@@ -1,0 +1,131 @@
+{
+  "variant": "primary-row-candidate-v1",
+  "passed": 72,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "36f41cf83f7d86284efb555d1d74035f5826a78f6edc646fcd7183c4ace00dc4",
+  "caption_probes": [
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    }
+  ],
+  "metrics": {
+    "FileOps.Issues.TypedProjection.RefreshUs": {
+      "samples_us": [
+        1986,
+        2715,
+        1892,
+        2109,
+        1750,
+        2135,
+        2714,
+        2031,
+        1896,
+        3506,
+        7036,
+        6195,
+        10704,
+        1849,
+        2024
+      ],
+      "median_us": 2109,
+      "p95_us": 10704
+    },
+    "FileOps.Issues.DetailCapture.CaptionPixels": {
+      "samples_us": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "median_us": 0.0,
+      "p95_us": 0
+    },
+    "FileOps.Issues.TypedProjection.UnchangedRefreshUs": {
+      "samples_us": [
+        653,
+        572,
+        453,
+        440,
+        546,
+        463,
+        685,
+        427,
+        738,
+        507,
+        444,
+        437,
+        665,
+        418,
+        497
+      ],
+      "median_us": 497,
+      "p95_us": 738
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "source": "2f4fb03fffb9484783ac0badb47f2f9b9f61c739",
+  "file": "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+  "fixtureSha256": "d19f06ab019bd95e3681525f8543bda8bfd081ca6341f2a9911f28fe73d18ba8",
+  "protectedAncestorNavigationSuffixSha256": "8bc594463af3faa8c2a84444cf7466498f454e684c96e90399253da9c14aaa5c",
+  "scope": "The Full failure occurs before the protected ancestor click/navigation/cleanup assertions. The fixture takes a single valid ellipsis geometry snapshot before clicking; existing consumer test policy requires repeated stable geometry. The original failure does not identify which post-click predicate failed."
+}

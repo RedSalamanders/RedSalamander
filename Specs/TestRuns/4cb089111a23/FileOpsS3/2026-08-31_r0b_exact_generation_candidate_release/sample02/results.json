@@ -1,0 +1,11 @@
+{
+  "schema": "red-salamander.focused-test-result.v1",
+  "runId": "r0b-candidate-02",
+  "commit": "e172269d0e44156cee22e6d22cd8ac4a9069a556",
+  "configuration": "Release",
+  "testsEnabled": true,
+  "expectedExit": 0,
+  "exitCode": 0,
+  "startedUtc": "2026-08-31T14:26:34.3587532Z",
+  "endedUtc": "2026-08-31T14:26:34.3984588Z"
+}

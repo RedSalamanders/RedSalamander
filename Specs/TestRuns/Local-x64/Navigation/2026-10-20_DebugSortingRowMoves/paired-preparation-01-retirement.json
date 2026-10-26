@@ -1,0 +1,6 @@
+{
+  "pid": 100788,
+  "creation": "2026-10-20T13:35:09.15619+02:00",
+  "measurement_started": false,
+  "reason": "Run the newly available main Release functional cases while foreign builds continue; no benchmark had started."
+}

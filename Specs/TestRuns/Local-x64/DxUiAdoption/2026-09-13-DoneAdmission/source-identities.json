@@ -1,0 +1,12 @@
+[
+  {
+    "sourceFile": "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
+    "commit": "0900aab8",
+    "gitBlobSha256": "f836bb431bfb320c7c90d5d55e01d27c521c04e110093ffd6d0dc11413c0271f"
+  },
+  {
+    "sourceFile": "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+    "commit": "0900aab8",
+    "gitBlobSha256": "b7ac341304fd48be5379afb6ed7d56bb9d328b5dd4757b8597ec654f3a9e05c5"
+  }
+]

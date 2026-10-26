@@ -1,0 +1,6 @@
+[ RUN      ] S3 CopySource and directory-transfer selftests
+[       OK ] FileSystemS3.dll CopySource and directory-transfer: loads for debug selftests
+[INFO] S3 directory-transfer timing: destination baseline/candidate=988830/492753 us; publication baseline/candidate=241704/239920 us; source-revision baseline/candidate=525508/773574 us
+[       OK ] FileSystemS3.dll CopySource and directory-transfer: debug selftests pass (passed=157, failed=0, hr=0x00000000)
+[       OK ] FileSystemS3.dll CopySource and directory-transfer: debug selftest module reaches its unload quiet point
+PluginContractTests focused S3 CopySource/directory-transfer selftests passed.

@@ -270,3 +270,5 @@ Implementation patterns for repository PowerShell tooling:
 - [references/powershell-multi-target-install.md](references/powershell-multi-target-install.md) —
   layered platform/variant parameters with `$PSBoundParameters` explicit-detection and a resolved
   target-array install loop.
+
+Ordinary iteration uses `Test-Changes.ps1 -Explain` followed by the affected default. Full/PrePush are explicit; use the owning scoped-testing contract to account for matching CI obligations and exact local evidence instead of repeating unchanged identical tests. Pending CI or foreground/platform acceptance is not a repository pass.

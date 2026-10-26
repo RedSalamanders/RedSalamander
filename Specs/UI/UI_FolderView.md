@@ -9,6 +9,59 @@
 - Asynchronous folder enumeration and icon loading
 - Grid layout with dynamic column sizing
 - Sorting (Name / Extension / Time / Size / Attributes) with direction toggle + unsorted state
+
+File and folder Name sorting MUST use Windows natural comparison (`NaturalSort::Compare`,
+`StrCmpLogicalW`), so `file1`, `file2`, `file10` appear in that order. Extension keys and
+name tie-breakers for Time/Size/Attributes MUST use the same policy. Directories remain
+first in both directions. Time compares signed 64-bit `lastWriteTime` timestamps;
+Size compares unsigned 64-bit `sizeBytes` for files, with folders ordered by name;
+Attributes compares numeric `DWORD` flags. Formatted date/size strings are never
+primary keys. Equal metadata values use the natural name tie-breaker. Natural name ties use
+case-sensitive ordinal spelling and then stable unsorted order. Background enumeration
+presorting MUST use natural names with ordinal ties too. Sort None retains the accepted
+initial order. Provider identity and current/selection restoration remain provider-aware,
+independent of natural display equality. Length-delimited provider names MUST NOT be
+assumed to have a trailing NUL. Regression: `cmd_natural_name_sorting_contracts` and the
+5000-entry `folderView_perf_sort_toggle_stress` fixture.
+
+Each enumeration MUST prepare listing-local name and extension ranks from that exact
+Windows ordering before publishing its rows. Name ranks reuse the already sorted
+directory/file groups and include ordinal spelling ties; identical names share a rank.
+Extension ranks group Windows-natural equals, then name ranks and stable source order
+resolve ties. Interactive sorts MUST reuse these ranks, including metadata name ties.
+Ranks travel with their rows, are rebuilt with every listing, and are never persisted,
+used as identity or copied into removed-item resolver probes. If either operand has no
+rank, the comparator MUST use the full Windows comparison and existing tie policy.
+The cache retains two `size_t` fields per row; preparation uses one temporary index per
+row on the enumeration worker. `FolderView.ExecuteEnumeration.NaturalSortRanks` records
+preparation duration, row count and retained rank bytes, within the existing SortMerge
+metric. Measure that cost alongside repeated interactive sorts rather than hiding work
+in enumeration.
+
+Interactive ordering MUST sort a permutation of row indices with the exact same
+production comparator, then apply its disjoint cycles to whole `FolderItem` values.
+Strings, owned layouts/bitmaps, semantic projections, selection and current flags
+travel with their source row. Fixed rows require no payload moves; nonfixed rows
+are assigned once plus one staging operation per cycle (at most
+`n + floor(n / 2)` payload moves). One staging row is constructed lazily and reused
+across cycles, retaining checked string proxies rather than allocating them for
+every cycle. Already ordered rows construct no staging row. Parallel comparison retains the existing large
+folder threshold and completes before payload movement on the UI thread. Checked
+iterator safety remains enabled globally; the index pointer range is bounded by
+the initialized scratch vector's active size. Repeated same-size sorts reuse scratch;
+retained capacity is at most twice the active row count after sorting, and clearing
+the model/provider or destroying the view releases it. Ranks and unsorted ordinals
+are unchanged by the permutation. Current/selection restoration still runs afterward.
+
+`FolderView.ApplyCurrentSort.OrderItems` isolates ordering from current/selection
+repair (`value0`: rows, `value1`: row bytes). `RowMoves` and `ScratchBytes` under the
+same prefix record payload move operations and retained index bytes respectively
+in `value1`, with row count in `value0`. Their duration is zero: these are counters.
+The natural-order contract case exercises cached, uncached and mixed rows, both
+directions and numeric extremes, owned payload continuity with empty/inline/heap
+strings, all six-row permutations,
+empty/singleton models, scratch reuse/release, and the sequential/parallel boundary.
+
 - Display modes: **Brief**, **Detailed**, **Extra Detailed**, and **Thumbnails**
 - Pane filter (wildcard mask) with persisted per-path state and a subtle watermark indicator when active
 - View options for hidden/system files (hidden items display a dim icon when shown)
@@ -172,6 +225,76 @@ For navigation to another logical folder/provider/context, resolve current in th
 3. the first displayed item.
 
 Navigation always starts with empty selection. Returning through Back/Forward restores current only, never selection.
+
+### Qualified inspection selection
+
+A host may capture a UI-thread `InspectionVisit` after requesting navigation and use
+`SelectItemForInspection` with the admitted provider path identity and exact item path. The visit
+is scoped to the view lifetime, path visit, provider epoch, enumeration generation and current-item
+ownership. Another pane, refreshed enumeration, intervening navigation/current change or destroyed
+view MUST reject the old visit, even when the path text or HWND later matches again.
+
+`IsInspectionVisitCurrent(visit)` exposes a read-only check including current-item ownership;
+being current does not establish enumeration completion.
+
+Selection MUST wait for the accepted enumeration to finish successfully. A failed enumeration returns
+its failure HRESULT; retained old rows are not a successful target model. The item parent must match
+the current/displayed model under the admitted provider rules. Exactly one displayed component may
+match; unknown identity, another parent, missing/filtered or ambiguous names leave selection unchanged.
+When the host knows the item's kind (file or folder), it breaks a tie between rows sharing the name,
+such as an S3 object `foo` beside the prefix `foo/`; the result is ambiguous only when more than one
+row matches both name and kind, or the kind is unknown. A single name match is selected whatever its kind.
+Do not fall back unconditionally to case-insensitive matching or a neighboring index. On success use
+the canonical single-item selection, current-item and ensure-visible behavior. Do not activate an OS
+window, open a file, grant consent or change an operation from this primitive.
+
+Owner selection callbacks can navigate reentrantly. The canonical single-item path MUST stop before
+using its old index for ensure-visible/focus memory after model replacement. Inspection must recheck
+its visit and selected/current identity before reporting success. Existing queued external commands
+or selections make the inspection commit unavailable rather than overwriting a reported success.
+
+FolderView's `SetEnumerationSettledCallback` has one production consumer: the pending conflict
+inspection of File Operations (`FileOperationState::BeginPendingConflictInspection`), which FolderWindow
+installs on the target pane only while a request is pending. `FolderWindow::SetPaneEnumerationSettledCallback`
+is a self-test interposer compiled only with `ENABLE_TESTS`; it runs before the inspection listener.
+On the UI thread, accepted success or failure delivers its fresh
+visit, attempted folder and exact HRESULT after model handling and queued commands/selections.
+Early enumeration failures retain their attempted folder. Legacy completion remains success-only.
+Superseded generations or navigation from a legacy callback MUST suppress obsolete settlement.
+Clearing the folder path MUST cancel pending enumeration and advance its generation before clearing
+the accepted model. A success payload already queued for the prior generation MUST NOT repopulate
+the cleared view or publish an enumeration settlement.
+
+A user cancel of the busy enumeration overlay (Esc or its Cancel button) is a terminal settlement:
+no result will arrive for the generation the cancel opens, so the view records
+`HRESULT_FROM_WIN32(ERROR_CANCELLED)` as that generation's completion and, when a listener exists,
+posts the payload-less `kFolderViewEnumerationCanceled`. Its handler delivers the settlement with that
+status, after the Canceled overlay is shown, only while that generation is still the newest; a listener
+may then navigate. Cancellations that are not the user's (provider change, clearing the path, network
+drive disconnect preparation, destroy) settle nothing; the host ends a request waiting on that pane
+itself (FolderWindow ends a pending conflict inspection as stale when it clears the pane path or
+prepares the pane for a disconnect).
+
+A watcher or cache refresh advances the enumeration generation without changing the navigation.
+`IsSameNavigationVisit(original, settled)` lets a waiting host follow the newer settlement of the same
+visit: it requires the same view lifetime, path visit, provider epoch and current-item ownership and
+allows only the enumeration generation to advance. It does not establish that the settled visit is
+current; the host still revalidates it.
+The callable and folder are retained during dispatch so a listener can unsubscribe or navigate
+reentrantly. With no listener, no receipt/token/callback allocation occurs. This is an event-driven
+primitive, not a foreground or file-operation transaction. Instrument dispatch with
+`folder.enumeration.settled_callback_us`.
+
+Implemented 2026-09-20: the FolderView component, owning-pane settlement hook and focused native x64 Debug coverage. The owning
+File Operations completion/failure transaction (`BeginPendingConflictInspection`), live endpoint/profile/root
+qualification, foreground and intervening-user-interaction guards, the popup inspection controls and popup
+return are implemented; see [UI_FileOperationsPopup.md](UI_FileOperationsPopup.md), "Inspect a pending conflict in a
+file pane", which also owns the residuals still open (native mixed-DPI/AT, provider refusal/switching and
+rollback-failure acceptance). User-cancel settlement, same-navigation refresh following and the name-and-kind
+tie-break are covered by the `FileOps_SafetyRemediationContracts` conflict-inspection check (2026-10-10).
+A visit token is model freshness, not those additional host guarantees. Hosts must consume completion
+events; this API does not justify idle polling. Instrument attempts with `folder.inspection.select_us`;
+no per-paint allocation, timer or worker is introduced. One lazy lifetime marker is owned per view.
 
 ### Bounded per-pane current memory
 
@@ -384,7 +507,9 @@ instead of inventing a numeric value.
 - If plugin is unavailable or enumeration fails, display a friendly **in-window alert overlay** (no `MessageBoxW`) using the shared `RedSalamander::Ui::AlertOverlay` component (`RedSalamander/Ui/AlertOverlay.h`):
   - Dimmed scrim + centered card, icon, title, and wrapped details text.
   - Pane-scoped modal (default): the current pane ignores normal interactions while the overlay is shown; the user can dismiss via the close “X” (errors/warnings/info).
+  - A settled enumeration-error/disconnection overlay MUST still allow Backspace to invoke normal parent navigation from the requested current path, including a deleted folder reopened from history. Each press moves exactly one level up even if that parent also fails enumeration; a successful parent enumeration clears the alert. Root/connection-root callbacks retain their normal behavior. Other item keys remain blocked; busy enumeration and blocking operation/rendering overlays retain their existing input policy.
 - Alert overlays must **never disappear** due to small pane size; when space is constrained, the overlay switches to a **text-only** layout (icon hidden) and clips text as needed.
+- **Overlay stacking with the File Operations decision mirror (I35 S5).** FolderView's own overlay slot (busy, error, information, empty-state) is single and text-only and never hosts a File Operations decision. The decision mirror (`UI_FileOperationsPopup.md` "Decision mirror") is a separate modeless `AlertOverlayWindow`, an owned top-level popup anchored on this FolderView's window: it sits above the pane's own overlay, follows the pane's position, size and visibility (hidden while a preview or terminal tab hides the view), never blocks the pane's input and never replaces or dismisses the pane's overlay. A blocking host prompt anchored on the pane (an ingress confirmation) stacks above both; no mirror appears while its nested loop runs (one already shown stays below it). While a dialog of the main window runs its own modal loop (the main window is disabled), the mirror leaves the screen and returns once the dialog closed; moves and activation changes of the main window never raise it in the z-order. Escape typed in the pane keeps its meaning (busy-cancel, quick-search, focus reclaim): the mirror acts on keys only while it has the keyboard focus, a focus it gets without a click is guarded against keys typed for the pane, and F6 or Shift+F6 on it hands the keyboard focus back to this FolderView without answering (the pane's shortcuts work again from there).
 - If enumeration is slow (>300ms), show a **busy overlay** (spinner + “Please wait…” message), cleared when enumeration completes.
   - Busy overlays are not closable; for enumeration, the overlay exposes a **Cancel** action (button) to abort enumeration.
   - After the user cancels enumeration, show a non-dismissible **information** overlay (no close button) indicating the cancellation; it is cleared on the next navigation.
@@ -462,7 +587,7 @@ while (entry != nullptr)
   Operations artifact. The item stays in its ordinary sort position and remains subject only to the
   user's normal hidden/system, wildcard, and hide-name choices.
 - The shared artifact classifier supplies an orthogonal row state. Possible renders a warning overlay
-  and `Possible interrupted-operation artifact`. This semantic remains available to accessibility
+  and `Possibly incomplete file (left by an interrupted copy or move)`. This semantic remains available to accessibility
   even when the current display mode has no details line.
 - A badge or pane cache is not authority. Possible is a recognized generated-name shape only and
   never proves ownership, cleanup, or recovery authority. Folder refresh or watch change re-queries
@@ -474,9 +599,15 @@ while (entry != nullptr)
   authoritative schema before keyed lookup can return.
 - When an artifact row is focused with no selection, the pane status bar appends the same localized
   Possible classification text used by Find. The artifact context submenu exposes read-only
-  `Inspect` and `Reveal in pane`; Inspect forces the built-in host viewer so a configured external
-  viewer cannot turn the inspection action into an unguarded launch. `Reveal in pane` is the read-only
-  Open-location presentation. There is no Resume, Roll back, cleanup, or recovery action.
+  `Inspect` and `Reveal in pane`, and for a Local (Win32) path `Open location in File Explorer`; Inspect forces
+  the built-in host viewer so a configured external viewer cannot turn the inspection action into an
+  unguarded launch. `Reveal in pane` is the read-only in-pane presentation; `Open location in File
+  Explorer` opens the item's parent folder with the item selected (`SHOpenFolderAndSelectItems`), is
+  prompt-free and grants no authority (I35 R7.2). There is no Resume, Roll back, or recovery action.
+  The submenu also offers **Clean Up Leftovers of Interrupted Operations** (I35 R7.5) whenever the
+  listing has any Possible row, even when the focused row is ordinary: it opens the pane command's
+  listing of the current folder's Possible rows, which deletes nothing until the user confirms the
+  ordinary Delete of the checked rows (see `FileSystem_FileOperations.md` "Visibility and touch guard").
 - Selection, Properties, Reveal/Open location, and the host read-only viewer are inspection. Copy,
   external Open/Edit, Move, Rename, Delete/Recycle, overwrite, write-capable commands, drag, and
   clipboard operations touching a Possible row route through the shared exact-set artifact warning
@@ -530,6 +661,7 @@ while (entry != nullptr)
 - Paste Shortcut is local-file-system only. FolderView reads the clipboard on the UI thread, then creates `.lnk` files on value-only background work that captures copied source paths, target folder, path-visit generation, original filesystem identity, request id, and `HWND`, but never captures or dereferences `this`. A FolderView MUST serialize Paste Shortcut requests: if one worker is in flight, later invocations queue the already-captured clipboard payload and run after completion. The worker initializes COM as MTA before calling shell-link APIs and posts completion through `PostMessagePayload`.
 - Paste Shortcut shortcut creation MUST be collision-safe. Each deterministic `GenerateShortcutPath` candidate is probed and saved without replace semantics; if a racing creator wins the same slot (`ERROR_FILE_EXISTS` / `ERROR_ALREADY_EXISTS`), the worker retries the next candidate. Short and long final paths share the same temp-file-plus-move save path. The shell-persist temp path remains reserved between `GetTempFileNameW` and `IPersistFile::Save`; the placeholder is not deleted and exposed to name stealing.
 - Paste Shortcut completion MUST run on the UI thread. Completion always emits `clipboard.paste_shortcut_worker_us`; cache invalidation for `result.targetFolder` uses the captured original filesystem even if the pane changed provider, while current-view refresh and focus restoration additionally require that provider identity, target path, and path-visit generation still match. A failed first completion post is retried from a preserved result payload; request-id matching, a stale timeout, and `WM_NCDESTROY` reset prevent a lost or late completion from wedging or clearing a newer request. Failure reporting via the Paste Shortcut pane alert remains unconditional when the UI receives completion. A stale completion MUST NOT navigate back to the old folder or focus an item there.
+- When a `FileOperationRefusalCallback` is installed, FolderView MUST consult it before showing its own rename prompt (context menu Rename, F2) or the Move folder picker. When it returns true the host has refused the operation and already shown why (for example an accepted application exit), and FolderView shows no prompt and sends no request.
 - Missing `FileOperationRequestCallback` is a host wiring failure for normal UI paths. FolderView MUST fail visibly and log the error instead of silently running a direct plugin copy/move/delete with different conflict/progress semantics. Direct plugin fallback is reserved for explicit no-host/test scenarios with an opt-in test hook.
 
 **Drag Initiation:**
@@ -592,7 +724,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - separator
 - Move…; Delete…; Rename…
 - separator
-- Operation artifact submenu when the focused row is a Possible artifact; separator
+- `Leftover from an interrupted operation` submenu (Inspect, Reveal in pane, and Open location in File Explorer for a Local path when the focused row is a Possible artifact; then Clean Up Leftovers of Interrupted Operations whenever the listing has any Possible row); separator
 - Properties
 
 **Background target:**
@@ -607,7 +739,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - A pointer miss loads only the background resource. Retained current identity is not an item target and item-only commands are absent rather than disabled.
 - `Cut` is enabled only when the resolved item target can publish local built-in-file-system `CF_HDROP` paths. Providers that the clipboard implementation rejects (including Dummy, S3, MTP, and cloud providers) show Cut disabled rather than a working-looking command that warns after invocation.
 - `Paste` preflight uses the same non-blocking clipboard-format check as the paste path and also requires a live, enumerated destination folder. The file-operation admission path remains authoritative for provider capabilities and revalidates at execution; the popup MUST NOT perform blocking provider I/O merely to predict that later result.
-- The optional Operation artifact submenu is inserted immediately before the separator and final `Properties` action. It is never appended after Properties or debug-only suffixes, and a failed submenu/separator insertion rolls back partial composition.
+- The optional "Leftover from an interrupted operation" submenu is inserted immediately before the separator and final `Properties` action. It is never appended after Properties or debug-only suffixes, and a failed submenu/separator insertion rolls back partial composition.
 - Selection-aware destructive commands compare the post-menu target identities as a multiset, preserving duplicate cardinality; a display-name membership check that can accept a duplicate or substituted target is insufficient.
 - Menu rendering uses the active `MenuTheme` (owner-draw for themed background/selection colors).
 - DxUI context menus opened from right-click or keyboard context-menu commands MUST share the common `DxUi::ContextMenu::Show(...)` input contract: pointer hover highlights visible rows, enabled item clicks invoke immediately, outside clicks and Escape dismiss, arrow keys move the keyboard highlight, Enter/Space invoke, and focus returns to the owning pane when the menu exits.
@@ -667,7 +799,7 @@ running task is revealed after 500 ms; a clean success before that deadline crea
 completed row, still refreshes the pane, and retains focus by renamed identity. Once revealed, the
 card follows normal task rules and never becomes silent. Tests use a fake clock or zero delay.
 Batch Rename and any F2 action that opens Batch Rename use ordinary queue/card behavior.
-- **Backspace**: Navigate to parent folder
+- **Backspace**: Navigate to parent folder, including from a settled failed-enumeration overlay when the current folder no longer exists.
 - **F3/F5/F6/F7/F8**: FolderWindow-global operations (view/copy/move/mkdir/delete) per `Specs/UI/UI_CommandMenuKeyboard.md`.
 
 **Clipboard Keys:**
@@ -1364,8 +1496,9 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 - Scroll smoothness: 60fps sustained
 - Icon loading: 100 icons/second
 - `folderView_perf_large_folder_baseline` must verify that stock icon loading resolves into item bitmap icons, not only that icon-index lookup or cache warming occurred.
-- `folderView_perf_sort_toggle_stress` is the focused sort baseline: it uses a 5,000-entry adversarial local folder, repeatedly toggles Name, Extension, Time, Size, and None sort modes, writes `folderView_perf_sort_toggle_stress_metrics.json`, emits `folder.sort_toggle_us`, and keeps `FolderView.ApplyCurrentSort` / `FolderView.ExecuteEnumeration.SortMerge` as the product metric families. This case is a deterministic metric recorder and structural regression guard, not a wall-clock CI threshold gate.
-- FolderView sorting keeps medium interactive folders on the sequential `std::sort` path; parallel sort is reserved for genuinely large folders where scheduling overhead is amortized. `FolderViewSortPolicy::ShouldUseParallelSort(...)` defines and unit-tests the threshold boundary. The comparator must remain a total ordering by ending ties with `unsortedOrder`, which is what makes non-stable sorting behavior-preserving.
+- `folderView_perf_sort_toggle_stress` is the focused product-paint sort recorder: it uses the unchanged 5,000-entry adversarial local folder and ten Name/Extension/Time/Size/None requests, writes `folderView_perf_sort_toggle_stress_metrics.json` with `measurementProtocol: product_paint_v2`, and emits `folder.sort_product_paint_us`. Rendering preparation stays outside measured requests; changed sorts require a successful product paint without injected warm-up/resize/invalidation, while a warm no-op requires no new frame. The separate `folderView_perf_sort_toggle_legacy_warm_control` retains the original warm-render sequence and `folder.sort_toggle_us` for historical comparison. Both retain `FolderView.ApplyCurrentSort` / `FolderView.ExecuteEnumeration.SortMerge` product metrics. These are deterministic metric recorders and structural guards, not wall-clock CI threshold gates; protocol changes are never labeled product speedups.
+- FolderView sorting keeps medium interactive folders on the sequential index `std::sort` path; parallel index sorting is reserved for genuinely large folders where scheduling overhead is amortized. `FolderViewSortPolicy::ShouldUseParallelSort(...)` defines the threshold; the natural-order contract case exercises the real reorder path on both sides. The comparator must remain a total ordering by ending ties with `unsortedOrder`, which is what makes non-stable sorting behavior-preserving.
+- Sorting CPU attribution retains `folder.sort_jsonl_write_us` and per-request writer time/calls alongside the existing paint metric. Capture stays inside the unchanged request timer; companion observations do not suppress or defer records. Optimize the shared writer under `Core_RedSalamanderMonitor.md` rather than altering Explorer collation, numeric metadata keys, checked Debug iterators or graphics validation to improve captured timings. Gains from recording must remain distinct from uncaptured UI performance.
 - Normal FolderView rendering must not apply or clear incremental-search text drawing effects unless incremental quick search is active with a non-empty query. Exiting quick search clears any existing DirectWrite layout effects once so inactive renders cannot leave stale highlighted text behind. `folderView_perf_sort_toggle_stress` guards inactive quick-search renders with `incrementalSearchEffectUpdates == 0`, and `cmd_pane_quickSearch_integrated_navigation` remains the active quick-search correctness guard.
 - `folderView_dpi_change_repaints_both_panes` is the focused DPI/scale-transition guard: it warms both pane render targets, applies a synthetic per-monitor DPI change, verifies both panes update DPI before or during the transition, and verifies each pane schedules or completes a full-client render so no pane can expose a black/stale back buffer. 2026-06-09 Debug evidence is archived at `Specs/TestRuns/7d3a1247382a/Commands/2026-06-09_134243/`.
 - `folderView_rendering_error_overlay_requires_persistence` is the focused rendering-error UX guard: it forces consecutive synthetic `IDXGISwapChain::Present` failures, verifies transient failures do not create a FolderView alert, verifies an aged third failure promotes to a rendering alert, verifies explicit clear hides the alert, and verifies the next single failure is suppressed again. The case also records `folder.render.failure_suppressed` and `folder.render.failure_promoted`; 2026-06-09 Debug evidence is archived at `Specs/TestRuns/7d3a1247382a/Commands/2026-06-09_134254/`.

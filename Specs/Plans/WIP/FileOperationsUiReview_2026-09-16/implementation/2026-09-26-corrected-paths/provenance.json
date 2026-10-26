@@ -1,0 +1,65 @@
+{
+  "run_id": "20260926T103536Z-7556-2f3544f9f9da4fd8983eef3b508ca6f5",
+  "captures": [
+    {
+      "name": "129c-issues-confirmed-delete__dark__fr-FR__display1__144dpi.png",
+      "before_sha256": "824a329ed2cd3d766d1dd7a12899764bd8757ccae2c357f6e1f021149f37aebb",
+      "after_sha256": "ece28d3feb2db4d7921f20213dff8a0654d84543fe2af580a763747a5db0f1a8",
+      "before_size": [
+        934,
+        977
+      ],
+      "after_size": [
+        934,
+        977
+      ],
+      "dimensions_equal": true,
+      "pixels_equal": false
+    },
+    {
+      "name": "129c-issues-confirmed-delete__dark__fr-FR__display2__96dpi.png",
+      "before_sha256": "e8d2082e472553253b7d93812a6542102667bc39279a969f15a469bd3a193913",
+      "after_sha256": "07eac39fbaed39bb7b9b91c0eac50c68107e8b57ca32bf233af20ac3edb08946",
+      "before_size": [
+        622,
+        633
+      ],
+      "after_size": [
+        622,
+        633
+      ],
+      "dimensions_equal": true,
+      "pixels_equal": false
+    },
+    {
+      "name": "129d-issues-confirmed-rename__dark__fr-FR__display1__144dpi.png",
+      "before_sha256": "f35b524341cbe6566652c49bd860726071efdd76b7bc7a28e367f62a6b4dcf0a",
+      "after_sha256": "cf97a41acc33224c44f7511bd6227599c6c8f944b26da8c313f99b685da733ee",
+      "before_size": [
+        934,
+        977
+      ],
+      "after_size": [
+        934,
+        977
+      ],
+      "dimensions_equal": true,
+      "pixels_equal": false
+    },
+    {
+      "name": "129d-issues-confirmed-rename__dark__fr-FR__display2__96dpi.png",
+      "before_sha256": "b5a2eb56dd459a0484440550e4abf11df5f9e3294c84517b2130665faa7e1711",
+      "after_sha256": "fb3734eb58dca7f72cece97118899ba19a8f4fd79da4234519762ff045741db5",
+      "before_size": [
+        622,
+        633
+      ],
+      "after_size": [
+        622,
+        633
+      ],
+      "dimensions_equal": true,
+      "pixels_equal": false
+    }
+  ]
+}

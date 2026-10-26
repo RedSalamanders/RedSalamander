@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-08-31T22:22:41.730Z",
+    "duration_ms": 1111,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_batchRename_execution_engine_large_independent_perf",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\r7-a10-baseline-03\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 709,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_batchRename_execution_engine_large_independent_perf",
+            "cases": [
+                {
+                    "name": "cmd_pane_batchRename_execution_engine_large_independent_perf",
+                    "status": "passed",
+                    "duration_ms": 207,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

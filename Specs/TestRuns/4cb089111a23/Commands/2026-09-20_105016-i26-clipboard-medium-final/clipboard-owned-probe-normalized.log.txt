@@ -1,0 +1,14 @@
+transfer=True broad=False normalized=True retained=42 returnedAlias=False releaser=False medium=TYMED_HGLOBAL streamQuery=00000001 streamGet=80040064 format=49344/TYMED_HGLOBAL
+transfer=True broad=True normalized=True retained=42 returnedAlias=False releaser=False medium=TYMED_HGLOBAL streamQuery=00000001 streamGet=80040064 format=49344/TYMED_HGLOBAL
+MethodInvocationException: C:\RedSalamander.Perf\evidence\i26-ui\clipboard-owned-probe.ps1:72
+Line |
+  72 |  … lse,$true)){[OwnedClipboardProbe]::Run($transfer,$broad,$NormalizeMed …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "Run" with "3" argument(s): "The method or operation is not implemented."
+
+MethodInvocationException: C:\RedSalamander.Perf\evidence\i26-ui\clipboard-owned-probe.ps1:72
+Line |
+  72 |  … lse,$true)){[OwnedClipboardProbe]::Run($transfer,$broad,$NormalizeMed …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "Run" with "3" argument(s): "The method or operation is not implemented."
+

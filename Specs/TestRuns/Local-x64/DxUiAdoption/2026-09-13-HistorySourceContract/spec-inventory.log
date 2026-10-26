@@ -1,0 +1,5 @@
+Spec inventory: Z:\RsI19Toolchain\.build\SpecInventory\spec-inventory.json
+Normative consistency: Z:\RsI19Toolchain\.build\SpecInventory\normative-consistency.json
+Markdown report: Z:\RsI19Toolchain\.build\SpecInventory\spec-inventory.md
+Test inventory: Z:\RsI19Toolchain\.build\SpecInventory\test-inventory.json
+Blocking findings: 0

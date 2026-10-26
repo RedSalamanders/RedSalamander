@@ -13,6 +13,7 @@
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
 #include "PathUtils.h"
+#include "WindowActivation.h"
 #include <DxUi/DxUi.h>
 
 #include "SettingsStore.h"
@@ -21,7 +22,7 @@
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
 #endif
 #include "UiMetrics.h"
 
@@ -916,7 +917,7 @@ public:
         static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -1497,7 +1498,7 @@ public:
         static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -2181,7 +2182,7 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -2727,7 +2728,7 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -3428,7 +3429,7 @@ public:
         static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -3953,7 +3954,7 @@ using namespace FolderWindowFileSystemInternal;
 
 LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ChangeCaseTaskPayload>(lp);
+    auto payload = TakeMessagePayload<ChangeCaseTaskPayload>(_hWnd.get(), WndMsg::kChangeCaseTaskUpdate, lp);
     if (! payload)
     {
         return 0;
@@ -3966,7 +3967,7 @@ LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
 
 LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ChangeCaseCompletedPayload>(lp);
+    auto payload = TakeMessagePayload<ChangeCaseCompletedPayload>(_hWnd.get(), WndMsg::kChangeCaseCompleted, lp);
     if (! payload)
     {
         return 0;
@@ -3993,6 +3994,11 @@ LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
     }
 
     if (SUCCEEDED(payload->hr) && payload->operations.empty())
+    {
+        return 0;
+    }
+    // The case scan ran in the background; an exit accepted meanwhile refuses its renames.
+    if (RefuseFileOperationForPendingExit(payload->pane, FILESYSTEM_RENAME))
     {
         return 0;
     }
@@ -4404,7 +4410,7 @@ HRESULT FolderWindow::ExecuteInPane(Pane pane,
                 ShowWindow(wnd, SW_SHOWNORMAL);
             }
 
-            SetForegroundWindow(wnd);
+            Common::RequestForegroundWindow(wnd);
         }
     };
 
@@ -5169,6 +5175,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         }
     }
     PublishTerminalSourceLocation(pane, pluginPath);
+    NotifyFileOperationsPaneChanged();
 }
 
 bool FolderWindow::TryOpenFileAsVirtualFileSystem(Pane pane, const std::filesystem::path& path) noexcept

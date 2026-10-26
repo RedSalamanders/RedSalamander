@@ -637,19 +637,19 @@ namespace PrefsUi
 PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept
 {
     using DxUi::FontRole;
-    using DxUi::Typography::GetDxUiTypographySpec;
+    using DxUi::Typography::GetSpec;
 
     const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
     return PreferencesTypographyContext{
         .dpi     = (std::max<UINT>)(dpi, USER_DEFAULT_SCREEN_DPI),
-        .body    = GetDxUiTypographySpec(FontRole::Body),
-        .caption = GetDxUiTypographySpec(FontRole::Small),
-        .title   = GetDxUiTypographySpec(FontRole::Title),
-        .strong  = GetDxUiTypographySpec(FontRole::BodyStrong),
+        .body    = GetSpec(FontRole::Body),
+        .caption = GetSpec(FontRole::Small),
+        .title   = GetSpec(FontRole::Title),
+        .strong  = GetSpec(FontRole::BodyStrong),
     };
 }
 
-int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography, const DxUi::Typography::TypographySpec& spec, std::wstring_view text) noexcept
+int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography, const DxUi::Typography::Spec& spec, std::wstring_view text) noexcept
 {
     using namespace DxUi::Typography;
 
@@ -668,10 +668,7 @@ int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
     return MeasureSingleLineTextMetrics(factory, format.get(), typography.dpi, text).widthPx;
 }
 
-int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
-                               const DxUi::Typography::TypographySpec& spec,
-                               int width,
-                               std::wstring_view text) noexcept
+int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography, const DxUi::Typography::Spec& spec, int width, std::wstring_view text) noexcept
 {
     using namespace DxUi::Typography;
 
@@ -1478,14 +1475,15 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
 
     const Common::Settings::FileOperationsSettings defaults{};
     const auto& fileOperations = settings.fileOperations.value();
-    const bool hasNonDefault = fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
-                               fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-                               fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-                               fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-                               fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-                               fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-                               fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-                               fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
+    const bool hasNonDefault =
+        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.showInformationalNotes != defaults.showInformationalNotes ||
+        fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+        fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+        fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+        fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+        fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
+        fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
+        fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
 
     if (! hasNonDefault)
     {

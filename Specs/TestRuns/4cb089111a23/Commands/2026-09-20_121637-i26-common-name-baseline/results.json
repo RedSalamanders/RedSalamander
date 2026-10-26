@@ -1,0 +1,36 @@
+{
+    "run_started_utc": "2026-09-20T10:16:41.074Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T101314Z-66668-afa6e3f29f2f48be851b0edc6e347fb3\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 13668,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "A shared filename must be a single prominent heading, not an Incoming name row.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "failed",
+            "duration_ms": 4199,
+            "repeat_index": 1,
+            "reason": "A shared filename must be a single prominent heading, not an Incoming name row."
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "failed",
+            "duration_ms": 4168,
+            "repeat_index": 2,
+            "reason": "A shared filename must be a single prominent heading, not an Incoming name row."
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "failed",
+            "duration_ms": 4194,
+            "repeat_index": 3,
+            "reason": "A shared filename must be a single prominent heading, not an Incoming name row."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

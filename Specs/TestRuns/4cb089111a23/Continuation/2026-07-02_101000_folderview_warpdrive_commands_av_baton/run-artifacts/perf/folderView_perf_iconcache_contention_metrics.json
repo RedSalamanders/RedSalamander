@@ -1,0 +1,39 @@
+{
+  "case": "folderView_perf_iconcache_contention",
+  "leftRoot": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands\\work\\folder_iconcache_contention_{147F9B5F-5E03-4634-B365-5EA057AF88D6}\\left",
+  "rightRoot": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands\\work\\folder_iconcache_contention_{147F9B5F-5E03-4634-B365-5EA057AF88D6}\\right",
+  "itemsPerPane": 480,
+  "uniqueExtensionsPerPane": 160,
+  "cycles": [
+    {
+      "index": 0,
+      "durationUs": 166531,
+      "leftBitmapIconCount": 480,
+      "rightBitmapIconCount": 480,
+      "leftQueueCalls": 3,
+      "rightQueueCalls": 3,
+      "leftBatchCalls": 1,
+      "rightBatchCalls": 1
+    },
+    {
+      "index": 1,
+      "durationUs": 354422,
+      "leftBitmapIconCount": 480,
+      "rightBitmapIconCount": 480,
+      "leftQueueCalls": 6,
+      "rightQueueCalls": 6,
+      "leftBatchCalls": 2,
+      "rightBatchCalls": 2
+    },
+    {
+      "index": 2,
+      "durationUs": 388828,
+      "leftBitmapIconCount": 480,
+      "rightBitmapIconCount": 480,
+      "leftQueueCalls": 7,
+      "rightQueueCalls": 7,
+      "leftBatchCalls": 2,
+      "rightBatchCalls": 2
+    }
+  ]
+}

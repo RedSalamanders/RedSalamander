@@ -1,0 +1,82 @@
+[
+  {
+    "sort": "name",
+    "direction": "ascending",
+    "baseline_us": 29118,
+    "candidate_us": 32150,
+    "baseline_renders": 3,
+    "candidate_renders": 3
+  },
+  {
+    "sort": "extension",
+    "direction": "ascending",
+    "baseline_us": 102450,
+    "candidate_us": 200616,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "time",
+    "direction": "descending",
+    "baseline_us": 114835,
+    "candidate_us": 109185,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "size",
+    "direction": "descending",
+    "baseline_us": 116181,
+    "candidate_us": 118628,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_us": 96867,
+    "candidate_us": 97685,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "name",
+    "direction": "descending",
+    "baseline_us": 75244,
+    "candidate_us": 119283,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "extension",
+    "direction": "descending",
+    "baseline_us": 84484,
+    "candidate_us": 182470,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "time",
+    "direction": "ascending",
+    "baseline_us": 87136,
+    "candidate_us": 91861,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "size",
+    "direction": "ascending",
+    "baseline_us": 87953,
+    "candidate_us": 102330,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_us": 79580,
+    "candidate_us": 82228,
+    "baseline_renders": 4,
+    "candidate_renders": 4
+  }
+]

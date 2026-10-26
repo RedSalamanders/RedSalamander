@@ -1,0 +1,94 @@
+{
+  "head": "676391cb3edb65c5b38ee4e3db8c0677678e9558",
+  "ownerPid": 11880,
+  "phase": "complete",
+  "outcome": "focused_pass_only",
+  "updatedUtc": "2026-10-26T09:58:27.9686225Z",
+  "scope": "Focused seed qualification only; six builds and final Full profiles still required.",
+  "entries": [
+    {
+      "phase": "native-seed-scratch-x64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:43:32.0580180Z",
+      "finishedUtc": "2026-10-26T09:48:44.5593813Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-x64-ASan-Debug-build.log"
+    },
+    {
+      "phase": "native-seed-scratch-asan-parser",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:48:44.7790561Z",
+      "finishedUtc": "2026-10-26T09:48:48.0852775Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-asan-parser.log"
+    },
+    {
+      "phase": "native-seed-scratch-asan-memory-1",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:48:48.3444301Z",
+      "finishedUtc": "2026-10-26T09:49:23.5552859Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-asan-memory-1.log"
+    },
+    {
+      "phase": "native-seed-scratch-asan-memory-2",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:49:23.9476287Z",
+      "finishedUtc": "2026-10-26T09:49:54.4796611Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-asan-memory-2.log"
+    },
+    {
+      "phase": "native-seed-scratch-asan-memory-3",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:49:54.7049558Z",
+      "finishedUtc": "2026-10-26T09:50:24.0985641Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-asan-memory-3.log"
+    },
+    {
+      "phase": "native-seed-scratch-asan-service-regressions",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:50:24.3225586Z",
+      "finishedUtc": "2026-10-26T09:51:01.2785677Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-asan-service-regressions.log"
+    },
+    {
+      "phase": "native-seed-scratch-x64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:51:01.5063128Z",
+      "finishedUtc": "2026-10-26T09:57:47.5844550Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-x64-Release-build.log"
+    },
+    {
+      "phase": "native-seed-scratch-release-parser",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:57:47.8933016Z",
+      "finishedUtc": "2026-10-26T09:57:50.3974953Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-release-parser.log"
+    },
+    {
+      "phase": "native-seed-scratch-release-memory-1",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:57:50.6236223Z",
+      "finishedUtc": "2026-10-26T09:58:02.7167055Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-release-memory-1.log"
+    },
+    {
+      "phase": "native-seed-scratch-release-memory-2",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:58:02.9274687Z",
+      "finishedUtc": "2026-10-26T09:58:15.0647789Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-release-memory-2.log"
+    },
+    {
+      "phase": "native-seed-scratch-release-memory-3",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:58:15.3327864Z",
+      "finishedUtc": "2026-10-26T09:58:27.1230129Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-release-memory-3.log"
+    },
+    {
+      "phase": "native-seed-scratch-paired-comparison",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T09:58:27.3367171Z",
+      "finishedUtc": "2026-10-26T09:58:27.8591103Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-scratch-paired-comparison.log"
+    }
+  ]
+}

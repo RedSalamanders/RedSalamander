@@ -1,0 +1,38 @@
+{
+  "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-decision-candidate-v4-20260921\\scratch\\settings-store\\RedSalamander\\Logs\\FileOperations-20260921.jsonl",
+  "source_sha256": "9cf7656777ba9b274d520d4b92c2ec8a01e52188067693296985058d4ba45688",
+  "source_encoding": "UTF-16LE BOM",
+  "source_line_numbers": [
+    3,
+    8,
+    15,
+    20,
+    33,
+    34,
+    39,
+    42,
+    49,
+    54,
+    61,
+    66,
+    79,
+    80,
+    85,
+    88,
+    95,
+    100,
+    107,
+    112,
+    125,
+    126,
+    131,
+    134
+  ],
+  "records": 24,
+  "origins": {
+    "user": 18,
+    "cachedScope": 6
+  },
+  "verification": "JSON parsed; unique task/prompt IDs; every cached decision references its retained user grant and identical scope/action; distinct item indexes; no fabricated success/result field",
+  "selected_utf8_sha256": "924127c452f18411f9462265f1f16aac18eb6f35aecf38228dac7695113905d6"
+}

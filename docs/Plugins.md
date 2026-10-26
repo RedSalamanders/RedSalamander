@@ -4,15 +4,16 @@ RedSalamander uses plugins for:
 
 - **File systems**: browsing + operations (local, archives, remote protocols, cloud)
 - **Viewers**: opening files in dedicated viewer windows
+- **Terminal**: embedded pane sessions and a floating tabbed shell window
 
 Plugins are loaded from:
 
 - the `Plugins\` folder next to `RedSalamander.exe`, and
 - any additional custom plugin paths you add in Preferences.
 
-![Plugins UI](res/preferences-plugins.png)
-
 ## Open the plugin manager UI
+
+![Installed file-system and viewer plugins in Preferences](res/plugins.png)
 
 - **Plugins → Plugin Manager…** (opens the Plugins page in Preferences)
 - **View → Preferences… → Plugins**
@@ -35,6 +36,7 @@ File systems are selected by a **short prefix** in the address bar:
 |--------|-----------|----------|---------------------------|
 | `file:` | `builtin/file-system` | Windows file system | Drives, known folders, UNC paths, WSL shortcuts, browse/open/copy/move/rename/delete, Recycle Bin delete where supported, properties, clipboard, and drag-and-drop. |
 | `7z:` | `builtin/file-system-7z` | Archives | Open supported archives as virtual folders, usually by pressing Enter on an archive from `file:`. |
+| `mtp:` | `builtin/file-system-mtp` | Phones, cameras and media players | Device/storage pickers, read-only browsing by default, and device-dependent writes after opting into a writable profile. See [Portable Devices](PortableDevices.md). |
 | `ftp:` | `builtin/file-system-ftp` | FTP | Browse/read/write/delete through the curl-based remote file-system plugin; server capability and credentials may limit operations. |
 | `sftp:` | `builtin/file-system-sftp` | SFTP | SSH file transfer with password or key-based authentication via settings or Connection Manager. |
 | `scp:` | `builtin/file-system-scp` | SCP | SSH copy access; directory operations depend on server SFTP support. |
@@ -54,6 +56,13 @@ See also:
 - [Cloud Drives](CloudDrives.md)
 - [S3 / S3 Table](S3AndS3Table.md)
 - [Connections](Connections.md)
+
+## Terminal plugin
+
+The Terminal plugin is configured alongside file systems and viewers under
+**Preferences -> Plugins -> Terminal**. It has its own shell, font, paste,
+hyperlink and clipboard options. Open it with **Ctrl+Alt+T** or use
+**Ctrl+Shift+N** for the floating window; see [Terminal](Terminal.md).
 
 ## Common file-system shortcuts
 
@@ -338,8 +347,6 @@ Shortcuts:
 
 ### Image / RAW Viewer (`builtin/viewer-imgraw`)
 
-![Image/RAW viewer opened on a generated PNG](res/viewer-imgraw.png)
-
 Behavior:
 
 - Displays common image formats and many camera RAW formats.
@@ -366,23 +373,20 @@ Shortcuts:
 
 ### Space Viewer (`builtin/viewer-space`)
 
-![Space viewer treemap for a generated folder](res/viewer-space.png)
+Open **Commands → Calculate Occupied Space** (Alt+F10), or a folder's **View Space** context action. One selected folder is scanned; otherwise the current pane folder is used.
 
-Behavior:
+- A treemap links to a ranked retained-child table and compact inspector. Discovered totals stay scan-wide; Shown totals reflect the current folder and exclusions.
+- One Layout menu chooses a right or bottom panel, or Map only. Ctrl+1/Ctrl+2 retain right/bottom aliases.
+- Current-folder name/type/age filters and optional color/count modes support exploration. Other preserves exact aggregate totals without inventing discarded names.
+- Copy path uses Alt+Insert. Session exclusions are restorable and independent of cleanup marking.
+- Reviewed real cleanup targets enter the host's normal confirmed File Operations workflow. Provider-aware Focus in pane and explicit Open folder in other pane retain their source context.
+- Problems and bounded CSV/JSON current-view export expose unreadable, summarized, excluded and unavailable facts.
+- Settings live in global Preferences → Plugins → Space, with technical fields under Advanced. There is no private viewer settings dialog.
+- F5 refreshes without the cache; Rebuild discards the retained display first. Escape dismisses a popup/review/filter, then cancels scanning or closes when idle.
 
-- Visualizes folder disk usage as a treemap.
-- Opens from **Commands -> Calculate Occupied Space** (`Alt+F10`) or folder context menu **View Space**.
-- If exactly one folder is selected, it scans that folder; otherwise it scans the current folder.
-
-Shortcuts:
-
-- `F5`: refresh/rescan.
-- `Backspace`: up.
-- `Esc`: close.
+See [Space Viewer](Viewers.md#space-viewer-builtinviewer-space) for full behavior and native synthetic screenshots.
 
 ### PE Viewer (`builtin/viewer-pe`)
-
-![PE viewer opened on a sample executable](res/viewer-pe.png)
 
 Behavior:
 
@@ -416,8 +420,6 @@ Shortcuts:
 - Inside the viewer, use normal dialog navigation (`Tab`, arrow keys, Enter/Space on focused buttons) for Reload, Previous, Next, Run Query, and Table Preview.
 
 ### VLC Viewer (`builtin/viewer-vlc`)
-
-![VLC viewer playing a generated audio sample](res/viewer-vlc.png)
 
 Behavior:
 

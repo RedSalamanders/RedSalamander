@@ -1,0 +1,7 @@
+{
+  "observedAtUtc": "2026-09-08T17:26:12.3215317Z",
+  "runId": "20260908T164307Z-104260-ba28d93d5bb041e5900189f2db0b2445",
+  "userReport": "I interacted with the test windows",
+  "scope": "Exact timing, input, and affected cases were not specified.",
+  "disposition": "This interactive pass is not closeout evidence. Preserve all failures; reproduce failed groups on unchanged source without interaction before attributing them to a product defect. A clean Fresh Full remains required."
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "path": "Tools/Modules/Build/MSBuildInvocation.psm1",
+    "sha256": "095ba97d78f7105f07ec2e2ae1294c8cf7bf65c9615b8dfd97a1394fa6f05333"
+  },
+  {
+    "path": "Tools/Modules/Build/ProcessStreaming.psm1",
+    "sha256": "9da9cdf3c7f1e14d76d1406405cd3bfa372a8b116d34673955718290c084a358"
+  },
+  {
+    "path": "Tools/Modules/Build/SanitizedEnvironment.psm1",
+    "sha256": "33fdac9216dae4600b0bb9f466555e3baeeb1bfce602f1f3c297ae25301c94f0"
+  },
+  {
+    "path": "Tools/Modules/Tooling/ToolInventory.psm1",
+    "sha256": "2ba30ddea4512b82fa289c105c4a313f0e72dffcd19835b9b1cc654667c70208"
+  },
+  {
+    "path": "Tools/Tests/TestSupport.psm1",
+    "sha256": "c4cb7d615384a4534e036bd06b135d2cd21811eac717233eff74836d1dc63bf1"
+  },
+  {
+    "path": "Tools/tool-inventory.json",
+    "sha256": "67df479bea2bc9ff50ffd9b195c7dae3264f5481c3e82b9a9fc68030f26a4e0b"
+  },
+  {
+    "path": "Tools/README.md",
+    "sha256": "aa64bd6541d30c1e2ca068a0cc71569fd7b36dd131ca7b2b40c9982cf55a4ea4"
+  },
+  {
+    "path": "Specs/Build/Build_Toolchain.md",
+    "sha256": "307404e4dcc43e77ecdafe11121ac8dbe6ed387a09d75da7b07212dda20e427c"
+  },
+  {
+    "path": "Specs/NormativeConsistency.json",
+    "sha256": "3e518326b9bb7296a10ced0e8492944e5bd25aaa04724b5cd00932b4a78bc025"
+  },
+  {
+    "path": "Tools/Tests/MSBuildInvocation.Tests.ps1",
+    "sha256": "8caeb7cbdd8d0b8f074b86a45012395d9367822e9f1b1b4598e24303dc6cce6a"
+  },
+  {
+    "path": "Tools/Tests/ProcessStreaming.Tests.ps1",
+    "sha256": "12479331b60c407ee5a014500b2859468af5032a8f812ec98e6d76e9c2bd86a1"
+  },
+  {
+    "path": "Tools/Tests/BuildOutputProcess.Tests.ps1",
+    "sha256": "72217f80b8370bce8581b8ea004cd218c17c3e7371fecedff8161b89318a3067"
+  },
+  {
+    "path": "Tools/Tests/ToolInventory.Tests.ps1",
+    "sha256": "e0b570bf25f22f633e85bda109cde3cef2f92350cc9dd284c67dc4dbb13fc1b7"
+  },
+  {
+    "path": "Tools/Tests/ToolingGovernance.Tests.ps1",
+    "sha256": "053570323df98f2bf82c347c95b3ebdcda6a8d31eda44f8702e20b31f4167907"
+  }
+]

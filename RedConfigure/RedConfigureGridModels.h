@@ -27,7 +27,7 @@ using DxUi::GridColumnDesc;
 using DxUi::GridColumnKind;
 using DxUi::GridRowStyle;
 using DxUi::GridRowTone;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 
 [[nodiscard]] inline uint64_t StableLocalizationReviewRowId(std::wstring_view ownerName, std::wstring_view id) noexcept
 {
@@ -64,7 +64,7 @@ using DxUi::IDxGridModel;
     return nullptr;
 }
 
-class InventoryGridModel final : public IDxGridModel
+class InventoryGridModel final : public IGridModel
 {
 public:
     InventoryGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
@@ -163,7 +163,7 @@ private:
     std::vector<GridColumnDesc> _columns;
 };
 
-class TranslationGridModel final : public IDxGridModel
+class TranslationGridModel final : public IGridModel
 {
 public:
     TranslationGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
@@ -289,7 +289,7 @@ private:
     std::vector<size_t> _viewRows;
 };
 
-class LocalizationReviewGridModel final : public IDxGridModel
+class LocalizationReviewGridModel final : public IGridModel
 {
 public:
     LocalizationReviewGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
@@ -549,7 +549,7 @@ private:
     std::vector<std::wstring> _visibleCultures;
 };
 
-class ThemeColorGridModel final : public IDxGridModel
+class ThemeColorGridModel final : public IGridModel
 {
 public:
     ThemeColorGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)

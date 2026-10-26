@@ -1,0 +1,62 @@
+{
+  "schema": "i26-v63-completed-red-diagnostic.v1",
+  "diagnosticOnly": true,
+  "acceptanceEffect": "none",
+  "status": "expected-red",
+  "runId": "20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "exitCode": 1,
+  "candidateBefore": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "54e237632507f8a0cab50c62cc8340331deb5cd6a511bf93db7d3d6640f06756",
+    "receiptSha256": "8a576a080ad5ed455ded14ca97b7ac564acd160f62623a650796a64e68063b9f",
+    "manifestSha256": "e3dfb1c06a8d422cd1764c8174a5f5c7c13dafaeb0f80e1a545ba5978383db07",
+    "manifestRows": 85,
+    "sourceSnapshotId": "1f311234bb99a4cc11c6f35dfe5551e8988839a425281b93fccbcc091840784f"
+  },
+  "candidateAfter": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "54e237632507f8a0cab50c62cc8340331deb5cd6a511bf93db7d3d6640f06756",
+    "receiptSha256": "8a576a080ad5ed455ded14ca97b7ac564acd160f62623a650796a64e68063b9f",
+    "manifestSha256": "e3dfb1c06a8d422cd1764c8174a5f5c7c13dafaeb0f80e1a545ba5978383db07",
+    "manifestRows": 85,
+    "sourceSnapshotId": "1f311234bb99a4cc11c6f35dfe5551e8988839a425281b93fccbcc091840784f"
+  },
+  "names": [
+    "cmd_pane_fileops_completed_group_and_navigation"
+  ],
+  "repeatCount": 1,
+  "executions": 1,
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "sandboxClean": true,
+  "runnerResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v63-completed-red\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "runnerResultSha256": "9a7cd36ea1c65e2ccc90f37792b47390bc58e0a51afdf9af8985829fc4fd6bad",
+  "nativeResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v63-completed-red\\runner-run\\artifacts\\selftest\\last_run\\commands\\results.json",
+  "nativeResultSha256": "e552de2c12ae7d71ead48cf1b7714bb5a4635b86471a2b6f992900dcb90645da",
+  "nativeReason": "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348].",
+  "expectedReasonPrefix": "Two focus requests before paint must reveal the final group disclosure:",
+  "expectedTestSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "tracePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v63-completed-red\\runner-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+  "traceSha256": "cb89cee41c876e6fa7f145b9f7f0c7501b4c45712c7bc5818a726cfdbc635fa2",
+  "focusWitnessLines": [
+    "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348].",
+    "Case failure: cmd_pane_fileops_completed_group_and_navigation reason='Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348].'",
+    "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348]."
+  ],
+  "failureObservations": [
+    {
+      "name": "cmd_pane_fileops_completed_group_and_navigation",
+      "status": "failed",
+      "duration_ms": 4210,
+      "repeat_index": 1,
+      "reason": "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348]."
+    }
+  ],
+  "originalV58FullPreserved": true,
+  "originalV59DiagnosticPreserved": true,
+  "originalV60RedPreserved": true,
+  "testOnlyRed": true,
+  "doesNotReplaceFull": true,
+  "wholePlanComplete": false
+}

@@ -1,0 +1,57 @@
+{
+    "run_started_utc": "2026-10-20T14:54:05.000Z",
+    "duration_ms": 31900,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 5,
+    "case_filter": "folderView_perf_sort_toggle_legacy_warm_control",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261020T145324Z-36080-a216e22b6f0e4d1ea14f2f3a7716dcea\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 31228,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 5,
+            "case_filter": "folderView_perf_sort_toggle_legacy_warm_control",
+            "cases": [
+                {
+                    "name": "folderView_perf_sort_toggle_legacy_warm_control",
+                    "status": "passed",
+                    "duration_ms": 6011,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "folderView_perf_sort_toggle_legacy_warm_control",
+                    "status": "passed",
+                    "duration_ms": 5912,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "folderView_perf_sort_toggle_legacy_warm_control",
+                    "status": "passed",
+                    "duration_ms": 5747,
+                    "repeat_index": 3
+                },
+                {
+                    "name": "folderView_perf_sort_toggle_legacy_warm_control",
+                    "status": "passed",
+                    "duration_ms": 6061,
+                    "repeat_index": 4
+                },
+                {
+                    "name": "folderView_perf_sort_toggle_legacy_warm_control",
+                    "status": "passed",
+                    "duration_ms": 5812,
+                    "repeat_index": 5
+                }
+            ]
+        }
+    ],
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+}

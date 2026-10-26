@@ -1,0 +1,53 @@
+Skipping build (verified receipt 47f273ea7f7a87caef4fcaabec434b0bf8251b270ffa01240fcbdd231c1be6e4).
+Validation plan: 897908d14ce84a001ccc2f143d32504a61c68f7809360110fc2b0d0d5f63480c
+Entry fingerprints: 10ead983e74a2e353dba4a9e1b8f0c5bec038f35f03b3b8c81e35ea729f75bd3 (97 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-timeout-multiplier=3 --selftest-case=file_operations_phase0_typed_contract_source_guard,cmd_pane_fileops_conflict_comparison_rows --selftest-repeat=3
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS]
+Commands
+  (31,1s)
+         Passed: 6
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall:
+PASSED
+  Total: 6
+  Passed: 6
+  Failed: 0
+  Skipped: 0
+  Wall time: 40,5s
+  Classifications:
+flaky=0
+regression=0
+isolation_suspect=0
+unclassified_failure=0
+  Quarantine:
+active=0
+invalid=0
+repair_attempts=0
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: S:\RedSalamander.Perf
+  Run id:    i26-bounded-body-candidate-v11-20260921
+  Disk audit issues: 0
+  Last run: S:\RedSalamander.Perf\runs\i26-bounded-body-candidate-v11-20260921\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json

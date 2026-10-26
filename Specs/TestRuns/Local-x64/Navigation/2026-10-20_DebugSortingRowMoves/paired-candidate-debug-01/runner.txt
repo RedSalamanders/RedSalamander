@@ -1,0 +1,38 @@
+Skipping build (verified receipt 5a3f7b334066b6c7cd1f36c31aa7b5ec4cbbd4a3e9c89c0eab4a011bc3827003).
+Validation plan: 89f1ce55b006ae83585062e8434f4d387f79963f1f8f503dd2f8e9c61ebdf125
+Entry fingerprints: 35fc2d42c7b220c12413475e18b2409fd85c7ba0d2273742936919f8b0762099 (90 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=folderView_perf_sort_toggle_stress --selftest-repeat=5
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] Commands  (38,4s)
+         Passed: 5  Failed: 0  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: PASSED  Total: 5  Passed: 5  Failed: 0  Skipped: 0
+  Wall time: 55,1s
+  Classifications: flaky=0 regression=0 isolation_suspect=0 unclassified_failure=0
+  Quarantine: active=0 invalid=0 repair_attempts=0 repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20261020T132924Z-100560-bea25b3391ac4b81a8c3ef08a932a0a8
+  Disk audit issues: 41
+  Last run: Z:\RedSalamander.Perf\runs\20261020T132924Z-100560-bea25b3391ac4b81a8c3ef08a932a0a8\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+    perf\folderView_perf_sort_toggle_stress_metrics.json
+

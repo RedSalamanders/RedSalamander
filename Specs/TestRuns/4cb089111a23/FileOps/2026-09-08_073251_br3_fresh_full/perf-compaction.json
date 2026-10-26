@@ -1,0 +1,12 @@
+{
+  "original_file": "FileOps/2026-09-08_103911/perf/perf_metrics.jsonl",
+  "original_bytes": 433433536,
+  "original_rows": 1162233,
+  "original_sha256": "00d9a21a1bce7674e000d63f7b0233c53658c590bc85b0aeb0168e37eaf79fa8",
+  "selected_file": "perf/perf_metrics.jsonl",
+  "selected_rows": 1141,
+  "selected_bytes": 655093,
+  "selected_sha256": "44fcdba0731cd443241fcb01f26c8036c59dd3574919ad3b019666189092342b",
+  "selection": "All FileOps.SelfTest.* rows; FileOps.Scheduler.* rows in UTC [2026-09-08T08:32:14,2026-09-08T08:32:18), containing SharedPerItemScheduler; FileOps.BandwidthThrottle.* and FileOps.Interlock.* rows in UTC [2026-09-08T08:31:00,2026-09-08T08:33:00), containing Phase 7 knob and scheduler cases. No scheduler distribution or throughput claim is made from this selection.",
+  "ordering": "Selected original JSON lines remain in original file order; only line endings are normalized by WriteAllLines."
+}

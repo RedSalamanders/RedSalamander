@@ -1,0 +1,8 @@
+{
+  "schema": "red-salamander.i27-baseline-source-binding.v1",
+  "reviewed_revision": "e860022a088f8b5fc3c604a61e091452cf83337e",
+  "frozen_checkout": "C:/RsI26Adopt",
+  "checked_native_files": 687,
+  "differences": [],
+  "note": "Git blob comparison of tracked native headers, sources, projects, imports and resources under Common, RedSalamander and Plugins. The baseline is a frozen dirty checkout; its build receipt retains that identity."
+}

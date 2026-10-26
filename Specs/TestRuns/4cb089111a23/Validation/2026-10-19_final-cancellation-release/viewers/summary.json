@@ -1,0 +1,41 @@
+[
+  {
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "run_id": "20261019T062230Z-55020-6179f0e9d52d469eab5aeb97f67fa46b",
+    "exit_code": 0,
+    "configuration": "Release",
+    "platform": "x64",
+    "activation": "native-no-activate",
+    "scope": "Three affected ViewerSpace cases only",
+    "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+    "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+    "source_stable": true,
+    "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-release-2026-10-19\\viewers\\20261019T062230Z-55020-6179f0e9d52d469eab5aeb97f67fa46b"
+  },
+  {
+    "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+    "run_id": "20261019T062301Z-55020-f1ad475121da4cd981f3cdbc83067187",
+    "exit_code": 0,
+    "configuration": "Release",
+    "platform": "x64",
+    "activation": "native-no-activate",
+    "scope": "Three affected ViewerSpace cases only",
+    "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+    "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+    "source_stable": true,
+    "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-release-2026-10-19\\viewers\\20261019T062301Z-55020-f1ad475121da4cd981f3cdbc83067187"
+  },
+  {
+    "case": "TestViewerSpaceListingValidation",
+    "run_id": "20261019T062332Z-55020-a3f5d53e2a0142fdaec02da59886e042",
+    "exit_code": 0,
+    "configuration": "Release",
+    "platform": "x64",
+    "activation": "native-no-activate",
+    "scope": "Three affected ViewerSpace cases only",
+    "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+    "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+    "source_stable": true,
+    "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-release-2026-10-19\\viewers\\20261019T062332Z-55020-a3f5d53e2a0142fdaec02da59886e042"
+  }
+]

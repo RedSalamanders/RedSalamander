@@ -1,0 +1,14 @@
+{
+  "schema": "red-salamander.i27-final-native-source-verification.v1",
+  "timestamp_utc": "2026-10-02T15:22:29.6391260Z",
+  "source_binding_sha256": "6743a9a055c7b57746a848ffdd65193b174d7d065f4f22800657995a82d0985c",
+  "native_inputs_checked": 971,
+  "checkouts": [
+    "Z:/src/RedSalamander",
+    "C:/RsI27Safety"
+  ],
+  "differences": [],
+  "fixture_blob": "9b244a8830403e2dae192d3ce180f2613f34d0cc",
+  "primary_head": "e860022a088f8b5fc3c604a61e091452cf83337e",
+  "primary_branch": "codex/fileops-review-remediation"
+}

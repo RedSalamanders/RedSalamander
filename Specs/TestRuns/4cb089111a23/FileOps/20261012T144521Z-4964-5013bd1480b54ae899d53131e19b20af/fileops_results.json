@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-12T14:46:45.915Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T144521Z-4964-5013bd1480b54ae899d53131e19b20af\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 16204,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 3344,
+            "repeat_index": 1
+        },
+        {
+            "name": "R4T4_LocalManyDirectoriesCopy",
+            "status": "passed",
+            "duration_ms": 12688,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 157,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

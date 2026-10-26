@@ -1,6 +1,6 @@
 # Diagnostics: ETW, Debug Logging & Perf
 
-RedSalamander has no log files: every diagnostic is a structured ETW (Event Tracing for Windows) event emitted through a single TraceLogging provider, and `RedSalamanderMonitor.exe` is the real-time consumer. This page is the developer reference for how to emit diagnostics, the on-the-wire event schema, the consumer pipeline, the build/runtime gating that decides what is emitted, and the separate `--perf` JSONL sink. For the wider architecture see [../DeveloperGuide.md](../DeveloperGuide.md) ("Diagnostics" deep dive); for the consumer UI see [../Monitor.md](../Monitor.md); for access/permission issues see [../Troubleshooting.md](../Troubleshooting.md).
+RedSalamander Debug helpers emit structured ETW events consumed by the separately installed RedMonitor viewer. File Operations daily logs and --perf JSONL remain application-owned. This page covers the producer API; viewer implementation and qualification belong to the independent RedMonitor project.
 
 ## How to emit diagnostics
 
@@ -92,7 +92,8 @@ Built by `EmitEtwEvent` from an `InfoParam` (`BuildInfoParam` stamps the time, P
 | `ProcessId` | `UInt32` | Emitting process id. |
 | `ThreadId` | `UInt32` | Emitting thread id. |
 | `FileTime` | `UInt64` | `FILETIME` of emit (UTC, 100ns ticks). |
-| `Message` | `CountedWideString` | The formatted payload text. |
+| `Message` | `CountedWideString` | The normalized [RedSalamander] prefix and bounded Unicode payload. |
+| Application | WideString | Static application label RedSalamander, additive to the compatible schema. |
 
 `InfoParam::Type` is a bit value (`Text=0x0`, `Error=0x1`, `Warning=0x2`, `Info=0x4`, `Perf=0x8`, `Debug=0x10`, `All=0x3F`). The Monitor maps these to its 6-bit display filter mask via `FilterBitForType` (Text `0x01`, Error `0x02`, Warning `0x04`, Info `0x08`, Perf `0x10`, Debug `0x20`).
 
@@ -113,16 +114,16 @@ Written by `Perf::Scope`'s destructor and by `Perf::Emit`.
 
 ## Consumer pipeline
 
-`RedSalamanderMonitor.exe` consumes the same provider in real time. The chain is **emit -> ETW session -> TDH decode -> queue -> batch -> render**:
+The independently installed RedMonitor.exe owns ETW session/listener lifetime, bounded model, intake
+queue and rendering. Its [transport contract](https://github.com/RedSalamanders/RedMonitor/blob/ej/redmonitor-adoption-20261023/Specs/Core/Core_Transport.md)
+owns session collision and shutdown behavior; never stop a foreign session. This application emits
+through its existing module-owned provider and does not own a listener thread or viewer window.
 
-1. **Session start** — `EtwListener::Start` stops any stale `RedSalamanderMonitor_ETW_Session`, calls `StartTrace` (real-time mode, 256 KB buffers, 8-128 buffers), then `EnableTraceEx2` on the provider GUID at `TRACE_LEVEL_VERBOSE` matching any keyword, and `OpenTrace`.
-2. **Worker thread** — `ProcessTrace` runs on a `std::jthread` (`ProcessTraceThread`); `EventRecordCallback` -> `HandleEvent` -> `ExtractEventData` decodes each event's properties with the TDH API (slow, but off the UI thread). When a record has no `Message` but has a `Name`, it is treated as a `PerfScope` and a `[perf] ...` line is synthesized (with a duration warning/error marker over 500ms / 1s).
-3. **Display filter** — the wired callback applies `ShouldAcceptEtwEventForDisplay` (see self-event suppression below), then calls `ColorTextView::QueueEtwEvent`.
-4. **Cross-thread queue** — `QueueEtwEvent` (still on the worker) pushes onto `_etwEventQueue` (a `std::deque` under `wil::critical_section _etwQueueCS`) and posts `WndMsg::kColorTextViewEtwBatch` **only when the queue was empty** (coalescing to one pending message).
-5. **Batch intake** — `OnAppEtwBatch` runs on the UI thread, drains up to `kMaxBatchSize` = 200 entries under the lock, reposts the batch message if overflow remains, and appends the chunk via `Document::AppendInfoLines` under a single document write lock. Append/layout/paint stay on the UI thread.
-
-The two-mode (AUTO_SCROLL / SCROLL_BACK) rendering model and its perf metrics are documented in `Specs/Core/Core_RedSalamanderMonitor.md`.
-
+The pinned Client.h shares normalization with RedPrism, RedXe and RedTilde. Disabled writes perform no
+formatting/allocation; enabled payloads are bounded to 16000 UTF-16 code units including the application
+prefix. The explicit updater changes only the reviewed header/license/lock. Ordinary build and package
+operations need no helper source or executable. See [Monitor](../Monitor.md) for installed discovery,
+Debug-only automatic launch and the shared Release 7.0 Preferences profile.
 ## Build & runtime gating
 
 What actually reaches ETW depends on the build flavor and command-line/environment opt-ins. The decision for `DebugMessage` types is `ShouldEmitMonitorDiagnosticMessageType`; the perf path additionally checks `Perf::IsEnabled()`.
@@ -132,7 +133,7 @@ What actually reaches ETW depends on the build flavor and command-line/environme
 | Debug, ASan Debug | Emitted | Emitted | On |
 | Release | Emitted | Off unless opted in | Off unless opted in |
 
-Opt-ins (both `RedSalamander.exe` and `RedSalamanderMonitor.exe` parse the same flags):
+Opt-ins (both `RedSalamander.exe` and `RedMonitor.exe` parse the same flags):
 
 | Switch / variable | Effect |
 | --- | --- |
@@ -145,7 +146,7 @@ Build-flavor detection is `IsMonitorDiagnosticsBuild()` — true for `_DEBUG` / 
 
 ### Self-event suppression (Monitor)
 
-By default the Monitor must stay quiet about itself. `ShouldAcceptEtwEventForDisplay` (in `RedSalamanderMonitor/MonitorDiagnostics.h`) drops events whose `processID == GetCurrentProcessId()` and suppresses startup status text. Launching the Monitor with `--etw` (which sets the runtime flag) opts into showing its own self-originated events and startup status.
+By default the Monitor must stay quiet about itself. `ShouldAcceptEtwEventForDisplay` (in `RedMonitor src/MonitorDiagnostics.h (independent repository)`) drops events whose `processID == GetCurrentProcessId()` and suppresses startup status text. Launching the Monitor with `--etw` (which sets the runtime flag) opts into showing its own self-originated events and startup status.
 
 ## The `--perf` JSONL sink
 
@@ -186,6 +187,6 @@ The Monitor also surfaces the failing error code (`EtwListener::GetLastError`/`G
 | `Common/Helpers.h` (`EmitEtwEvent`, `InfoParam`, `kDebugKeyword`, `kPerfKeyword`) | `DebugMessage` writer and metadata struct. |
 | `Common/Helpers.h` (`CallTracer`, `TRACER*`) | Per-thread indentation + timing. |
 | `Common/Common/PerfJsonl.cpp` | JSONL perf sink (exported from `Common.dll`). |
-| `RedSalamanderMonitor/EtwListener.{h,cpp}` | Real-time ETW session + TDH decode. |
-| `RedSalamanderMonitor/ColorTextView.cpp` | Cross-thread queue + batch intake + render. |
-| `RedSalamanderMonitor/MonitorDiagnostics.h` | Self-event filtering policy. |
+| `RedMonitor src/EtwListener.{h,cpp} (independent repository)` | Real-time ETW session + TDH decode. |
+| `RedMonitor src/ColorTextView.cpp (independent repository)` | Cross-thread queue + batch intake + render. |
+| `RedMonitor src/MonitorDiagnostics.h (independent repository)` | Self-event filtering policy. |

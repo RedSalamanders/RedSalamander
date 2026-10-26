@@ -1,0 +1,14 @@
+[PASS] ViewerSpace listing validation invariants
+ViewerPETests passed.
+[PASS] TestViewerSpaceListingValidation harness path resolves
+[PASS] TestViewerSpaceListingValidation fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceListingValidation fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceListingValidation fresh harness process launches
+[PASS] TestViewerSpaceListingValidation fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceListingValidation fresh harness process resumes
+[PASS] TestViewerSpaceListingValidation fresh harness process exits before timeout
+[PASS] TestViewerSpaceListingValidation fresh harness process reports an exit code
+[PASS] TestViewerSpaceListingValidation fresh harness run passes
+[PASS] TestViewerSpaceListingValidation owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

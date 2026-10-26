@@ -1,0 +1,6 @@
+{
+  "case": "TestViewerVlcLongPathsAndErrorMessages",
+  "exitCode": 1,
+  "trace": "TestViewerVlcLongPathsAndErrorMessages.txt",
+  "activation": "no-activate"
+}

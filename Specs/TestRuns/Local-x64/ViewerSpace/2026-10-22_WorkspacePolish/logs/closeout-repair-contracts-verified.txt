@@ -1,0 +1,88 @@
+
+
+
+
+
+Describing Resource localization contracts
+ [+] requires every top-level RC resource root to be explicitly allowlisted 2.89s
+ [+] keeps resource format placeholders positional and translation-safe 5.2s
+ [+] keeps documented language-neutral string ids embedded-only in their owning resource module 266ms
+ [+] loads documented language-neutral string ids through embedded helpers only 1.41s
+ [+] keeps satellite string ids complete except documented embedded-only ids 591ms
+ [+] keeps file-operations count summaries count-neutral and removes the retired combined format 216ms
+ [+] passes file-operations diagnostic resource text typed instead of pre-rendered 32ms
+ [+] keeps base and satellite MENU structures identical 226ms
+ [+] keeps the reviewed context, viewer, and monitor command placement exact 57ms
+ [+] keeps actionable static sibling menu access keys present and unique 267ms
+Describing Specification information architecture integration
+ [+] keeps every approved post-Terminal Done history blob unchanged 14.3s
+Describing Visible native audit contracts
+ [+] keeps dependency trees outside the product scan and classifies every current residual 5.29s
+Describing Keyboard shortcut documentation drift contracts
+ [+] binds the Alt+arrow folder-view chords to history and selected-name commands in code 14ms
+ [+] documents the Alt+arrow chords consistently in docs/KeyboardShortcuts.md 5ms
+ [+] keeps the implemented folderView keyboard spec aligned with the Alt+arrow command ids 4ms
+Describing Settings schema vs code key-coverage contracts
+ [+] accepts every canonical formatted theme function spelling 30ms
+ [+] reads connections.allowInsecureTlsInAutomation in the settings store 4ms
+ [+] declares connections.allowInsecureTlsInAutomation in the settings schema 7ms
+ [+] declares the Windows Hello connection keys in the settings schema 4ms
+ [+] keeps the settings schema parseable as JSON 6ms
+ [+] documents the Monitor filter mask default as 63 (six message types) in the schema 3ms
+Describing File Operations popup documentation drift contracts
+ [+] tracks split popup cases in source and domain specs without freezing them in coverage policy 23ms
+Describing Historical audit governance contracts
+ [+] marks every review campaign document as a non-live historical snapshot 39ms
+ [+] records that the legacy root plans queue was archived to Done and deleted 30ms
+ [+] resolves reviewed Markdown links and backticked repository paths 10ms
+ [+] keeps the completed Observatory ledger internally consistent 26ms
+ [+] keeps generated Theme Gallery Vite state out of version control 121ms
+ [+] keeps the vcpkg Dependabot group limited to direct manifest dependencies 9ms
+Describing Published File Operations capture provenance
+ [+] binds all documented count and lifecycle scenes to reviewed native synthetic captures 79ms
+Describing Published product scenario capture provenance
+ [+] closes the Terminal, utility-dialog, provider and real-playback illustration gaps 37ms
+ [+] covers Search, Space, actual viewers, plugins and every Preferences category 10ms
+ [+] binds every whole native frame to its origin receipt and reviewed synthetic data 514ms
+ [+] links every published scenario from a guide or its scenario table 21ms
+Describing Viewer chrome keyboard contracts
+ [+] routes standalone file-combo keyboard handling through the shared helper 65ms
+ [+] routes viewer Unicode text copies through the shared ownership helper 6ms
+ [+] routes first-party viewer title bars through the shared DWM attribute policy 11ms
+ [+] does not persist OnCreate hwnd captures in viewer chrome callbacks 13ms
+ [+] documents the shared Escape focus-cancel-close contract 8ms
+Describing Launcher subsystem contracts
+ [+] uses one detached console-policy WinGet alias launcher for normal and foreground waits 22ms
+Describing Tools inventory contract
+ [+] classifies every tracked or non-ignored file in the current Tools tree 1.88s
+ [+] rejects an unclassified top-level file even when a broad rule would match it 21ms
+ [+] rejects an unclassified nested file outside reviewed directory rules 3ms
+ [+] fails when a derived module consumer is missing from usedBy 354ms
+ [+] rejects stale explicit paths 4ms
+ [+] ignores tracked files deleted from the working tree during an in-progress move 354ms
+ [+] requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints 9ms
+ [+] requires explicit prerequisites metadata on entries and directory rules 8ms
+ [+] requires retention policy for compatibility records 9ms
+ [+] requires every non-null replacement to be an exact existing Tools path 7ms
+ [+] rejects historical entries without a reviewed manual entry point 4ms
+ [+] rejects unreviewed and missing historical manual entry-point paths 17ms
+ [+] rejects a reviewed manual root whose inventory entry is not a historical command 5ms
+ [+] allows reviewed manual roots to retain themselves and exposes the resolved closure 4ms
+ [+] uses a reviewed nested rule when exactly one rule matches 3ms
+ [+] renders a useful Markdown file inventory 1.47s
+ [+] documents the command contract and supports Validate as an alias 1.54s
+Describing Repository tooling governance
+ [+] keeps the checked-in inventory reconciled with the Tools tree 1.51s
+ [+] keeps active private implementation modules below Tools Modules 5ms
+ [+] limits internal root compatibility loaders to explicit module replacements 8ms
+ [+] documents every public command and compatibility loader completely 1.72s
+ [+] requires canonical replacements and explicit retention policy for compatibility surfaces 6ms
+ [+] keeps every historical file reachable from a reviewed manual command root 15ms
+ [+] keeps active executable tooling covered by at least one current test contract 16ms
+ [+] keeps the README top-level and module maps in exact filesystem parity 21ms
+ [+] keeps current Terminal helper export and consumer contracts live in the current profile 1.1s
+ [+] keeps destructive support commands within their documented static safety boundaries 166ms
+ [+] uses psm1 modules with explicit reviewed exports 302ms
+ [+] records every reviewed public naming exception in the inventory 9ms
+Tests completed in 42.45s
+Passed: 68 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0

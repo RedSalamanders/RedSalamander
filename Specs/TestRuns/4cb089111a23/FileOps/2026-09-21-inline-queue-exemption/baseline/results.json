@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-21T16:20:21.224Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260921T161946Z-77776-97bdacea5c42473db04ac5ab23231221\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1500,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Floodgate inline-F2 inherited global Queue waiting instead of only the overlapping-root interlock.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1281,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+            "status": "failed",
+            "duration_ms": 188,
+            "repeat_index": 1,
+            "reason": "Floodgate inline-F2 inherited global Queue waiting instead of only the overlapping-root interlock."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

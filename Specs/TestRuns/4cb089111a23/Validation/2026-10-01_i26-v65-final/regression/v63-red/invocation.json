@@ -1,0 +1,8 @@
+{
+  "startedUtc": "2026-10-01T08:42:54.6375993+00:00",
+  "endedUtc": "2026-10-01T08:43:40.9128498+00:00",
+  "exitCode": 1,
+  "runId": "20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "filter": "cmd_pane_fileops_completed_group_and_navigation",
+  "repeatCount": 1
+}

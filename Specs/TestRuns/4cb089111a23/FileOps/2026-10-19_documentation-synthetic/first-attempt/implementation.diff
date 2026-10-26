@@ -1,0 +1,252 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 0b6422618..4d9896112 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -63,6 +63,10 @@ Application screenshots for specifications, documentation, and UI reviews MUST b
+ harness with deterministic scenarios and no desktop takeover. Reuse or extend harness capture support rather
+ than using Computer Use or manual desktop screenshots. Save scenario/build provenance with the captures and
+ label proposal mockups separately from actual application screenshots.
++All published screenshots MUST use realistic invented fixture data for paths, filenames, accounts,
++hostnames and other identifying content. Never publish personal or environment-derived data, or
++replace it with redaction labels such as `[path hidden]`; seed synthetic values before capture.
++See `Specs/Testing/Testing_SelfTests.md` for the screenshot data and privacy contract.
+ Default to no activation. When the user explicitly authorizes brief focus for interaction captures, use
+ the harness’s existing warning and interactive desktop lease, target only owned test windows, and restore
+ cursor and foreground focus. Never substitute Computer Use or manual desktop screenshots.
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
+index bcd5963ba..6804acf74 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
+@@ -15469,7 +15469,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+                 Fail(presentationFailure);
+                 return true;
+             }
+-            if (! CaptureFileOpsCardHierarchy(state))
++            if (! CaptureFileOpsDocumentation(state) || ! CaptureFileOpsCardHierarchy(state))
+             {
+                 Fail(L"Card hierarchy failed; see CardHierarchy subject, geometry and disclosure witnesses in the trace.");
+                 return true;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
+index c57b9103f..d12f6345e 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
+@@ -1815,6 +1815,152 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+ 
+ // Review-remediation capture deliberately inspects only its own HWND and retained tree.
+ // It needs neither desktop-global UIA/focus observation nor real foreground input.
++[[nodiscard]] bool CaptureFileOpsDocumentation(SelfTestState& state)
++{
++    using namespace FileOperationsPopupInternal;
++    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
++        return false;
++    auto* folder           = TryGetFolderWindow(state.mainWindow);
++    const auto monitors    = GetFileOpsGalleryMonitors();
++    const auto output      = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, L"documentation");
++    const auto breadcrumbs = output / L"empty-breadcrumbs";
++    if (! folder || monitors.empty() || output.empty() || ! SelfTest::EnsureDirectory(output) || ! SelfTest::EnsureDirectory(breadcrumbs))
++        return false;
++
++    Localization::LanguagePreference previousLanguage{};
++    if (g_settings.ui.has_value() && ! g_settings.ui.value().language.empty() && g_settings.ui.value().language != L"system")
++        previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui.value().language};
++    const auto previousTheme = folder->GetTheme();
++    const auto restore       = wil::scope_exit([&]
++    {
++        static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage));
++        folder->ApplyTheme(previousTheme);
++    });
++    if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, L"en-US"})))
++        return false;
++    auto theme                  = ResolveAppTheme(ThemeMode::Dark, L"Documentation");
++    theme.reducedMotionOverride = true;
++    folder->ApplyTheme(theme);
++
++    // These invented, display-only identities are never opened. Private state and
++    // an empty durable store keep actual tasks and personal data out of the frames.
++    constexpr std::wstring_view subject           = L"Workshop";
++    constexpr std::wstring_view sourceFolder      = LR"(C:\Demo\Media\Workshop)";
++    constexpr std::wstring_view destinationFolder = LR"(D:\Demo\Archive\Workshop)";
++    constexpr std::wstring_view sourcePath        = LR"(C:\Demo\Media\Workshop\session-01.mp4)";
++    constexpr std::wstring_view destinationPath   = LR"(D:\Demo\Archive\Workshop\session-01.mp4)";
++    constexpr std::wstring_view issueName         = L"session-02.mp4";
++    constexpr std::wstring_view issueSource       = LR"(C:\Demo\Media\Workshop\session-02.mp4)";
++    constexpr std::wstring_view issueDestination  = LR"(D:\Demo\Archive\Workshop\session-02.mp4)";
++    FileOperationMoveBreadcrumb::SetRootForSelfTest(breadcrumbs);
++    const auto restoreBreadcrumbs = wil::scope_exit([] { FileOperationMoveBreadcrumb::ClearRootForSelfTest(); });
++    Common::Settings::Settings settings{};
++    settings.fileOperations.emplace();
++    auto owner = std::make_unique<FolderWindow>();
++    owner->SetSettings(&settings);
++    FolderWindow::FileOperationState operations(*owner);
++    auto lifetime = std::make_shared<int>(0);
++    wil::unique_hwnd popup(FileOperationsPopup::Create(&operations, folder, state.mainWindow, lifetime));
++    wil::unique_hwnd issues;
++    const auto closeWindows = wil::scope_exit([&]
++    {
++        lifetime.reset();
++        issues.reset();
++        popup.reset();
++    });
++    auto* renderer          = popup ? reinterpret_cast<FileOperationsPopupState*>(GetWindowLongPtrW(popup.get(), GWLP_USERDATA)) : nullptr;
++    if (! renderer)
++        return false;
++
++    TaskSnapshot task{};
++    task.taskId         = 0xD0C1u;
++    task.operation      = FILESYSTEM_COPY;
++    task.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Running);
++    task.started = task.discoveryClosed = task.discoveredBytesKnown = task.hasProgressCallbacks = true;
++    task.selection              = {std::wstring(subject), 1u, 0u, 1u, true};
++    task.currentSourcePath      = sourcePath;
++    task.currentDestinationPath = destinationPath;
++    task.destinationFolder      = destinationFolder;
++    task.plannedItems = task.totalItems = 1u;
++    task.totalBytes = task.itemTotalBytes = 19'864'223'744ull;
++    task.completedBytes = task.itemCompletedBytes = 10'490'457'620ull;
++    task.discoveredFileCount                      = 240u;
++    task.discoveredDirectoryCount                 = 8u;
++    task.copiedFileCount                          = 12u;
++    task.copiedFolderCount                        = 2u;
++    task.copiedFileCountKnown = task.copiedFolderCountKnown = task.autoConcurrencyUsed = true;
++    task.autoTunedConcurrency = task.effectiveConcurrencyBudget = 4u;
++    task.lastProgressCallbackTick                               = GetTickCount64();
++    task.operationStartTick                                     = task.lastProgressCallbackTick - 200'000u;
++    renderer->DebugSetVisualScenario({task}, false, true);
++    PlaceFileOpsGalleryWindow(popup.get(), monitors.front(), 900, 460);
++    const auto subjectId = std::format(L"FileOperations.Task.{}.Subject", task.taskId);
++    std::wstring name;
++    std::wstring help;
++    bool valid =
++        renderer->DebugHostedRegionAccessibleTextForSelfTest(subjectId, name, help) &&
++        name == FormatStringResource(nullptr, IDS_FMT_FILEOPS_OPERATION_SUBJECT, LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY), subject);
++    for (const auto& [suffix, label] :
++         std::array<std::pair<std::wstring_view, UINT>, 2u>{{{L"Source.0", IDS_FILEOPS_LABEL_FROM}, {L"Destination", IDS_FILEOPS_LABEL_TO}}})
++    {
++        const auto expected = std::format(L"{} {}", LoadStringResource(nullptr, label), suffix == L"Source.0" ? sourcePath : destinationFolder);
++        valid = renderer->DebugHostedRegionAccessibleTextForSelfTest(std::format(L"FileOperations.Task.{}.Path.{}", task.taskId, suffix), name, help) &&
++                name == expected && help == expected && valid;
++    }
++    PopupLayoutDebugSnapshot popupSnapshot{};
++    popupSnapshot.taskId = task.taskId;
++    valid                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), popupSnapshot) && ! popupSnapshot.taskHasVisibleButtonOverlap &&
++                           popupSnapshot.taskCountsText == FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS, 2u, 8u, 12u, 240u) && valid;
++    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / L"file-operations-popup.png")))
++        return false;
++
++    FolderWindow::FileOperationState::CompletedTaskSummary summary{};
++    summary.taskId        = 0xD0C2u;
++    summary.operation     = FILESYSTEM_COPY;
++    summary.selection     = {std::wstring(issueName), 1u, 1u, 0u, true};
++    summary.resultHr      = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
++    summary.errorCount    = 1u;
++    summary.totalItems    = 1u;
++    summary.completedTick = GetTickCount64();
++    FolderWindow::FileOperationState::TaskDiagnosticEntry issue{};
++    issue.localTime  = SYSTEMTIME{2026, 10, 1, 19, 10, 0, 0, 0};
++    issue.taskId     = summary.taskId;
++    issue.operation  = FILESYSTEM_COPY;
++    issue.severity   = FolderWindow::FileOperationState::DiagnosticSeverity::Error;
++    issue.status     = summary.resultHr;
++    issue.category   = L"item.continueOnError";
++    issue.message    = LoadStringResource(nullptr, IDS_FILEOPS_DIAG_SOURCE_MISSING);
++    issue.sourcePath      = issueSource;
++    issue.destinationPath = issueDestination;
++    summary.issueDiagnostics.push_back(std::move(issue));
++    operations.DebugAppendCompletedTaskForSelfTest(std::move(summary));
++    issues.reset(FileOperationsIssuesPane::Create(&operations, folder, state.mainWindow, lifetime));
++    if (! issues)
++        return false;
++    PlaceFileOpsGalleryWindow(issues.get(), monitors.front(), 900, 540);
++    FileOperationsIssuesPane::SelfTestSnapshot issuesSnapshot{};
++    valid = FileOperationsIssuesPane::SelfTestRefresh(issues.get(), true) && FileOperationsIssuesPane::SelfTestSelectTask(issues.get(), 0xD0C2u) &&
++            FileOperationsIssuesPane::TryGetSelfTestSnapshot(issues.get(), issuesSnapshot, true) && issuesSnapshot.rowCount == 1u &&
++            issuesSnapshot.selectionCount == 1u && issuesSnapshot.detailPresent &&
++            issuesSnapshot.detailTexts[4] == std::format(L"{}\n{}", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SOURCE), sourceFolder) &&
++            issuesSnapshot.detailTexts[5] == std::format(L"{}\n{}", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_DESTINATION), destinationFolder) &&
++            issuesSnapshot.detailTexts[8] == issueName && ! issuesSnapshot.selectedCells.empty() && issuesSnapshot.selectedCells.front() == issueName;
++    for (const auto& text : issuesSnapshot.detailTexts)
++        valid = text.find(L"[path hidden]") == std::wstring::npos && text.find(L"[name hidden]") == std::wstring::npos &&
++                text.find(L"C:\\Users\\") == std::wstring::npos && text.find(L"\\\\") == std::wstring::npos && text.find(L'@') == std::wstring::npos && valid;
++    for (const auto& text : issuesSnapshot.selectedCells)
++        valid = text.find(L"[path hidden]") == std::wstring::npos && text.find(L"[name hidden]") == std::wstring::npos &&
++                text.find(L"C:\\Users\\") == std::wstring::npos && text.find(L"\\\\") == std::wstring::npos && text.find(L'@') == std::wstring::npos && valid;
++    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(issues.get(), output / L"file-operations-issues.png")))
++        return false;
++    std::ofstream manifest(output / L"scenarios.tsv", std::ios::binary);
++    manifest << "file\tscenario\tlanguage\ttheme\tclientWidthDip\tdpi\tidentity\n"
++             << "file-operations-popup.png\trunning-copy\ten-US\tdark\t900\t" << GetDpiForWindow(popup.get()) << "\tinvented Workshop media paths\n"
++             << "file-operations-issues.png\tselected-source-missing-issue\ten-US\tdark\t900\t" << GetDpiForWindow(issues.get()) << "\tinvented Workshop media paths\n";
++    AppendLog(L"DocumentationPrivacy: two private synthetic surfaces; exact invented names and paths; one selected issue; no redaction or personal data.");
++    return manifest.good();
++}
++
+ [[nodiscard]] bool CaptureFileOpsCardHierarchy(SelfTestState& state)
+ {
+     using namespace FileOperationsPopupInternal;
+diff --git a/Specs/Testing/Testing_SelfTests.md b/Specs/Testing/Testing_SelfTests.md
+index 1c4b7912b..7661e1d95 100644
+--- a/Specs/Testing/Testing_SelfTests.md
++++ b/Specs/Testing/Testing_SelfTests.md
+@@ -1521,6 +1521,25 @@ desktop lease; they target only process-owned test windows and restore cursor/fo
+ Computer Use and manual desktop screenshots are not substitutes. Captures MUST identify the scenario, theme, window size, DPI,
+ source/build identity and whether operation data is synthetic. Concept mockups are separate artifacts.
+ 
++Every published screenshot, across all features and all specifications, documentation and UI reviews,
++MUST use realistic invented fixture data wherever identifying content appears. This includes file and
++folder names, paths, user/account names, email addresses, host/share names, titles and document content.
++Do not derive these values from a person's files, workspace, machine or account, even if the values
++appear harmless. Ordinary application labels and naturally empty fields remain as the UI renders them.
++Use plausible synthetic names and paths (for example `C:\Demo\Media\Workshop\session-01.mp4`), not
++`[path hidden]`, `[name hidden]`, blur, masking or other redaction substitutes. Seed the fixture before
++capture; do not edit pixels afterward. Display-only example paths grant no filesystem access: actual
++test I/O still requires the marked test sandbox. Record the synthetic scenario in provenance and
++review the complete frame, including titles, breadcrumbs, rows, details and any visible tooltips.
++Replace a noncompliant existing illustration through the harness before publishing it again.
++
++`FileOps_ReviewRemediationContracts` captures dedicated private popup/Issues-pane fixtures using an
++invented Workshop media folder and distinct source/destination paths, an empty owned breadcrumb store,
++and no admitted operation. It verifies exact displayed and retained accessible identities and the
++selected issue before saving unedited native frames. These documentation fixtures are separate from
++the broader stress gallery, whose synthetic names exercise path/name layout. Do not reuse an old
++completed-task card as an Issues-pane illustration.
++
+ 
+ ## File Operations storage and lifecycle witness catalog
+ 
+diff --git a/docs/FileOperations.md b/docs/FileOperations.md
+index df690e555..544e6d7cf 100644
+--- a/docs/FileOperations.md
++++ b/docs/FileOperations.md
+@@ -4,11 +4,8 @@ RedSalamander runs long operations in the background and shows progress in a ded
+ 
+ ![File operations popup](res/file-operations-popup.png)
+ 
+-This native harness capture shows the current card layout. Its [capture provenance](res/file-operations-popup.provenance.json) records the deterministic scenario and build.
+-
+-The [French scenario gallery](../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/gallery.html)
+-shows conflicts, cancellation, long paths, themes and the two tested display scales.
+-Use its filters to compare the captured states and open each image at full resolution.
++This native harness capture shows the current card layout using invented file names and paths.
++Its [capture provenance](res/file-operations-popup.provenance.json) records the deterministic scenario and build.
+ 
+ ## File Operations popup (UI tour)
+ 
+@@ -232,6 +229,9 @@ When operations encounter errors, they can be reviewed in the issues UI:
+ 
+ ![File operations issues pane](res/file-operations-issues.png)
+ 
++This is the current Issues pane with a selected failure and its details, using invented file names
++and paths. The [capture provenance](res/file-operations-issues.provenance.json) records the synthetic scenario and build.
++
+ ## Leftovers from an interrupted copy or move
+ 
+ If a copy or move is interrupted before it can clean up (for example when RedSalamander closes unexpectedly), a temporary file can be left next to the destination. RedSalamander recognizes these files by the long generated names it gives them (for example names with a `.rs_tmp_…` part) and never hides them: they show up in panes, Find Files and Compare Directories like any other item, with a warning icon and the label **Possibly incomplete file (left by an interrupted copy or move)**. RedSalamander also recognizes the temporary names it uses on remote and device locations (FTP, SFTP and SCP uploads, S3 backups, MTP device writes). A backup or rename leftover (names with a `.rs_bak_…`, `.rs_ren_…` or `.rs_case_tmp_…` part, an S3 `.rs-bak-…` key or a `.redsalamander-rollback-…` file) can be the only complete copy of a file, so it is labeled **Possibly an original kept by an interrupted copy or move** instead: check it before deleting anything. The mark is based on the name only, so it is a hint rather than proof, and RedSalamander never deletes or repairs these files on its own.
+@@ -250,8 +250,6 @@ Some network shares (for example some NAS devices) cannot tell RedSalamander whi
+ 
+ Open item properties with **Files -> Properties** or `Alt+Enter`.
+ 
+-![File properties dialog](res/file-properties.png)
+-
+ Properties work through the active file-system plugin. Local files show name, path, type, size, timestamps, attributes, shortcut/link/reparse targets when present, and named streams when present. Remote/cloud plugins can expose their own metadata through the same dialog. `Ctrl+C` copies the full property text; `Esc` closes the dialog.
+ 
+ ## Clipboard copy/paste (Windows Explorer format)

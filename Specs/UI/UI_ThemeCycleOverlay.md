@@ -133,6 +133,21 @@ Required gates are:
 performance or closeout claim must cite a fresh same-machine archived run; unavailable historical run directories
 and incident artifacts are not normative proof.
 
+Retention receipts record valid private-byte samples before and after the unchanged
+1,000-command burst and 8 MiB guard. Ordinary Debug/Release retain the original single
+warmup command. ASan additionally warms the actual command path for 1,000 commands
+with default sanitizer settings, records that cold private-memory cost, and restores
+the original starting theme before measurement. The cold burst must reuse one HWND,
+grow GDI/USER counts by at most two, and grow live allocated bytes by at most 8 MiB.
+The original measured burst keeps its private-byte guard and adds 8 MiB live-allocation
+bounds both against its immediate baseline and across the combined cold/measured
+bursts. Thus allocator reservation is warmed while application retention stays bounded.
+Allocator heap/free diagnostics remain visible. Cold handle diagnostics retain the exact
+before/after GDI and USER counts and HWND identities. No option change or quarantine purge
+qualifies this test, and this measurement protocol is not a production performance
+improvement claim. Diagnostic writes remain outside the measured interval; original
+HWND, generation, GDI/USER, timer, capture and teardown assertions remain independent.
+
 ## Shared DXUI and Alert Overlay decision
 
 The feature required narrow shared DXUI improvements: Status-root UIA semantics, stable automation IDs,

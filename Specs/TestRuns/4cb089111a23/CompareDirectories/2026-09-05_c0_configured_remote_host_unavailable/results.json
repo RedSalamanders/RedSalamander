@@ -1,0 +1,54 @@
+{
+    "run_started_utc": "2026-09-05T18:44:09.915Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-configured-remote-readonly-authorized-debug-20260905\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 37,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 5,
+    "cases": [
+        {
+            "name": "remote_file_s3",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "S3: host connection UI unavailable for GetConnectionSecret. hr=0x80070578"
+        },
+        {
+            "name": "remote_file_ftp",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "FTP: host connection UI unavailable for GetConnectionSecret. hr=0x80070578"
+        },
+        {
+            "name": "remote_file_sftp",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "SFTP: host connection UI unavailable for GetConnectionSecret. hr=0x80070578"
+        },
+        {
+            "name": "remote_file_scp",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "SCP: host connection UI unavailable for GetConnectionSecret. hr=0x80070578"
+        },
+        {
+            "name": "remote_file_imap",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "IMAP: host connection UI unavailable for GetConnectionSecret. hr=0x80070578"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,18 @@
+{
+  "ordering_inputs": [
+    {
+      "path": "Common/NaturalSort.h",
+      "sha256": "46BBFEB89E08027F5E2A07689547B5765E7DE9A0C60523A7FD314C13C13BAE52"
+    },
+    {
+      "path": "RedSalamander/FolderViewSortPolicy.h",
+      "sha256": "318F6FE32C6848803A9421522C009587A3BA0730FA9610CD29EA7CE7F97BA2C5"
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "sha256": "945963641442274D65D99F47E45DFE824CBA104550A464DA690684F4752B231A"
+    }
+  ],
+  "fixture_function_and_ten_requests_unchanged": true,
+  "scope": "Windows helper, threshold and complete row-ordering implementation are unchanged; only test timing and test-only presentation observation change."
+}

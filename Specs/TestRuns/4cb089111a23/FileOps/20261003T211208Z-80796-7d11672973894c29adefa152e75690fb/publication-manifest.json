@@ -1,0 +1,444 @@
+{
+  "schema": "i27.f6-v2-publication-allowlist.proposed.v1",
+  "status": "PROPOSED-NOT-PUBLISHED",
+  "family": "V2",
+  "role": "baseline",
+  "ordinal": 8,
+  "pair": 4,
+  "original_runner_run_id": "20261003T211208Z-80796-7d11672973894c29adefa152e75690fb",
+  "machine": "4cb089111a23",
+  "native_metric_run_id": "2026-10-03_211244",
+  "native_metric_process": 21744,
+  "native_metric_commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+  "native_branch": "(detached)",
+  "native_commit_exception": "none",
+  "canonical_git_head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+  "source_snapshot_id": "73e48c8e89dd4061b6a681835bbd03d2ff24796526b6989492b4a141a71b93dd",
+  "receipt_id": "2fb4d7aabad65f136080922bd94c2999d10e6d13f85350b39b2806632c9405c9",
+  "proposed_repo_run": "Specs/TestRuns/4cb089111a23/FileOps/20261003T211208Z-80796-7d11672973894c29adefa152e75690fb",
+  "segments_in_same_original_run": true,
+  "selected_rows": 275,
+  "selected_row_bytes": 111877,
+  "original_raw_sha256": "a4462bda11fd958a3d6bb60c55a0dd218a6ce1741e8f954828a45650fa1bc912",
+  "original_raw_bytes": 5162901,
+  "original_raw_lines": 13923,
+  "original_hashes_recomputed_by_this_review": false,
+  "curated_segment_hash_count_and_identity_verified": true,
+  "whole_archive_raw_binding_matches_curator": true,
+  "strict_line_number_order_and_segment_ranges_match_metadata": true,
+  "files": [
+    {
+      "target": "raw-01/perf_metrics.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-v2-curation-external-20261003T214531Z-3fbce6a004d8496196b86d000bcb0f71\\v2\\20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\raw-01\\perf_metrics.jsonl",
+      "bytes": 111877,
+      "expected_sha256": "db7fd33123797c9ae7cefab6f8de8e011716719d5f77a48ea84b90628d8f5b97",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "ALL original claim rows; original text/digits/LF and order unchanged",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/row-selection.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-v2-curation-external-20261003T214531Z-3fbce6a004d8496196b86d000bcb0f71\\v2\\20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\row-selection.json",
+      "bytes": 11934,
+      "expected_sha256": "d3888c3f2d75abf771565e35f47e12ec4b8fcd9c34186fb884dd8f635e1a127b",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original line numbers, segments, before/after copied-hash binding",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/whole-archive-manifest.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\archive-manifest.json",
+      "bytes": 21210,
+      "expected_sha256": "1db38949080dc97b29f698894ab1cac76f96ecff6d0284fb0433b5fa7387d7e7",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete closed whole-run copied byte/hash and failure provenance",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "bytes": 581,
+      "expected_sha256": "2ddf779b9c45eba0c9b750521404c7d911ca4455f15ad351070609f7c8e48de0",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "bytes": 680,
+      "expected_sha256": "60ed5ab7b09a22bfce39de8d27627456c8f1613d57ebd7a48da9d65bc09eab65",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\results.json",
+      "bytes": 1032,
+      "expected_sha256": "0b8dcf329b8c3c8ac6ca4ac3bb78da6887b05e869d278d5419080bc8c489af74",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\trace.txt",
+      "bytes": 14468,
+      "expected_sha256": "1d3ca30f963ad4ea42ab9f691a3bdba052881d7e08097053fe81c8a9f8f42ff0",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "commands/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "bytes": 2,
+      "expected_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "compare/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+      "bytes": 2,
+      "expected_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "bytes": 74277,
+      "expected_sha256": "2612ddec4b81218fffc86af0cda879e5b2e1e07862f199ff9cc6339790a55127",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-case-history.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "bytes": 374,
+      "expected_sha256": "7f6c4ada33ff1df987ee927f9db51fe8fa440d73af71fcb01d12a2b7dd8c0b36",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-dashboard.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+      "bytes": 517,
+      "expected_sha256": "3f913ed1d623b832b446ae9dcabbfcc669177a01a07442fb75620dc14d7b1763",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/workspace-after-selftest.file-operations.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+      "bytes": 34126,
+      "expected_sha256": "32a796c215ed11ba6b03c1500b846bbe559076771222e760299488f403191a31",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/workspace-final.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "bytes": 34126,
+      "expected_sha256": "2ac4c2c850f6d12d0f1937badc8dbdfdaf116a2e793fcbdec070d338de5698ea",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/entry-fingerprints.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "bytes": 1694,
+      "expected_sha256": "657739fe2daaa05c116b30b347d55fec310ecbe45bd5f705c2c08d1ca1e1f353",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/validation-plan.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan.json",
+      "bytes": 1626,
+      "expected_sha256": "fa2eee56d4d94ddc15157541f2729e19ad3f6aa92c59157bdeab5150f8fe2ce5",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/validation-plan-decision.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "bytes": 5593,
+      "expected_sha256": "fc47047a305ff6e5f3c8f5100fce3860932afa5bbf6917fadf57b97f601f05b1",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/workspace-initial.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\whole-run\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+      "bytes": 34126,
+      "expected_sha256": "bd79571cde99439e771192f642f5b497f56727114bb801d8880b5581cdabcd48",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original native/runner/assertion or explicitly previous-run lineage record",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/capture-controls.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\capture-controls.json",
+      "bytes": 74334,
+      "expected_sha256": "e2bc2d88480d041e8a89f2116fb0570bdeb6513a2f874295ef0c7cb0f190c2e4",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original controls/audit scope; retain failures and global is_clean=false",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/capture-validation.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\capture-validation.json",
+      "bytes": 39,
+      "expected_sha256": "c4ab6a13fe500064577c7b89a3db36b9d346372f2cf771dc4b6e96b637d9be4e",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original controls/audit scope; retain failures and global is_clean=false",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/sandbox-audit-qualification.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb\\sandbox-audit-qualification.json",
+      "bytes": 450,
+      "expected_sha256": "72d4a6c0418a6c2999de9380fdf290bb63c0b01fec01813cc942749965fde765",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original controls/audit scope; retain failures and global is_clean=false",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/interleaved-run-bindings.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\interleaved-run-bindings.json",
+      "bytes": 13933,
+      "expected_sha256": "7225642997ed59e0c276f410bdac19bd78b871bf987705c65f40ed3598f0509c",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete fixed collection binding/history/audit controls",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/comparison-scope.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\comparison-scope.json",
+      "bytes": 520,
+      "expected_sha256": "6b2bdd6c11857963dfbf2653f85d78cf2396fa159c732dff19c738cf98f221c9",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete fixed collection binding/history/audit controls",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/closed-owned-audit-seeds.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\closed-owned-audit-seeds.json",
+      "bytes": 17750,
+      "expected_sha256": "2ab3875fe43f6edda160d709eb34bb7dd71ffdc1aaab7e5a559820f9dcbd1484",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete fixed collection binding/history/audit controls",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/immutable-receipt.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline\\immutable-receipt.json",
+      "bytes": 83501,
+      "expected_sha256": "f865c3e38af7c287bcfa63191efe6ec544bfa783664e66de0a12b357475b6620",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Byte-exact frozen immutable receipt/pointer; not current-source re-attestation",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/build-receipt.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline\\build-receipt.json",
+      "bytes": 83501,
+      "expected_sha256": "f865c3e38af7c287bcfa63191efe6ec544bfa783664e66de0a12b357475b6620",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Byte-exact frozen immutable receipt/pointer; not current-source re-attestation",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/curator.ps1",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\Curate-ClosedF6V2Rows.proposed.ps1",
+      "bytes": 20988,
+      "expected_sha256": "548851b62cd812edb3961f705ddb8330385cb045d6d690c8dd7be7445070468f",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Executed curator source bound by its recorded SHA256",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/literal-curator-inputs.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\Curate-ClosedF6V2Rows.proposed.inputs.json",
+      "bytes": 32155,
+      "expected_sha256": "1355b36d3120c925cd2284cdd66fa3397432922b9b7ad2f3c69bb8a86f289638",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "All sixteen literal original process/run/control/receipt identities",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/curation-summary.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-v2-curation-external-20261003T214531Z-3fbce6a004d8496196b86d000bcb0f71\\summary.json",
+      "bytes": 9061,
+      "expected_sha256": "8a9f7b124efbb9442b6870cc48da5961083a222003d1b5d45b4bf289f615608c",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Original sixteen-run successful selection summary; curation only",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/F6V2-Publication-ResourceScope.proposed.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\F6V2-Publication-ResourceScope.proposed.md",
+      "bytes": 7002,
+      "expected_sha256": "4448a8e32f8bcbee478b9655c66781e51f8acf07fb40fb74580923da1f7da76a",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Pending root resource scope; all adverse directions and earlier v1/failures remain explicit",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/ROOT-F6-V2-BOUNDED-ASSESSMENT.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\ROOT-F6-V2-BOUNDED-ASSESSMENT.md",
+      "bytes": 7037,
+      "expected_sha256": "ff1ab1f8fdd30d702bd582caef54bdcca1d85909a178b470227afd69bbc1e63d",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Exact root bounded disposition; keeps native/resource/dependency/history limits and remaining admission separate",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/fresh-build-bindings.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\fresh-build-bindings.json",
+      "bytes": 340861,
+      "expected_sha256": "410c6b486df84a777a85a3f7a7527c3fb348fa57063b878ec80e20f90ec25c38",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete frozen baseline/candidate/dependency/profile and raw audit binding",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/sandbox-audit-baseline.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\sandbox-audit-baseline.json",
+      "bytes": 70284,
+      "expected_sha256": "2f6bb28d2cb466a9be06bc456435b28ade63b527a1cf022ca6968e8c5ec69c76",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete frozen baseline/candidate/dependency/profile and raw audit binding",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/sandbox-audit-unseeded-baseline.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\sandbox-audit-unseeded-baseline.json",
+      "bytes": 71653,
+      "expected_sha256": "ccff69373194955c9b3f43aa62aaaa8f0eb56ca159ab43b99595017ba31b713e",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete frozen baseline/candidate/dependency/profile and raw audit binding",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/runner.log",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb.log",
+      "bytes": 1677,
+      "expected_sha256": "7256abbedb92161bbb03761a4dbca9e26f004a9670e655018c4fe1940a79572b",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete original runner stdout/closure log",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/audit-before.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\baseline-4-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb.audit-before.json",
+      "bytes": 70796,
+      "expected_sha256": "3c3dbab826853b4a083a2c8c019a126f13da7851d290735d25695e62d0c9a07b",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Original per-process pre-audit; after observations retained in capture controls",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/performance-comparison-v2.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\v2-pairs-20261003T210306Z-487089b39880442e8158b96b95fc97dd\\performance-comparison-v2.json",
+      "bytes": 391045,
+      "expected_sha256": "253ae0dbc06999eff150eed09b19f4efc6c5cce94352da5b6739bbbce85885cb",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "ALL ten captures/12 timing/13 resource metrics/adverse pairs; separate v2 whole-product ANALYSIS_ONLY",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/v2-ten-run-independent-review.proposed.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\metadata-review\\v2-ten-run-independent-review.proposed.md",
+      "bytes": 10851,
+      "expected_sha256": "4bb2c68ca913f2f6324a5976fe16cce99764ecc0e43031b72063edd9be589488",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete independent review/all290 resource phases/all1160 original resource rows/+1,+265/USER/CPU/private adverses",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/v2-resource-absolute-levels.readonly-review.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\metadata-review\\v2-resource-absolute-levels.readonly-review.md",
+      "bytes": 7331,
+      "expected_sha256": "e940c41828875a7a6c7e04d0c7f2ec682f961ea271cb08f5ece6d713c8f3e4c8",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete independent review/all290 resource phases/all1160 original resource rows/+1,+265/USER/CPU/private adverses",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/v2-resource-absolute-levels.readonly-review.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\v2-baseline-review\\metadata-review\\v2-resource-absolute-levels.readonly-review.json",
+      "bytes": 771051,
+      "expected_sha256": "f47cb4c4d3b40704de717a7d923068227e463bb86df673a9c69afd712bf0534b",
+      "hash_origin": "independent bounded source byte hash in this review",
+      "role": "Complete independent review/all290 resource phases/all1160 original resource rows/+1,+265/USER/CPU/private adverses",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "publication-manifest.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\F6V2-PublicationAllowlist.proposed-20261003T220522Z\\V2-08-20261003T211208Z-80796-7d11672973894c29adefa152e75690fb.json",
+      "bytes": 31650,
+      "expected_sha256": null,
+      "hash_origin": "Self digest belongs in external proposal index; no circular self digest",
+      "role": "This exact complete proposal counted toward final run cap",
+      "root_byte_verification_required": true
+    }
+  ],
+  "historical_evidence": [
+    {
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T195937Z-028ff301e3d449c6ad202fd2d6667c51",
+      "status": "Original status unchanged; not promoted"
+    },
+    {
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202054Z-3399404ce22548bea7b970eaf8ff0689",
+      "status": "Original status unchanged; not promoted"
+    },
+    {
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202840Z-6ac2976c690146cbbcbeecdd0a9963f6",
+      "status": "Original status unchanged; not promoted"
+    },
+    {
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\FileOps_IntegratedPresentationPerf-debug-20261003T144951Z-81320-23b8c3f6d7f5466b90a587b23ebf4dd3-whole-run",
+      "status": "Original failed native/control evidence unchanged"
+    },
+    {
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\FileOps_IntegratedPresentationPerf-debug-20261003T153744Z-74812-e9563585bd1348599297d0fb28b29299-whole-run",
+      "status": "Original native/control evidence unchanged"
+    },
+    {
+      "path": "C:/RsI27Followup/Specs/TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation/performance/comparison.json",
+      "status": "Authoritative original v1 adverse/nonqualified separate workload; unaccepted"
+    },
+    {
+      "path": "C:/RsI27Followup/Specs/TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation/ReviewRemediation.md",
+      "line": 88,
+      "status": "Original v1 25-32% and matched interleaved ~29% graph/churn medians retained; unaccepted"
+    }
+  ],
+  "limits": {
+    "file_bytes": 2097152,
+    "original_run_bytes": 5242880,
+    "total_bytes_including_this_manifest": 2465715,
+    "headroom_bytes": 2777165
+  },
+  "qualification": "Proposal only. Native verdicts/status/skips unchanged; frozen historic receipts; analysis remains ANALYSIS_ONLY/NOT_QUALIFIED; root acceptance required; no blanket nonregression/leak/GPU/Full/I27 claim",
+  "required_before_staging": [
+    "Root independently review native/schema/build/control/resource/analysis scope",
+    "Copy unchanged selected bytes and verify all source/destination hashes, external self digest, and complete final caps",
+    "Test-TestRunArchive.ps1 -RunPath exact-original-run-path before force-staging",
+    "Validate changed set and -Inventory; retain historical failures/v1 unaccepted; no validator waiver"
+  ]
+}

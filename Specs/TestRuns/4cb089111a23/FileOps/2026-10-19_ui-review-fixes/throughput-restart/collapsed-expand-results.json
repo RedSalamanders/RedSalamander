@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-19T10:18:01.939Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\throughput-restart-74768-15414265\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 579,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_restart",
+            "status": "passed",
+            "duration_ms": 49,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

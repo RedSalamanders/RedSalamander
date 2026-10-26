@@ -1,0 +1,25 @@
+{
+  "scenario":"viewer_space_memory_heavy_four_root_cache_refresh",
+  "rootSetupUs":183545712,"rootSetupPerRootUs":[47104706, 46695649, 44865052, 44880276],"lifecycleUs":360342709,"rootCount":4,"directoriesPerRoot":501,"filesPerRoot":100000,
+  "configuration":"topK512_threads8_volume1_cacheTTL600_entries4",
+  "effectiveScanThreads":8,
+  "relativeRoots":["root_00","root_01","root_02","root_03"],
+  "fixtureDigestAlgorithm":"BLAKE3(relative UTF-8 path, NUL, payload, FF)",
+  "rootFixtureDigests":["55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B"],
+  "rootTotalBytes":3001292,"cacheHitCount":1,
+  "processBefore":{"workingSetBytes":228237312,"privateBytes":232923136},
+  "processPeak":{"workingSetBytes":327618560,"privateBytes":428564480},
+  "processAfter":{"workingSetBytes":292937728,"privateBytes":320135168},
+  "phases":[
+    {"root":1,"phase":"seed-complete","phaseUs":670296,"privateBytes":400769024,"workingSetBytes":299929600,"rootBytes":3001292,"firstMeaningfulPaintUs":257046},
+    {"root":1,"phase":"seed-closed","phaseUs":537274,"privateBytes":317689856,"workingSetBytes":282529792,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":2,"phase":"seed-complete","phaseUs":593213,"privateBytes":412385280,"workingSetBytes":313835520,"rootBytes":3001292,"firstMeaningfulPaintUs":157515},
+    {"root":2,"phase":"seed-closed","phaseUs":542807,"privateBytes":336105472,"workingSetBytes":301727744,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":3,"phase":"seed-complete","phaseUs":622498,"privateBytes":422608896,"workingSetBytes":322355200,"rootBytes":3001292,"firstMeaningfulPaintUs":169763},
+    {"root":3,"phase":"seed-closed","phaseUs":544009,"privateBytes":346353664,"workingSetBytes":310280192,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":4,"phase":"seed-complete","phaseUs":541303,"privateBytes":428564480,"workingSetBytes":327417856,"rootBytes":3001292,"firstMeaningfulPaintUs":179916},
+    {"root":4,"phase":"seed-closed","phaseUs":532040,"privateBytes":295911424,"workingSetBytes":263520256,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":1,"phase":"cached-reopen","phaseUs":762880,"privateBytes":357146624,"workingSetBytes":300744704,"rootBytes":3001292,"firstMeaningfulPaintUs":738143},
+    {"root":1,"phase":"refresh-retained-pending","phaseUs":0,"privateBytes":357969920,"workingSetBytes":301375488,"rootBytes":3001292,"firstMeaningfulPaintUs":0}
+  ]
+}

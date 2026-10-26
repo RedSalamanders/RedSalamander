@@ -1,6 +1,8 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "FindFilesWindow.h"
+#include "NaturalSort.h"
 
 #include <algorithm>
 #include <array>
@@ -75,8 +77,8 @@ using DxUi::GridRowStyle;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
 using DxUi::GridVisualMode;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::IsContextMenuDiagnosticsEnabled;
 using DxUi::Label;
 using DxUi::MenuFlyoutItem;
@@ -892,7 +894,7 @@ struct ResultListMutation
 [[nodiscard]] std::wstring FormatFileTimeValue(int64_t fileTimeTicks) noexcept;
 [[nodiscard]] std::wstring FormatAttributes(unsigned long attributes) noexcept;
 
-class FindResultsGridModel final : public IDxGridModel
+class FindResultsGridModel final : public IGridModel
 {
 public:
     explicit FindResultsGridModel(const AppTheme& theme) : _theme(&theme)
@@ -978,7 +980,9 @@ public:
                 outCell.text      = record.displayName;
                 if (record.artifactProjection)
                 {
-                    outCell.badgeText   = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
+                    outCell.badgeText   = LoadStringResource(nullptr,
+                                                             record.artifactProjection->mayHoldOriginal ? IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE
+                                                                                                        : IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
                     outCell.badgeTone   = DxUi::AdornmentTone::Warning;
                     outCell.tooltipText = outCell.badgeText;
                 }
@@ -1646,12 +1650,12 @@ private:
     std::condition_variable _idleCv;
 };
 
-class FindFilesWindow final : public IDxGridDelegate
+class FindFilesWindow final : public IGridDelegate
 {
 public:
-    using IDxGridDelegate::OnGridContextMenu;
-    using IDxGridDelegate::OnGridRowActivated;
-    using IDxGridDelegate::OnGridSelectionChanged;
+    using IGridDelegate::OnGridContextMenu;
+    using IGridDelegate::OnGridRowActivated;
+    using IGridDelegate::OnGridSelectionChanged;
 
     FindFilesWindow(
         HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept;
@@ -1700,6 +1704,7 @@ public:
     [[nodiscard]] bool DebugReorderVisibleResultColumn(size_t fromVisibleIndex, size_t targetVisibleIndex) noexcept;
     [[nodiscard]] bool DebugResizeVisibleResultColumn(size_t visibleIndex, float deltaDip) noexcept;
     [[nodiscard]] bool DebugSelectResult(std::wstring fullPath) noexcept;
+    [[nodiscard]] bool DebugSeedDocumentationScenario(bool emptyResults) noexcept;
     [[nodiscard]] bool DebugSelectResults(std::vector<std::wstring> fullPaths) noexcept;
     [[nodiscard]] bool DebugActivateSelectedResult() noexcept;
     [[nodiscard]] bool DebugOpenSelectedResultParent() noexcept;
@@ -2576,7 +2581,7 @@ bool FindFilesWindow::Create() noexcept
     const bool hasPlacement = _settings && _settings->windows.contains(std::wstring(kFindFilesWindowId));
     const int showCmd       = hasPlacement ? WindowPlacementPersistence::Restore(*_settings, kFindFilesWindowId, created) : SW_SHOWNORMAL;
     ShowWindow(created, showCmd);
-    SetForegroundWindow(created);
+    Common::RequestForegroundWindow(created);
     return true;
 }
 
@@ -4590,7 +4595,7 @@ LRESULT FindFilesWindow::OnNcDestroy() noexcept
     if (restoreOwner)
     {
         static_cast<void>(SetActiveWindow(restoreOwner));
-        static_cast<void>(SetForegroundWindow(restoreOwner));
+        static_cast<void>(Common::RequestForegroundWindow(restoreOwner));
     }
     if (restoreFocus)
     {
@@ -5105,13 +5110,15 @@ void FindFilesWindow::SortResults() noexcept
         int compare = 0;
         switch (_resultSortSpec.columnIndex)
         {
-            case kColumnName: compare = compareText(lhs.displayName, rhs.displayName); break;
-            case kColumnPath: compare = compareText(GetResultRelativeFolderPath(lhs.relativePath), GetResultRelativeFolderPath(rhs.relativePath)); break;
+            case kColumnName: compare = NaturalSort::Compare(lhs.displayName, rhs.displayName); break;
+            case kColumnPath:
+                compare = NaturalSort::Compare(GetResultRelativeFolderPath(lhs.relativePath), GetResultRelativeFolderPath(rhs.relativePath));
+                break;
             case kColumnSize: compare = (lhs.endOfFile < rhs.endOfFile) ? -1 : ((lhs.endOfFile > rhs.endOfFile) ? 1 : 0); break;
             case kColumnModified: compare = (lhs.lastWriteTime < rhs.lastWriteTime) ? -1 : ((lhs.lastWriteTime > rhs.lastWriteTime) ? 1 : 0); break;
             case kColumnAttributes: compare = compareText(FormatAttributes(lhs.fileAttributes), FormatAttributes(rhs.fileAttributes)); break;
             case kColumnSnippet: compare = compareText(lhs.previewText, rhs.previewText); break;
-            default: compare = compareText(lhs.displayName, rhs.displayName); break;
+            default: compare = NaturalSort::Compare(lhs.displayName, rhs.displayName); break;
         }
 
         if (compare == 0)
@@ -5350,6 +5357,10 @@ std::wstring FindFilesWindow::BuildWarningSummary(uint32_t warningFlags) const n
     if ((warningFlags & FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED) != 0)
     {
         warnings.push_back(LoadStringResource(nullptr, IDS_FIND_WARNING_REGEX_REJECTED));
+    }
+    if ((warningFlags & FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE) != 0)
+    {
+        warnings.push_back(LoadStringResource(nullptr, IDS_FIND_WARNING_REGEX_INCOMPLETE));
     }
 
     std::wstring result;
@@ -6441,6 +6452,9 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
 {
     out                                       = {};
     out.searchActive                          = _session.IsActive();
+    out.uiSettled                             = _session.IsUiSettled();
+    out.resultsRefreshPending                 = _resultsRefreshPending;
+    out.resultsRefreshTimerArmed              = _resultsRefreshTimerArmed;
     out.usesDxUiHost                          = _dxHost.GetHwnd() == _hWnd.get();
     out.findButtonEnabled                     = _findButton ? _findButton->IsEnabled() : false;
     out.findButtonPressed                     = _findButton ? _findButton->DebugIsPressed() : false;
@@ -7026,6 +7040,45 @@ bool FindFilesWindow::DebugResizeVisibleResultColumn(size_t visibleIndex, float 
     return deltaDip > 0.0f ? it->widthDip >= beforeWidthDip + 20.0f : it->widthDip <= beforeWidthDip - 20.0f;
 }
 
+bool FindFilesWindow::DebugSeedDocumentationScenario(bool emptyResults) noexcept
+{
+    // Unlike search execution tests this UI-only fixture must not open a displayed path.
+    if (IsSearchActive() || ! _hWnd || GetWindowThreadProcessId(_hWnd.get(), nullptr) != GetCurrentThreadId())
+    {
+        return false;
+    }
+    ClearResults();
+    if (! emptyResults)
+    {
+        constexpr const wchar_t* names[]{L"project-plan.txt", L"meeting-notes.txt", L"release-checklist.txt", L"design-overview.txt", L"setup-guide.txt"};
+        for (size_t index = 0u; index < std::size(names); ++index)
+        {
+            FindResultRecord record{};
+            record.pluginId       = L"builtin/file-system";
+            record.pluginShortId  = L"file";
+            record.fullPath       = std::format(L"C:\\Demo\\Workspace\\Reports\\{}", names[index]);
+            record.displayName    = names[index];
+            record.relativePath   = std::format(L"Reports\\{}", names[index]);
+            record.previewText    = L"Workshop planning notes and review checklist.";
+            record.fileAttributes = FILE_ATTRIBUTE_NORMAL;
+            record.endOfFile      = static_cast<int64_t>((index + 1u) * 2048u);
+            static_cast<void>(AddOrUpdateVisibleResult(std::move(record)));
+        }
+    }
+    _lastSearchRootPath     = L"C:\\Demo\\Workspace";
+    _lastCurrentPath        = _lastSearchRootPath;
+    _lastPhase              = FILESYSTEM_SEARCH_PHASE_COMPLETED;
+    _lastBackend            = FILESYSTEM_SEARCH_BACKEND_SCAN;
+    _lastStatusHint         = S_OK;
+    _lastScannedDirectories = 3u;
+    _lastScannedFiles       = 18u;
+    _lastMatchedEntries     = static_cast<uint64_t>(_results.size());
+    RebuildResultsList();
+    RefreshStatusText();
+    UpdateActionButtons();
+    return true;
+}
+
 bool FindFilesWindow::DebugSelectResult(std::wstring fullPath) noexcept
 {
     if (! _resultsList || fullPath.empty())
@@ -7110,13 +7163,8 @@ bool FindFilesWindow::DebugSelectResult(std::wstring fullPath) noexcept
         return false;
     }
 
-    const size_t rowIndex = static_cast<size_t>(std::distance(_results.begin(), it));
-    _resultsList->GetSelectionModel().SetSingle(_resultsModel.GetStableRowId(rowIndex));
-    _dxHost.SetFocusControl(_resultsList);
-    _resultsList->NotifyDataChanged();
-    UpdateActionButtons();
-    _dxHost.Invalidate();
-    return true;
+    // Preserve path fallback and establish the Grid current row as well.
+    return DebugSelectResults({it->fullPath});
 }
 
 bool FindFilesWindow::DebugSelectResults(std::vector<std::wstring> fullPaths) noexcept
@@ -7126,8 +7174,8 @@ bool FindFilesWindow::DebugSelectResults(std::vector<std::wstring> fullPaths) no
         return false;
     }
 
-    std::vector<uint64_t> stableIds;
-    stableIds.reserve(fullPaths.size());
+    std::vector<size_t> selectedRows;
+    selectedRows.reserve(fullPaths.size());
     for (const std::wstring& fullPath : fullPaths)
     {
         if (fullPath.empty())
@@ -7144,21 +7192,24 @@ bool FindFilesWindow::DebugSelectResults(std::vector<std::wstring> fullPaths) no
         }
 
         const size_t rowIndex = static_cast<size_t>(std::distance(_results.begin(), it));
-        stableIds.push_back(_resultsModel.GetStableRowId(rowIndex));
+        selectedRows.push_back(rowIndex);
     }
 
-    auto& selection = _resultsList->GetSelectionModel();
-    selection.Clear();
-    for (const uint64_t stableId : stableIds)
+    // Use the real Grid requests so keyboard context menus have a current row
+    // inside this selection, just as after pointer/keyboard selection.
+    if (! _resultsList->RequestSelectRow(selectedRows.front(), 0u))
+        return false;
+    for (size_t index = 1u; index < selectedRows.size(); ++index)
     {
-        selection.Toggle(stableId);
+        if (! _resultsList->RequestAddRowSelection(selectedRows[index]))
+            return false;
     }
 
     _dxHost.SetFocusControl(_resultsList);
     _resultsList->NotifyDataChanged();
     UpdateActionButtons();
     _dxHost.Invalidate();
-    return selection.GetCount() == fullPaths.size();
+    return _resultsList->GetSelectionModel().GetCount() == fullPaths.size();
 }
 
 bool FindFilesWindow::DebugActivateSelectedResult() noexcept
@@ -7420,7 +7471,7 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
         case WndMsg::kFindSearchResults: OnSearchResults(wParam, lParam); return 0;
         case WndMsg::kFindSearchProgress: OnSearchProgress(wParam, lParam); return 0;
-        case WndMsg::kFindSearchComplete: OnSearchComplete(TakeMessagePayload<FindSearchCompletePayload>(lParam)); return 0;
+        case WndMsg::kFindSearchComplete: OnSearchComplete(TakeMessagePayload<FindSearchCompletePayload>(_hWnd.get(), message, lParam)); return 0;
         case WndMsg::kFindSearchDeferredRefresh: ApplyPendingResultsRefresh(); return 0;
         case WndMsg::kFindShowActionMenu:
         {
@@ -7857,6 +7908,11 @@ bool DebugApplyFindFilesWindowResultsLayoutFromSettings() noexcept
 bool DebugSelectFindFilesWindowResult(std::wstring fullPath) noexcept
 {
     return g_findFilesWindow ? g_findFilesWindow->DebugSelectResult(std::move(fullPath)) : false;
+}
+
+bool DebugSeedFindFilesDocumentationScenario(bool emptyResults) noexcept
+{
+    return g_findFilesWindow ? g_findFilesWindow->DebugSeedDocumentationScenario(emptyResults) : false;
 }
 
 bool DebugSelectFindFilesWindowResults(std::vector<std::wstring> fullPaths) noexcept

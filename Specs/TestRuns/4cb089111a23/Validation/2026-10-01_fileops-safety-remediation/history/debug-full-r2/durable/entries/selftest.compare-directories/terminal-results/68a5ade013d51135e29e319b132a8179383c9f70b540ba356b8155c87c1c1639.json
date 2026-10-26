@@ -1,0 +1,1 @@
+{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":252,"skipped":20,"total":272},"entry_id":"selftest.compare-directories","kind":"SelfTest","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"68a5ade013d51135e29e319b132a8179383c9f70b540ba356b8155c87c1c1639"}

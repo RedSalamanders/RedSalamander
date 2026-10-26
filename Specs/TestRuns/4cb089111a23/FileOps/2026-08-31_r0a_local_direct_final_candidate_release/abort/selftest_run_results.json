@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-08-31T13:44:19.758Z",
+    "duration_ms": 1718,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\r0a-green-release-abort-final\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1281,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1172,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete",
+                    "status": "passed",
+                    "duration_ms": 31,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 78,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

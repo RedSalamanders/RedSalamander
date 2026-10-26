@@ -417,3 +417,18 @@ If your provider has settings, implement `IInformations` and return a configurat
 - `Specs/Plugins/Plugins_VirtualFileSystem.md` — the normative ABI, capability JSON, and `pathIdentity` contract.
 - `Specs/Plugins/Plugins_PluginAPI.md` — host-services ABI evolution and the module quiet-point exports.
 - `Common/PlugInterfaces/Factory.h`, `FileSystem.h`, `Informations.h` — the interface headers themselves.
+
+## Additional shipped provider and Terminal contracts
+
+The MTP/PTP provider is `FileSystemMtp.dll` / `builtin/file-system-mtp` / `mtp`.
+It owns WPD device/storage browsing, serialized device sessions, read-only profile
+enforcement, path/device-scoped capabilities and watchdog/cancellation behavior.
+Connection Manager calls its factory browse contract; do not add a second host
+WPD picker implementation. Use [Portable Devices](../PortableDevices.md) for the
+user workflow and [the MTP spec](../../Specs/FileSystem/FileSystem_Mtp.md) for
+identity, mutation, overwrite/recovery and unload requirements.
+
+`Terminal.dll` is a separate plugin family. Its host/session ABI, shell process,
+input, paste/clipboard policy and runtime dependency contract are documented in
+[Terminal](../Terminal.md) and [the terminal spec](../../Specs/Terminal/Terminal_EmbeddedPlugin.md).
+It does not implement the file-system interface.

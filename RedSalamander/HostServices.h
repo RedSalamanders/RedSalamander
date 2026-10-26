@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 
 #include "PlugInterfaces/Host.h"
@@ -27,6 +28,8 @@ void HostClearConnectionSessionState() noexcept;
 void HostBeginPromptShutdown() noexcept;
 void HostResetPromptShutdown() noexcept;
 [[nodiscard]] bool HostIsPromptShutdown() noexcept;
+// A blocking host prompt's nested message loop is running on the UI thread.
+[[nodiscard]] bool HostIsBlockingPromptActive() noexcept;
 
 // Debug/testing hook: bypass prompts and accept the default result.
 // Intended for automated self-tests that must not block on modal dialogs.
@@ -36,6 +39,8 @@ bool HostGetAutoAcceptPrompts() noexcept;
 #ifdef ENABLE_TESTS
 struct HostPromptDebugSnapshot
 {
+    HostAlertScope scope                = HOST_ALERT_SCOPE_APPLICATION;
+    HWND targetWindow                   = nullptr;
     HostAlertSeverity severity          = HOST_ALERT_ERROR;
     HostPromptButtons buttons           = HOST_PROMPT_BUTTONS_OK;
     HostPromptResult defaultResult      = HOST_PROMPT_RESULT_NONE;
@@ -54,12 +59,16 @@ void HostClearTestPromptResultOverride() noexcept;
 void HostSetTestPromptFileOperationOptionsOverride(const HostFileOperationPromptOptions& options) noexcept;
 void HostClearTestPromptFileOperationOptionsOverride() noexcept;
 void HostResetTestPromptRequestCount() noexcept;
+// Answers consumed one per prompt, ahead of the sticky override above (multi-step prompt flows).
+void HostQueueTestPromptResults(std::initializer_list<HostPromptResult> results);
+void HostClearTestPromptResultQueue() noexcept;
 uint64_t HostGetTestPromptRequestCount() noexcept;
 bool HostGetTestLastPromptDebugSnapshot(HostPromptDebugSnapshot& out) noexcept;
 size_t HostGetTestSynchronousPayloadRegistrationCount() noexcept;
+size_t HostGetTestWindowAlertOverlayCount() noexcept;
 LPARAM HostGetTestLastRetiredSynchronousPayloadToken() noexcept;
 #endif
 
 // FolderWindow dispatch helper for cross-thread plugin calls.
 // Returns true if the message was handled (and `result` is set).
-bool TryHandleHostServicesWindowMessage(UINT message, WPARAM wParam, LPARAM lParam, LRESULT& result) noexcept;
+bool TryHandleHostServicesWindowMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, LRESULT& result) noexcept;

@@ -1,0 +1,35 @@
+{
+  "scope": "Focused native diagnostic; not a canonical aggregate or Full",
+  "phase": "candidate-debug-ambient",
+  "configuration": "Debug",
+  "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+  "arguments": [
+    "--no-activate",
+    "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges"
+  ],
+  "run_id": "20261017T170428Z-88144-1f637f550a7649dcac206f745dcb959e",
+  "receipt_id": "ff01abe52754f0db033a336615eac60cda4c4f1ac6214aa62e0062f35024c55c",
+  "started_utc": "2026-10-17T17:04:28.8823048Z",
+  "inputs": [
+    {
+      "path": "Plugins/ViewerSpace/ViewerSpace.cpp",
+      "sha256": "659F19181F68E0B01C1B54DD4E6A924DB853FB47AAAF060CEBAF39B86305442D"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "4307A4A3D4B6C24507D86797EF962A19E535A6EE6E6ADBA797246A585084F332"
+    }
+  ],
+  "binaries": [
+    {
+      "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+      "sha256": "C92BFE30D682185E9A94BAB20AB1BAC52C6CD068C4CF572D66F046148CDC63C1"
+    },
+    {
+      "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll",
+      "sha256": "E387BDFBE1E8B763CE0E592D38C8220E70BE1F101A372E898997B6E3C4739807"
+    }
+  ],
+  "exit_code": 0,
+  "ended_utc": "2026-10-17T17:04:31.5296173Z"
+}

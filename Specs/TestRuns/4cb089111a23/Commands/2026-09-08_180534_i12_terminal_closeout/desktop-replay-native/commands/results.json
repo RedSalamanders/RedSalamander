@@ -1,0 +1,842 @@
+{
+    "run_started_utc": "2026-09-08T18:32:38.806Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T182930Z-97660-586ba5c9e75145f5b8839707c4bb9b6c\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 222286,
+    "passed": 138,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_preferences_dialog_themes_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 6516,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_selection_survives_legacy_combo_clear",
+            "status": "passed",
+            "duration_ms": 6303,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_color_selection_survives_legacy_list_clear",
+            "status": "passed",
+            "duration_ms": 6328,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_page_exposes_live_uia_grid_selection",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 3665,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_history_size_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1341,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_combo_then_toggle_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1398,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_page_uses_dxui_statics_and_toggles",
+            "status": "passed",
+            "duration_ms": 1028,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 2344,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 562,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 232,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+            "status": "passed",
+            "duration_ms": 164,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1724,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1211,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1144,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1179,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances",
+            "status": "passed",
+            "duration_ms": 254,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_recursive_local_search_and_index_availability",
+            "status": "passed",
+            "duration_ms": 752,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing",
+            "status": "passed",
+            "duration_ms": 962,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions",
+            "status": "passed",
+            "duration_ms": 4410,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_tab_traversal_matches_expected_order",
+            "status": "passed",
+            "duration_ms": 934,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_editable_combo_keyboard_editing_keys",
+            "status": "passed",
+            "duration_ms": 569,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies",
+            "status": "passed",
+            "duration_ms": 1355,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states",
+            "status": "passed",
+            "duration_ms": 1191,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_action_buttons_activate_expected_commands",
+            "status": "passed",
+            "duration_ms": 3074,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_compare_directories_options_scroll_to_lower_cards_stays_stable",
+            "status": "passed",
+            "duration_ms": 10805,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_compare_directories_options_enter_and_escape_route_default_cancel",
+            "status": "passed",
+            "duration_ms": 1402,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_compare_directories_options_access_keys_focus_expected_controls",
+            "status": "passed",
+            "duration_ms": 325,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_compare_directories_options_theme_cycle_keeps_surface_legible",
+            "status": "passed",
+            "duration_ms": 1008,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_goto_selected_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 79,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_same_extension_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 80,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_same_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 75,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 608,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 177,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_unselected_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 179,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_unselect_dialogs_keep_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 445,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_filter_dialog_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 527,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigation_compare_directories_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 562,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigation_item_properties_window_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 346,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigation_create_directory_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 224,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigation_rename_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 254,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_showShortcuts_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 442,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_compare_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 558,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_preferences_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 181,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_managePlugins_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 195,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 6543,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_selection_survives_legacy_combo_clear",
+            "status": "passed",
+            "duration_ms": 6318,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_color_selection_survives_legacy_list_clear",
+            "status": "passed",
+            "duration_ms": 6317,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_page_exposes_live_uia_grid_selection",
+            "status": "passed",
+            "duration_ms": 251,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 3635,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_history_size_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1349,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_combo_then_toggle_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1426,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_page_uses_dxui_statics_and_toggles",
+            "status": "passed",
+            "duration_ms": 996,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 2311,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+            "status": "passed",
+            "duration_ms": 253,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 566,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 248,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+            "status": "passed",
+            "duration_ms": 172,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1738,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1240,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1128,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1160,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances",
+            "status": "passed",
+            "duration_ms": 255,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_recursive_local_search_and_index_availability",
+            "status": "passed",
+            "duration_ms": 725,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing",
+            "status": "passed",
+            "duration_ms": 934,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions",
+            "status": "passed",
+            "duration_ms": 4477,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_tab_traversal_matches_expected_order",
+            "status": "passed",
+            "duration_ms": 898,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_editable_combo_keyboard_editing_keys",
+            "status": "passed",
+            "duration_ms": 546,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies",
+            "status": "passed",
+            "duration_ms": 1337,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states",
+            "status": "passed",
+            "duration_ms": 1176,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_action_buttons_activate_expected_commands",
+            "status": "passed",
+            "duration_ms": 3090,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_compare_directories_options_scroll_to_lower_cards_stays_stable",
+            "status": "passed",
+            "duration_ms": 622,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_compare_directories_options_enter_and_escape_route_default_cancel",
+            "status": "passed",
+            "duration_ms": 1412,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_compare_directories_options_access_keys_focus_expected_controls",
+            "status": "passed",
+            "duration_ms": 285,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_compare_directories_options_theme_cycle_keeps_surface_legible",
+            "status": "passed",
+            "duration_ms": 1006,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_goto_selected_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 82,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_same_extension_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 74,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_same_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 609,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 179,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_unselected_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 179,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_unselect_dialogs_keep_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 428,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_filter_dialog_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 584,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigation_compare_directories_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 605,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigation_item_properties_window_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 366,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigation_create_directory_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 262,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigation_rename_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 194,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_showShortcuts_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 433,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_compare_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 561,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_preferences_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 174,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_managePlugins_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 199,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 6559,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_selection_survives_legacy_combo_clear",
+            "status": "passed",
+            "duration_ms": 6295,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_color_selection_survives_legacy_list_clear",
+            "status": "passed",
+            "duration_ms": 6325,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_page_exposes_live_uia_grid_selection",
+            "status": "passed",
+            "duration_ms": 231,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 3635,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_history_size_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1317,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_panes_combo_then_toggle_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1372,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_page_uses_dxui_statics_and_toggles",
+            "status": "passed",
+            "duration_ms": 997,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_hot_paths_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 2265,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+            "status": "passed",
+            "duration_ms": 265,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 515,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+            "status": "passed",
+            "duration_ms": 214,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+            "status": "passed",
+            "duration_ms": 168,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1737,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1233,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1129,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1199,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_recursive_local_search_and_index_availability",
+            "status": "passed",
+            "duration_ms": 713,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing",
+            "status": "passed",
+            "duration_ms": 1004,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions",
+            "status": "passed",
+            "duration_ms": 4556,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_tab_traversal_matches_expected_order",
+            "status": "passed",
+            "duration_ms": 910,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_editable_combo_keyboard_editing_keys",
+            "status": "passed",
+            "duration_ms": 525,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies",
+            "status": "passed",
+            "duration_ms": 1344,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states",
+            "status": "passed",
+            "duration_ms": 1276,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_action_buttons_activate_expected_commands",
+            "status": "passed",
+            "duration_ms": 3250,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_compare_directories_options_scroll_to_lower_cards_stays_stable",
+            "status": "passed",
+            "duration_ms": 653,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_compare_directories_options_enter_and_escape_route_default_cancel",
+            "status": "passed",
+            "duration_ms": 1475,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_compare_directories_options_access_keys_focus_expected_controls",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_compare_directories_options_theme_cycle_keeps_surface_legible",
+            "status": "passed",
+            "duration_ms": 991,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_goto_selected_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 77,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_same_extension_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 69,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_same_name_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 72,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 613,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 177,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_unselected_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 176,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_unselect_dialogs_keep_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 385,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_filter_dialog_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 544,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigation_compare_directories_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 544,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigation_item_properties_window_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 332,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigation_create_directory_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 266,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigation_rename_prompt_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 226,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_showShortcuts_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 430,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_compare_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 577,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_preferences_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 186,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_managePlugins_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 190,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

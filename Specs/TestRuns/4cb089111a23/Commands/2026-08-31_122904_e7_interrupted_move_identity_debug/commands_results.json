@@ -1,0 +1,21 @@
+{
+    "run_started_utc": "2026-08-31T10:29:16.177Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 822,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 265,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}
+

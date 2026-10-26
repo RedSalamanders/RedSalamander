@@ -1,0 +1,118 @@
+{
+  "source_snapshot": "77e8b64b07bdd8156d5612d1465fa92861528a9294af2bdc495393aa25c6d8d4",
+  "method": "SaveWindowScreenshot; deterministic production renderer; directed input uses existing warning/lease/restoration",
+  "captures": [
+    {
+      "file": "discovery-open__480dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\discovery-open__480dip__fr-FR__144dpi.png",
+      "sha256": "284172ee8c514020f1095cd589f5d88d9d86cb520d56bc8f942229eba9d6bcf7",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "discovery-open__640dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\discovery-open__640dip__fr-FR__144dpi.png",
+      "sha256": "029a882504621a18ad7fa246f4baace6fe0d34a765c90a466e4b82c1f0d359d3",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "discovery-open__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\discovery-open__760dip__fr-FR__144dpi.png",
+      "sha256": "bf1f7f28ccad9c7ccb5c5db29326afe17ad7f72efbf5ccf1bae31c62d4524218",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "sha256": "780aba51d8ced4afa0cd90abbabca55e51c12463c643e20bb069ad4ae5c040a9",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "negative-control-missing-color.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\negative-control-missing-color.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "sha256": "7fb492c3792d3f64b356dfb7065bc21bb685bc49a75b7037d4f6b89e8af86a0d",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-collapsed__480dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-collapsed__480dip__fr-FR__144dpi.png",
+      "sha256": "fac3d1c89fefa740e9f6580fb9e7b2e1b8dc552d95fba51ed2488c65bfc4c7bd",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-collapsed__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-collapsed__760dip__fr-FR__144dpi.png",
+      "sha256": "bc86571e5daecbfd256b43e7730fc19b10f0964ecb6bb5f647cf54a2d7435224",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-covered__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-covered__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-device-recovery-1__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-device-recovery-1__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-device-recovery-2__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-device-recovery-2__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-device-recovery-3__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-device-recovery-3__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-expanded__480dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-expanded__480dip__fr-FR__144dpi.png",
+      "sha256": "b8ff7a93e9dad096bd9b7926038915509221320bbe6c47b5583f61a0e0bca527",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-expanded__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-expanded__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-shown-after-idle__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-shown-after-idle__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    },
+    {
+      "file": "throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands\\throughput-disclosure\\throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "sha256": "cddbe2c68981c12f41aa4bf9d2593ab4bd34056756bc44e436179640c1782d49",
+      "native_dpi": 144,
+      "locale": "fr-FR"
+    }
+  ]
+}

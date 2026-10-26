@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-08-23T20:44:22.876Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260823T204401Z-79560-a6d33e9536c2473dba8c18f29b4a0bbc\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 247625,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Phase11_BridgeMultiFolderParallelCopyInFlightLines timed out.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1218,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+            "status": "failed",
+            "duration_ms": 246328,
+            "repeat_index": 1,
+            "reason": "Phase11_BridgeMultiFolderParallelCopyInFlightLines timed out."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 79,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

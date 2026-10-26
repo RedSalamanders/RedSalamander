@@ -1,0 +1,87 @@
+{
+    "run_started_utc": "2026-07-15T15:18:41.322Z",
+    "duration_ms": 2788,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 10,
+    "case_filter": "cmd_app_toggleUiChrome",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T151512Z-68524-79b8192fac8c4c79a9060d8c6ab5443c\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 2320,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 10,
+            "case_filter": "cmd_app_toggleUiChrome",
+            "cases": [
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 381,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 193,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 204,
+                    "repeat_index": 3
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 186,
+                    "repeat_index": 4
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 189,
+                    "repeat_index": 5
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 213,
+                    "repeat_index": 6
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 191,
+                    "repeat_index": 7
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 211,
+                    "repeat_index": 8
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 184,
+                    "repeat_index": 9
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome",
+                    "status": "passed",
+                    "duration_ms": 185,
+                    "repeat_index": 10
+                }
+            ]
+        }
+    ],
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+}

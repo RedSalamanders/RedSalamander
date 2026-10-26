@@ -116,7 +116,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="CrashHandlingTests.cpp" />
+    <ClCompile Include="CrashHandling.Tests.Runner.cpp" />
     <!-- Compiled directly (not exported from RedSalamander.exe) so the test can call the extracted
          pure decision function (SelectPluginsToDisable / DisablePluginIdInSettingsForTest) exposed
          under ENABLE_TESTS. -->
@@ -130,7 +130,7 @@
          (SessionState::TryRead, HostShowPrompt, AppDataPaths::GetLocalAppDataPath,
          REDSALAMANDER_TEXT_VERSION) so the test never invokes the real UI / SessionState /
          known-folder code. -->
-    <ClCompile Include="CrashQuarantine.TestStubs.cpp" />
+    <ClCompile Include="CrashHandling.Tests.CrashQuarantine.Stubs.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">

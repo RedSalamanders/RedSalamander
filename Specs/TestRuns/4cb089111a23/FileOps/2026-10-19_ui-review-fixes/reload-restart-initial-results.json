@@ -1,0 +1,29 @@
+{
+    "run_started_utc": "2026-10-19T10:01:41.037Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T100104Z-92632-4d4b147f33364fd2ab54debd81be6752\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 918,
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0,
+    "failureMessage": "The reload fixture requires exclusive ownership of an idle operation popup.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_external_reload",
+            "status": "failed",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "reason": "The reload fixture requires exclusive ownership of an idle operation popup."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_restart",
+            "status": "failed",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "reason": "The restart fixture requires an idle operation popup."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

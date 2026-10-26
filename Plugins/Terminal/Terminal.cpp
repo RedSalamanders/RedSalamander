@@ -2590,6 +2590,31 @@ HRESULT STDMETHODCALLTYPE Terminal::Open(const TerminalOpenContext* context) noe
         return S_OK;
     }
 
+#if defined(ENABLE_TESTS)
+    if (_documentationSession)
+    {
+        // Fixed VT input exercises the actual Ghostty parser and native renderer.
+        // No shell, ConPTY, user profile/history, endpoint or displayed path is opened.
+        constexpr std::string_view transcript = "\x1b[2J\x1b[H\x1b[1;36mWORKSHOP / DEMO LIBRARY\x1b[0m\r\n\r\n"
+                                                "PS C:\\Demo\\Workspace> Get-ChildItem\r\n\r\n"
+                                                "Mode     Length  Name\r\n"
+                                                "d----            Media\r\n"
+                                                "d----            Reports\r\n"
+                                                "-a---      2048  project-plan.txt\r\n"
+                                                "-a---      1024  meeting-notes.txt\r\n\r\n"
+                                                "PS C:\\Demo\\Workspace> Write-Output 'Review complete'\r\n"
+                                                "\x1b[32mReview complete\x1b[0m\r\n\r\nPS C:\\Demo\\Workspace> ";
+        {
+            std::scoped_lock lock(_terminalMutex);
+            _runtime.terminalVtWrite(_ghosttyTerminal, reinterpret_cast<const uint8_t*>(transcript.data()), transcript.size());
+        }
+        _sessionGeneration.fetch_add(1u, std::memory_order_acq_rel);
+        setLifecycle(TerminalLifecycleState::Running);
+        resizeTerminal();
+        notifyOutputReady();
+        return S_OK;
+    }
+#endif
     const TerminalLocationKind locationKind = context->launchLocation.kind;
     const bool supportedWindows             = (locationKind == TerminalLocationKind::WindowsLocal || locationKind == TerminalLocationKind::WindowsUnc) &&
                                               ! copySpan(context->launchLocation.windowsPath).empty();
@@ -4511,7 +4536,7 @@ Terminal::MessageRouteResult Terminal::routeSessionMessage(HWND hwnd, UINT messa
     {
         case WndMsg::kTerminalOutputReady:
         {
-            std::unique_ptr<ReadyWakePayload> payload = TakeMessagePayload<ReadyWakePayload>(lParam);
+            std::unique_ptr<ReadyWakePayload> payload = TakeMessagePayload<ReadyWakePayload>(hwnd, message, lParam);
             if (! payload || _closing.load(std::memory_order_acquire) || payload->sessionGeneration != _sessionGeneration.load(std::memory_order_acquire))
             {
                 return {true, 0};
@@ -4527,7 +4552,7 @@ Terminal::MessageRouteResult Terminal::routeSessionMessage(HWND hwnd, UINT messa
         }
         case WndMsg::kTerminalKittyReady:
         {
-            std::unique_ptr<ReadyWakePayload> payload = TakeMessagePayload<ReadyWakePayload>(lParam);
+            std::unique_ptr<ReadyWakePayload> payload = TakeMessagePayload<ReadyWakePayload>(hwnd, message, lParam);
             if (! payload || _closing.load(std::memory_order_acquire) || payload->sessionGeneration != _sessionGeneration.load(std::memory_order_acquire))
             {
                 return {true, 0};
@@ -4554,7 +4579,7 @@ Terminal::MessageRouteResult Terminal::routeSessionMessage(HWND hwnd, UINT messa
             return {true, 0};
         case WndMsg::kTerminalCommandSurfaceReady:
         {
-            std::unique_ptr<TerminalCommandSurfaceReadyPayload> payload = TakeMessagePayload<TerminalCommandSurfaceReadyPayload>(lParam);
+            std::unique_ptr<TerminalCommandSurfaceReadyPayload> payload = TakeMessagePayload<TerminalCommandSurfaceReadyPayload>(hwnd, message, lParam);
             if (payload && payload->snapshotOnly)
             {
                 if (_commandSurfaceKind != CommandSurfaceKind::Find || payload->snapshotGeneration != _commandSurfaceSnapshotGeneration ||
@@ -4617,11 +4642,11 @@ Terminal::MessageRouteResult Terminal::routeSessionMessage(HWND hwnd, UINT messa
     }
 }
 
-Terminal::MessageRouteResult Terminal::routeClipboardMessage(HWND, UINT message, WPARAM, LPARAM lParam) noexcept
+Terminal::MessageRouteResult Terminal::routeClipboardMessage(HWND hwnd, UINT message, WPARAM, LPARAM lParam) noexcept
 {
     switch (message)
     {
-        case WndMsg::kTerminalClipboardWrite: handleOsc52Clipboard(TakeMessagePayload<Osc52ClipboardPayload>(lParam)); return {true, 0};
+        case WndMsg::kTerminalClipboardWrite: handleOsc52Clipboard(TakeMessagePayload<Osc52ClipboardPayload>(hwnd, message, lParam)); return {true, 0};
         case WM_PASTE: static_cast<void>(pasteClipboard()); return {true, 0};
         case WM_COPY: static_cast<void>(copySelection()); return {true, 0};
         default: return {};

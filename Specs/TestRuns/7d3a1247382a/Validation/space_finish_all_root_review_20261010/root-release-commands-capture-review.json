@@ -1,0 +1,105 @@
+{
+  "reviewer": "root",
+  "scope": "whole-frame visual inspection of eleven original-resolution harness frames",
+  "run_id": "20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038",
+  "receipt_id": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd",
+  "build_source_snapshot_id": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "capture_provenance_sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da",
+  "payload_replay": [
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/analyst-dark.png",
+      "sha256": "124363da05d309709eca2cd9d340effbe40226abdc8aed98d8a476a47f24c4c0",
+      "bytes": 433317,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/analyst-high-contrast.png",
+      "sha256": "e5693483d79d2cb68fe7e7d2feec7dd8334d50d840b0805f9559ebf23b4dbc57",
+      "bytes": 163273,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/analyst-rainbow.png",
+      "sha256": "3960a081a380ee9708c3e9cc7564542e9a811bc0ffaf96066abda089c3bdf41b",
+      "bytes": 383793,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-body-455.png",
+      "sha256": "7ff1cd22b04beb0ea9490138054c00eba56711850ca400b40a8807d0bc882423",
+      "bytes": 353577,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-body-456.png",
+      "sha256": "733e8bfd5f474a31afd1e1f30fb116e492efa49d57afa445b41b6625844107c8",
+      "bytes": 195264,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-1099.png",
+      "sha256": "0e3c514947354b0ed5eccfc48c28a3a728fa70e6055d9c197af0ea4a4fbe1ed9",
+      "bytes": 403720,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-1100.png",
+      "sha256": "ef93f50b8c042834aaedf5ea1c0bc7222d16a8b7a7a0b86925e3c3ce169024d2",
+      "bytes": 524017,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-503.png",
+      "sha256": "3d89c5f4bf20854af53a89c435a473040042bf63f497a113c4c94cb5ebd283fc",
+      "bytes": 342698,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-504.png",
+      "sha256": "739de91eedbf094cb7593479facda3d2da07a4537c6cb5e3aea267150fb0eddf",
+      "bytes": 208529,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/explorer-light.png",
+      "sha256": "d34452778aa6413f65b8df79446db6c37fa7a2e707aca9c6c3b0618f87b416d7",
+      "bytes": 503887,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/explorer-narrow.png",
+      "sha256": "532101fce7a010d3b655810e9223555da2c6269793715201bfc8077fd684d1d7",
+      "bytes": 198288,
+      "raw_available": false
+    },
+    {
+      "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+      "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da",
+      "bytes": 4093,
+      "raw_available": false
+    }
+  ],
+  "binaries": [
+    {
+      "path": ".build/x64/Release/RedSalamander.exe",
+      "sha256": "5152578890de6cd08897be5156fc384aa6e6b44ba4da4333b19f9b03445d1783",
+      "bytes": 33686528
+    },
+    {
+      "path": ".build/x64/Release/Plugins/ViewerSpace.dll",
+      "sha256": "facf0c3582443d094926b437432f6d8d7199fb5e56b510cedd6bfa1ef91b8a63",
+      "bytes": 1781760
+    }
+  ],
+  "observations": [
+    "Explorer light displays nested folder header bands and file folded-corner markers, a ranked grid, and selected file details.",
+    "Analyst dark, Rainbow, and high-contrast display the nested map above the five-column grid with an adjacent selection inspector.",
+    "Rainbow preserves file/folder shape differences and selection outline.",
+    "Narrow Explorer stacks the grid and inspector beneath the map; grid horizontal scrolling preserves additional columns.",
+    "At actual width 1100 DIP analysis is right; at 1099.33 DIP it is bottom.",
+    "At actual width 504 DIP analysis is visible; at 503.33 DIP it is hidden and the map fills the body.",
+    "At available body height 456 DIP analysis is visible; at 455.33 DIP it is hidden and the map fills the body.",
+    "Small rectangles elide or omit text while retaining geometry and file corner markers; selected file name and byte count remain available in the inspector when analysis is visible."
+  ],
+  "limits": "These are deterministic English 144-DPI frames. This record does not qualify other DPI, Narrator, human contrast usability, live providers, or performance targets."
+}

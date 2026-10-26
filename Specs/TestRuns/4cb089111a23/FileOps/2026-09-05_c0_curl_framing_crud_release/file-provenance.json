@@ -1,0 +1,52 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 873,
+    "sha256": "69ca22bcc1b1bb1ab5b36e8b14f7cd3c541af530ec8ba16ed6b7555d9a34221d",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5262,
+    "sha256": "56f6da803e32974f7efdef13ebef81cc574f5919d4c2d7f3c2598175e3b7ad67",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1423,
+    "sha256": "97d305f96c8ee3be8e9e9f3b9fd717b8a9e8f77a35e244c5e8e22f1f2c9ade1f",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19794,
+    "sha256": "4a6696d8925bfdbdf6ba888aad74a0e9ab0e1c0ae3bea8b7a28ee1ca73360ab7",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 31127,
+    "sha256": "7d6de74d0971886988723b7c439b400990fa78b89359ebf6378a458625c893f4",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "7c9a35eb10d03e9081f2bff24857696d70b42c4c8bcf108869c1cf157b9435ae",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-crud-release-20260905\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "bytes": 703863,
+    "rows": 1924,
+    "sha256": "f36bfe533029a4cf5368bf2fccfcf9371fa480d906096c251ecdabdd8103a31d",
+    "transform": "none"
+  }
+]

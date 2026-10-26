@@ -45,7 +45,8 @@ function New-RSFakePortablePackageTree {
         'RedLauncher.exe',
         'red.exe',
         'RedSalamander.exe',
-        'RedSalamanderMonitor.exe',
+        'SettingsStore.schema.json',
+        'RedMonitor-LICENSE.txt',
         'Plugins\FileSystem.dll',
         'Plugins\FileSystem7z.dll',
         'Plugins\FileSystemCurl.dll',
@@ -63,6 +64,7 @@ function New-RSFakePortablePackageTree {
         'Plugins\Terminal.dll'
     )
     foreach ($relativePath in $requiredFiles) {
+        New-Item -ItemType Directory -Path (Split-Path (Join-Path $Root $relativePath)) -Force | Out-Null
         [System.IO.File]::WriteAllBytes((Join-Path $Root $relativePath), [byte[]](0x52, 0x53))
     }
 
@@ -123,9 +125,7 @@ Describe 'Declarative runtime dependency graph' {
         $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
         $targets = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.targets') -Raw
         $testTargets = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\Directory.Build.targets') -Raw
-        $monitorProject = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\MonitorTest\MonitorTest.vcxproj') -Raw
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $monitorProject | Should Match '<RSTestAdditionalPreprocessorDefinitions>ENABLE_TESTS;'
         $props | Should Match '<PreprocessorDefinitions>\$\(RSTestAdditionalPreprocessorDefinitions\)%\(PreprocessorDefinitions\)</PreprocessorDefinitions>'
         $props | Should Match "RSBuildEnableTests.*Configuration.*Debug.*ASan Debug.*true"
         $props | Should Match "RSBuildEnableTests.*false"
@@ -149,7 +149,9 @@ Describe 'Declarative runtime dependency graph' {
         $targets | Should Match 'Condition="Exists\(''%\(Identity\)''\)"'
         $targets | Should Match '<ItemDefinitionGroup Condition="[^\"]+RSBuildCompilerDebugInformation[^\"]+Embedded'
         $targets | Should Match '<DebugInformationFormat>OldStyle</DebugInformationFormat>'
-        $targets | Should Match '<ClCompile Update="\.\.\\Common\\SearchTextHelpers\.cpp;\.\.\\\.\.\\Common\\SearchTextHelpers\.cpp">'
+        $targets | Should Match '<ClCompile Update="@\(ClCompile\)">'
+        $targets | Should Match '_RSEmbeddedSearchTextPath'
+        $targets | Should Match 'WithMetadataValue\(''FullPath'''
         $targets | Should Match '<MultiProcessorCompilation>false</MultiProcessorCompilation>'
         $testTargets | Should Match 'RSParentDirectoryBuildTargets'
         $testTargets | Should Match "RSIsTestProject.*RSBuildEnableTests.*!='true'"
@@ -258,7 +260,7 @@ Describe 'Declarative runtime dependency graph' {
             -SkipExecution
 
         $result.ExecutionSkipped | Should Be $true
-        $result.RequiredFileCount | Should Be 19
+        $result.RequiredFileCount | Should Be 20
         $result.GhosttyRuntime.Machine | Should Be 'AMD64'
         Assert-MockCalled -CommandName Test-RSPortableGhosttyRuntime -ModuleName PortablePackageSmoke -Times 1 -Exactly -Scope It
     }
@@ -267,7 +269,7 @@ Describe 'Declarative runtime dependency graph' {
         $packageScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\zip\build-zip.ps1') -Raw
         $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\release.yml') -Raw
         $testTargets = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\Directory.Build.targets') -Raw
-        $pluginContractHarness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
+        $pluginContractHarness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp') -Raw
         $packageScript | Should Match 'PortablePackageSmoke\.psm1'
         $packageScript | Should Match 'Test-RSPortablePackage'
         $packageScript | Should Match 'Compress-Archive[\s\S]+Test-RSPortablePackage'
@@ -299,7 +301,7 @@ Describe 'Declarative runtime dependency graph' {
         $packageScript | Should Not Match '(?m)^\s*Compress-Archive[^\r\n]+-DestinationPath\s+\$ZipPath'
     }
 
-    It 'runs both fresh-extraction smoke executables through contained process support' {
+    It 'runs app and plugin extraction probes through contained process support' {
         Mock -CommandName Invoke-RSProcess -ModuleName PortablePackageSmoke -MockWith { 0 }
         Mock -CommandName Test-RSPortableGhosttyRuntime -ModuleName PortablePackageSmoke -MockWith {
             [pscustomobject]@{
@@ -532,18 +534,18 @@ Describe 'MSI and MSIX package source contracts' {
         $buildScript | Should Match '(?s)& \$msixVersionScript.+?-Version \$versionContext\.PackagingVersion.+?-Platform \$Platform.+?-Configuration \$Configuration'
     }
 
-    It 'keeps MSI staging aligned with the three shipping executables and optional service component' {
+    It 'keeps MSI staging aligned with the two shipping executables and optional service component' {
         $buildMsi = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\build-msi.ps1') -Raw
         $product = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\Product.wxs') -Raw
 
-        $buildMsi | Should Match '\$shippingExes\s*=\s*@\("RedSalamander\.exe",\s*"RedSalamanderMonitor\.exe",\s*"RedSalamanderSearchService\.exe"\)'
+        $buildMsi | Should Match '\$shippingExes\s*=\s*@\("RedSalamander\.exe",\s*"RedSalamanderSearchService\.exe"\)'
         $buildMsi | Should Match 'Expected shipping executable not found'
         $product | Should Match '<MajorUpgrade[\s\S]+Schedule="afterInstallInitialize"'
         $product | Should Match '<StandardDirectory Id="ProgramFiles64Folder">'
         $product | Should Match 'Condition="INSTALLSEARCHSERVICE&lt;&gt;&quot;0&quot;"'
         $product | Should Match '<ServiceInstall[\s\S]+Name="RedSalamanderSearchService"[\s\S]+Start="auto"[\s\S]+Account="LocalSystem"'
         $product | Should Match 'Target="\[INSTALLFOLDER\]RedSalamander\.exe"'
-        $product | Should Match 'Target="\[INSTALLFOLDER\]RedSalamanderMonitor\.exe"'
+        $product | Should Not Match 'RedSalamanderMonitor\.exe'
     }
 
     It 'keeps the symbols MSI allowlist aligned with shipped binaries and plugin PDBs' {
@@ -551,7 +553,6 @@ Describe 'MSI and MSIX package source contracts' {
 
         foreach ($pdb in @(
                 'RedSalamander.pdb',
-                'RedSalamanderMonitor.pdb',
                 'RedSalamanderSearchService.pdb',
                 'Common.pdb'
             )) {
@@ -566,9 +567,9 @@ Describe 'MSI and MSIX package source contracts' {
         $stamper = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\UpdateManifestVersion.ps1') -Raw
 
         $manifest | Should Match '<Identity Name="RedSalamander" Publisher="CN=RedSalmanders" Version="7\.0\.0\.0" ProcessorArchitecture="x64"'
-        ([regex]::Matches($manifest, '<Application Id="')).Count | Should Be 2
+        ([regex]::Matches($manifest, '<Application Id="')).Count | Should Be 1
         $manifest | Should Match '<Application Id="RedSalamander" Executable="RedSalamander\.exe"'
-        $manifest | Should Match '<Application Id="RedSalamanderMonitor" Executable="RedSalamanderMonitor\.exe"'
+        $manifest | Should Not Match 'RedSalamanderMonitor\.exe'
         $project | Should Match '<TargetPlatformMinVersion>10\.0\.22000\.2600</TargetPlatformMinVersion>'
         $project | Should Match '<RSAppxManifestPath Condition="''\$\(RSAppxManifestPath\)''==''''">\$\(MSBuildThisFileDirectory\)Package\.appxmanifest</RSAppxManifestPath>'
         $project | Should Match '<AppxManifest Include="\$\(RSAppxManifestPath\)">'
@@ -604,6 +605,55 @@ Describe 'MSI and MSIX package source contracts' {
             if (Test-Path -LiteralPath $stageRoot -PathType Container) {
                 Remove-Item -LiteralPath $stageRoot -Recurse -Force
             }
+        }
+    }
+}
+
+$compilerPolicyCases = @(foreach ($platform in @('x64', 'ARM64')) {
+    foreach ($configuration in @('Debug', 'Release', 'ASan Debug')) {
+        foreach ($mode in @('ProgramDatabase', 'Embedded')) {
+            @{ platform=$platform; configuration=$configuration; mode=$mode }
+        }
+    }
+})
+
+Describe 'Effective invocation-wide compiler metadata' -Tag RequiresBuildToolchain {
+    BeforeAll {
+        $script:compilerPolicyRepo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        Import-Module (Join-Path $compilerPolicyRepo 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $hostFolder = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') { 'arm64' } else { 'amd64' }
+        $script:compilerPolicyMSBuild = Join-Path $installation "MSBuild/Current/Bin/$hostFolder/MSBuild.exe"
+    }
+
+    foreach ($case in $compilerPolicyCases) {
+        It "evaluates $($case.platform) $($case.configuration) $($case.mode) after every project import" -TestCases @($case) {
+            param($platform, $configuration, $mode)
+            $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $compilerPolicyRepo -Harness 'EffectiveCompilerPolicy' -Case ([guid]::NewGuid().ToString('N'))
+            $expected = if ($mode -eq 'Embedded') { 'OldStyle' } elseif ($configuration -eq 'Debug') { 'EditAndContinue' } else { 'ProgramDatabase' }
+            $sharedPath = [IO.Path]::GetFullPath((Join-Path $compilerPolicyRepo 'Common/SearchTextHelpers.cpp'))
+            $sharedCount = 0
+            foreach ($project in @('Common/Common/Common.vcxproj', 'Plugins/Terminal/Terminal.vcxproj', 'RedSalamander/RedSalamander.vcxproj', 'Tests/PluginContractTests/PluginContractTests.vcxproj')) {
+                $output = Join-Path $scratch (([IO.Path]::GetFileNameWithoutExtension($project)) + '.json')
+                & $compilerPolicyMSBuild (Join-Path $compilerPolicyRepo $project) /nologo /noautoresponse /nr:false `
+                    "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:SolutionDir=$compilerPolicyRepo\" `
+                    /p:RSBuildEnableTests=true "/p:RSBuildCompilerDebugInformation=$mode" '-getItem:ClCompile' > $output
+                $LASTEXITCODE | Should Be 0
+                $items = @((Get-Content -LiteralPath $output -Raw | ConvertFrom-Json).Items.ClCompile)
+                $items.Count | Should BeGreaterThan 0
+                foreach ($item in $items) {
+                    $item.DebugInformationFormat | Should Be $expected
+                    if ($mode -eq 'Embedded') {
+                        $item.AdditionalOptions | Should Not Match '(?i)/Zi(?:\s|$)'
+                        if ($item.FullPath -ieq $sharedPath) {
+                            $sharedCount++
+                            $item.MultiProcessorCompilation | Should Be 'false'
+                        }
+                    }
+                }
+            }
+            if ($mode -eq 'Embedded') { $sharedCount | Should BeGreaterThan 0 }
         }
     }
 }
@@ -680,6 +730,19 @@ Describe 'Pinned build-tool and CI identity' {
         $buildScript | Should Match '(?s)New-RSBuildArtifactRecord.+?-LiteralPath\s+\$toolchainIdentityPath'
     }
 
+    It 'installs CI dependencies from a registry checkout of the manifest baseline beside the pinned executable' {
+        # The tool commit's own version database predates the versions vcpkg.json requires; with one checkout vcpkg fails
+        # with "no version database entry" (Build_Toolchain.md).
+        $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
+        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-registry'''
+        $ci | Should Match 'git worktree add --detach \$registryRoot \$baseline'
+        $ci | Should Match '\$actualBaseline -ne \$baseline'
+        $ci | Should Match '"--vcpkg-root=\$env:VCPKG_REGISTRY_ROOT"'
+        $ci | Should Match '"--downloads-root=\$downloadsRoot"'
+        $ci.IndexOf('git checkout --detach $toolCommit') | Should BeLessThan $ci.IndexOf('git worktree add --detach $registryRoot $baseline')
+        $ci.IndexOf('VCPKG_REGISTRY_ROOT=$registryRoot') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
+    }
+
     It 'keeps ARM64 compilation and critical contract suites in the PR gate' {
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
         $subclassGuard = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Verify-NoSubclassManager.ps1') -Raw
@@ -716,9 +779,12 @@ Describe 'Pinned build-tool and CI identity' {
         $nightly | Should Match 'workflows/nightly-ci\.yml/runs\?branch='
         # The run-list call needs the Actions read scope; an API failure runs the suite instead of skipping it.
         $nightly | Should Match '(?ms)^  changes:\s*\r?\n(?:.*?\r?\n)*?    permissions:\s*\r?\n\s*actions: read\s*\r?\n\s*contents: read'
-        $nightly | Should Match 'if ! last=\$\(gh api'
-        $nightly | Should Match '::warning::Could not list the completed nightly runs'
-        $nightly | Should Match "if: needs\.changes\.outputs\.run == 'true'"
+        $nightly | Should Match 'shell:\s*pwsh'
+        $nightly | Should Match 'status=completed&per_page=1'
+        $nightly | Should Match 'if \(\$LASTEXITCODE -eq 0\)'
+        $nightly | Should Match 'Unreadable workflow history; running\.'
+        $nightly | Should Match 'Test-RSScheduledTestsRequired -EventName \$env:EVENT_NAME -Commit \$env:COMMIT -PreviousRun \$previous'
+        $nightly | Should Match "if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.run != 'false' \}\}"
         foreach ($profile in @('x64, runner: windows-2025-vs2026, configuration: Debug',
                 'x64, runner: windows-2025-vs2026, configuration: Release',
                 'ARM64, runner: windows-11-vs2026-arm, configuration: Debug',
@@ -733,7 +799,7 @@ Describe 'Pinned build-tool and CI identity' {
     It 'runs weekly ASan on both architectures with a seeded detector proof before green contracts' {
         $asan = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\asan.yml') -Raw
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-        $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
+        $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp') -Raw
         $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\) \}\}"
         $asan | Should Match 'schedule:\s*\r?\n\s*- cron: "30 4 \* \* 2"'
         $asan | Should Match 'workflow_dispatch:'
@@ -750,5 +816,65 @@ Describe 'Pinned build-tool and CI identity' {
         $reusable | Should Match 'AddressSanitizer diagnostic'
         $harness | Should Match 'RS_ASAN_DEBUG_BUILD'
         $harness | Should Match 'raw\[16\]\s*=\s*0x5Au'
+    }
+}
+
+Describe 'Workflow-selected MSBuild identity' {
+    It 'accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild binaries' {
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $functions = @($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-MSBuild'},$true))
+        $functions.Count | Should Be 1
+        $find = $functions[0].Body.GetScriptBlock()
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath)[0]
+        $hostFolder = if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'){'arm64'}else{'amd64'}
+        $real = Join-Path $installation ('MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
+        (Get-Item -LiteralPath $real).VersionInfo.FileMajorPart | Should BeGreaterThan 17
+        $fixture = Join-Path $TestDrive ('relocated VS é日/MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
+        [void][IO.Directory]::CreateDirectory((Split-Path $fixture))
+        Copy-Item -LiteralPath $real -Destination $fixture
+        $savedActions = $env:GITHUB_ACTIONS
+        $savedMsbuild = $env:MSBUILD_EXE_PATH
+        try {
+            $env:GITHUB_ACTIONS = 'true'
+            $env:MSBUILD_EXE_PATH = $fixture
+            $selected = & $find
+            $selected.Path | Should Be ([IO.Path]::GetFullPath($fixture))
+            $selected.Method | Should Be 'MSBUILD_EXE_PATH'
+            $wrongLayout = Join-Path $TestDrive 'outside-install-layout/MSBuild.exe'
+            [void][IO.Directory]::CreateDirectory((Split-Path $wrongLayout))
+            Copy-Item -LiteralPath $real -Destination $wrongLayout
+            $env:MSBUILD_EXE_PATH = $wrongLayout
+            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            # Keep valid version metadata but use a different binary identity.
+            # Native ARM64 installs can keep task hosts/managed assemblies in the
+            # parent Bin directory. Require a real VS18 counterexample there too.
+            $otherCandidates = @(
+                foreach ($folder in @((Split-Path $real), (Split-Path (Split-Path $real)))) {
+                    foreach ($name in @('MSBuildTaskHost.exe', 'Microsoft.Build.dll')) {
+                        $candidate = Join-Path $folder $name
+                        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                            $identity = (Get-Item -LiteralPath $candidate).VersionInfo
+                            if ($identity.FileMajorPart -ge 18 -and $identity.OriginalFilename -ine 'MSBuild.exe') { $candidate }
+                        }
+                    }
+                }
+            )
+            $otherCandidates.Count | Should BeGreaterThan 0
+            $other = $otherCandidates[0]
+            (Get-Item -LiteralPath $other).VersionInfo.FileMajorPart | Should BeGreaterThan 17
+            (Get-Item -LiteralPath $other).VersionInfo.OriginalFilename | Should Not Be 'MSBuild.exe'
+            Copy-Item -LiteralPath $other -Destination $fixture -Force
+            $env:MSBUILD_EXE_PATH = $fixture
+            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            $env:MSBUILD_EXE_PATH = Join-Path $TestDrive 'missing/MSBuild.exe'
+            Assert-RSThrowsMatching { & $find } 'does not exist'
+        } finally {
+            $env:GITHUB_ACTIONS = $savedActions
+            $env:MSBUILD_EXE_PATH = $savedMsbuild
+        }
     }
 }

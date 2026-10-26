@@ -2,11 +2,11 @@
   "name": "red-salamander",
   "description": "RedSalamander Project",
   "homepage": "https://github.com/Redsalamanderse/RedSalamander",
-  "builtin-baseline": "1391150599c0b9dc6f2a3c79c50eff6c94b077d1",
+  "builtin-baseline": "d53f25d56e7806475054f624439e93ee38e1e81d",
   "dependencies": [
     {
       "name": "7zip",
-      "version>=": "26.2"
+      "version>=": "26.3"
     },
     {
       "name": "wil",
@@ -14,7 +14,7 @@
     },
     {
       "name": "yyjson",
-      "version>=": "0.12.0"
+      "version>=": "0.13.0"
     },
     {
       "name": "blake3",
@@ -22,7 +22,7 @@
     },
     {
       "name": "sqlite3",
-      "version>=": "3.53.4"
+      "version>=": "3.53.4#1"
     },
     {
       "name": "libraw",
@@ -34,7 +34,7 @@
     },
     {
       "name": "libjpeg-turbo",
-      "version>=": "3.2.0"
+      "version>=": "3.2.0#1"
     },
     {
       "name": "pe-parse",
@@ -42,7 +42,7 @@
     },
     {
       "name": "curl",
-      "version>=": "8.22.0",
+      "version>=": "8.22.0#1",
       "features": [
         "ssl",
         "ssh",
@@ -72,6 +72,10 @@
     {
       "name": "aws-sdk-cpp",
       "version": "1.11.880"
+    },
+    {
+      "name": "aws-crt-cpp",
+      "version": "0.43.4"
     }
   ],
   "features": {

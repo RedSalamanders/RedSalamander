@@ -1,0 +1,9 @@
+{
+  "scenario": "cmd/app/rereadAssociations",
+  "rereadAssociations.total_us": 451952,
+  "associationIconCacheSizeBefore": 50,
+  "associationIconCacheSizeAfterClear": 0,
+  "viewerActionCount": 1,
+  "editorActionCount": 1,
+  "userMenuActionCount": 1
+}

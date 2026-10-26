@@ -6,6 +6,7 @@
 #include <windowsx.h>
 
 #include <shellapi.h>
+#include <shlwapi.h>
 
 #include "ConnectionSecrets.h"
 #include "DirectoryInfoCache.h"
@@ -2355,6 +2356,19 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
     RestoreFolderViewFocusAfterDropdown();
 }
 
+#ifdef ENABLE_TESTS
+bool NavigationView::DebugGetSiblingFoldersForSelfTest(IFileSystem* fileSystem,
+                                                       const std::filesystem::path& parentPath,
+                                                       const std::filesystem::path& preferredPath,
+                                                       std::vector<std::filesystem::path>& siblings,
+                                                       bool& truncated)
+{
+    NavigationView navigation;
+    navigation._fileSystemPlugin = fileSystem;
+    return navigation.TryGetSiblingFolders(parentPath, preferredPath, siblings, truncated);
+}
+#endif
+
 bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPath,
                                           const std::filesystem::path& preferredPath,
                                           std::vector<std::filesystem::path>& siblings,
@@ -2386,20 +2400,20 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
 
     constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
     const auto lessByName             = [](const std::filesystem::path& left, const std::filesystem::path& right)
-    { return _wcsicmp(left.filename().c_str(), right.filename().c_str()) < 0; };
+    {
+        const auto leftName  = left.filename();
+        const auto rightName = right.filename();
+        return NaturalSort::Less(leftName.native(), rightName.native());
+    };
     const auto isPreferred = [&](const std::filesystem::path& candidate)
     { return wil::compare_string_ordinal(candidate.native(), preferredPath.native(), true) == wistd::weak_ordering::equivalent; };
-    size_t largestReplaceableIndex    = SIZE_MAX;
-    const auto findLargestReplaceable = [&]()
+    // A bounded max-heap retains the earliest natural names in O(log(99)) per replacement. Ranking the
+    // current folder first here protects it from eviction; the final display sort uses only its name.
+    const auto lessForRetention = [&](const std::filesystem::path& left, const std::filesystem::path& right)
     {
-        largestReplaceableIndex = SIZE_MAX;
-        for (size_t i = 0; i < siblings.size(); ++i)
-        {
-            if (! isPreferred(siblings[i]) && (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
-            {
-                largestReplaceableIndex = i;
-            }
-        }
+        const bool leftPreferred  = isPreferred(left);
+        const bool rightPreferred = isPreferred(right);
+        return leftPreferred != rightPreferred ? leftPreferred : lessByName(left, right);
     };
 
     while (entry != nullptr)
@@ -2414,15 +2428,17 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
                 if (siblings.size() < kMaxSiblingItems)
                 {
                     siblings.push_back(std::move(candidate));
-                    findLargestReplaceable();
+                    if (siblings.size() == kMaxSiblingItems)
+                        std::make_heap(siblings.begin(), siblings.end(), lessForRetention);
                 }
                 else
                 {
                     truncated = true;
-                    if (largestReplaceableIndex != SIZE_MAX && (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
+                    if (lessForRetention(candidate, siblings.front()))
                     {
-                        siblings[largestReplaceableIndex] = std::move(candidate);
-                        findLargestReplaceable();
+                        std::pop_heap(siblings.begin(), siblings.end(), lessForRetention);
+                        siblings.back() = std::move(candidate);
+                        std::push_heap(siblings.begin(), siblings.end(), lessForRetention);
                     }
                 }
             }

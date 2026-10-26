@@ -1,0 +1,55 @@
+{
+  "source": "bdf657a9559ed63579ad48e30f6fb306eb0e621a",
+  "ownerPid": 99260,
+  "scope": "focused diagnostic only; never Full qualification",
+  "label": "seed-guarded-renderer-release-parser",
+  "suite": "Compare",
+  "configuration": "Release",
+  "filter": "local_index_core_usn_record_bounds_reject_corruption,local_index_core_usn_seed_arena_preserves_unicode_records,local_index_core_ntfs_seed_scratch_owns_storage",
+  "repeat": 1,
+  "runId": "20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8",
+  "root": "E:\\RedSalamander.Perf",
+  "buildReceipt": "817c6ae94a564d07a0f1a95c393c88c0ffdc21a2d84ddf555d87837f23c7a105",
+  "sourceSnapshot": "bb25a1550369d092a430ed2e47b1dbaa2986df3690e6ed5628e43ce3232167f2",
+  "artifacts": [
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\RedSalamander.exe",
+      "sha256": "2111B8BE70F1700B14F09370C325B8F4F0257F76ACE79EC547F7D7AE44DB9C8C"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\RedSalamanderSearchService.exe",
+      "sha256": "783CF402CC782E12FA7CAFAF9CE7F99CB362D4C7B23132E0958FDCCC20191F8E"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\Common.dll",
+      "sha256": "7610E981F7C5503BB602A4ECC4E98BF7B193FCB33C2F5F2F7A6587633A791CDC"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll",
+      "sha256": "C075B529F7F8667FF913136AC4D50DBCAE2C86D8A76A0AD51A6E37111810C0EF"
+    }
+  ],
+  "desktopOperationSourceSha256": "F96309169EB717FC69D1EACF77228F3BAE66FC87ED7EA0FD6767122190C6D0D5",
+  "startedUtc": "2026-10-26T10:19:45.5176694Z",
+  "outcome": "focused_pass_only",
+  "log": "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\residual-observer\\native-output.txt",
+  "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\residual-observer\\native-error.txt",
+  "requestedMetricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\residual-observer\\residual-perf.jsonl",
+  "exitCode": 0,
+  "finishedUtc": "2026-10-26T10:19:46.2635721Z",
+  "arguments": [
+    "--compare-selftest",
+    "--selftest-case=local_index_core_usn_record_bounds_reject_corruption,local_index_core_usn_seed_arena_preserves_unicode_records,local_index_core_ntfs_seed_scratch_owns_storage",
+    "--selftest-repeat=1",
+    "--selftest-no-activate"
+  ],
+  "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\selftest\\last_run\\compare\\results.json",
+  "nativeResultsSha256": "BBA46C1975B594484E92FBF3E2E93B30BC03B53DEE657F4C5C63637025F8E900",
+  "nativePassed": 3,
+  "nativeFailed": 0,
+  "nativeSkipped": 0,
+  "exactCaseCounts": true,
+  "metricsPaths": [
+    "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl"
+  ]
+}

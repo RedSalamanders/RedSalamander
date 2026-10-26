@@ -1,0 +1,28 @@
+{
+  "name": "transition-visibility-v14-release-20260927",
+  "configuration": "Release",
+  "git_head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+  "build_receipt_id": "164674b2c8088a615fe4caddb9d941bad635dc8f3eb7e9eba73726d5665f0bf2",
+  "source_snapshot_id": "ddafee6ae6e6230bc68624b3f88a295df8bbd90859097dddf0eb5c135efcf305",
+  "build_target": "solution",
+  "project_selection": [
+    "RedSalamander.sln"
+  ],
+  "run_id": "20260927T153240Z-90320-cbb07f251f7e4a2c846d41bc6fb6bb2d",
+  "counts": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "planned_interactive": false,
+  "runner_payloads_hash_verified": 571,
+  "binary_sha256": "186db455f7cf33edf8817730c26bb8b41bd11f441226742bff3a73214d6b2b04",
+  "terminal_transition_stages": 60,
+  "terminal_transition_fit_failures": 0,
+  "migration_markers": 2,
+  "visibility": [
+    "[13661843] TerminalFactsVisibility: stage=footer-restored groupVisible=false groupExpanded=false hiddenByGroup=false scroll=0 viewport=(0,0,720,411) paintedCard=(15,15,705,396) actions=(30,333,690,384)",
+    "[13706125] TerminalFactsVisibility: stage=footer-restored groupVisible=false groupExpanded=false hiddenByGroup=false scroll=0 viewport=(0,0,480,290) paintedCard=(10,10,470,280) actions=(20,238,460,272)"
+  ],
+  "limitation": "V9 intermittent footer failure not reproduced or explained; no production change, waiver or final acceptance."
+}

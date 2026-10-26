@@ -1,0 +1,144 @@
+
+
+
+
+
+Describing Declarative runtime dependency graph
+ [+] uses one complete manifest for every supported flavor and platform 280ms
+ [+] replaces plugin-local xcopy batches with fail-closed MSBuild tasks 37ms
+ [+] honors test-harness definitions in Release and permits bounded build parallelism 78ms
+ [+] rejects a missing required staged dependency by exact output name 163ms
+ [+] stages and validates the SearchService SQLite runtime at the profile root 159ms
+ [+] keeps Terminal runtime sources literal, platform-specific, and nested under the plugin output 54ms
+ [+] validates a clean extracted portable package from the shared manifest 606ms
+ [+] makes fresh-extraction app and plugin smoke part of portable packaging 28ms
+ [+] publishes portable ZIPs through guarded same-directory atomic replacement 8ms
+ [+] runs app and plugin extraction probes through contained process support 331ms
+Describing MSI and MSIX package source contracts
+ [+] requires explicit standalone package identities and never allocates from repository version state 123ms
+ [+] keeps standalone package mutators under balanced fail-closed coordination 45ms
+ [+] validates exact Winget versions and portable archive identities before hashing 41ms
+ [+] keeps each release MSIX build in one contained packaging transaction 7ms
+ [+] keeps MSI staging aligned with the two shipping executables and optional service component 5ms
+ [+] keeps the symbols MSI allowlist aligned with shipped binaries and plugin PDBs 4ms
+ [+] keeps MSIX identity applications architecture stamping and directory-preserving harvest aligned 4ms
+Staged MSIX manifest: Version=7.0.184.0 ProcessorArchitecture=arm64 Path=E:\RedSalamander.Perf\repository-migration-20261024\public-verification-582d644be\.build\AppPackages\ManifestStagingTests\1592fcc676984d759559c8addf91cece\Package.appxmanifest
+ [+] stages MSIX identity changes without changing the tracked manifest 162ms
+Describing Effective invocation-wide compiler metadata
+ [+] evaluates x64 Debug ProgramDatabase after every project import 1.4s
+ [+] evaluates x64 Debug Embedded after every project import 1.36s
+ [+] evaluates x64 Release ProgramDatabase after every project import 1.32s
+ [+] evaluates x64 Release Embedded after every project import 1.32s
+ [+] evaluates x64 ASan Debug ProgramDatabase after every project import 1.33s
+ [+] evaluates x64 ASan Debug Embedded after every project import 1.35s
+ [+] evaluates ARM64 Debug ProgramDatabase after every project import 1.3s
+ [+] evaluates ARM64 Debug Embedded after every project import 1.29s
+ [+] evaluates ARM64 Release ProgramDatabase after every project import 1.28s
+ [+] evaluates ARM64 Release Embedded after every project import 1.28s
+ [+] evaluates ARM64 ASan Debug ProgramDatabase after every project import 1.26s
+ [+] evaluates ARM64 ASan Debug Embedded after every project import 1.3s
+Describing Pinned build-tool and CI identity
+ [+] separately pins and validates the vcpkg executable revision locally and in CI 44ms
+ [+] installs CI dependencies from a registry checkout of the manifest baseline beside the pinned executable 5ms
+ [+] keeps ARM64 compilation and critical contract suites in the PR gate 9ms
+ [+] runs weekly ASan on both architectures with a seeded detector proof before green contracts 6ms
+Describing Workflow-selected MSBuild identity
+Locating MSBuild...
+Locating MSBuild...
+Locating MSBuild...
+Locating MSBuild...
+ [+] accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild executables 389ms
+Tests completed in 18.37s
+Passed: 35 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+
+
+
+
+Describing MSBuild invocation helper
+ [+] keeps CI-style redirected shells on the streaming path 46ms
+ [+] keeps Codex terminals on the streaming path even when the host is interactive 6ms
+ [+] keeps Windows Terminal on the streaming path so MSBuild progress is replayed 2ms
+ [+] uses direct console execution for a plain interactive console while still capturing a log file 4ms
+ [+] keeps replay streaming for non-interactive terminals 2ms
+ [+] colors replayed MSBuild errors and warnings 6ms
+ [+] colors replayed MSBuild project completion and keeps ordinary lines default 2ms
+ [+] summarizes MSBuild diagnostics from captured logs 7ms
+ [+] counts and colors the same diagnostic header: unnumbered vcpkg warning 9ms
+ [+] counts and colors the same diagnostic header: unnumbered build error 3ms
+ [+] counts and colors the same diagnostic header: unnumbered fatal linker error 2ms
+ [+] counts and colors the same diagnostic header: blank warning origin and code 2ms
+ [+] counts and colors the same diagnostic header: blank error origin and code 3ms
+ [+] counts and colors the same diagnostic header: blank origin with separator 3ms
+ [+] counts and colors the same diagnostic header: code with no origin 2ms
+ [+] counts and colors the same diagnostic header: command-line subcategory 2ms
+ [+] counts and colors the same diagnostic header: case-insensitive category 2ms
+ [+] counts and colors the same diagnostic header: non-numeric code 2ms
+ [+] counts and colors the same diagnostic header: numeric code 3ms
+ [+] counts and colors the same diagnostic header: parallel node prefix 2ms
+ [+] counts and colors the same diagnostic header: UNC source 2ms
+ [+] counts and colors the same diagnostic header: warning mentioning an error 2ms
+ [+] counts and colors the same diagnostic header: error mentioning a warning 2ms
+ [+] counts and colors the same diagnostic header: summary warning count 2ms
+ [+] counts and colors the same diagnostic header: summary error count 2ms
+ [+] counts and colors the same diagnostic header: source filename 2ms
+ [+] counts and colors the same diagnostic header: ordinary progress 2ms
+ [+] counts and colors the same diagnostic header: incomplete header 1ms
+ [+] counts and colors the same diagnostic header: empty line 1ms
+ [+] surfaces unnumbered diagnostics in the summary and streaming presenters 77ms
+Cold Turkish category classification passed.
+ [+] classifies the locale-neutral category independently of the current culture 420ms
+Tests completed in 637ms
+Passed: 31 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+
+
+
+
+Describing Vcpkg install safety helper
+ [+] contains vcpkg execution and acquires selected platform dependency locks in stable order 177ms
+ [+] accepts vcpkg triplet leaf names 6ms
+ [+] rejects triplet values that are paths 5ms
+ [+] resolves child paths under the intended root 9ms
+ [+] rejects child paths that escape the intended root 43ms
+ [+] accepts manifest version floors present in the selected registry 18ms
+ [+] rejects a manifest floor absent from the selected registry before install 9ms
+ [+] accepts an exact manifest override present in the selected registry 14ms
+ [+] rejects an exact manifest override absent from the selected registry 9ms
+ [+] keeps the audited AWS SDK serializer dependency on one exact override 4ms
+  Performing lock-aware merge (test-triplet)...
+  Analyzing 1 file(s)...
+  Merge statistics for test-triplet:
+    Files analyzed: 1
+    Files copied:   1 (absent or changed)
+    Files skipped:  0 (unchanged, hash-verified)
+    Dirs created:   1
+    Errors:         0
+  Merge of 'test-triplet' completed successfully.
+ [+] merges a single source file while StrictMode is active 21ms
+Describing Vcpkg default MSVC toolset pin
+ [+] reads the default toolset from the installation, not the newest one installed beside it 24ms
+ [+] fails with the file and the repair when the default toolset version is missing or malformed 26ms
+ [+] finds the installation the way the build does 41ms
+ [+] writes the stock triplet unchanged in its own line endings, then the two pins 10ms
+ [+] rewrites the overlay only when its bytes change 25ms
+ [+] finds the stock triplet in triplets, then triplets\community, and keeps the governed leaf-name rule 36ms
+ [+] pins every triplet the installer builds, before any lock, staging directory or download 6ms
+ [+] matches the pinned DxUi modules it mirrors 130ms
+Describing Vcpkg dependency pins
+ [+] compares vcpkg version text the way the pin checks need 28ms
+ [+] pins builtin-baseline to the vcpkg tool commit 3ms
+ [+] keeps every direct floor at or below its exact override and the audited AWS SDK and CRT pair together 4ms
+ [+] keeps Dependabot away from the vcpkg baseline and the audited AWS pair 4ms
+ [+] keeps Dependabot from proposing any vcpkg port or baseline update 5ms
+ [+] finds every floor and override in the pinned tool checkout's version database 121ms
+Describing MSBuild manifest install toolset pin
+ [+] refreshes the installer's overlay triplet before MSBuild can install, inside the platform dependency lock 12ms
+ [+] initializes the once-per-build overlay flag so callers under StrictMode can build 294ms
+ [+] passes the overlay to the MSBuild manifest install only when the overlay triplet exists 918ms
+Describing MSVC 14.52 ARM64 AWS hash compiler workaround
+ [+] limits expansion only for the affected compiler target and translation unit 659ms
+Tests completed in 2.68s
+Passed: 29 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+Verified required toolchain: {"installation":"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders","version":"14.52.37025","host":"x64","platform":"x64"}
+Verified required toolchain: {"installation":"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders","version":"14.52.37025","host":"x64","platform":"ARM64"}

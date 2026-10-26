@@ -1,0 +1,18 @@
+[
+  {
+    "target": "target=local",
+    "copies": 12,
+    "bytes": 28427.0,
+    "minimum_us": 22716,
+    "median_us": 27713.5,
+    "maximum_us": 41932
+  },
+  {
+    "target": "target=unc",
+    "copies": 12,
+    "bytes": 28427.0,
+    "minimum_us": 28176,
+    "median_us": 33875.5,
+    "maximum_us": 59544
+  }
+]

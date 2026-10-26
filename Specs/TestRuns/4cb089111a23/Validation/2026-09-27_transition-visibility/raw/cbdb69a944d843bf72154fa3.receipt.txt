@@ -1,0 +1,6 @@
+{
+  "case": "FileOps_VisualGallery",
+  "startedUtc": "2026-09-27T15:32:39.7506684+00:00",
+  "completedUtc": "2026-09-27T15:34:56.5854338+00:00",
+  "exit": 0
+}

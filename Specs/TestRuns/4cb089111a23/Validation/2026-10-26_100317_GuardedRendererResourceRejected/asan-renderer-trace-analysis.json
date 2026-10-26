@@ -1,0 +1,13 @@
+{
+  "source": "bdf657a9559ed63579ad48e30f6fb306eb0e621a",
+  "recordSourceSha256": "40519D2AD72EAE5EAE7D1EA98C3FB944433F11D1169228DF3515DE6BB024E598",
+  "metricsSourceSha256": "753154653041C41D1779CA4676BC185CD8F2299A5C0FEEE9D8DC9F1D0325AB29",
+  "nativeChecks": 21,
+  "admitted": 30,
+  "released": 30,
+  "releasesOnUiThread": 0,
+  "maxWorkerReleaseUs": 83227.0,
+  "maxWholeCloseUs": 91013.0,
+  "passed": true,
+  "scope": "Focused ASan trace only; no cross-corpus performance median or Full claim."
+}

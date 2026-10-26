@@ -1,0 +1,14 @@
+[
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "sha256": "7537920eabbd2c478d74f36ffa75ee1beb309e850cbc4488ac7892e04f2cab8b"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+    "sha256": "2b6c2e6362c1f8e3d1aeb24c10dbee53d26417a3b6f57e54200ab0898e8224a3"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.CommonPresentationPerf.cpp",
+    "sha256": "9c817b6cfe7570a3fea9c2d0b5a95da9379a5368df7612debd80628f095224fd"
+  }
+]

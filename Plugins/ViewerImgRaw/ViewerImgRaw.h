@@ -34,6 +34,7 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "ViewerMenuHost.h"
 #include <DxUi/DxUi.h>
 #include <DxUi/NativeMenuInterop.h>
 
@@ -286,6 +287,7 @@ private:
 
     // Viewer state
     wil::unique_hmenu _menuHandle;
+    RedSalamander::ViewerMenuHost::AttachResult _menuAttachResult;
     DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
     DxUi::WindowHost _fileComboHost;

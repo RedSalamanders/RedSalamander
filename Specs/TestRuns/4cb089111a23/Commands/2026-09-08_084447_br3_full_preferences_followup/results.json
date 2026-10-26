@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-08T08:45:15.997Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T084447Z-10708-23e3459b74f44ff598e7c88b0037c3c4\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3330,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+            "status": "passed",
+            "duration_ms": 624,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+            "status": "passed",
+            "duration_ms": 639,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+            "status": "passed",
+            "duration_ms": 637,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

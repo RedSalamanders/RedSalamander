@@ -1,0 +1,225 @@
+{
+  "schema": "viewer-space.four-root-retained-reference-analysis.v1",
+  "status": "qualified",
+  "campaignId": "20261009T231508122Z-399289c9",
+  "fixtureDigests": [
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B"
+  ],
+  "fixture": {
+    "roots": 4,
+    "directoriesPerRoot": 501,
+    "filesPerRoot": 100000,
+    "topK": 512,
+    "uncachedScanWorkers": 8,
+    "cacheTtlSeconds": 600,
+    "cacheMaxEntries": 4
+  },
+  "warmups": [
+    {
+      "side": "baseline",
+      "runId": "20261009T231510Z-5776-23c964bced4640f58ff97d5b8f492e55"
+    },
+    {
+      "side": "candidate",
+      "runId": "20261009T231914Z-13180-1bdd5c4f635943fd9edcbc6daf8b76b0"
+    }
+  ],
+  "pairedContrasts": [
+    {
+      "block": 1,
+      "pair": 1,
+      "baselineRunId": "20261009T232351Z-19184-29c80fa4f98f41ce8589b99f5e2cf604",
+      "candidateRunId": "20261009T232843Z-2644-ed0ed79661304fa6b9ee39a0aa9aa0d7",
+      "baselinePeakPrivateBytes": 443097088,
+      "candidatePeakPrivateBytes": 361357312,
+      "baselinePeakWorkingSetBytes": 346370048,
+      "candidatePeakWorkingSetBytes": 331874304,
+      "baselinePeakPrivateDeltaBytes": 210362368,
+      "candidatePeakPrivateDeltaBytes": 128561152,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 190562723,
+      "candidateRootSetupUs": 181259780,
+      "baselineLifecycleUs": 17201497,
+      "candidateLifecycleUs": 12488195,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.6111413995872114
+    },
+    {
+      "block": 1,
+      "pair": 2,
+      "baselineRunId": "20261009T233807Z-39332-febd2c899ae84ae1b7416416225869f3",
+      "candidateRunId": "20261009T233326Z-14316-277f9baea9c644eeb2e01902b38f63e4",
+      "baselinePeakPrivateBytes": 440487936,
+      "candidatePeakPrivateBytes": 361750528,
+      "baselinePeakWorkingSetBytes": 348372992,
+      "candidatePeakWorkingSetBytes": 330895360,
+      "baselinePeakPrivateDeltaBytes": 207781888,
+      "candidatePeakPrivateDeltaBytes": 128770048,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 177565093,
+      "candidateRootSetupUs": 181885652,
+      "baselineLifecycleUs": 16964470,
+      "candidateLifecycleUs": 11841637,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.6197366346002208
+    },
+    {
+      "block": 2,
+      "pair": 1,
+      "baselineRunId": "20261009T234246Z-20792-2182c746381a451aaac926eacc07c1bc",
+      "candidateRunId": "20261009T234726Z-13004-f75c1d1aa5264c9c8486ebd5bd4d1686",
+      "baselinePeakPrivateBytes": 437186560,
+      "candidatePeakPrivateBytes": 361439232,
+      "baselinePeakWorkingSetBytes": 345542656,
+      "candidatePeakWorkingSetBytes": 330194944,
+      "baselinePeakPrivateDeltaBytes": 204357632,
+      "candidatePeakPrivateDeltaBytes": 128647168,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 177763858,
+      "candidateRootSetupUs": 178713225,
+      "baselineLifecycleUs": 16683942,
+      "candidateLifecycleUs": 11564783,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.6295197626874048
+    },
+    {
+      "block": 2,
+      "pair": 2,
+      "baselineRunId": "20261009T235647Z-18476-51a64293cd8c459db79e6a356ad0a16b",
+      "candidateRunId": "20261009T235202Z-28920-242ec45ba2c44b74813e7ba2f770cd79",
+      "baselinePeakPrivateBytes": 444514304,
+      "candidatePeakPrivateBytes": 359284736,
+      "baselinePeakWorkingSetBytes": 349827072,
+      "candidatePeakWorkingSetBytes": 329752576,
+      "baselinePeakPrivateDeltaBytes": 211697664,
+      "candidatePeakPrivateDeltaBytes": 126566400,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 177722212,
+      "candidateRootSetupUs": 181135302,
+      "baselineLifecycleUs": 17092508,
+      "candidateLifecycleUs": 12618953,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.5978639424193174
+    },
+    {
+      "block": 3,
+      "pair": 1,
+      "baselineRunId": "20261010T000127Z-2708-7542a05852ed4040a53f2d84bb915ccf",
+      "candidateRunId": "20261010T000613Z-41688-a5fb5098b4c04a05a8cdff9e687765ae",
+      "baselinePeakPrivateBytes": 447557632,
+      "candidatePeakPrivateBytes": 363114496,
+      "baselinePeakWorkingSetBytes": 347488256,
+      "candidatePeakWorkingSetBytes": 330207232,
+      "baselinePeakPrivateDeltaBytes": 214818816,
+      "candidatePeakPrivateDeltaBytes": 130322432,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 182788771,
+      "candidateRootSetupUs": 190318900,
+      "baselineLifecycleUs": 17297311,
+      "candidateLifecycleUs": 11615127,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.606662090531213
+    },
+    {
+      "block": 3,
+      "pair": 2,
+      "baselineRunId": "20261010T001550Z-42348-c96be8e7d4e4487b982a79eb1667a853",
+      "candidateRunId": "20261010T001107Z-15012-3753b679588f4f22824b19eee8c7ceb8",
+      "baselinePeakPrivateBytes": 437370880,
+      "candidatePeakPrivateBytes": 361369600,
+      "baselinePeakWorkingSetBytes": 345432064,
+      "candidatePeakWorkingSetBytes": 332681216,
+      "baselinePeakPrivateDeltaBytes": 204800000,
+      "candidatePeakPrivateDeltaBytes": 128593920,
+      "baselineRootTotalBytes": 3001292,
+      "candidateRootTotalBytes": 3001292,
+      "baselineRootSetupUs": 178637579,
+      "candidateRootSetupUs": 183379210,
+      "baselineLifecycleUs": 16795199,
+      "candidateLifecycleUs": 12065120,
+      "pairedPeakPrivateDeltaRatioCandidateOverBaseline": 0.6279
+    }
+  ],
+  "candidateVsBaselineRatio": {
+    "pairedPeakPrivateDeltaRatioMedian": 0.6154390170937161,
+    "ratioOfUnpairedMedians_peakPrivateDelta": 0.6151969907724859,
+    "ratioOfUnpairedMedians_peakPrivateTotal": 0.8180410626787626
+  },
+  "pairedSampleSummaries": {
+    "baselinePeakPrivateDeltaBytes": {
+      "n": 6,
+      "median": 209072128.0,
+      "p95": 214818816,
+      "max": 214818816
+    },
+    "candidatePeakPrivateDeltaBytes": {
+      "n": 6,
+      "median": 128620544.0,
+      "p95": 130322432,
+      "max": 130322432
+    },
+    "baselinePeakWorkingSetBytes": {
+      "n": 6,
+      "median": 346929152.0,
+      "p95": 349827072,
+      "max": 349827072
+    },
+    "candidatePeakWorkingSetBytes": {
+      "n": 6,
+      "median": 330551296.0,
+      "p95": 332681216,
+      "max": 332681216
+    },
+    "baselineLifecycleUs": {
+      "n": 6,
+      "median": 17028489.0,
+      "p95": 17297311,
+      "max": 17297311
+    },
+    "candidateLifecycleUs": {
+      "n": 6,
+      "median": 11953378.5,
+      "p95": 12618953,
+      "max": 12618953
+    }
+  },
+  "candidateFirstMeaningfulPaintUsByPhase": {
+    "open-loaded": {
+      "n": 24,
+      "median": 197938.0,
+      "p95": 270755,
+      "max": 272845,
+      "targetUs": null,
+      "targetMetCount": null
+    },
+    "reopened-cached": {
+      "n": 24,
+      "median": 710276.5,
+      "p95": 796418,
+      "max": 842856,
+      "targetUs": null,
+      "targetMetCount": null
+    },
+    "refresh-done": {
+      "n": 24,
+      "median": 710276.5,
+      "p95": 796418,
+      "max": 842856,
+      "targetUs": null,
+      "targetMetCount": null
+    }
+  },
+  "firstMeaningfulPaintSemantics": "Candidate firstMeaningfulPaintUs is measured from each IViewer::Open entry to the first successful present of a published nonempty map. On later refresh rows it remains that Open-scoped value and is not an F5-specific latency. Baseline zero/unavailable values are not imputed or compared.",
+  "cohort": "same-IViewer controlled reference; not historical fresh-instance S0",
+  "memoryReductionTarget": {
+    "targetPercent": 70,
+    "status": "MEASURED",
+    "pairedMedianRatio": 0.6154390170937161,
+    "met": true,
+    "denominator": "controlled-reference paired peak private-byte delta; not historical S0"
+  },
+  "interpretation": "Six mirrored ABBA contrasts of the controlled-reference lifecycle. Fixture setup is separate. Closed-HWND rows retain the caller COM owner; only the final owner-release row records caller release. This comparison does not qualify historical fresh-instance S0."
+}

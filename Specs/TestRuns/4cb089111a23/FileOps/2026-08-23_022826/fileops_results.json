@@ -1,0 +1,11 @@
+{
+  "schema": "red-salamander.focused-test-result.v1",
+  "suite": "FileOperations",
+  "case": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+  "governedRunId": "20260823T002807Z-26200-d5c7f0baff1e43068ef7f564fb7b5a38",
+  "buildAttestation": "fd95dad5bfc45aded7855ed9f7fc7eea53be3c047dc95e008092a2527d17806f",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "status": "passed"
+}

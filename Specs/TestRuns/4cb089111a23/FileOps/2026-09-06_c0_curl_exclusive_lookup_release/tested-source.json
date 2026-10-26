@@ -1,0 +1,28 @@
+{
+  "base": "2283f0cfff0c6ca0656ae587ee45120625b4f679",
+  "receipt": "d7b48c90c98502b6886baea888122f34b8a9ce7acc05c47238b34ff5efa10820",
+  "sourceSnapshot": "7ce7d8bc9e5f758454a82af5b6a642a83a6da2857e45d85bf123335b52723cfe",
+  "files": [
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp",
+      "sha256": "b0fbf881abdfc4f5b9e70f4dab814e0e0ced94f6b0ba917a28a382497d3a09c8",
+      "bytes": 409631
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+      "sha256": "e3d319f8f9d64f6ed200c43d6113874ec9aab0cc2cc10200e9c3b69719e6fb7c",
+      "bytes": 719580
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "sha256": "30ac0fff3802e6c4ec9df4d135e241225334f2a4d6cd25d1f575530291be77db",
+      "bytes": 109879
+    },
+    {
+      "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+      "sha256": "862e6842dce9b16c5704fd49d0771e677cb79e6f11cd4b73c0b93e4eef78a0c2",
+      "bytes": 65314
+    }
+  ],
+  "patchSha256": "4b556dffc3d85d1a6d67dd600c2a695e2f9b053963a90c6c37d040d21cdc6ca9"
+}

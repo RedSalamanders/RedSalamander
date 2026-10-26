@@ -1,0 +1,40 @@
+{
+  "shape_checks": [
+    {
+      "name": "local",
+      "shape_rows": 6,
+      "overlap": [
+        4,
+        4,
+        4,
+        4,
+        1,
+        1
+      ],
+      "closed_before_payload": true,
+      "zero_growth": true,
+      "contents_and_sources": true,
+      "cleanup_controls": 0,
+      "nested_moves": 0
+    },
+    {
+      "name": "smb",
+      "shape_rows": 6,
+      "overlap": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "closed_before_payload": true,
+      "zero_growth": true,
+      "contents_and_sources": true,
+      "cleanup_controls": 5,
+      "nested_moves": 1
+    }
+  ],
+  "collapse_controls": 4,
+  "source": "Independent checks of preserved raw JSONL after native passes"
+}

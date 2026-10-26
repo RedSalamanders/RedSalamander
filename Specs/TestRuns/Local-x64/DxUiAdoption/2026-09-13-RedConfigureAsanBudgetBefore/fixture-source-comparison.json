@@ -1,0 +1,16 @@
+{
+  "path": "Tests/RedConfigureTests/RedConfigureTests.cpp",
+  "sources": [
+    {
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "caseSha256": "f4cbbe461f6046bbcfc4d62aa744142e30cdfb27afdd315f681832b9e05a64d7",
+      "whitespaceNormalizedCaseSha256": "338575dc55f493453e38722491e021bddf43894b8c6ef33cc100a6656dd88312"
+    },
+    {
+      "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+      "caseSha256": "b62f52c1ff0de7fb0f863d5c7ae169edd3bfb992e0b2e2aaf268bd9b93863e63",
+      "whitespaceNormalizedCaseSha256": "338575dc55f493453e38722491e021bddf43894b8c6ef33cc100a6656dd88312"
+    }
+  ],
+  "identicalIgnoringWhitespace": true
+}

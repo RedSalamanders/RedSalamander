@@ -1,0 +1,5 @@
+{
+  "Id": "selftest.commands",
+  "Kind": "SelfTest",
+  "RequiresInteractiveDesktop": true
+}

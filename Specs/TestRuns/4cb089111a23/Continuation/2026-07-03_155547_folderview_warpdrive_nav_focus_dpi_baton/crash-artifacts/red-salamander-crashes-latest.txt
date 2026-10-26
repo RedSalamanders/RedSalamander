@@ -1,0 +1,12 @@
+2026-07-03T14:20:49.7237136+02:00       760266 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-142049-p98100.dmp
+2026-07-03T14:20:49.4212080+02:00         5466 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-142049-p98100.txt
+2026-07-02T12:58:18.2600458+02:00     10187894 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.dmp
+2026-07-02T12:58:17.4187253+02:00         7660 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.txt
+2026-07-02T10:00:20.5847909+02:00     10798291 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.dmp
+2026-07-02T10:00:19.3857202+02:00         3796 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.txt
+2026-07-01T11:43:35.0400291+02:00      8737016 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.dmp
+2026-07-01T11:43:34.3617481+02:00         8284 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.txt
+2026-07-01T11:21:04.7340146+02:00      4297551 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.dmp
+2026-07-01T11:21:04.2774514+02:00         2350 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.txt
+2026-07-01T08:16:23.5902389+02:00      4533506 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.dmp
+2026-07-01T08:16:22.5675841+02:00         1128 C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.txt

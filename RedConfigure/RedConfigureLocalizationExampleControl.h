@@ -10,6 +10,12 @@ namespace RedConfigure::Ui
 class LocalizationExampleControl final : public DxUi::Control
 {
 public:
+    LocalizationExampleControl()                                             = default;
+    LocalizationExampleControl(const LocalizationExampleControl&)            = delete;
+    LocalizationExampleControl(LocalizationExampleControl&&)                 = delete;
+    LocalizationExampleControl& operator=(const LocalizationExampleControl&) = delete;
+    LocalizationExampleControl& operator=(LocalizationExampleControl&&)      = delete;
+
     enum class Kind : uint8_t
     {
         String,

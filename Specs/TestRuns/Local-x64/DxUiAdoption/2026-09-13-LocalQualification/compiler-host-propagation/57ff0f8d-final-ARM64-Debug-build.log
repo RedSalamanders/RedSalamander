@@ -1,0 +1,33 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19\RedSalamander.sln
+  Target:        All Projects
+  Configuration: Debug
+  Platform:      ARM64
+  Build workers: 2
+  Version:       7.0.100 beta Debug (ARM64)
+  Build number:  100
+  Version state: Z:\RsI19\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+
+========================================
+Build Failed with Exception!
+========================================
+Error: Cannot evaluate the consumer compiler host before DxUi restore.
+Build time: 00:00

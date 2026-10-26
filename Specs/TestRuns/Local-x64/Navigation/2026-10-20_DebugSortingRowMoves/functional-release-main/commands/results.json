@@ -1,0 +1,50 @@
+{
+    "run_started_utc": "2026-10-20T11:45:11.814Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 6158,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_natural_name_sorting_contracts",
+            "status": "passed",
+            "duration_ms": 11,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_focus_memory_bounded_lru",
+            "status": "passed",
+            "duration_ms": 258,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_focus_memory_navigation_roundtrip",
+            "status": "passed",
+            "duration_ms": 386,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_selection_refresh_filter_contract",
+            "status": "passed",
+            "duration_ms": 447,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_selection_visibility_restore_contract",
+            "status": "passed",
+            "duration_ms": 662,
+            "repeat_index": 1
+        },
+        {
+            "name": "folderView_perf_focus_selection_state",
+            "status": "passed",
+            "duration_ms": 2507,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

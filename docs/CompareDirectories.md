@@ -39,7 +39,7 @@ The Compare Directories window has its own command surface:
 - **Restore Differences Selection** returns selection to the detected difference set.
 - **Invert Differences Selection** flips the current difference selection.
 - **Brief**, **Detailed**, and **Extra Detailed** change the result-pane display mode.
-- **Close** exits the compare window.
+- **Close** exits the compare window. If a copy, move or delete started in the window is still running, it first asks whether to cancel it and close the window; after you accept, the window closes once the operation has stopped.
 
 If the main settings file changes while the **Options…** panel is open:
 

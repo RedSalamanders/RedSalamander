@@ -1,0 +1,70 @@
+{
+    "run_started_utc": "2026-09-21T03:16:02.772Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-display-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 29304,
+    "passed": 8,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Local fixture paths must be qualified by the admitted provider before they are observed.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_display_observations",
+            "status": "passed",
+            "duration_ms": 3933,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_accepted_decision_records",
+            "status": "passed",
+            "duration_ms": 4236,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_display_observations",
+            "status": "passed",
+            "duration_ms": 4295,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_accepted_decision_records",
+            "status": "passed",
+            "duration_ms": 4269,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_display_observations",
+            "status": "failed",
+            "duration_ms": 4310,
+            "repeat_index": 3,
+            "reason": "Local fixture paths must be qualified by the admitted provider before they are observed."
+        },
+        {
+            "name": "cmd_pane_fileops_accepted_decision_records",
+            "status": "passed",
+            "duration_ms": 4278,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

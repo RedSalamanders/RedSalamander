@@ -1,0 +1,156 @@
+{
+  "schema": "red-salamander.supplemental-documentation-gallery.v1",
+  "date": "2026-10-19",
+  "realAccounts": false,
+  "terminalShellStarted": false,
+  "mediaOrigin": "generated silent AVI",
+  "captures": [
+    {
+      "name": "change-case",
+      "group": "product",
+      "sha256": "ccf82c8a0fa18c6822a7541440a6300abe259557c77ddb7f0cb86d4722f0d417",
+      "scenario": "cmd_product_documentation_gallery/change-case",
+      "provenance": "docs/res/change-case.provenance.json"
+    },
+    {
+      "name": "change-attributes",
+      "group": "product",
+      "sha256": "2edb6a8432fefeeeef3b47913b090805fc25c298226c020d60177527e21464b5",
+      "scenario": "cmd_product_documentation_gallery/change-attributes",
+      "provenance": "docs/res/change-attributes.provenance.json"
+    },
+    {
+      "name": "selection-mask",
+      "group": "product",
+      "sha256": "8a4852ea5e19f46a0ef1d1368b974b09c077cf70421b0645ae09c1580925b5b1",
+      "scenario": "cmd_product_documentation_gallery/selection-mask",
+      "provenance": "docs/res/selection-mask.provenance.json"
+    },
+    {
+      "name": "file-filter",
+      "group": "product",
+      "sha256": "f5c97ef7243ade48262641b4c2219e051fd07abf9240b5fe008f469865bb57b6",
+      "scenario": "cmd_product_documentation_gallery/file-filter",
+      "provenance": "docs/res/file-filter.provenance.json"
+    },
+    {
+      "name": "make-file-list",
+      "group": "product",
+      "sha256": "f0a31d27ae3c2bfb0d49d703ebb6a300c18d67df538f5fa88f8ac7bdcb03ac51",
+      "scenario": "cmd_product_documentation_gallery/make-file-list",
+      "provenance": "docs/res/make-file-list.provenance.json"
+    },
+    {
+      "name": "create-directory",
+      "group": "product",
+      "sha256": "c0f18b5e30e2b2492c9e7740c3a1ae91891a9a6aa9c94a13277b6c88f2b9db02",
+      "scenario": "cmd_product_documentation_gallery/create-directory",
+      "provenance": "docs/res/create-directory.provenance.json"
+    },
+    {
+      "name": "new-file",
+      "group": "product",
+      "sha256": "f8000d934acdc266688d9c56f36731f738493fdec93390390b3f201dd6740811",
+      "scenario": "cmd_product_documentation_gallery/new-file",
+      "provenance": "docs/res/new-file.provenance.json"
+    },
+    {
+      "name": "archive-pack",
+      "group": "product",
+      "sha256": "7f648aef15ff8e2328d92687ce81e0e8c455c3b57598ddccff3c0657477b94ef",
+      "scenario": "cmd_product_documentation_gallery/archive-pack",
+      "provenance": "docs/res/archive-pack.provenance.json"
+    },
+    {
+      "name": "archive-unpack",
+      "group": "product",
+      "sha256": "ade56589afe00f7f8ebac3b2d55b1bb181c8f06ab623a7c29e6218f6d38272c4",
+      "scenario": "cmd_product_documentation_gallery/archive-unpack",
+      "provenance": "docs/res/archive-unpack.provenance.json"
+    },
+    {
+      "name": "shared-directories",
+      "group": "product",
+      "sha256": "ada2f952df358bbc81cf85ab5969bceea00c6273b5086922774b6c228d2bc2ab",
+      "scenario": "cmd_product_documentation_gallery/shared-directories",
+      "provenance": "docs/res/shared-directories.provenance.json"
+    },
+    {
+      "name": "shortcuts-terminal",
+      "group": "product",
+      "sha256": "487a1973b50336b4a4437ee27da5824fc5da4263e6b393c61f5d61cdfc16d26f",
+      "scenario": "cmd_product_documentation_gallery/shortcuts-terminal",
+      "provenance": "docs/res/shortcuts-terminal.provenance.json"
+    },
+    {
+      "name": "terminal-embedded",
+      "group": "product",
+      "sha256": "32e9327e03923915b8e2b5dc5ab2875491b44118ef301f14b6038b00cd9f9b87",
+      "scenario": "cmd_product_documentation_gallery/terminal-embedded",
+      "provenance": "docs/res/terminal-embedded.provenance.json"
+    },
+    {
+      "name": "terminal-floating-tabs",
+      "group": "product",
+      "sha256": "0835d98011b844c1d29f1534173828e309e4cd6d77dac8faf14c0234415b169d",
+      "scenario": "cmd_product_documentation_gallery/terminal-floating-tabs",
+      "provenance": "docs/res/terminal-floating-tabs.provenance.json"
+    },
+    {
+      "name": "terminal-find",
+      "group": "product",
+      "sha256": "248535f919eda08cb8f95d4e819b6a369aebdaae70808a2a61dc10b6e775f588",
+      "scenario": "cmd_product_documentation_gallery/terminal-find",
+      "provenance": "docs/res/terminal-find.provenance.json"
+    },
+    {
+      "name": "provider-ftp",
+      "group": "product",
+      "sha256": "7ba74408340aa0c65bf16ac3fe0070446716f34f01c5a28c262ccd43ba571255",
+      "scenario": "cmd_product_documentation_gallery/provider-ftp",
+      "provenance": "docs/res/provider-ftp.provenance.json"
+    },
+    {
+      "name": "provider-google-drive",
+      "group": "product",
+      "sha256": "7b77faf4dc325f32dd22b3ddd5185eda18fe3930d5d1fea3a47b584085dc9dae",
+      "scenario": "cmd_product_documentation_gallery/provider-google-drive",
+      "provenance": "docs/res/provider-google-drive.provenance.json"
+    },
+    {
+      "name": "provider-onedrive",
+      "group": "product",
+      "sha256": "8c5420941c325434c049b6f5b57c2bb5e622d173d22f59eaeaa1a5b272ac9bbc",
+      "scenario": "cmd_product_documentation_gallery/provider-onedrive",
+      "provenance": "docs/res/provider-onedrive.provenance.json"
+    },
+    {
+      "name": "provider-s3",
+      "group": "product",
+      "sha256": "110f0ced3ed7ccd85f2ca1631dc3bc7f5750a7097dc794023cde9f238ac798bb",
+      "scenario": "cmd_product_documentation_gallery/provider-s3",
+      "provenance": "docs/res/provider-s3.provenance.json"
+    },
+    {
+      "name": "provider-mtp",
+      "group": "product",
+      "sha256": "68ce59f95bbe98b8bfb8fc941ccfe6f83f6889abd16a561c69ab7a4499ca3a52",
+      "scenario": "cmd_product_documentation_gallery/provider-mtp",
+      "provenance": "docs/res/provider-mtp.provenance.json"
+    },
+    {
+      "name": "viewer-vlc-playback",
+      "group": "viewer",
+      "sha256": "2a2e18b64c5f0d315bf97b1ceb8dd02c11dfd11582a519f1c4208f74f96fb727",
+      "scenario": "TestViewerVlcDocumentationPlayback/viewer-vlc-playback",
+      "provenance": "docs/res/viewer-vlc-playback.provenance.json"
+    },
+    {
+      "name": "viewer-vlc-paused",
+      "group": "viewer",
+      "sha256": "735bfee4448698df6252746724308ff887432cbf20ab2795f90d84be57e32367",
+      "scenario": "TestViewerVlcDocumentationPlayback/viewer-vlc-paused",
+      "provenance": "docs/res/viewer-vlc-paused.provenance.json"
+    }
+  ]
+}

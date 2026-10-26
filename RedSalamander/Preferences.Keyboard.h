@@ -7,10 +7,10 @@
 #include "Preferences.h"
 #include <DxUi/DxUi.h>
 
-class KeyboardPane final : public DxUi::IDxGridDelegate
+class KeyboardPane final : public DxUi::IGridDelegate
 {
 public:
-    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IGridDelegate::OnGridSelectionChanged;
 
     KeyboardPane();
     ~KeyboardPane();

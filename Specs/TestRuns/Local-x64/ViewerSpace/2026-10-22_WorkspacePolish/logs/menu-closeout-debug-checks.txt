@@ -1,0 +1,3 @@
+Debug TestViewerSpaceAnalysisHostVirtualGridAndLifetime passed.
+Debug TestViewerSpaceLifecycleCaptures passed.
+Debug exact interaction passed with canonical lease.

@@ -51,9 +51,13 @@ The marker is cleared on a clean shutdown, so the prompt only appears after an a
 
 ## Capturing diagnostics for a bug report
 
-RedSalamander writes no log files; diagnostics are emitted as ETW (Event Tracing for Windows) events and consumed in real time by `RedSalamanderMonitor.exe`. To capture errors and warnings while reproducing a problem:
+General diagnostics are emitted as ETW (Event Tracing for Windows) events and
+can be consumed in real time by `RedMonitor.exe`. File Operations also
+keeps daily logs and exported issue reports, and `--perf` writes JSONL metrics.
+See [File Operations diagnostics](FileOperations.md#diagnostics-logs-and-issue-reports)
+for those files. To capture ETW errors and warnings while reproducing a problem:
 
-1. Start `RedSalamanderMonitor.exe` and let it begin its ETW session.
+1. Install the independent production Release helper, then start RedMonitor.exe or use RedSalamander.exe --redmonitor and let it begin its ETW session.
 2. Reproduce the issue in RedSalamander.
 3. Copy the relevant `[Error]` / `[Warning]` lines from the Monitor to attach to your report.
 
@@ -154,3 +158,25 @@ To see timing evolution over many runs, use `Tools\\AnalyzeTestRuns.ps1`:
 ```powershell
 .\Tools\AnalyzeTestRuns.ps1 Specs\TestRuns\<ComputerHashName>\FileOps -TopN 10
 ```
+
+## Terminal and portable-device workflows
+
+For Terminal startup, check that the current pane has a supported Windows/WSL
+backing location and that the Terminal plugin is enabled. A busy or unsupported
+prompt can prevent guarded directory following/history insertion. Read the
+in-terminal explanation and see [Terminal](Terminal.md) before changing settings.
+
+For a phone or camera, unlock it, enable the device's transfer mode and refresh
+the Connection Manager device/storage pickers. Read-only is the MTP profile
+default. Writes and verification also depend on device capabilities; a successful
+copy need not imply safe removal of the source in a Move. See
+[Portable Devices](PortableDevices.md) and [File Operations](FileOperations.md).
+
+## Sharing documentation or diagnostic images
+
+Reproduce documentation screenshots through a deterministic harness fixture with
+invented data. Do not publish actual titles, paths, filenames, accounts or hosts,
+or replace them with blur/redaction labels. Review the complete frame and attach
+its provenance. Diagnostic logs and exports can also contain real names/paths;
+review their contents separately before sharing them. See
+[capture guidance](dev/TestingAndScreenshots.md).

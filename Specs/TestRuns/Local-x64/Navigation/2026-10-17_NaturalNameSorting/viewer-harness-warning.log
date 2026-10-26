@@ -1,0 +1,11 @@
+
+  ViewerPE.Tests.Runner.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+Z:\src\RedSalamander\Tests\ViewerPETests\ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp(127,21): warning C4456: declaration of 'insensitive' hides previous local declaration [Z:\src\RedSalamander\Tests\ViewerPETests\ViewerPETests.vcxproj]
+      Z:\src\RedSalamander\Tests\ViewerPETests\ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp(115,44):
+      see declaration of 'insensitive'
+  
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  Generating Code...
+  ViewerPETests.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\ViewerPETests.exe

@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-19T21:33:26.981Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-path-keyboard-initial\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 30504,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Restore and persist the original clipboard after path keyboard tests.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 6534,
+            "repeat_index": 1,
+            "reason": "Restore and persist the original clipboard after path keyboard tests."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 6196,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 6007,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

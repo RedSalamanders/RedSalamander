@@ -1,0 +1,108 @@
+{
+  "case": "folderView_perf_sort_toggle_stress",
+  "root": "Z:\\RedSalamander.Perf\\runs\\20261020T131103Z-82268-d50e71b411b94e76bd6174c5191b7bf9\\scratch\\commands\\folder_sort_toggle_stress",
+  "itemCount": 5000,
+  "enumerationCount": 1,
+  "sortOperations": [
+    {
+      "sort": "name",
+      "direction": "ascending",
+      "durationUs": 31235,
+      "renderCalls": 3,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 88,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "extension",
+      "direction": "ascending",
+      "durationUs": 86858,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 66,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "time",
+      "direction": "descending",
+      "durationUs": 109278,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 88,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "size",
+      "direction": "descending",
+      "durationUs": 95733,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 66,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "none",
+      "direction": "ascending",
+      "durationUs": 94617,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 88,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "name",
+      "direction": "descending",
+      "durationUs": 67227,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 72,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "extension",
+      "direction": "descending",
+      "durationUs": 67026,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 44,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "time",
+      "direction": "ascending",
+      "durationUs": 79028,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 88,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "size",
+      "direction": "ascending",
+      "durationUs": 82240,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 44,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    },
+    {
+      "sort": "none",
+      "direction": "ascending",
+      "durationUs": 82380,
+      "renderCalls": 4,
+      "incrementalSearchEffectUpdates": 0,
+      "itemCount": 5000,
+      "visibleItemCount": 88,
+      "focusedItem": "casevariant_1700_MiXeD.bin"
+    }
+  ]
+}

@@ -1,0 +1,886 @@
+// Included only by the opt-in documentation gallery. No operation is admitted.
+struct FileOpsGalleryMonitor final
+{
+    RECT work{};
+    std::wstring device;
+};
+
+[[nodiscard]] std::vector<FileOpsGalleryMonitor> GetFileOpsGalleryMonitors()
+{
+    std::vector<FileOpsGalleryMonitor> monitors;
+    EnumDisplayMonitors(nullptr,
+                        nullptr,
+                        [](HMONITOR monitor, HDC, LPRECT, LPARAM context) noexcept -> BOOL
+    {
+        MONITORINFOEXW info{};
+        info.cbSize = sizeof(info);
+        if (GetMonitorInfoW(monitor, &info))
+            reinterpret_cast<std::vector<FileOpsGalleryMonitor>*>(context)->push_back({info.rcWork, info.szDevice});
+        return TRUE;
+    },
+                        reinterpret_cast<LPARAM>(&monitors));
+    return monitors;
+}
+
+void PlaceFileOpsGalleryWindow(HWND hwnd, const FileOpsGalleryMonitor& monitor, int widthDip, int heightDip)
+{
+    SetWindowPos(hwnd, HWND_BOTTOM, monitor.work.left + 16, monitor.work.top + 16, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+    const UINT dpi = GetDpiForWindow(hwnd);
+    RECT rect{0, 0, MulDiv(widthDip, static_cast<int>(dpi), 96), MulDiv(heightDip, static_cast<int>(dpi), 96)};
+    AdjustWindowRectExForDpi(
+        &rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)), dpi);
+    SetWindowPos(hwnd,
+                 HWND_BOTTOM,
+                 monitor.work.left + 16,
+                 monitor.work.top + 16,
+                 std::min(rect.right - rect.left, monitor.work.right - monitor.work.left - 32),
+                 std::min(rect.bottom - rect.top, monitor.work.bottom - monitor.work.top - 32),
+                 SWP_NOACTIVATE);
+    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+}
+
+[[nodiscard]] bool SaveFileOpsGallerySurface(HWND hwnd,
+                                             const std::filesystem::path& output,
+                                             std::ofstream& manifest,
+                                             std::wstring_view name,
+                                             size_t display,
+                                             std::wstring_view fixture,
+                                             std::span<RedSalamander::TestSupport::WindowScreenshotColorProbe> probes = {})
+{
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    const UINT dpi         = GetDpiForWindow(hwnd);
+    const auto file        = std::format(L"{}__dark__fr-FR__display{}__{}dpi.png", name, display + 1u, dpi);
+    const HRESULT captured = RedSalamander::TestSupport::SaveWindowScreenshot(hwnd, output / file, probes);
+    if (! probes.empty())
+        AppendLog(std::format(L"VisualGalleryWitness: {} matched={} required={} hr=0x{:08X}",
+                              file,
+                              probes.front().matchedPixels,
+                              probes.front().minimumMatchingPixels,
+                              static_cast<unsigned long>(captured)));
+    if (FAILED(captured))
+        return false;
+    manifest << Common::Strings::Utf8FromUtf16ReplacingInvalid(file) << '\t' << Common::Strings::Utf8FromUtf16ReplacingInvalid(name) << "\tdark\t0\t" << dpi
+             << '\t' << Common::Strings::Utf8FromUtf16ReplacingInvalid(fixture) << '\n';
+    manifest.flush();
+    AppendLog(std::format(L"VisualGallery: {}", file));
+    return manifest.good();
+}
+
+struct FileOpsGalleryConfirmationCapture final
+{
+    std::filesystem::path output;
+    std::ofstream* manifest = nullptr;
+    std::wstring name;
+    size_t display        = 0u;
+    bool succeeded        = false;
+    unsigned attempts     = 0u;
+    COLORREF closeColor   = 0;
+    HWND window           = nullptr;
+    bool requireScrolling = false;
+};
+FileOpsGalleryConfirmationCapture* g_fileOpsGalleryConfirmation = nullptr;
+
+void CALLBACK CaptureFileOpsGalleryConfirmation(HWND, UINT, UINT_PTR timerId, DWORD) noexcept
+{
+    auto* capture = g_fileOpsGalleryConfirmation;
+    if (! capture)
+        return;
+    HWND overlay = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(),
+                      [](HWND candidate, LPARAM context) noexcept -> BOOL
+    {
+        wchar_t name[128]{};
+        GetClassNameW(candidate, name, static_cast<int>(std::size(name)));
+        if (std::wstring_view(name) == L"RedSalamander.AlertOverlayWindow" && IsWindowVisible(candidate))
+            *reinterpret_cast<HWND*>(context) = candidate;
+        return TRUE;
+    },
+                      reinterpret_cast<LPARAM>(&overlay));
+    RedSalamander::Ui::AlertOverlayWindowDebugSnapshot snapshot{};
+    if (! overlay || ! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, snapshot) || ! snapshot.visible || ! snapshot.hasLayout ||
+        snapshot.paintCount == 0u || snapshot.lastDrawOpacity < 0.999f)
+    {
+        if (++capture->attempts > 100u)
+        {
+            KillTimer(nullptr, timerId);
+            HostBeginPromptShutdown(); // Bounded failure: leave the nested test prompt without accepting it.
+        }
+        return;
+    }
+    capture->window = overlay;
+    KillTimer(nullptr, timerId);
+    // A completed paint can precede WGC's first usable frame. Require the actual
+    // semantic close glyph, not merely a successful PNG encoder. The shared
+    // capture helper repaints and retries bounded stale frames without activation.
+    std::array<RedSalamander::TestSupport::WindowScreenshotColorProbe, 1> probes{};
+    probes[0].clientBounds  = snapshot.closeRectPx;
+    probes[0].expectedColor = capture->closeColor;
+    // The thin diagonal glyph is antialiased at 96 DPI. Allow up to one quarter
+    // of the 8-bit channel range, while still requiring four core pixels in its
+    // interior rectangle. The retained blank frame matches zero for all three colors.
+    probes[0].tolerance             = 64u;
+    probes[0].minimumMatchingPixels = 4u;
+    capture->succeeded =
+        snapshot.usesCompositionPresentation && snapshot.hasPreparedFrame && (! capture->requireScrolling || snapshot.scrollMaximumDip > 0.0f) &&
+        SaveFileOpsGallerySurface(
+            overlay, capture->output, *capture->manifest, capture->name, capture->display, L"production-confirmation-synthetic-request", probes);
+    if (capture->succeeded && snapshot.scrollMaximumDip > 0.0f)
+    {
+        SendMessageW(overlay, WM_KEYDOWN, VK_END, 0);
+        RedSalamander::Ui::AlertOverlayWindowDebugSnapshot scrolled{};
+        if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, scrolled) || scrolled.scrollOffsetDip < scrolled.scrollMaximumDip - 0.5f)
+            capture->succeeded = false;
+        else
+            capture->succeeded = SaveFileOpsGallerySurface(overlay,
+                                                           capture->output,
+                                                           *capture->manifest,
+                                                           capture->name + L"-scrolled",
+                                                           capture->display,
+                                                           L"production-confirmation-synthetic-scroll",
+                                                           probes);
+        SendMessageW(overlay, WM_KEYDOWN, VK_HOME, 0);
+        if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, scrolled) || scrolled.scrollOffsetDip != 0.0f)
+            capture->succeeded = false;
+        AppendLog(std::format(L"ConfirmationScroll: {} extent={:.1f} end/home dispatch and close-glyph capture verified={}",
+                              capture->name,
+                              snapshot.scrollMaximumDip,
+                              capture->succeeded));
+    }
+    RedSalamander::Ui::AlertOverlayWindowDebugSnapshot afterCapture{};
+    if (RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, afterCapture))
+        AppendLog(std::format(L"ConfirmationPaint: {} paints={}/{} opacity={:.3f}/{:.3f} endDraw=0x{:08X} windowState={} color={} close=({},{},{},{})",
+                              capture->name,
+                              snapshot.paintCount,
+                              afterCapture.paintCount,
+                              snapshot.lastDrawOpacity,
+                              afterCapture.lastDrawOpacity,
+                              static_cast<unsigned long>(afterCapture.lastEndDrawResult),
+                              afterCapture.renderTargetWindowState,
+                              capture->closeColor,
+                              snapshot.closeRectPx.left,
+                              snapshot.closeRectPx.top,
+                              snapshot.closeRectPx.right,
+                              snapshot.closeRectPx.bottom));
+    SendMessageW(overlay, WM_KEYDOWN, VK_ESCAPE, 0);
+}
+
+// Geometry/model checks use the same overlay without taking native foreground focus.
+// Native keyboard/UIA acceptance remains a separate governed desktop gate.
+[[nodiscard]] bool ValidateFileOpsConfirmationLayout()
+{
+    using namespace RedSalamander::Ui;
+    wil::com_ptr<IDWriteFactory> factory;
+    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(factory.put()))))
+        return false;
+    for (const float width : {320.0f, 480.0f, 920.0f})
+    {
+        AlertOverlay overlay;
+        overlay.SetScrollingEnabled(true);
+        AlertModel model;
+        model.title   = L"Confirmer la copie des photographies";
+        model.message = L"Vérifiez les emplacements avant de poursuivre cette opération.\n"
+                        L"C:\\Photographies\\Archives familiales de plusieurs générations\\Sélection définitive pour archivage.\n"
+                        L"D:\\Sauvegardes\\Photographies retouchées en très haute résolution.";
+        for (uint32_t id = 1u; id <= 4u; ++id)
+            model.options.push_back({id,
+                                     L"Vérification après la copie",
+                                     {{0u, L"Désactivée"}, {1u, L"Vérifier intégralement chaque fichier après la copie avant de supprimer le fichier source"}},
+                                     1u});
+        model.buttons = {{10u, L"Copier les fichiers sélectionnés", true}, {11u, L"Annuler cette opération", false}};
+        overlay.SetModel(std::move(model));
+        if (! overlay.EnsureLayout(factory.get(), width, 480.0f) || ! overlay.DebugAllControlLabelsFit() ||
+            (width < 920.0f && overlay.GetScrollMaximum() <= 0.0f))
+        {
+            Fail(std::format(L"Confirmation layout lost/clipped a control at width {}.", width));
+            return false;
+        }
+        const auto initialLastOption = overlay.GetVisibleControlRect({AlertHitTest::Part::Option, 4u});
+        const uint64_t layoutPasses  = overlay.DebugGetLayoutPassCount();
+        for (uint32_t repeat = 0u; repeat < 32u; ++repeat)
+            static_cast<void>(overlay.EnsureLayout(factory.get(), width, 480.0f));
+        if (overlay.DebugGetLayoutPassCount() != layoutPasses)
+        {
+            Fail(L"Confirmation rebuilt unchanged text/geometry during warm paints.");
+            return false;
+        }
+        for (uint32_t id = 1u; id <= 4u; ++id)
+        {
+            const AlertHitTest focus{AlertHitTest::Part::Option, id};
+            static_cast<void>(overlay.FocusControl(focus));
+            const auto rect = overlay.GetVisibleControlRect(focus);
+            const auto hit  = overlay.HitTest(D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f));
+            if (rect.bottom <= rect.top || hit.part != focus.part || hit.buttonId != id)
+            {
+                Fail(L"Confirmation focus did not reveal the correct option hit target.");
+                return false;
+            }
+        }
+        static_cast<void>(overlay.ScrollBy(-overlay.GetScrollMaximum()));
+        static_cast<void>(overlay.EnsureLayout(factory.get(), width, 480.0f));
+        const auto resetLastOption = overlay.GetVisibleControlRect({AlertHitTest::Part::Option, 4u});
+        if (overlay.GetScrollOffset() != 0.0f || std::abs(resetLastOption.top - initialLastOption.top) > 0.5f ||
+            std::abs(resetLastOption.bottom - initialLastOption.bottom) > 0.5f)
+        {
+            Fail(std::format(L"Confirmation scroll reset changed visible geometry at width {}: offset {:.1f}, original ({:.1f},{:.1f}), reset ({:.1f},{:.1f}).",
+                             width,
+                             overlay.GetScrollOffset(),
+                             initialLastOption.top,
+                             initialLastOption.bottom,
+                             resetLastOption.top,
+                             resetLastOption.bottom));
+            return false;
+        }
+        const auto footer    = overlay.GetVisibleControlRect({AlertHitTest::Part::Button, 11u});
+        const auto footerHit = overlay.HitTest(D2D1::Point2F((footer.left + footer.right) * 0.5f, (footer.top + footer.bottom) * 0.5f));
+        if (footerHit.part != AlertHitTest::Part::Button || footerHit.buttonId != 11u)
+        {
+            Fail(L"Confirmation option hit testing overlapped the pinned footer.");
+            return false;
+        }
+        static_cast<void>(overlay.FocusControl({AlertHitTest::Part::Option, 4u}));
+        static_cast<void>(overlay.ActivateOption(4u));
+        static_cast<void>(overlay.EnsureLayout(factory.get(), width, 480.0f));
+        overlay.RevealFocusedControl();
+        if (! overlay.DebugAllControlLabelsFit() || overlay.GetScrollOffset() > overlay.GetScrollMaximum())
+            return false;
+        static_cast<void>(overlay.EnsureLayout(factory.get(), 920.0f, 1600.0f));
+        if (overlay.GetScrollOffset() != 0.0f || overlay.GetScrollMaximum() != 0.0f || ! overlay.DebugAllControlLabelsFit())
+        {
+            Fail(L"Confirmation resize did not clamp scrolling after content fit.");
+            return false;
+        }
+        static_cast<void>(overlay.EnsureLayout(factory.get(), 320.0f, 80.0f));
+        static_cast<void>(overlay.FocusControl({AlertHitTest::Part::Button, 11u}));
+        const auto shortAction = overlay.GetVisibleControlRect({AlertHitTest::Part::Button, 11u});
+        if (shortAction.bottom <= shortAction.top || shortAction.top < 0.0f || shortAction.bottom > 80.0f || ! overlay.DebugAllControlLabelsFit() ||
+            overlay.GetVisibleTextRect().bottom != 0.0f)
+        {
+            Fail(L"Short confirmation lost its final action or reported invisible text as visible.");
+            return false;
+        }
+        AppendLog(std::format(
+            L"ConfirmationLayout: width {} wrapped labels, all options reachable, footer isolation, resize clamping, 32 warm layout hits passed", width));
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaptureFileOpsGallerySupplemental(SelfTestState& state,
+                                                     const std::filesystem::path& output,
+                                                     std::ofstream& manifest,
+                                                     const std::vector<FileOpsGalleryMonitor>& monitors)
+{
+    if (! ValidateFileOpsConfirmationLayout())
+        return false;
+    auto* folder                  = TryGetFolderWindow(state.mainWindow);
+    auto* operations              = TryGetFileOps(folder);
+    auto lifetime                 = std::make_shared<int>(0);
+    const bool previousAutoAccept = HostGetAutoAcceptPrompts();
+    const auto previousOverride   = HostGetTestPromptResultOverride();
+    HostSetAutoAcceptPrompts(false);
+    HostClearTestPromptResultOverride();
+    auto restorePrompts = wil::scope_exit([&]
+    {
+        HostSetAutoAcceptPrompts(previousAutoAccept);
+        HostSetTestPromptResultOverride(previousOverride);
+        HostResetPromptShutdown();
+    });
+    for (size_t display = 0u; display < monitors.size(); ++display)
+    {
+        const auto& monitor = monitors[display];
+        wil::unique_hwnd anchor(FileOperationsPopup::Create(operations, folder, state.mainWindow, lifetime));
+        if (! anchor)
+            return false;
+        auto* renderer = reinterpret_cast<FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(anchor.get(), GWLP_USERDATA));
+        renderer->DebugSetVisualScenario({}, false, true);
+        PlaceFileOpsGalleryWindow(anchor.get(), monitor, 920, 620);
+        for (uint32_t captureIndex = 0u; captureIndex < 30u; ++captureIndex)
+        {
+            const uint32_t variant = captureIndex % 10u;
+            const int widthDip     = captureIndex < 10u ? 920 : 480;
+            const int heightDip    = captureIndex < 20u ? 620 : 320;
+            PlaceFileOpsGalleryWindow(anchor.get(), monitor, widthDip, heightDip);
+            HostFileOperationPromptOptions options{};
+            options.sizeBytes = sizeof(options);
+            const std::array availability{HOST_FILE_OPERATION_VERIFICATION_SUPPORTED,
+                                          HOST_FILE_OPERATION_VERIFICATION_SUPPORTED,
+                                          HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED,
+                                          HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION};
+            options.verifyAfterCopy              = variant == 7u ? 0u : variant % 2u;
+            options.verificationAvailability     = variant == 7u ? HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE : availability[variant % 4u];
+            options.clipboardMoveConsumesCutList = variant >= 4u ? 1u : 0u;
+            options.linkPolicy                   = variant % 2u ? HOST_FILE_OPERATION_LINK_SKIP : HOST_FILE_OPERATION_LINK_PRESERVE;
+            options.executionMode                = variant % 2u ? HOST_FILE_OPERATION_EXECUTION_PARALLEL : HOST_FILE_OPERATION_EXECUTION_QUEUE;
+            options.bandwidthLimitBytesPerSecond = variant % 2u ? 64ull * 1024ull * 1024ull : 0u;
+            HostPromptRequest request{};
+            request.sizeBytes     = sizeof(request);
+            request.scope         = HOST_ALERT_SCOPE_WINDOW;
+            request.targetWindow  = anchor.get();
+            request.severity      = HOST_ALERT_WARNING;
+            request.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+            request.defaultResult = HOST_PROMPT_RESULT_CANCEL;
+            request.presentation  = variant < 4u   ? HOST_PROMPT_PRESENTATION_COPY
+                                    : variant < 8u ? HOST_PROMPT_PRESENTATION_MOVE
+                                                   : HOST_PROMPT_PRESENTATION_DELETE;
+            request.message =
+                L"128 fichiers sélectionnés dans C:\\Photographies\\Vacances en famille — septembre 2026\\Sélection définitive pour impression et archivage.\n"
+                L"Destination : D:\\Sauvegardes\\Archives photographiques personnelles\\Exposition annuelle\\Photographies retouchées en très haute "
+                L"résolution.\n"
+                L"Veuillez vérifier les emplacements et les options avant de poursuivre cette opération.";
+            if (variant == 8u)
+                request.message = L"Supprimer définitivement les 128 fichiers sélectionnés dans C:\\Photographies\\Archives familiales ?\n"
+                                  L"Les fichiers ne seront pas envoyés à la Corbeille. Cette action ne peut pas être annulée.";
+            else if (variant == 9u)
+                request.message = L"Supprimer définitivement le dossier Photographies originales de la réunion familiale et tout son contenu ?\n"
+                                  L"Emplacement : C:\\Photographies\\Archives de plusieurs générations.\n"
+                                  L"Le dossier ne sera pas envoyé à la Corbeille. Cette action ne peut pas être annulée.";
+            request.fileOperationOptions = variant < 8u ? &options : nullptr;
+            FileOpsGalleryConfirmationCapture capture{output,
+                                                      &manifest,
+                                                      std::format(L"102-confirmation-{}{}",
+                                                                  variant,
+                                                                  captureIndex < 10u   ? L""
+                                                                  : captureIndex < 20u ? L"-narrow"
+                                                                                       : L"-short"),
+                                                      display};
+            const auto& colors           = folder->GetTheme().folderView;
+            capture.requireScrolling     = captureIndex >= 20u && variant < 8u;
+            capture.closeColor           = ColorToCOLORREF(variant < 4u ? colors.infoText : variant < 8u ? colors.warningText : colors.errorText);
+            g_fileOpsGalleryConfirmation = &capture;
+            const UINT_PTR timer         = SetTimer(nullptr, 0u, 100u, CaptureFileOpsGalleryConfirmation);
+            if (! timer)
+                return false;
+            auto reset              = wil::scope_exit([&]
+            {
+                KillTimer(nullptr, timer);
+                g_fileOpsGalleryConfirmation = nullptr;
+            });
+            HostPromptResult result = HOST_PROMPT_RESULT_NONE;
+            const HRESULT hr        = HostShowPrompt(request, nullptr, &result);
+            if (FAILED(hr) || ! capture.succeeded || result != HOST_PROMPT_RESULT_CANCEL)
+            {
+                Fail(std::format(L"Confirmation capture failed: variant {}, display {}, width {}, hr 0x{:08X}, result {}",
+                                 variant,
+                                 display + 1u,
+                                 widthDip,
+                                 static_cast<unsigned long>(hr),
+                                 static_cast<unsigned>(result)));
+                return false;
+            }
+            RedSalamander::Ui::AlertOverlayWindowDebugSnapshot hidden{};
+            if (capture.window && IsWindow(capture.window) &&
+                (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(capture.window, hidden) || hidden.visible || hidden.usesCompositionPresentation ||
+                 hidden.hasPreparedFrame || hidden.hasBackdropBitmap))
+            {
+                Fail(std::format(L"Confirmation {} retained visible or device resources after cancellation.", variant));
+                return false;
+            }
+            AppendLog(std::format(L"ConfirmationResources: variant {} released after cancellation on display {}", variant, display + 1u));
+        }
+        wil::unique_hwnd issues(FileOperationsIssuesPane::Create(operations, folder, state.mainWindow, lifetime));
+        if (! issues)
+            return false;
+        PlaceFileOpsGalleryWindow(issues.get(), monitor, 1000, 620);
+        FileOperationsIssuesPane::SelfTestRefresh(issues.get(), true);
+        if (! SaveFileOpsGallerySurface(issues.get(), output, manifest, L"103-issues-empty", display, L"production-issues-pane"))
+            return false;
+        auto dismiss = wil::scope_exit([&]
+        {
+            operations->DismissCompletedTask(90001u);
+            operations->DismissCompletedTask(90002u);
+        });
+        for (uint64_t id : {90001ull, 90002ull})
+        {
+            FolderWindow::FileOperationState::CompletedTaskSummary summary{};
+            summary.taskId         = id;
+            summary.operation      = id == 90001u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
+            summary.resultHr       = E_ACCESSDENIED;
+            summary.errorCount     = 14u;
+            summary.totalItems     = 128u;
+            summary.completedItems = 114u;
+            summary.completedTick  = GetTickCount64();
+            for (unsigned row = 0u; row < 14u; ++row)
+            {
+                FolderWindow::FileOperationState::TaskDiagnosticEntry issue{};
+                GetLocalTime(&issue.localTime);
+                issue.taskId    = id;
+                issue.operation = summary.operation;
+                issue.severity  = FolderWindow::FileOperationState::DiagnosticSeverity::Error;
+                issue.status    = E_ACCESSDENIED;
+                issue.category  = L"Vérification et conservation de la source";
+                issue.message   = L"Impossible de terminer la vérification : le fichier source a été conservé. Vérifiez les autorisations du dossier de "
+                                  L"destination avant de réessayer.";
+                issue.sourcePath =
+                    std::format(L"C:\\Photographies\\Vacances en famille — septembre 2026\\Photographie panoramique retouchée numéro {:02}.raw", row);
+                issue.destinationPath = L"D:\\Sauvegardes\\Archives photographiques personnelles\\Exposition annuelle\\Sélection définitive";
+                summary.issueDiagnostics.push_back(std::move(issue));
+            }
+            operations->DebugAppendCompletedTaskForSelfTest(std::move(summary));
+        }
+        FileOperationsIssuesPane::SelfTestRefresh(issues.get(), true);
+        FileOperationsIssuesPane::SelfTestSnapshot issueSnapshot{};
+        if (! FileOperationsIssuesPane::TryGetSelfTestSnapshot(issues.get(), issueSnapshot) || issueSnapshot.rowCount != 28u)
+            return false;
+        if (! SaveFileOpsGallerySurface(issues.get(), output, manifest, L"104-issues-populated", display, L"production-issues-synthetic-diagnostics"))
+            return false;
+        FileOperationsIssuesPane::SelfTestSelectTask(issues.get(), 90001u);
+        if (! SaveFileOpsGallerySurface(issues.get(), output, manifest, L"105-issues-selected", display, L"production-issues-selection"))
+            return false;
+        FileOperationsIssuesPane::SelfTestScrollByWheelDetents(issues.get(), -8);
+        if (! SaveFileOpsGallerySurface(issues.get(), output, manifest, L"106-issues-scrolled", display, L"production-issues-scroll"))
+            return false;
+
+        // Retain 103-106 unchanged; use a fresh narrow, nonactivating production pane
+        // for the typed states on each native gallery display.
+        issues.reset();
+        operations->DismissCompletedTask(90001u);
+        operations->DismissCompletedTask(90002u);
+        wil::unique_hwnd typedIssues(FileOperationsIssuesPane::Create(operations, folder, state.mainWindow, lifetime));
+        if (! typedIssues)
+            return false;
+        PlaceFileOpsGalleryWindow(typedIssues.get(), monitor, 620, 620);
+        auto clearTypedIssues  = wil::scope_exit([&]
+        {
+            for (uint64_t taskId : {91001ull, 91002ull, 91003ull})
+                operations->DebugRemoveDiagnosticsForTask(taskId);
+        });
+        const auto selectIssue = [&](std::wstring_view name, uint64_t taskId, uint64_t generation, FileOperationsIssuesPane::SelfTestSnapshot& snapshot)
+        {
+            const bool selected = FileOperationsIssuesPane::SelfTestRefresh(typedIssues.get(), true) &&
+                                  FileOperationsIssuesPane::SelfTestSelectTask(typedIssues.get(), taskId, generation);
+            if (selected)
+                static_cast<void>(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(typedIssues.get(), -8));
+            if (! selected || ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(typedIssues.get(), snapshot, true) || snapshot.selectionCount != 1u ||
+                snapshot.primarySelectedTaskId != taskId || snapshot.primarySelectedRowId == 0u)
+            {
+                Fail(std::format(L"Issues gallery {} could not select task {} generation {}.", name, taskId, generation));
+                return false;
+            }
+            return true;
+        };
+        const auto unknownDecision    = LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_DECISION_UNKNOWN);
+        const auto unknownResult      = LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_RESULT_UNKNOWN);
+        const auto failedResult       = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_FAILED_SHORT);
+        using GalleryDiagnostic       = FolderWindow::FileOperationState::TaskDiagnosticEntry;
+        const auto semanticDetailFits = [&](std::wstring_view scene,
+                                            const FileOperationsIssuesPane::SelfTestSnapshot& snapshot,
+                                            std::array<wchar_t, 3> fluent,
+                                            std::array<wchar_t, 3> fallback)
+        {
+            constexpr std::array<size_t, 3> labels{{0u, 2u, 3u}};
+            for (size_t slot = 0u; slot < labels.size(); ++slot)
+            {
+                const size_t index     = labels[slot];
+                const wchar_t expected = fluent[slot] != 0 && snapshot.detailIconsUseFluentFont ? fluent[slot] : fallback[slot];
+                const auto icon        = snapshot.detailIconBounds[index];
+                const auto text        = snapshot.detailTextBounds[index];
+                if (snapshot.detailIconGlyphs[index] != expected || icon.right <= icon.left || icon.left < snapshot.detailViewport.left ||
+                    icon.right + 4.0f > text.left || text.right > snapshot.detailViewport.right || snapshot.detailRequiredHeights[index] <= 0.0f ||
+                    snapshot.detailRequiredHeights[index] > text.bottom - text.top + 0.5f)
+                {
+                    Fail(std::format(L"Issues gallery {} semantic icon/text bounds or state failed for detail section {}.", scene, index));
+                    return false;
+                }
+            }
+            return true;
+        };
+        const auto semanticIconProbe = [&](const FileOperationsIssuesPane::SelfTestSnapshot& snapshot, size_t index)
+        {
+            RedSalamander::TestSupport::WindowScreenshotColorProbe probe{};
+            auto icon = snapshot.detailIconBounds[index];
+            // Retained bounds are in content coordinates; Paint applies the scroll
+            // transform and viewport clip before rasterizing these decorations.
+            icon.top -= snapshot.detailScrollOffset;
+            icon.bottom -= snapshot.detailScrollOffset;
+            icon.left          = std::max(icon.left, snapshot.detailViewport.left);
+            icon.top           = std::max(icon.top, snapshot.detailViewport.top);
+            icon.right         = std::min(icon.right, snapshot.detailViewport.right);
+            icon.bottom        = std::min(icon.bottom, snapshot.detailViewport.bottom);
+            const float scale  = static_cast<float>(GetDpiForWindow(typedIssues.get())) / 96.0f;
+            probe.clientBounds = {static_cast<LONG>(std::floor(icon.left * scale)),
+                                  static_cast<LONG>(std::floor(icon.top * scale)),
+                                  static_cast<LONG>(std::ceil(icon.right * scale)),
+                                  static_cast<LONG>(std::ceil(icon.bottom * scale))};
+            probe.expectedColor =
+                ColorToCOLORREF(D2D1::ColorF(snapshot.detailIconColors[index].r, snapshot.detailIconColors[index].g, snapshot.detailIconColors[index].b));
+            // A thin check at 96 DPI can have only one nearby-color pixel.
+            // Keep this paint witness inside the separately verified icon bounds;
+            // semantic glyph and measured text-fit assertions run independently.
+            // Match the existing close-glyph witness's ClearType channel tolerance.
+            probe.tolerance             = 64u;
+            probe.minimumMatchingPixels = 1u;
+            return probe;
+        };
+
+        GalleryDiagnostic legacy{};
+        legacy.localTime       = SYSTEMTIME{2026, 9, 1, 23, 12, 0, 0, 0};
+        legacy.taskId          = 91001u;
+        legacy.operation       = FILESYSTEM_COPY;
+        legacy.severity        = FolderWindow::FileOperationState::DiagnosticSeverity::Warning;
+        legacy.status          = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+        legacy.category        = L"legacy.conflict";
+        legacy.message         = L"Un fichier portant ce nom existe déjà ; le choix effectué n'a pas été enregistré.";
+        legacy.sourcePath      = L"C:\\Photographies\\Archives familiales\\Portrait original.raw";
+        legacy.destinationPath = L"D:\\Sauvegardes\\Portrait original.raw";
+        operations->EnqueueTaskDiagnostic(legacy);
+        FileOperationsIssuesPane::SelfTestSnapshot typedSnapshot{};
+        if (! selectIssue(L"123-issues-legacy-missing-facts", legacy.taskId, 0u, typedSnapshot) || typedSnapshot.rowCount != 1u ||
+            ! typedSnapshot.primaryHasOriginalProblem || typedSnapshot.primaryHasAcceptedDecision || typedSnapshot.primaryHasConflictResult ||
+            typedSnapshot.primaryResultText != unknownResult || typedSnapshot.detailTexts[0].find(legacy.message) == std::wstring::npos ||
+            typedSnapshot.detailTexts[2].find(unknownDecision) == std::wstring::npos ||
+            typedSnapshot.detailTexts[3].find(unknownResult) == std::wstring::npos ||
+            typedSnapshot.detailTexts[4].find(legacy.sourcePath) == std::wstring::npos ||
+            typedSnapshot.detailTexts[5].find(legacy.destinationPath) == std::wstring::npos)
+        {
+            Fail(L"Issues gallery legacy row invented a missing decision/result or lost exact paths.");
+            return false;
+        }
+        if (! semanticDetailFits(
+                L"123-issues-legacy-missing-facts", typedSnapshot, {{FluentIcons::kWarning, 0, 0}}, {{FluentIcons::kFallbackWarning, L'?', L'?'}}))
+            return false;
+        std::array<RedSalamander::TestSupport::WindowScreenshotColorProbe, 1> warningProbe{{semanticIconProbe(typedSnapshot, 0u)}};
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"123-issues-legacy-missing-facts", display, L"production-issues-legacy-unknown", warningProbe))
+            return false;
+
+        auto pending                                  = legacy;
+        pending.taskId                                = 91002u;
+        pending.category                              = L"item.conflict.prompt";
+        pending.message                               = L"Une photographie portant ce nom existe déjà dans le dossier de destination.";
+        pending.conflictPrompt                        = FileOperations::ConflictPromptObservation{10u, FileOperations::ConflictClass::RegularFileExists, 0u};
+        pending.conflictPrompt->sourceName            = L"Portrait original.raw";
+        pending.conflictPrompt->sourceParentPath      = L"C:\\Photographies\\Archives familiales";
+        pending.conflictPrompt->destinationName       = L"Portrait original.raw";
+        pending.conflictPrompt->destinationParentPath = L"D:\\Sauvegardes";
+        operations->EnqueueTaskDiagnostic(pending);
+        auto decision                        = pending;
+        decision.severity                    = FolderWindow::FileOperationState::DiagnosticSeverity::Info;
+        decision.category                    = L"item.conflict.decision";
+        decision.acceptedDecision            = FileOperations::AcceptedConflictDecision{};
+        auto& accepted                       = decision.acceptedDecision.value();
+        accepted.taskId                      = pending.taskId;
+        accepted.promptGeneration            = 10u;
+        accepted.sourceItemIndex             = 0u;
+        accepted.action                      = FileOperations::ConflictAction::Overwrite;
+        accepted.scope.bucket                = FileOperations::ConflictClass::RegularFileExists;
+        accepted.applyToAll                  = true;
+        accepted.originatingPromptGeneration = 10u;
+        operations->EnqueueTaskDiagnostic(decision);
+        if (! selectIssue(L"124-issues-accepted-pending", pending.taskId, 10u, typedSnapshot) || typedSnapshot.rowCount != 2u ||
+            ! typedSnapshot.primaryHasOriginalProblem || ! typedSnapshot.primaryHasAcceptedDecision || typedSnapshot.primaryHasConflictResult ||
+            typedSnapshot.primaryDecisionAction != static_cast<uint32_t>(FileOperations::ConflictAction::Overwrite) ||
+            typedSnapshot.primaryResultText != unknownResult || typedSnapshot.detailTexts[2].find(L"Remplacer") == std::wstring::npos ||
+            typedSnapshot.detailTexts[3].find(unknownResult) == std::wstring::npos)
+        {
+            Fail(L"Issues gallery accepted choice must remain pending until an exact executor result exists.");
+            return false;
+        }
+        if (! semanticDetailFits(L"124-issues-accepted-pending",
+                                 typedSnapshot,
+                                 {{FluentIcons::kWarning, FluentIcons::kForward, 0}},
+                                 {{FluentIcons::kFallbackWarning, FluentIcons::kFallbackForward, L'?'}}))
+            return false;
+        const uint64_t pendingRowId = typedSnapshot.primarySelectedRowId;
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"124-issues-accepted-pending", display, L"production-issues-accepted-result-unknown"))
+            return false;
+
+        auto failed = decision;
+        failed.acceptedDecision.reset();
+        failed.conflictPrompt.reset();
+        failed.category       = L"item.conflict.result";
+        failed.status         = E_ACCESSDENIED;
+        failed.severity       = FolderWindow::FileOperationState::DiagnosticSeverity::Error;
+        failed.message        = L"Le remplacement a échoué : l’accès au fichier de destination a été refusé.";
+        failed.conflictResult = FileOperations::ConflictResultObservation{{pending.taskId, 10u},
+                                                                          FileOperations::PublicationState::NotPublished,
+                                                                          FileOperations::VerificationState::NotRequested,
+                                                                          FileOperations::SourceDisposition::Retained,
+                                                                          FileOperations::ItemCompletion::Failed,
+                                                                          FileOperations::OwnedStageDisposition::RetainedIncomplete,
+                                                                          E_ACCESSDENIED};
+        operations->EnqueueTaskDiagnostic(failed);
+        if (! selectIssue(L"125-issues-failed-replacement", pending.taskId, 10u, typedSnapshot) || typedSnapshot.rowCount != 2u ||
+            typedSnapshot.primarySelectedRowId != pendingRowId || ! typedSnapshot.primaryHasAcceptedDecision || ! typedSnapshot.primaryHasConflictResult ||
+            typedSnapshot.primaryResultText != failedResult || typedSnapshot.detailTexts[2].find(L"Remplacer") == std::wstring::npos ||
+            typedSnapshot.detailTexts[3].find(failedResult) == std::wstring::npos ||
+            typedSnapshot.detailCopyText.find(FileOperations::FormatConflictResultDiagnostic(failed.conflictResult.value())) == std::wstring::npos)
+        {
+            Fail(L"Issues gallery failed replacement did not update the accepted row with its independent result.");
+            return false;
+        }
+        if (! semanticDetailFits(L"125-issues-failed-replacement",
+                                 typedSnapshot,
+                                 {{FluentIcons::kWarning, FluentIcons::kForward, FluentIcons::kError}},
+                                 {{FluentIcons::kFallbackWarning, FluentIcons::kFallbackForward, FluentIcons::kFallbackError}}))
+            return false;
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"125-issues-failed-replacement", display, L"production-issues-correlated-failure"))
+            return false;
+
+        auto partial                       = pending;
+        partial.taskId                     = 91003u;
+        partial.operation                  = FILESYSTEM_MOVE;
+        partial.conflictPrompt->generation = 20u;
+        partial.message                    = L"Un fichier portant ce nom existe déjà dans le dossier de destination du déplacement.";
+        operations->EnqueueTaskDiagnostic(partial);
+        auto partialDecision                                          = decision;
+        partialDecision.taskId                                        = partial.taskId;
+        partialDecision.operation                                     = FILESYSTEM_MOVE;
+        partialDecision.conflictPrompt->generation                    = 20u;
+        partialDecision.acceptedDecision->taskId                      = partial.taskId;
+        partialDecision.acceptedDecision->promptGeneration            = 20u;
+        partialDecision.acceptedDecision->originatingPromptGeneration = 20u;
+        operations->EnqueueTaskDiagnostic(partialDecision);
+        auto partialResult                                  = failed;
+        partialResult.taskId                                = partial.taskId;
+        partialResult.operation                             = FILESYSTEM_MOVE;
+        partialResult.status                                = E_FAIL;
+        partialResult.message                               = L"La destination a été publiée, mais la source du déplacement a été conservée.";
+        partialResult.conflictResult->reference             = {partial.taskId, 20u};
+        partialResult.conflictResult->publication           = FileOperations::PublicationState::Published;
+        partialResult.conflictResult->verification          = FileOperations::VerificationState::NotApplicable;
+        partialResult.conflictResult->ownedStageDisposition = FileOperations::OwnedStageDisposition::Published;
+        partialResult.conflictResult->status                = E_FAIL;
+        operations->EnqueueTaskDiagnostic(partialResult);
+        if (! selectIssue(L"126-issues-partial-move", partial.taskId, 20u, typedSnapshot) || typedSnapshot.rowCount != 3u ||
+            ! typedSnapshot.primaryHasOriginalProblem || ! typedSnapshot.primaryHasAcceptedDecision || ! typedSnapshot.primaryHasConflictResult ||
+            typedSnapshot.primaryResultText != failedResult ||
+            typedSnapshot.detailTexts[1].find(LoadStringResource(nullptr, IDS_CMD_MOVE)) == std::wstring::npos ||
+            typedSnapshot.detailCopyText.find(FileOperations::FormatConflictResultDiagnostic(partialResult.conflictResult.value())) == std::wstring::npos)
+        {
+            Fail(L"Issues gallery partial Move lost the published destination, retained source, or failed completion truth.");
+            return false;
+        }
+        if (! semanticDetailFits(L"126-issues-partial-move",
+                                 typedSnapshot,
+                                 {{FluentIcons::kWarning, FluentIcons::kForward, FluentIcons::kError}},
+                                 {{FluentIcons::kFallbackWarning, FluentIcons::kFallbackForward, FluentIcons::kFallbackError}}))
+            return false;
+        if (! SaveFileOpsGallerySurface(typedIssues.get(), output, manifest, L"126-issues-partial-move", display, L"production-issues-partial-move"))
+            return false;
+
+        auto cached                               = decision;
+        cached.conflictPrompt->generation         = 12u;
+        cached.acceptedDecision->promptGeneration = 12u;
+        cached.acceptedDecision->origin           = FileOperations::ConflictDecisionOrigin::CachedScope;
+        cached.message                            = L"Décision précédente appliquée à un conflit similaire de cette tâche.";
+        operations->EnqueueTaskDiagnostic(cached);
+        if (! selectIssue(L"127-issues-cached-scope", pending.taskId, 12u, typedSnapshot) || typedSnapshot.rowCount != 4u ||
+            typedSnapshot.primaryHasOriginalProblem || ! typedSnapshot.primaryHasAcceptedDecision || typedSnapshot.primaryHasConflictResult ||
+            ! typedSnapshot.primaryDecisionIsCached || typedSnapshot.primaryResultText != unknownResult ||
+            typedSnapshot.detailTexts[2].find(LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_ORIGIN_CACHED)) == std::wstring::npos ||
+            typedSnapshot.detailTexts[3].find(unknownResult) == std::wstring::npos)
+        {
+            Fail(L"Issues gallery cached-scope row invented a fresh user decision, original problem, or result.");
+            return false;
+        }
+        if (! semanticDetailFits(L"127-issues-cached-scope", typedSnapshot, {{0, FluentIcons::kForward, 0}}, {{L'?', FluentIcons::kFallbackForward, L'?'}}))
+            return false;
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"127-issues-cached-scope", display, L"production-issues-cached-scope-unknown-result"))
+            return false;
+
+        operations->DebugRemoveDiagnosticsForTask(pending.taskId); // Remove the selected task; this does not exercise history-cap eviction.
+        if (! FileOperationsIssuesPane::SelfTestRefresh(typedIssues.get(), true) ||
+            ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(typedIssues.get(), typedSnapshot, true) || typedSnapshot.rowCount != 2u ||
+            typedSnapshot.selectionCount != 0u || typedSnapshot.primarySelectedRowId != 0u)
+        {
+            Fail(L"Issues gallery task removal did not clear the selected typed rows and their detail.");
+            return false;
+        }
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"128-issues-task-removed-selection", display, L"production-issues-selected-task-removal"))
+            return false;
+
+        auto invalidResult = failed;
+        invalidResult.conflictResult->reference.taskId += 1u;
+        operations->EnqueueTaskDiagnostic(invalidResult);
+        invalidResult                                            = failed;
+        invalidResult.conflictResult->reference.promptGeneration = 0u;
+        operations->EnqueueTaskDiagnostic(invalidResult);
+        FileOperationsIssuesPane::SelfTestRefresh(typedIssues.get(), true);
+        FileOperationsIssuesPane::TryGetSelfTestSnapshot(typedIssues.get(), typedSnapshot, true);
+        if (typedSnapshot.rowCount != 2u)
+        {
+            Fail(L"Rejected Error-severity results must not fall through as legacy original problems.");
+            return false;
+        }
+        operations->EnqueueTaskDiagnostic(failed);
+        if (! selectIssue(L"129-issues-result-before-problem", pending.taskId, 10u, typedSnapshot) || typedSnapshot.primaryHasOriginalProblem ||
+            ! typedSnapshot.primaryHasConflictResult || typedSnapshot.detailTexts[0].find(failed.message) != std::wstring::npos)
+        {
+            Fail(L"A result-only Error must not invent the original conflict message.");
+            return false;
+        }
+        if (! semanticDetailFits(
+                L"129-issues-result-before-problem", typedSnapshot, {{0, 0, FluentIcons::kError}}, {{L'?', L'?', FluentIcons::kFallbackError}}))
+            return false;
+        const auto resultOnlyRowId = typedSnapshot.primarySelectedRowId;
+        operations->EnqueueTaskDiagnostic(decision);
+        operations->EnqueueTaskDiagnostic(pending);
+        if (! selectIssue(L"129-issues-reappeared-identity", pending.taskId, 10u, typedSnapshot) || typedSnapshot.rowCount != 3u ||
+            typedSnapshot.primarySelectedRowId == pendingRowId || ! typedSnapshot.primaryHasOriginalProblem || ! typedSnapshot.primaryHasAcceptedDecision ||
+            ! typedSnapshot.primaryHasConflictResult || typedSnapshot.primaryResultText != failedResult ||
+            typedSnapshot.primarySelectedRowId != resultOnlyRowId || typedSnapshot.detailTexts[0].find(pending.message) == std::wstring::npos ||
+            typedSnapshot.detailTexts[0].find(failed.message) != std::wstring::npos)
+        {
+            Fail(L"Issues gallery reused a removed row ID or lost the reversed-order typed projection.");
+            return false;
+        }
+        if (! semanticDetailFits(L"129-issues-reappeared-identity",
+                                 typedSnapshot,
+                                 {{FluentIcons::kWarning, FluentIcons::kForward, FluentIcons::kError}},
+                                 {{FluentIcons::kFallbackWarning, FluentIcons::kFallbackForward, FluentIcons::kFallbackError}}))
+            return false;
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"129-issues-reappeared-identity", display, L"production-issues-reappeared-new-row-id"))
+            return false;
+
+        auto confirmed                                       = failed;
+        confirmed.status                                     = S_OK;
+        confirmed.conflictResult->reference.promptGeneration = 14u;
+        confirmed.conflictResult->publication                = FileOperations::PublicationState::Published;
+        confirmed.conflictResult->verification               = FileOperations::VerificationState::Verified;
+        confirmed.conflictResult->completion                 = FileOperations::ItemCompletion::Completed;
+        confirmed.conflictResult->status                     = S_OK;
+        operations->EnqueueTaskDiagnostic(confirmed);
+        if (! selectIssue(L"129b-issues-confirmed-publication", pending.taskId, 14u, typedSnapshot) || typedSnapshot.rowCount != 4u ||
+            ! typedSnapshot.primaryHasConflictResult || typedSnapshot.primaryHasOriginalProblem || typedSnapshot.primaryHasAcceptedDecision ||
+            typedSnapshot.primaryResultText != LoadStringResource(nullptr, IDS_FILEOPS_STATUS_COMPLETED) ||
+            ! semanticDetailFits(
+                L"129b-issues-confirmed-publication", typedSnapshot, {{0, 0, FluentIcons::kCheckMark}}, {{L'?', L'?', FluentIcons::kFallbackCheckMark}}))
+        {
+            Fail(L"Issues gallery confirmed success requires exact completed and published result, not intent or HRESULT alone.");
+            return false;
+        }
+        std::array<RedSalamander::TestSupport::WindowScreenshotColorProbe, 1> resultProbe{{semanticIconProbe(typedSnapshot, 3u)}};
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"129b-issues-confirmed-publication", display, L"production-issues-typed-published-result", resultProbe))
+            return false;
+
+        auto deleted                                       = confirmed;
+        deleted.operation                                  = FILESYSTEM_DELETE;
+        deleted.destinationPath.clear(); // Delete has no destination namespace.
+        deleted.conflictResult->reference.promptGeneration = 15u;
+        deleted.conflictResult->publication                = FileOperations::PublicationState::NotAttempted;
+        deleted.conflictResult->verification               = FileOperations::VerificationState::NotApplicable;
+        for (const auto disposition :
+             {FileOperations::SourceDisposition::Unknown, FileOperations::SourceDisposition::Retained, FileOperations::SourceDisposition::Removed})
+        {
+            ++deleted.conflictResult->reference.promptGeneration;
+            deleted.conflictResult->sourceDisposition = disposition;
+            operations->EnqueueTaskDiagnostic(deleted);
+            const bool removed     = disposition == FileOperations::SourceDisposition::Removed;
+            const bool retained    = disposition == FileOperations::SourceDisposition::Retained;
+            const wchar_t fluent   = removed ? FluentIcons::kCheckMark : retained ? FluentIcons::kWarning : L'\0';
+            const wchar_t fallback = removed ? FluentIcons::kFallbackCheckMark : retained ? FluentIcons::kFallbackWarning : L'?';
+            if (! selectIssue(L"129c-issues-delete-result", deleted.taskId, deleted.conflictResult->reference.promptGeneration, typedSnapshot) ||
+                ! semanticDetailFits(L"129c-issues-delete-result", typedSnapshot, {{0, 0, fluent}}, {{L'?', L'?', fallback}}))
+            {
+                Fail(L"Delete result icon must follow typed removal/retention/unknown evidence; it has no publication axis.");
+                return false;
+            }
+        }
+        resultProbe[0] = semanticIconProbe(typedSnapshot, 3u);
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"129c-issues-confirmed-delete", display, L"production-issues-typed-removed-result", resultProbe))
+            return false;
+
+        auto renamed                                       = confirmed;
+        renamed.operation                                  = FILESYSTEM_RENAME;
+        renamed.destinationPath = (std::filesystem::path(renamed.sourcePath).parent_path() / L"Portrait renommé.raw").native();
+        renamed.conflictResult->reference.promptGeneration = 19u;
+        renamed.conflictResult->sourceDisposition          = FileOperations::SourceDisposition::Removed;
+        operations->EnqueueTaskDiagnostic(renamed);
+        if (! selectIssue(L"129d-issues-confirmed-rename", renamed.taskId, 19u, typedSnapshot) ||
+            ! semanticDetailFits(
+                L"129d-issues-confirmed-rename", typedSnapshot, {{0, 0, FluentIcons::kCheckMark}}, {{L'?', L'?', FluentIcons::kFallbackCheckMark}}))
+        {
+            Fail(L"Rename success requires exact completed, published and source-removed evidence.");
+            return false;
+        }
+        resultProbe[0] = semanticIconProbe(typedSnapshot, 3u);
+        if (! SaveFileOpsGallerySurface(
+                typedIssues.get(), output, manifest, L"129d-issues-confirmed-rename", display, L"production-issues-typed-renamed-result", resultProbe))
+            return false;
+
+        // Exercise the real history cap in a private state without changing the live host's settings.
+        typedIssues.reset();
+        // A state constructor loads durable Move records. Route it to an empty owned store;
+        // this exact no-provider gallery must have no operation that could use the global test override.
+        const auto breadcrumbRoot = output / std::format(L"retention-breadcrumbs-display{}", display + 1u);
+        if (operations->HasActiveOperations() || ! SelfTest::EnsureDirectory(breadcrumbRoot))
+        {
+            Fail(L"History-cap fixture requires an idle engine and an owned durable-store directory.");
+            return false;
+        }
+        FileOperationMoveBreadcrumb::SetRootForSelfTest(breadcrumbRoot);
+        auto restoreBreadcrumbRoot = wil::scope_exit([] { FileOperationMoveBreadcrumb::ClearRootForSelfTest(); });
+        Common::Settings::Settings retentionSettings{};
+        retentionSettings.fileOperations.emplace();
+        constexpr uint32_t retainedLimit                         = 3u;
+        retentionSettings.fileOperations->maxDiagnosticsInMemory = retainedLimit;
+        auto retentionOwner                                      = std::make_unique<FolderWindow>();
+        retentionOwner->SetSettings(&retentionSettings);
+        FolderWindow::FileOperationState retention(*retentionOwner);
+        auto retentionLifetime = std::make_shared<int>(0);
+        wil::unique_hwnd retentionPane(FileOperationsIssuesPane::Create(&retention, folder, state.mainWindow, retentionLifetime));
+        if (! retentionPane)
+            return false;
+        PlaceFileOpsGalleryWindow(retentionPane.get(), monitor, 620, 620);
+        auto oldest     = legacy;
+        oldest.taskId   = 92001u;
+        oldest.category = L"selftest.issues.retention";
+        oldest.message  = L"Ce conflit est le plus ancien de l’historique conservé.";
+        retention.EnqueueTaskDiagnostic(oldest);
+        FileOperationsIssuesPane::SelfTestSnapshot retainedSnapshot{};
+        if (! FileOperationsIssuesPane::SelfTestRefresh(retentionPane.get(), true) ||
+            ! FileOperationsIssuesPane::SelfTestSelectTask(retentionPane.get(), oldest.taskId) ||
+            ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(retentionPane.get(), retainedSnapshot, true) || retainedSnapshot.selectionCount != 1u ||
+            retainedSnapshot.primarySelectedRowId == 0u)
+        {
+            Fail(L"History-cap fixture could not select its oldest retained diagnostic.");
+            return false;
+        }
+        const uint64_t evictedRowId = retainedSnapshot.primarySelectedRowId;
+        if (! SaveFileOpsGallerySurface(
+                retentionPane.get(), output, manifest, L"130-issues-history-selected", display, L"production-issues-history-cap-before"))
+            return false;
+        for (uint32_t index = 1u; index <= retainedLimit; ++index)
+        {
+            auto added = oldest;
+            added.taskId += index;
+            added.message = std::format(L"Un autre conflit a été enregistré : photographie familiale numéro {}.", index);
+            retention.EnqueueTaskDiagnostic(added);
+        }
+        std::vector<GalleryDiagnostic> retained;
+        retention.CollectDiagnostics(retained);
+        if (retained.size() != retainedLimit || std::ranges::any_of(retained, [&](const auto& entry) noexcept { return entry.taskId == oldest.taskId; }) ||
+            ! FileOperationsIssuesPane::SelfTestRefresh(retentionPane.get(), true) ||
+            ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(retentionPane.get(), retainedSnapshot, true) || retainedSnapshot.rowCount != retainedLimit ||
+            retainedSnapshot.selectionCount != 0u || retainedSnapshot.primarySelectedRowId != 0u ||
+            FileOperationsIssuesPane::SelfTestSelectTask(retentionPane.get(), oldest.taskId))
+        {
+            Fail(L"Normal history-cap eviction must remove the oldest selected row and keep the projection bounded.");
+            return false;
+        }
+        if (! SaveFileOpsGallerySurface(
+                retentionPane.get(), output, manifest, L"131-issues-history-evicted", display, L"production-issues-history-cap-eviction"))
+            return false;
+        retention.EnqueueTaskDiagnostic(oldest);
+        if (! FileOperationsIssuesPane::SelfTestRefresh(retentionPane.get(), true) ||
+            ! FileOperationsIssuesPane::SelfTestSelectTask(retentionPane.get(), oldest.taskId) ||
+            ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(retentionPane.get(), retainedSnapshot, true) || retainedSnapshot.rowCount != retainedLimit ||
+            retainedSnapshot.selectionCount != 1u || retainedSnapshot.primarySelectedRowId == 0u || retainedSnapshot.primarySelectedRowId == evictedRowId)
+        {
+            Fail(L"A diagnostic reintroduced after history-cap eviction must receive a new bounded row identity.");
+            return false;
+        }
+        static_cast<void>(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(retentionPane.get(), -8));
+        if (! SaveFileOpsGallerySurface(
+                retentionPane.get(), output, manifest, L"132-issues-history-reintroduced", display, L"production-issues-history-cap-new-identity"))
+            return false;
+    }
+    return true;
+}

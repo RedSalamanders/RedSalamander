@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "D2DHdcPaint.h"
 #include "Preferences.Advanced.h"
@@ -72,7 +73,7 @@
 #include "resource.h"
 #include <DxUi/DxUi.h>
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
 #endif
 
 namespace
@@ -89,8 +90,8 @@ constexpr wchar_t kPrefsDxDiagnosticsProp[]                 = L"RedSalamander.Pr
 using DxUi::Button;
 using DxUi::Control;
 using DxUi::FontRole;
-using DxUi::IDxTreeDelegate;
-using DxUi::IDxTreeModel;
+using DxUi::ITreeDelegate;
+using DxUi::ITreeModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::ScrollPanel;
@@ -283,7 +284,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
     Button* _applyButtonControl                                = nullptr;
     Button* _resetAllButtonControl                             = nullptr;
 
-    struct PreferencesCategoryTreeModel final : IDxTreeModel
+    struct PreferencesCategoryTreeModel final : ITreeModel
     {
         void Rebuild() noexcept
         {
@@ -413,7 +414,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
         std::vector<PrefsPluginListItem> _pluginItems;
     } _categoryTreeModel;
 
-    struct PreferencesCategoryTreeDelegate final : IDxTreeDelegate
+    struct PreferencesCategoryTreeDelegate final : ITreeDelegate
     {
         void Attach(HWND dialog, PreferencesDialogState* state, PreferencesCategoryTreeModel* model, Tree* tree) noexcept
         {
@@ -494,6 +495,11 @@ constexpr wchar_t kPreferencesWindowId[]       = L"PreferencesWindow";
 
 struct PreferencesPageHostSurfaceControl final : DxUi::Control
 {
+    PreferencesPageHostSurfaceControl(const PreferencesPageHostSurfaceControl&)            = delete;
+    PreferencesPageHostSurfaceControl(PreferencesPageHostSurfaceControl&&)                 = delete;
+    PreferencesPageHostSurfaceControl& operator=(const PreferencesPageHostSurfaceControl&) = delete;
+    PreferencesPageHostSurfaceControl& operator=(PreferencesPageHostSurfaceControl&&)      = delete;
+
     explicit PreferencesPageHostSurfaceControl(const PreferencesDialogState* state) noexcept : _state(state)
     {
     }
@@ -566,6 +572,12 @@ private:
 
 struct PreferencesShellSurfaceControl final : DxUi::Control
 {
+    PreferencesShellSurfaceControl()                                                 = default;
+    PreferencesShellSurfaceControl(const PreferencesShellSurfaceControl&)            = delete;
+    PreferencesShellSurfaceControl(PreferencesShellSurfaceControl&&)                 = delete;
+    PreferencesShellSurfaceControl& operator=(const PreferencesShellSurfaceControl&) = delete;
+    PreferencesShellSurfaceControl& operator=(PreferencesShellSurfaceControl&&)      = delete;
+
     void Paint(WindowHost& host) const override
     {
         auto* dc = host.GetDeviceContext();
@@ -708,7 +720,9 @@ void InitializePreferencesPageControls(const PrefCategory category, PreferencesD
             }
         }
 
-        if (state.pageHostDxHost)
+        // Preserve valid interaction on a same-page refresh; switching pages
+        // or initializing their controls retires the previous interaction state.
+        if (state.pageHostDxHost && (needsFirstTimeInit || state.pageHostDxContentRootControl != state.paneWrapperPanels[catIndex]))
         {
             state.pageHostDxHost->ResetInteractionState();
         }
@@ -2089,6 +2103,8 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
+            baselineFileOperations.showInformationalNotes != workingFileOperations.showInformationalNotes ||
+            baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
             baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
@@ -2455,6 +2471,8 @@ struct PreferencesSaveResult final
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
+            baselineFileOperations.showInformationalNotes != workingFileOperations.showInformationalNotes ||
+            baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
             baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
@@ -2769,7 +2787,9 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 
     const bool pluginsChanged = ! AreEquivalentPluginsSettings(state.baselineSettings.plugins, state.workingSettings.plugins);
 
-    *state.settings        = state.workingSettings;
+    *state.settings = state.workingSettings;
+    // Canonical persistence omits factory shortcuts; live consumers need the materialized defaults.
+    ShortcutDefaults::EnsureShortcutsInitialized(*state.settings);
     state.baselineSettings = state.workingSettings;
     if (saveResult.monitorSaved)
     {
@@ -4690,7 +4710,7 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
             break;
         }
         case WndMsg::kPreferencesDeferredPaneAction:
-            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(lp))
+            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(hwnd, msg, lp))
             {
                 return HandleDeferredPaneAction(hwnd, *state, std::move(*payload)) ? 0 : FALSE;
             }
@@ -5218,7 +5238,7 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             }
             return FALSE;
         case WndMsg::kPreferencesDeferredPaneAction:
-            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(lp))
+            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(dlg, msg, lp))
             {
                 return state ? (HandleDeferredPaneAction(dlg, *state, std::move(*payload)) ? TRUE : FALSE) : FALSE;
             }
@@ -5445,7 +5465,7 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 if (restoreOwner)
                 {
                     static_cast<void>(SetActiveWindow(restoreOwner));
-                    static_cast<void>(SetForegroundWindow(restoreOwner));
+                    static_cast<void>(Common::RequestForegroundWindow(restoreOwner));
                     static_cast<void>(SetFocus(restoreOwner));
                     static_cast<void>(PostMessageW(restoreOwner, WndMsg::kPaneRestoreFolderFocus, 0, 0));
                 }
@@ -5483,7 +5503,7 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
             {
                 ShowWindow(existing, SW_SHOW);
             }
-            SetForegroundWindow(existing);
+            Common::RequestForegroundWindow(existing);
             if (auto* state = GetState(existing))
             {
                 HWND effectiveOwner = owner;
@@ -5564,7 +5584,7 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
     const SIZE restoreMinimumSize{state->minTrackSizePx.cx, state->restoreMinSizePx.cy};
     const int showCmd = WindowPlacementPersistence::Restore(settings, kPreferencesWindowId, dlg, restoreMinimumSize);
     static_cast<void>(ShowWindow(dlg, showCmd));
-    static_cast<void>(SetForegroundWindow(dlg));
+    static_cast<void>(Common::RequestForegroundWindow(dlg));
     return true;
 }
 
@@ -5587,7 +5607,16 @@ void UpdatePreferencesWindowsTheme(const AppTheme& theme) noexcept
 
     if (auto* state = GetState(dlg))
     {
-        state->theme = theme;
+        state->theme          = theme;
+        const auto workingUi  = state->workingSettings.ui.value_or(Common::Settings::UiSettings{});
+        const auto baselineUi = state->baselineSettings.ui.value_or(Common::Settings::UiSettings{});
+        if (workingUi.compactMode != baselineUi.compactMode || workingUi.reducedMotion != baselineUi.reducedMotion ||
+            workingUi.windowBackdrop != baselineUi.windowBackdrop)
+        {
+            // A previous Apply's delayed notification must preserve the next
+            // draft's live UI preview while accepting incoming colors and HC.
+            SettingsHotReload::ApplyUiPreferencesToTheme(state->workingSettings, state->theme);
+        }
         RefreshPreferencesDialogTheme(dlg, *state);
         InvalidateRect(dlg, nullptr, FALSE);
     }
@@ -6295,6 +6324,8 @@ bool PreferencesDialog::DebugSelectCategory(const PrefCategory category) noexcep
                 return false;
             }
 
+            // Programmatic selection has no pointer handler to schedule the tree repaint.
+            hostState._categoryTreeHost.Invalidate();
             PreferencesDebugSnapshot snapshot{};
             return DebugGetSnapshot(snapshot) && snapshot.currentCategory == category && ! snapshot.pluginItemSelected;
         }
@@ -6360,6 +6391,7 @@ bool PreferencesDialog::DebugSelectPluginsTreeChild(const size_t childIndex) noe
             return false;
         }
 
+        hostState._categoryTreeHost.Invalidate();
         PreferencesDebugSnapshot snapshot{};
         return DebugGetSnapshot(snapshot) && snapshot.currentCategory == PrefCategory::Plugins && snapshot.pluginItemSelected;
     }

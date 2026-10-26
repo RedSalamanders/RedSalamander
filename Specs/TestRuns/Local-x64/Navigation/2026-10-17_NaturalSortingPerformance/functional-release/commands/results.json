@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-10-17T18:48:30.508Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261017T184746Z-78096-93569d51ff284c8789c67fc0da8fa2bc\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 8599,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
+            "status": "passed",
+            "duration_ms": 145,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties",
+            "status": "passed",
+            "duration_ms": 77,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_header_click_sorts_results",
+            "status": "passed",
+            "duration_ms": 1246,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_decision_mirror_real_focus",
+            "status": "passed",
+            "duration_ms": 1629,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_natural_name_sorting_contracts",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_navigation_sibling_natural_sorting",
+            "status": "passed",
+            "duration_ms": 265,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_delete_rehomes_current_item_to_next_or_previous",
+            "status": "passed",
+            "duration_ms": 436,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_selection_refresh_filter_contract",
+            "status": "passed",
+            "duration_ms": 451,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

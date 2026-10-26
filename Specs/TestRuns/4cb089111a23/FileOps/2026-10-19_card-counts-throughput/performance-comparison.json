@@ -1,0 +1,28 @@
+{
+  "scenario": "Original scenes 0..12, four language/width groups, frames 2..11, same machine 4cb089111a23, x64 Debug at 144 DPI",
+  "method": "nearest-rank median/p95, all matched retained samples, no timing exclusions",
+  "results": [
+    {
+      "name": "baseline",
+      "retainedFrames": 624,
+      "matchedWarmFrames": 520,
+      "medianUs": 8167,
+      "p95Us": 8628
+    },
+    {
+      "name": "first-candidate",
+      "retainedFrames": 1152,
+      "matchedWarmFrames": 520,
+      "medianUs": 8165,
+      "p95Us": 8534
+    },
+    {
+      "name": "candidate",
+      "retainedFrames": 1152,
+      "matchedWarmFrames": 520,
+      "medianUs": 8018,
+      "p95Us": 14056
+    }
+  ],
+  "caveat": "Final candidate frame p95 rose to 14.056 ms from 8.628 ms; the first candidate was 8.534 ms. Product renderer source is identical between candidates; these observations do not isolate a cause or prove performance equivalence. Keep all samples and report the longer tail."
+}

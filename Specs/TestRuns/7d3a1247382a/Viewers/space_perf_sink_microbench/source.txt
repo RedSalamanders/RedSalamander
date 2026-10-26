@@ -1,0 +1,197 @@
+// Ignored, standalone experiment for measuring the diagnostic JSONL sink's observer cost.
+// This is not product code, a repository tool, or a filesystem enumeration benchmark. The
+// parent PowerShell driver must validate argv[1] as a path below its initialized test sandbox.
+#define NOMINMAX
+#include <Windows.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#pragma comment(lib, "Common.lib")
+
+namespace Debug::detail
+{
+__declspec(dllimport) void WritePerfJsonl(
+    std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept;
+} // namespace Debug::detail
+
+namespace Debug::Perf
+{
+__declspec(dllimport) void ConfigureJsonlOutput(const std::filesystem::path& path,
+                                                std::wstring_view scenario,
+                                                std::wstring_view build,
+                                                std::wstring_view branch,
+                                                std::wstring_view commit,
+                                                std::wstring_view machineHash,
+                                                std::wstring_view runId) noexcept;
+__declspec(dllimport) void ClearJsonlOutput() noexcept;
+} // namespace Debug::Perf
+
+namespace
+{
+using Clock = std::chrono::steady_clock;
+
+constexpr std::wstring_view kMetric = L"FileSystem.DirectoryOps.Enumerate";
+constexpr size_t kCallsPerCase      = 1000;
+constexpr size_t kConcurrentThreads = 8;
+constexpr size_t kCallsPerThread    = kCallsPerCase / kConcurrentThreads;
+constexpr size_t kDetailLength      = 300;
+
+struct SinkReset final
+{
+    ~SinkReset()
+    {
+        Debug::Perf::ClearJsonlOutput();
+    }
+};
+
+struct ThreadStats final
+{
+    uint64_t totalCallNs{};
+    uint64_t maxCallNs{};
+    uint64_t calls{};
+};
+
+struct CaseStats final
+{
+    uint64_t totalCallNs{};
+    uint64_t maxCallNs{};
+    uint64_t wallNs{};
+    uint64_t calls{};
+};
+
+std::wstring MakeFixtureDetail()
+{
+    std::wstring detail{L"root=C:\\viewer-space-fixture\\tenant-2026-10\\dataset"};
+    constexpr std::wstring_view segment{L"\\nested-directory-000000000000000000000000000000000000000000000000"};
+    while (detail.size() < kDetailLength)
+    {
+        detail.append(segment);
+    }
+    detail.resize(kDetailLength);
+    return detail;
+}
+
+void EmitMeasured(std::wstring_view detail, ThreadStats& stats, size_t calls)
+{
+    for (size_t index = 0; index < calls; ++index)
+    {
+        const auto started = Clock::now();
+        // Synthetic one-microsecond operation duration: no directory read is performed.
+        Debug::detail::WritePerfJsonl(kMetric, detail, 1, 4096, 1, S_OK);
+        const auto elapsed   = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count();
+        const auto elapsedNs = static_cast<uint64_t>(elapsed);
+        stats.totalCallNs += elapsedNs;
+        stats.maxCallNs = std::max(stats.maxCallNs, elapsedNs);
+        ++stats.calls;
+    }
+}
+
+CaseStats RunCase(std::wstring_view detail, size_t threadCount)
+{
+    std::array<ThreadStats, kConcurrentThreads> perThread{};
+    std::vector<std::jthread> workers;
+    if (threadCount > 1)
+    {
+        workers.reserve(threadCount);
+    }
+
+    const auto wallStarted = Clock::now();
+    if (threadCount == 1)
+    {
+        EmitMeasured(detail, perThread[0], kCallsPerCase);
+    }
+    else
+    {
+        for (size_t index = 0; index < threadCount; ++index)
+        {
+            workers.emplace_back([detail, &perThread, index]() { EmitMeasured(detail, perThread[index], kCallsPerThread); });
+        }
+        for (auto& worker : workers)
+        {
+            worker.join();
+        }
+    }
+
+    CaseStats result{};
+    result.wallNs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - wallStarted).count());
+    for (size_t index = 0; index < threadCount; ++index)
+    {
+        result.totalCallNs += perThread[index].totalCallNs;
+        result.maxCallNs = std::max(result.maxCallNs, perThread[index].maxCallNs);
+        result.calls += perThread[index].calls;
+    }
+    return result;
+}
+
+void PrintCase(const CaseStats& stats, size_t threadCount)
+{
+    std::wcout << L"{\"threads\":" << threadCount << L",\"calls\":" << stats.calls << L",\"sink_call_total_ns\":" << stats.totalCallNs
+               << L",\"sink_call_max_ns\":" << stats.maxCallNs << L",\"wall_ns\":" << stats.wallNs << L"}";
+}
+
+void ConfigureSink(const std::filesystem::path& path)
+{
+    Debug::Perf::ConfigureJsonlOutput(path,
+                                      L"viewer_space_perf_sink_microbench",
+                                      L"candidate-x64-release-tests-enabled",
+                                      L"codex/viewer-space-explorer-analyst-implementation",
+                                      L"d5350a3ba12ffacfbac3c4b524d685d625242225",
+                                      L"7d3a1247382a",
+                                      L"viewer-space-sink-microbench");
+}
+} // namespace
+
+int wmain(int argc, wchar_t* argv[])
+{
+    if (argc != 2)
+    {
+        std::wcerr << L"Usage: space-perf-sink-microbench.exe <sandboxed-jsonl-output-path>\n";
+        return 2;
+    }
+
+    // The parent driver owns the sandbox check and supplies a fresh, unique JSONL path below
+    // its exact initialized-root path; the Common sink appends rows to the configured file.
+    const std::filesystem::path outputPath{argv[1]};
+    const std::wstring detail = MakeFixtureDetail();
+    SinkReset resetSink;
+
+    ConfigureSink(outputPath);
+    const CaseStats firstSingle     = RunCase(detail, 1);
+    const CaseStats firstConcurrent = RunCase(detail, kConcurrentThreads);
+
+    // The sink appends. Clear and reconfigure the same parent-validated path so all four cases
+    // remain in one log; after all four batches the expected row count is exactly 4,000.
+    Debug::Perf::ClearJsonlOutput();
+    ConfigureSink(outputPath);
+    const CaseStats secondSingle     = RunCase(detail, 1);
+    const CaseStats secondConcurrent = RunCase(detail, kConcurrentThreads);
+    Debug::Perf::ClearJsonlOutput();
+    const CaseStats sinkOffSingle     = RunCase(detail, 1);
+    const CaseStats sinkOffConcurrent = RunCase(detail, kConcurrentThreads);
+
+    std::wcout << L"{\"scenario\":\"viewer_space_perf_sink_microbench\",\"metric\":\"FileSystem.DirectoryOps.Enumerate\"" << L",\"detail_characters\":"
+               << detail.size() << L",\"synthetic_duration_us\":1"
+               << L",\"warmup_calls\":0,\"expected_jsonl_rows\":4000,\"per_call_clock_reads\":2,\"rounds\":[" << L"{\"round\":1,\"single_thread\":";
+    PrintCase(firstSingle, 1);
+    std::wcout << L",\"eight_threads\":";
+    PrintCase(firstConcurrent, kConcurrentThreads);
+    std::wcout << L"},{\"round\":2,\"single_thread\":";
+    PrintCase(secondSingle, 1);
+    std::wcout << L",\"eight_threads\":";
+    PrintCase(secondConcurrent, kConcurrentThreads);
+    std::wcout << L"}],\"sink_off\":{\"single_thread\":";
+    PrintCase(sinkOffSingle, 1);
+    std::wcout << L",\"eight_threads\":";
+    PrintCase(sinkOffConcurrent, kConcurrentThreads);
+    std::wcout << L"}}\n";
+    return 0;
+}

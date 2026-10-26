@@ -1,0 +1,221 @@
+[
+  {
+    "kind": "ui-metrics",
+    "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T193240Z-40124-cb54a8e6175240f5aac6d48a84ec9f11\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-25_203444\\perf\\perf_metrics.jsonl",
+    "sha256": "26322E2BC69EB127B4E9174AE461903B660C91AA8999A32D21501B559947BD65",
+    "bytes": 17229841,
+    "lineCount": 45438,
+    "selected": [
+      {
+        "line": 13258,
+        "text": "{\"timestamp\":\"2026-10-25T19:33:29.540Z\",\"process\":70984,\"thread\":97916,\"metric\":\"theme.cycle.overlay.retention.private_bytes\",\"detail\":\"before/after; original 8 MiB guard\",\"durationUs\":0,\"value0\":692473856,\"value1\":1180155904,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":692473856,\"unit\":\"count\"}"
+      },
+      {
+        "line": 13259,
+        "text": "{\"timestamp\":\"2026-10-25T19:33:29.540Z\",\"process\":70984,\"thread\":97916,\"metric\":\"theme.cycle.overlay.retention.asan_live_bytes\",\"detail\":\"before/after; diagnostic only\",\"durationUs\":0,\"value0\":57853237,\"value1\":57278958,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":57853237,\"unit\":\"count\"}"
+      },
+      {
+        "line": 13260,
+        "text": "{\"timestamp\":\"2026-10-25T19:33:29.540Z\",\"process\":70984,\"thread\":97916,\"metric\":\"theme.cycle.overlay.retention.asan_heap_bytes\",\"detail\":\"before/after; diagnostic only\",\"durationUs\":0,\"value0\":270794752,\"value1\":697626624,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":270794752,\"unit\":\"count\"}"
+      },
+      {
+        "line": 13261,
+        "text": "{\"timestamp\":\"2026-10-25T19:33:29.540Z\",\"process\":70984,\"thread\":97916,\"metric\":\"theme.cycle.overlay.retention.asan_free_bytes\",\"detail\":\"before/after; diagnostic only\",\"durationUs\":0,\"value0\":105490736,\"value1\":231730268,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":105490736,\"unit\":\"count\"}"
+      },
+      {
+        "line": 38381,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:10.116Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_stages_us\",\"detail\":\"clear=19;navigation=2250;analysis=1721;workers=1496;queueDiagnostics=156;retire=169;abandonDisposals=28;renderer=33394;notify=7\",\"durationUs\":39240,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":39240,\"unit\":\"us\"}"
+      },
+      {
+        "line": 38382,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:10.154Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_hwnd_us\",\"detail\":\"duration\",\"durationUs\":83469,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":83469,\"unit\":\"us\"}"
+      },
+      {
+        "line": 39535,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:18.505Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_stages_us\",\"detail\":\"clear=25;navigation=2273;analysis=2158;workers=16;queueDiagnostics=155;retire=173;abandonDisposals=28;renderer=34904;notify=8\",\"durationUs\":39740,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":39740,\"unit\":\"us\"}"
+      },
+      {
+        "line": 39536,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:18.539Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_hwnd_us\",\"detail\":\"duration\",\"durationUs\":83894,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":83894,\"unit\":\"us\"}"
+      },
+      {
+        "line": 41460,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:26.907Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_stages_us\",\"detail\":\"clear=19;navigation=2309;analysis=1544;workers=1444;queueDiagnostics=153;retire=193;abandonDisposals=41;renderer=44681;notify=9\",\"durationUs\":50393,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":50393,\"unit\":\"us\"}"
+      },
+      {
+        "line": 41461,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:26.941Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_hwnd_us\",\"detail\":\"duration\",\"durationUs\":92444,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":92444,\"unit\":\"us\"}"
+      },
+      {
+        "line": 43386,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:35.064Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_stages_us\",\"detail\":\"clear=20;navigation=2242;analysis=2153;workers=1308;queueDiagnostics=198;retire=206;abandonDisposals=44;renderer=46408;notify=7\",\"durationUs\":52586,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":52586,\"unit\":\"us\"}"
+      },
+      {
+        "line": 43387,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:35.098Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_hwnd_us\",\"detail\":\"duration\",\"durationUs\":92597,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":92597,\"unit\":\"us\"}"
+      },
+      {
+        "line": 45412,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:43.788Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_stages_us\",\"detail\":\"clear=36;navigation=2193;analysis=1992;workers=21;queueDiagnostics=155;retire=179;abandonDisposals=58;renderer=33753;notify=7\",\"durationUs\":38394,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":38394,\"unit\":\"us\"}"
+      },
+      {
+        "line": 45413,
+        "text": "{\"timestamp\":\"2026-10-25T19:34:43.823Z\",\"process\":70984,\"thread\":97916,\"metric\":\"viewer.space.close.destroy_hwnd_us\",\"detail\":\"duration\",\"durationUs\":84336,\"value0\":0,\"value1\":0,\"hr\":0,\"scenario\":\"SelfTest\",\"build\":\"ASan Debug\",\"branch\":\"gallery-static-presentation-20261024\",\"commit\":\"\",\"machineHash\":\"4cb089111a23\",\"runId\":\"2026-10-25_193311\",\"value\":84336,\"unit\":\"us\"}"
+      }
+    ]
+  },
+  {
+    "kind": "ui-trace",
+    "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T193240Z-40124-cb54a8e6175240f5aac6d48a84ec9f11\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-25_203444\\commands_trace.txt",
+    "sha256": "4BC423D5E113981A4653179DB9B02067CBF9E1A9B1E3E643CA19EF0AB8F835E8",
+    "bytes": 41672,
+    "lineCount": 108,
+    "selected": [
+      {
+        "line": 13,
+        "text": "Breadcrumb post-assertion readiness: ready=false dismiss=false compact=true elapsedUs=3006217."
+      },
+      {
+        "line": 93,
+        "text": "TwoPending destination return: foreground=true nativeFocus=true focus='FileOperations.Action.27.23.0.1' default='' cancel='' beforeDefault='' beforeCancel='' scope=false->false collapsed=false->false active=true context=true."
+      }
+    ]
+  },
+  {
+    "kind": "selection-trace",
+    "source": "E:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T193529Z-40124-fe81a73253554f0da75bc7a26b9c0bbf\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-25_204435\\fileops_trace.txt",
+    "sha256": "E8B65DE4F3414AC3CCEFD269BB103941F781AA0720C7AC27AA421EE6857D196E",
+    "bytes": 49984,
+    "lineCount": 291,
+    "selected": [
+      {
+        "line": 31,
+        "text": "[221425640] Selection shape phase witness: scenario=local-copy-route0-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 33,
+        "text": "[221431375] Selection shape phase witness: scenario=local-copy-route0-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 35,
+        "text": "[221436218] Selection shape phase witness: scenario=local-copy-route1-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 36,
+        "text": "[221442250] Selection shape: FAILED scenario=local-copy-route1-leaves;configured=4;activeMax=2;discoveryUs=0;bytesWhileOpen=0;files=9;bytes=33554432;growth=0;elapsedUs=5881679;contents=true;sources=true;liveStatus=true;hr=0x00000000"
+      },
+      {
+        "line": 37,
+        "text": "[221442250] Selection shape phase witness: scenario=local-copy-route1-leaves;originalActiveMax=2;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 39,
+        "text": "[221446968] Selection shape phase witness: scenario=local-copy-route2-folder;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 41,
+        "text": "[221453125] Selection shape phase witness: scenario=local-copy-route2-leaves;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 88,
+        "text": "[221458171] Selection shape phase witness: scenario=local-copy-route0-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 90,
+        "text": "[221463875] Selection shape phase witness: scenario=local-copy-route0-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 92,
+        "text": "[221468687] Selection shape phase witness: scenario=local-copy-route1-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 94,
+        "text": "[221474375] Selection shape phase witness: scenario=local-copy-route1-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 96,
+        "text": "[221478734] Selection shape phase witness: scenario=local-copy-route2-folder;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 98,
+        "text": "[221484937] Selection shape phase witness: scenario=local-copy-route2-leaves;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 145,
+        "text": "[221511484] Selection shape phase witness: scenario=local-copy-route0-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 147,
+        "text": "[221517281] Selection shape phase witness: scenario=local-copy-route0-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 149,
+        "text": "[221522031] Selection shape phase witness: scenario=local-copy-route1-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 151,
+        "text": "[221528140] Selection shape phase witness: scenario=local-copy-route1-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 153,
+        "text": "[221532781] Selection shape phase witness: scenario=local-copy-route2-folder;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 155,
+        "text": "[221538875] Selection shape phase witness: scenario=local-copy-route2-leaves;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 202,
+        "text": "[221565390] Selection shape phase witness: scenario=local-copy-route0-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 204,
+        "text": "[221571078] Selection shape phase witness: scenario=local-copy-route0-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 206,
+        "text": "[221575828] Selection shape phase witness: scenario=local-copy-route1-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 208,
+        "text": "[221581578] Selection shape phase witness: scenario=local-copy-route1-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 210,
+        "text": "[221586156] Selection shape phase witness: scenario=local-copy-route2-folder;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 212,
+        "text": "[221592328] Selection shape phase witness: scenario=local-copy-route2-leaves;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 259,
+        "text": "[221619125] Selection shape phase witness: scenario=local-copy-route0-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 261,
+        "text": "[221624781] Selection shape phase witness: scenario=local-copy-route0-leaves;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 263,
+        "text": "[221629515] Selection shape phase witness: scenario=local-copy-route1-folder;originalActiveMax=4;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 264,
+        "text": "[221635531] Selection shape: FAILED scenario=local-copy-route1-leaves;configured=4;activeMax=0;discoveryUs=16000;bytesWhileOpen=0;files=9;bytes=33554432;growth=0;elapsedUs=5864375;contents=true;sources=true;liveStatus=true;hr=0x00000000"
+      },
+      {
+        "line": 265,
+        "text": "[221635531] Selection shape phase witness: scenario=local-copy-route1-leaves;originalActiveMax=0;explicitTransferActiveMax=4;expected=4"
+      },
+      {
+        "line": 267,
+        "text": "[221640156] Selection shape phase witness: scenario=local-copy-route2-folder;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      },
+      {
+        "line": 269,
+        "text": "[221646312] Selection shape phase witness: scenario=local-copy-route2-leaves;originalActiveMax=1;explicitTransferActiveMax=1;expected=1"
+      }
+    ]
+  }
+]

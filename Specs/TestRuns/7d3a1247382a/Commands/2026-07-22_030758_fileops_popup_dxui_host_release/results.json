@@ -1,0 +1,30 @@
+{
+  "run_started_utc": "2026-07-22T03:07:57.431Z",
+  "suite": "Commands",
+  "duration_ms": 11271,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "timeout_scale": 2.0,
+  "repeat_count": 1,
+  "cases": [
+    {
+      "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "status": "passed",
+      "duration_ms": 1249,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+      "status": "passed",
+      "duration_ms": 6534,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_completed_group_and_navigation",
+      "status": "passed",
+      "duration_ms": 3447,
+      "repeat_index": 1
+    }
+  ]
+}

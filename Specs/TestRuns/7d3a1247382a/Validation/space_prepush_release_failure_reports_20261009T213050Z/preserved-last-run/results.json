@@ -1,0 +1,1883 @@
+{
+    "run_started_utc": "2026-10-09T22:31:15.259Z",
+    "duration_ms": 4861,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 3905,
+            "passed": 3,
+            "failed": 1,
+            "skipped": 229,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "failureMessage": "File Operations safety contracts failed; see individual witnesses in the trace.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1546,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_QueuedAdmissionContracts",
+                    "status": "passed",
+                    "duration_ms": 610,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_SafetyRemediationContracts",
+                    "status": "failed",
+                    "duration_ms": 1656,
+                    "repeat_index": 1,
+                    "reason": "File Operations safety contracts failed; see individual witnesses in the trace."
+                },
+                {
+                    "name": "FileOps_AdmissionBaseline",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_OwnedProductionShutdown",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_CrossVolumeMoveAfterPartialPublicationStorage",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_RepeatedNonClipboardCopyStorage",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_RepeatedNonClipboardMoveStorage",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_TerminalFactsProjection",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ClearCompletedScope",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_PerItemCancelUndispatchedRoots",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_BatchRenameExactResultCarrier",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_BatchRenameNeverRunRowsNotAttempted",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_CopyMergeIntoExistingFolder",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_MoveMergeIntoExistingFolderSameVolume",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Beeline_RenameMergeSkipKeepsSourceFolder",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_RenameMergeEmptyFolderCompletes",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ReparseDirectoryMergeIntoExistingFolder",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ProviderCapabilityMatrix",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ParallelGraphFairColorWeight",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ReparseLiteralCopyKeepsTargets",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_DeleteToctouSwapGuard",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_NativeMoveRacedDestinationNotReplaced",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_NativeMoveMissingPathKnownFailure",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "FileOps_ResolvedItemsExactDestinations",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_ReparseNativeMoveRelocatesLinkObject",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_ManagedMovePreservesUncopiedNewFiles",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_OverwriteGrantIsOneShot",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_MovedTreeKeepsLiteralLinks",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_RerunCopyIdenticalCollisionPrompts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_MoveSameSizeCollisionPrompts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_ManagedMergeMovePreservesChildren",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_CopyIntoSelfAliasRejected",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_StorageKindProbed",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_BridgePerFileConflictSkips",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_BridgeMovePerFileConflictSkipsParallel",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Fairstream_DiscoveryAheadOverlapsTransfer",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Causeway_BridgeRejectsHostileChildNames",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Causeway_BridgeProviderOutputContracts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Causeway_BridgeSchedulingAndResourceContracts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Causeway_BridgeFileReparsePolicy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Beeline_CopySkipLinksKeepsPlaceholders",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Causeway_BridgeFailureStatusAndPausedReader",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterEventuallyConsistentMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterPermanentMissMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterWrongSizeMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterConcurrentReplacementCopy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterCancelDuringBackoff",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyOnlyUsesCopyVerification",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_CrossFsDirectoryCopyOnlyRetainsSource",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_LocalWriterOverwriteIsStaged",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_LocalCopyOverwriteIsStaged",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_LocalCopyNewNameConcurrentReplacementSurvives",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C1_InlineRenameNameRefusedOnCard",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A19_DiscoveryMeasurementFacts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A19_DiscoveryProviderControls",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A19_DiscoveryIndependentVolumes",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_LeafCopy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_LeafMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_ManagedDirectory",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_NativeRenameMerge",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_MixedRoots",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_ZeroByteAndVerifiedLeaf",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_LocalDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_DummyDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_CurlDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_S3DirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_GDriveDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_GraphDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "DiscoveryScope_MtpDirectApi",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fSmb_BlockedSynchronousCallCancelReturns",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fSmb_LoopbackReadWriteCreateDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fSmb_LoopbackRecycleNeverDestroys",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fCurl_FakeFtpReadWriteCreateDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "BR5_CurlHostDirectoryMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "BR5_CurlHostDirectoryMoveRefused",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fS3_FakeS3ReadWriteCreateDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fGraph_FakeGraphReadWriteCreateRenameRecycle",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R0fGDrive_FakeDriveReadWriteCreateMoveDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_LocalKnownNoCommitReceipts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlNativeDeleteGuards",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlCommittedMutationResponseLost",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlHostCommittedDeleteResponseLost",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlPartialTreeFailure",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlHostPartialTreeFailure",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlNativeDeleteLateListing",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlDeleteTraversalBounds",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlDirectorySizeTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlMovePreflightTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlCopyTraversalTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlEntryLookupTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlImapListingTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C0_CurlImapTransportTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R3_1_IdentityLessReplaceDummy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R3_2_WriterProofDummy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R3_3_PublicationFaultMatrix",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R3_4_ReplaceWithoutOccupantTokenRefused",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "RC3_9_TransferDestinationNameRefused",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4T_DeepTreeCopyCompletesIteratively",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4T2_DeepTreeLocalDeleteCompletes",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4T3_WideDirectoryCopyCompletes",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_DontStartCancelsBeforeMutation",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_ReadReadDoesNotWarn",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_SameDestinationWarns",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_RunConcurrentSameDestinationStaysSafe",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_LiveOutputGuardChoices",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_DisjointWritesDoNotWarn",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_RenamePublishKeepsIndexPrecise",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R4A02_LatePublisherStillWarns",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_DiscoverySingleTraversal",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelReleasesSlot",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_CleanupDrainsOutstandingTasks",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelLatencyLocal",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_DiscoverySkipContinues",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "BR3_CancelQueuePausedTransfer",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_CancelQueuedTask",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase5_SwitchWaitToParallelResume",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase6_PopupRateSmoothing",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase6_PopupSmokeResizeAndPause",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase6_DeleteBytesMeaningful",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase6_LocalBandwidthThrottle",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase6_ParallelBandwidthThrottleFairness",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_WatcherChurn",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CacheBorrowNoWatchInvalidation",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CrossPaneVisibleRefreshLocal",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CrossPaneVisibleRefreshDummy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CrossPaneRelocateLocal",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_LargeDirectoryEnumeration",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_ParallelCopyMoveKnobs",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CopyMoveConcurrency16Perf",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_AutoConcurrencyHints",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_PerItemDirectoryCopyInFlightLines",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CopyItemsMultiRootUnevenRecursiveParallelism",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_CopyRecursiveParallelismMatrix",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_SharedPerItemScheduler",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_ParallelDeleteKnobs",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_RecycleBinBatchDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_RecycleBinBatchDeleteMultiBatch",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase7_RecycleBinTestItemsPurged",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase8_DefaultBandwidthLimitFromSettings",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase8_TightDefaults_NoOverwrite",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase8_InvalidDestinationRejected",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase8_InvalidSizeBytesRejected",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase8_PerItemOrchestration",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_OverwriteReplaceReadonly",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_ApplyToAllUiCache",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_KeepBothNestedCacheEligibility",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_TypeMismatchNoOverwrite",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_LocalFileOntoDirectory",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_SkipApplyToAll",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_RetryCap",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_SkipContinuesDirectoryCopy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase9_PerItemConcurrency",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_PermanentDelete",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_DeferredConsentAndRecycleEscalation",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_RecycleDestroyedIsNeverRecycled",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_RecycleEscalationDirectoryTree",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_MetadataPreservationAndSourceRetention",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_TypedResultsAndConsumers",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_ClipboardAdmissionAndRetainedActions",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_ContentVerification",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase10_ArtifactTouchGuard",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "R1d_PreparingLifecycle",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C1_ExitCloseDeferredUntilTasksQuiet",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Beeline_SameVolumeTreeMoveIsRename",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Beeline_LoopbackShareMoveIsRename",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "C1_PermanentDeleteConfirmsOnCard",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_CrossFileSystemBridge",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_BridgeSingleFolderParallelCopyInFlightLines",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_BridgePipelineDummyToDummyPerf",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_ConnectionOverridePrecedence",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideGlobalGate",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideClamp",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase12_ReparsePointPolicy",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase13_PostMortemDiagnostics",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase14_PopupHostLifetimeGuard",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase15_FileSystem7zReadSeekSmoke",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase15_FileSystem7zMountPathImpact",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteWatchContractExposure",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteFtpSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteFtpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteSftpSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteSftpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteScpSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteScpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteImapSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteImapSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteS3Secret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteS3Sandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteS3FileOps",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalFileOps",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteOneDriveBusinessSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteOneDriveBusinessSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteSharePointSecret",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Phase16_RemoteSharePointSandbox",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "unexpected",
+                    "reason": "not executed (suite stopped early)"
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 78,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 1,
+    "skipped": 229
+}

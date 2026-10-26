@@ -1,0 +1,19 @@
+{
+  "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+  "tree": "e5049d0a56ec33bc230f5a1a38348b3c3b47f315",
+  "privateBase": "7590d47d6d35ee9f03ccde95c54310417dbeebc5",
+  "publicBase": "0f6cd8ddbbbec0d4556a334d3252be930edeb1a3",
+  "protectedDoneBaseline": "4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853",
+  "snapshot": "397e15adf847aef4f9d5afe190b007d13ed5778e",
+  "publicBranch": "ej/source-snapshot-20261026-582d644be",
+  "isolatedRepository": "E:\\RedSalamander.Perf\\repository-migration-20261024\\snapshot-582d644be.git",
+  "reachableCommitCount": 227,
+  "allCommitObjectCount": 227,
+  "noAdditionalCommitObjects": true,
+  "allReachableObjectCount": 32827,
+  "allObjectCount": 32827,
+  "noAdditionalObjects": true,
+  "outcome": "public-snapshot-branch-published",
+  "preparedUtc": "2026-10-26T14:50:14.2039484Z",
+  "finishedUtc": "2026-10-26T14:50:47.1182064Z"
+}

@@ -1,0 +1,9 @@
+{
+  "raw_path": "Z:\\RedSalamander.Perf\\evidence\\keep-both-and-plain-messages\\message-review-pass-debug\\perf_metrics.jsonl",
+  "raw_sha256": "916F87C43FD1A82A2874E27B3AD26463C19E67FE2D6B527BF600C1438219963B",
+  "raw_bytes": 10456520,
+  "raw_rows": 26577,
+  "selected_rows": 97,
+  "preserves_order": true,
+  "build_receipt": "23d81b46d6b2c7eddc883bc28ded09aab87037f4a56f58ecf9f1d8701c70b5c4"
+}

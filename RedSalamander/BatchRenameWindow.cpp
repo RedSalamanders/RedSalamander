@@ -1,6 +1,8 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "BatchRenameWindow.h"
+#include "NaturalSort.h"
 
 #include <algorithm>
 #include <array>
@@ -64,8 +66,8 @@ using DxUi::GridRowStyle;
 using DxUi::GridRowTone;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::MenuFlyoutItem;
 using DxUi::MenuItemKind;
@@ -972,7 +974,7 @@ struct BatchRenameScopeMatcher final
 void SortBatchRenameTargets(std::vector<BatchRename::Target>& targets)
 {
     std::ranges::sort(targets, [](const BatchRename::Target& lhs, const BatchRename::Target& rhs) noexcept {
-        return ::CompareStringOrdinal(lhs.sourcePath.c_str(), -1, rhs.sourcePath.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+        return NaturalSort::Less(lhs.sourcePath.native(), rhs.sourcePath.native());
     });
 }
 
@@ -1963,6 +1965,18 @@ void SortBatchPreviewRows(std::vector<BatchPreviewRow>& rows, const std::vector<
         {
             comparison = lhs.sizeBytes < rhs.sizeBytes ? -1 : (lhs.sizeBytes > rhs.sizeBytes ? 1 : 0);
         }
+        else if (sortSpec.columnIndex == 0u)
+        {
+            comparison = NaturalSort::Compare(lhs.originalName, rhs.originalName);
+        }
+        else if (sortSpec.columnIndex == 1u)
+        {
+            comparison = NaturalSort::Compare(lhs.newName, rhs.newName);
+        }
+        else if (sortSpec.columnIndex == 5u)
+        {
+            comparison = NaturalSort::Compare(lhs.displayPath, rhs.displayPath);
+        }
         else
         {
             comparison = OrdinalString::Compare(cellText(lhs, sortSpec.columnIndex), cellText(rhs, sortSpec.columnIndex), true);
@@ -1976,7 +1990,7 @@ void SortBatchPreviewRows(std::vector<BatchPreviewRow>& rows, const std::vector<
     });
 }
 
-class BatchRenamePreviewGridModel final : public IDxGridModel
+class BatchRenamePreviewGridModel final : public IGridModel
 {
 public:
     BatchRenamePreviewGridModel()
@@ -2132,11 +2146,11 @@ private:
     std::vector<BatchPreviewRow> _rows;
 };
 
-class BatchRenameWindow final : public IDxGridDelegate
+class BatchRenameWindow final : public IGridDelegate
 {
 public:
-    using IDxGridDelegate::OnGridContextMenu;
-    using IDxGridDelegate::OnGridRowActivated;
+    using IGridDelegate::OnGridContextMenu;
+    using IGridDelegate::OnGridRowActivated;
 
     BatchRenameWindow() = default;
 
@@ -2425,7 +2439,7 @@ HWND BatchRenameWindow::Create(HWND owner, Common::Settings::Settings& settings,
     const bool hasPlacement = _settings && _settings->windows.contains(std::wstring(kBatchRenameWindowId));
     const int showCmd       = hasPlacement ? WindowPlacementPersistence::Restore(*_settings, kBatchRenameWindowId, hwnd) : SW_SHOWNORMAL;
     ShowWindow(hwnd, showCmd);
-    SetForegroundWindow(hwnd);
+    Common::RequestForegroundWindow(hwnd);
     StartTargetCollection();
     return hwnd;
 }
@@ -2562,19 +2576,19 @@ LRESULT BatchRenameWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 return 0;
             }
             break;
-        case WndMsg::kBatchRenameTaskUpdate: OnTaskProgress(TakeMessagePayload<BatchRenameTaskProgressPayload>(lParam)); return 0;
+        case WndMsg::kBatchRenameTaskUpdate: OnTaskProgress(TakeMessagePayload<BatchRenameTaskProgressPayload>(hwnd, message, lParam)); return 0;
         case WndMsg::kBatchRenameCompleted:
             if (wParam == kBatchRenameTaskCollection)
             {
-                OnCollectionCompleted(TakeMessagePayload<BatchRenameCollectionCompletedPayload>(lParam));
+                OnCollectionCompleted(TakeMessagePayload<BatchRenameCollectionCompletedPayload>(hwnd, message, lParam));
             }
             else if (wParam == kBatchRenameTaskPreview)
             {
-                OnPreviewCompleted(TakeMessagePayload<BatchRenamePreviewCompletedPayload>(lParam));
+                OnPreviewCompleted(TakeMessagePayload<BatchRenamePreviewCompletedPayload>(hwnd, message, lParam));
             }
             else
             {
-                OnExecutionCompleted(TakeMessagePayload<BatchRenameExecutionCompletedPayload>(lParam));
+                OnExecutionCompleted(TakeMessagePayload<BatchRenameExecutionCompletedPayload>(hwnd, message, lParam));
             }
             return 0;
         case WM_CLOSE:
@@ -4017,8 +4031,18 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
     {
         _executing = false;
         BatchRenameExecutionReport failureReport{};
-        failureReport.totalRows    = totalRows;
-        failureReport.skippedRows  = skippedRows;
+        failureReport.totalRows   = totalRows;
+        failureReport.skippedRows = skippedRows;
+        if (startHr == BatchRenamePaneContext::kStartRefusedForPendingExit)
+        {
+            // Refused because the application is closing: no row was attempted, so none failed.
+            failureReport.canceled     = true;
+            failureReport.firstFailure = startHr;
+            failureReport.firstFailureText =
+                FormatStringResource(nullptr, IDS_FMT_PANE_FILEOP_REFUSED_EXIT_PENDING, LoadStringResource(nullptr, IDS_FILEOP_OPERATION_RENAME));
+            UpdateTaskUi();
+            return finishSynchronous(startHr, L"refused_exit_pending", std::move(failureReport));
+        }
         failureReport.failedRows   = opsCount;
         failureReport.firstFailure = FAILED(startHr) ? startHr : E_UNEXPECTED;
         UpdateTaskUi();
@@ -5342,7 +5366,7 @@ bool ShowBatchRenameWindow(HWND owner, Common::Settings::Settings& settings, con
         g_batchRenameWindow->UpdateTheme(theme);
         g_batchRenameWindow->SetContext(std::move(context));
         ShowWindow(g_batchRenameWindow->Hwnd(), SW_SHOWNORMAL);
-        SetForegroundWindow(g_batchRenameWindow->Hwnd());
+        Common::RequestForegroundWindow(g_batchRenameWindow->Hwnd());
         return true;
     }
 

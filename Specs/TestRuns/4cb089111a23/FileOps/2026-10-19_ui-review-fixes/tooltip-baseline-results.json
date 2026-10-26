@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-10-19T10:10:20.057Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T100944Z-95308-53a0c34fdb5742689ca03322844689e8\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 29195,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Focused path must reveal its exact labelled value without activating a task decision: id=FileOperations.Task.90001.Path.Source.0 actual=FileOperations.Task.90001.Path.Source.0 pathUnits=66 tooltipUnits=170 expectedUnits=71 tooltipPrefix='De : C:\\Photographies\\Nouvelle sélection définitive\\Fichier suivant.raw\nÉgalement en cours (1) :\nC:\\Photographies\\Deuxième sélection très longue\\Souvenirs de l'été 📷.raw'.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 13341,
+            "repeat_index": 1,
+            "reason": "Focused path must reveal its exact labelled value without activating a task decision: id=FileOperations.Task.90001.Path.Source.0 actual=FileOperations.Task.90001.Path.Source.0 pathUnits=66 tooltipUnits=170 expectedUnits=71 tooltipPrefix='De : C:\\Photographies\\Nouvelle sélection définitive\\Fichier suivant.raw\nÉgalement en cours (1) :\nC:\\Photographies\\Deuxième sélection très longue\\Souvenirs de l'été 📷.raw'."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_external_reload",
+            "status": "passed",
+            "duration_ms": 885,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_restart",
+            "status": "passed",
+            "duration_ms": 13755,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

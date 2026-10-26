@@ -1,0 +1,55 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt 503bcd43929331fd4e3bc93ed7474821282fec0ddef3c066e99be5370785b1b6).
+Validation plan: 99ebcc8fc4f951e9e7f62a7b5c181da9e90c2e00178fbaca3ffdb854e2720fcc
+Entry fingerprints: c88ffb26b49111b4d7ba7582615dd1e561c0972facb676d9a0facdb68043c783 (92 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-timeout-multiplier=3 --selftest-case=FileOps_VisualGallery
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+FileOperations
+  (1m 59,9s)
+         Passed: 1
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 1
+  Passed: 1
+  Failed: 0
+  Skipped: 0
+  Wall time: 2m 9,8s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260927T151143Z-84768-53972d29b05f4ea990a0d55ef3ad9e62
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260927T151143Z-84768-53972d29b05f4ea990a0d55ef3ad9e62\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+

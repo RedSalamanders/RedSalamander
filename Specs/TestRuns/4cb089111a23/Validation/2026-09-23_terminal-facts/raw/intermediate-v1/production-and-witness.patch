@@ -1,0 +1,875 @@
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -5,6 +5,7 @@
+ #include "FluentIcons.h"
+ #include "FolderWindow.FileOperationsInternal.h"
+ #include "HostServices.h"
++#include "LocalizationManager.h"
+ #include "NavigationLocation.h"
+ #include "StringConversion.h"
+ #include "ThroughputParsing.h"
+@@ -1499,6 +1500,70 @@
+     return count;
+ }
+ 
++[[nodiscard]] std::array<unsigned long, 9> TerminalFactCounts(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
++{
++    return {{task.publishedItemCount,
++             task.unknownPublicationItemCount,
++             task.removedSourceCount,
++             task.retainedSourceCount,
++             task.unknownSourceCount,
++             task.verifiedItemCount,
++             task.verificationFailedItemCount,
++             task.verificationUnavailableItemCount,
++             task.verificationCanceledItemCount}};
++}
++
++[[nodiscard]] bool TaskHasTerminalFacts(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
++{
++    if (! task.finished || task.interruptedMoveNotice)
++        return false;
++    const auto counts = TerminalFactCounts(task);
++    return std::ranges::any_of(counts, [](unsigned long count) noexcept { return count > 0u; }) || TaskHasTerminalAxisBadges(task);
++}
++
++[[nodiscard]] std::wstring BuildTerminalFactsText(const FileOperationsPopupInternal::TaskSnapshot& task)
++{
++    const auto counts = TerminalFactCounts(task);
++    constexpr std::array<UINT, 9> ids{{IDS_FMT_FILEOPS_TERMINAL_PUBLISHED,
++                                       IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN,
++                                       IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED,
++                                       IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED,
++                                       IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN,
++                                       IDS_FMT_FILEOPS_TERMINAL_VERIFIED,
++                                       IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED,
++                                       IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE,
++                                       IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED}};
++    constexpr std::array<size_t, 4> offsets{{0u, 2u, 5u, 9u}};
++    constexpr std::array<UINT, 3> labels{
++        {IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PUBLICATION, IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SOURCE, IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_VERIFICATION}};
++    std::wstring result;
++    for (size_t axis = 0u; axis < labels.size(); ++axis)
++    {
++        std::wstring clauses;
++        for (size_t index = offsets[axis]; index < offsets[axis + 1u]; ++index)
++        {
++            if (counts[index] == 0u)
++                continue;
++            const std::wstring clause = FormatStringResource(nullptr, ids[index], counts[index]);
++            clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
++        }
++        if (axis == 2u && clauses.empty() && TaskHasVerificationResultBadge(task))
++        {
++            // Historical/synthetic snapshots may retain a categorical verification
++            // result without a numeric receipt. Preserve that fact without inventing a count.
++            std::array<TerminalAxisBadge, 3u> legacy{};
++            if (BuildTerminalAxisBadges(task, legacy) > 0u)
++                clauses = legacy.front().text;
++        }
++        if (clauses.empty())
++            continue;
++        if (! result.empty())
++            result += L"\n";
++        result += FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS, LoadStringResource(nullptr, labels[axis]), clauses);
++    }
++    return result;
++}
++
+ [[nodiscard]] std::wstring BuildTaskHeaderText(const FileOperationsPopupInternal::TaskSnapshot& task, std::wstring_view operationText, ULONGLONG nowTick)
+ {
+     // The status chip names the terminal state; the expanded body carries the
+@@ -4124,6 +4189,21 @@
+         completedTaskById.emplace(completed.taskId, &completed);
+     }
+ 
++    const auto projectCompletedTerminalCounts = [](TaskSnapshot& snap, const FolderWindow::FileOperationState::CompletedTaskSummary& completed) noexcept
++    {
++        snap.publishedItemCount               = completed.publishedItemCount;
++        snap.unknownPublicationItemCount      = completed.unknownPublicationItemCount;
++        snap.removedSourceCount               = completed.removedSourceCount;
++        snap.retainedSourceCount              = completed.retainedSourceCount;
++        snap.retainedSourceNativeCount        = completed.retainedSourceNativeCount;
++        snap.unknownSourceCount               = completed.unknownSourceCount;
++        snap.verifiedItemCount                = completed.verifiedItemCount;
++        snap.verificationProblemItemCount     = completed.verificationProblemItemCount;
++        snap.verificationFailedItemCount      = completed.verificationFailedItemCount;
++        snap.verificationUnavailableItemCount = completed.verificationUnavailableItemCount;
++        snap.verificationCanceledItemCount    = completed.verificationCanceledItemCount;
++    };
++
+     std::vector<FolderWindow::FileOperationState::Task*> waitingTasks;
+     waitingTasks.reserve(tasks.size());
+     for (auto* task : tasks)
+@@ -4320,8 +4400,7 @@
+                 snap.errorCount                   = completed.errorCount;
+                 snap.lastDiagnosticMessage        = completed.lastDiagnosticMessage;
+                 snap.resultSummary                = completed.resultSummary;
+-                snap.verifiedItemCount            = completed.verifiedItemCount;
+-                snap.verificationProblemItemCount = completed.verificationProblemItemCount;
++                projectCompletedTerminalCounts(snap, completed);
+                 snap.verificationState = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
+                                                               : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
+                                                               : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
+@@ -4333,9 +4412,6 @@
+                 snap.clipboardMoveAdmission             = completed.clipboardMoveAdmission;
+                 snap.clipboardMoveConsumed              = completed.clipboardMoveConsumed;
+                 snap.hasSourceActionPaths               = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
+-                snap.retainedSourceCount                = completed.retainedSourceCount;
+-                snap.retainedSourceNativeCount          = completed.retainedSourceNativeCount;
+-                snap.unknownSourceCount                 = completed.unknownSourceCount;
+                 snap.exactRetainedSourceActionAvailable = completed.clipboardMoveAdmission &&
+                                                           NavigationLocation::IsFilePluginShortId(completed.sourcePluginShortId) &&
+                                                           completed.retainedSourceCount > 0u && completed.unknownSourceCount == 0u &&
+@@ -4432,8 +4508,7 @@
+         snap.lastDiagnosticMessage                 = completed.lastDiagnosticMessage;
+         snap.resultSummary                         = completed.resultSummary;
+         snap.verificationRequested                 = completed.verifiedItemCount > 0u || completed.verificationProblemItemCount > 0u;
+-        snap.verifiedItemCount                     = completed.verifiedItemCount;
+-        snap.verificationProblemItemCount          = completed.verificationProblemItemCount;
++        projectCompletedTerminalCounts(snap, completed);
+         snap.verificationState         = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
+                                                               : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
+                                                               : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
+@@ -4445,9 +4520,6 @@
+         snap.clipboardMoveAdmission    = completed.clipboardMoveAdmission;
+         snap.clipboardMoveConsumed     = completed.clipboardMoveConsumed;
+         snap.hasSourceActionPaths      = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
+-        snap.retainedSourceCount       = completed.retainedSourceCount;
+-        snap.retainedSourceNativeCount = completed.retainedSourceNativeCount;
+-        snap.unknownSourceCount        = completed.unknownSourceCount;
+         snap.exactRetainedSourceActionAvailable = completed.clipboardMoveAdmission && NavigationLocation::IsFilePluginShortId(completed.sourcePluginShortId) &&
+                                                   completed.retainedSourceCount > 0u && completed.unknownSourceCount == 0u &&
+                                                   completed.exactRetainedSourceItems.size() == completed.retainedSourceCount;
+@@ -4955,6 +5027,53 @@
+                       task.resultSummary.size(),
+                       metrics.lineCount,
+                       hr);
++    return hr;
++}
++
++HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalFacts(size_t slot,
++                                                                                    const TaskSnapshot& task,
++                                                                                    float widthPx,
++                                                                                    uint64_t languageRevision) noexcept
++{
++    if (slot >= _terminalFacts.size() || ! _dwriteFactory || ! _bodyFormat || ! std::isfinite(widthPx) || widthPx <= 0.0f)
++        return E_INVALIDARG;
++    auto& cached      = _terminalFacts[slot];
++    const auto counts = TerminalFactCounts(task);
++    auto& prepared    = cached.prepared;
++    if (prepared.layout && prepared.taskId == task.taskId && cached.counts == counts && cached.verificationState == task.verificationState &&
++        cached.languageRevision == languageRevision && prepared.format.get() == _bodyFormat.get() && prepared.widthPx == widthPx)
++        return S_OK;
++    cached                   = {};
++    const uint64_t startedUs = PerfNowUs();
++    std::wstring text        = BuildTerminalFactsText(task);
++    if (text.empty())
++        return E_UNEXPECTED;
++    wil::com_ptr<IDWriteTextLayout> layout;
++    HRESULT hr = _dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), _bodyFormat.get(), widthPx, 4096.0f, layout.put());
++    if (SUCCEEDED(hr))
++        hr = layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
++    DWRITE_TEXT_METRICS metrics{};
++    if (SUCCEEDED(hr))
++        hr = layout->GetMetrics(&metrics);
++    const float heightPx = std::ceil(metrics.height);
++    if (SUCCEEDED(hr) && (! std::isfinite(heightPx) || heightPx <= 0.0f || metrics.width > widthPx + 0.5f))
++        hr = E_UNEXPECTED;
++    if (SUCCEEDED(hr))
++        hr = layout->SetMaxHeight(heightPx);
++    if (SUCCEEDED(hr))
++    {
++        prepared.taskId          = task.taskId;
++        prepared.text            = std::move(text);
++        prepared.format          = _bodyFormat;
++        prepared.layout          = std::move(layout);
++        prepared.widthPx         = widthPx;
++        prepared.heightPx        = heightPx;
++        cached.counts            = counts;
++        cached.verificationState = task.verificationState;
++        cached.languageRevision  = languageRevision;
++    }
++    Debug::Perf::Emit(
++        L"FileOps.Popup.TerminalFacts.MeasureUs", L"current terminal facts cache miss", PerfElapsedUs(startedUs), prepared.text.size(), metrics.lineCount, hr);
+     return hr;
+ }
+ 
+@@ -6826,12 +6945,30 @@
+     else
+         _completedGroupMeasurement = {};
+     _terminalSummaries.resize(snapshot.size());
++    _terminalFacts.resize(snapshot.size());
++    const uint64_t languageRevision = Localization::GetLanguagePreferenceRevision();
+     for (size_t index = 0u; index < snapshot.size(); ++index)
+     {
+         const auto& task       = snapshot[index];
+         const bool groupHidden = showCompletedGroup && ! _completedGroupExpanded && IsCompletedGroupTask(task);
+-        if (footerOnly || groupHidden || task.kind != TaskSnapshot::Kind::FileOperation || ! task.finished || task.resultSummary.empty() ||
++        if (footerOnly || groupHidden || task.kind != TaskSnapshot::Kind::FileOperation || ! task.finished ||
+             IsTaskCollapsedForDisplay(task.taskId, compactDensity))
++        {
++            _terminalSummaries[index] = {};
++            _terminalFacts[index]     = {};
++            continue;
++        }
++        if (TaskHasTerminalFacts(task))
++        {
++            if (FAILED(PrepareTerminalFacts(index, task, conflictActionWidthPx, languageRevision)))
++            {
++                static_cast<void>(EnterFailureSurface(hwnd));
++                return;
++            }
++        }
++        else
++            _terminalFacts[index] = {};
++        if (task.resultSummary.empty())
+         {
+             _terminalSummaries[index] = {};
+             continue;
+@@ -6908,10 +7045,11 @@
+                 const float noteLines       = task.lastDiagnosticMessage.empty() ? 0.0f : 1.0f;
+                 // Top/header, optional axis badges, exact body rows, then progress,
+                 // action gap, dismiss action and bottom inset. Outer scrolling owns overflow.
+-                h = DipsToPixels(8.0f + 18.0f + (TaskHasTerminalAxisBadges(task) ? 24.0f : 0.0f) + 48.0f, _dpi) +
+-                    (diagnosticLines + pathLines + noteLines) * baseLineH;
++                h = DipsToPixels(8.0f + 18.0f + 48.0f, _dpi) + (diagnosticLines + pathLines + noteLines) * baseLineH;
+                 if (const auto& summary = _terminalSummaries[row.taskIndex]; summary.layout)
+                     h += summary.heightPx + DipsToPixels(10.0f, _dpi);
++                if (const auto& facts = _terminalFacts[row.taskIndex].prepared; facts.layout)
++                    h += facts.heightPx + DipsToPixels(10.0f, _dpi);
+             }
+             else if (! displayCollapsed && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE))
+             {
+@@ -8330,56 +8468,6 @@
+ 
+                 textY = headerBottom;
+ 
+-                if (task.finished && TaskHasTerminalAxisBadges(task))
+-                {
+-                    std::array<TerminalAxisBadge, 3u> badges{};
+-                    const size_t badgeCount = BuildTerminalAxisBadges(task, badges);
+-                    const float badgeTop    = textY + DipsToPixels(3.0f, _dpi);
+-                    const float badgeH      = DipsToPixels(18.0f, _dpi);
+-                    const float badgeGap    = DipsToPixels(5.0f, _dpi);
+-                    const float badgeHPad   = DipsToPixels(7.0f, _dpi);
+-                    float badgeLeft         = textX;
+-                    for (size_t badgeIndex = 0u; badgeIndex < badgeCount && badgeLeft < contentRight; ++badgeIndex)
+-                    {
+-                        const size_t remainingBadgeCount = badgeCount - badgeIndex;
+-                        const float remainingGap         = badgeGap * static_cast<float>(remainingBadgeCount - 1u);
+-                        const float availableW           = std::max(0.0f, contentRight - badgeLeft - remainingGap);
+-                        const float badgeMaxW            = availableW / static_cast<float>(remainingBadgeCount);
+-                        const float measuredTextW =
+-                            _smallFormat ? MeasureTextWidth(_dwriteFactory.get(), _smallFormat.get(), badges[badgeIndex].text, badgeMaxW, badgeH) : 0.0f;
+-                        const float badgeW        = std::clamp(measuredTextW + badgeHPad * 2.0f, std::min(DipsToPixels(48.0f, _dpi), badgeMaxW), badgeMaxW);
+-                        const D2D1_RECT_F badgeRc = D2D1::RectF(badgeLeft, badgeTop, badgeLeft + badgeW, badgeTop + badgeH);
+-                        const float badgeRadius   = ClampCornerRadius(badgeRc, DipsToPixels(5.0f, _dpi));
+-                        if (_graphDynamicBrush)
+-                        {
+-                            D2D1::ColorF badgeColor = StatusVisualColorForTone(appTheme, badges[badgeIndex].tone);
+-                            badgeColor.a            = appTheme.highContrast ? 0.28f : 0.14f;
+-                            _graphDynamicBrush->SetColor(badgeColor);
+-                            _target->FillRoundedRectangle(D2D1::RoundedRect(badgeRc, badgeRadius, badgeRadius), _graphDynamicBrush.get());
+-                            badgeColor.a = appTheme.highContrast ? 1.0f : 0.55f;
+-                            _graphDynamicBrush->SetColor(badgeColor);
+-                            _target->DrawRoundedRectangle(D2D1::RoundedRect(badgeRc, badgeRadius, badgeRadius), _graphDynamicBrush.get(), 1.0f);
+-                        }
+-                        if (_smallFormat && _textBrush)
+-                        {
+-                            const D2D1_RECT_F badgeTextRc = D2D1::RectF(badgeRc.left + badgeHPad, badgeRc.top, badgeRc.right - badgeHPad, badgeRc.bottom);
+-                            _target->DrawTextW(badges[badgeIndex].text.data(),
+-                                               static_cast<UINT32>(badges[badgeIndex].text.size()),
+-                                               _smallFormat.get(),
+-                                               badgeTextRc,
+-                                               _textBrush.get(),
+-                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+-                        }
+-                        _hostedTooltipDescriptors.push_back(HostedTooltipDescriptor{
+-                            .bounds       = badgeRc,
+-                            .text         = badges[badgeIndex].text,
+-                            .automationId = std::format(L"FileOperations.Task.{}.Result.{}", task.taskId, badges[badgeIndex].automationSuffix),
+-                        });
+-                        badgeLeft = badgeRc.right + badgeGap;
+-                    }
+-                    textY += DipsToPixels(24.0f, _dpi);
+-                }
+-
+                 if (task.finished)
+                 {
+                     const auto& summary = _terminalSummaries[row.taskIndex];
+@@ -8391,6 +8479,16 @@
+                         _hostedTooltipDescriptors.push_back(HostedTooltipDescriptor{
+                             .bounds = summaryBounds, .text = summary.text, .automationId = std::format(L"FileOperations.Task.{}.ResultSummary", task.taskId)});
+                         textY = summaryBounds.bottom + DipsToPixels(6.0f, _dpi);
++                    }
++                    const auto& facts = _terminalFacts[row.taskIndex].prepared;
++                    if (facts.layout)
++                    {
++                        textY += DipsToPixels(4.0f, _dpi);
++                        const D2D1_RECT_F factsBounds = D2D1::RectF(textX, textY, textX + facts.widthPx, textY + facts.heightPx);
++                        _target->DrawTextLayout(D2D1::Point2F(textX, textY), facts.layout.get(), _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
++                        _hostedTooltipDescriptors.push_back(HostedTooltipDescriptor{
++                            .bounds = factsBounds, .text = facts.text, .automationId = std::format(L"FileOperations.Task.{}.TerminalFacts", task.taskId)});
++                        textY = factsBounds.bottom + DipsToPixels(6.0f, _dpi);
+                     }
+                 }
+ 
+@@ -11432,6 +11530,7 @@
+     _footerSummaryFormat.reset();
+     _footerSummaryText.clear();
+     _terminalSummaries.clear();
++    _terminalFacts.clear();
+     _completedGroupMeasurement = {};
+     _graphTrailingLabelFormat.reset();
+     _buttonFormat.reset();
+@@ -11502,6 +11601,7 @@
+     _footerSummaryFormat.reset();
+     _footerSummaryText.clear();
+     _terminalSummaries.clear();
++    _terminalFacts.clear();
+     _completedGroupMeasurement = {};
+     _graphTrailingLabelFormat.reset();
+     _buttonFormat.reset();
+@@ -12432,6 +12532,7 @@
+             result.taskHostedProgressHelpText      = std::wstring(progress->GetAccessibleHelpText());
+             break;
+         }
++        D2D1_RECT_F paintedSummaryBounds{};
+         const auto summaryId = std::format(L"FileOperations.Task.{}.ResultSummary", taskIt->taskId);
+         for (const auto& descriptor : _hostedTooltipDescriptors)
+         {
+@@ -12439,6 +12540,7 @@
+                 continue;
+             result.taskTerminalSummaryVisible = descriptor.text == taskIt->resultSummary && ! descriptor.text.empty();
+             const auto& bounds                = descriptor.bounds;
++            paintedSummaryBounds              = bounds;
+             wil::com_ptr<IDWriteTextLayout> measured;
+             DWRITE_TEXT_METRICS metrics{};
+             const float availableWidth = bounds.right - bounds.left;
+@@ -12457,6 +12559,49 @@
+                 result.taskTerminalSummaryPrecedesActions = bounds.bottom <= painted->second.actions.top;
+             }
+         }
++        const auto factsId      = std::format(L"FileOperations.Task.{}.TerminalFacts", taskIt->taskId);
++        size_t factsRegionCount = 0u;
++        for (size_t index = 0u; index < _hostedTooltipDescriptors.size(); ++index)
++        {
++            const HostedTooltipDescriptor& descriptor = _hostedTooltipDescriptors[index];
++            if (descriptor.automationId != factsId)
++                continue;
++            ++factsRegionCount;
++            const DxUi::Label* region           = index < _hostedTooltipRegions.size() ? _hostedTooltipRegions[index] : nullptr;
++            const D2D1_RECT_F& bounds           = descriptor.bounds;
++            result.taskTerminalFactsText        = descriptor.text;
++            result.taskTerminalFactsPaintedRect = bounds;
++            if (region)
++                result.taskTerminalFactsHostedName = std::wstring(region->GetAccessibleName());
++            const auto close               = [](float a, float b) noexcept { return std::abs(a - b) <= 0.5f; };
++            const D2D1_RECT_F hostedBounds = region ? region->GetBounds() : D2D1::RectF();
++            const bool hostedBoundsMatch =
++                region && close(hostedBounds.left, _controlsHost.PixelsToDip(bounds.left)) && close(hostedBounds.top, _controlsHost.PixelsToDip(bounds.top)) &&
++                close(hostedBounds.right, _controlsHost.PixelsToDip(bounds.right)) && close(hostedBounds.bottom, _controlsHost.PixelsToDip(bounds.bottom));
++            result.taskTerminalFactsVisible = region && ! descriptor.text.empty() && rectHasArea(bounds) && hostedBoundsMatch &&
++                                              region->GetAccessibleAutomationId() == factsId && region->GetAccessibleName() == descriptor.text &&
++                                              region->GetAccessibleHelpText() == descriptor.text && region->GetTooltipText() == descriptor.text;
++            wil::com_ptr<IDWriteTextLayout> measured;
++            DWRITE_TEXT_METRICS metrics{};
++            const float availableWidth = bounds.right - bounds.left;
++            const bool measuredOk =
++                _dwriteFactory && _bodyFormat && availableWidth > 0.0f &&
++                SUCCEEDED(_dwriteFactory->CreateTextLayout(
++                    descriptor.text.data(), static_cast<UINT32>(descriptor.text.size()), _bodyFormat.get(), availableWidth, 4096.0f, measured.put())) &&
++                measured && SUCCEEDED(measured->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP)) && SUCCEEDED(measured->GetMetrics(&metrics));
++            result.taskTerminalFactsFits = result.taskTerminalFactsVisible && measuredOk && metrics.height > 0.0f &&
++                                           metrics.height <= bounds.bottom - bounds.top + 0.5f && metrics.width <= availableWidth + 0.5f;
++            if (const auto painted = _paintedTaskBodiesForSelfTest.find(taskIt->taskId); painted != _paintedTaskBodiesForSelfTest.end())
++            {
++                const auto& card                        = painted->second.card;
++                result.taskTerminalFactsFits            = result.taskTerminalFactsFits && bounds.left >= card.left && bounds.right <= card.right &&
++                                                          bounds.top >= card.top && bounds.bottom <= card.bottom;
++                result.taskTerminalFactsFollowsSummary  = result.taskTerminalSummaryVisible && paintedSummaryBounds.bottom <= bounds.top;
++                result.taskTerminalFactsPrecedesActions = bounds.bottom <= painted->second.actions.top;
++            }
++        }
++        if (factsRegionCount != 1u)
++            result.taskTerminalFactsVisible = result.taskTerminalFactsFits = false;
+         if (const auto painted = _paintedTaskBodiesForSelfTest.find(taskIt->taskId); painted != _paintedTaskBodiesForSelfTest.end())
+         {
+             result.taskPaintedBodyBoundsValid = true;
+@@ -12635,18 +12780,6 @@
+                 }
+             }
+         }
+-        std::array<TerminalAxisBadge, 3u> terminalBadges{};
+-        const size_t terminalBadgeCount = BuildTerminalAxisBadges(*taskIt, terminalBadges);
+-        for (size_t badgeIndex = 0u; badgeIndex < terminalBadgeCount; ++badgeIndex)
+-        {
+-            result.taskVerificationBadgeVisible   = result.taskVerificationBadgeVisible || terminalBadges[badgeIndex].automationSuffix == L"Verification";
+-            result.taskRetainedSourceBadgeVisible = result.taskRetainedSourceBadgeVisible || terminalBadges[badgeIndex].automationSuffix == L"SourceRetained";
+-            result.taskUnknownSourceBadgeVisible  = result.taskUnknownSourceBadgeVisible || terminalBadges[badgeIndex].automationSuffix == L"SourceUnknown";
+-        }
+-        result.taskTerminalAxisBadgesColorBlindSafe =
+-            terminalBadgeCount == 0u || std::ranges::all_of(terminalBadges.begin(),
+-                                                            terminalBadges.begin() + static_cast<std::ptrdiff_t>(terminalBadgeCount),
+-                                                            [](const TerminalAxisBadge& badge) noexcept { return ! badge.text.empty(); });
+         result.taskStatusGlyphSignalVisible = StatusIsOk(status) || StatusIsWarning(status) || StatusIsError(status);
+         result.taskStatusTextSignalVisible  = ! statusChipText.empty() || ! StatusTextForTask(*taskIt, status, GetTickCount64()).empty();
+         result.taskStatusColorBlindSafeEncoding =
+@@ -12670,11 +12803,12 @@
+             return descriptor.automationId == std::format(L"FileOperations.Task.{}.DeletionRate", taskIt->taskId);
+         });
+         result.taskInlineEtaRowVisible   = false;
+-        result.taskExpandedBaseHeightDip = taskIt->finished ? (TaskHasTerminalAxisBadges(*taskIt) ? 202.0f : 178.0f)
+-                                           : taskIt->operation == FILESYSTEM_DELETE ? kFileOperationsExpandedDeleteCardHeightDip
+-                                           : (taskIt->operation == FILESYSTEM_COPY || taskIt->operation == FILESYSTEM_MOVE)
+-                                               ? kFileOperationsExpandedTransferCardHeightDip
+-                                               : kFileOperationsExpandedCardHeightDip;
++        result.taskExpandedBaseHeightDip =
++            taskIt->finished
++                ? (result.taskPaintedBodyBoundsValid ? _controlsHost.PixelsToDip(result.taskPaintedCardRect.bottom - result.taskPaintedCardRect.top) : 0.0f)
++            : taskIt->operation == FILESYSTEM_DELETE                                         ? kFileOperationsExpandedDeleteCardHeightDip
++            : (taskIt->operation == FILESYSTEM_COPY || taskIt->operation == FILESYSTEM_MOVE) ? kFileOperationsExpandedTransferCardHeightDip
++                                                                                             : kFileOperationsExpandedCardHeightDip;
+         if (taskProgressPresentation.showTransferProgress)
+         {
+             result.taskUnderGraphProgressBarCount = 1u;
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -424,10 +424,6 @@
+     D2D1_RECT_F taskStatusChipPaintedTextRect{};
+     std::wstring taskStatusChipPaintedText;
+     std::wstring taskStatusHeaderPaintedText;
+-    bool taskVerificationBadgeVisible             = false;
+-    bool taskRetainedSourceBadgeVisible           = false;
+-    bool taskUnknownSourceBadgeVisible            = false;
+-    bool taskTerminalAxisBadgesColorBlindSafe     = false;
+     bool taskStatusGlyphSignalVisible             = false;
+     bool taskStatusTextSignalVisible              = false;
+     bool taskStatusColorBlindSafeEncoding         = false;
+@@ -451,6 +447,14 @@
+     bool taskTerminalSummaryVisible                = false;
+     bool taskTerminalSummaryFits                   = false;
+     bool taskTerminalSummaryPrecedesActions        = false;
++    // Actual painted semantic region and synchronized retained DxUi::Label, not a projection of TaskSnapshot counts.
++    bool taskTerminalFactsVisible         = false;
++    bool taskTerminalFactsFits            = false;
++    bool taskTerminalFactsFollowsSummary  = false;
++    bool taskTerminalFactsPrecedesActions = false;
++    std::wstring taskTerminalFactsText;
++    std::wstring taskTerminalFactsHostedName;
++    D2D1_RECT_F taskTerminalFactsPaintedRect{};
+     bool completedGroupAnimationEnabled           = false;
+     bool taskCardAnimationEnabled                 = false;
+     bool hostedProgressAnimationEnabled           = false;
+@@ -1173,6 +1177,18 @@
+     std::vector<TerminalSummaryLayout> _terminalSummaries;
+     HRESULT PrepareTerminalSummary(size_t slot, const TaskSnapshot& task, float widthPx) noexcept;
+ 
++    struct TerminalFactsLayout final
++    {
++        TerminalSummaryLayout prepared;
++        std::array<unsigned long, 9> counts{};
++        uint64_t languageRevision = 0u;
++        uint8_t verificationState = 0u;
++    };
++    // Numeric facts are bounded by current expanded snapshots. Zero is absence of
++    // recorded evidence, never a complement or a claim of complete success.
++    std::vector<TerminalFactsLayout> _terminalFacts;
++    HRESULT PrepareTerminalFacts(size_t slot, const TaskSnapshot& task, float widthPx, uint64_t languageRevision) noexcept;
++
+     struct CompletedGroupMeasurement final
+     {
+         std::wstring clearText;
+--- a/RedSalamander/RedSalamander.rc
++++ b/RedSalamander/RedSalamander.rc
+@@ -1845,6 +1845,17 @@
+     IDS_FILEOPS_THROUGHPUT                                "Throughput"
+     IDS_FILEOPS_RATE_UNAVAILABLE                          "Rate: —"
+     IDS_FILEOPS_ETA_UNAVAILABLE                           "Time remaining: —"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLISHED                    "Published items: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN          "Unknown publication outcomes: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED               "Original sources removed: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED              "Sources retained: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN               "Unknown source outcomes: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFIED                     "Verified items: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Verification failures: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Unavailable verifications: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Canceled verifications: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS                    "{0} — {1}"
++    IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN                    "{0} · {1}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Options"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Links"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Preserve"
+--- a/RedSalamander/resource.h
++++ b/RedSalamander/resource.h
+@@ -1793,6 +1793,17 @@
+ #define IDS_FILEOPS_THROUGHPUT 50036
+ #define IDS_FILEOPS_RATE_UNAVAILABLE 50037
+ #define IDS_FILEOPS_ETA_UNAVAILABLE 50038
++#define IDS_FMT_FILEOPS_TERMINAL_PUBLISHED 50039
++#define IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN 50040
++#define IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED 50041
++#define IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED 50042
++#define IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN 50043
++#define IDS_FMT_FILEOPS_TERMINAL_VERIFIED 50044
++#define IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED 50045
++#define IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE 50046
++#define IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED 50047
++#define IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS 50048
++#define IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN 50049
+ #define IDS_PREFS_VIEWERS_ACTION_HINT 1498
+ #define IDS_CHANGE_ATTR_OPTIONS_HINT 1600
+ #define IDS_CHANGE_ATTR_LABEL_READONLY 1601
+--- a/Tools/tool-inventory.json
++++ b/Tools/tool-inventory.json
+@@ -1,6 +1,7 @@
+ {
+   "schemaVersion": 3,
+   "entries": [
++    {"path": "Tools/Tests/ResourceLocalizationContracts.Tests.ps1", "kind": "test", "visibility": "internal", "lifecycle": "active", "purpose": "Validate source and satellite resource parity, positional format placeholders, and owner-scoped embedded-only resources, including terminal result axis and clause skeletons.", "usage": "Run with Pester or the current tooling aggregate after localized resource changes.", "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1", "Tools/Run-AllTests.ps1"], "prerequisites": ["PowerShell with Pester"], "sideEffects": [], "outputs": ["Pester pass/fail results"], "ownerSpec": "Specs/Core/Core_Localization.md", "tests": ["self"], "replacement": null},
+     {"path": "Tools/Tests/DxUiDependency.Tests.ps1", "kind": "test", "visibility": "internal", "lifecycle": "active", "purpose": "Validate exact DxUi source/archive provenance, package sidecars, severity/action-ready update-advisory presentation, and real six-profile MSBuild evaluation including sanitizer settings and compiler-host overrides.", "usage": "Run with Pester or the current tooling test aggregate; MSBuild queries evaluate imports without compiling or modifying product outputs.", "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1", "Tools/Run-AllTests.ps1"], "prerequisites": ["PowerShell with Pester", "Visual Studio MSBuild", "Git", "Initialized marked test root"], "sideEffects": ["Creates run-owned dependency and package fixtures", "Temporarily clears the process compiler-host preference and restores it after read-only MSBuild queries"], "outputs": ["Pester pass/fail results"], "ownerSpec": "Specs/Build/Build_Toolchain.md", "tests": ["self"], "replacement": null},
+     {"path": "Tools/Restore-DxUi.ps1", "kind": "command", "visibility": "public", "lifecycle": "active", "purpose": "Restore the exact standalone DxUi pin and isolated compiler/SDK/CRT outputs, with an optional action-ready update advisory.", "usage": "Run before IDE builds or use the automatic root build restore.", "usedBy": ["Developers", "build.ps1"], "prerequisites": ["Visual Studio C++", "Git read access to DxUi"], "sideEffects": ["Restores source/dependencies and resolved properties under .build with a platform dependency lease"], "outputs": ["Pinned source", "Restore logs", "Resolved MSBuild properties and build identity"], "ownerSpec": "Specs/Build/Build_Toolchain.md", "tests": ["Tools/Tests/DxUiDependency.Tests.ps1"], "replacement": null},
+     {"path": "Tools/Update-DxUi.ps1", "kind": "command", "visibility": "public", "lifecycle": "active", "purpose": "Advance the exact DxUi lock only to current main with successful completed DxUi CI, then run or explicitly skip product validation.", "usage": "Run on a product branch; use -UpdateOnly only with matching external product-validation evidence.", "usedBy": ["Developers"], "prerequisites": ["Network access to public DxUi GitHub API", "PowerShell", "Full validation prerequisites unless -UpdateOnly is supplied"], "sideEffects": ["Atomically changes Dependencies/DxUi.lock.json", "Runs the Full product suite unless -UpdateOnly is supplied"], "outputs": ["Updated lock", "Product validation result unless skipped"], "ownerSpec": "Specs/Build/Build_Toolchain.md", "tests": ["Tools/Tests/DxUiUpdate.Tests.ps1"], "replacement": null},
+--- a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
++++ b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+@@ -1546,6 +1546,15 @@
+     IDS_FILEOPS_THROUGHPUT                                "Přenosová rychlost"
+     IDS_FILEOPS_RATE_UNAVAILABLE                          "Rychlost: —"
+     IDS_FILEOPS_ETA_UNAVAILABLE                           "Zbývající čas: —"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLISHED                    "Publikované položky: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN          "Neznámé výsledky publikování: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED               "Odstraněné původní zdroje: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED              "Zachované zdroje: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN               "Neznámé výsledky zdrojů: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFIED                     "Ověřené položky: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Selhání ověření: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Nedostupná ověření: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Zrušená ověření: {0:L}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Možnosti"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Odkazy"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Zachovat"
+--- a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
++++ b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+@@ -1546,6 +1546,15 @@
+     IDS_FILEOPS_THROUGHPUT                                "Débit"
+     IDS_FILEOPS_RATE_UNAVAILABLE                          "Débit : —"
+     IDS_FILEOPS_ETA_UNAVAILABLE                           "Temps restant : —"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLISHED                    "Éléments publiés : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN          "États de publication inconnus : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED               "Sources d’origine retirées : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED              "Sources conservées : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN               "États de source inconnus : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFIED                     "Éléments vérifiés : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Échecs de vérification : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Vérifications indisponibles : {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Vérifications annulées : {0:L}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Options"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Liens"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Préserver"
+--- a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
++++ b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+@@ -1546,6 +1546,15 @@
+     IDS_FILEOPS_THROUGHPUT                                "転送速度"
+     IDS_FILEOPS_RATE_UNAVAILABLE                          "速度: —"
+     IDS_FILEOPS_ETA_UNAVAILABLE                           "残り時間: —"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLISHED                    "公開済み項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN          "公開結果が不明な項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED               "元のソースが除去された項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED              "保持されたソース: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN               "ソースの状態が不明な項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFIED                     "検証済み項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "検証に失敗した項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "検証を利用できない項目: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "検証がキャンセルされた項目: {0:L}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "オプション"
+     IDS_FILEOPS_CONFIRM_LINKS                             "リンク"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "保持"
+--- a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
++++ b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+@@ -1546,6 +1546,15 @@
+     IDS_FILEOPS_THROUGHPUT                                "Prenosová rýchlosť"
+     IDS_FILEOPS_RATE_UNAVAILABLE                          "Rýchlosť: —"
+     IDS_FILEOPS_ETA_UNAVAILABLE                           "Zostávajúci čas: —"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLISHED                    "Publikované položky: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_PUBLICATION_UNKNOWN          "Neznáme výsledky publikovania: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_REMOVED               "Odstránené pôvodné zdroje: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_RETAINED              "Zachované zdroje: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_SOURCE_UNKNOWN               "Neznáme výsledky zdrojov: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFIED                     "Overené položky: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Zlyhania overenia: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Nedostupné overenia: {0:L}"
++    IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Zrušené overenia: {0:L}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Možnosti"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Odkazy"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Zachovať"
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -6863,7 +6863,7 @@
+     constexpr uint64_t taskId = 0xF26A000000000001ull;
+     std::vector<Summary> existing;
+     operations->CollectCompletedTasks(existing);
+-    if (std::ranges::any_of(existing, [taskId](const Summary& value) noexcept { return value.taskId == taskId; }))
++    if (std::ranges::any_of(existing, [](const Summary& value) noexcept { return value.taskId == taskId; }))
+     {
+         return L"Terminal-facts projection task ID is already in use.";
+     }
+@@ -6909,7 +6909,7 @@
+     completed.issueDiagnostics.push_back(std::move(issue));
+ 
+     operations->DebugAppendCompletedTaskForSelfTest(std::move(completed));
+-    const auto dismissTask = wil::scope_exit([operations, taskId]() noexcept { operations->DismissCompletedTask(taskId); });
++    const auto dismissTask = wil::scope_exit([operations]() noexcept { operations->DismissCompletedTask(taskId); });
+ 
+     auto lifetime = std::make_shared<int>(0);
+     wil::unique_hwnd popup(FileOperationsPopup::Create(operations, folder, state.mainWindow, lifetime));
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -644,6 +644,28 @@
+     task.totalItems   = 0u;
+     task.plannedItems = 0u;
+     add(L"143-delete-closed-unknown", task);
++    // Mixed terminal Move: every independent publication, source, and verification count must be painted.
++    task                                  = done;
++    task.operation                        = FILESYSTEM_MOVE;
++    task.resultHr                         = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
++    task.hasIndeterminateResult           = true;
++    task.resultSummary                    = L"Déplacement partiel : vérifiez les éléments publiés, les sources et la vérification.";
++    task.totalItems                       = 10u;
++    task.plannedItems                     = 10u;
++    task.completedItems                   = 9u;
++    task.publishedItemCount               = 9u;
++    task.unknownPublicationItemCount      = 1u;
++    task.removedSourceCount               = 7u;
++    task.retainedSourceCount              = 2u;
++    task.unknownSourceCount               = 1u;
++    task.verificationRequested            = true;
++    task.verificationState                = static_cast<uint8_t>(FileOperations::VerificationState::Failed);
++    task.verifiedItemCount                = 6u;
++    task.verificationProblemItemCount     = 3u;
++    task.verificationFailedItemCount      = 1u;
++    task.verificationUnavailableItemCount = 1u;
++    task.verificationCanceledItemCount    = 1u;
++    add(L"144-terminal-move-mixed-facts", task);
+     return result;
+ }
+ 
+@@ -904,6 +926,10 @@
+     bool waitingTransitionsFit    = true;
+     bool speedLimitLabelsFit      = true;
+     bool terminalPresentationFits = true;
++    bool terminalFactsFit               = true;
++    size_t terminalFactsWitnessCount    = 0u;
++    bool terminalFactsTransitionsFit    = true;
++    size_t terminalFactsTransitionCount = 0u;
+     bool statusChipLabelsFit = true;
+     size_t statusChipWitnessCount     = 0u;
+     bool hostedProgressValuesMatch    = true;
+@@ -926,7 +952,8 @@
+             for (size_t sceneIndex = 0u; sceneIndex < scenarios.size(); ++sceneIndex)
+             {
+                 // All semantics in the dark baseline; representative risk/progress/layouts in other themes.
+-                if (themeIndex != 0u && sceneIndex != 9u && sceneIndex != 30u && sceneIndex != 32u && sceneIndex != 54u)
++                if (themeIndex != 0u && sceneIndex != 9u && sceneIndex != 30u && sceneIndex != 32u && sceneIndex != 54u &&
++                    ! (themeIndex == 3u && scenarios[sceneIndex].name == L"144-terminal-move-mixed-facts"))
+                     continue;
+                 const auto& scenario             = scenarios[sceneIndex];
+                 const bool waitingLayoutScenario = ! scenario.footerOnly && ! scenario.collapsed && ! scenario.compactDensity &&
+@@ -1177,6 +1204,61 @@
+                                               summary.taskTerminalSummaryPrecedesActions,
+                                               fits));
+                     }
++                    if (scenario.name == L"144-terminal-move-mixed-facts")
++                    {
++                        ++terminalFactsWitnessCount;
++                        PopupLayoutDebugSnapshot facts{};
++                        facts.taskId    = scenario.tasks.front().taskId;
++                        const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), facts);
++                        constexpr std::array<std::wstring_view, 9> requiredClauses{{L"Éléments publiés : 9",
++                                                                                    L"États de publication inconnus : 1",
++                                                                                    L"Sources d’origine retirées : 7",
++                                                                                    L"Sources conservées : 2",
++                                                                                    L"États de source inconnus : 1",
++                                                                                    L"Éléments vérifiés : 6",
++                                                                                    L"Échecs de vérification : 1",
++                                                                                    L"Vérifications indisponibles : 1",
++                                                                                    L"Vérifications annulées : 1"}};
++                        const bool allClausesOnce = std::ranges::all_of(requiredClauses,
++                                                                        [&](std::wstring_view clause)
++                        {
++                            const size_t first = facts.taskTerminalFactsText.find(clause);
++                            return first != std::wstring::npos && facts.taskTerminalFactsText.find(clause, first + clause.size()) == std::wstring::npos;
++                        });
++                        const std::array<std::wstring_view, 3> axes{{L"Publication —", L"Source —", L"Vérification —"}};
++                        const size_t publication  = facts.taskTerminalFactsText.find(axes[0]);
++                        const size_t source       = facts.taskTerminalFactsText.find(axes[1]);
++                        const size_t verification = facts.taskTerminalFactsText.find(axes[2]);
++                        const bool threeAxes = publication != std::wstring::npos && source != std::wstring::npos && verification != std::wstring::npos &&
++                                               publication < source && source < verification && facts.taskTerminalFactsText.find(L'\n', publication) < source &&
++                                               facts.taskTerminalFactsText.find(L'\n', source) < verification;
++                        bool clausesOnTheirAxes = threeAxes;
++                        for (size_t index = 0u; index < requiredClauses.size(); ++index)
++                        {
++                            const size_t position = facts.taskTerminalFactsText.find(requiredClauses[index]);
++                            const size_t lower    = index < 2u ? publication : (index < 5u ? source : verification);
++                            const size_t upper    = index < 2u ? source : (index < 5u ? verification : facts.taskTerminalFactsText.size());
++                            clausesOnTheirAxes    = clausesOnTheirAxes && position > lower && position < upper;
++                        }
++                        const bool fits  = read && facts.taskTerminalFactsVisible && facts.taskTerminalFactsFits && facts.taskTerminalFactsFollowsSummary &&
++                                           facts.taskTerminalFactsPrecedesActions && facts.taskTerminalFactsText == facts.taskTerminalFactsHostedName &&
++                                           allClausesOnce && clausesOnTheirAxes;
++                        terminalFactsFit = terminalFactsFit && fits;
++                        AppendLog(std::format(L"TerminalFactsFit: {} dpi={} width={} theme={} visible={} fits={} followsSummary={} precedesActions={} "
++                                              L"clauses={} axes={} fit={} text='{}'",
++                                              scenario.name,
++                                              dpi,
++                                              widthDip,
++                                              themeNames[themeIndex],
++                                              facts.taskTerminalFactsVisible,
++                                              facts.taskTerminalFactsFits,
++                                              facts.taskTerminalFactsFollowsSummary,
++                                              facts.taskTerminalFactsPrecedesActions,
++                                              allClausesOnce,
++                                              clausesOnTheirAxes,
++                                              fits,
++                                              facts.taskTerminalFactsText));
++                    }
+                     if (scenario.name == L"31-completed-group-expanded" || scenario.name == L"32-completed-group-collapsed" ||
+                         scenario.name == L"69-all-items-skipped")
+                     {
+@@ -1395,6 +1477,100 @@
+                              << "\tproduction-renderer-synthetic-presentation\n";
+                     manifest.flush();
+                     AppendLog(std::format(L"VisualGallery: {}", filename));
++                    if (themeIndex == 0u && widthDip == 480 && scenario.name == L"144-terminal-move-mixed-facts")
++                    {
++                        // The application-original PNG above must retain the initial nine-item state.
++                        // These probes reuse its HWND/task and mutate the retained scenario directly,
++                        // preserving terminal layout caches between paints.
++                        auto& current = popupState->debugVisualScenario.value().front();
++                        PopupLayoutDebugSnapshot initial{};
++                        initial.taskId                        = current.taskId;
++                        const bool initialRead                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), initial);
++                        const std::wstring originalText       = initial.taskTerminalFactsText;
++                        std::wstring changedText              = originalText;
++                        constexpr std::wstring_view oldClause = L"Éléments publiés : 9";
++                        constexpr std::wstring_view newClause = L"Éléments publiés : 18";
++                        const size_t oldPosition              = changedText.find(oldClause);
++                        const bool originalKnown              = initialRead && initial.taskTerminalFactsVisible && oldPosition != std::wstring::npos;
++                        if (oldPosition != std::wstring::npos)
++                            changedText.replace(oldPosition, oldClause.size(), newClause.data(), newClause.size());
++                        terminalFactsTransitionsFit = terminalFactsTransitionsFit && originalKnown;
++                        const auto inspect = [&](std::wstring_view stage, bool visible, std::wstring_view expectedText, bool collapsed, bool footerOnly)
++                            -> PopupLayoutDebugSnapshot
++                        {
++                            for (unsigned frame = 0u; frame < 2u; ++frame)
++                                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                            PopupLayoutDebugSnapshot observed{};
++                            observed.taskId             = current.taskId;
++                            const bool read             = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), observed);
++                            const bool content          = visible ? observed.taskTerminalFactsVisible && observed.taskTerminalFactsFits &&
++                                                                        observed.taskTerminalFactsFollowsSummary && observed.taskTerminalFactsPrecedesActions &&
++                                                                        observed.taskTerminalFactsText == expectedText &&
++                                                                        observed.taskTerminalFactsHostedName == expectedText
++                                                                  : ! observed.taskTerminalFactsVisible && observed.taskTerminalFactsText.empty() &&
++                                                                        observed.taskTerminalFactsHostedName.empty();
++                            const bool fits             = read && observed.taskCollapsed == collapsed && observed.footerOnly == footerOnly && content;
++                            terminalFactsTransitionsFit = terminalFactsTransitionsFit && fits;
++                            ++terminalFactsTransitionCount;
++                            AppendLog(std::format(L"TerminalFactsTransition: dpi={} width={} stage={} visible={} collapsed={} footerOnly={} fit={}",
++                                                  dpi,
++                                                  widthDip,
++                                                  stage,
++                                                  observed.taskTerminalFactsVisible,
++                                                  observed.taskCollapsed,
++                                                  observed.footerOnly,
++                                                  fits));
++                            return observed;
++                        };
++                        const auto perfPath   = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
++                        const auto perfOffset = [&]() -> std::optional<std::uintmax_t>
++                        {
++                            std::error_code error;
++                            const auto bytes = std::filesystem::file_size(perfPath, error);
++                            return ! error && Debug::Perf::HasJsonlOutput() ? std::optional<std::uintmax_t>{bytes} : std::nullopt;
++                        };
++                        const auto newMeasurements = [&](std::optional<std::uintmax_t> offset) -> std::optional<size_t>
++                        {
++                            if (! offset)
++                                return std::nullopt;
++                            std::ifstream perf(perfPath, std::ios::binary);
++                            if (! perf || ! perf.seekg(static_cast<std::streamoff>(offset.value())))
++                                return std::nullopt;
++                            size_t count = 0u;
++                            for (std::string line; std::getline(perf, line);)
++                                count += line.find("\"metric\":\"FileOps.Popup.TerminalFacts.MeasureUs\"") != std::string::npos;
++                            return perf.bad() ? std::nullopt : std::optional<size_t>{count};
++                        };
++                        const auto beforeChange = perfOffset();
++                        // Synthetic count-only mutation probes the cache key; this is not an engine outcome fixture.
++                        current.publishedItemCount   = 18u;
++                        const auto changed           = inspect(L"count-18", true, changedText, false, false);
++                        const auto changedMeasures   = newMeasurements(beforeChange);
++                        const auto beforeUnchanged   = perfOffset();
++                        const auto unchanged         = inspect(L"unchanged-repaint", true, changedText, false, false);
++                        const auto unchangedMeasures = newMeasurements(beforeUnchanged);
++                        const auto& a                = changed.taskTerminalFactsPaintedRect;
++                        const auto& b                = unchanged.taskTerminalFactsPaintedRect;
++                        const bool stable            = a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom &&
++                                                       changedMeasures == std::optional<size_t>{1u} && unchangedMeasures == std::optional<size_t>{0u};
++                        terminalFactsTransitionsFit  = terminalFactsTransitionsFit && stable;
++                        AppendLog(std::format(L"TerminalFactsStableRepaint: dpi={} width={} changedMeasures={} unchangedMeasures={} fit={}",
++                                              dpi,
++                                              widthDip,
++                                              changedMeasures.value_or(SIZE_MAX),
++                                              unchangedMeasures.value_or(SIZE_MAX),
++                                              stable));
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        static_cast<void>(inspect(L"collapsed", false, {}, true, false));
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        static_cast<void>(inspect(L"expanded", true, changedText, false, false));
++                        operations->SetPopupFooterOnly(true);
++                        static_cast<void>(inspect(L"footer-hidden", false, {}, false, true));
++                        operations->SetPopupFooterOnly(false);
++                        static_cast<void>(inspect(L"footer-restored", true, changedText, false, false));
++                        current.publishedItemCount = 9u;
++                        static_cast<void>(inspect(L"count-restored", true, originalText, false, false));
++                    }
+                     if (scenario.menu != PopupHitTest::Kind::None)
+                     {
+                         // Menu dispatch follows the window-procedure convention of returning zero;
+@@ -1570,6 +1746,12 @@
+     if (! statusChipLabelsFit || statusChipWitnessCount != 6u * monitors.size())
+         Fail(L"Elapsed Discovering/Preparing status chips must paint their short French labels entirely inside the actual chrome while the header retains "
+              L"elapsed detail.");
++    if (! terminalFactsFit || terminalFactsWitnessCount != 4u * monitors.size())
++        Fail(L"Mixed terminal Move must paint all nine localized publication/source/verification facts in one hosted region after the result summary and "
++             L"before actions at both widths and both tested themes.");
++    if (! terminalFactsTransitionsFit || terminalFactsTransitionCount != 7u * monitors.size())
++        Fail(
++            L"Terminal facts must update and retire on the same HWND across count, collapse, and footer transitions; see TerminalFactsTransition diagnostics.");
+     if (! terminalPresentationFits)
+         Fail(L"Completed-group actions and badges, and full expanded terminal results, must remain readable without clipping.");
+     if (! completedSemanticsFit || doneHeadingWitnessCount != 4u * monitors.size() || groupBadgeWitnessCount != 2u * monitors.size())
+@@ -1584,6 +1766,8 @@
+         Fail(L"Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics.");
+     return statusChipLabelsFit && statusChipWitnessCount == 6u * monitors.size() && hostedProgressValuesMatch &&
+            hostedProgressWitnessCount == 9u * monitors.size() && completedSemanticsFit && doneHeadingWitnessCount == 4u * monitors.size() &&
+-           groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit &&
+-           supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits && footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
++           groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && terminalFactsFit &&
++           terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit && terminalFactsTransitionCount == 7u * monitors.size() &&
++           speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
++           footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }
+--- a/Tools/Tests/ResourceLocalizationContracts.Tests.ps1
++++ b/Tools/Tests/ResourceLocalizationContracts.Tests.ps1
+@@ -465,6 +465,8 @@
+             'IDS_FMT_FILEOPS_OP_COUNTS',
+             'IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL',
+             'IDS_FMT_FILEOPS_OP_STATUS',
++            'IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS',
++            'IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN',
+             'IDS_FMT_FILEOPS_SIZE_PROGRESS',
+             'IDS_FMT_HRESULT_DETAILS',
+             'IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS',

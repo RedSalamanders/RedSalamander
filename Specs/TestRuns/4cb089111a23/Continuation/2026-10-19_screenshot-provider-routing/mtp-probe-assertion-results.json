@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-19T20:39:54.061Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T203439Z-94636-808566bd876d44f58f25780566e3f7bb\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 13947,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Read-only MTP documentation must not probe any recovery journal.",
+    "cases": [
+        {
+            "name": "cmd_product_documentation_gallery",
+            "status": "failed",
+            "duration_ms": 13930,
+            "repeat_index": 1,
+            "reason": "Read-only MTP documentation must not probe any recovery journal."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

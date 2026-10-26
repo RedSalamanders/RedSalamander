@@ -51,7 +51,7 @@
     <ClCompile Include="TerminalSecurity.cpp" />
     <ClCompile Include="TerminalSession.cpp" />
     <ClCompile Include="TerminalVt.cpp" />
-    <ClCompile Include="TerminalVtUpgradeTests.cpp" />
+    <ClCompile Include="Terminal.Tests.VtUpgrade.cpp" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Terminal.h" />
     <ClInclude Include="TerminalAccessibility.h" />
@@ -62,7 +62,7 @@
     <ClInclude Include="TerminalSecurity.h" />
     <ClInclude Include="TerminalSession.h" />
     <ClInclude Include="TerminalVt.h" />
-    <ClInclude Include="TerminalVtUpgradeTestContract.h" />
+    <ClInclude Include="TerminalVtUpgrade.Tests.Contract.h" />
     <ResourceCompile Include="TerminalResources.rc" />
   </ItemGroup>
   <ItemGroup>

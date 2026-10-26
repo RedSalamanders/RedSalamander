@@ -1,0 +1,62 @@
+{
+    "run_started_utc": "2026-10-17T17:45:10.502Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261017T174102Z-47260-e336e91ded074f7f931ff3e331e784dd\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 12194,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
+            "status": "passed",
+            "duration_ms": 160,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties",
+            "status": "passed",
+            "duration_ms": 52,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged",
+            "status": "passed",
+            "duration_ms": 64,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_header_click_sorts_results",
+            "status": "passed",
+            "duration_ms": 413,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_decision_mirror_real_focus",
+            "status": "passed",
+            "duration_ms": 1560,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_natural_name_sorting_contracts",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_navigation_sibling_natural_sorting",
+            "status": "passed",
+            "duration_ms": 590,
+            "repeat_index": 1
+        },
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 7045,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

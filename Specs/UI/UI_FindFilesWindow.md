@@ -1,5 +1,12 @@
 # Find Files Window Specification
 
+Documentation examples MUST use the native no-activation harness with fixed
+invented roots and rows. The test-only presentation seed refuses an active search
+and calls only on the owning UI thread. It does not enumerate or search displayed
+paths. Results and empty-state captures use the production grid/status rendering;
+they qualify presentation separately from provider search execution tests. See
+[the product gallery contract](../Testing/Testing_SelfTests.md#product-documentation-gallery).
+
 `FindFilesWindow` is the modeless DirectX Find Files and Directories surface. It owns the search form, result grid, result action commands, and the Find split-button action menu.
 
 ## Window Lifetime And Initial Scope
@@ -82,7 +89,7 @@
 Find never removes or suppresses a matching result because it is a File Operations artifact.
 `Possible` is an orthogonal name-shape classification supplied by the shared artifact classifier,
 not search-set membership, identity, or ownership. Possible rows show
-`Possible interrupted-operation artifact`. The result remains
+`Possibly incomplete file (left by an interrupted copy or move)`. The result remains
 visible in Find, Append, Intersect, and Subtract according to the ordinary query/set rules.
 
 The search result and any cached classification are never authority. Reveal/Open location and host
@@ -103,6 +110,12 @@ capability, identity, or bind work. No result is suppressed from the search set.
 - Recursive traversal MUST descend into subdirectories independently of whether each directory name itself matches the name mask; a non-matching folder may contain matching files or folders below it.
 - The Path column shows the containing folder relative to the searched root. Nested subfolders must be visible in this column; files directly in the searched root may show the current empty/placeholder path presentation.
 - Header clicks cycle result sorting without changing explicit or persisted column widths.
+- Name and displayed root-relative Path sorting MUST use Windows natural comparison
+  (`NaturalSort::Compare`), including numeric runs (`file2` before `file10`). Natural ties
+  retain arrival order in both directions. Sort None restores arrival order; Size/Modified
+  remain numeric, and Attributes/Snippet retain their text policy. Display sorting MUST NOT
+  redefine result identity. `cmd_pane_find_dialog_header_click_sorts_results` covers real
+  Name-header cycles, both Path directions, numeric folders and selection preservation.
 - Resized columns must survive sort changes, repeated search refreshes, and result-grid rebuilds.
 
 ## Backend Options

@@ -1,0 +1,71 @@
+{
+  "head": "a4209ee8cd7aa8f548f18706ca4a08c3bd272479",
+  "ownerPid": 73052,
+  "ownerStartUtc": "2026-10-26T12:56:07.4542424Z",
+  "phase": "original-commands-ASan",
+  "outcome": "failed",
+  "fullRuntimeSkippedByUser": true,
+  "fullRuntimePassClaim": false,
+  "scopeWaiverFile": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\runtime-scope-waiver-a4209ee8c.json",
+  "scopeWaiverSha256": "852E9A7FC83FE031E29D0C68D6CA7117729AF2AE3F11B6AE6AF553F2280459FD",
+  "earlierUnchangedProductionQualification": "c4c7399b0ccf700d5f761be5245f6a1e3c513fea",
+  "originalEightFocusedPassed": false,
+  "entries": [
+    {
+      "phase": "x64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T12:49:10.8449744Z",
+      "finishedUtc": "2026-10-26T12:55:52.2825938Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-x64-ASan-Debug.log"
+    },
+    {
+      "phase": "x64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T12:55:52.4969188Z",
+      "finishedUtc": "2026-10-26T13:02:32.0616656Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-x64-Debug.log"
+    },
+    {
+      "phase": "x64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T13:02:32.3546106Z",
+      "finishedUtc": "2026-10-26T13:11:10.2044827Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-x64-Release.log"
+    },
+    {
+      "phase": "ARM64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T12:49:10.8445265Z",
+      "finishedUtc": "2026-10-26T12:56:36.4325891Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-ARM64-Debug.log"
+    },
+    {
+      "phase": "ARM64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T12:56:36.6793878Z",
+      "finishedUtc": "2026-10-26T13:05:57.5604858Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-ARM64-Release.log"
+    },
+    {
+      "phase": "ARM64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T13:05:57.7948066Z",
+      "finishedUtc": "2026-10-26T13:13:42.7212009Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-build-ARM64-ASan-Debug.log"
+    },
+    {
+      "phase": "verify-current-build-artifacts",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T13:13:45.0558265Z",
+      "finishedUtc": "2026-10-26T13:14:25.2965257Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-verify-current-build-artifacts.log"
+    },
+    {
+      "phase": "original-commands-ASan",
+      "exitCode": 1,
+      "startedUtc": "2026-10-26T13:14:25.5189336Z",
+      "finishedUtc": "2026-10-26T13:16:32.8937481Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-original-commands-ASan.log"
+    }
+  ]
+}

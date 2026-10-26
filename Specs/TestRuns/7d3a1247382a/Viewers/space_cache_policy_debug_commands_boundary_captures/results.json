@@ -1,0 +1,48 @@
+{
+  "schema": "red-salamander.capture-companion-results.v1",
+  "sourceRunId": "20261009T114940Z-46640-68c13f2ed9fc4f429704f7c1a3b76535",
+  "machineHash": "7d3a1247382a",
+  "overallResultsPath": "../space_cache_policy_debug_commands/results.json",
+  "captureCaseResultsPath": "../space_cache_policy_debug_commands/commands/results.json",
+  "overallPassed": 32,
+  "overallFailed": 0,
+  "captureCase": {
+    "name": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+    "status": "passed",
+    "duration_ms": 13013,
+    "repeat_index": 1
+  },
+  "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication.",
+  "captures": [
+    {
+      "file": "boundary-body-455.png",
+      "sha256": "4c8b2d47f374454efebfe576c58f6dc224798e833b6cd6402cb9d1130ea7abfc",
+      "bytes": 334766
+    },
+    {
+      "file": "boundary-body-456.png",
+      "sha256": "6af2110280a020014df2de676a4281456b9e8cdf4dece42bd9afebceb6e99960",
+      "bytes": 193333
+    },
+    {
+      "file": "boundary-width-1099.png",
+      "sha256": "783c03260111ac46ce107608b07a81aa766c2c9ee2f68e7dc3a81fb967f2e35f",
+      "bytes": 401998
+    },
+    {
+      "file": "boundary-width-1100.png",
+      "sha256": "befba5445c685be09bf1bfe7a52b50bb99c16e45b2f4a0360943242c108473bc",
+      "bytes": 519803
+    },
+    {
+      "file": "boundary-width-503.png",
+      "sha256": "eac15ac4616589e30d6c17e2352979f23b979b2458e8bfacd0998c1562bbcc57",
+      "bytes": 342045
+    },
+    {
+      "file": "boundary-width-504.png",
+      "sha256": "1289277048911bb5c73e193291440faa2841698afb4203d7711b91fb0d4a514e",
+      "bytes": 203508
+    }
+  ]
+}

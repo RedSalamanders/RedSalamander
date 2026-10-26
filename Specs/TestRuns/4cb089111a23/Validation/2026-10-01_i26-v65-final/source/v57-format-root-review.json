@@ -1,0 +1,342 @@
+{
+  "schema": "i26-v57-format-root-review.v1",
+  "reviewer": "root",
+  "source": "V56 frozen native bytes to formatted primary",
+  "formatter": "CI pinned clang-format 22.1.3",
+  "changedNativeFiles": 16,
+  "exactRawTokenFiles": 13,
+  "ordinaryHeaderReorderFiles": [
+    "RedSalamander/FolderWindow.FileOperations.cpp",
+    "RedSalamander/FolderWindow.FileOperations.State.cpp",
+    "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp"
+  ],
+  "preferencesFragmentIncludeOrder": "Preserved, dispatcher last after helper definitions in its own group",
+  "algorithm": "Clang raw tokens compared by kind and spelling, excluding whitespace/comments; all nonidentical sequences independently inspected as same-membership header include permutations",
+  "changes": [
+    {
+      "path": "Common/LocalSearchIndexCore.cpp",
+      "beforeSha256": "ea698471245541eb5336334b4ebcb8ad4e2ff020b5d92ca5cfec9f4360dbe6b8",
+      "afterSha256": "228291ed39e0bc5553ef20e5b881b9ec35d48e6eace510488c2562464b54633f",
+      "tokensBefore": 29657,
+      "tokensAfter": 29657,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "Common/SearchServiceBroker.cpp",
+      "beforeSha256": "963cc1fec4e09365bd4cb7d6709145cfdb7a68152636612764089e826c653979",
+      "afterSha256": "1a16ea3c0e4c5c0f86963e26308a0c288293c091bcced575ea2ad646a9b4116c",
+      "tokensBefore": 25223,
+      "tokensAfter": 25223,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/FileOperationMoveBreadcrumb.cpp",
+      "beforeSha256": "6dea7f77a2743ecda15277dcaa33612842dd49a1a3a78fc6f05dc117d6d846d7",
+      "afterSha256": "45f0f6f0b210a98e780c6dca28e72e4cfa745bdf717f850116de574a182992d8",
+      "tokensBefore": 4653,
+      "tokensAfter": 4653,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/FileOperationMoveBreadcrumb.h",
+      "beforeSha256": "ff034a92538274e797fb7ed1b84831ad832964b02d498d5508bf474580b506ac",
+      "afterSha256": "762529d6b8c65f783b63058cb5fc43d1cba6833f2e703f5d756fb0adf6c94b46",
+      "tokensBefore": 572,
+      "tokensAfter": 572,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.cpp",
+      "beforeSha256": "f28b957d0e07bdf79bbf07c791b621dc082baa82f063c01b4753375b7419330d",
+      "afterSha256": "c625a03dca3195fd67682e84817f4adfc60c0fbef0bc83770031b920a60043ed",
+      "tokensBefore": 31984,
+      "tokensAfter": 31984,
+      "exactTokens": false,
+      "differences": [
+        {
+          "tag": "insert",
+          "before": [],
+          "after": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"FolderWindow.FileOperations.State.Private.h\""
+            ]
+          ]
+        },
+        {
+          "tag": "delete",
+          "before": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"FolderWindow.FileOperations.State.Private.h\""
+            ]
+          ],
+          "after": []
+        },
+        {
+          "tag": "insert",
+          "before": [],
+          "after": [
+            [
+              "string_literal",
+              "\"FileOperationArtifactRegistry.h\""
+            ],
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ]
+          ]
+        },
+        {
+          "tag": "delete",
+          "before": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"FileOperationArtifactRegistry.h\""
+            ]
+          ],
+          "after": []
+        }
+      ]
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+      "beforeSha256": "bf56e991e70365f9a5e58f9d7c2474e44d62d20b74d3c60a6714d22c82a27aa7",
+      "afterSha256": "6217d8717f2309c6b32471196b163071c690eec8f8a9d06223759137a2eb2a4f",
+      "tokensBefore": 14395,
+      "tokensAfter": 14395,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.h",
+      "beforeSha256": "c50c0f93318414de51ff63b84710e9b6bae1c50d0f7b937839b6a8803b6f8540",
+      "afterSha256": "82e1f915242fce256f8d04423979ec78a6166b43a363a0e2a8cff863bf7b1384",
+      "tokensBefore": 693,
+      "tokensAfter": 693,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+      "beforeSha256": "bf66cb3b330b2d3ebed845dc8d9b6f43b4cf054c8b185465fdfedaa06d979ac5",
+      "afterSha256": "0e5cc470055106ea29871022b0c1381d1292e8b25f4b19b3108300415a011a2e",
+      "tokensBefore": 121738,
+      "tokensAfter": 121738,
+      "exactTokens": false,
+      "differences": [
+        {
+          "tag": "replace",
+          "before": [
+            [
+              "string_literal",
+              "\"ContentDigest.h\""
+            ]
+          ],
+          "after": [
+            [
+              "string_literal",
+              "\"ConnectionProfileUtils.h\""
+            ]
+          ]
+        },
+        {
+          "tag": "replace",
+          "before": [
+            [
+              "string_literal",
+              "\"ConnectionProfileUtils.h\""
+            ]
+          ],
+          "after": [
+            [
+              "string_literal",
+              "\"ContentDigest.h\""
+            ]
+          ]
+        },
+        {
+          "tag": "delete",
+          "before": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"SynchronousIoCancelWatch.h\""
+            ]
+          ],
+          "after": []
+        },
+        {
+          "tag": "insert",
+          "before": [],
+          "after": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"SynchronousIoCancelWatch.h\""
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+      "beforeSha256": "8ab2b216f8fb0094cd1889f87de7353706dd3037cd4baa5f63fdbec0d3e645da",
+      "afterSha256": "e87840879174f1420f987f10bdca8af0229df822ced3508d45e15b92ba0f2fdf",
+      "tokensBefore": 13314,
+      "tokensAfter": 13314,
+      "exactTokens": false,
+      "differences": [
+        {
+          "tag": "insert",
+          "before": [],
+          "after": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"FileSystemPathIdentity.h\""
+            ]
+          ]
+        },
+        {
+          "tag": "delete",
+          "before": [
+            [
+              "hash",
+              "#"
+            ],
+            [
+              "raw_identifier",
+              "include"
+            ],
+            [
+              "string_literal",
+              "\"FileSystemPathIdentity.h\""
+            ]
+          ],
+          "after": []
+        }
+      ]
+    },
+    {
+      "path": "RedSalamander/Resource.h",
+      "beforeSha256": "7b6675e03a3034f644d7d4202e3b459767a002ecbd6896ecc4d8498c58f9df8f",
+      "afterSha256": "ae79db07904bf25cf99e847598a0bf2f8f1b2617546c1bb0caae9044fa3f1a8f",
+      "tokensBefore": 10230,
+      "tokensAfter": 10230,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp",
+      "beforeSha256": "772d11f30047a1b336b84b973b8c7bda45d3f16544a175bb4f39c589f774c642",
+      "afterSha256": "13a49bc3344aa18c51fb0c4092c20b8e2c148be9874b128a41a5aec484c87122",
+      "tokensBefore": 4832,
+      "tokensAfter": 4832,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp",
+      "beforeSha256": "4378bc887e51baec099f45d186035e3e3107a02f4100a72dee9eea88ad9c1541",
+      "afterSha256": "f99bee1fe9bee4a11410d99ddb56c1d4fc629e4bd5f46b080098adea19cd579c",
+      "tokensBefore": 104644,
+      "tokensAfter": 104644,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.cpp",
+      "beforeSha256": "7f99c942e0c2ed6d3983c4f309b58603efef9d7d57280c9c1c402a293c099b0c",
+      "afterSha256": "061d3219b799bb1f12df6c21ebeae952840dda436cc1fbb2ef613c2b3ced48d3",
+      "tokensBefore": 35784,
+      "tokensAfter": 35784,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FileOperationsSurfaceResources.h",
+      "beforeSha256": "e7643158d8812ad3dad490dfeae12e88e41ac7d9689ef76556a6cb345846fb70",
+      "afterSha256": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5",
+      "tokensBefore": 340,
+      "tokensAfter": 340,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp",
+      "beforeSha256": "263cdd7f163e945f7e21b5cea2d0b257b3763ed99f5e4b308ddce8f2f5f6561a",
+      "afterSha256": "0acf25709e58d29baad3557798f715e0b5f50996413a3dd0a2d36489e6642282",
+      "tokensBefore": 52802,
+      "tokensAfter": 52802,
+      "exactTokens": true,
+      "differences": []
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp",
+      "beforeSha256": "0d7c7ef58b388c2c10b95ffb2a8514cdb840ff4ff438df77d0f8d064b067196c",
+      "afterSha256": "59cbcd21559175d5155f35c928fb57095d32d784efa258325bdcf44fafd58a6c",
+      "tokensBefore": 50044,
+      "tokensAfter": 50044,
+      "exactTokens": true,
+      "differences": []
+    }
+  ],
+  "tokenReportSha256": "89af8fc7b97aec05e6652dad5994284ccbe5c4f791fc076bf578832a583b2f84",
+  "pinnedFormatCheckSha256": "c47ad7319cc36635930848e9bbd31018e59b3c2975f0c5bc54377067bc98c283",
+  "carryForward": "Keep V55 broad Debug FileOps and static/protected capture identities; keep V56 ordered Commands cluster identity. No production executable statement, constant, action, resource text or visual fixture logic changed in formatting. New Debug/Release builds and Full/resource evidence remain required for formatted candidate.",
+  "doesNotClaimIdenticalBinary": true
+}

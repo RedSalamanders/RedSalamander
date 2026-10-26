@@ -1,0 +1,101 @@
+{
+  "schema": "viewer-space.memory-qualification.v1",
+  "campaign_id": "20261009T094417632Z-0b453b63",
+  "mode": "CachedReopen200",
+  "created_utc": "2026-10-09T09:44:17.6840965Z",
+  "test_root": "D:\\RedSalamander.Perf",
+  "platform": "x64",
+  "configuration": "Release",
+  "case_filter": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+  "ordering": "single candidate-only 200-sample cached-reopen run; not a baseline comparison.",
+  "timeout_ms": 420000,
+  "archive_limits": {
+    "per_run_bytes": 5242880,
+    "per_file_bytes": 2097152
+  },
+  "expected_receipts": {
+    "baseline": "",
+    "candidate": "ea4ebe861c5fcf352f2903a1791c44a2e6731f309472dbb1ccf9b9870c2a7bb3"
+  },
+  "expected_build_source_snapshot_ids": {
+    "baseline": "",
+    "candidate": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131"
+  },
+  "expected_build_log_paths": {
+    "baseline": "",
+    "candidate": "C:/Users/PVB/.codex/worktrees/viewer-space-explorer-analyst/RedSalamander/.build/logs/msbuild-20261009_112742_874-pid44124-ad1da9a7.log"
+  },
+  "workspace_snapshots": "Capture each runner workspace-final.json snapshot_id independently; it is distinct from the build receipt source_snapshot_id.",
+  "raw_sources_root": "raw-sources",
+  "reproduction": {
+    "curate-viewer-space-memory-run.py": {
+      "path": "reproduction\\curate-viewer-space-memory-run.py",
+      "sha256": "e32289cbe1704d3233d460751ad4f0e67839220839d86bfd71ecb2c8549b963f",
+      "bytes": 21941
+    },
+    "run-viewer-space-memory-qualification.ps1": {
+      "path": "reproduction\\run-viewer-space-memory-qualification.ps1",
+      "sha256": "9cfea9d0d67600ba60663c6a90456cfdc22da891df5141980127a33578d67098",
+      "bytes": 23578
+    },
+    "analyze-viewer-space-memory-campaign.py": {
+      "path": "reproduction\\analyze-viewer-space-memory-campaign.py",
+      "sha256": "469b5ab0e69be7d35f3c747c1e1a6ff3d7a7debd85d01086efa9c73c68dc091c",
+      "bytes": 20591
+    }
+  },
+  "runs": [
+    {
+      "label": "20261009T094417632Z-0b453b63-b0-p1-candidate",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 0,
+      "position": 1,
+      "run_id": "20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a",
+      "status": "FAILED",
+      "failure_phase": "qualification",
+      "error": "focused Commands case status is failed; canonical runner did not record exactly one passing focused case; cached-reopen artifact is incomplete or failed; cached-reopen artifact contains a failed/non-current presentation sample; cached-reopen fixture/cache-hit count mismatch",
+      "started_utc": "2026-10-09T09:44:17.8233762Z",
+      "finished_utc": "2026-10-09T09:50:08.7847526Z",
+      "exit_code": 1,
+      "summary_exit_code": 1,
+      "case_status": "failed",
+      "receipt_id": "ea4ebe861c5fcf352f2903a1791c44a2e6731f309472dbb1ccf9b9870c2a7bb3",
+      "receipt_source_snapshot_id": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+      "receipt_sha256": "c6237a300b0e1ceeb4d5221979467315f75723c129765e03e536dd7274a2b738",
+      "workspace_snapshot_id": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+      "receipt_ended_utc": "2026-10-09T09:37:07.8244507Z",
+      "expected_build_log_path": "C:/Users/PVB/.codex/worktrees/viewer-space-explorer-analyst/RedSalamander/.build/logs/msbuild-20261009_112742_874-pid44124-ad1da9a7.log",
+      "build_log_source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\logs\\msbuild-20261009_112742_874-pid44124-ad1da9a7.log",
+      "build_log_index_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\build-inputs\\candidate\\msbuild-log-index.json",
+      "build_log_sha256": "9fe5f552acca8ee77f57e0f3691d97942cbe43a8c3efb4026de47540daeb1703",
+      "build_log_bytes": 42095,
+      "stdout_sha256": "87220479cd0d58c4401f6132400754de7b2dc28dd21577cd8bd10a9ac9cbf791",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 2981,
+      "stderr_bytes": 0,
+      "raw_metrics_original_path": "D:\\RedSalamander.Perf\\runs\\20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "raw_metrics_preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\raw-sources\\20261009T094417632Z-0b453b63-b0-p1-candidate\\perf_metrics.jsonl",
+      "raw_metrics_bytes": 22012104,
+      "raw_metrics_sha256": "e0cc2938dc85affd5b7d670d338fa34127b90d513c21a92e5d8af376cd35881b",
+      "archive_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\runs\\20261009T094417632Z-0b453b63-b0-p1-candidate",
+      "curation_status": "unqualified",
+      "curation_errors": [
+        "focused Commands case status is failed",
+        "canonical runner did not record exactly one passing focused case",
+        "cached-reopen artifact is incomplete or failed",
+        "cached-reopen artifact contains a failed/non-current presentation sample",
+        "cached-reopen fixture/cache-hit count mismatch"
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "label": "20261009T094417632Z-0b453b63-b0-p1-candidate",
+      "side": "candidate",
+      "block": 0,
+      "position": 1,
+      "run_id": "20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a"
+    }
+  ]
+}

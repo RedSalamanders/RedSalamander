@@ -1,0 +1,7 @@
+{
+  "prior": "C:/RedSalamander.Perf/evidence/i26-ui/exact-bound-results-candidate-v4-20260926",
+  "changed_inputs": [
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp"
+  ],
+  "reason": "Fix fixture oracle only: canonical typed task reducer returns S_FALSE for intentional Skip. Product unchanged. Common fixture runtime smoke is not paired performance acceptance."
+}

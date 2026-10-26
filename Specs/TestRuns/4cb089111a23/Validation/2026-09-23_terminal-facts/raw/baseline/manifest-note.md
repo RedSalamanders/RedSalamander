@@ -1,0 +1,1 @@
+The original runner manifest contains 18 entries for 17 unique source files. The SelfTest.cpp entry is repeated with the same SHA-256. No source was omitted or changed by deduplication; candidate-inputs-unique.json is the corrected view. Original executed metadata remains intact.

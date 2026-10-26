@@ -306,7 +306,7 @@ Instrumentation must not distort the hot path it measures:
 - no stopwatch-only measurements when a metric row should exist,
 - no hidden static cache that suppresses metrics after `ConfigureJsonlOutput(...)`,
 - no production delay knobs; selftest-only latency hooks live under
-  `RedSalamander/SelfTest/Common/SelfTestLatencyHooks.h/.cpp` and compile to no-ops outside
+  `RedSalamander/SelfTest/Common/Common.Tests.LatencyHooks.h/.cpp` and compile to no-ops outside
   `ENABLE_TESTS`.
 
 ---

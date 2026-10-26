@@ -1,0 +1,13 @@
+{
+  "head": "c4c7399b0ccf700d5f761be5245f6a1e3c513fea",
+  "stoppedOwnerPid": 100188,
+  "stoppedOwnerStartUtc": "2026-10-26T10:53:46.679307Z",
+  "stoppedAtPhase": "PrePush-Debug-planning-only",
+  "stoppedUtc": "2026-10-26T11:25:51.5271018Z",
+  "completedBuilds": 6,
+  "nativeProcessesActive": 0,
+  "fullRuntimeStarted": false,
+  "scopeWaiverSha256": "B4B402D21089FF5D16F0F5F28B3954520940D7E5909EE44DAE8012F38C60900F",
+  "preservedStateSha256": "52E96E606B985B7E188CB225E8E403119858855E229E70A750E473283E17B8E7",
+  "reason": "User allowed skipping Full runtime after green earlier qualification; coordinator stopped at read-only post-build boundary while the handoff artifact interlock prevented a Full launch. Raw state is retained, not relabelled as a Full pass."
+}

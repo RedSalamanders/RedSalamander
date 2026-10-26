@@ -1,0 +1,6 @@
+{
+  "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-controls-layout.log",
+  "sha256": "d3d1c033b7dfd32c4ac993e4198fe2ec412bf7223ff6adba67abae5dbe9b6b10",
+  "result": "Build failed before tests: fixture declarations removed by an edit; corrected in accepted source. No test pass or successful build receipt claimed.",
+  "normalized_lf_sha256": "c69bd29d630e02a1317e38f23be656a33d9a03addf472ac731556c5862bf621d"
+}

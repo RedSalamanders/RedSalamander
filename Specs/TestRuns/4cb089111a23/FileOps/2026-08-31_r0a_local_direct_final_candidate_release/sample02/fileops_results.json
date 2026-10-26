@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-08-31T13:42:06.953Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\r0a-candidate-release-final-02\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1296,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1156,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_LocalCopyNewNameConcurrentReplacementSurvives",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 46,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-18T22:26:16.000Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261018T222538Z-75160-b75fad05cfff44ffa1eee693b5d0382a\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 56656,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1437,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_SelectionShapeSmb",
+            "status": "passed",
+            "duration_ms": 55094,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

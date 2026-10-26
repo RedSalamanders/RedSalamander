@@ -22,7 +22,7 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual ($commandsFamilyTotal + $inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations) -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'Commands family and coordinator registrations should account for the aggregate source inventory.'
 
         $settingsHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\SettingsStore.h') -Raw
-        $settingsCases = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp') -Raw
+        $settingsCases = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp') -Raw
         $fileOperationsStruct = [Regex]::Match($settingsHeader, 'struct\s+FileOperationsSettings\s*\{(?<body>[\s\S]*?)\r?\n\};')
         Assert-RSEqual -Actual $fileOperationsStruct.Success -Expected $true -Message 'FileOperationsSettings definition was not found.'
         $fieldNames = @([Regex]::Matches(
@@ -66,7 +66,6 @@ Describe 'Test inventory helper' {
             PluginContractTests = 'Executable'
             SettingsSchemaTests = 'Executable'
             CrashHandlingTests = 'Executable'
-            RedSalamanderMonitorEtwLatency = 'Executable'
             PerformanceTests2 = 'CppUnitTest'
             ToolsPesterTests = 'Pester'
             ToolsPesterBuildToolchain = 'Pester'
@@ -76,6 +75,10 @@ Describe 'Test inventory helper' {
         foreach ($required in $requiredKinds.GetEnumerator()) {
             $matches = @($allEntries | Where-Object { $_.Name -eq $required.Key -and $_.Kind -eq $required.Value })
             Assert-RSEqual -Actual ($matches.Count -gt 0) -Expected $true -Message "Required test surface '$($required.Key)' with kind '$($required.Value)' is missing from CI/Full inventory."
+        }
+        foreach ($removedViewerSurface in @('MonitorTest', 'RedSalamanderMonitorEtwLatency')) {
+            Assert-RSEqual -Actual @($allEntries | Where-Object Name -eq $removedViewerSurface).Count -Expected 0 `
+                -Message "The consumer must not own extracted viewer surface '$removedViewerSurface'."
         }
         foreach ($entry in $allEntries) {
             Assert-RSEqual -Actual $entry.MetadataComplete -Expected $true -Message "Run-plan metadata is incomplete for '$($entry.Name)'."
@@ -112,7 +115,7 @@ Describe 'Test inventory helper' {
 
     It 'guards FileOperations Step enum values against phase-order drift' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
-        $coordinator = Join-Path $repoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $coordinator = Join-Path $repoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
         $integrity = Get-RSFileOpsPhaseIntegrity -FilePath $coordinator
 
         Assert-RSEqual -Actual $integrity.ActiveEnumValues.Count -Expected $inventory.SelfTests.FileOperations.ActivePhases -Message 'FileOperations active Step inventory should be derived from the phase order.'
@@ -124,6 +127,12 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual ($integrity.EnumValues -contains 'FileOps_VisualGallery') -Expected $true -Message 'The explicit documentation gallery must remain a discoverable Step.'
         Assert-RSEqual -Actual ($integrity.OrderedPhases -contains 'FileOps_VisualGallery') -Expected $false -Message 'Documentation capture must not enter the broad native phase sequence.'
         Assert-RSEqual -Actual ($integrity.ActiveEnumValues -contains 'FileOps_VisualGallery') -Expected $false -Message 'Opt-in documentation capture must not inflate behavioral coverage inventory.'
+        Assert-RSEqual -Actual ($integrity.EnumValues -contains 'FileOps_CommonPresentationPerf') -Expected $true -Message 'The paired presentation benchmark must remain discoverable for exact selection.'
+        Assert-RSEqual -Actual ($integrity.OrderedPhases -contains 'FileOps_CommonPresentationPerf') -Expected $false -Message 'The paired presentation benchmark must not run in the broad behavioral sequence.'
+        Assert-RSEqual -Actual ($integrity.ActiveEnumValues -contains 'FileOps_CommonPresentationPerf') -Expected $false -Message 'The opt-in presentation benchmark must not inflate behavioral coverage inventory.'
+        Assert-RSEqual -Actual ($integrity.EnumValues -contains 'FileOps_IntegratedPresentationPerf') -Expected $true -Message 'The integrated presentation benchmark must remain discoverable for exact selection.'
+        Assert-RSEqual -Actual ($integrity.OrderedPhases -contains 'FileOps_IntegratedPresentationPerf') -Expected $false -Message 'The integrated presentation benchmark must not run in the broad behavioral sequence.'
+        Assert-RSEqual -Actual ($integrity.ActiveEnumValues -contains 'FileOps_IntegratedPresentationPerf') -Expected $false -Message 'The integrated presentation benchmark must not inflate behavioral coverage inventory.'
     }
 
     It 'documents commands for live inventory instead of checked-in current totals' {

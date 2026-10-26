@@ -1,0 +1,38 @@
+{
+    "run_started_utc": "2026-09-08T09:57:00.568Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T095645Z-25328-f95d5e8b4d9748a2945cdd2317fbd682\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1734,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1234,
+            "repeat_index": 1
+        },
+        {
+            "name": "BR5_CurlHostDirectoryMove",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "BR5_CurlHostDirectoryMoveRefused",
+            "status": "passed",
+            "duration_ms": 203,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

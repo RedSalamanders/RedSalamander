@@ -1,0 +1,12 @@
+{
+  "classification": "host-restart-interruption",
+  "run_id": "20261019T053144Z-45640-25dd39acc8204cff891dcc002d1a40da",
+  "last_trace_utc": "2026-10-19T05:32:35.6745045Z",
+  "restart_requested_utc": "2026-10-19T05:32:35.8450176Z",
+  "event": 1074,
+  "requester": "StartMenuExperienceHost.exe",
+  "later_planned_upgrade_event_utc": "2026-10-19T05:35:38.6060474Z",
+  "native_final_result_present": false,
+  "artifact_profile_lock_length": 0,
+  "note": "Preserved partial raw artifacts before canonical cleanup. No pass/fail result is assigned to the interrupted selection. Existing four successful selections are retained only under the same verified source/receipt/artifact identity."
+}

@@ -1,0 +1,1387 @@
+diff --git a/.gitattributes b/.gitattributes
+index dc0d89731..a7853aba3 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -352,3 +352,6 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-local/** -text
+ Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+ Specs/TestRuns/4cb089111a23/Validation/2026-10-18_final-cancellation-debug/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+ Specs/TestRuns/4cb089111a23/Validation/2026-10-19_final-cancellation-release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
++
++# Preserve the original card-layout baseline/candidate measurements and harness provenance.
++Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_card-counts-throughput/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index 937826229..5ed13f774 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -499,8 +499,6 @@ constexpr ULONGLONG kTaskbarListRetryDelayMs                   = 1000ull;
+ [[nodiscard]] DxUi::ButtonVariant HostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept
+ {
+     using Kind = FileOperationsPopupInternal::PopupHitTest::Kind;
+-    if (kind == Kind::TaskToggleTechnical)
+-        return DxUi::ButtonVariant::Hyperlink; // The pinned Disclosure variant paints only a chevron; this labeled button still publishes expanded state.
+     if (kind == Kind::FooterToggleDetails || kind == Kind::CompletedGroupToggle || kind == Kind::TaskToggleCollapse || kind == Kind::TaskToggleThroughput)
+     {
+         return DxUi::ButtonVariant::Disclosure;
+@@ -1652,7 +1650,6 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
+         case Kind::TaskDismiss:
+         case Kind::FooterOptions:
+         case Kind::TaskToggleThroughput:
+-        case Kind::TaskToggleTechnical:
+         case Kind::TaskConflictInspectSource:
+         case Kind::TaskConflictInspectDestination:
+         case Kind::TaskIssues: return false;
+@@ -4740,7 +4737,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::CleanupCollapsedTask
+         _throughputExpandedTasks.try_emplace(task.taskId, ! fileOps || fileOps->GetPopupThroughputExpanded());
+     }
+     std::erase_if(_throughputExpandedTasks, [&](const auto& entry) { return ! seen.contains(entry.first); });
+-    std::erase_if(_technicalExpandedTasks, [&](const auto taskId) { return ! seen.contains(taskId); });
+ 
+     for (auto it = _collapsedTasks.begin(); it != _collapsedTasks.end();)
+     {
+@@ -7243,7 +7239,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFactPair(
+             return;
+         _target->DrawTextLayout(D2D1::Point2F(rect.left, rect.top),
+                                 layout,
+-                                pair.format.get() == _headerFormat.get() ? _textBrush.get() : _subTextBrush.get(),
++                                pair.format.get() == _headerFormat.get() || suffix == L"Throughput.Label" ? _textBrush.get() : _subTextBrush.get(),
+                                 D2D1_DRAW_TEXT_OPTIONS_CLIP);
+         _hostedTooltipDescriptors.push_back({.bounds       = rect,
+                                              .text         = std::wstring(text),
+@@ -7265,9 +7261,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFactPair(
+ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformation(const std::vector<TaskSnapshot>& snapshot, float width)
+ {
+     _cardInformationLayouts.resize(snapshot.size());
+-    const std::wstring technicalLabel = LoadStringResource(nullptr, IDS_FILEOPS_TECHNICAL_DETAILS);
+-    const float technicalWidth        = DipsToPixels(
+-        std::ceil(MeasureTextWidth(_dwriteFactory.get(), _controlsHost.GetTextFormat(DxUi::FontRole::Body), technicalLabel, 4096.0f, 128.0f)) + 16.0f, _dpi);
+     for (size_t index = 0u; index < snapshot.size(); ++index)
+     {
+         const auto& task  = snapshot[index];
+@@ -7278,18 +7271,16 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
+         const auto presentation = ResolveWholeTaskProgressPresentation(task);
+         std::wstring progress;
+         std::wstring percent;
+-        if (! task.finished && task.discoveryClosed && ! TaskUsesSkippedCountingWorkSummary(task))
++        if (! task.finished && ! TaskUsesSkippedCountingWorkSummary(task))
+         {
+-            if (task.totalBytes > 0u && (task.operation != FILESYSTEM_COPY || task.discoveredBytesKnown))
++            if (task.discoveryClosed && task.totalBytes > 0u && (task.operation != FILESYSTEM_COPY || task.discoveredBytesKnown))
+                 progress = FormatStringResource(
+                     nullptr, IDS_FMT_FILEOPS_TRANSFER_AMOUNT, FormatBytesCompact(task.completedBytes), FormatBytesCompact(task.totalBytes));
+-            else if (task.operation == FILESYSTEM_COPY && task.copiedFileCountKnown && task.discoveredFileCount > 0u)
++            else if (task.discoveryClosed && task.operation == FILESYSTEM_COPY && task.copiedFileCountKnown && task.discoveredFileCount > 0u)
+                 progress = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COPIED_FILES, task.copiedFileCount, task.discoveredFileCount);
+-            else if (task.operation == FILESYSTEM_COPY)
+-                progress = FormatStringResource(nullptr, IDS_FMT_FILEOPS_WRITTEN_BYTES, FormatBytesCompact(task.completedBytes));
+             else
+-                progress = FormatStringResource(nullptr, IDS_FMT_FILEOP_ITEMS, task.completedItems, task.totalItems);
+-            if (presentation.determinate)
++                progress = FormatStringResource(nullptr, IDS_FMT_FILEOPS_WRITTEN_BYTES, FormatBytesCompact(task.completedBytes));
++            if (task.discoveryClosed && presentation.determinate)
+                 percent = FormatStringResource(
+                     nullptr, IDS_FMT_FILEOPS_COMPACT_PERCENT, static_cast<unsigned>(std::lround(Clamp01(static_cast<float>(presentation.fraction)) * 100.0f)));
+         }
+@@ -7319,115 +7310,47 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
+             }
+ #endif
+         }
+-        PrepareFactPair(information.rate,
+-                        std::move(rate),
++        // Popup presentation uses only published recursive facts. A selected folder's 0/1
++        // counter cannot stand in for the files and folders inside it, especially for Move
++        // routes which do not publish type-specific completion receipts.
++        std::wstring counts;
++        if (! task.finished && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) && ! TaskUsesSkippedCountingWorkSummary(task))
++        {
++            if (! task.discoveryClosed)
++                counts = task.discoveredFileCount > 0u || task.discoveredDirectoryCount > 0u
++                             ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNTING_FOUND, task.discoveredDirectoryCount, task.discoveredFileCount)
++                             : LoadStringResource(nullptr, IDS_FILEOPS_COUNTING_FILES_FOLDERS);
++            else if (task.operation == FILESYSTEM_COPY && task.copiedFileCountKnown && task.copiedFolderCountKnown)
++                counts = FormatStringResource(nullptr,
++                                              IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS,
++                                              task.copiedFolderCount,
++                                              task.discoveredDirectoryCount,
++                                              task.copiedFileCount,
++                                              task.discoveredFileCount);
++            else if (task.operation == FILESYSTEM_COPY && task.copiedFileCountKnown)
++                counts = FormatStringResource(
++                    nullptr, IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS, task.discoveredDirectoryCount, task.copiedFileCount, task.discoveredFileCount);
++            else if (task.discoveredFileCount > 0u || task.discoveredDirectoryCount > 0u)
++                counts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS, task.discoveredDirectoryCount, task.discoveredFileCount);
++            else
++                counts = LoadStringResource(nullptr, IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE);
++        }
++        PrepareFactPair(information.counts,
++                        std::move(counts),
+                         std::move(eta),
+                         _smallFormat.get(),
+-                        width,
+-                        presentation.showThroughputGraph ? StalledRateLabelSlotWidth() : 0.0f);
+-        std::wstring technical = task.discoveryClosed ? FormatStringResource(nullptr, IDS_FMT_FILEOP_ITEMS, task.completedItems, task.totalItems)
+-                                                      : FormatStringResource(nullptr, IDS_FMT_FILEOP_ITEMS_UNKNOWN_TOTAL, task.completedItems);
+-        if (task.autoConcurrencyUsed && task.autoTunedConcurrency > 0u)
+-        {
+-            technical += L'\n';
+-            technical += FormatStringResource(nullptr, IDS_FMT_FILEOPS_AUTO_CONCURRENCY, task.autoTunedConcurrency, task.effectiveConcurrencyBudget);
+-        }
+-        if (task.operation == FILESYSTEM_COPY && task.discoveryClosed)
+-        {
+-            technical += L'\n';
+-            technical += FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOUND_FILE_COUNTS, task.discoveredFileCount, task.discoveredDirectoryCount);
+-            if (task.copiedFileCountKnown)
+-            {
+-                technical += L'\n';
+-                technical += FormatStringResource(nullptr, IDS_FMT_FILEOPS_COPIED_FILES, task.copiedFileCount, task.discoveredFileCount);
+-            }
+-        }
+-        if (information.technicalText != technical || information.technicalWidth != width || information.technicalFormat.get() != _smallFormat.get())
+-        {
+-            information.technical.reset();
+-            information.technicalHeight = 0.0f;
+-            information.technicalText   = std::move(technical);
+-            information.technicalWidth  = width;
+-            information.technicalFormat = _smallFormat;
+-            if (SUCCEEDED(_dwriteFactory->CreateTextLayout(information.technicalText.data(),
+-                                                           static_cast<UINT32>(information.technicalText.size()),
+-                                                           _smallFormat.get(),
+-                                                           width,
+-                                                           4096.0f,
+-                                                           information.technical.put())))
+-            {
+-                static_cast<void>(information.technical->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP));
+-                static_cast<void>(information.technical->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+-                DWRITE_TEXT_METRICS metrics{};
+-                if (SUCCEEDED(information.technical->GetMetrics(&metrics)))
+-                    information.technicalHeight = std::ceil(metrics.height) + DipsToPixels(6.0f, _dpi);
+-            }
+-        }
+-        information.disclosureWidth = std::min(width, technicalWidth);
+-        const auto speedLimit       = FormatSpeedLimitSelectorText(task.desiredSpeedLimitBytesPerSecond);
+-        const bool waiting          = ! task.started && ! task.overlapQueued && (task.waitingForOthers || task.waitingInQueue);
+-        const float actionWidth     = task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE
+-                                          ? DipsToPixels(84.0f + (task.started ? 92.0f : 0.0f) + (waiting ? 104.0f : 0.0f) +
+-                                                             (task.discoveryAheadActive ? 92.0f : 0.0f) + 8.0f + MeasureSpeedLimitWidthDip(index, speedLimit),
+-                                                         _dpi)
+-                                          : DipsToPixels(176.0f, _dpi);
+-        information.technicalOwnRow = task.finished || width < actionWidth + technicalWidth + DipsToPixels(8.0f, _dpi);
+-    }
+-}
+-
+-void FileOperationsPopupInternal::FileOperationsPopupState::DrawTechnicalDetails(
+-    const TaskSnapshot& task, const CardInformationLayout& information, float left, float right, float top)
+-{
+-    const float height = DipsToPixels(24.0f, _dpi);
+-    PopupButton disclosure{};
+-    disclosure.bounds = D2D1::RectF(std::max(left, right - information.disclosureWidth), top, right, top + height);
+-    disclosure.hit    = {PopupHitTest::Kind::TaskToggleTechnical, task.taskId, 0u};
+-    _buttons.push_back(disclosure);
+-    DrawButton(disclosure, nullptr, {});
+-    if (_technicalExpandedTasks.contains(task.taskId) && information.technical)
+-    {
+-        const auto bounds = D2D1::RectF(left, top + height + DipsToPixels(6.0f, _dpi), right, top + height + information.technicalHeight);
+-        _target->DrawTextLayout(D2D1::Point2F(bounds.left, bounds.top), information.technical.get(), _subTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+-        _hostedTooltipDescriptors.push_back({.bounds       = bounds,
+-                                             .text         = information.technicalText,
+-                                             .automationId = std::format(L"FileOperations.Task.{}.TechnicalDetails", task.taskId),
+-                                             .taskId       = task.taskId,
+-                                             .liveText     = ! task.finished});
+-#ifdef ENABLE_TESTS
+-        if (task.operation == FILESYSTEM_COPY && task.discoveryClosed)
+-        {
+-            const auto counts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOUND_FILE_COUNTS, task.discoveredFileCount, task.discoveredDirectoryCount);
+-            const auto offset = information.technicalText.find(counts);
+-            std::array<DWRITE_HIT_TEST_METRICS, 8> hits{};
+-            UINT32 hitCount = 0u;
+-            if (offset != std::wstring::npos &&
+-                SUCCEEDED(information.technical->HitTestTextRange(static_cast<UINT32>(offset),
+-                                                                  static_cast<UINT32>(counts.size()),
+-                                                                  bounds.left,
+-                                                                  bounds.top,
+-                                                                  hits.data(),
+-                                                                  static_cast<UINT32>(hits.size()),
+-                                                                  &hitCount)) &&
+-                hitCount > 0u)
+-            {
+-                auto row = D2D1::RectF(hits[0].left, hits[0].top, hits[0].left + hits[0].width, hits[0].top + hits[0].height);
+-                for (UINT32 index = 1u; index < hitCount; ++index)
+-                {
+-                    row.left   = std::min(row.left, hits[index].left);
+-                    row.top    = std::min(row.top, hits[index].top);
+-                    row.right  = std::max(row.right, hits[index].left + hits[index].width);
+-                    row.bottom = std::max(row.bottom, hits[index].top + hits[index].height);
+-                }
+-                auto& painted          = _paintedLiveProgressForSelfTest[task.taskId];
+-                painted.discoveryText  = counts;
+-                painted.discoveryRect  = row;
+-                painted.discoveryColor = _subTextBrush->GetColor();
+-            }
+-        }
+-#endif
++                        std::max(1.0f, width - (presentation.showDiscoveryActivity ? DipsToPixels(30.0f, _dpi) : 0.0f)));
++        PrepareFactPair(information.throughput,
++                        presentation.showThroughputGraph ? LoadStringResource(nullptr, IDS_FILEOPS_THROUGHPUT) : std::wstring{},
++                        std::move(rate),
++                        _bodyFormat.get(),
++                        std::max(1.0f, width - DipsToPixels(28.0f, _dpi)));
++        std::wstring concurrency;
++        if (! task.finished && task.autoConcurrencyUsed && task.effectiveConcurrencyBudget > 0u)
++            concurrency = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PARALLEL_TRANSFERS, task.effectiveConcurrencyBudget);
++        PrepareFactPair(information.concurrency, std::move(concurrency), {}, _smallFormat.get(), width);
+     }
+ }
+-
+ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(const D2D1_RECT_F& rect,
+                                                                                uint64_t taskId,
+                                                                                const RateHistory& history,
+@@ -7436,8 +7359,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
+                                                                                bool rainbowMode,
+                                                                                bool perStreamBands,
+                                                                                bool showLabels,
+-                                                                               const GraphLabelLayout* summaryLabels,
+-                                                                               float summaryTop) noexcept
++                                                                               const D2D1_RECT_F* rateBounds,
++                                                                               const D2D1_RECT_F* etaBounds) noexcept
+ {
+     // C4: the hosted ThroughputGraph is the only graph painter; this builds its descriptor.
+     HostedGraphDescriptor hostedGraph{};
+@@ -7491,15 +7414,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
+                                                  .liveText     = true});
+         }
+     }
+-    if (! showLabels && summaryLabels)
++    if (! showLabels && rateBounds && etaBounds)
+     {
+-        hostedGraph.separateLabelRow    = true; // The task summary already paints and publishes this pair above its paths.
++        hostedGraph.separateLabelRow    = true; // Speed is beside Throughput; ETA is beside the counts above the paths.
+         hostedGraph.labelsInTaskSummary = true;
+-        const auto& pair                = *summaryLabels;
+-        hostedGraph.rateLabelBounds =
+-            D2D1::RectF(rect.left, summaryTop, rect.left + (pair.stacked ? pair.width : pair.rateWidth), summaryTop + pair.rateHeight);
+-        const float etaTop         = pair.stacked ? summaryTop + pair.rateHeight + DipsToPixels(2.0f, _dpi) : summaryTop;
+-        hostedGraph.etaLabelBounds = D2D1::RectF(rect.right - (pair.stacked ? pair.width : pair.etaWidth), etaTop, rect.right, etaTop + pair.etaHeight);
++        hostedGraph.rateLabelBounds     = *rateBounds;
++        hostedGraph.etaLabelBounds      = *etaBounds;
+     }
+     hostedGraph.labelRowBottom =
+         hostedGraph.separateLabelRow
+@@ -7580,7 +7500,6 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
+         case PopupHitTest::Kind::CompletedGroupClear: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLEAR_COMPLETED);
+         case PopupHitTest::Kind::TaskToggleCollapse: return L"\u2304";
+         case PopupHitTest::Kind::TaskToggleThroughput: return LoadStringResource(nullptr, IDS_FILEOPS_THROUGHPUT);
+-        case PopupHitTest::Kind::TaskToggleTechnical: return LoadStringResource(nullptr, IDS_FILEOPS_TECHNICAL_DETAILS);
+         case PopupHitTest::Kind::TaskStartNow: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_START_NOW);
+         case PopupHitTest::Kind::TaskQueueMoveUp: return L"\u2191";
+         case PopupHitTest::Kind::TaskQueueMoveDown: return L"\u2193";
+@@ -7742,7 +7661,7 @@ FileOperationsPopupInternal::HostedTaskSpaceKeyRoute FileOperationsPopupInternal
+     if (kind == PopupHitTest::Kind::TaskConflictAction || kind == PopupHitTest::Kind::TaskConflictMore ||
+         kind == PopupHitTest::Kind::TaskConflictInspectSource || kind == PopupHitTest::Kind::TaskConflictInspectDestination ||
+         kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll || kind == PopupHitTest::Kind::TaskToggleThroughput ||
+-        kind == PopupHitTest::Kind::TaskToggleCollapse || kind == PopupHitTest::Kind::TaskToggleTechnical)
++        kind == PopupHitTest::Kind::TaskToggleCollapse)
+         return HostedTaskSpaceKeyRoute::ControlActivation;
+     if (modified)
+         return HostedTaskSpaceKeyRoute::Ignore;
+@@ -8760,11 +8679,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
+             button->SetDisclosureCollapsedDirection(DxUi::ChevronDirection::Right);
+             button->SetDisclosureExpanded(IsTaskThroughputExpanded(hit.taskId));
+         }
+-        else if (hit.kind == PopupHitTest::Kind::TaskToggleTechnical)
+-        {
+-            button->SetDisclosureCollapsedDirection(DxUi::ChevronDirection::Right);
+-            button->SetDisclosureExpanded(_technicalExpandedTasks.contains(hit.taskId));
+-        }
+         else
+         {
+             button->ClearDisclosureState();
+@@ -9533,23 +9447,23 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                         TaskUsesSkippedCountingWorkSummary(task)
+                             ? MeasureWrappedTextHeight(
+                                   _dwriteFactory.get(), _bodyFormat.get(), FormatDiscoveryProgressText(task), conflictActionWidthPx, baseLineH)
+-                        : progress.showDiscoveryActivity ? baseLineH * 2.0f
+-                                                         : FactPairHeight(information.progress) + DipsToPixels(4.0f, _dpi);
++                            : FactPairHeight(information.progress) + DipsToPixels(4.0f, _dpi);
+                     size_t streams = 0u;
+                     for (size_t stream = 0u; stream < task.inFlightFileCount; ++stream)
+                         if (FileProgressIsVisible(task.inFlightFiles[stream], renderTick))
+                             ++streams;
+                     const float pathHeight     = (static_cast<float>(std::max<size_t>(1u, streams)) + 1.0f) * baseLineH + fromToGapY +
+                                                  (TaskShowsDestinationChangeNotice(task) ? baseLineH : 0.0f);
+-                    const float rateHeight     = progress.showThroughputGraph ? FactPairHeight(information.rate) + DipsToPixels(4.0f, _dpi) : 0.0f;
++                    const float countsHeight   = FactPairHeight(information.counts) + DipsToPixels(4.0f, _dpi);
+                     const float progressHeight = progress.showTransferProgress ? DipsToPixels(26.0f, _dpi) : DipsToPixels(8.0f, _dpi);
+-                    const float plotHeight =
+-                        progress.showThroughputGraph ? DipsToPixels(32.0f + (IsTaskThroughputExpanded(task.taskId) ? 80.0f : 0.0f), _dpi) : 0.0f;
+-                    h = DipsToPixels(8.0f + 18.0f + 8.0f + 24.0f + 10.0f, _dpi) + summaryHeight + rateHeight + progressHeight + pathHeight + plotHeight;
++                    const float plotHeight     = progress.showThroughputGraph
++                                                     ? std::max(DipsToPixels(24.0f, _dpi), FactPairHeight(information.throughput)) +
++                                                           DipsToPixels(8.0f + (IsTaskThroughputExpanded(task.taskId) ? 80.0f : 0.0f), _dpi)
++                                                     : 0.0f;
++                    h = DipsToPixels(8.0f + 18.0f + 8.0f + 24.0f + 10.0f, _dpi) + summaryHeight + countsHeight + progressHeight + pathHeight + plotHeight;
+                 }
+-                h += information.technicalOwnRow ? DipsToPixels(28.0f, _dpi) : 0.0f;
+-                if (_technicalExpandedTasks.contains(task.taskId))
+-                    h += information.technicalHeight;
++                if (information.concurrency.rate)
++                    h += FactPairHeight(information.concurrency) + DipsToPixels(6.0f, _dpi);
+             }
+             // Decision content changes immediately (metadata/inspection outcomes).
+             // Snap its measured height too; interpolating a shorter previous card
+@@ -11125,11 +11039,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+ 
+                     const float dismissButtonH         = DipsToPixels(_terminalActions[row.taskIndex].heightDip, _dpi);
+                     const float dismissButtonBottomPad = DipsToPixels(8.0f, _dpi);
+-                    const auto& information            = _cardInformationLayouts[row.taskIndex];
+-                    const float technicalHeight =
+-                        DipsToPixels(28.0f, _dpi) + (_technicalExpandedTasks.contains(task.taskId) ? information.technicalHeight : 0.0f);
+-                    const float dismissButtonTop =
+-                        std::max(textY + DipsToPixels(4.0f, _dpi), cardRect.bottom - dismissButtonBottomPad - dismissButtonH - technicalHeight);
++                    const float dismissButtonTop       = std::max(textY + DipsToPixels(4.0f, _dpi), cardRect.bottom - dismissButtonBottomPad - dismissButtonH);
+ 
+ #ifdef ENABLE_TESTS
+                     _paintedTaskBodiesForSelfTest[task.taskId] = {
+@@ -11172,7 +11082,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                             DrawButton(action, nullptr, {});
+                     }
+ 
+-                    DrawTechnicalDetails(task, information, textX, contentRight, dismissButtonTop + dismissButtonH + DipsToPixels(4.0f, _dpi));
+                     const float gapAfter = (rowIndex + 1u < rowCount) ? cardGap : 0.0f;
+                     y += taskCardH + gapAfter;
+                     continue;
+@@ -11188,12 +11097,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                 }
+                 const bool graphBandsActive = RateHistoryGraphBandsAreActive(history, theme);
+ 
+-                const auto& information           = _cardInformationLayouts[row.taskIndex];
+-                const bool priorityTransfer       = ! task.conflict.active && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
+-                float primaryProgressTop          = 0.0f;
+-                float primaryRateTop              = 0.0f;
++                const auto& information     = _cardInformationLayouts[row.taskIndex];
++                const bool priorityTransfer = ! task.conflict.active && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
++                float primaryProgressTop    = 0.0f;
++                D2D1_RECT_F primaryEtaRect{};
+                 const bool skippedCountingSummary = TaskUsesSkippedCountingWorkSummary(task);
+-                if (priorityTransfer && task.discoveryClosed && ! skippedCountingSummary)
++                if (priorityTransfer && ! skippedCountingSummary)
+                 {
+                     textY += DipsToPixels(4.0f, _dpi);
+                     const auto bounds = D2D1::RectF(textX, textY, contentRight, textY + FactPairHeight(information.progress));
+@@ -11227,7 +11136,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                     textY += summaryHeight;
+                 }
+                 const bool discoveryInProgress = compactProgressPresentation.showDiscoveryActivity;
+-                if (discoveryInProgress)
++                if (discoveryInProgress && ! priorityTransfer)
+                 {
+                     const std::wstring discoveryText = FormatDiscoveredSoFarText(task);
+                     const float indicatorW           = DipsToPixels(24.0f, _dpi);
+@@ -11380,12 +11289,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+ 
+                 if (priorityTransfer)
+                 {
+-                    if (compactProgressPresentation.showThroughputGraph)
++                    if (information.counts.rate || information.counts.eta)
+                     {
+                         textY += DipsToPixels(4.0f, _dpi);
+-                        primaryRateTop    = textY;
+-                        const auto bounds = D2D1::RectF(textX, textY, contentRight, textY + FactPairHeight(information.rate));
+-                        DrawFactPair(information.rate, bounds, task.taskId, L"Throughput.Rate", L"Throughput.Eta");
++                        const float countsLeft = textX + (discoveryInProgress ? DipsToPixels(30.0f, _dpi) : 0.0f);
++                        const auto bounds      = D2D1::RectF(countsLeft, textY, contentRight, textY + FactPairHeight(information.counts));
++                        DrawFactPair(information.counts, bounds, task.taskId, L"Progress.Counts", L"Throughput.Eta");
++                        const float etaTop = information.counts.stacked ? textY + information.counts.rateHeight + DipsToPixels(2.0f, _dpi) : textY;
++                        primaryEtaRect     = D2D1::RectF(contentRight - (information.counts.stacked ? information.counts.width : information.counts.etaWidth),
++                                                         etaTop,
++                                                         contentRight,
++                                                         etaTop + information.counts.etaHeight);
++#ifdef ENABLE_TESTS
++                        const auto countsRect = D2D1::RectF(countsLeft,
++                                                            textY,
++                                                            countsLeft + (information.counts.stacked ? information.counts.width : information.counts.rateWidth),
++                                                            textY + information.counts.rateHeight);
++                        auto& painted         = _paintedLiveProgressForSelfTest[task.taskId];
++                        painted.discoveryText = information.counts.rateText;
++                        painted.discoveryRect = countsRect;
++                        painted.discoveryColor = _subTextBrush->GetColor();
++#endif
++                        if (discoveryInProgress)
++                            DrawDiscoveryActivityIndicator(D2D1::RectF(textX, textY, textX + DipsToPixels(24.0f, _dpi), textY + lineH), nowTick, reducedMotion);
+                         textY = bounds.bottom;
+                     }
+                     primaryProgressTop = textY + DipsToPixels(6.0f, _dpi);
+@@ -11754,10 +11680,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                                                           : 0.0f;
+                 const float buttonsHeight           = hasConflictPrompt ? (conflictButtonsHeight + conflictApplyLineHeight) : buttonH;
+ 
+-                const float technicalHeight = hasConflictPrompt ? 0.0f
+-                                                                : (information.technicalOwnRow ? DipsToPixels(28.0f, _dpi) : 0.0f) +
+-                                                                      (_technicalExpandedTasks.contains(task.taskId) ? information.technicalHeight : 0.0f);
+-                const float buttonRowBottom = cardRect.bottom - bottomPadding - technicalHeight;
++                const float noteHeight =
++                    ! hasConflictPrompt && information.concurrency.rate ? FactPairHeight(information.concurrency) + DipsToPixels(6.0f, _dpi) : 0.0f;
++                const float buttonRowBottom = cardRect.bottom - bottomPadding - noteHeight;
+                 const float buttonRowTop    = buttonRowBottom - buttonsHeight;
+ #ifdef ENABLE_TESTS
+                 if (! hasConflictPrompt)
+@@ -11996,14 +11921,33 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                         disclosure.bounds = D2D1::RectF(barX, graphTop, barX + disclosureSize, graphTop + disclosureSize);
+                         disclosure.hit    = {PopupHitTest::Kind::TaskToggleThroughput, task.taskId, 0u};
+                         _buttons.push_back(disclosure);
+-                        const std::wstring label = LoadStringResource(nullptr, IDS_FILEOPS_THROUGHPUT);
+-                        const D2D1_RECT_F labelRect =
+-                            D2D1::RectF(barX + disclosureSize + DipsToPixels(4.0f, _dpi), graphTop, barX + barW, graphTop + disclosureSize);
+-                        _target->DrawTextW(label.data(), static_cast<UINT32>(label.size()), _bodyFormat.get(), labelRect, _textBrush.get());
++                        const float labelLeft     = barX + disclosureSize + DipsToPixels(4.0f, _dpi);
++                        const float headingHeight = priorityTransfer ? std::max(disclosureSize, FactPairHeight(information.throughput)) : disclosureSize;
++                        D2D1_RECT_F rateRect{};
++                        if (priorityTransfer)
++                        {
++                            DrawFactPair(information.throughput,
++                                         D2D1::RectF(labelLeft, graphTop, barX + barW, graphTop + headingHeight),
++                                         task.taskId,
++                                         L"Throughput.Label",
++                                         L"Throughput.Rate");
++                            const auto& pair    = information.throughput;
++                            const float rateTop = pair.stacked ? graphTop + pair.rateHeight + DipsToPixels(2.0f, _dpi) : graphTop;
++                            rateRect = D2D1::RectF(barX + barW - (pair.stacked ? pair.width : pair.etaWidth), rateTop, barX + barW, rateTop + pair.etaHeight);
++                        }
++                        else
++                        {
++                            const auto label = LoadStringResource(nullptr, IDS_FILEOPS_THROUGHPUT);
++                            _target->DrawTextW(label.data(),
++                                               static_cast<UINT32>(label.size()),
++                                               _bodyFormat.get(),
++                                               D2D1::RectF(labelLeft, graphTop, barX + barW, graphTop + headingHeight),
++                                               _textBrush.get());
++                        }
+ 
+                         const RateHistory empty{};
+                         const RateHistory& graphHistory = history ? *history : empty;
+-                        const float bodyTop             = graphTop + DipsToPixels(28.0f, _dpi);
++                        const float bodyTop             = graphTop + headingHeight + DipsToPixels(4.0f, _dpi);
+                         const D2D1_RECT_F bodyRect      = D2D1::RectF(barX, bodyTop, barX + barW, graphBottom);
+                         if (IsTaskThroughputExpanded(task.taskId))
+                         {
+@@ -12018,8 +11962,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                                                rainbowMode,
+                                                true,
+                                                ! priorityTransfer,
+-                                               priorityTransfer ? &information.rate : nullptr,
+-                                               primaryRateTop);
++                                               priorityTransfer ? &rateRect : nullptr,
++                                               priorityTransfer ? &primaryEtaRect : nullptr);
+                         }
+                         else if (! priorityTransfer)
+                         {
+@@ -12082,10 +12026,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+ 
+                 {
+                     const float btnGapX = DipsToPixels(8.0f, _dpi);
+-                    const float rowW =
+-                        std::max(0.0f,
+-                                 contentRight - textX -
+-                                     (! hasConflictPrompt && ! information.technicalOwnRow ? information.disclosureWidth + DipsToPixels(8.0f, _dpi) : 0.0f));
++                    const float rowW    = std::max(0.0f, contentRight - textX);
+                     if (rowW > 1.0f && ! task.cancellationRequested)
+                     {
+                         const float rowTop    = buttonRowTop;
+@@ -12463,9 +12404,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                         }
+                     }
+                 }
+-                if (! hasConflictPrompt)
+-                    DrawTechnicalDetails(
+-                        task, information, textX, contentRight, information.technicalOwnRow ? buttonRowBottom + DipsToPixels(4.0f, _dpi) : buttonRowTop);
++                if (! hasConflictPrompt && information.concurrency.rate)
++                    DrawFactPair(information.concurrency,
++                                 D2D1::RectF(textX, buttonRowBottom + DipsToPixels(6.0f, _dpi), contentRight, buttonRowBottom + noteHeight),
++                                 task.taskId,
++                                 L"Concurrency",
++                                 {});
+             }
+ 
+             const float gapAfter = (rowIndex + 1u < rowCount) ? cardGap : 0.0f;
+@@ -15125,19 +15069,6 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
+         return 0;
+     }
+ 
+-    if (hit.kind == PopupHitTest::Kind::TaskToggleTechnical)
+-    {
+-        const bool published =
+-            std::ranges::any_of(_buttons, [&](const PopupButton& button) { return button.hit.kind == hit.kind && button.hit.taskId == hit.taskId; });
+-        if (! published)
+-            return 0;
+-        if (! _technicalExpandedTasks.erase(hit.taskId))
+-            _technicalExpandedTasks.insert(hit.taskId);
+-        _taskHeightAnimations.erase(hit.taskId);
+-        Invalidate(hwnd);
+-        return 0;
+-    }
+-
+     if (hit.kind == PopupHitTest::Kind::TaskPause)
+     {
+         if (fileOps)
+@@ -15345,10 +15276,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
+         payload->kind == PopupHitTest::Kind::FooterPauseResumeAll || payload->kind == PopupHitTest::Kind::FooterOptions ||
+         payload->kind == PopupHitTest::Kind::CompletedGroupToggle || payload->kind == PopupHitTest::Kind::CompletedGroupClear ||
+         payload->kind == PopupHitTest::Kind::TaskToggleCollapse || payload->kind == PopupHitTest::Kind::TaskToggleThroughput ||
+-        payload->kind == PopupHitTest::Kind::TaskToggleTechnical || payload->kind == PopupHitTest::Kind::TaskStartNow ||
+-        payload->kind == PopupHitTest::Kind::TaskQueueMoveUp || payload->kind == PopupHitTest::Kind::TaskQueueMoveDown ||
+-        payload->kind == PopupHitTest::Kind::TaskConflictInspectSource || payload->kind == PopupHitTest::Kind::TaskConflictInspectDestination ||
+-        payload->kind == PopupHitTest::Kind::TaskIssues)
++        payload->kind == PopupHitTest::Kind::TaskStartNow || payload->kind == PopupHitTest::Kind::TaskQueueMoveUp ||
++        payload->kind == PopupHitTest::Kind::TaskQueueMoveDown || payload->kind == PopupHitTest::Kind::TaskConflictInspectSource ||
++        payload->kind == PopupHitTest::Kind::TaskConflictInspectDestination || payload->kind == PopupHitTest::Kind::TaskIssues)
+     {
+         // OnActivatedHit returns 0 for these kinds even on success; self-test callers need a
+         // dispatched-successfully signal.
+@@ -16051,9 +15981,15 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                            metrics.top + metrics.height <= bounds.bottom - bounds.top + 0.5f;
+                 };
+                 const size_t taskIndex = static_cast<size_t>(std::distance(taskSnapshot.begin(), taskIt));
+-                const auto& pair       = graphIt->labelsInTaskSummary && taskIndex < _cardInformationLayouts.size() ? _cardInformationLayouts[taskIndex].rate
+-                                                                                                                    : _graphLabelLayouts[index];
+-                result.graphLabelsFit  = fits(pair.rate.get(), graphIt->rateLabelBounds) && fits(pair.eta.get(), graphIt->etaLabelBounds);
++                if (graphIt->labelsInTaskSummary && taskIndex < _cardInformationLayouts.size())
++                {
++                    const auto& information = _cardInformationLayouts[taskIndex];
++                    result.graphLabelsFit =
++                        fits(information.throughput.eta.get(), graphIt->rateLabelBounds) && fits(information.counts.eta.get(), graphIt->etaLabelBounds);
++                }
++                else
++                    result.graphLabelsFit = fits(_graphLabelLayouts[index].rate.get(), graphIt->rateLabelBounds) &&
++                                            fits(_graphLabelLayouts[index].eta.get(), graphIt->etaLabelBounds);
+             }
+         }
+ 
+@@ -16331,14 +16267,6 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                     result.taskThroughputDisclosureRect    = button.bounds;
+                 }
+                 break;
+-            case PopupHitTest::Kind::TaskToggleTechnical:
+-                if (result.found && button.hit.taskId == result.taskId)
+-                {
+-                    result.taskTechnicalButtonRect = button.bounds;
+-                    result.taskTechnicalLabelFits = i < _hostedButtons.size() && _hostedButtons[i] && hostedLabelFits(*_hostedButtons[i], button.bounds, false);
+-                    result.taskTechnicalExpanded = i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetDisclosureExpanded().value_or(false);
+-                }
+-                break;
+             case PopupHitTest::Kind::TaskStartNow:
+                 if (result.found && button.hit.taskId == result.taskId)
+                 {
+@@ -16462,8 +16390,18 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+             result.taskRateRect = descriptor.bounds;
+         else if (descriptor.automationId.ends_with(L".Throughput.Eta"))
+             result.taskEtaRect = descriptor.bounds;
+-        else if (descriptor.automationId.ends_with(L".TechnicalDetails"))
+-            result.taskTechnicalRect = descriptor.bounds;
++        else if (descriptor.automationId.ends_with(L".Progress.Counts"))
++        {
++            result.taskCountsRect = descriptor.bounds;
++            result.taskCountsText = descriptor.text;
++        }
++        else if (descriptor.automationId.ends_with(L".Throughput.Label"))
++            result.taskThroughputLabelRect = descriptor.bounds;
++        else if (descriptor.automationId.ends_with(L".Concurrency"))
++        {
++            result.taskConcurrencyRect = descriptor.bounds;
++            result.taskConcurrencyText = descriptor.text;
++        }
+     }
+     *snapshot = result;
+     return result.found ? 1 : 0;
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index 2b90ca486..ac291c669 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -60,7 +60,6 @@ struct PopupHitTest
+         TaskConflictInspectSource,
+         TaskConflictInspectDestination,
+         TaskIssues,
+-        TaskToggleTechnical,
+     };
+ 
+     Kind kind                 = Kind::None;
+@@ -574,10 +573,11 @@ struct PopupLayoutDebugSnapshot
+     D2D1_RECT_F taskPercentRect{};
+     D2D1_RECT_F taskRateRect{};
+     D2D1_RECT_F taskEtaRect{};
+-    D2D1_RECT_F taskTechnicalRect{};
+-    D2D1_RECT_F taskTechnicalButtonRect{};
+-    bool taskTechnicalLabelFits             = false;
+-    bool taskTechnicalExpanded              = false;
++    D2D1_RECT_F taskCountsRect{};
++    D2D1_RECT_F taskThroughputLabelRect{};
++    D2D1_RECT_F taskConcurrencyRect{};
++    std::wstring taskCountsText;
++    std::wstring taskConcurrencyText;
+     bool taskStatusGlyphSignalVisible       = false;
+     bool taskStatusTextSignalVisible        = false;
+     bool taskStatusColorBlindSafeEncoding   = false;
+@@ -1409,14 +1409,9 @@ private:
+     struct CardInformationLayout final
+     {
+         GraphLabelLayout progress;
+-        GraphLabelLayout rate;
+-        std::wstring technicalText;
+-        wil::com_ptr<IDWriteTextLayout> technical;
+-        wil::com_ptr<IDWriteTextFormat> technicalFormat;
+-        float technicalWidth  = 0.0f;
+-        float technicalHeight = 0.0f;
+-        float disclosureWidth = 0.0f;
+-        bool technicalOwnRow  = false;
++        GraphLabelLayout counts;
++        GraphLabelLayout throughput;
++        GraphLabelLayout concurrency;
+         std::wstring headerText;
+         std::wstring paintedHeader;
+         float headerWidth = 0.0f;
+@@ -1426,7 +1421,6 @@ private:
+     void PrepareFactPair(GraphLabelLayout& pair, std::wstring leading, std::wstring trailing, IDWriteTextFormat* format, float width, float leadingSlot = 0.0f);
+     [[nodiscard]] float FactPairHeight(const GraphLabelLayout& pair) const noexcept;
+     void DrawFactPair(const GraphLabelLayout& pair, const D2D1_RECT_F& bounds, uint64_t taskId, std::wstring_view leadingId, std::wstring_view trailingId);
+-    void DrawTechnicalDetails(const TaskSnapshot& task, const CardInformationLayout& information, float left, float right, float top);
+ 
+     struct ScalarAnimation final
+     {
+@@ -1507,9 +1501,9 @@ private:
+                             std::wstring_view overlayText,
+                             bool rainbowMode,
+                             bool perStreamBands,
+-                            bool showLabels                       = true,
+-                            const GraphLabelLayout* summaryLabels = nullptr,
+-                            float summaryTop                      = 0.0f) noexcept;
++                            bool showLabels               = true,
++                            const D2D1_RECT_F* rateBounds = nullptr,
++                            const D2D1_RECT_F* etaBounds  = nullptr) noexcept;
+     // I35 R10.2: the bottom of the labels the hosted graph draws inside its plot when they have no row
+     // above it (DxUi::ThroughputGraph: from 3 DIP below the top, each in its half of the width).
+     [[nodiscard]] float InPlotGraphLabelRowBottom(const D2D1_RECT_F& plot, std::wstring_view leading, std::wstring_view trailing) noexcept;
+@@ -1804,7 +1798,6 @@ private:
+     std::unordered_map<uint64_t, RateHistory> _rates;
+     std::unordered_map<uint64_t, bool> _collapsedTasks;
+     std::unordered_map<uint64_t, bool> _throughputExpandedTasks;
+-    std::unordered_set<uint64_t> _technicalExpandedTasks;
+     bool _preserveWindowSizeForThroughputChange = false;
+     std::unordered_set<uint64_t> _compactExpandedTasks;
+     std::unordered_map<uint64_t, TaskHeightAnimation> _taskHeightAnimations;
+diff --git a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+index 2147f9491..eb95c068d 100644
+--- a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
++++ b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+@@ -489,7 +489,13 @@ BEGIN
+     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
+     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} souborů, {1:L} složek"
+     IDS_FMT_FILEOPS_SELECTION_ITEMS "{0:L} položek"
+-    IDS_FILEOPS_TECHNICAL_DETAILS "Technické podrobnosti"
++    IDS_FILEOPS_COUNTING_FILES_FOLDERS "Počítání souborů a složek…"
++    IDS_FMT_FILEOPS_COUNTING_FOUND "Počítání… Nalezené složky: {0:L} · Nalezené soubory: {1:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS "Složky: {0:L} z {1:L} · Soubory: {2:L} z {3:L}"
++    IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS "Nalezené složky: {0:L} · Soubory: {1:L} z {2:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS "Nalezené složky: {0:L} · Nalezené soubory: {1:L}"
++    IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE "Počty souborů a složek nejsou dostupné"
++    IDS_FMT_FILEOPS_PARALLEL_TRANSFERS "Souběžné přenosy: nejvýše {0:L} (automaticky)"
+     IDC_REDSALAMANDER       "REDSALAMANDER"
+     IDS_CAPTION_ERROR       "Chyba"
+     IDS_CAPTION_WARNING     "Upozornění"
+@@ -1790,7 +1796,6 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Složka není prázdná. Zk
+     IDS_FILEOPS_BTN_PAUSE_ALL                             "Pozastavit vše"
+     IDS_FILEOPS_BTN_RESUME_ALL                            "Pokračovat vše"
+     IDS_FMT_FILEOPS_COMPLETED_GROUP                       "Dokončeno ({0:L})"
+-    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Automatická souběžnost: vyřešeno {0}, použito {1}"
+     IDS_FILEOPS_ISSUES_PANE_TITLE                         "Problémy při operacích se soubory"
+     IDS_FILEOPS_ISSUES_COL_TIME                           "Čas"
+     IDS_FILEOPS_ISSUES_COL_TASK                           "Úkol"
+diff --git a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+index d47f195d2..2d24bae59 100644
+--- a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
++++ b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+@@ -489,7 +489,13 @@ BEGIN
+     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
+     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} fichiers, {1:L} dossiers"
+     IDS_FMT_FILEOPS_SELECTION_ITEMS "{0:L} éléments"
+-    IDS_FILEOPS_TECHNICAL_DETAILS "Détails techniques"
++    IDS_FILEOPS_COUNTING_FILES_FOLDERS "Comptage des fichiers et dossiers…"
++    IDS_FMT_FILEOPS_COUNTING_FOUND "Comptage… Dossiers trouvés : {0:L} · Fichiers trouvés : {1:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS "Dossiers : {0:L} sur {1:L} · Fichiers : {2:L} sur {3:L}"
++    IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS "Dossiers trouvés : {0:L} · Fichiers : {1:L} sur {2:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS "Dossiers trouvés : {0:L} · Fichiers trouvés : {1:L}"
++    IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE "Nombre de fichiers et dossiers indisponible"
++    IDS_FMT_FILEOPS_PARALLEL_TRANSFERS "Transferts simultanés : maximum {0:L} (automatique)"
+     IDC_REDSALAMANDER       "REDSALAMANDER"
+     IDS_CAPTION_ERROR       "Erreur"
+     IDS_CAPTION_WARNING     "Avertissement"
+@@ -1790,7 +1796,6 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Le dossier n’est pas vide
+     IDS_FILEOPS_BTN_PAUSE_ALL                             "Tout suspendre"
+     IDS_FILEOPS_BTN_RESUME_ALL                            "Tout reprendre"
+     IDS_FMT_FILEOPS_COMPLETED_GROUP                       "Terminées ({0:L})"
+-    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Parallélisme automatique : résolu {0}, appliqué {1}"
+     IDS_FILEOPS_ISSUES_PANE_TITLE                         "Problèmes lors des opérations sur les fichiers"
+     IDS_FILEOPS_ISSUES_COL_TIME                           "Date"
+     IDS_FILEOPS_ISSUES_COL_TASK                           "Tâche"
+diff --git a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+index 8962da2ee..c722e6b2a 100644
+--- a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
++++ b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+@@ -489,7 +489,13 @@ BEGIN
+     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
+     IDS_FMT_FILEOPS_SELECTION_KINDS "ファイル {0:L} 個、フォルダー {1:L} 個"
+     IDS_FMT_FILEOPS_SELECTION_ITEMS "{0:L} 項目"
+-    IDS_FILEOPS_TECHNICAL_DETAILS "技術的な詳細"
++    IDS_FILEOPS_COUNTING_FILES_FOLDERS "ファイルとフォルダーを集計中…"
++    IDS_FMT_FILEOPS_COUNTING_FOUND "集計中… 検出したフォルダー: {0:L} ・ ファイル: {1:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS "フォルダー: {0:L}/{1:L} ・ ファイル: {2:L}/{3:L}"
++    IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS "検出したフォルダー: {0:L} ・ ファイル: {1:L}/{2:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS "検出したフォルダー: {0:L} ・ ファイル: {1:L}"
++    IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE "ファイルとフォルダーの件数を取得できません"
++    IDS_FMT_FILEOPS_PARALLEL_TRANSFERS "並列転送: 最大 {0:L}（自動）"
+     IDC_REDSALAMANDER       "レッドサラマンダー"
+     IDS_CAPTION_ERROR       "エラー"
+     IDS_CAPTION_WARNING     "警告"
+@@ -1790,7 +1796,6 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "フォルダーが空では
+     IDS_FILEOPS_BTN_PAUSE_ALL                             "すべて一時停止"
+     IDS_FILEOPS_BTN_RESUME_ALL                            "すべて再開"
+     IDS_FMT_FILEOPS_COMPLETED_GROUP                       "完了 ({0:L})"
+-    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "自動同時実行: 解決 {0}、適用 {1}"
+     IDS_FILEOPS_ISSUES_PANE_TITLE                         "ファイル操作の問題"
+     IDS_FILEOPS_ISSUES_COL_TIME                           "時間"
+     IDS_FILEOPS_ISSUES_COL_TASK                           "タスク"
+diff --git a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+index 7f49cabca..3d890aaa1 100644
+--- a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
++++ b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+@@ -489,7 +489,13 @@ BEGIN
+     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
+     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} súborov, {1:L} priečinkov"
+     IDS_FMT_FILEOPS_SELECTION_ITEMS "{0:L} položiek"
+-    IDS_FILEOPS_TECHNICAL_DETAILS "Technické podrobnosti"
++    IDS_FILEOPS_COUNTING_FILES_FOLDERS "Počítanie súborov a priečinkov…"
++    IDS_FMT_FILEOPS_COUNTING_FOUND "Počítanie… Nájdené priečinky: {0:L} · Nájdené súbory: {1:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS "Priečinky: {0:L} z {1:L} · Súbory: {2:L} z {3:L}"
++    IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS "Nájdené priečinky: {0:L} · Súbory: {1:L} z {2:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS "Nájdené priečinky: {0:L} · Nájdené súbory: {1:L}"
++    IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE "Počty súborov a priečinkov nie sú dostupné"
++    IDS_FMT_FILEOPS_PARALLEL_TRANSFERS "Súbežné prenosy: najviac {0:L} (automaticky)"
+     IDC_REDSALAMANDER       "REDSALAMANDER"
+     IDS_CAPTION_ERROR       "Chyba"
+     IDS_CAPTION_WARNING     "Upozornenie"
+@@ -1790,7 +1796,6 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Priečinok nie je prázdny.
+     IDS_FILEOPS_BTN_PAUSE_ALL                             "Pozastaviť všetky"
+     IDS_FILEOPS_BTN_RESUME_ALL                            "Obnoviť všetky"
+     IDS_FMT_FILEOPS_COMPLETED_GROUP                       "Dokončené ({0:L})"
+-    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Automatická súbežnosť: vyriešené {0}, použité {1}"
+     IDS_FILEOPS_ISSUES_PANE_TITLE                         "Problémy pri operáciách so súbormi"
+     IDS_FILEOPS_ISSUES_COL_TIME                           "Čas"
+     IDS_FILEOPS_ISSUES_COL_TASK                           "Úloha"
+diff --git a/RedSalamander/RedSalamander.rc b/RedSalamander/RedSalamander.rc
+index 244aefda3..4a89a94bb 100644
+--- a/RedSalamander/RedSalamander.rc
++++ b/RedSalamander/RedSalamander.rc
+@@ -626,7 +626,13 @@ BEGIN
+     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
+     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} files, {1:L} folders"
+     IDS_FMT_FILEOPS_SELECTION_ITEMS "{0:L} items"
+-    IDS_FILEOPS_TECHNICAL_DETAILS "Technical details"
++    IDS_FILEOPS_COUNTING_FILES_FOLDERS "Counting files and folders…"
++    IDS_FMT_FILEOPS_COUNTING_FOUND "Counting… Folders found: {0:L} · Files found: {1:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS "Folders: {0:L} of {1:L} · Files: {2:L} of {3:L}"
++    IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS "Folders found: {0:L} · Files: {1:L} of {2:L}"
++    IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS "Folders found: {0:L} · Files found: {1:L}"
++    IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE "File and folder counts unavailable"
++    IDS_FMT_FILEOPS_PARALLEL_TRANSFERS "Parallel transfers: up to {0:L} (automatic)"
+     IDS_APP_TITLE           "RedSalamander"
+     IDC_REDSALAMANDER       "REDSALAMANDER"
+     IDS_CAPTION_ERROR       "Error"
+@@ -2093,7 +2099,6 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "The folder is not empty. Ch
+     IDS_FILEOPS_BTN_PAUSE_ALL                             "Pause all"
+     IDS_FILEOPS_BTN_RESUME_ALL                            "Resume all"
+     IDS_FMT_FILEOPS_COMPLETED_GROUP                       "Completed ({0:L})"
+-    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Auto concurrency: resolved {0}, applied {1}"
+     IDS_FILEOPS_ISSUES_PANE_TITLE                         "File operation issues"
+     IDS_FILEOPS_ISSUES_COL_TIME                           "Time"
+     IDS_FILEOPS_ISSUES_COL_TASK                           "Task"
+diff --git a/RedSalamander/Resource.h b/RedSalamander/Resource.h
+index 0d8adc2a5..106914155 100644
+--- a/RedSalamander/Resource.h
++++ b/RedSalamander/Resource.h
+@@ -1231,7 +1231,6 @@
+ #define IDS_FILEOPS_ISSUES_COL_SOURCE 1073
+ #define IDS_FILEOPS_ISSUES_COL_DESTINATION 1074
+ #define IDS_FILEOPS_ISSUES_COL_STATUS_TEXT 1082
+-#define IDS_FMT_FILEOPS_AUTO_CONCURRENCY 1187
+ #define IDS_FILEOPS_STATUS_NEEDS_ATTENTION 1188
+ #define IDS_FILEOPS_DIAG_SKIPPED_ITEMS 1507
+ #define IDS_FILEOPS_ISSUES_OPERATION_UNKNOWN 1075
+@@ -1947,7 +1946,13 @@
+ #define IDS_FMT_FILEOPS_OPERATION_SUBJECT 50078
+ #define IDS_FMT_FILEOPS_SELECTION_KINDS 50079
+ #define IDS_FMT_FILEOPS_SELECTION_ITEMS 50080
+-#define IDS_FILEOPS_TECHNICAL_DETAILS 50081
++#define IDS_FILEOPS_COUNTING_FILES_FOLDERS 50100
++#define IDS_FMT_FILEOPS_COUNTING_FOUND 50101
++#define IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS 50102
++#define IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS 50103
++#define IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS 50104
++#define IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE 50105
++#define IDS_FMT_FILEOPS_PARALLEL_TRANSFERS 50106
+ #define IDS_FMT_FILEOPS_TRANSFER_AMOUNT 50082
+ #define IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE 50083
+ #define IDS_FILEOPS_DIAG_SAME_OBJECT 50084
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp
+index 49b3efcef..707b60f90 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp
+@@ -9050,16 +9050,19 @@ struct FileOperationsClipboardFlushProbe
+             state.Require(rateValid, L"UIA Collapse must retain a finite positive throughput summary rate.");
+             if (! rateValid)
+                 return false;
+-            const std::wstring expectedSummary =
+-                std::format(L"{} · {}",
+-                            FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(static_cast<uint64_t>(std::floor(rate + 0.5)))),
+-                            FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, L"01:20"));
+-            const std::wstring summaryId = std::format(L"FileOperations.Task.{}.ThroughputSummary", task.taskId);
+-            wil::com_ptr_nothrow<IRawElementProviderSimple> summaryProvider;
+-            std::wstring summaryHelp;
+-            state.Require(FindMatchingWindowHostRawProvider(popup.get(), 0, expectedSummary, summaryProvider.put(), summaryId) && summaryProvider &&
+-                              TryReadRawProviderStringProperty(*summaryProvider, UIA_HelpTextPropertyId, summaryHelp) && summaryHelp == expectedSummary,
+-                          L"UIA Collapse must publish the exact localized rate and ETA through the same task's summary provider.");
++            for (const std::wstring_view suffix : {L"Throughput.Rate", L"Throughput.Eta"})
++            {
++                const auto text =
++                    suffix == L"Throughput.Rate"
++                        ? FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(static_cast<uint64_t>(std::floor(rate + 0.5))))
++                        : FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, L"01:20");
++                const auto factId = std::format(L"FileOperations.Task.{}.{}", task.taskId, suffix);
++                wil::com_ptr_nothrow<IRawElementProviderSimple> factProvider;
++                std::wstring help;
++                state.Require(FindMatchingWindowHostRawProvider(popup.get(), 0, text, factProvider.put(), factId) && factProvider &&
++                                  TryReadRawProviderStringProperty(*factProvider, UIA_HelpTextPropertyId, help) && help == text,
++                              L"UIA Collapse must retain the exact localized speed and ETA in their separate task regions.");
++            }
+         }
+         if (! state.failure.empty())
+             return false;
+@@ -9117,16 +9120,19 @@ struct FileOperationsClipboardFlushProbe
+     if (summaryRateValid)
+     {
+         // DebugSetVisualScenario seeds an exact 80-second, closed-discovery ETA.
+-        const std::wstring expectedSummary =
+-            std::format(L"{} · {}",
+-                        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(static_cast<uint64_t>(std::floor(summaryRate + 0.5)))),
+-                        FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, L"01:20"));
+-        const std::wstring summaryId = std::format(L"FileOperations.Task.{}.ThroughputSummary", task.taskId);
+-        wil::com_ptr_nothrow<IRawElementProviderSimple> summaryProvider;
+-        std::wstring summaryHelp;
+-        state.Require(FindMatchingWindowHostRawProvider(popup.get(), 0, expectedSummary, summaryProvider.put(), summaryId) && summaryProvider &&
+-                          TryReadRawProviderStringProperty(*summaryProvider, UIA_HelpTextPropertyId, summaryHelp) && summaryHelp == expectedSummary,
+-                      L"Collapsed throughput must expose the exact localized rate and qualified ETA under the same task identity.");
++        for (const std::wstring_view suffix : {L"Throughput.Rate", L"Throughput.Eta"})
++        {
++            const auto text =
++                suffix == L"Throughput.Rate"
++                    ? FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(static_cast<uint64_t>(std::floor(summaryRate + 0.5))))
++                    : FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, L"01:20");
++            const auto factId = std::format(L"FileOperations.Task.{}.{}", task.taskId, suffix);
++            wil::com_ptr_nothrow<IRawElementProviderSimple> factProvider;
++            std::wstring help;
++            state.Require(FindMatchingWindowHostRawProvider(popup.get(), 0, text, factProvider.put(), factId) && factProvider &&
++                              TryReadRawProviderStringProperty(*factProvider, UIA_HelpTextPropertyId, help) && help == text,
++                          L"Collapsed throughput must retain its speed and qualified ETA under the same task identity.");
++        }
+     }
+     state.Require(! collapsed.taskThroughputExpanded && collapsed.taskThroughputSummaryVisible && collapsed.hostedGraphControlCount == 0u,
+                   L"Collapse must retain rate/ETA while removing the hosted graph and its accessible child.");
+@@ -9579,8 +9585,7 @@ struct FileOperationsClipboardFlushProbe
+         state.Require(discoveryLayout.graphLabelsOutsidePlot && discoveryLayout.graphLabelsFit &&
+                           discoveryLayout.graphRateLabelRect.left >= discoveryLayout.graphPlotRect.left &&
+                           discoveryLayout.graphEtaLabelRect.right <= discoveryLayout.graphPlotRect.right &&
+-                          (discoveryLayout.graphRateLabelRect.right <= discoveryLayout.graphEtaLabelRect.left ||
+-                           discoveryLayout.graphRateLabelRect.bottom <= discoveryLayout.graphEtaLabelRect.top),
++                          discoveryLayout.graphEtaLabelRect.bottom < discoveryLayout.graphRateLabelRect.top,
+                       std::format(L"French speed/ETA labels must fit, remain distinct, and sit entirely above the plot at {} DIP.", widthDip));
+         requirePath(LoadStringResource(nullptr, IDS_FILEOPS_LABEL_FROM), task.currentSourcePath, L"Source.0");
+         requirePath(LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), task.destinationFolder.native(), L"Destination");
+@@ -9654,8 +9659,8 @@ struct FileOperationsClipboardFlushProbe
+                       0u,
+                       stackedLabels.graphLabelsFit ? S_OK : E_FAIL);
+     state.Require(stackedLabels.graphLabelsOutsidePlot && stackedLabels.graphLabelsFit &&
+-                      stackedLabels.graphRateLabelRect.bottom < stackedLabels.graphEtaLabelRect.top,
+-                  L"Long French graph legends must stack, wrap completely, and remain above a positive plot.");
++                      stackedLabels.graphEtaLabelRect.bottom < stackedLabels.graphRateLabelRect.top,
++                  L"Long French ETA and throughput speed must wrap completely in their separate rows above a positive plot.");
+     std::array<RedSalamander::TestSupport::WindowScreenshotColorProbe, 2> longLabelProbes{};
+     const std::array longLabelBounds{stackedLabels.graphRateLabelRect, stackedLabels.graphEtaLabelRect};
+     for (size_t index = 0u; index < longLabelBounds.size(); ++index)
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp
+index d56942186..a523171fa 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp
+@@ -537,19 +537,18 @@ private:
+                                         task.discoveredDirectoryCount == kExpectedDirectories && task.discoveredTotalBytes == kExpectedBytes);
+             if (task.discoveryClosed)
+             {
+-                if (! painted.taskTechnicalExpanded && painted.taskTechnicalButtonRect.right > painted.taskTechnicalButtonRect.left)
+-                    static_cast<void>(DebugInvokeFileOperationsPopup(popup, {PopupHitTest::Kind::TaskToggleTechnical, task.taskId}));
+-                const std::wstring expectedCounts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOUND_FILE_COUNTS, kExpectedFiles, kExpectedDirectories);
+-                const std::wstring expectedSize   = FormatStringResource(nullptr,
+-                                                                         IDS_FMT_FILEOPS_TRANSFER_AMOUNT,
+-                                                                         FormatBytesCompact(painted.taskPaintedTransferCompletedBytes),
+-                                                                         FormatBytesCompact(kExpectedBytes));
+-                countRowSeen                      = countRowSeen || painted.taskPaintedDiscoveryText == expectedCounts;
++                const std::wstring expectedSize = FormatStringResource(nullptr,
++                                                                       IDS_FMT_FILEOPS_TRANSFER_AMOUNT,
++                                                                       FormatBytesCompact(painted.taskPaintedTransferCompletedBytes),
++                                                                       FormatBytesCompact(kExpectedBytes));
++                // The closed row includes changing completed-file numerators. The engine totals
++                // are asserted independently above; probe the actual painted/accessible row.
++                countRowSeen = countRowSeen || (totalsSeen && ! painted.taskCountsText.empty() && painted.taskCountsText == painted.taskPaintedDiscoveryText);
+                 if (countRowSeen && ! countCaptureAttempted)
+                 {
+                     ++countCaptureAttempts;
+                     RECT client{};
+-                    // Parallel stream rows can push Technical details below a short viewport.
++                    // Reveal the count row if a very small viewport has scrolled it out of view.
+                     // Reveal the owned scroll body and then restore the transfer view for the
+                     // independent per-file pixel witnesses; no foreground input is involved.
+                     bool detailsRevealed = true;
+@@ -888,8 +887,7 @@ private:
+                 if (attempted[index] || task.discoveredFileCount != prefix.files || task.discoveredDirectoryCount != prefix.directories ||
+                     task.discoveredTotalBytes != prefix.bytes)
+                     continue;
+-                const auto expected = FormatStringResource(
+-                    nullptr, IDS_FMT_FILEOPS_FOUND_FILE_COUNTS_SIZE_SO_FAR, prefix.files, prefix.directories, FormatBytesCompact(prefix.bytes));
++                const auto expected = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNTING_FOUND, prefix.directories, prefix.files);
+                 if (painted.taskPaintedDiscoveryText != expected)
+                     continue;
+                 attempted[index] = true;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
+index e4960d4d5..55fe68598 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp
+@@ -1876,14 +1876,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+             identity.totalItems += 1'000u;
+             passed = DebugBuildFileOperationsTaskHeaderText(identity, GetTickCount64()) == originalHeader && passed;
+         }
+-        passed = DebugResolveFileOperationsHostedButtonVariant(PopupHitTest::Kind::TaskToggleTechnical) == DxUi::ButtonVariant::Hyperlink &&
+-                 ResolveHostedTaskSpaceKeyRoute(PopupHitTest::Kind::TaskToggleTechnical, true, false) == HostedTaskSpaceKeyRoute::ControlActivation && passed;
+         for (const int width : {480, 960})
+         {
+             auto theme                  = ResolveAppTheme(width == 480 ? ThemeMode::Light : ThemeMode::Dark, L"CardHierarchy");
+             theme.reducedMotionOverride = true;
+             folder->ApplyTheme(theme);
+-            for (unsigned scene = 0u; scene < 13u; ++scene)
++            for (unsigned scene = 0u; scene < 24u; ++scene)
+             {
+                 TaskSnapshot task{};
+                 task.taskId                 = 0xCA4Du;
+@@ -1962,6 +1960,74 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                     task.totalItems                                                                       = 11u;
+                     task.completedItems                                                                   = 4u;
+                 }
++                std::wstring expectedCounts;
++                if (scene >= 13u)
++                {
++                    task.operation                = FILESYSTEM_COPY;
++                    task.discoveredFileCount      = 240u;
++                    task.discoveredDirectoryCount = 8u;
++                    task.copiedFileCount          = 12u;
++                    task.copiedFolderCount        = 2u;
++                    task.copiedFileCountKnown = task.copiedFolderCountKnown = task.discoveredBytesKnown = true;
++                    task.selection                                                                      = {L"Family archive", 1u, 0u, 1u, true};
++                    expectedCounts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS, 2u, 8u, 12u, 240u);
++                    if (scene == 14u || scene == 15u)
++                    {
++                        task.discoveryClosed      = false;
++                        task.discoveryAheadActive = true;
++                        if (scene == 14u)
++                        {
++                            task.discoveredFileCount = task.discoveredDirectoryCount = 0u;
++                            expectedCounts                                           = LoadStringResource(nullptr, IDS_FILEOPS_COUNTING_FILES_FOLDERS);
++                        }
++                        else
++                            expectedCounts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNTING_FOUND, 8u, 240u);
++                    }
++                    if (scene == 16u)
++                    {
++                        task.discoveryClosed  = false;
++                        task.discoverySkipped = true;
++                        expectedCounts.clear(); // The existing completed-work summary owns the skipped-counting counts.
++                    }
++                    if (scene == 17u)
++                    {
++                        task.operation            = FILESYSTEM_MOVE;
++                        task.copiedFileCountKnown = task.copiedFolderCountKnown = false;
++                        expectedCounts                                          = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOLDER_FILE_TOTALS, 8u, 240u);
++                    }
++                    if (scene == 18u)
++                    {
++                        task.autoTunedConcurrency       = 8u;
++                        task.effectiveConcurrencyBudget = 2u; // Display the effective limit, never the requested/resolved value or active file count.
++                    }
++                    if (scene == 19u)
++                    {
++                        task.operation           = FILESYSTEM_MOVE;
++                        task.discoveredFileCount = task.discoveredDirectoryCount = 0u;
++                        expectedCounts                                           = LoadStringResource(nullptr, IDS_FILEOPS_FILE_FOLDER_COUNTS_UNAVAILABLE);
++                    }
++                    if (scene == 20u)
++                        task.autoConcurrencyUsed = false;
++                    if (scene == 21u)
++                    {
++                        task.discoveredFileCount = task.discoveredDirectoryCount = 0u;
++                        task.copiedFileCount = task.copiedFolderCount = task.totalBytes = task.completedBytes = 0u;
++                        expectedCounts = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOLDER_FILE_PROGRESS, 0u, 0u, 0u, 0u);
++                    }
++                    if (scene == 22u)
++                    {
++                        task.copiedFolderCountKnown = false;
++                        expectedCounts              = FormatStringResource(nullptr, IDS_FMT_FILEOPS_FOUND_FOLDERS_FILE_PROGRESS, 8u, 12u, 240u);
++                    }
++                    if (scene == 23u)
++                    {
++                        renderer->debugGraphLabelText[0] = FormatStringResource(nullptr,
++                                                                                IDS_FMT_FILEOPS_RATE_WITH_STALL,
++                                                                                FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, L"57.6 MB"),
++                                                                                LoadStringResource(nullptr, IDS_FILEOPS_STALL_WAITING_DESTINATION));
++                        renderer->debugGraphLabelText[1] = LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE);
++                    }
++                }
+                 const bool collapsed = scene == 1u || scene == 3u || scene == 5u || scene == 6u || scene == 8u || scene == 9u;
+                 renderer->DebugSetVisualScenario({task}, collapsed, true);
+                 PlaceFileOpsGalleryWindow(popup.get(), monitors.front(), width, 600);
+@@ -1983,65 +2049,75 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                     (task.selection.singleName.empty() || task.selection.folderCount > 0u || layout.taskSubjectPaintedText.ends_with(L".mkv"));
+                 const bool paired =
+                     collapsed || task.finished || task.operation == FILESYSTEM_DELETE ||
+-                    ((scene == 10u ? layout.taskPercentRect.right <= layout.taskPercentRect.left
+-                                   : layout.taskAmountRect.right <= layout.taskPercentRect.left && layout.taskAmountRect.top == layout.taskPercentRect.top) &&
+-                     layout.taskAmountRect.bottom <= layout.taskRateRect.top &&
+-                     (layout.taskRateRect.right <= layout.taskEtaRect.left || layout.taskRateRect.bottom <= layout.taskEtaRect.top));
++                    ((layout.taskPercentRect.right <= layout.taskPercentRect.left ||
++                      (layout.taskAmountRect.right <= layout.taskPercentRect.left && layout.taskAmountRect.top == layout.taskPercentRect.top)) &&
++                     (layout.taskCountsText.empty() || layout.taskAmountRect.bottom <= layout.taskCountsRect.top) &&
++                     (layout.taskCountsText.empty() || layout.taskCountsRect.right <= layout.taskEtaRect.left ||
++                      layout.taskCountsRect.bottom <= layout.taskEtaRect.top) &&
++                     (layout.taskThroughputLabelRect.right <= layout.taskRateRect.left || layout.taskThroughputLabelRect.bottom <= layout.taskRateRect.top) &&
++                     layout.taskRateRect.right == layout.graphPlotRect.right);
+                 const bool headingFits = layout.taskSubjectRect.right <= layout.taskStatusChipPaintedRect.left;
+                 const bool detailsFit =
+-                    collapsed || (layout.taskTechnicalLabelFits && layout.taskTechnicalButtonRect.right > layout.taskTechnicalButtonRect.left);
++                    collapsed || task.finished || ! task.autoConcurrencyUsed ||
++                    (layout.taskConcurrencyText == FormatStringResource(nullptr, IDS_FMT_FILEOPS_PARALLEL_TRANSFERS, task.effectiveConcurrencyBudget) &&
++                     layout.taskConcurrencyRect.top > layout.taskPaintedActionRowRect.bottom &&
++                     layout.taskConcurrencyRect.bottom <= layout.taskPaintedCardRect.bottom);
+                 const bool graphFit =
+                     collapsed || task.finished || task.operation == FILESYSTEM_DELETE || (layout.graphLabelsFit && layout.graphLabelsOutsidePlot);
+                 const bool amountCorrect = scene < 10u || scene > 11u ||
+                                            layout.taskPaintedTransferText ==
+                                                FormatStringResource(nullptr, IDS_FMT_FILEOPS_COPIED_FILES, task.copiedFileCount, task.discoveredFileCount);
+-                passed                   = subjectCorrect && paired && headingFits && detailsFit && graphFit && amountCorrect && passed;
+-                const auto file          = std::format(L"scene{}-{}-{}dip.png", scene, language, width);
+-                passed                   = SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / file)) && passed;
+-                const auto manifestRow   = std::format("{}\t{}\t{}\t{}\t{}\t{}\n",
+-                                                       Common::Strings::Utf8FromUtf16ReplacingInvalid(file),
+-                                                       Common::Strings::Utf8FromUtf16ReplacingInvalid(language),
+-                                                       width == 480 ? "light" : "dark",
+-                                                       width,
+-                                                       GetDpiForWindow(popup.get()),
+-                                                       scene);
++                const bool countsCorrect = scene < 13u || layout.taskCountsText == expectedCounts;
++                const bool noUnexpectedConcurrency = task.autoConcurrencyUsed || layout.taskConcurrencyText.empty();
++                std::wstring accessibleCounts;
++                const bool accessibleCorrect = scene < 13u || expectedCounts.empty() ||
++                                               (renderer->DebugHostedRegionAccessibleTextForSelfTest(
++                                                    std::format(L"FileOperations.Task.{}.Progress.Counts", task.taskId), accessibleCounts, help) &&
++                                                accessibleCounts == expectedCounts);
++                passed = subjectCorrect && paired && headingFits && detailsFit && graphFit && amountCorrect && countsCorrect && noUnexpectedConcurrency &&
++                         accessibleCorrect && passed;
++                const auto file        = std::format(L"scene{}-{}-{}dip.png", scene, language, width);
++                passed                 = SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / file)) && passed;
++                const auto manifestRow = std::format("{}\t{}\t{}\t{}\t{}\t{}\n",
++                                                     Common::Strings::Utf8FromUtf16ReplacingInvalid(file),
++                                                     Common::Strings::Utf8FromUtf16ReplacingInvalid(language),
++                                                     width == 480 ? "light" : "dark",
++                                                     width,
++                                                     GetDpiForWindow(popup.get()),
++                                                     scene);
+                 manifest << manifestRow;
+-                AppendLog(std::format(L"CardHierarchy: {} found={} buttonOverlap={} subject={} paired={} heading={} details={}",
+-                                      file,
+-                                      layout.found,
+-                                      layout.taskHasVisibleButtonOverlap,
+-                                      subjectCorrect,
+-                                      paired,
+-                                      headingFits,
+-                                      detailsFit));
++                AppendLog(std::format(
++                    L"CardHierarchy: {} found={} buttonOverlap={} subject={} paired={} heading={} details={} graph={} counts={} accessible={} amount={}",
++                    file,
++                    layout.found,
++                    layout.taskHasVisibleButtonOverlap,
++                    subjectCorrect,
++                    paired,
++                    headingFits,
++                    detailsFit,
++                    graphFit,
++                    countsCorrect,
++                    accessibleCorrect,
++                    amountCorrect));
+                 if (scene == 0u)
+                 {
+-                    passed = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleTechnical, task.taskId}) && passed;
+-                    for (unsigned paint = 0u; paint < 2u; ++paint)
+-                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                     std::wstring technical;
+-                    const auto technicalId = std::format(L"FileOperations.Task.{}.TechnicalDetails", task.taskId);
+-                    PopupLayoutDebugSnapshot expandedLayout{};
+-                    expandedLayout.taskId = task.taskId;
+-                    passed                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), expandedLayout) && expandedLayout.taskTechnicalExpanded &&
+-                                            expandedLayout.taskTechnicalLabelFits && passed;
+-                    const bool expanded   = renderer->DebugHostedRegionAccessibleTextForSelfTest(technicalId, technical, help) &&
+-                                            technical.find(FormatStringResource(nullptr, IDS_FMT_FILEOPS_AUTO_CONCURRENCY, 4u, 4u)) != std::wstring::npos;
+-                    passed = expanded &&
+-                             SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(),
+-                                                                                        output / std::format(L"technical-{}-{}dip.png", language, width))) &&
+-                             passed;
+-                    passed = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, task.taskId}) && passed;
++                    passed                   = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(
++                                                   std::format(L"FileOperations.Task.{}.TechnicalDetails", task.taskId), technical, help) &&
++                                               passed;
++                    const auto concurrencyId = std::format(L"FileOperations.Task.{}.Concurrency", task.taskId);
++                    const auto countsId      = std::format(L"FileOperations.Task.{}.Progress.Counts", task.taskId);
++                    passed                   = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, task.taskId}) && passed;
+                     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+-                    passed = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(technicalId, technical, help) && passed;
++                    passed = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(concurrencyId, technical, help) &&
++                             ! renderer->DebugHostedRegionAccessibleTextForSelfTest(countsId, technical, help) && passed;
+                     passed = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, task.taskId}) && passed;
+                     for (unsigned paint = 0u; paint < 2u; ++paint)
+                         RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+-                    passed = renderer->DebugHostedRegionAccessibleTextForSelfTest(technicalId, technical, help) && passed;
+-                    passed = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleTechnical, task.taskId}) && passed;
+-                    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+-                    passed = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(technicalId, technical, help) && passed;
+-                    AppendLog(std::format(L"CardHierarchy technical disclosure: expanded={} accumulatedPass={}", expanded, passed));
++                    passed = renderer->DebugHostedRegionAccessibleTextForSelfTest(concurrencyId, technical, help) &&
++                             technical == FormatStringResource(nullptr, IDS_FMT_FILEOPS_PARALLEL_TRANSFERS, 4u) &&
++                             renderer->DebugHostedRegionAccessibleTextForSelfTest(countsId, technical, help) && passed;
++                    AppendLog(std::format(L"CardHierarchy inline facts: accumulatedPass={}", passed));
+                     passed = DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleThroughput, task.taskId}) && passed;
+                     for (unsigned paint = 0u; paint < 2u; ++paint)
+                         RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+diff --git a/Specs/UI/UI_FileOperationsPopup.md b/Specs/UI/UI_FileOperationsPopup.md
+index cd62169ab..bcca0ecf2 100644
+--- a/Specs/UI/UI_FileOperationsPopup.md
++++ b/Specs/UI/UI_FileOperationsPopup.md
+@@ -1,6 +1,6 @@
+ # File Operations Popup UI Contract
+ 
+-Last updated: 2026-10-04
++Last updated: 2026-10-19
+ 
+ This spec covers the hybrid Direct2D/DirectWrite and hosted DxUi File Operations progress popup surface in:
+ 
+@@ -343,28 +343,40 @@ For normal expanded Copy/Move cards the order is:
+ 2. Transferred amount/known nonzero byte total at the left, known whole-task percentage at the right.
+    Copy uses copied-file counts when its byte total is unknown or zero; without known file counts it
+    shows bytes written. Selected-root counts never stand in for recursive Copy progress.
+-3. Speed at the left and remaining time at the right, with the existing honest unknown/provisional rules.
++3. Recursive folder/file counts at the left and remaining time at the right, directly under the
++   amount. With authoritative completed counts, use `Folders: {completed} of {total} · Files:
++   {completed} of {total}`; a completed folder means its operation has finished, including its
++   children. If only file completion is known, show folders found and completed/total files.
++   Routes without completion receipts (including Move) show explicitly labeled found totals.
++   Missing counts show `File and folder counts unavailable`, never a fabricated zero or a
++   selected-root `Items: 0/1`. While totals are open, show `Counting files and folders…` or
++   `Counting… Folders found: N · Files found: N`, without a growing denominator or percentage.
++   Byte progress remains above this row. ETA retains the existing unknown/provisional rules.
+ 4. Full-width overall progress, then source/current-file and destination rows.
+ 5. Full-width Throughput history, retaining its existing expanded default and remembered preference.
+-   Hiding the plot keeps the same first-level Rate/Eta regions above the paths; it does not add a
+-   duplicate combined summary below them. Collapsing/reopening the card preserves the plot choice.
+-6. Primary actions at the left and Technical details at the right.
+-
+-Paired facts use measured text and wrap when they cannot fit together. Technical details moves to
+-its own trailing-aligned row when the action lane would become too small. Its body uses the smaller
+-secondary text format and contains item counters, Copy discovery/copied counters, and automatic
+-concurrency's resolved/applied values. These settings and counters do not precede progress or paths.
+-The task-owned keyboard-accessible labeled button exposes expanded state, retains its choice
+-through card collapse, and drops its state when the task is removed. Closing it removes its body
+-from the retained accessible tree. The pinned DxUi Disclosure chrome is chevron-only, so this
+-labeled control uses text-link chrome while retaining the native expanded-state accessibility
+-contract. Error outcomes and conflict decisions retain their existing
++   Its disclosure and label lead the heading; the live speed is right-aligned on that heading.
++   A long speed/stall label wraps below the label, still aligned to the content's right edge.
++   Hiding the plot retains this heading and speed, and the ETA beside the counts above the paths;
++   no duplicate combined summary is added. Collapsing/reopening the card preserves the plot choice.
++6. Primary actions, followed by the automatic-concurrency note in smaller secondary text:
++   `Parallel transfers: up to N (automatic)`. N is the effective applied budget, not the resolved
++   auto-tuning recommendation and not the number of currently active streams. Do not show the
++   note for an unknown/zero limit, manual mode or a completed task. It wraps at narrow widths.
++
++Paired facts use measured text and wrap when they cannot fit together. The ordinary card has no
++Technical details button or selected-root progress fraction. Count, ETA, speed and concurrency
++regions expose their complete localized text to accessibility and tooltips; collapsing the card
++removes its body regions and reopening it restores the current facts. The concurrency note is
++read-only and adds no focus stop. It uses the existing secondary text color, including high-contrast
++theme handling. The Issues pane retains its separate Technical details, logs and exports.
++Skipped counting retains its existing completed-work summary instead of duplicating counts;
++an open traversal never renders a final denominator. Error outcomes and conflict decisions retain their existing
+ priority, precise facts and safe actions; Delete retains its item-based presentation.
+ 
+ Selection facts require no new provider query or traversal. Layout caches are bounded by snapshot
+ rows, invalidated by text/width/format changes and share measured paired-text preparation with the
+ graph. `FileOps_ReviewRemediationContracts` validates owned-window captures, exact accessible
+-subjects, painted paired geometry and Technical details transitions without activation. Its
++subjects, painted count/ETA and throughput/speed geometry, effective-limit text and body/plot transitions without activation. Its
+ `card-hierarchy/scenarios.tsv` records language, theme, client width and actual DPI; build/run
+ provenance and rendering metrics are archived with the captures under `Specs/TestRuns/`.
+ 
+@@ -1881,8 +1893,11 @@ the source…`, or `Waiting for storage…` when neither or both sides are high-
+ not reported progress yet is starting, not stalled. Paused and queued tasks and a task waiting for a
+ decision move nothing by design: they show no speed and no stall, and measuring restarts when they
+ continue. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+-The graph's rate and ETA labels are laid out as if the widest stalled rate label were shown, so a
+-stall name that appears or goes never moves the labels or the plot.
++Copy/Move keeps the speed's right edge fixed on the Throughput heading; the ETA has its independent
++row beside the counts. Measure the full current speed/stall text, wrapping it below the heading's
++label when necessary and reserving that complete height above the plot. A wrapped stall label can
++therefore increase the heading height. Other paired graph-label layouts retain their reserved
++widest-stalled-rate slot, so the stall suffix does not change their shared-row placement.
+ 
+ The ETA divides the remaining work by the displayed speed (smoothed over about 1.5 s) and is hidden
+ while the speed is unknown or below 1 B/s. A silence of 40 s therefore ends at exactly zero with no
+@@ -1906,8 +1921,10 @@ The popup graph uses the shared `DxUi::ThroughputGraph` primitive. It shows:
+ - per-stream colored bands when concurrent transfer streams are present,
+ - the current displayed speed as a labeled marker (only the speed the rate model publishes; never an
+   older plotted sample),
+-- the smoothed remaining time right-aligned beside the left-aligned bandwidth above the plot, or
+-  below it when the measured localized labels cannot share a row.
++- on ordinary Copy/Move cards, the displayed speed right-aligned beside Throughput and the smoothed
++  remaining time right-aligned beside the counts above the paths; both remain outside the plot,
++- on other graph presentations, paired bandwidth/remaining-time labels above the plot, wrapping
++  into separate rows when the measured localized labels cannot share a row.
+ 
+ Throughput is expanded by default and has a keyboard-accessible `Débit` disclosure. Persist its
+ last explicit expanded/collapsed choice as `fileOperations.popupThroughputExpanded` (default `true`),
+@@ -1927,17 +1944,22 @@ The [focused Debug reload/restart receipt](../TestRuns/4cb089111a23/Commands/202
+ covers the real watcher and three sequential owned application processes. Final integrated
+ Release, native mixed-DPI/AT and resource acceptance remain separate gates.
+ 
+-A collapsed graph removes its plot and graph-specific UIA child, not useful information: current
+-rate and qualified ETA remain on one measured summary row. Expanded graphs place those same values
+-in a measured label area above the plot without duplicate marker labels. Cache the two DirectWrite
+-layouts by text, font and available width, with explicit near paragraph alignment and wrapping.
+-Stack labels when their measured widths plus spacing exceed the row; reserve their complete height
+-before the positive plot bounds. Keep the numeric current-rate marker in the shared graph. The
+-consumer's prepared client layer paints these labels; the shared graph remains the sole plot painter.
+-Retain at most two live layouts per visible expanded graph and release retired/collapsed slots.
+-Each label has its complete tooltip/UIA name and help on its actual rectangle, with stable
+-`FileOperations.Task.<id>.Throughput.Rate` and `.Eta` automation IDs. The visible summary or expanded
+-graph's accessible help retains both values. Unknown values remain explicit; no ETA is invented.
++A collapsed graph removes its plot and graph-specific UIA child, while retaining current speed and
++qualified ETA. For ordinary Copy/Move, retain speed in the Throughput heading and ETA beside the
++counts above the paths, as specified in the card hierarchy; do not add a combined summary. Other
++graph presentations keep their paired summary above the plot. Expanded graphs reuse their visible
++labels without duplicate marker text. Cache measured DirectWrite layouts by text, font and available
++width, with explicit near paragraph alignment and wrapping. When a paired row cannot fit, stack its
++facts and reserve their complete measured height before positive plot bounds. Keep the numeric
++current-rate marker in the shared graph. The consumer's prepared client layer paints the labels;
++the shared graph remains the sole plot painter.
++Graph-owned paired slots retain at most two live layouts per visible expanded graph and release
++retired/collapsed slots. Copy/Move's card-owned amount, counts/ETA, heading/speed and concurrency
++pairs are separately bounded by snapshot rows; plot collapse retains the heading and ETA layouts.
++Each fact has its complete tooltip/UIA name and help on its actual rectangle, with stable
++`FileOperations.Task.<id>.Throughput.Rate` and `.Eta` automation IDs. Copy/Move exposes these as
++independent regions in either plot state; the expanded graph's accessible help also retains both
++values. Unknown values remain explicit; no ETA is invented.
+ A conflict or queued card still has no transfer graph regardless of preference.
+ Disclosure has UIA ExpandCollapse state and a visible chevron; collapsing returns focus to its header
+ if a child owned focus. It preserves the task's scroll anchor, pause/cancel controls and window
+diff --git a/docs/FileOperations.md b/docs/FileOperations.md
+index 729de2488..6b11efce1 100644
+--- a/docs/FileOperations.md
++++ b/docs/FileOperations.md
+@@ -32,7 +32,8 @@ The **File Operations** popup opens automatically when an operation is still run
+ Each task shows:
+ 
+ - Operation and original subject on the left, with status on the right. One selected file or folder keeps its name; a selection keeps its file/folder counts (or item count when kinds are unknown), including when the card is collapsed or finished.
+-- Expanded Copy/Move cards pair transferred amount with percentage, then speed with remaining time. Overall progress sits above the source/destination paths and throughput history. Short facts wrap when needed.
++- Expanded Copy/Move cards pair transferred amount with percentage. Directly below, folder/file counts sit beside remaining time. Overall progress sits above the source/destination paths and throughput history. Short facts wrap when needed.
++- Folder/file fractions count successfully completed objects inside the selection, including nested files. A folder completes when its operation and children finish. When a route supplies totals without completion counts, the card labels them **Folders found** and **Files found**. Unavailable counts are stated explicitly.
+ - When a Copy's byte total is unknown, it shows copied-file counts when available, otherwise bytes written, and keeps the progress indeterminate. A known zero-byte selection can show file progress.
+ - **From** / **To** (or **Deleting**) paths
+ - Item/byte progress and “Remaining” time (once the totals are final; while items are still being counted, live counters are shown instead, see [“Counting items…” and totals](#counting-items-and-totals))
+@@ -43,8 +44,7 @@ Each task shows:
+ Task controls (what you can click):
+ 
+ - **Collapse/expand**: hide/show details while keeping the operation's original name or selection summary visible. Long names shorten in the middle; their full text remains available to accessibility and in the tooltip.
+-- **Technical details**: show item counters and automatic concurrency's resolved/applied values in smaller text. It sits beside the main actions when space permits and below them in narrow cards. Its open/closed state survives collapsing the card.
+-- **Throughput**: hide or show the history plot. Speed and remaining time stay visible above the paths, and your plot choice survives collapsing the card.
++- **Throughput**: hide or show the history plot. Speed stays at the right of the Throughput heading, and remaining time stays beside the counts above the paths. Your plot choice survives collapsing the card.
+ - **Pause / Resume**: pauses the task at the next safe checkpoint.
+ - **Cancel**: requests cancellation of only that task; its card shows Stopping until the worker reaches a safe stop and the final result is known.
+ - **Skip counting**: shown while the card is counting ahead of the work. It stops the count from running ahead so the operation can use its full speed. It does not skip any check (see [“Counting items…” and totals](#counting-items-and-totals)).
+@@ -58,6 +58,11 @@ Task controls (what you can click):
+ - **More...** *(completed tasks with diagnostics)*: opens **Show log** and **Export issues** actions.
+ - **Dismiss**: removes a completed task summary from the popup.
+ 
++When automatic parallelism is in use, a small line below the action buttons reads
++**Parallel transfers: up to N (automatic)**. This is the effective maximum, so fewer files can
++be active at a particular moment. These routine facts are visible directly on the expanded card;
++there is no separate Technical details button. The Issues pane still provides detailed diagnostics.
++
+ If a source file or folder disappears before a queued Copy or Move reaches it, the task fails with
+ a source-not-found explanation and asks you to check the original location and start again. Its
+ result lists the missing item separately; it does not say that the item was left in place or offer
+@@ -84,8 +89,8 @@ RedSalamander does not scan a folder tree twice just to get totals. Copy, Move a
+ 
+ While the count is still open, the totals are not final, so the card shows what is known instead of guessing:
+ 
+-- **Found so far** shows what has been counted, for example `Found so far: <size> · N items`, next to a small animated three-dot signal. It reads `Nothing counted yet` before the first item is found, and shows only an item count (`Found so far: N items`) when no sizes are available.
+-- A second line shows the work done so far: `Transferred: <size> · N items` (`Deleted: <size> · N items` for Delete).
++- Copy/Move shows bytes written first, followed by **Counting files and folders…** or **Counting… Folders found: N · Files found: N**, next to the counting signal. Found counts are provisional, and are not completed counts.
++- Delete retains its **Found so far** row and separate work-done row, including committed file/folder counts when the provider supplies them.
+ - The progress bar is indeterminate (a moving bar) instead of filling to a percentage, because the total can still grow. The card never shows a fraction of a growing total.
+ - Once data is moving at a steady speed, a provisional **Remaining** time can appear, marked `(still counting)`. It can go up or down while the count goes on, and it is hidden while the task is paused or stalled.
+ 
+diff --git a/docs/res/file-operations-popup.png b/docs/res/file-operations-popup.png
+index b253b45a9..0c6206166 100644
+Binary files a/docs/res/file-operations-popup.png and b/docs/res/file-operations-popup.png differ
+diff --git a/docs/res/file-operations-popup.provenance.json b/docs/res/file-operations-popup.provenance.json
+index 06e716011..5079c381d 100644
+--- a/docs/res/file-operations-popup.provenance.json
++++ b/docs/res/file-operations-popup.provenance.json
+@@ -1,17 +1,17 @@
+ {
+   "kind": "native-production-renderer-harness-capture",
+-  "scenario": "FileOps_ReviewRemediationContracts/card-hierarchy/scene0",
+-  "description": "Expanded running Move; fixture snapshot only, no admitted operation on displayed paths.",
+-  "sourceRunId": "20261016T173738Z-83008-21037ccaa05048f38559cb8314746aa0",
+-  "source": "Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_card-hierarchy-closeout/captures/layout/card-hierarchy/scene0-en-US-960dip.png",
+-  "sha256": "73fe7193d57fec52e59a2c78fbbfb767373f3ba51fead0de3cf5cc10516c15e0",
++  "scenario": "FileOps_ReviewRemediationContracts/card-hierarchy/scene13",
++  "description": "Expanded running Copy with recursive completion counts; synthetic fixture, no operation on displayed paths.",
++  "sourceRunId": "20261019T074800Z-93124-e2af00322c84424c95b204bdd1774620",
++  "source": "Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_card-counts-throughput/captures/candidate/scene13-en-US-960dip.png",
++  "sha256": "98bd979e7e0c8ffd33c26fc8d06f319ee346fc69df40a9efec2de4cc7d515695",
+   "build": {
+     "configuration": "Debug",
+     "testsEnabled": true,
+-    "gitHead": "761c6b622972d49f1674ff2fd322ea0aab738e0b",
++    "gitHead": "14c82ff264a7b3cfd300104647de061abf60ab5c",
+     "platform": "x64",
+-    "sourceSnapshotId": "c4566839c3d9746d8e474d9fffca58f17f58dc50a04a547e8e30944722380153",
+-    "receiptId": "c6667ebbe6f3397737f731ef836a606ef6dbb0726b6e00838e2c7532b50d19b1"
++    "sourceSnapshotId": "a0e406399e70240239de4c4fb905ff419b0c5e6ff00e4814b27410018d72d70f",
++    "receiptId": "4cbc6a08e5609eee5a6e6c85113a4ca1faccb5eeb111a3cabf73c6ae6f23e29f"
+   },
+   "display": {
+     "numberFormat": "system fr-FR",
+@@ -26,5 +26,5 @@
+     "wholeFrame": true,
+     "imageEdits": "none"
+   },
+-  "limits": "Qualifies this deterministic native layout at 144 DPI; not real storage performance, Full, Release, ARM64 or foreground input."
++  "limits": "Deterministic native layout at 144 DPI; passing capture run and warning-free x64 Debug build. Not storage performance, Full, Release, ARM64 or foreground-input qualification."
+ }

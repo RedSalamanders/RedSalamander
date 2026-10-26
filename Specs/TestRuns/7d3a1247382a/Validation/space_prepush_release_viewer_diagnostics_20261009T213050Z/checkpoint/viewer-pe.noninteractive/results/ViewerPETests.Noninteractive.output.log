@@ -1,0 +1,1251 @@
+[PASS] Viewer harness timeout fixture owns a fresh readiness event
+[PASS] __Internal_ViewerHarnessBlockedChild harness path resolves
+[PASS] __Internal_ViewerHarnessBlockedChild fresh harness kill-on-close job object is created
+[PASS] __Internal_ViewerHarnessBlockedChild fresh harness kill-on-close job object is configured
+[PASS] __Internal_ViewerHarnessBlockedChild fresh harness process launches
+[PASS] __Internal_ViewerHarnessBlockedChild fresh harness process joins the kill-on-close job
+[PASS] __Internal_ViewerHarnessBlockedChild fresh harness process resumes
+[PASS] Viewer harness blocked child reaches its intentional wait before the timeout
+[PASS] Viewer harness can observe only its blocked child's top-level windows
+[PASS] Viewer harness private blocked child reaches the deliberate timeout
+[PASS] __Internal_ViewerHarnessBlockedChild parent terminates only its owned unfinished child
+[PASS] __Internal_ViewerHarnessBlockedChild parent joins its terminated child
+[PASS] __Internal_ViewerHarnessBlockedChild owned job has no active processes before desktop restoration
+[PASS] Viewer harness deliberate timeout retains a verified containment boundary
+[PASS] Viewer harness blocked child has no top-level window before termination
+[PASS] Viewer harness joins the child and observes an empty job before releasing its job owner
+ViewerPETests passed.
+[PASS] ViewerPE blocked-read test executable path resolves
+[PASS] ViewerPE blocked-read fixtures are present
+[PASS] ViewerPE.dll loads for blocked-read validation
+[PASS] ViewerPE factory resolves for blocked-read validation
+[PASS] ViewerPE instance is created for blocked-read validation
+[PASS] ViewerPE accepts an oversized-provider parse request
+[PASS] ViewerPE rejects the reported 256 MiB plus one byte source with a terminal error
+[PASS] ViewerPE queries the oversized source exactly once
+[PASS] ViewerPE rejects an oversized source before issuing any Read
+[PASS] ViewerPE exact-reader fixture has a bounded nonempty size
+[PASS] ViewerPE accepts the seek-position mismatch test request
+[PASS] ViewerPE rejects a provider that lies about the initial seek position
+[PASS] ViewerPE rejects the seek mismatch before reading bytes
+[PASS] ViewerPE accepts the premature-EOF test request
+[PASS] ViewerPE rejects premature EOF before the committed GetSize byte count
+[PASS] ViewerPE accepts the trailing-byte test request
+[PASS] ViewerPE rejects bytes beyond the committed GetSize byte count
+[PASS] ViewerPE accepts the impossible over-return test request
+[PASS] ViewerPE rejects Read counts larger than the requested buffer
+[PASS] ViewerPE first blocking-read events are created
+[PASS] ViewerPE starts the first blocked parse
+[PASS] ViewerPE first parse reaches the blocking Read while its window stays responsive
+[PASS] ViewerPE accepts a replaceable middle parse request
+[PASS] ViewerPE accepts the latest parse request
+[PASS] ViewerPE does not start the replaceable middle request while one Read is active
+[PASS] ViewerPE first blocking Read exits after release
+[PASS] ViewerPE runs the latest pending request after the blocked request exits
+[PASS] ViewerPE permanently drops the superseded middle request
+[PASS] ViewerPE caps each file-system Read request at one MiB
+[PASS] ViewerPE latest-wins request reaches a successful terminal parse
+[PASS] ViewerPE arms the result-allocation terminal-delivery fault
+[PASS] ViewerPE result-allocation failure leaves loading through the scheduler fallback
+[PASS] ViewerPE result-allocation terminal fallback preserves the current window
+[PASS] ViewerPE arms the payload-post terminal-delivery fault
+[PASS] ViewerPE payload-post failure leaves loading through the scheduler fallback
+[PASS] ViewerPE payload-post terminal fallback preserves the current window
+[PASS] ViewerPE close-path blocking-read events are created
+[PASS] ViewerPE starts the close-path blocked parse
+[PASS] ViewerPE close-path parse reaches the blocking Read
+[PASS] ViewerPE Close succeeds while Read remains blocked
+[PASS] ViewerPE Close returns within 500 ms instead of joining the blocked Read (elapsed=29 ms)
+[PASS] ViewerPE window is destroyed before the blocked Read is released
+[PASS] ViewerPE close-path Read request remains capped at one MiB
+[PASS] ViewerPE worker keeps its DLL module loaded after the window and caller references are released
+[PASS] ViewerPE cancelled worker exits after the provider releases Read
+[PASS] ViewerPE worker releases its module pin after cancelled work exits
+ViewerPETests passed.
+[PASS] UTF-8 escaper emits no literal '<'
+[PASS] UTF-8 escaper output cannot terminate <script>
+[PASS] UTF-8 escaper neutralizes the <!-- comment opener
+[PASS] UTF-8 escaper encodes '<' as the inert \x3C escape
+[PASS] UTF-8 escaper neutralizes raw U+2028
+[PASS] UTF-8 escaper neutralizes raw U+2029
+[PASS] UTF-8 escaper encodes U+2028/U+2029 as \u escapes
+[PASS] UTF-8 escaper leaves a non-separator 0xE2 byte intact
+[PASS] UTF-8 escaper escapes double quotes
+[PASS] UTF-8 escaper escapes backslashes
+[PASS] UTF-8 escaper escapes newlines with no raw newline left
+[PASS] Wide escaper emits no literal '<'
+[PASS] Wide escaper encodes '<' as the inert \x3C escape
+[PASS] Wide escaper neutralizes raw U+2028
+ViewerPETests passed.
+[PASS] ViewerWeb raw response is CSP sandboxed
+[PASS] ViewerWeb raw response denies resources by default
+[PASS] ViewerWeb raw response denies document script
+[PASS] ViewerWeb raw response denies network, frame, object, base, and form capabilities
+[PASS] ViewerWeb raw response never enables inline script
+[PASS] ViewerWeb raw response leaves encoding selection to BOM/meta sniffing
+[PASS] ViewerWeb generated response retains its bundled inline renderer
+[PASS] ViewerWeb generated response still denies network and frames
+[PASS] ViewerWeb external navigation defaults to blocked
+[PASS] ViewerWeb configuration has a finite 64 MiB hard ceiling
+[PASS] ViewerWeb permits only its exact active top-level document
+[PASS] ViewerWeb permits a fragment on the exact active document
+[PASS] ViewerWeb blocks query changes on the active document URL
+[PASS] ViewerWeb blocks frame navigation even to the active document URL
+[PASS] ViewerWeb blocks non-allowlisted file navigation
+[PASS] ViewerWeb blocks non-http new windows
+[PASS] ViewerWeb blocks external navigation under the default setting
+[PASS] ViewerWeb blocks non-user-initiated external navigation
+[PASS] ViewerWeb permits an explicit user-initiated https system-browser open
+[PASS] ViewerWeb never opens frame navigation externally
+[PASS] ViewerWeb running-byte guard accepts an exact-limit read
+[PASS] ViewerWeb running-byte guard rejects the first byte over limit
+[PASS] ViewerWeb running-byte guard rejects integer overflow
+[PASS] ViewerWeb generated output limit has deterministic fixed and expansion allowances
+[PASS] ViewerWeb accepts generated output at the exact limit
+[PASS] ViewerWeb rejects generated output before publishing the first byte over limit
+[PASS] ViewerWeb converts UTF-16LE incrementally within the output bound
+[PASS] ViewerWeb rejects UTF-16 expansion before output exceeds its bound
+[PASS] ViewerWeb rejects a truncated UTF-16 code unit
+[PASS] ViewerWeb chunked conversion preserves a surrogate pair at a chunk boundary
+[PASS] ViewerWeb retains a staged path when immediate and delayed cleanup both fail
+[PASS] ViewerWeb later quiet-point retry removes the retained staged path
+[PASS] ViewerWeb debug snapshot starts with no document route
+ViewerPETests passed.
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput harness path resolves
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness kill-on-close job object is created
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness kill-on-close job object is configured
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness process launches
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness process joins the kill-on-close job
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness process resumes
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness process exits before timeout
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness process reports an exit code
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput fresh harness run passes
+[PASS] TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput owned job has no active processes before desktop restoration
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead harness path resolves
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness kill-on-close job object is created
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness kill-on-close job object is configured
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness process launches
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness process joins the kill-on-close job
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness process resumes
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness process exits before timeout
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness process reports an exit code
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead fresh harness run passes
+[PASS] TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead owned job has no active processes before desktop restoration
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments harness path resolves
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness kill-on-close job object is created
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness kill-on-close job object is configured
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness process launches
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness process joins the kill-on-close job
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness process resumes
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness process exits before timeout
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness process reports an exit code
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments fresh harness run passes
+[PASS] TestViewerWebEscapesScriptBreakoutInGeneratedDocuments owned job has no active processes before desktop restoration
+[PASS] TestViewerWebSecurityPolicyAndBounds harness path resolves
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness kill-on-close job object is created
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness kill-on-close job object is configured
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness process launches
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness process joins the kill-on-close job
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness process resumes
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness process exits before timeout
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness process reports an exit code
+[PASS] TestViewerWebSecurityPolicyAndBounds fresh harness run passes
+[PASS] TestViewerWebSecurityPolicyAndBounds owned job has no active processes before desktop restoration
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps harness path res[PASS] ViewerWeb security harness resolves its executable path
+[PASS] ViewerWeb.dll is present for the security harness
+[PASS] ViewerWeb.dll loads for the security harness
+[PASS] ViewerWeb security harness resolves the factory
+[PASS] ViewerWeb security harness TestSandbox root is available
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb security harness obtains the Web schema
+[PASS] ViewerWeb schema publishes the 64 MiB hard ceiling
+[PASS] ViewerWeb schema publishes blocked external navigation
+[PASS] ViewerWeb opens hostile HTML through a virtual filesystem
+[PASS] ViewerWeb hostile virtual HTML window becomes visible
+[PASS] ViewerWeb WebView2 source observes the private viewer origin
+[PASS] ViewerWeb disables the actual WebView2 script setting for raw HTML
+[PASS] ViewerWeb classifies hostile HTML as private-origin content
+[PASS] ViewerWeb raw HTML does not create a staging file
+[PASS] ViewerWeb reports accepted UTF-16 BOM raw source bytes
+[PASS] ViewerWeb allowlists only the generated private document URL
+[PASS] ViewerWeb never navigates virtual raw HTML through file://
+[PASS] ViewerWeb reads the accepted UTF-16 BOM virtual HTML exactly once within the cap
+[PASS] ViewerWeb private-origin harness closes cleanly
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb opens a virtual PDF
+[PASS] ViewerWeb virtual PDF window becomes visible
+[PASS] ViewerWeb virtual PDF navigation completes
+[PASS] ViewerWeb virtual PDF navigation succeeds
+[PASS] ViewerWeb virtual PDF keeps document script disabled
+[PASS] ViewerWeb virtual PDF uses its constrained staged file URL
+[PASS] ViewerWeb tracks the virtual PDF staging path
+[PASS] ViewerWeb PDF allowlist always names a collision-safe .pdf path
+[PASS] ViewerWeb virtual PDF staging artifact exists while active
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb opens a local PDF
+[PASS] ViewerWeb local PDF window becomes visible
+[PASS] ViewerWeb local PDF navigation completes
+[PASS] ViewerWeb local PDF navigation succeeds
+[PASS] ViewerWeb local PDF keeps document script disabled
+[PASS] ViewerWeb local PDF uses its constrained file URL
+[PASS] ViewerWeb also stages local PDFs through the provider trust boundary
+[PASS] ViewerWeb PDF allowlist always names a collision-safe .pdf path
+[PASS] ViewerWeb local PDF staging artifact exists while active
+[PASS] ViewerWeb deletes every staged PDF after the WebView2 quiet point
+[PASS] ViewerWeb deletes every staged PDF after the WebView2 quiet point
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb advertised-size rejection case starts
+[PASS] ViewerWeb advertised-size rejection case reaches its byte guard
+[PASS] ViewerWeb advertised-size rejection case stops at the expected read boundary
+[PASS] ViewerWeb advertised-size rejection case never publishes a document route
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb trailing-size mismatch case starts
+[PASS] ViewerWeb trailing-size mismatch case reaches its byte guard
+[PASS] ViewerWeb trailing-size mismatch case stops at the expected read boundary
+[PASS] ViewerWeb trailing-size mismatch case never publishes a document route
+[PASS] ViewerWeb security harness creates a viewer
+[PASS] ViewerWeb security harness obtains configuration
+[PASS] ViewerWeb security harness applies a 1 MiB deny-by-default configuration
+[PASS] ViewerWeb generated-output rejection case starts
+[PASS] ViewerWeb generated-output rejection case reaches its byte guard
+[PASS] ViewerWeb generated-output rejection case stops at the expected read boundary
+[PASS] ViewerWeb generated-output rejection case never publishes a document route
+[PASS] ViewerWeb generated-output case rejects the expanded page before publication
+ViewerPETests passed.
+[PASS] ViewerImgRaw PNG test executable path resolves
+[PASS] ViewerImgRaw.dll is present for PNG decode validation
+[PASS] ViewerImgRaw.dll loads for PNG decode validation
+[PASS] ViewerImgRaw factory export is available for PNG decode validation
+[PASS] ViewerImgRaw factory creates an IViewer instance (PNG decode)
+[PASS] ViewerImgRaw PNG fixture TestSandbox root is available
+[PASS] ViewerImgRaw open succeeds for PNG
+[PASS] ViewerImgRaw window becomes visible for PNG
+[PASS] ViewerImgRaw PNG decode completes (host alert observed)
+[PASS] ViewerImgRaw decodes PNG via WIC without a decode-failure alert
+[PASS] ViewerImgRaw window close succeeds (PNG)
+[PASS] ViewerImgRaw window closes cleanly (PNG)
+ViewerPETests passed.
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Early failure fixture attaches its native menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Failed restoration retains one valid detached owner and its exact error
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Replacement fixture attaches a distinct native menu
+[PASS] Failed attachment discards the partial host
+[PASS] Unexpected native replacement stays owned by the window and the unused original is disposed
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Reentrant close during restoration destroys the transferred menu once and leaves no RAII claim
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] ViewerImgRaw Farsight test executable path resolves
+[PASS] ViewerImgRaw.dll is present for Farsight validation
+[PASS] ViewerImgRaw.dll loads for Farsight validation
+[PASS] ViewerImgRaw factory export is available for Farsight validation
+[PASS] ViewerImgRaw Farsight TestSandbox root is available
+[PASS] ViewerImgRaw Farsight image fixtures are valid files
+[PASS] ViewerImgRaw native-menu fallback iteration 1 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 1 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 1 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 1 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 1 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 1 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 1 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 1 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 1 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 1 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 1 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 1 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 1 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 1 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 1 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 1 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 1 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 1 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 1 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 1 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 1 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 1 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 1 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 1 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 1 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 1 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 1 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 1 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw native-menu fallback iteration 2 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 2 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 2 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 2 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 2 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 2 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 2 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 2 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 2 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 2 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 2 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 2 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 2 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 2 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 2 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 2 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 2 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 2 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 2 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 2 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 2 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 2 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 2 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 2 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 2 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 2 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 2 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 2 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw native-menu fallback iteration 3 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 3 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 3 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 3 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 3 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 3 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 3 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 3 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 3 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 3 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 3 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 3 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 3 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 3 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 3 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 3 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 3 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 3 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 3 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 3 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 3 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 3 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 3 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 3 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 3 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 3 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 3 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 3 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw oriented WIC TIFF creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw oriented WIC TIFF opens
+[PASS] ViewerImgRaw oriented WIC TIFF shows a viewer window
+[PASS] ViewerImgRaw oriented WIC TIFF exposes the menu ownership snapshot
+[PASS] ViewerImgRaw oriented WIC TIFF detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw oriented WIC TIFF has one hidden RAII menu owner
+[PASS] ViewerImgRaw oriented WIC TIFF completes decode
+[PASS] ViewerImgRaw oriented WIC TIFF decodes without a warning
+[PASS] ViewerImgRaw oriented WIC TIFF exposes the decode snapshot
+[PASS] ViewerImgRaw oriented WIC TIFF retains a decoded image
+[PASS] ViewerImgRaw oriented WIC TIFF closes
+[PASS] ViewerImgRaw oriented WIC TIFF destroys its viewer window
+[PASS] WIC TIFF orientation 6 propagates to render geometry (base=6, view=6)
+[PASS] WIC TIFF orientation swaps displayed axes (source=2x3, oriented=3x2)
+[PASS] ViewerImgRaw oriented WIC fallback creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw oriented WIC fallback opens
+[PASS] ViewerImgRaw oriented WIC fallback shows a viewer window
+[PASS] ViewerImgRaw oriented WIC fallback exposes the menu ownership snapshot
+[PASS] ViewerImgRaw oriented WIC fallback detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw oriented WIC fallback has one hidden RAII menu owner
+[PASS] ViewerImgRaw oriented WIC fallback completes decode
+[PASS] ViewerImgRaw oriented WIC fallback decodes without a warning
+[PASS] ViewerImgRaw oriented WIC fallback exposes the decode snapshot
+[PASS] ViewerImgRaw oriented WIC fallback retains a decoded image
+[PASS] ViewerImgRaw oriented WIC fallback closes
+[PASS] ViewerImgRaw oriented WIC fallback destroys its viewer window
+[PASS] WIC fallback preserves orientation (view=6, oriented=3x2)
+[PASS] ViewerImgRaw valid EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw valid EXIF orientation opens
+[PASS] ViewerImgRaw valid EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw valid EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw valid EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw valid EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw valid EXIF orientation completes decode
+[PASS] ViewerImgRaw valid EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw valid EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw valid EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw valid EXIF orientation closes
+[PASS] ViewerImgRaw valid EXIF orientation destroys its viewer window
+[PASS] Scalar SHORT count=1 EXIF orientation is accepted
+[PASS] ViewerImgRaw wrong-type EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw wrong-type EXIF orientation opens
+[PASS] ViewerImgRaw wrong-type EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw wrong-type EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw wrong-type EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw wrong-type EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw wrong-type EXIF orientation completes decode
+[PASS] ViewerImgRaw wrong-type EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw wrong-type EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw wrong-type EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw wrong-type EXIF orientation closes
+[PASS] ViewerImgRaw wrong-type EXIF orientation destroys its viewer window
+[PASS] Wrong-type EXIF orientation is rejected
+[PASS] ViewerImgRaw huge-count EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw huge-count EXIF orientation opens
+[PASS] ViewerImgRaw huge-count EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw huge-count EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw huge-count EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw huge-count EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw huge-count EXIF orientation completes decode
+[PASS] ViewerImgRaw huge-count EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw huge-count EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw huge-count EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw huge-count EXIF orientation closes
+[PASS] ViewerImgRaw huge-count EXIF orientation destroys its viewer window
+[PASS] Overflowing/non-scalar EXIF orientation count is rejected
+ViewerPETests passed.
+[PASS] ViewerImgRaw production policy accepts a practical 48-megapixel WIC/JPEG/RAW image
+[PASS] ViewerImgRaw production policy rejects excessive decoded pixels before BGRA allocation
+[PASS] ViewerImgRaw production policy rejects an excessive single dimension
+[PASS] ViewerImgRaw deterministic small policy accepts its exact WIC/JPEG/RAW boundary
+[PASS] ViewerImgRaw deterministic small policy rejects one pixel beyond its RAW/WIC/JPEG limit
+[PASS] ViewerImgRaw embedded-JPEG guard accepts bounded declared dimensions and compressed length
+[PASS] ViewerImgRaw embedded-JPEG guard rejects tlength beyond the RAW source
+[PASS] ViewerImgRaw embedded-JPEG guard enforces its fixed compressed-byte ceiling
+[PASS] ViewerImgRaw embedded-bitmap guard accepts the exact packed source size
+[PASS] ViewerImgRaw embedded-bitmap guard rejects truncated tlength
+[PASS] ViewerImgRaw embedded-bitmap guard rejects unsupported channel counts
+[PASS] ViewerImgRaw shared byte arithmetic rejects uint64 overflow
+ViewerPETests passed.
+olves
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness kill-on-close job object is created
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness kill-on-close job object is configured
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness process launches
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness process joins the kill-on-close job
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness process resumes
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness process exits before timeout
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness process reports an exit code
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps fresh harness run passes
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps parent terminates only its remaining owned descendants
+[PASS] TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps owned job has no active processes before desktop restoration
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert harness path resolves
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness kill-on-close job object is created
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness kill-on-close job object is configured
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness process launches
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness process joins the kill-on-close job
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness process resumes
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness process exits before timeout
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness process reports an exit code
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert fresh harness run passes
+[PASS] TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert owned job has no active processes before desktop restoration
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards harness path resolves
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness kill-on-close job object is created
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness kill-on-close job object is configured
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process launches
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process joins the kill-on-close job
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process resumes
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process exits before timeout
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process reports an exit code
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness run passes
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards owned job has no active processes before desktop restoration
+[PASS] TestViewerImgRawResourcePolicyHelpers harness path resolves
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness kill-on-close job object is created
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness kill-on-close job object is configured
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness process launches
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness process joins the kill-on-close job
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness process resumes
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness process exits before timeout
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness process reports an exit code
+[PASS] TestViewerImgRawResourcePolicyHelpers fresh harness run passes
+[PASS] TestViewerImgRawResourcePolicyHelpers owned job has no active processes before desktop restoration
+[PASS] TestView[PASS] ViewerImgRaw resource test executable path resolves
+[PASS] ViewerImgRaw.dll is present for resource validation
+[PASS] ViewerImgRaw.dll loads for resource validation
+[PASS] ViewerImgRaw resource validation resolves the factory
+[PASS] ViewerImgRaw resource TestSandbox root is available
+[PASS] ViewerImgRaw resource fixtures are valid files
+[PASS] ViewerImgRaw small-policy WIC creates a viewer
+[PASS] ViewerImgRaw small-policy WIC opens
+[PASS] ViewerImgRaw small-policy WIC shows a viewer window
+[PASS] ViewerImgRaw small-policy WIC reaches a decode result
+[PASS] Small decoded-image policy rejects WIC before retaining BGRA
+[PASS] Small decoded-image policy reports the WIC rejection
+[PASS] ViewerImgRaw small-policy WIC closes
+[PASS] ViewerImgRaw small-policy WIC destroys its window
+[PASS] ViewerImgRaw small-policy JPEG creates a viewer
+[PASS] ViewerImgRaw small-policy JPEG opens
+[PASS] ViewerImgRaw small-policy JPEG shows a viewer window
+[PASS] ViewerImgRaw small-policy JPEG reaches a decode result
+[PASS] Small decoded-image policy rejects libjpeg before retaining BGRA
+[PASS] Small decoded-image policy reports the JPEG rejection
+[PASS] ViewerImgRaw small-policy JPEG closes
+[PASS] ViewerImgRaw small-policy JPEG destroys its window
+[PASS] ViewerImgRaw bounded speculative cache creates a viewer
+[PASS] ViewerImgRaw bounded speculative cache opens
+[PASS] ViewerImgRaw bounded speculative cache shows a viewer window
+[PASS] ViewerImgRaw bounded speculative cache reaches a decode result
+[PASS] Speculative budget rejection does not fail the main image
+[PASS] Speculative prefetch records deterministic admission and rejection
+[PASS] Speculative decoded bytes never exceed the configured small cap
+[PASS] Clearing the cache releases every speculative decoded-byte reservation
+[PASS] ViewerImgRaw bounded speculative cache closes
+[PASS] ViewerImgRaw bounded speculative cache destroys its window
+[PASS] ViewerImgRaw stale-generation prefetch cleanup creates a viewer
+[PASS] ViewerImgRaw stale-generation prefetch cleanup opens
+[PASS] ViewerImgRaw stale-generation prefetch cleanup shows a viewer window
+[PASS] ViewerImgRaw stale-generation prefetch cleanup reaches a decode result
+[PASS] Stale-generation test observes an in-flight speculative reservation
+[PASS] Invalidating the request generation releases the in-flight reservation
+[PASS] ViewerImgRaw stale-generation prefetch cleanup closes
+[PASS] ViewerImgRaw stale-generation prefetch cleanup destroys its window
+[PASS] ViewerImgRaw stale prefetch commit rejection creates a viewer
+[PASS] ViewerImgRaw stale prefetch commit rejection opens
+[PASS] ViewerImgRaw stale prefetch commit rejection shows a viewer window
+[PASS] ViewerImgRaw stale prefetch commit rejection reaches a decode result
+[PASS] Stale prefetch commit test reaches the post-generation-check pause
+[PASS] Generation invalidation prevents a paused prefetch from repopulating the cleared cache or retaining budget
+[PASS] ViewerImgRaw stale prefetch commit rejection closes
+[PASS] ViewerImgRaw stale prefetch commit rejection destroys its window
+[PASS] ViewerImgRaw long export root resolves absolutely
+[PASS] ViewerImgRaw creates a long-path export directory
+[PASS] ViewerImgRaw export test destination actually exceeds MAX_PATH
+[PASS] ViewerImgRaw long-path export creates a viewer
+[PASS] ViewerImgRaw long-path export opens
+[PASS] ViewerImgRaw long-path export shows a viewer window
+[PASS] ViewerImgRaw long-path export reaches a decode result
+[PASS] Long-path export source decodes successfully
+[PASS] ViewerImgRaw queues the real long-path export
+[PASS] ViewerImgRaw atomically commits a non-empty image beyond MAX_PATH
+[PASS] ViewerImgRaw long-path export leaves no sibling staging file
+[PASS] ViewerImgRaw long-path export closes
+[PASS] ViewerImgRaw long-path export destroys its window
+ViewerPETests passed.
+[PASS] ViewerSpace helper fixture creates a provider buffer
+[PASS] ViewerSpace helper fixture exposes provider metadata
+[PASS] ViewerSpace provider contract accepts a bounded aligned buffer
+[PASS] ViewerSpace provider parser accepts the first aligned record
+[PASS] ViewerSpace provider parser reaches the exact terminal record
+[PASS] ViewerSpace provider parser reconciles the terminal record extent with used bytes
+[PASS] ViewerSpace provider contract rejects used bytes beyond allocation
+[PASS] ViewerSpace provider contract rejects excessive advertised counts
+[PASS] ViewerSpace provider contract rejects excessive advertised allocation
+[PASS] ViewerSpace child-name policy rejects path injection, cycles, and embedded NULs
+[PASS] ViewerSpace accounting saturates instead of wrapping
+[PASS] ViewerSpace child arena covers geometric live blocks plus every predecessor block at the child-reference ceiling
+[PASS] ViewerSpace provider parser rejects a misaligned record base
+ViewerPETests passed.
+[PASS] Analysis fixture executable path resolves
+[PASS] Analysis fixture loads ViewerSpace
+[PASS] Embedded UTF-8 queued caption decodes its Unicode ellipsis correctly
+[PASS] Analysis fixture factory resolves
+[PASS] Analysis fixture creates viewer
+[PASS] Analysis fixture configuration accepted
+[PASS] Analysis fixture opens
+[PASS] Analysis fixture publishes exact complete rows and geometry
+[INFO] ViewerSpace analysis test outer client: 984x661 px (984x661 DIP at 96 DPI), rows=2001, bounds=984x324 px.
+[INFO] ViewerSpace analysis host: available=true hwnd=true visible=true size=984x324 px root=true D2D=true render=2 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[INFO] ViewerSpace navigation host: available=true hwnd=true visible=true size=984x36 px root=true D2D=true render=1 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[PASS] Analysis UIA contract
+[PASS] Analysis fixture actually detaches its host before retained provider access
+[PASS] Analysis detached provider contract
+ViewerPETests passed.
+[PASS] Lifecycle capture enters a per-monitor-v2 thread DPI context
+[PASS] Lifecycle capture executable path resolves
+[PASS] Lifecycle capture locates ViewerSpace.dll beside the test executable
+[PASS] Lifecycle capture loads ViewerSpace
+[PASS] Lifecycle capture resolves the ViewerSpace factory
+[PASS] Lifecycle capture hashes its exact executable and plugin binaries
+[PASS] Lifecycle captures use the selected marked-run artifacts directory
+[PASS] Lifecycle read gate creates owned synchronization events
+[PASS] Lifecycle fixture opens an embedded ViewerSpace window under a no-activate owned host
+[PASS] Lifecycle fixture holds the first provider read before any rows are available
+[PASS] Initial scan snapshot proves no provider data has been observed
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 01-scanning-before-data no-activation WGC capture passes the theme-background witness
+[PASS] 01-scanning-before-data WGC capture preserves foreground activation
+[PASS] 01-scanning-before-data lifecycle state and displayed model remain stable across capture
+[PASS] 01-scanning-before-data capture provenance records state, fixture and binary hashes
+[PASS] Lifecycle fixture reaches the delayed nested-directory read
+[PASS] Partial scan has published both known root files and their observed byte total while a child read remains in flight
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 02-partial-scan-observed-totals-inflight no-activation WGC capture passes the theme-background witness
+[PASS] 02-partial-scan-observed-totals-inflight WGC capture preserves foreground activation
+[PASS] 02-partial-scan-observed-totals-inflight lifecycle state and displayed model remain stable across capture
+[PASS] 02-partial-scan-observed-totals-inflight capture provenance records state, fixture and binary hashes
+[PASS] Initial lifecycle fixture reaches a settled complete model
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 03-done no-activation WGC capture passes the theme-background witness
+[PASS] 03-done WGC capture preserves foreground activation
+[PASS] 03-done lifecycle state and displayed model remain stable across capture
+[PASS] 03-done capture provenance records state, fixture and binary hashes
+[PASS] F5 refresh command is delivered without changing foreground activation
+[PASS] Refresh pauses in the root provider read
+[PASS] Pending refresh retains the previous display generation and linked analysis rows
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 04-refresh-pending-retained-display no-activation WGC capture passes the theme-background witness
+[PASS] 04-refresh-pending-retained-display WGC capture preserves foreground activation
+[PASS] 04-refresh-pending-retained-display lifecycle state and displayed model remain stable across capture
+[PASS] 04-refresh-pending-retained-display capture provenance records state, fixture and binary hashes
+[PASS] Escape cancels only the candidate refresh and restores the prior completed model
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 05-refresh-canceled-retained-display no-activation WGC capture passes the theme-background witness
+[PASS] 05-refresh-canceled-retained-display WGC capture preserves foreground activation
+[PASS] 05-refresh-canceled-retained-display lifecycle state and displayed model remain stable across capture
+[PASS] 05-refresh-canceled-retained-display capture provenance records state, fixture and binary hashes
+[PASS] Canceled refresh provider read exits before its fixture is destroyed
+[PASS] Canceled refresh callback has returned before later lifecycle phases
+[PASS] Lifecycle refusal witness begins with a recorded, successfully presented Done-header bitmap
+[PASS] Refused F5 refresh preserves foreground activation
+[PASS] Configured refresh refusal replaces the recorded Done-header bitmap with a successfully presented rebuild-required header
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 06-refresh-refused-retained-display no-activation WGC capture passes the theme-background witness
+[PASS] 06-refresh-refused-retained-display WGC capture preserves foreground activation
+[PASS] 06-refresh-refused-retained-display lifecycle state and displayed model remain stable across capture
+[PASS] 06-refresh-refused-retained-display capture provenance records state, fixture and binary hashes
+[PASS] Lifecycle callbacks return and worker filesystem references retire within the bounded close interval
+[PASS] Lifecycle child window closes within the bounded close interval
+[PASS] Lifecycle root/child callbacks and worker-held filesystem references have fully retired
+[PASS] 07-empty lifecycle fixture reaches its exact terminal scan state
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 07-empty no-activation WGC capture passes the theme-background witness
+[PASS] 07-empty WGC capture preserves foreground activation
+[PASS] 07-empty lifecycle state and displayed model remain stable across capture
+[PASS] 07-empty capture provenance records state, fixture and binary hashes
+[PASS] 07-empty callbacks return and worker filesystem references retire within the bounded close interval
+[PASS] 07-empty child window closes within the bounded close interval
+[PASS] 08-provider-error lifecycle fixture reaches its exact terminal scan state
+[PASS] Lifecycle capture window has a nontrivial client area
+[PASS] Lifecycle capture window fits completely inside the selected monitor work area
+[PASS] 08-provider-error no-activation WGC capture passes the theme-background witness
+[PASS] 08-provider-error WGC capture preserves foreground activation
+[PASS] 08-provider-error lifecycle state and displayed model remain stable across capture
+[PASS] 08-provider-error capture provenance records state, fixture and binary hashes
+[PASS] 08-provider-error callbacks return and worker filesystem references retire within the bounded close interval
+[PASS] 08-provider-error child window closes within the bounded close interval
+ViewerPETests passed.
+[PASS] ViewerSpace listing validation invariants
+ViewerPETests passed.
+erImgRawResourceBudgetAndLongPathExport harness path resolves
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness kill-on-close job object is created
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness kill-on-close job object is configured
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness process launches
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness process joins the kill-on-close job
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness process resumes
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness process exits before timeout
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness process reports an exit code
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport fresh harness run passes
+[PASS] TestViewerImgRawResourceBudgetAndLongPathExport owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceScanPolicyHelpers harness path resolves
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process launches
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process resumes
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process exits before timeout
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process reports an exit code
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness run passes
+[PASS] TestViewerSpaceScanPolicyHelpers owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime harness path resolves
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process launches
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process resumes
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process exits before timeout
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process reports an exit code
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness run passes
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceLifecycleCaptures harness path resolves
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process launches
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process resumes
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process exits before timeout
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process reports an exit code
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness run passes
+[PASS] TestViewerSpaceLifecycleCaptures owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceListingValidation harness path resolves
+[PASS] TestViewerSpaceListingValidation fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceListingValidation fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceListingValidation fresh harness process launches
+[PASS] TestViewerSpaceListingValidation fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceListingValidation fresh harness process resumes
+[PASS] TestViewerSpaceListingValidation fresh harness process exits before timeout
+[PASS] ViewerSpace bounded scan executable path resolves
+[PASS] ViewerSpace.dll is present for bounded scan validation
+[PASS] ViewerSpace.dll loads for bounded scan validation
+[PASS] ViewerSpace bounded scan validation resolves the factory
+[PASS] ViewerSpace tiny-cap wide tree creates a viewer
+[PASS] ViewerSpace tiny-cap wide tree exposes configuration
+[PASS] ViewerSpace tiny-cap wide tree accepts deterministic scan configuration
+[PASS] ViewerSpace tiny-cap wide tree opens
+[PASS] ViewerSpace tiny-cap wide tree shows a viewer window
+[PASS] ViewerSpace tiny-cap wide tree reaches a stable terminal model
+[PASS] Wide capped scan preserves exact rolled-up totals and counts (bytes=210, folders=6, files=6)
+[PASS] Wide capped scan itemizes only the tiny policy and aggregates the omitted subtrees exactly
+[PASS] Wide capped scan matches exact atomic-summary child-arena accounting (references=6/<=8 arenaSlots=7/7 freeSlots=0/0 limit=32)
+[PASS] Wide capped scan exposes deterministic capped/resource accounting
+[PASS] Wide capped scan leaves a stable renderable UI
+[PASS] ViewerSpace tiny-cap wide tree closes
+[PASS] ViewerSpace tiny-cap wide tree destroys its window
+[PASS] ViewerSpace tiny-cap deep tree creates a viewer
+[PASS] ViewerSpace tiny-cap deep tree exposes configuration
+[PASS] ViewerSpace tiny-cap deep tree accepts deterministic scan configuration
+[PASS] ViewerSpace tiny-cap deep tree opens
+[PASS] ViewerSpace tiny-cap deep tree shows a viewer window
+[PASS] ViewerSpace tiny-cap deep tree reaches a stable terminal model
+[PASS] Deep provider traversal stops at the deterministic depth cap without unbounded model growth
+[PASS] ViewerSpace tiny-cap deep tree closes
+[PASS] ViewerSpace tiny-cap deep tree destroys its window
+[PASS] Production-depth fixtures use the declared 512-depth and 100,000-outstanding limits
+[PASS] ViewerSpace production depth 400 path and totals creates a viewer
+[PASS] ViewerSpace production depth 400 path and totals exposes configuration
+[PASS] ViewerSpace production depth 400 path and totals accepts deterministic scan configuration
+[PASS] ViewerSpace production depth 400 path and totals opens
+[PASS] ViewerSpace production depth 400 path and totals shows a viewer window
+[PASS] ViewerSpace production depth 400 path and totals reaches a stable terminal model
+[PASS] Production depth-400 chain scans exactly through its terminal (validation=0, traversed=401, dirs=401, folders=400, files=1, bytes=1)
+[PASS] ViewerSpace production depth 400 path and totals closes
+[PASS] ViewerSpace production depth 400 path and totals destroys its window
+[PASS] ViewerSpace zero-byte depth-400 priority cap creates a viewer
+[PASS] ViewerSpace zero-byte depth-400 priority cap exposes configuration
+[PASS] ViewerSpace zero-byte depth-400 priority cap accepts deterministic scan configuration
+[PASS] ViewerSpace zero-byte depth-400 priority cap opens
+[PASS] ViewerSpace zero-byte depth-400 priority cap shows a viewer window
+[PASS] ViewerSpace zero-byte depth-400 priority cap reaches a stable terminal model
+[PASS] Zero-byte depth-400 tree consumes exactly the 16 first-child priority slots and completes FIFO without changing totals (priority=16, traversed=801, dirs=801, folders=800, files=0, bytes=0)
+[PASS] ViewerSpace zero-byte depth-400 priority cap closes
+[PASS] ViewerSpace zero-byte depth-400 priority cap destroys its window
+[PASS] ViewerSpace production depth 513 rejection boundary creates a viewer
+[PASS] ViewerSpace production depth 513 rejection boundary exposes configuration
+[PASS] ViewerSpace production depth 513 rejection boundary accepts deterministic scan configuration
+[PASS] ViewerSpace production depth 513 rejection boundary opens
+[PASS] ViewerSpace production depth 513 rejection boundary shows a viewer window
+[PASS] ViewerSpace production depth 513 rejection boundary reaches a stable terminal model
+[PASS] Production depth-513 chain rejects before reading the over-limit path (validation=18, traversed=513, dirs=513, folders=513, rejected=1)
+[PASS] ViewerSpace production depth 513 rejection boundary closes
+[PASS] ViewerSpace production depth 513 rejection boundary destroys its window
+[PASS] ViewerSpace cycle/path injection creates a viewer
+[PASS] ViewerSpace cycle/path injection exposes configuration
+[PASS] ViewerSpace cycle/path injection accepts deterministic scan configuration
+[PASS] ViewerSpace cycle/path injection opens
+[PASS] ViewerSpace cycle/path injection shows a viewer window
+[PASS] ViewerSpace cycle/path injection reaches a stable terminal model
+[PASS] ViewerSpace cycle/path injection rejects safely with bounded model state
+[PASS] ViewerSpace cycle/path injection closes
+[PASS] ViewerSpace cycle/path injection destroys its window
+[PASS] ViewerSpace non-reparse provider alias cycle creates a viewer
+[PASS] ViewerSpace non-reparse provider alias cycle exposes configuration
+[PASS] ViewerSpace non-reparse provider alias cycle accepts deterministic scan configuration
+[PASS] ViewerSpace non-reparse provider alias cycle opens
+[PASS] ViewerSpace non-reparse provider alias cycle shows a viewer window
+[PASS] ViewerSpace non-reparse provider alias cycle reaches a stable terminal model
+[PASS] ViewerSpace bounds a non-reparse provider alias loop at the traversal-depth ceiling (validation=18, traversed=5)
+[PASS] ViewerSpace keeps exact totals for every aliased path it accepted (bytes=15, files=3, folders=5)
+[PASS] ViewerSpace non-reparse provider alias cycle closes
+[PASS] ViewerSpace non-reparse provider alias cycle destroys its window
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) creates a viewer
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) exposes configuration
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) accepts deterministic scan configuration
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) opens
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) shows a viewer window
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) reaches a stable terminal model
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) scans every nested folder with exact totals (validation=0, bytes=21, folders=2, files=2)
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) closes
+[PASS] ViewerSpace per-listing positional FileIndex (MTP, Google Drive) destroys its window
+[PASS] ViewerSpace FAT directory-offset FileIndex creates a viewer
+[PASS] ViewerSpace FAT directory-offset FileIndex exposes configuration
+[PASS] ViewerSpace FAT directory-offset FileIndex accepts deterministic scan configuration
+[PASS] ViewerSpace FAT directory-offset FileIndex opens
+[PASS] ViewerSpace FAT directory-offset FileIndex shows a viewer window
+[PASS] ViewerSpace FAT directory-offset FileIndex reaches a stable terminal model
+[PASS] ViewerSpace FAT directory-offset FileIndex scans every nested folder with exact totals (validation=0, bytes=33, folders=3, files=3)
+[PASS] ViewerSpace FAT directory-offset FileIndex closes
+[PASS] ViewerSpace FAT directory-offset FileIndex destroys its window
+[PASS] ViewerSpace misaligned provider buffer creates a viewer
+[PASS] ViewerSpace misaligned provider buffer exposes configuration
+[PASS] ViewerSpace misaligned provider buffer accepts deterministic scan configuration
+[PASS] ViewerSpace misaligned provider buffer opens
+[PASS] ViewerSpace misaligned provider buffer shows a viewer window
+[PASS] ViewerSpace misaligned provider buffer reaches a stable terminal model
+[PASS] ViewerSpace misaligned provider buffer rejects safely with bounded model state
+[PASS] ViewerSpace misaligned provider buffer closes
+[PASS] ViewerSpace misaligned provider buffer destroys its window
+[PASS] ViewerSpace count mismatch creates a viewer
+[PASS] ViewerSpace count mismatch exposes configuration
+[PASS] ViewerSpace count mismatch accepts deterministic scan configuration
+[PASS] ViewerSpace count mismatch opens
+[PASS] ViewerSpace count mismatch shows a viewer window
+[PASS] ViewerSpace count mismatch reaches a stable terminal model
+[PASS] ViewerSpace count mismatch rejects safely with bounded model state
+[PASS] ViewerSpace count mismatch closes
+[PASS] ViewerSpace count mismatch destroys its window
+[PASS] ViewerSpace truncated used-buffer bytes creates a viewer
+[PASS] ViewerSpace truncated used-buffer bytes exposes configuration
+[PASS] ViewerSpace truncated used-buffer bytes accepts deterministic scan configuration
+[PASS] ViewerSpace truncated used-buffer bytes opens
+[PASS] ViewerSpace truncated used-buffer bytes shows a viewer window
+[PASS] ViewerSpace truncated used-buffer bytes reaches a stable terminal model
+[PASS] ViewerSpace truncated used-buffer bytes rejects safely with bounded model state
+[PASS] ViewerSpace truncated used-buffer bytes closes
+[PASS] ViewerSpace truncated used-buffer bytes destroys its window
+[PASS] ViewerSpace allocated-size contract creates a viewer
+[PASS] ViewerSpace allocated-size contract exposes configuration
+[PASS] ViewerSpace allocated-size contract accepts deterministic scan configuration
+[PASS] ViewerSpace allocated-size contract opens
+[PASS] ViewerSpace allocated-size contract shows a viewer window
+[PASS] ViewerSpace allocated-size contract reaches a stable terminal model
+[PASS] ViewerSpace allocated-size contract rejects safely with bounded model state
+[PASS] ViewerSpace allocated-size contract closes
+[PASS] ViewerSpace allocated-size contract destroys its window
+[PASS] ViewerSpace allocated-buffer cap creates a viewer
+[PASS] ViewerSpace allocated-buffer cap exposes configuration
+[PASS] ViewerSpace allocated-buffer cap accepts deterministic scan configuration
+[PASS] ViewerSpace allocated-buffer cap opens
+[PASS] ViewerSpace allocated-buffer cap shows a viewer window
+[PASS] ViewerSpace allocated-buffer cap reaches a stable terminal model
+[PASS] ViewerSpace allocated-buffer cap rejects safely with bounded model state
+[PASS] ViewerSpace allocated-buffer cap closes
+[PASS] ViewerSpace allocated-buffer cap destroys its window
+[PASS] ViewerSpace Win32-folded duplicate logical name creates a viewer
+[PASS] ViewerSpace Win32-folded duplicate logical name exposes configuration
+[PASS] ViewerSpace Win32-folded duplicate logical name accepts deterministic scan configuration
+[PASS] ViewerSpace Win32-folded duplicate logical name opens
+[PASS] ViewerSpace Win32-folded duplicate logical name shows a viewer window
+[PASS] ViewerSpace Win32-folded duplicate logical name reaches a stable terminal model
+[PASS] ViewerSpace Win32-folded duplicate logical name rejects safely with bounded model state
+[PASS] ViewerSpace Win32-folded duplicate logical name closes
+[PASS] ViewerSpace Win32-folded duplicate logical name destroys its window
+[PASS] ViewerSpace duplicate provider id creates a viewer
+[PASS] ViewerSpace duplicate provider id exposes configuration
+[PASS] ViewerSpace duplicate provider id accepts deterministic scan configuration
+[PASS] ViewerSpace duplicate provider id opens
+[PASS] ViewerSpace duplicate provider id shows a viewer window
+[PASS] ViewerSpace duplicate provider id reaches a stable terminal model
+[PASS] ViewerSpace duplicate provider id rejects safely with bounded model state
+[PASS] ViewerSpace duplicate provider id closes
+[PASS] ViewerSpace duplicate provider id destroys its window
+[PASS] ViewerSpace packed item-id exhaustion creates a viewer
+[PASS] ViewerSpace packed item-id exhaustion exposes configuration
+[PASS] ViewerSpace packed item-id exhaustion accepts deterministic scan configuration
+[PASS] ViewerSpace packed item-id exhaustion opens
+[PASS] ViewerSpace packed item-id exhaustion shows a viewer window
+[PASS] ViewerSpace packed item-id exhaustion reaches a stable terminal model
+[PASS] ViewerSpace preflights the whole directory-id range before retaining or publishing any child
+[PASS] ViewerSpace packed item-id exhaustion closes
+[PASS] ViewerSpace packed item-id exhaustion destroys its window
+[PASS] ViewerSpace ancestor-inclusive outstanding admission creates a viewer
+[PASS] ViewerSpace ancestor-inclusive outstanding admission exposes configuration
+[PASS] ViewerSpace ancestor-inclusive outstanding admission accepts deterministic scan configuration
+[PASS] ViewerSpace ancestor-inclusive outstanding admission opens
+[PASS] ViewerSpace ancestor-inclusive outstanding admission shows a viewer window
+[PASS] ViewerSpace ancestor-inclusive outstanding admission reaches a stable terminal model
+[PASS] ViewerSpace counts ancestor completions and publishes no child before outstanding admission
+[PASS] ViewerSpace ancestor-inclusive outstanding admission closes
+[PASS] ViewerSpace ancestor-inclusive outstanding admission destroys its window
+[PASS] ViewerSpace saturating totals creates a viewer
+[PASS] ViewerSpace saturating totals exposes configuration
+[PASS] ViewerSpace saturating totals accepts deterministic scan configuration
+[PASS] ViewerSpace saturating totals opens
+[PASS] ViewerSpace saturating totals shows a viewer window
+[PASS] ViewerSpace saturating totals reaches a stable terminal model
+[PASS] ViewerSpace saturates overflowing provider bytes while retaining exact file count
+[PASS] ViewerSpace saturating totals closes
+[PASS] ViewerSpace saturating totals destroys its window
+[PASS] ViewerSpace access-denied leaf creates a viewer
+[PASS] ViewerSpace access-denied leaf exposes configuration
+[PASS] ViewerSpace access-denied leaf accepts deterministic scan configuration
+[PASS] ViewerSpace access-denied leaf opens
+[PASS] ViewerSpace access-denied leaf shows a viewer window
+[PASS] ViewerSpace access-denied leaf reaches a stable terminal model
+[PASS] Access-denied fixture publishes the complete linked analysis and current map
+[PASS] ViewerSpace preserves zero-byte nonfatal access-denied accounting while marking leaf and ancestor content as not measured
+[PASS] ViewerSpace access-denied leaf closes
+[PASS] ViewerSpace access-denied leaf destroys its window
+[PASS] ViewerSpace reparse non-descent creates a viewer
+[PASS] ViewerSpace reparse non-descent exposes configuration
+[PASS] ViewerSpace reparse non-descent accepts deterministic scan configuration
+[PASS] ViewerSpace reparse non-descent opens
+[PASS] ViewerSpace reparse non-descent shows a viewer window
+[PASS] ViewerSpace reparse non-descent reaches a stable terminal model
+[PASS] ViewerSpace keeps an ancestor-alias reparse directory visible and non-descending
+[PASS] ViewerSpace reparse non-descent closes
+[PASS] ViewerSpace reparse non-descent destroys its window
+[PASS] ViewerSpace unreadable folder mid-tree creates a viewer
+[PASS] ViewerSpace unreadable folder mid-tree exposes configuration
+[PASS] ViewerSpace unreadable folder mid-tree accepts deterministic scan configuration
+[PASS] ViewerSpace unreadable folder mid-tree opens
+[PASS] ViewerSpace unreadable folder mid-tree shows a viewer window
+[PASS] ViewerSpace unreadable folder mid-tree reaches a stable terminal model
+[PASS] ViewerSpace keeps an unreadable folder local and completes the root (bytes=12, dirs=3, unreadable=1)
+[PASS] ViewerSpace unreadable folder mid-tree closes
+[PASS] ViewerSpace unreadable folder mid-tree destroys its window
+[PASS] ViewerSpace unreadable scan root creates a viewer
+[PASS] ViewerSpace unreadable scan root exposes configuration
+[PASS] ViewerSpace unreadable scan root accepts deterministic scan configuration
+[PASS] ViewerSpace unreadable scan root opens
+[PASS] ViewerSpace unreadable scan root shows a viewer window
+[PASS] ViewerSpace unreadable scan root reaches a stable terminal model
+[PASS] ViewerSpace still ends in Error when the scan root cannot be read
+[PASS] ViewerSpace unreadable scan root closes
+[PASS] ViewerSpace unreadable scan root destroys its window
+[PASS] ViewerSpace failed capped subtree creates a viewer
+[PASS] ViewerSpace failed capped subtree exposes configuration
+[PASS] ViewerSpace failed capped subtree accepts deterministic scan configuration
+[PASS] ViewerSpace failed capped subtree opens
+[PASS] ViewerSpace failed capped subtree shows a viewer window
+[PASS] ViewerSpace failed capped subtree reaches a stable terminal model
+[PASS] ViewerSpace puts a failed capped subtree's partial totals into Other (root=210, other=150, otherFiles=3)
+[PASS] ViewerSpace failed capped subtree closes
+[PASS] ViewerSpace failed capped subtree destroys its window
+[PASS] ViewerSpace click navigation creates a viewer
+[PASS] ViewerSpace click navigation exposes configuration
+[PASS] ViewerSpace click navigation accepts deterministic scan configuration
+[PASS] ViewerSpace click navigation opens
+[PASS] ViewerSpace click navigation shows a viewer window
+[PASS] ViewerSpace click navigation reaches a stable terminal model
+[PASS] ViewerSpace click navigation fixture renders before probing (renderTarget=true, rendererFailureStage=0, rendererFailureHr=0x00000000)
+[PASS] ViewerSpace double click drills in once (after click=2, after double click=2)
+[PASS] ViewerSpace navigation fixture exposes a clickable folder tile
+[PASS] ViewerSpace Up goes to the structural parent (expected=2, actual=2)
+[PASS] ViewerSpace navigation fixture exposes a nested folder band two levels deep
+[PASS] ViewerSpace click navigation closes
+[PASS] ViewerSpace click navigation destroys its window
+ViewerPETests passed.
+[PASS] ViewerSpace blocked-provider test executable path resolves
+[PASS] ViewerSpace.dll is present for blocked-provider validation
+[PASS] ViewerSpace.dll loads for blocked-provider validation
+[PASS] ViewerSpace exposes factory, shutdown, and runtime unload-gate exports
+[PASS] ViewerSpace creates a viewer for the PostUpdate race
+[PASS] ViewerSpace opens the PostUpdate race fixture
+[PASS] ViewerSpace PostUpdate race window becomes visible
+[PASS] ViewerSpace arms the PostUpdate generation-race pause
+[PASS] ViewerSpace starts the paused scan generation
+[PASS] ViewerSpace producer pauses after the fast generation check
+[PASS] ViewerSpace invalidates and clears while the stale producer is paused
+[PASS] ViewerSpace replacement generation settles while the old producer remains paused
+[PASS] ViewerSpace inner generation check rejects the resumed stale update with an empty queue
+[PASS] ViewerSpace stale producer cannot contaminate replacement-generation queue diagnostics
+[PASS] ViewerSpace PostUpdate race window closes cleanly
+[PASS] ViewerSpace blocked-provider events are created
+[PASS] ViewerSpace creates a viewer for blocked-provider close
+[PASS] ViewerSpace opens the blocked provider fixture
+[PASS] ViewerSpace reaches blocked ReadDirectoryInfo while its window remains responsive
+[PASS] ViewerSpace Close returns within 500 ms while the provider remains blocked
+[PASS] ViewerSpace destroys its HWND before the blocked provider returns
+[PASS] ViewerSpace provider remains blocked after non-waiting Close
+[PASS] ViewerSpace reports ViewerClosed exactly once with the registered cookie
+[PASS] ViewerSpace detached worker retains the provider and viewer lifetime
+[PASS] ViewerSpace runtime unload gate rejects refresh while an abandoned worker exists
+[PASS] ViewerSpace module remains mapped while runtime unload is deferred
+[PASS] ViewerSpace blocked provider exits after the test releases it
+[PASS] ViewerSpace worker and provider self-references retire exactly once after unblock
+[PASS] ViewerSpace intentionally quarantines same-path runtime reload for the process after forced abandonment
+[PASS] ViewerSpace does not report a second close after worker retirement
+ViewerPETests passed.
+[PASS] ViewerSpace protocol test executable path resolves
+[PASS] ViewerSpace protocol test locates ViewerSpace.dll
+[PASS] ViewerSpace protocol test loads the plugin
+[PASS] ViewerSpace protocol test resolves the plugin factory
+[PASS] summary valid copy-budget-one scenario creates ViewerSpace
+[PASS] summary valid copy-budget-one scenario exposes configuration
+[PASS] summary valid copy-budget-one scenario accepts bounded scan configuration
+[PASS] summary valid copy-budget-one scenario opens
+[PASS] summary valid copy-budget-one scenario creates its viewer window
+[PASS] ViewerSpace holds root Done while budgeted child-reference copy remains staged
+[PASS] summary valid copy-budget-one scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=4656 scannedFiles=96 retainedFiles=96 effectiveFileBudget=7669 accepted=116 rejected=0 cappedFiles=0 retainedChildren=116 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=210528 summaryStageBytes=0 summaryChunkMaxBytes=65352 summaryCommitted=1 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=72960 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=481272 stagingRejected=0
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] summary valid copy-budget-one scenario consumes each queued update exactly once, including summary-blocked children (posted=77, coalesced=1, drained=76)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] root Done resumes only after all prior children and summary files commit
+[PASS] summary valid copy-budget-one scenario closes
+[PASS] summary valid copy-budget-one scenario destroys its window
+[PASS] gated publication fixture creates its provider synchronization events
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario creates ViewerSpace
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario exposes configuration
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario accepts bounded scan configuration
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario opens
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario creates its viewer window
+[PASS] gated publication fixture captures its pre-scan layout baseline
+[PASS] first nested read is held after the root provider response
+[PASS] root data starts a sliced layout while the first nested provider read is gated
+[PASS] new child updates queue within the byte cap while the multi-turn layout builder is active
+[PASS] second nested read holds the scan while the first child has raised its root-directory ancestor
+[PASS] multi-turn map is presented with the first directory ancestor positive before Done
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=7488 scannedFiles=1152 retainedFiles=1152 effectiveFileBudget=7669 accepted=1250 rejected=0 cappedFiles=0 retainedChildren=1250 traversedDirectories=99 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=513712 summaryStageBytes=0 summaryChunkMaxBytes=3720 summaryCommitted=99 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=6316 activePathRejected=0 stagingCurrent=0 stagingPeak=121088 stagingRejected=0
+[PASS] gated first-positive scan priority remains generation-local and capped at 16 jobs
+[PASS] gated scan settles the first root directory to its exact subtree byte total
+[PASS] gated ancestor tile presents its exact settled 78-byte subtree after the second child finishes
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario consumes each queued update exactly once, including summary-blocked children (posted=1089, coalesced=282, drained=807)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario retains exact directory/traversal/child totals (dirs=99, traversed=99, children=1250, retainedChildren=1250)
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario closes
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario destroys its window
+[PASS] gated publication callbacks and worker filesystem references drain after close
+[PASS] 200k files across 20k directories production-cap compatibility creates ViewerSpace
+[PASS] 200k files across 20k directories production-cap compatibility exposes configuration
+[PASS] 200k files across 20k directories production-cap compatibility accepts bounded scan configuration
+[PASS] 200k files across 20k directories production-cap compatibility opens
+[PASS] 200k files across 20k directories production-cap compatibility creates its viewer window
+[PASS] 200k files across 20k directories production-cap compatibility reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=200000 scannedFiles=200000 retainedFiles=200000 effectiveFileBudget=7669 accepted=220000 rejected=0 cappedFiles=0 retainedChildren=220000 traversedDirectories=20001 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=8388528 summaryStageBytes=0 summaryChunkMaxBytes=3656 summaryCommitted=20001 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=1345536 scratchRejected=0 activePathCurrent=0 activePathPeak=1360032 activePathRejected=0 stagingCurrent=0 stagingPeak=11586560 stagingRejected=0
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] 200k files across 20k directories production-cap compatibility consumes each queued update exactly once, including summary-blocked children (posted=220012, coalesced=58001, drained=162011)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] 200k files across 20k directories production-cap compatibility retains exact directory/traversal/child totals (dirs=20001, traversed=20001, children=220000, retainedChildren=220000)
+[PASS] scale fixture preserves the specified production resource ceilings
+[PASS] 200k/20k synthetic tree completes under unchanged production directory/file/reference/arena/name/provider limits
+[PASS] 200k/20k synthetic tree stays within independent queue/chunk/scratch/path/staging budgets
+[PASS] 200k files across 20k directories production-cap compatibility closes
+[PASS] 200k files across 20k directories production-cap compatibility destroys its window
+[PASS] 100k flat directory adaptive top-K staging scenario creates ViewerSpace
+[PASS] 100k flat directory adaptive top-K staging scenario exposes configuration
+[PASS] 100k flat directory adaptive top-K staging scenario accepts bounded scan configuration
+[PASS] 100k flat directory adaptive top-K staging scenario opens
+[PASS] 100k flat directory adaptive top-K staging scenario creates its viewer window
+[PASS] 100k flat directory adaptive top-K staging scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=5000050000 scannedFiles=100000 retainedFiles=7669 effectiveFileBudget=7669 accepted=100000 rejected=0 cappedFiles=92331 retainedChildren=7669 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=648368 summaryStageBytes=0 summaryChunkMaxBytes=5384 summaryCommitted=1 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=6465536 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=4453348 stagingRejected=0
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] 100k flat directory adaptive top-K staging scenario consumes each queued update exactly once, including summary-blocked children (posted=392, coalesced=261, drained=131)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] 100k flat directory adaptive top-K staging scenario closes
+[PASS] 100k flat directory adaptive top-K staging scenario destroys its window
+[PASS] summary stage cancellation scenario creates ViewerSpace
+[PASS] summary stage cancellation scenario exposes configuration
+[PASS] summary stage cancellation scenario accepts bounded scan configuration
+[PASS] summary stage cancellation scenario opens
+[PASS] summary stage cancellation scenario creates its viewer window
+[PASS] ViewerSpace holds root Done while budgeted child-reference copy remains staged
+[PASS] ViewerSpace cancellation fixture reaches a live deferred summary stage
+[PASS] summary stage cancellation scenario cancels with a staged summary
+[PASS] summary stage cancellation scenario destroys its window after staged cancellation
+[PASS] summary missing End scenario creates ViewerSpace
+[PASS] summary missing End scenario exposes configuration
+[PASS] summary missing End scenario accepts bounded scan configuration
+[PASS] summary missing End scenario opens
+[PASS] summary missing End scenario creates its viewer window
+[PASS] summary missing End scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_MISSING_END value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=193896 summaryStageBytes=0 summaryChunkMaxBytes=65352 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary missing End scenario closes
+[PASS] summary missing End scenario destroys its window
+[PASS] summary duplicate chunk scenario creates ViewerSpace
+[PASS] summary duplicate chunk scenario exposes configuration
+[PASS] summary duplicate chunk scenario accepts bounded scan configuration
+[PASS] summary duplicate chunk scenario opens
+[PASS] summary duplicate chunk scenario creates its viewer window
+[PASS] summary duplicate chunk scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_DUPLICATE_CHUNK value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=258072 summaryStageBytes=0 summaryChunkMaxBytes=65352 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary duplicate chunk scenario closes
+[PASS] summary duplicate chunk scenario destroys its window
+[PASS] summary out-of-order chunk scenario creates ViewerSpace
+[PASS] summary out-of-order chunk scenario exposes configuration
+[PASS] summary out-of-order chunk scenario accepts bounded scan configuration
+[PASS] summary out-of-order chunk scenario opens
+[PASS] summary out-of-order chunk scenario creates its viewer window
+[PASS] summary out-of-order chunk scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_OUT_OF_ORDER value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=194160 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary out-of-order chunk scenario closes
+[PASS] summary out-of-order chunk scenario destroys its window
+[PASS] aggregate validation scratch cap scenario creates ViewerSpace
+[PASS] aggregate validation scratch cap scenario exposes configuration
+[PASS] aggregate validation scratch cap scenario accepts bounded scan configuration
+[PASS] aggregate validation scratch cap scenario opens
+[PASS] aggregate validation scratch cap scenario creates its viewer window
+[PASS] aggregate validation scratch cap scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=4 actualState=4 rootBytes=0 scannedFiles=0 retainedFiles=0 effectiveFileBudget=7669 accepted=0 rejected=1 cappedFiles=0 retainedChildren=0 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=2112 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=0 modelValidationError=20 scratchCurrent=0 scratchPeak=0 scratchRejected=1 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=0 stagingRejected=0
+[PASS] aggregate validation scratch admission fails closed before allocating listing scratch
+[PASS] aggregate validation scratch cap scenario closes
+[PASS] aggregate validation scratch cap scenario destroys its window
+[PASS] aggregate active path cap scenario creates ViewerSpace
+[PASS] aggregate active path cap scenario exposes configuration
+[PASS] aggregate active path cap scenario accepts bounded scan configuration
+[PASS] aggregate active path cap scenario opens
+[PASS] aggregate active path cap scenario creates its viewer window
+[PASS] aggregate active path cap scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=116 rejected=1 cappedFiles=0 retainedChildren=0 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=1848 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=0 modelValidationError=20 scratchCurrent=0 scratchPeak=72960 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=1 stagingCurrent=0 stagingPeak=481272 stagingRejected=0
+[PASS] aggregate active-path admission rejects before allocating paths beyond the test cap
+[PASS] aggregate active path cap scenario closes
+[PASS] aggregate active path cap scenario destroys its window
+[PASS] cross-generation budget test creates delayed provider gate
+[PASS] cross-generation budget test creates ViewerSpace
+[PASS] cross-generation budget test exposes configuration
+[PASS] cross-generation budget test starts gated scan
+[PASS] first generation holds its path lease inside delayed provider read
+[PASS] first generation exposes its live aggregate path reservation
+[PASS] in-flight screenshot uses the authorized artifact sandbox
+[PASS] in-flight ViewerSpace screenshot saved: D:\RedSalamander.Perf\runs\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\artifacts\viewer-pe\viewer-space-inflight-96167500\viewer-space-inflight-scan.png
+[PASS] in-flight screenshot writes scan and DPI provenance beside the PNG
+[PASS] second generation rebuilds while first provider call remains blocked
+[PASS] new generation cannot reset or over-admit the retired generation's live path lease
+[PASS] delayed first provider call retires after release
+[PASS] retired generation releases its shared path lease exactly once
+[PASS] third generation rebuilds after the old lease retires
+[PASS] rebuild can reserve the path after the retired generation exits
+[PASS] cross-generation budget test closes its owned window
+[PASS] cross-generation scratch test creates ViewerSpace
+[PASS] cross-generation scratch test starts the first generation
+[PASS] cross-generation scratch test creates its window
+[PASS] initial empty scan prepares the scratch-pause test window
+[PASS] cross-generation scratch test arms the after-admission gate
+[PASS] cross-generation scratch test starts the gated listing
+[PASS] producer pauses immediately after validation scratch admission
+[PASS] paused generation retains its provider buffer while validating
+[PASS] cross-generation scratch test starts a rebuild
+[PASS] rebuild remains within the aggregate scratch cap while the retired generation owns its reservation
+[PASS] new generation proceeds after the prior scratch lease releases and the aggregate peak stays bounded
+[PASS] cross-generation scratch test closes its owned window
+[PASS] worker-staging rejection test creates ViewerSpace
+[PASS] worker-staging rejection test opens the long-name fixture
+[PASS] worker-staging rejection test creates its viewer window
+[PASS] tiny worker-staging budget rejects before retaining names or publishing a partial listing
+[PASS] worker-staging rejection test closes its owned window
+[PASS] worker-staging test creates its initial-read barrier
+[PASS] worker-staging pause events are created
+[PASS] cross-generation worker-staging test creates ViewerSpace
+[PASS] cross-generation worker-staging test opens the long-name fixture
+[PASS] cross-generation worker-staging test holds the initial root read before arming the pause
+[PASS] cross-generation worker-staging test arms the post-copy pause
+[PASS] initial blocked root read exits before the worker-staging generation starts
+[PASS] worker-staging test starts its first synthetic listing after the pause is armed
+[PASS] first worker holds the copied-name staging reservation at the deterministic pause
+[PASS] paused worker-staging generation retains its provider buffer
+[PASS] replacement generation starts while the first generation retains worker staging
+[PASS] replacement reaches the worker-staging admission while the prior generation retains its lease
+[PASS] replacement waits without rejection, over-admission, or partial listing while the retired worker owns its lease
+[PASS] replacement completes after the held worker releases and its aggregate peak stays within budget
+[PASS] next generation retries after the replacement completes and its staging lease drains
+[PASS] worker-staging capacity is reusable after retirement and its aggregate peak stays within the test budget
+[PASS] cross-generation worker-staging test closes its owned window
+ViewerPETests passed.
+[PASS] ViewerVLC configuration test executable path resolves
+[PASS] ViewerVLC.dll is present for configuration validation
+[PASS] ViewerVLC.dll loads successfully for configuration validation
+[PASS] ViewerVLC factory export is available for configuration validation
+[PASS] ViewerVLC factory creates an IViewer for configuration validation
+[PASS] ViewerVLC exposes IInformations for configuration validation
+[PASS] ViewerVLC configuration schema is available
+[PASS] ViewerVLC schema exposes last volume persistence
+[PASS] ViewerVLC schema exposes mute persistence
+[PASS] ViewerVLC schema identifies extra arguments as trusted-user configuration
+[PASS] ViewerVLC accepts bounded module tokens and ordinary trusted-user options
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC rejects separator, control, option, and external-module injection
+[PASS] ViewerVLC clamps maximum unsigned JSON values before narrowing
+[PASS] ViewerVLC returns the safely clamped unsigned configuration
+[PASS] ViewerVLC clamps each unsigned setting to its documented maximum
+[PASS] ViewerVLC accepts persisted volume and mute configuration
+[PASS] ViewerVLC returns normalized persisted configuration
+[PASS] ViewerVLC keeps the last volume in its persisted configuration
+[PASS] ViewerVLC keeps mute state in its persisted configuration
+[PASS] ViewerVLC marks non-default volume state for persistence
+ViewerPETests passed.
+[PASS] TestViewerSpaceListingValidation fresh harness process reports an exit code
+[PASS] TestViewerSpaceListingValidation fresh harness run passes
+[PASS] TestViewerSpaceListingValidation owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceBoundedHostileProviderScanning harness path resolves
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness process launches
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness process resumes
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness process exits before timeout
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness process reports an exit code
+[PASS] TestViewerSpaceBoundedHostileProviderScanning fresh harness run passes
+[PASS] TestViewerSpaceBoundedHostileProviderScanning owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace harness path resolves
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness process launches
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness process resumes
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness process exits before timeout
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness process reports an exit code
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace fresh harness run passes
+[PASS] TestViewerSpaceBlockedProviderCloseAndPostUpdateRace owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceDirectorySummaryProtocol harness path resolves
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process launches
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process resumes
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process exits before timeout
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process reports an exit code
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness run passes
+[PASS] TestViewerSpaceDirectorySummaryProtocol owned job has no active processes before desktop restoration
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute harness path resolves
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness kill-on-close job object is created
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness kill-on-close job object is configured
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process launches
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process joins the kill-on-close job
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process resumes
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process exits before timeout
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+[PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

@@ -3,6 +3,10 @@
 #include "PathUtils.h"
 #include "ViewerDxUiTheme.h"
 
+#ifdef ENABLE_TESTS
+#include "../../Tests/TestSupport/TestSupport.Tests.Runner.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -677,14 +681,71 @@ void RetryStagedFileCleanup() noexcept;
     return ! g_sharedEnvironment.shuttingDown && g_sharedEnvironment.generation == generation;
 }
 
-std::wstring GetWebView2UserDataFolder() noexcept
+HRESULT GetWebView2UserDataFolder(std::wstring& folder) noexcept
 {
-    wchar_t appData[MAX_PATH]{};
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
+    folder.clear();
+#ifdef ENABLE_TESTS
+    // Pass the test profile explicitly. Loader/runtime versions do not all
+    // apply a late process-environment override to an explicit default folder.
+    const auto runId            = RedSalamander::TestSupport::ReadEnvironmentValue(RedSalamander::TestSupport::kTestRunIdEnvironmentVariable);
+    const auto requestedProfile = RedSalamander::TestSupport::ReadEnvironmentValue(L"WEBVIEW2_USER_DATA_FOLDER");
+    if (runId.error != ERROR_SUCCESS || requestedProfile.error != ERROR_SUCCESS)
     {
-        return {};
+        return HRESULT_FROM_WIN32(runId.error != ERROR_SUCCESS ? runId.error : requestedProfile.error);
     }
-    return std::format(L"{}\\RedSalamander\\WebView2UserData", appData);
+    if (runId.value.has_value() && ! RedSalamander::TestSupport::IsSafeTestRunId(runId.value.value()))
+    {
+        return E_ACCESSDENIED;
+    }
+    if (requestedProfile.value.has_value() && ! requestedProfile.value.value().empty())
+    {
+        std::error_code error;
+        const auto profile = Common::Testing::NormalizeAbsoluteTestSandboxPath(requestedProfile.value.value(), error);
+        if (! error && Common::Testing::IsAuthorizedTestSandboxPath(profile, {}, false, error) &&
+            Common::Testing::RequireSandboxedExposureTarget(profile, error) && std::filesystem::is_directory(profile, error) && ! error)
+        {
+            if (runId.value.has_value())
+            {
+                const auto sandbox = RedSalamander::TestSupport::ResolveTestSandboxBase(error);
+                const auto scratch = sandbox / std::wstring(RedSalamander::TestSupport::kRunsDirectoryName) / runId.value.value() /
+                                     std::wstring(RedSalamander::TestSupport::kScratchDirectoryName);
+                if (error || Common::Testing::TestSandboxPathEquals(profile, scratch) || ! Common::Testing::IsSameOrDescendantTestSandboxPath(profile, scratch))
+                {
+                    return E_ACCESSDENIED;
+                }
+            }
+            folder = profile.native();
+            return S_OK;
+        }
+        if (runId.value.has_value())
+        {
+            // An invalid test override must not initialize a normal user profile.
+            return E_ACCESSDENIED;
+        }
+    }
+    else if (runId.value.has_value())
+    {
+        std::error_code error;
+        const auto profile =
+            RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"viewer-web",
+                                                              .leafSegment         = std::format(L"profile-{}-{}", GetCurrentProcessId(), GetTickCount64()),
+                                                              .fallbackRunIdPrefix = L"viewer-web",
+                                                              .cleanExisting       = false},
+                                                             error);
+        if (error || profile.empty())
+        {
+            return E_ACCESSDENIED;
+        }
+        folder = profile.native();
+        return S_OK;
+    }
+#endif
+    wchar_t appData[MAX_PATH]{};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
+    {
+        folder = std::format(L"{}\\RedSalamander\\WebView2UserData", appData);
+    }
+    return S_OK;
 }
 
 void ResetSharedEnvironmentImpl() noexcept
@@ -1790,11 +1851,7 @@ void ViewerWeb::OnCreate(HWND hwnd)
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (! _menuHandle)
-    {
-        _menuHandle.reset(GetMenu(hwnd));
-    }
-    if (_menuHandle)
+    if (GetMenu(hwnd))
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this]
@@ -1820,7 +1877,6 @@ void ViewerWeb::OnCreate(HWND hwnd)
             }
             return true;
         });
-        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     ApplyTheme(hwnd);
@@ -1927,7 +1983,7 @@ void ViewerWeb::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT code,
 
 void ViewerWeb::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
-    if (! _menuHandle)
+    if (! _menuHandle && ! GetMenu(hwnd))
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
     }
@@ -2645,6 +2701,11 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
         ApplyPendingViewerWebClassBackgroundBrush(_hWnd.get());
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+        if (! _embeddedMode)
+        {
+            _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+            Layout(_hWnd.get());
+        }
         ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
         if (! embeddedMode)
         {
@@ -2806,6 +2867,20 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         std::copy_n(_allowedDocumentUrl.begin(), copyLength, snapshot->allowedDocumentUrl.begin());
         snapshot->allowedDocumentUrl[copyLength] = L'\0';
         snapshot->scriptsEnabled                 = _documentScriptsEnabled ? TRUE : FALSE;
+#ifdef ENABLE_TESTS
+        if (g_sharedEnvironment.environment)
+        {
+            const auto environment = g_sharedEnvironment.environment.try_query<ICoreWebView2Environment7>();
+            wil::unique_cotaskmem_string userDataFolder;
+            if (environment && SUCCEEDED(environment->get_UserDataFolder(userDataFolder.put())) && userDataFolder)
+            {
+                const std::wstring_view folder(userDataFolder.get());
+                const size_t folderLength = std::min(folder.size(), snapshot->webViewUserDataFolder.size() - 1u);
+                std::copy_n(folder.begin(), folderLength, snapshot->webViewUserDataFolder.begin());
+                snapshot->webViewUserDataFolder[folderLength] = L'\0';
+            }
+        }
+#endif
         if (_webView)
         {
             wil::com_ptr<ICoreWebView2Settings> settings;
@@ -2857,6 +2932,19 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     switch (msg)
     {
 #ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetMenuAttachmentSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerMenuAttachmentDebugSnapshot*>(lp);
+            if (! snapshot)
+                return FALSE;
+            *snapshot = {_menuAttachResult.inputMenu,
+                         _menuAttachResult.menuAfterAttach,
+                         static_cast<unsigned>(_menuAttachResult.outcome),
+                         _menuAttachResult.fallbackError,
+                         _menuAttachResult.attempted,
+                         _menuAttachResult.attached};
+            return TRUE;
+        }
         case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
         {
             auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
@@ -2914,13 +3002,13 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_DPICHANGED: OnDpiChanged(hwnd, HIWORD(wp), reinterpret_cast<const RECT*>(lp)); return 0;
         case kAsyncLoadCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncLoadResult>(lp);
+            auto result = TakeMessagePayload<AsyncLoadResult>(hwnd, msg, lp);
             OnAsyncLoadComplete(std::move(result));
             return 0;
         }
         case kAsyncSaveCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncSaveWorkItem>(lp);
+            auto result = TakeMessagePayload<AsyncSaveWorkItem>(hwnd, msg, lp);
             OnAsyncSaveComplete(std::move(result));
             return 0;
         }
@@ -4112,10 +4200,17 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         return S_FALSE;
     }
 
-    // First caller — create the shared environment.
+    // Keep the original lifetime and shared-creation guards across profile/shell resolution.
     g_sharedEnvironment.createInProgress = true;
-
-    const std::wstring userDataFolder = GetWebView2UserDataFolder();
+    std::wstring userDataFolder;
+    const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
+    if (FAILED(folderHr))
+    {
+        _webViewInitInProgress = false;
+        ResetSharedEnvironmentImpl();
+        Release();
+        return folderHr;
+    }
 
     auto callback = MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
         [this, hwnd, sharedEnvironmentGeneration](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT

@@ -1,0 +1,11 @@
+{
+  "kind": "observed build block",
+  "configuration": "Release",
+  "platform": "x64",
+  "command": "build.ps1 -Configuration Release -Platform x64 -MaxCpuCount 4",
+  "exitCode": 1,
+  "processId": 95428,
+  "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe",
+  "reason": "An independently launched process is using an exact target output. The build canceled before compilation and did not terminate that process.",
+  "qualification": "No Release build or runtime qualification"
+}

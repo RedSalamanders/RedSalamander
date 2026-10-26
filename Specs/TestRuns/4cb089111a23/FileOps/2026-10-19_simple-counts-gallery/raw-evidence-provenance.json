@@ -1,0 +1,10 @@
+{
+  "runId": "20261019T160349Z-75836-17f67a74d0c94f78b4c6410376addba0",
+  "archive": "native-capture-run.zip",
+  "archiveSha256": "a19ca4e36b193cac071afc8fd4e30748dba85da45f9f07e68e4ddf278c83641a",
+  "location": "Private marked test root evidence/fileops-simple-counts-20261019",
+  "metricsSha256": "8be0b003eaf4475c044ecf8a2c94c807e0605ff0c545e7c308359b3e6181cdd3",
+  "metricsBytes": 9963499,
+  "metricsRows": 25389,
+  "limits": "Complete raw stream retained outside Git. No performance comparison or production qualification claim."
+}

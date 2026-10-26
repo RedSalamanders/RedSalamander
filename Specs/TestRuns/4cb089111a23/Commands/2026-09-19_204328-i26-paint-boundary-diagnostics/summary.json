@@ -1,0 +1,270 @@
+{
+  "variant": "paint-boundary-diagnostics",
+  "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_204328-i26-paint-boundary-diagnostics",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "failure": null,
+  "source_snapshot": "86d593b101e9afa719c60e8d7b73a61b03fa3703fa66b9990af8b4541ff86a2a",
+  "build_receipt": "17b498a35cde35e7fcf487159d6ac99c5b6e3ea9174aabbb2ccb87bc9f80daef",
+  "rounds": [
+    {
+      "repetition": 1,
+      "median_us": 66385,
+      "p95_us": 67212,
+      "samples_us": [
+        60337,
+        65839,
+        67157,
+        66230,
+        66352,
+        61478,
+        67134,
+        66509,
+        66142,
+        66822,
+        73975,
+        66679,
+        66191,
+        66210,
+        66623,
+        56147,
+        66897,
+        66031,
+        67212,
+        66418
+      ]
+    },
+    {
+      "repetition": 2,
+      "median_us": 66569.5,
+      "p95_us": 68000,
+      "samples_us": [
+        66316,
+        67440,
+        65482,
+        67288,
+        67517,
+        63388,
+        66159,
+        66625,
+        67527,
+        65098,
+        74245,
+        66613,
+        66448,
+        65922,
+        66953,
+        65732,
+        67011,
+        66526,
+        66107,
+        68000
+      ]
+    },
+    {
+      "repetition": 3,
+      "median_us": 66520,
+      "p95_us": 68982,
+      "samples_us": [
+        75244,
+        66401,
+        68982,
+        64817,
+        66045,
+        65255,
+        67075,
+        66552,
+        66600,
+        66567,
+        67081,
+        66519,
+        66106,
+        66836,
+        66521,
+        60685,
+        66192,
+        66512,
+        67239,
+        66107
+      ]
+    }
+  ],
+  "states": [
+    {
+      "Name": "0, 0, 144, 0",
+      "Count": 996
+    }
+  ],
+  "capture_results": [
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2295,
+      "value1": 523844,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2486,
+      "value1": 632819,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2295,
+      "value1": 523844,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2486,
+      "value1": 632819,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 35,
+      "value1": 4859,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2295,
+      "value1": 523844,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2486,
+      "value1": 632819,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 2045,
+      "value1": 379992,
+      "hr": 0
+    }
+  ],
+  "note": "Diagnostics and covered variants use the legacy HWND target. Single-surface records legacy drawing in a host-owned-device command list. A failing capture is not a valid performance acceptance baseline."
+}

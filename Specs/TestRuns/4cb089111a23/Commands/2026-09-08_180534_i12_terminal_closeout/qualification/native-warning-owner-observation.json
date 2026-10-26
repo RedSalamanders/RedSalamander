@@ -1,0 +1,10 @@
+{
+  "observedRun": "20260908T182930Z-97660-586ba5c9e75145f5b8839707c4bb9b6c",
+  "question": "Was the larger existing warning centered on the test app and readable?",
+  "ownerAnswer": "Yes, this is better",
+  "observedUtc": "2026-09-08T18:38:18.5147666Z",
+  "pesterTotal": 265,
+  "pesterPassed": 265,
+  "pesterFailed": 0,
+  "laterChange": "Warning lifetime begins before startup activation; layout and text unchanged. Fresh Full will qualify this ordering."
+}

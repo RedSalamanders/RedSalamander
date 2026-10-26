@@ -1,0 +1,20 @@
+# Whole-frame review receipt
+
+Reviewer: root (direct visual review reported to curator).
+Disposition: accepted for the exact 11 archived application frames at 144 DPI.
+Scope: five theme/arrangement captures and six width/body boundary captures listed below; the original `captures/raw-provenance.json` and capture bytes remain unchanged.
+
+Accepted files:
+explorer-light.png
+explorer-narrow.png
+analyst-dark.png
+analyst-rainbow.png
+analyst-high-contrast.png
+boundary-width-1100.png
+boundary-width-1099.png
+boundary-width-504.png
+boundary-width-503.png
+boundary-body-456.png
+boundary-body-455.png
+
+This records visual review of these exact frames only. It does not qualify other DPIs, locales, devices, or manual accessibility.

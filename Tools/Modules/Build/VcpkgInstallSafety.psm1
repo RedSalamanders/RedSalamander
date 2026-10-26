@@ -400,10 +400,225 @@ function Merge-RSVcpkgTripletSafe {
     }
 }
 
+# --- Default MSVC toolset pin -------------------------------------------------------------------------------------------
+# vcpkg builds dependencies with the newest MSVC toolset of the Visual Studio installation it prefers, while MSBuild compiles
+# and links this product with that installation's default toolset. The two differ when a newer toolset is installed beside
+# the default. That newer toolset can lack a compiler for a target (a side-by-side toolset without the x64-hosted ARM64
+# compiler failed every fresh ARM64 restore), and a compiled library (curl, 7-Zip, libjpeg-turbo) built by a toolset newer
+# than the one that links it is a link hazard. Every triplet installed here is therefore pinned, through an overlay triplet, to
+# the installation and default toolset the build discovers.
+#
+# These functions have the contract of DxUi's Tools/VisualStudio.psm1 and Tools/VcpkgTriplet.psm1, which the pinned library
+# documents as part of its consumer interface. They are implemented here instead of imported because this installer runs before
+# the pinned DxUi source is restored (the Ghostty ARM64 workflow installs first, and the README names it as the first step), so
+# it cannot depend on that checkout's presence. VcpkgInstallSafety.Tests.ps1 compares both implementations whenever the pinned
+# checkout is restored.
+
+function Get-RSVcpkgVisualStudioInstallation {
+    <#
+    .SYNOPSIS
+        The Visual Studio installation the build compiles with.
+
+    .DESCRIPTION
+        The one build.ps1 selects. In GitHub Actions that is the workflow-selected MSBuild (MSBUILD_EXE_PATH). Everywhere else it
+        is the newest installation, prereleases included, that has MSBuild, as vswhere reports it (the query Tools\Restore-DxUi.ps1
+        and DxUi use). Nothing here installs or writes anything, and no developer installation is named.
+    #>
+    [CmdletBinding()]
+    param()
+
+    if ($env:GITHUB_ACTIONS -eq 'true' -and -not [string]::IsNullOrWhiteSpace($env:MSBUILD_EXE_PATH)) {
+        $selected = [System.IO.Path]::GetFullPath($env:MSBUILD_EXE_PATH)
+        $match = [regex]::Match($selected, '^(?<root>.+?)\\MSBuild\\(?:Current|15\.0)\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$', 'IgnoreCase')
+        if (-not $match.Success) {
+            throw "The workflow-selected MSBuild is not inside a Visual Studio installation: $selected"
+        }
+        return $match.Groups['root'].Value
+    }
+
+    $vswhere = @(${env:ProgramFiles(x86)}, $env:ProgramFiles | Where-Object { $_ } |
+            ForEach-Object { Join-Path $_ 'Microsoft Visual Studio\Installer\vswhere.exe' }) |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if (-not $vswhere) {
+        throw 'Visual Studio Installer\vswhere.exe was not found; install Visual Studio 2026 with the C++ tools.'
+    }
+    $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath) |
+        Where-Object { $_ } | Select-Object -First 1
+    if (-not $installation) {
+        throw 'Visual Studio with MSBuild was not found; install Visual Studio 2026 with the C++ tools.'
+    }
+    return [string]$installation
+}
+
+function Get-RSVcpkgDefaultToolset {
+    <#
+    .SYNOPSIS
+        The MSVC toolset MSBuild compiles with when a project names none.
+
+    .DESCRIPTION
+        The version in the installation's VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt, such as 14.51.36231, which
+        its major.minor (14.51) selects. It can differ from the newest toolset installed side by side, which is what vcpkg would
+        choose. A file that is missing or holds anything else fails here, naming the file and the repair, before anything is
+        cloned, downloaded or installed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Installation
+    )
+
+    $path = [System.IO.Path]::GetFullPath(
+        [System.IO.Path]::Combine($Installation, 'VC', 'Auxiliary', 'Build', 'Microsoft.VCToolsVersion.default.txt'))
+    $cause = "Cannot pin vcpkg to the default MSVC toolset of the Visual Studio installation at '$Installation'"
+    if (-not [System.IO.File]::Exists($path)) {
+        throw "${cause}: '$path' does not exist. Install the Desktop development with C++ workload (MSVC build tools) in the Visual Studio Installer, or repair the installation, and try again."
+    }
+
+    $text = [System.IO.File]::ReadAllText($path).Trim()
+    $match = [regex]::Match($text, '^(?<majorMinor>[0-9]+\.[0-9]+)\.[0-9]+\z')
+    if (-not $match.Success) {
+        $shown = $text -replace '\s+', ' '
+        if ($shown.Length -gt 60) { $shown = $shown.Substring(0, 60) + '...' }
+        $holds = if ($shown) { "holds '$shown'" } else { 'is empty' }
+        throw "${cause}: '$path' $holds, not a toolset version such as 14.51.36231. Repair the installation in the Visual Studio Installer so the file names the default toolset, and try again."
+    }
+
+    return [pscustomobject]@{
+        Installation = $Installation
+        VersionFile  = $path
+        Version      = $text
+        MajorMinor   = $match.Groups['majorMinor'].Value
+    }
+}
+
+function ConvertTo-RSCMakeQuotedArgument {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
+
+    # In a CMake quoted argument a backslash, a double quote and a dollar sign are special; every other character is literal.
+    return '"' + [regex]::Replace($Value, '[\\"$]', '\$&') + '"'
+}
+
+function Get-RSVcpkgOverlayTripletText {
+    <#
+    .SYNOPSIS
+        The text of an overlay triplet: the stock triplet unchanged, then the two toolset pins.
+
+    .DESCRIPTION
+        Keeps the stock text's line endings (arm64-windows.cmake is CRLF and x64-windows.cmake LF), so the copy stays one
+        consistent file. vcpkg takes an overlay in place of the triplet of the same name. Pure: no I/O.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$StockText,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Installation,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[0-9]+\.[0-9]+$')]
+        [string]$ToolsetVersion
+    )
+
+    $newline = if ($StockText.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $text = $StockText
+    if ($text.Length -and -not $text.EndsWith("`n", [StringComparison]::Ordinal)) { $text += $newline }
+    if ($text.Length) { $text += $newline }
+    $pins = @(
+        '# RedSalamander: build with the Visual Studio installation and default MSVC toolset the build uses (generated by vcpkg-install.ps1; do not edit).',
+        "set(VCPKG_VISUAL_STUDIO_PATH $(ConvertTo-RSCMakeQuotedArgument $Installation))",
+        "set(VCPKG_PLATFORM_TOOLSET_VERSION $(ConvertTo-RSCMakeQuotedArgument $ToolsetVersion))")
+    return $text + (($pins -join $newline) + $newline)
+}
+
+function Resolve-RSVcpkgStockTripletPath {
+    <#
+    .SYNOPSIS
+        The stock triplet file of the selected vcpkg root: triplets\<name>.cmake, else triplets\community\<name>.cmake.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RegistryRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Triplet
+    )
+
+    [void](Assert-RSVcpkgTripletLeafName -Triplet $Triplet)
+    foreach ($relative in @("triplets\$Triplet.cmake", "triplets\community\$Triplet.cmake")) {
+        $candidate = Join-Path $RegistryRoot $relative
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "vcpkg triplet '$Triplet' is not one of the triplets of the selected vcpkg root: neither triplets\$Triplet.cmake nor triplets\community\$Triplet.cmake exists beneath '$RegistryRoot'. Install a triplet that vcpkg ships, or check -VcpkgRoot."
+}
+
+function Update-RSVcpkgOverlayTriplet {
+    <#
+    .SYNOPSIS
+        Writes <OutputDirectory>\<name>.cmake, the overlay of the stock triplet pinned to the toolset.
+
+    .DESCRIPTION
+        The file is rewritten only when its bytes would change, so an unchanged install leaves its timestamp alone. Changing the
+        triplet changes vcpkg's package ABI hash, so the first install after a change rebuilds the packages; vcpkg's binary
+        cache then serves them to any other root whose triplet text is identical. Returns Triplet, Directory (what
+        --overlay-triplets takes), Path and Changed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StockTripletPath,
+
+        [Parameter(Mandatory = $true)]
+        $Toolset,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OutputDirectory
+    )
+
+    # Relative paths mean the caller's PowerShell location, which .NET file calls do not know.
+    $StockTripletPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($StockTripletPath)
+    $OutputDirectory = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
+    if (-not [System.IO.File]::Exists($StockTripletPath)) {
+        throw "The triplet to pin does not exist: $StockTripletPath"
+    }
+
+    $name = [System.IO.Path]::GetFileName($StockTripletPath)
+    $text = Get-RSVcpkgOverlayTripletText `
+        -StockText ([System.IO.File]::ReadAllText($StockTripletPath)) `
+        -Installation $Toolset.Installation `
+        -ToolsetVersion $Toolset.MajorMinor
+    $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($text)
+    $path = Join-Path $OutputDirectory $name
+    $changed = -not ([System.IO.File]::Exists($path) -and
+        [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($path)) -ceq [Convert]::ToBase64String($bytes))
+    if ($changed) {
+        [void][System.IO.Directory]::CreateDirectory($OutputDirectory)
+        [System.IO.File]::WriteAllBytes($path, $bytes)
+    }
+
+    return [pscustomobject]@{
+        Triplet   = [System.IO.Path]::GetFileNameWithoutExtension($name)
+        Directory = $OutputDirectory
+        Path      = $path
+        Changed   = $changed
+    }
+}
+
 Export-ModuleMember -Function @(
     'Assert-RSVcpkgTripletLeafName',
     'Assert-RSVcpkgManifestVersionConstraintsAvailable',
     'Resolve-RSVcpkgSafeChildPath',
     'Get-RSVcpkgFileSha256Hex',
-    'Merge-RSVcpkgTripletSafe'
+    'Merge-RSVcpkgTripletSafe',
+    'Get-RSVcpkgVisualStudioInstallation',
+    'Get-RSVcpkgDefaultToolset',
+    'Get-RSVcpkgOverlayTripletText',
+    'Resolve-RSVcpkgStockTripletPath',
+    'Update-RSVcpkgOverlayTriplet'
 )

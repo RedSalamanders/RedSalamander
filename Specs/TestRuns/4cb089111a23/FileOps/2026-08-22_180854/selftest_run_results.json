@@ -1,0 +1,65 @@
+{
+    "run_started_utc": "2026-08-22T16:08:51.730Z",
+    "duration_ms": 2839,
+    "fail_fast": false,
+    "timeout_scale": 0.1,
+    "repeat_count": 2,
+    "shuffle_seed": 789,
+    "case_filter": "FileOps_ProviderCapabilityMatrix",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260822T160830Z-62420-f6138830c9da42f5939577106754f5d0\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2358,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 0.1,
+            "repeat_count": 2,
+            "shuffle_seed": 789,
+            "case_filter": "FileOps_ProviderCapabilityMatrix",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ProviderCapabilityMatrix",
+                    "status": "passed",
+                    "duration_ms": 469,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 62,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 78,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "FileOps_ProviderCapabilityMatrix",
+                    "status": "passed",
+                    "duration_ms": 453,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 62,
+                    "repeat_index": 2
+                }
+            ]
+        }
+    ],
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+}

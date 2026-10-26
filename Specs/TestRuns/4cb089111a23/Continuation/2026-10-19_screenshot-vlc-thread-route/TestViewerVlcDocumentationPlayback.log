@@ -1,0 +1,25 @@
+[PASS] Playback capture starts its no-activation witness
+[PASS] Playback uses marked sandbox paths
+[PASS] Generated silent AVI is written
+[PASS] Playback fixture resolves its binary directory
+[PASS] Playback viewer plugin loads
+[PASS] Playback viewer instance is created
+[PASS] Playback configuration interface is available
+[PASS] Playback pins the installed runtime and stays silent
+[PASS] Generated AVI opens through the real media route
+[PASS] Real VLC decodes the generated video with positive time and duration
+[PASS] Playback monitor resolves
+[PASS] Playback window fits the full work area
+[FAIL] Native media capture succeeds
+[FAIL] Native video layer contains the generated picture
+[PASS] Playback capture preserves foreground isolation
+[FAIL] Owned-window Space invokes real VLC pause
+[FAIL] Paused decoder time stays stable
+[FAIL] Native media capture succeeds
+[FAIL] Native video layer contains the generated picture
+[PASS] Playback capture preserves foreground isolation
+[PASS] Playback viewer closes
+[PASS] Playback child and viewer retire
+[PASS] Playback no-activation witness completes
+[PASS] Playback manifests are saved
+ViewerPETests failed.

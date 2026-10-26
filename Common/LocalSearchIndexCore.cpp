@@ -1,4 +1,5 @@
 #include "LocalSearchIndexCore.h"
+#include "DirectoryRecordCursor.h"
 
 #include "Helpers.h"
 #include "PathUtils.h"
@@ -12,11 +13,19 @@
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <memory>
+#include <memory_resource>
 #include <optional>
 #include <span>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <unordered_set>
+#include <utility>
+
+#if defined(__SANITIZE_ADDRESS__)
+#include <sanitizer/asan_interface.h>
+#endif
 
 #include <winioctl.h>
 #include <winternl.h>
@@ -32,7 +41,98 @@ namespace
 {
 constexpr HRESULT kNotSupportedHr         = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 constexpr uint64_t kProgressIntervalItems = 2048u;
-constexpr ULONGLONG kProgressIntervalMs   = 200u;
+// This ephemeral graph trades modest hash density for fewer large bucket arrays
+// when a live volume grows just past a power-of-two record count.
+constexpr float kNativeSeedMaxLoadFactor = 1.25f;
+// Seed-only storage: pack small graph nodes/names without individual allocation
+// headers. Large or over-aligned allocations retain ordinary deallocation so
+// growing hash buckets do not accumulate until the end of enumeration.
+class NativeSeedScratchResource final : public std::pmr::memory_resource
+{
+public:
+    explicit NativeSeedScratchResource(std::pmr::memory_resource& upstream = *std::pmr::new_delete_resource()) noexcept : _upstream(upstream)
+    {
+    }
+    NativeSeedScratchResource(const NativeSeedScratchResource&)            = delete;
+    NativeSeedScratchResource& operator=(const NativeSeedScratchResource&) = delete;
+    NativeSeedScratchResource(NativeSeedScratchResource&&)                 = delete;
+    NativeSeedScratchResource& operator=(NativeSeedScratchResource&&)      = delete;
+
+private:
+    static constexpr size_t kChunkBytes     = 64u * 1024u;
+    static constexpr size_t kSmallBytes     = 256u;
+    static constexpr size_t kChunkAlignment = alignof(std::max_align_t);
+    struct ChunkDeleter final
+    {
+        std::pmr::memory_resource* upstream = nullptr; // Borrows this resource's upstream.
+        void operator()(std::byte* storage) const noexcept
+        {
+#if defined(__SANITIZE_ADDRESS__)
+            __asan_unpoison_memory_region(storage, kChunkBytes);
+#endif
+            upstream->deallocate(storage, kChunkBytes, kChunkAlignment);
+        }
+    };
+    using Chunk = std::unique_ptr<std::byte, ChunkDeleter>;
+    std::pmr::memory_resource& _upstream;
+    std::vector<Chunk> _chunks;
+    std::byte* _cursor = nullptr; // Borrows the current owned chunk.
+    size_t _remaining  = 0u;
+
+    [[nodiscard]] void* do_allocate(size_t bytes, size_t alignment) override
+    {
+        if (bytes > kSmallBytes || alignment > kChunkAlignment)
+        {
+            return _upstream.allocate(bytes, alignment);
+        }
+        bytes                = (std::max)(bytes, size_t{1u});
+        size_t reservedBytes = bytes;
+#if defined(__SANITIZE_ADDRESS__)
+        // Keep every object boundary and ended lifetime visible to ASan, even
+        // though upstream ownership covers a complete chunk. Shadow granularity
+        // is eight bytes; each aligned object keeps its own trailing red zone.
+        alignment     = (std::max)(alignment, size_t{8u});
+        reservedBytes = ((bytes + 7u) & ~size_t{7u}) + 8u;
+#endif
+        void* aligned = _cursor;
+        size_t space  = _remaining;
+        if (std::align(alignment, reservedBytes, aligned, space) == nullptr)
+        {
+            Chunk chunk{static_cast<std::byte*>(_upstream.allocate(kChunkBytes, kChunkAlignment)), ChunkDeleter{&_upstream}};
+#if defined(__SANITIZE_ADDRESS__)
+            __asan_poison_memory_region(chunk.get(), kChunkBytes);
+#endif
+            aligned = chunk.get();
+            space   = kChunkBytes;
+            _chunks.push_back(std::move(chunk));
+        }
+#if defined(__SANITIZE_ADDRESS__)
+        __asan_unpoison_memory_region(aligned, bytes);
+#endif
+        _cursor    = static_cast<std::byte*>(aligned) + reservedBytes;
+        _remaining = space - reservedBytes;
+        return aligned;
+    }
+    void do_deallocate(void* storage, size_t bytes, size_t alignment) override
+    {
+        if (bytes > kSmallBytes || alignment > kChunkAlignment)
+        {
+            _upstream.deallocate(storage, bytes, alignment);
+        }
+#if defined(__SANITIZE_ADDRESS__)
+        else
+        {
+            const size_t ownedBytes = (std::max)(bytes, size_t{1u});
+            __asan_poison_memory_region(storage, ((ownedBytes + 7u) & ~size_t{7u}) + 8u);
+        }
+#endif
+    }
+    [[nodiscard]] bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
+    {
+        return this == &other;
+    }
+};
+constexpr ULONGLONG kProgressIntervalMs = 200u;
 
 constexpr uint32_t kSnapshotMagic                            = 0x58444953u; // "SIDX"
 constexpr uint32_t kSnapshotVersion                          = 1u;
@@ -205,7 +305,7 @@ struct SeedEntry final
 {
     NodeId id{};
     NodeId parentId{};
-    std::wstring name;
+    std::pmr::wstring name;
     unsigned long fileAttributes = 0u;
 };
 
@@ -216,14 +316,16 @@ struct EnumeratedChild final
     unsigned long fileAttributes = 0u;
 };
 
-struct UsnRecordData final
+template <typename NameString> struct ParsedUsnRecordData final
 {
     NodeId id{};
     NodeId parentId{};
-    std::wstring name;
+    NameString name;
     unsigned long fileAttributes = 0u;
     uint32_t reason              = 0u;
 };
+
+using UsnRecordData = ParsedUsnRecordData<std::wstring>;
 
 struct PersistedEntry final
 {
@@ -341,6 +443,23 @@ struct RepositoryProgressState final
     ULONGLONG lastReportedTick              = 0u;
     FileSystemSearchPhase lastReportedPhase = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
     bool hasReported                        = false;
+    uint64_t pendingEmitCalls               = 0u;
+    uint64_t pendingSuppressedCalls         = 0u;
+
+    // This frame-local state is passed by reference. Publish deltas at real
+    // callback boundaries and retain the trailing counts on every return path.
+    void FlushPerfCounters() noexcept
+    {
+        if (pendingEmitCalls != 0u)
+            EmitPerfCount(L"search.progress.emit_calls", std::exchange(pendingEmitCalls, 0u));
+        if (pendingSuppressedCalls != 0u)
+            EmitPerfCount(L"search.progress.emit_suppressed", std::exchange(pendingSuppressedCalls, 0u));
+    }
+
+    ~RepositoryProgressState() noexcept
+    {
+        FlushPerfCounters();
+    }
 };
 
 void UpdateRepositoryRuntimeStatus(RepositoryStatus* status,
@@ -425,7 +544,7 @@ HRESULT EmitRepositoryProgress(RepositoryProgressState& progress, bool force) no
         return S_OK;
     }
 
-    EmitPerfCount(L"search.progress.emit_calls");
+    ++progress.pendingEmitCalls;
     if (force)
     {
         EmitPerfCount(L"search.progress.emit_forced");
@@ -435,10 +554,11 @@ HRESULT EmitRepositoryProgress(RepositoryProgressState& progress, bool force) no
     if (! force && progress.hasReported && progress.latest.phase == progress.lastReportedPhase &&
         (progress.workUnits - progress.lastReportedUnits) < kProgressIntervalItems && (now - progress.lastReportedTick) < kProgressIntervalMs)
     {
-        EmitPerfCount(L"search.progress.emit_suppressed");
+        ++progress.pendingSuppressedCalls;
         return S_OK;
     }
 
+    progress.FlushPerfCounters();
     HRESULT hr = S_OK;
     {
         Debug::Perf::Scope callbackPerf(L"search.progress.callback_ms");
@@ -1777,11 +1897,12 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
     }
 }
 
+template <typename NameString>
 [[nodiscard]] bool TryAssignUsnRecordName(const USN_RECORD_COMMON_HEADER* header,
                                           const uint32_t fileNameOffset,
                                           const uint32_t fileNameLength,
                                           const size_t minimumNameOffset,
-                                          std::wstring& outName) noexcept
+                                          NameString& outName) noexcept
 {
     if (header == nullptr || (fileNameLength % sizeof(wchar_t)) != 0u)
     {
@@ -1797,13 +1918,32 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
 
     const auto* recordBytes = reinterpret_cast<const std::byte*>(header);
     const auto* nameData    = reinterpret_cast<const wchar_t*>(recordBytes + fileNameOffset);
-    outName.assign(nameData, static_cast<size_t>(fileNameLength / sizeof(wchar_t)));
+    const size_t nameLength = static_cast<size_t>(fileNameLength / sizeof(wchar_t));
+    if constexpr (std::is_same_v<NameString, std::wstring_view>)
+    {
+        outName = std::wstring_view{nameData, nameLength};
+    }
+    else
+    {
+        outName.assign(nameData, nameLength);
+    }
     return true;
 }
 
-[[nodiscard]] bool TryParseUsnRecord(const USN_RECORD_COMMON_HEADER* header, UsnRecordData& out) noexcept
+template <typename NameString> [[nodiscard]] bool TryParseUsnRecord(const USN_RECORD_COMMON_HEADER* header, ParsedUsnRecordData<NameString>& out) noexcept
 {
-    out = {};
+    out.id       = {};
+    out.parentId = {};
+    if constexpr (std::is_same_v<NameString, std::wstring_view>)
+    {
+        out.name = {};
+    }
+    else
+    {
+        out.name.clear();
+    }
+    out.fileAttributes = 0u;
+    out.reason         = 0u;
     if (header == nullptr)
     {
         return false;
@@ -1863,30 +2003,13 @@ struct DirectoryInfoEntryView final
 
 [[nodiscard]] bool TryParseFileFullDirectoryInformationEntry(const std::byte* buffer, size_t bytesValid, size_t offset, DirectoryInfoEntryView& out) noexcept
 {
-    out                              = {};
-    constexpr size_t kFileNameOffset = offsetof(FILE_FULL_DIR_INFO, FileName);
-
-    if (buffer == nullptr || offset >= bytesValid || bytesValid - offset < kFileNameOffset)
-    {
+    out = {};
+    Common::DirectoryRecords::RecordView<FILE_FULL_DIR_INFO> record{};
+    if (buffer == nullptr || FAILED(Common::DirectoryRecords::Read<FILE_FULL_DIR_INFO>(std::span<const std::byte>(buffer, bytesValid), offset, record)))
         return false;
-    }
-
-    const auto* info = reinterpret_cast<const FILE_FULL_DIR_INFO*>(buffer + offset);
-    if ((info->FileNameLength % sizeof(wchar_t)) != 0u)
-    {
-        return false;
-    }
-
-    const size_t remainingBytes = bytesValid - offset;
-    const size_t entryBytes     = info->NextEntryOffset != 0u ? static_cast<size_t>(info->NextEntryOffset) : remainingBytes;
-    if (entryBytes < kFileNameOffset || entryBytes > remainingBytes || static_cast<size_t>(info->FileNameLength) > entryBytes - kFileNameOffset)
-    {
-        return false;
-    }
-
-    out.name           = std::wstring_view(info->FileName, static_cast<size_t>(info->FileNameLength / sizeof(wchar_t)));
-    out.fileAttributes = info->FileAttributes;
-    out.nextOffset     = info->NextEntryOffset != 0u ? entryBytes : 0u;
+    out.name           = record.name;
+    out.fileAttributes = record.information->FileAttributes;
+    out.nextOffset     = record.nextOffset != 0u ? record.nextOffset - offset : 0u;
     return true;
 }
 
@@ -2371,14 +2494,34 @@ HRESULT LoadSnapshot(VolumeIndex& volume, QueryStats& stats) noexcept
     return foldedText.find(foldedPattern) != std::wstring_view::npos;
 }
 
-[[nodiscard]] bool MatchName(const QueryPlan& plan, std::wstring_view name) noexcept
+[[nodiscard]] bool MatchName(const QueryPlan& plan, std::wstring_view name, QueryStats& stats, RepositoryProgressState& progress) noexcept
 {
     switch (plan.nameMode)
     {
         case FILESYSTEM_SEARCH_NAME_DISABLED: return true;
         case FILESYSTEM_SEARCH_NAME_WILDCARD: return MatchWildcard(name, plan.namePattern, plan.matchCaseName);
         case FILESYSTEM_SEARCH_NAME_LITERAL: return MatchLiteral(name, plan.namePattern, plan.matchCaseName);
-        case FILESYSTEM_SEARCH_NAME_REGEX: return plan.compiledNameRegex != nullptr && std::regex_search(std::wstring(name), *plan.compiledNameRegex);
+        case FILESYSTEM_SEARCH_NAME_REGEX:
+        {
+            if (plan.compiledNameRegex == nullptr)
+            {
+                return false;
+            }
+            try
+            {
+                return std::regex_search(name.begin(), name.end(), *plan.compiledNameRegex);
+            }
+            catch (const std::regex_error&)
+            {
+                // noexcept boundary: the engine's implementation-defined complexity/stack
+                // limit gave up on this name. Keep that bound (the service runs as
+                // LocalSystem) and never retry with a costlier engine, but report the
+                // name as unevaluated rather than as a silent non-match.
+                stats.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
+                progress.latest.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
+                return false;
+            }
+        }
     }
 
     return false;
@@ -2567,8 +2710,7 @@ HRESULT HydrateDirectorySubtreeImpl(VolumeIndex& volume,
             }
             if (isAlias && IsDirectoryAttributes(child.fileAttributes))
             {
-                hr = HydrateDirectorySubtreeImpl(
-                    volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
+                hr = HydrateDirectorySubtreeImpl(volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
                 if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
                 {
                     return hr;
@@ -2685,6 +2827,33 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
     }
 #endif
 
+    const auto seedStartedAt        = std::chrono::steady_clock::now();
+    const bool captureSeedTelemetry = Debug::Perf::IsCaptureEnabled();
+    bool nativeVolumeOpened         = false;
+    bool seedSucceeded              = false;
+    uint64_t enumerationUs          = 0u;
+    uint64_t projectionFinishedUs   = 0u;
+    uint64_t mftEntryCount          = 0u;
+    uint64_t mftParentCount         = 0u;
+    // Declared before the temporary graph so the final sample includes its destruction.
+    const auto traceSeedCompletion = wil::scope_exit([&]() noexcept
+    {
+        if (captureSeedTelemetry && nativeVolumeOpened)
+        {
+            const uint64_t totalUs = Debug::Perf::ElapsedUs(seedStartedAt);
+            Debug::Perf::Emit(L"search.ntfs.seed_mft_stages_us",
+                              std::format(L"enumeration={};projection={};retirement={};complete={}",
+                                          enumerationUs,
+                                          projectionFinishedUs == 0u ? 0u : projectionFinishedUs - enumerationUs,
+                                          projectionFinishedUs == 0u ? 0u : totalUs - projectionFinishedUs,
+                                          seedSucceeded),
+                              totalUs,
+                              mftEntryCount,
+                              mftParentCount,
+                              seedSucceeded ? S_OK : S_FALSE);
+        }
+    });
+
     NodeId volumeRootId{};
     HRESULT hr = GetPathNodeId(volume.volumeRoot, volumeRootId);
     if (FAILED(hr))
@@ -2692,10 +2861,15 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
         return hr;
     }
 
-    std::unordered_map<NodeId, SeedEntry, NodeIdHash> allEntries;
+    // The complete graph may contain millions of nodes for a tiny tracked root.
+    // Small node/name allocations die together; independently owned tracked
+    // entries survive. Child buffers retain ordinary growth/deallocation.
+    NativeSeedScratchResource seedMemory;
+    std::pmr::unordered_map<NodeId, SeedEntry, NodeIdHash> allEntries{&seedMemory};
+    allEntries.max_load_factor(kNativeSeedMaxLoadFactor);
     std::unordered_map<NodeId, std::vector<NodeId>, NodeIdHash> childrenByParent;
 
-    SeedEntry volumeRootEntry{};
+    SeedEntry volumeRootEntry{.name = std::pmr::wstring{&seedMemory}};
     volumeRootEntry.id             = volumeRootId;
     volumeRootEntry.parentId       = {};
     volumeRootEntry.fileAttributes = FILE_ATTRIBUTE_DIRECTORY;
@@ -2713,6 +2887,7 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
         return hr;
     }
 
+    nativeVolumeOpened = true;
     MFT_ENUM_DATA_V0 enumData{};
     enumData.StartFileReferenceNumber = 0u;
     enumData.LowUsn                   = 0u;
@@ -2767,18 +2942,22 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
                 return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
             }
 
-            UsnRecordData parsed{};
+            ParsedUsnRecordData<std::wstring_view> parsed{};
             if (TryParseUsnRecord(header, parsed))
             {
-                SeedEntry entry{};
-                entry.id                        = parsed.id;
-                entry.parentId                  = parsed.parentId;
-                entry.name                      = std::move(parsed.name);
-                entry.fileAttributes            = parsed.fileAttributes;
-                const auto [insertIt, inserted] = allEntries.emplace(entry.id, entry);
+                SeedEntry entry{.name = std::pmr::wstring{&seedMemory}};
+                entry.id       = parsed.id;
+                entry.parentId = parsed.parentId;
+                // The view borrows the current input batch; own it before reuse.
+                entry.name.assign(parsed.name.data(), parsed.name.size());
+                entry.fileAttributes  = parsed.fileAttributes;
+                const NodeId entryId  = entry.id;
+                const NodeId parentId = entry.parentId;
+                // A duplicate ID leaves the candidate untouched for alias detection.
+                const auto [insertIt, inserted] = allEntries.try_emplace(entryId, std::move(entry));
                 if (inserted)
                 {
-                    childrenByParent[entry.parentId].push_back(entry.id);
+                    childrenByParent[parentId].push_back(entryId);
                 }
                 else if (! (insertIt->second.parentId == entry.parentId) || insertIt->second.name != entry.name)
                 {
@@ -2788,8 +2967,8 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
                 hr = AdvanceRepositoryProgress(progress,
                                                FILESYSTEM_SEARCH_PHASE_INDEX_LOOKUP,
                                                volume.normalizedRootPath,
-                                               IsDirectoryAttributes(entry.fileAttributes) ? 1u : 0u,
-                                               IsDirectoryAttributes(entry.fileAttributes) ? 0u : 1u,
+                                               IsDirectoryAttributes(parsed.fileAttributes) ? 1u : 0u,
+                                               IsDirectoryAttributes(parsed.fileAttributes) ? 0u : 1u,
                                                0u,
                                                0u,
                                                1u);
@@ -2801,8 +2980,20 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
 
             offset += header->RecordLength;
         }
+        mftEntryCount  = static_cast<uint64_t>(allEntries.size());
+        mftParentCount = static_cast<uint64_t>(childrenByParent.size());
     }
 
+    enumerationUs = Debug::Perf::ElapsedUs(seedStartedAt);
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"search.ntfs.seed_mft.buckets",
+                          std::format(L"maxEntryLoadFactor={}", allEntries.max_load_factor()),
+                          0u,
+                          static_cast<uint64_t>(allEntries.bucket_count()),
+                          static_cast<uint64_t>(childrenByParent.bucket_count()),
+                          S_OK);
+    }
     const std::vector<std::wstring> components = SplitRelativeComponents(volume.volumeRoot, volume.normalizedRootPath);
     NodeId trackedRootId                       = volumeRootId;
     unsigned long trackedRootAttributes        = FILE_ATTRIBUTE_DIRECTORY;
@@ -2866,9 +3057,9 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
         }
 
         Entry entry{};
-        entry.id             = seedIt->second.id;
-        entry.parentId       = (id == trackedRootId) ? NodeId{} : seedIt->second.parentId;
-        entry.name           = seedIt->second.name;
+        entry.id       = seedIt->second.id;
+        entry.parentId = (id == trackedRootId) ? NodeId{} : seedIt->second.parentId;
+        entry.name.assign(seedIt->second.name.data(), seedIt->second.name.size());
         entry.fileAttributes = seedIt->second.fileAttributes;
         if (id == trackedRootId && ! volume.trackedRootIsDirectory && entry.name.empty())
         {
@@ -2885,6 +3076,8 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
 
     RebuildDerivedState(volume);
     stats.usedNtfsEnumeration = true;
+    projectionFinishedUs      = Debug::Perf::ElapsedUs(seedStartedAt);
+    seedSucceeded             = true;
     return S_OK;
 }
 
@@ -3531,7 +3724,7 @@ HRESULT ExecuteQueryImpl(const VolumeIndex& volume,
             return S_OK;
         }
 
-        if (! MatchName(plan, entry.name))
+        if (! MatchName(plan, entry.name, stats, progress))
         {
             return S_OK;
         }
@@ -3659,7 +3852,7 @@ HRESULT STDMETHODCALLTYPE EmitSqliteCandidate(Candidate* candidate, void* cookie
         return E_POINTER;
     }
 
-    if (! MatchName(*context.plan, candidate->displayName))
+    if (! MatchName(*context.plan, candidate->displayName, *context.stats, *context.progress))
     {
         return S_OK;
     }
@@ -3771,6 +3964,16 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
                                               RepositoryProgressState& progress,
                                               FallbackReason* outFallbackReason = nullptr) noexcept
 {
+#ifdef ENABLE_TESTS
+    stats.directSqliteStoredVolumeState       = 0u;
+    stats.directSqliteStoredJournalId         = 0u;
+    stats.directSqliteStoredNextUsn           = 0u;
+    stats.directSqliteCurrentJournalKnown     = false;
+    stats.directSqliteCurrentJournalAvailable = false;
+    stats.directSqliteCurrentJournalId        = 0u;
+    stats.directSqliteCurrentFirstUsn         = 0u;
+    stats.directSqliteCurrentNextUsn          = 0u;
+#endif
     if (storeInfo.kind != PersistentStoreKind::Sqlite)
     {
         return S_FALSE;
@@ -3801,12 +4004,30 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
         return S_FALSE;
     }
 
+#ifdef ENABLE_TESTS
+    stats.directSqliteStoredVolumeState = storedVolume.state;
+    stats.directSqliteStoredJournalId   = storedVolume.journalId;
+    stats.directSqliteStoredNextUsn     = storedVolume.nextUsn;
+#endif
     if (storedVolume.state == SqliteIndexStore::kVolumeStateCurrentnessUnproven)
     {
         stats.sqliteCutoverBlocked = true;
         if (outFallbackReason != nullptr)
         {
             *outFallbackReason = FallbackReason::StoreStale;
+        }
+        return S_FALSE;
+    }
+
+    // Imported or otherwise unready rows are not a candidate source. The low-level
+    // SQLite reader can inspect them, but emitting them here would leak stale names
+    // before the live fallback and suppress fresh metadata through deduplication.
+    if (storedVolume.state != SqliteIndexStore::kVolumeStateReady)
+    {
+        stats.sqliteCutoverBlocked = true;
+        if (outFallbackReason != nullptr)
+        {
+            *outFallbackReason = FallbackReason::CutoverBlocked;
         }
         return S_FALSE;
     }
@@ -3838,7 +4059,13 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
             .currentFirstUsn         = journalState.firstUsn,
             .currentNextUsn          = journalState.nextUsn,
         };
-        const bool allowDirectQuery = ShouldAllowDirectSqliteQueryImpl(probe);
+        ++stats.directSqliteFreshnessChecks;
+        stats.directSqliteCurrentJournalKnown     = currentJournalKnown;
+        stats.directSqliteCurrentJournalAvailable = journalState.available;
+        stats.directSqliteCurrentJournalId        = journalState.id;
+        stats.directSqliteCurrentFirstUsn         = journalState.firstUsn;
+        stats.directSqliteCurrentNextUsn          = journalState.nextUsn;
+        const bool allowDirectQuery               = ShouldAllowDirectSqliteQueryImpl(probe);
 #else
         const bool allowDirectQuery = ShouldAllowDirectSqliteQueryImpl(storedVolume.state == SqliteIndexStore::kVolumeStateReady,
                                                                        currentJournalKnown,
@@ -3993,7 +4220,7 @@ HRESULT EnumerateLiveFileSystem(const QueryPlan& plan,
             return progressHr;
         }
 
-        if (! plan.includeFiles || ! MatchName(plan, GetPathLeaf(plan.rootPath)))
+        if (! plan.includeFiles || ! MatchName(plan, GetPathLeaf(plan.rootPath), stats, progress))
         {
             stats.entryCount = stats.fileCount;
             return S_OK;
@@ -4066,7 +4293,7 @@ HRESULT EnumerateLiveFileSystem(const QueryPlan& plan,
             bool emittedCandidate = false;
             if ((isDirectory && plan.includeDirectories) || (! isDirectory && plan.includeFiles))
             {
-                if (MatchName(plan, child.name))
+                if (MatchName(plan, child.name, stats, progress))
                 {
                     Candidate candidate{};
                     candidate.fullPath       = child.fullPath;
@@ -4081,8 +4308,7 @@ HRESULT EnumerateLiveFileSystem(const QueryPlan& plan,
                     if (hr != kSkipCandidateHr)
                     {
                         ++stats.candidateCount;
-                        progress.latest.candidateFiles = stats.candidateCount;
-                        emittedCandidate               = true;
+                        emittedCandidate = true;
                     }
                 }
             }
@@ -4108,7 +4334,7 @@ HRESULT EnumerateLiveFileSystem(const QueryPlan& plan,
 } // namespace
 
 #ifdef ENABLE_TESTS
-bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize) noexcept
+bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize, bool useSeedArena) noexcept
 {
     if (recordBytes == nullptr || recordBytesSize < sizeof(USN_RECORD_COMMON_HEADER))
     {
@@ -4122,7 +4348,147 @@ bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize) 
     }
 
     UsnRecordData parsed{};
-    return TryParseUsnRecord(header, parsed);
+    const bool parsedStandard = TryParseUsnRecord(header, parsed);
+    if (! useSeedArena)
+    {
+        return parsedStandard;
+    }
+
+    NativeSeedScratchResource nameStorage;
+    ParsedUsnRecordData<std::pmr::wstring> pooled{.name = std::pmr::wstring{&nameStorage}};
+    ParsedUsnRecordData<std::wstring_view> borrowed{};
+    const bool parsedArena = TryParseUsnRecord(header, pooled);
+    const bool parsedView  = TryParseUsnRecord(header, borrowed);
+    if (parsedStandard != parsedArena || parsedStandard != parsedView)
+    {
+        return false;
+    }
+    return parsedStandard && pooled.name.get_allocator().resource() == &nameStorage && pooled.id == parsed.id && pooled.parentId == parsed.parentId &&
+           pooled.fileAttributes == parsed.fileAttributes && pooled.reason == parsed.reason &&
+           std::wstring_view(pooled.name.data(), pooled.name.size()) == parsed.name && borrowed.name == parsed.name && borrowed.id == parsed.id &&
+           borrowed.parentId == parsed.parentId && borrowed.fileAttributes == parsed.fileAttributes && borrowed.reason == parsed.reason;
+}
+
+bool ValidateUsnRecordFailureResetForTests() noexcept
+{
+    NativeSeedScratchResource storage;
+    UsnRecordData ordinary{};
+    ParsedUsnRecordData<std::pmr::wstring> pooled{.name = std::pmr::wstring{&storage}};
+    ParsedUsnRecordData<std::wstring_view> borrowed{};
+    const auto checkReset = [](auto& parsed, const USN_RECORD_COMMON_HEADER* header) noexcept
+    {
+        parsed.id             = NodeId{1u, 2u};
+        parsed.parentId       = NodeId{3u, 4u};
+        parsed.name           = L"stale-\u00e9-\u65e5-\U0001f642-name";
+        parsed.fileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+        parsed.reason         = USN_REASON_FILE_CREATE;
+        return ! TryParseUsnRecord(header, parsed) && parsed.id.IsZero() && parsed.parentId.IsZero() && parsed.name.empty() && parsed.fileAttributes == 0u &&
+               parsed.reason == 0u;
+    };
+    USN_RECORD_COMMON_HEADER invalid{};
+    invalid.RecordLength = sizeof(invalid);
+    invalid.MajorVersion = 99u;
+    return checkReset(ordinary, &invalid) && checkReset(pooled, &invalid) && checkReset(borrowed, &invalid) && checkReset(ordinary, nullptr) &&
+           checkReset(pooled, nullptr) && checkReset(borrowed, nullptr) && pooled.name.get_allocator().resource() == &storage;
+}
+
+bool VerifyNativeSeedScratchStorageForTests() noexcept
+{
+    class TrackingUpstream final : public std::pmr::memory_resource
+    {
+    public:
+        TrackingUpstream()                                   = default;
+        TrackingUpstream(const TrackingUpstream&)            = delete;
+        TrackingUpstream& operator=(const TrackingUpstream&) = delete;
+        TrackingUpstream(TrackingUpstream&&)                 = delete;
+        TrackingUpstream& operator=(TrackingUpstream&&)      = delete;
+        size_t liveBytes                                     = 0u;
+        size_t maximumRequest                                = 0u;
+        size_t allocations                                   = 0u;
+        size_t deallocations                                 = 0u;
+
+    private:
+        void* do_allocate(size_t bytes, size_t alignment) override
+        {
+            void* storage = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+            liveBytes += bytes;
+            maximumRequest = (std::max)(maximumRequest, bytes);
+            ++allocations;
+            return storage;
+        }
+        void do_deallocate(void* storage, size_t bytes, size_t alignment) override
+        {
+            liveBytes -= bytes;
+            ++deallocations;
+            std::pmr::new_delete_resource()->deallocate(storage, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
+        {
+            return this == &other;
+        }
+    } upstream;
+    std::wstring retained;
+    {
+        NativeSeedScratchResource storage{upstream};
+#if defined(__SANITIZE_ADDRESS__)
+        auto* checked              = static_cast<std::byte*>(storage.allocate(13u, 1u));
+        const bool objectVisible   = __asan_address_is_poisoned(checked) == 0 && __asan_address_is_poisoned(checked + 12u) == 0;
+        const bool boundaryVisible = __asan_address_is_poisoned(checked + 13u) != 0;
+        storage.deallocate(checked, 13u, 1u);
+        if (! objectVisible || ! boundaryVisible || __asan_address_is_poisoned(checked) == 0 || __asan_address_is_poisoned(checked + 12u) == 0)
+        {
+            return false;
+        }
+#endif
+        std::pmr::vector<std::byte> odd{&storage};
+        odd.resize(1u);
+        std::pmr::vector<uint64_t> aligned{&storage};
+        aligned.resize(3u, 0x123456789abcdef0ull);
+        if (reinterpret_cast<uintptr_t>(aligned.data()) % alignof(uint64_t) != 0u || aligned.back() != 0x123456789abcdef0ull)
+        {
+            return false;
+        }
+        const size_t smallLive = upstream.liveBytes;
+        {
+            std::pmr::vector<std::byte> large{&storage};
+            large.resize(4096u);
+            struct alignas(64) AlignedValue final
+            {
+                std::array<std::byte, 64u> bytes{};
+            };
+            static_assert(sizeof(AlignedValue) == 64u);
+            std::pmr::vector<AlignedValue> overAligned{&storage};
+            overAligned.resize(2u);
+            if (reinterpret_cast<uintptr_t>(overAligned.data()) % alignof(AlignedValue) != 0u || upstream.liveBytes <= smallLive)
+            {
+                return false;
+            }
+        }
+        if (upstream.liveBytes != smallLive)
+        {
+            return false;
+        }
+        std::vector<std::pmr::vector<std::byte>> blocks;
+        blocks.reserve(1024u);
+        for (size_t index = 0u; index < 1024u; ++index)
+        {
+            std::pmr::vector<std::byte> block{&storage};
+            block.resize(256u, static_cast<std::byte>(index % 251u));
+            blocks.push_back(std::move(block));
+        }
+        for (size_t index = 0u; index < blocks.size(); ++index)
+        {
+            const auto expected = static_cast<std::byte>(index % 251u);
+            if (blocks[index].front() != expected || blocks[index].back() != expected)
+            {
+                return false;
+            }
+        }
+        const std::pmr::wstring name{L"retained-\u00e9-\u65e5-\U0001f642-name", &storage};
+        retained.assign(name.data(), name.size());
+    }
+    return retained == L"retained-\u00e9-\u65e5-\U0001f642-name" && upstream.liveBytes == 0u && upstream.allocations == upstream.deallocations &&
+           upstream.maximumRequest == 64u * 1024u;
 }
 
 bool TryParseFileFullDirectoryInformationForTests(const void* entryBytes, size_t entryBytesSize) noexcept
@@ -4348,14 +4714,13 @@ PersistentStoreInfo Repository::GetValidatedCachedPersistentStoreInfoForQuery() 
             ! cachedStoreInfo.primaryPath.empty())
         {
             PersistentStoreFileStamp currentFileStamp{};
-            const bool currentFileStampValid = TryCapturePersistentStoreFileStamp(cachedStoreInfo, currentFileStamp);
-            const bool databaseStampUnchanged = cachedFileStamp.databaseExists == currentFileStamp.databaseExists &&
-                                                cachedFileStamp.databaseLastWriteTime == currentFileStamp.databaseLastWriteTime &&
-                                                cachedFileStamp.databaseBytes == currentFileStamp.databaseBytes;
-            const bool emptyReadOnlyWalTransition =
-                cachedFileStampValid && currentFileStampValid && databaseStampUnchanged &&
-                ((! cachedFileStamp.walExists && currentFileStamp.walExists && currentFileStamp.walBytes == 0u) ||
-                 (cachedFileStamp.walExists && cachedFileStamp.walBytes == 0u && ! currentFileStamp.walExists));
+            const bool currentFileStampValid      = TryCapturePersistentStoreFileStamp(cachedStoreInfo, currentFileStamp);
+            const bool databaseStampUnchanged     = cachedFileStamp.databaseExists == currentFileStamp.databaseExists &&
+                                                    cachedFileStamp.databaseLastWriteTime == currentFileStamp.databaseLastWriteTime &&
+                                                    cachedFileStamp.databaseBytes == currentFileStamp.databaseBytes;
+            const bool emptyReadOnlyWalTransition = cachedFileStampValid && currentFileStampValid && databaseStampUnchanged &&
+                                                    ((! cachedFileStamp.walExists && currentFileStamp.walExists && currentFileStamp.walBytes == 0u) ||
+                                                     (cachedFileStamp.walExists && cachedFileStamp.walBytes == 0u && ! currentFileStamp.walExists));
             if (cachedFileStampValid && currentFileStampValid && (currentFileStamp == cachedFileStamp || emptyReadOnlyWalTransition))
             {
                 EmitPerfCount(L"search.backend.sqlite.store_generation_probe_skips");
@@ -4485,7 +4850,15 @@ bool Repository::TryBuildInMemoryPersistentStoreInfo(PersistentStoreInfo& outInf
         bool allVolumesReady = true;
         for (const std::shared_ptr<VolumeIndex>& volume : volumes)
         {
-            std::lock_guard volumeGuard(volume->mutex);
+            // Status enrichment is optional. Cold seeding owns this mutex across
+            // volume enumeration; the request thread must keep serving the coherent
+            // on-disk inspection and independent warmup state instead of waiting.
+            std::unique_lock volumeGuard(volume->mutex, std::try_to_lock);
+            if (! volumeGuard.owns_lock())
+            {
+                outInfo = {};
+                return false;
+            }
             if (! volume->initialized || volume->entries.empty())
             {
                 continue;
@@ -4583,8 +4956,8 @@ void Repository::RefreshCachedPersistentStoreInfo() noexcept
 void Repository::InvalidateCachedPersistentStoreInfo() noexcept
 {
     std::lock_guard guard(_mutex);
-    _cachedPersistentStoreInfo      = {};
-    _cachedPersistentStoreInfo.kind = _options.persistentStoreKind;
+    _cachedPersistentStoreInfo           = {};
+    _cachedPersistentStoreInfo.kind      = _options.persistentStoreKind;
     _cachedPersistentStoreFileStamp      = {};
     _cachedPersistentStoreInfoValid      = false;
     _cachedPersistentStoreFileStampValid = false;
@@ -4736,7 +5109,7 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             const auto directSqliteStart = std::chrono::steady_clock::now();
             validatedStoreInfo           = GetValidatedCachedPersistentStoreInfoForQuery();
             hasValidatedStoreInfo        = true;
-            hr = TryEnumerateFromConfiguredSqliteStore(
+            hr                           = TryEnumerateFromConfiguredSqliteStore(
                 validatedStoreInfo, sqlitePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
             if (hr == S_OK)
             {
@@ -4813,9 +5186,9 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             return hr;
         }
 
-        const auto executeStart = std::chrono::steady_clock::now();
+        const auto executeStart                   = std::chrono::steady_clock::now();
         const PersistentStoreInfo cachedStoreInfo = hasValidatedStoreInfo ? validatedStoreInfo : GetValidatedCachedPersistentStoreInfoForQuery();
-        hr = TryEnumerateFromConfiguredSqliteStore(
+        hr                                        = TryEnumerateFromConfiguredSqliteStore(
             cachedStoreInfo, effectivePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
         if (hr == S_FALSE)
         {
@@ -5045,24 +5418,27 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
         EmitPerfCount(L"search.sqlite.partial_emit_count", static_cast<uint64_t>(sqliteEmittedPathKeys.size()));
         EmitPerfCount(L"search.sqlite.partial_emit_set_size", static_cast<uint64_t>(sqliteEmittedPathKeys.size()));
 
-        std::shared_ptr<VolumeIndex> volume;
-        hr = AcquireOrCreateVolume(support, volume);
-        if (FAILED(hr))
+        // Authoritative SQLite requests have only direct-store and live-scan
+        // routes. Their fallback must not touch a volume held by background seed.
+        if (! sqliteAuthoritative)
         {
-            return hr;
-        }
+            std::shared_ptr<VolumeIndex> volume;
+            hr = AcquireOrCreateVolume(support, volume);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
 
-        {
             EmitPerfCount(L"search.backend.inmemory.attempts");
-            std::lock_guard volumeGuard(volume->mutex);
+            std::unique_lock volumeGuard(volume->mutex, std::try_to_lock);
             if (fallbackReason == FallbackReason::None)
             {
-                fallbackReason = volume->initialized ? FallbackReason::StoreStale : FallbackReason::WarmupRunning;
+                fallbackReason = volumeGuard.owns_lock() && volume->initialized ? FallbackReason::StoreStale : FallbackReason::WarmupRunning;
             }
 
             EmitPerfCount(GetFallbackReasonMetricName(fallbackReason));
 
-            if (! sqliteAuthoritative && IsVolumeCurrentForNoWaitQuery(*volume, stats))
+            if (volumeGuard.owns_lock() && IsVolumeCurrentForNoWaitQuery(*volume, stats))
             {
                 PopulateStatsFromVolume(*volume, stats);
                 AssignRepositoryProgressCounts(progress, stats.directoryCount, stats.fileCount, 0u, 0u);
@@ -5106,6 +5482,14 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
 
                 return S_OK;
             }
+        }
+        else
+        {
+            if (fallbackReason == FallbackReason::None)
+            {
+                fallbackReason = FallbackReason::WarmupRunning;
+            }
+            EmitPerfCount(GetFallbackReasonMetricName(fallbackReason));
         }
 
         stats.queryExecutionMode   = QueryExecutionMode::LiveScanFallback;
@@ -5191,7 +5575,10 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
             *outStats = stats;
         }
 
-        return S_OK;
+        // Flush throttled progress with final unique counts; batch flushing must
+        // not invent an unqualified update or leave the observer one item behind.
+        AssignRepositoryProgressCounts(progress, stats.directoryCount, stats.fileCount, stats.candidateCount, 0u);
+        return ReportRepositoryProgress(progress, FILESYSTEM_SEARCH_PHASE_ENUMERATING, effectivePlan.rootPath, S_OK, true);
     }
     catch (const std::bad_alloc&)
     {
@@ -5460,13 +5847,13 @@ HRESULT Repository::HydrateRootAndQueryForTests(const QueryPlan& plan, std::vect
         PopulateStatsFromVolume(*volume, stats);
         QueryPlan effectivePlan = plan;
         effectivePlan.rootPath  = volume->normalizedRootPath;
-        hr = ExecuteQueryImpl(*volume,
-                              effectivePlan,
-                              nullptr,
-                              nullptr,
-                              stats,
-                              progress,
-                              [&](Candidate&& candidate) noexcept -> HRESULT
+        hr                      = ExecuteQueryImpl(*volume,
+                                                   effectivePlan,
+                                                   nullptr,
+                                                   nullptr,
+                                                   stats,
+                                                   progress,
+                                                   [&](Candidate&& candidate) noexcept -> HRESULT
         {
             try
             {
@@ -5688,6 +6075,11 @@ void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uin
         .firstUsn  = firstUsn,
         .nextUsn   = nextUsn,
     };
+}
+
+void Repository::ClearNextJournalStateForTests() noexcept
+{
+    g_nextJournalStateForTests.reset();
 }
 
 HRESULT Repository::QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept

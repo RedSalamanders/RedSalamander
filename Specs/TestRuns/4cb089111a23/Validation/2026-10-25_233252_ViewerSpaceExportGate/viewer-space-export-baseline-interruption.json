@@ -1,0 +1,9 @@
+{
+  "head": "7b3ae28ce1f6cc99bbeb6453354c123fd7b43721",
+  "interruptedUtc": "2026-10-26T00:43:43.6257798Z",
+  "reason": "Exact lifetime-gate failure reproduced in the same binary. Stop additional baseline repetitions to instrument its stage; any in-flight case is incomplete and excluded.",
+  "completedRecords": 7,
+  "passes": 6,
+  "failures": 1,
+  "qualification": false
+}

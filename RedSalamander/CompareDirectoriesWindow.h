@@ -144,6 +144,8 @@ void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesRunSnapshotForWindow(HWND compareWindow, CompareDirectoriesRunDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetCompareDirectoriesPanePathForWindow(HWND compareWindow, bool leftPane, const std::filesystem::path& path) noexcept;
 [[nodiscard]] bool DebugSetCompareDirectoriesRunPendingForWindow(HWND compareWindow, bool pending) noexcept;
+// The Compare window's own two-pane FolderWindow, or nullptr when compareWindow is not one.
+[[nodiscard]] FolderWindow* DebugGetCompareDirectoriesFolderWindowForWindow(HWND compareWindow) noexcept;
 void DebugFailNextCompareDirectoriesWindowCreate() noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesMenuBarItemLabel(size_t index, std::wstring& outText) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesMenuBarItemScreenRect(size_t index, RECT& outRect) noexcept;

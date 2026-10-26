@@ -1,0 +1,85 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-01T05:39:07.7052748Z",
+  "run_ended_utc": "2026-10-01T05:39:31.5509762Z",
+  "duration_ms": 23846,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\RsI26Adopt\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "V:\\RedSalamander.Perf\\runs\\20261001T053849Z-103036-d119f7ff4de548d4bce5742b4fbccbf7\\artifacts\\selftest\\last_run",
+  "test_root": "V:\\RedSalamander.Perf",
+  "run_id": "20261001T053849Z-103036-d119f7ff4de548d4bce5742b4fbccbf7",
+  "fail_fast": false,
+  "timeout_scale": 3.0,
+  "case_filter": "file_operations_phase0_typed_contract_source_guard,file_operations_preparing_lifecycle_source_guard",
+  "exit_code": 0,
+  "passed": 2,
+  "failed": 0,
+  "skipped": 0,
+  "total": 2,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "V:\\RedSalamander.Perf",
+    "run_id": "20261001T053849Z-103036-d119f7ff4de548d4bce5742b4fbccbf7",
+    "allowed_run_ids": [
+      "20261001T053849Z-103036-d119f7ff4de548d4bce5742b4fbccbf7"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 11867,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "file_operations_phase0_typed_contract_source_guard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1072,
+          "attempt": 1
+        },
+        {
+          "name": "file_operations_preparing_lifecycle_source_guard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 163,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

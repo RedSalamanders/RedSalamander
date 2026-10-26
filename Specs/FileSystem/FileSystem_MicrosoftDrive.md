@@ -305,7 +305,7 @@ through the timeouts above. Readers and writers opened by the host bridge run wi
 option context and are bounded the same way. File Operations admits same- and cross-provider
 mutation on Graph routes. Witnesses: the Microsoft Drive debug self-test
 `RunGraphStalledRequestCancelSelfTests` against the in-tree fake Graph endpoint
-(`FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp` over `Common/LoopbackHttpFixture.h`: item
+(`FileSystemMicrosoftDrive.Tests.FakeGraph.cpp` over `Common/LoopbackHttpFixture.h`: item
 metadata by path and id, children with `$top` paging, folder creation, PATCH with If-Match,
 DELETE, simple content upload, upload sessions with Content-Range chunks, ranged download; the
 plugin is redirected to it through the test-only `ConfigureFakeGraph` seam, which also bypasses

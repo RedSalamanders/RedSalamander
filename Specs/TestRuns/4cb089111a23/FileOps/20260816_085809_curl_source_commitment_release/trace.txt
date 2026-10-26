@@ -1,0 +1,7 @@
+run=1 passed=199 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=2 passed=199 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=3 passed=199 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=4 passed=199 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=5 passed=199 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+metric=FileOps.Curl.SourceCommitmentGuard samples=5 durations_us=4000,6000,6000,5000,6000 source_commands=22,22,22,22,22 delivered_bytes=4098,4098,4098,4098,4098 hr=0x8007012B
+perf_metrics_sha256=d40e99beeb400d869998c4392094c701a8c965c903297d4c430fd9043c7a9d13 raw_lines=140 invalid_json_lines=0 processes=5

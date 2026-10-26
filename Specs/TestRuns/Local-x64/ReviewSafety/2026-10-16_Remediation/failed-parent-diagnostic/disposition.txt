@@ -1,0 +1,7 @@
+The diagnostic replay failed with Win32 ERROR_PATH_NOT_FOUND (3) for the deep child
+in the unbound configured-concurrency-4 cancellation case. Earlier matrix variants
+had passed. The child directory may already be committed as removed before the root
+observes cancellation. The fixture now probes release by renaming its surviving
+ancestor, so it no longer requires a removed child to exist. Production cancellation
+behavior was not changed. Preserve both failed runs; only the new complete matrix can
+qualify the corrected witness.

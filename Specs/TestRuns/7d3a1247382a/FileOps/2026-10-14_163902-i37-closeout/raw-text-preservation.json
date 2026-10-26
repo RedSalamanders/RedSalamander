@@ -1,0 +1,12 @@
+{
+  "kind": "lossless raw-text archive preservation",
+  "originalPath": "D:/RedSalamander.Perf/evidence/folder-copy-progress-final-accounting-20261014-01/done-admission-focused-transcript.txt",
+  "originalArchiveName": "done-admission-focused-transcript.txt",
+  "rawBytes": 6268,
+  "rawSha256": "152289C9F0D9EC3E5D97C07566E697EC0635E45E9663FAD166560C01100CCC34",
+  "storedPath": "done-admission-focused-transcript.txt.gz",
+  "storedBytes": 2494,
+  "storedSha256": "6D25AC8A5B8768C35E8D6D04E0964F1AE93AA3CB5CCDB47FBF4DC5BC12A18E64",
+  "method": "gzip with mtime0; decompression verified byte-identical. Original text remains in marked raw evidence.",
+  "reason": "Preserve actual banner/header trailing whitespace without rewriting raw facts or changing frozen attributes. Compressed storage is not a cleaned transcript."
+}

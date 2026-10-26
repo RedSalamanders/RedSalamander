@@ -1,0 +1,31 @@
+{
+  "configuration": "Release",
+  "locale": "fr-FR",
+  "dpi": 144,
+  "source_commit": "b859cbc37199a566aec9a62ee7cb2df2121f1114",
+  "workspace": "1e0a528ba61afea93fd457a6793ee7612f32daba5311d54e17d289e25f4b6095",
+  "receipt": "2657022283160eb730f770f075b61770754307d0df54a871c442b2af12422a57",
+  "capture": "Application WGC scenario harness; notified owned keyboard phase only",
+  "images": [
+    {
+      "file": "path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "sha256": "6aba4c376461e95f5b8267b2a67b6f83c3510c35df7c8f69436959b06c3c8093",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-keyboard-release\\commands\\throughput-disclosure\\path-keyboard-focused__480dip__fr-FR__144dpi.png"
+    },
+    {
+      "file": "graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "sha256": "b3e10e6cb05e739b0f252ccd770b9afa0c97bb29732bb2fe5e944596fdaa4187",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-keyboard-release\\commands\\throughput-disclosure\\graph-labels-stacked__480dip__fr-FR__144dpi.png"
+    },
+    {
+      "file": "throughput-expanded__480dip__fr-FR__144dpi.png",
+      "sha256": "49f27b89ec573eed3b69b0573ee2016935853641c89ed8466323a5f5f2485d0e",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-keyboard-release\\commands\\throughput-disclosure\\throughput-expanded__480dip__fr-FR__144dpi.png"
+    },
+    {
+      "file": "throughput-collapsed__480dip__fr-FR__144dpi.png",
+      "sha256": "1c93293095990411e068f2506d44aa32a2e88f5be4a22f2d529c1309ee161eb1",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-keyboard-release\\commands\\throughput-disclosure\\throughput-collapsed__480dip__fr-FR__144dpi.png"
+    }
+  ]
+}

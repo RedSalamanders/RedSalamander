@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-08-20T13:48:00.161Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\src\\RedSalamander-focus-baseline-20260820\\.build\\TestSandbox\\runs\\20260820T134407Z-101228-2c620b6b43944aac82c22e3ed0da606a\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3000,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "folderView_perf_focus_selection_state",
+            "status": "passed",
+            "duration_ms": 2629,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 8.0,
+    "repeat_count": 1
+}

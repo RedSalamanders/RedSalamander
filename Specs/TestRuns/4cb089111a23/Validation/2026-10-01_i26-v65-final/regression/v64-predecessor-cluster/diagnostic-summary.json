@@ -1,0 +1,44 @@
+{
+  "schema": "i26-v64-completed-predecessor-diagnostic.v1",
+  "diagnosticOnly": true,
+  "acceptanceEffect": "none",
+  "status": "diagnostic-pass",
+  "runId": "20261001T090117Z-11004-b0ec823cd95e4d1fa0ceed28c41043f9",
+  "exitCode": 0,
+  "candidateBefore": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "25acab62ae2fa24ab85b1171bc2cd6644f2a99cc72e468eb6a42a21ea31777a7",
+    "receiptSha256": "cbf0600857652a8c2d1822970f4021a1fce65410ec31b684122bb91ee729f134",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "candidateAfter": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "25acab62ae2fa24ab85b1171bc2cd6644f2a99cc72e468eb6a42a21ea31777a7",
+    "receiptSha256": "cbf0600857652a8c2d1822970f4021a1fce65410ec31b684122bb91ee729f134",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "names": [
+    "cmd_pane_fileops_conflict_pending_inspection_teardown",
+    "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+    "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+    "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+    "cmd_pane_fileops_completed_group_and_navigation"
+  ],
+  "repeatCount": 3,
+  "executions": 15,
+  "passed": 15,
+  "failed": 0,
+  "skipped": 0,
+  "sandboxClean": true,
+  "runnerResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v64-completed-predecessor-cluster\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "runnerResultSha256": "fd0eda83c994699c1a4ba8e67c9d2ce033f55441f18bc66c7d62129069b988e7",
+  "nativeResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v64-completed-predecessor-cluster\\runner-run\\artifacts\\selftest\\last_run\\commands\\results.json",
+  "nativeResultSha256": "189aecd3529539daf922a1686942e34b3a24062e7727ce8aea40df27af864b11",
+  "failureObservations": [],
+  "originalV58FullPreserved": true,
+  "doesNotReplaceFull": true
+}

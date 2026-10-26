@@ -10,6 +10,7 @@
 #undef max
 #endif
 
+#include "NaturalSort.h"
 #include "NavigationLocation.h"
 #include "NavigationView.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -637,7 +638,7 @@ void AppendMatchingDirectoryNamesFromFilesInformation(IFilesInformation* info, s
 
 [[nodiscard]] bool SortAndTrimEditSuggestNames(std::vector<std::wstring>& names)
 {
-    std::sort(names.begin(), names.end(), [](const std::wstring& a, const std::wstring& b) { return _wcsicmp(a.c_str(), b.c_str()) < 0; });
+    std::sort(names.begin(), names.end(), [](const std::wstring& left, const std::wstring& right) noexcept { return NaturalSort::Less(left, right); });
     const bool hasMore     = names.size() > kEditSuggestMaxItems;
     const size_t keepCount = (hasMore && kEditSuggestMaxItems > 0u) ? (kEditSuggestMaxItems - 1u) : kEditSuggestMaxItems;
     if (names.size() > keepCount)

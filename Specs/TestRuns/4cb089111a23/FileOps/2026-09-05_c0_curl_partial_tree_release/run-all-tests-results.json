@@ -1,0 +1,359 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-05T10:06:30.0315989Z",
+  "run_ended_utc": "2026-09-05T10:06:45.3885036Z",
+  "duration_ms": 15357,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Release",
+  "executable": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-release-20260905\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "c0-curl-partial-tree-release-20260905",
+  "fail_fast": true,
+  "timeout_scale": 1.0,
+  "case_filter": "C0_",
+  "exit_code": 0,
+  "passed": 11,
+  "failed": 0,
+  "skipped": 0,
+  "total": 11,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 42,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "c0-curl-partial-tree-release-20260905",
+    "allowed_run_ids": [
+      "c0-curl-partial-tree-release-20260905"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\a20-terminal-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-conflict-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-conflict-regression-repaired-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-host-regression-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-native-delete-candidate-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-native-delete-candidate-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-native-delete-red-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-native-delete-verified-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-candidate-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-ftp-regression-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-qualified-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-red-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-partial-tree-verified-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-reply-loss-candidate-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-reply-loss-host-regression-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-reply-loss-red-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-curl-reply-loss-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-candidate-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-family-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-red-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-local-overwrite-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-candidate-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-verified-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-owned-publication-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-enabled-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-contract-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-phase10-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-routine-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-streams-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-surface-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-phase10-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-streams-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-streams-isolated-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-surface-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-surface-rerun-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-routine-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-source-contract-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\viewerimgraw-scheduler-triage-20260905b",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 8745,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1250,
+          "attempt": 1
+        },
+        {
+          "name": "C0_GDriveCommittedCopyResponseLost",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 265,
+          "attempt": 1
+        },
+        {
+          "name": "C0_GDriveCommittedDeleteResponseLost",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 188,
+          "attempt": 1
+        },
+        {
+          "name": "C0_NativeCopyFailurePreservesKnownAxes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 312,
+          "attempt": 1
+        },
+        {
+          "name": "C0_MutationReceiptPrefixBoundary",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 63,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlNativeDeleteGuards",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3187,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlCommittedMutationResponseLost",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 829,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlHostCommittedDeleteResponseLost",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 156,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlPartialTreeFailure",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1344,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlHostPartialTreeFailure",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 203,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 31,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

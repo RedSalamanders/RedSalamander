@@ -1,0 +1,4409 @@
+{
+  "configuration": "Debug",
+  "fixture": "Unchanged 5000 files and ten requests",
+  "selection": "First native/observer-eligible attempts, never latency selection",
+  "counterbalance": "Debug legacy/product/product/legacy; Release product/legacy/legacy/product",
+  "role_statistics": {
+    "fresh legacy baseline": [
+      {
+        "request_index": 1,
+        "key": "name",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 24694,
+          "median_us": 35518,
+          "max_us": 38853
+        },
+        "render_calls": [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 2,
+        "key": "extension",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 57054,
+          "median_us": 58310,
+          "max_us": 64229
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 3,
+        "key": "time",
+        "direction": "descending",
+        "stats": {
+          "count": 5,
+          "min_us": 76244,
+          "median_us": 81543,
+          "max_us": 88918
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 4,
+        "key": "size",
+        "direction": "descending",
+        "stats": {
+          "count": 5,
+          "min_us": 62091,
+          "median_us": 69760,
+          "max_us": 74233
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 5,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 62392,
+          "median_us": 67264,
+          "max_us": 70842
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 6,
+        "key": "name",
+        "direction": "descending",
+        "stats": {
+          "count": 5,
+          "min_us": 57569,
+          "median_us": 58406,
+          "max_us": 65872
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 7,
+        "key": "extension",
+        "direction": "descending",
+        "stats": {
+          "count": 5,
+          "min_us": 38421,
+          "median_us": 40671,
+          "max_us": 45928
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 8,
+        "key": "time",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 47765,
+          "median_us": 52877,
+          "max_us": 56736
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 9,
+        "key": "size",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 52133,
+          "median_us": 52736,
+          "max_us": 58134
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "request_index": 10,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 5,
+          "min_us": 46420,
+          "median_us": 49255,
+          "max_us": 52124
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "successful_presents": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      }
+    ],
+    "candidate legacy control": [
+      {
+        "request_index": 1,
+        "key": "name",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 28435,
+          "median_us": 33004.5,
+          "max_us": 37688
+        },
+        "render_calls": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "request_index": 2,
+        "key": "extension",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 57806,
+          "median_us": 60665.5,
+          "max_us": 64029
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 3,
+        "key": "time",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 75829,
+          "median_us": 79105.5,
+          "max_us": 82508
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 4,
+        "key": "size",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 66857,
+          "median_us": 68308.0,
+          "max_us": 70424
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 5,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 63793,
+          "median_us": 67735.0,
+          "max_us": 75323
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 6,
+        "key": "name",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 60415,
+          "median_us": 63204.5,
+          "max_us": 81209
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 7,
+        "key": "extension",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 37905,
+          "median_us": 40821.0,
+          "max_us": 44920
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 8,
+        "key": "time",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 48226,
+          "median_us": 59932.0,
+          "max_us": 68371
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 9,
+        "key": "size",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 53400,
+          "median_us": 56033.5,
+          "max_us": 63582
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "request_index": 10,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 48097,
+          "median_us": 51211.5,
+          "max_us": 55424
+        },
+        "render_calls": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "warm_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "successful_presents": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      }
+    ],
+    "candidate product paint": [
+      {
+        "request_index": 1,
+        "key": "name",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 324,
+          "median_us": 472.0,
+          "max_us": 3192
+        },
+        "render_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "request_index": 2,
+        "key": "extension",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 34838,
+          "median_us": 41217.0,
+          "max_us": 66408
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 3,
+        "key": "time",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 45050,
+          "median_us": 52166.5,
+          "max_us": 85351
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 4,
+        "key": "size",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 40381,
+          "median_us": 42962.5,
+          "max_us": 75499
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 5,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 33328,
+          "median_us": 35297.5,
+          "max_us": 78079
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 6,
+        "key": "name",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 32262,
+          "median_us": 33883.0,
+          "max_us": 49694
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 7,
+        "key": "extension",
+        "direction": "descending",
+        "stats": {
+          "count": 10,
+          "min_us": 18194,
+          "median_us": 22723.5,
+          "max_us": 34537
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 8,
+        "key": "time",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 25612,
+          "median_us": 29329.0,
+          "max_us": 47221
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 9,
+        "key": "size",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 32081,
+          "median_us": 35483.5,
+          "max_us": 53923
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "request_index": 10,
+        "key": "none",
+        "direction": "ascending",
+        "stats": {
+          "count": 10,
+          "min_us": 17725,
+          "median_us": 19812.0,
+          "max_us": 28028
+        },
+        "render_calls": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "warm_calls": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "successful_presents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  "phases": {
+    "baseline-debug-01": {
+      "selected": true,
+      "role": "fresh legacy baseline",
+      "protocol": "legacy_warm_v1",
+      "configuration": "Debug",
+      "run_id": "20261020T135446Z-105980-c33ae48d89784168bdfb705492a65a52",
+      "receipt_id": "5a3f7b334066b6c7cd1f36c31aa7b5ec4cbbd4a3e9c89c0eab4a011bc3827003",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2500,
+        "median_us": 5975,
+        "max_us": 7541
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 38853,
+          "render_calls": 3,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 60102,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 81543,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 69760,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 70842,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 58406,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 40671,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 55701,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 58134,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 52124,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 35518,
+          "render_calls": 3,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 64229,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 81762,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 69149,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 67264,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 58163,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 38533,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 56736,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 52736,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 50404,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 28487,
+          "render_calls": 3,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 57054,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 88918,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 70413,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 67126,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 58634,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 45928,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 48002,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 52640,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 47459,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 24694,
+          "render_calls": 3,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 57930,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 77413,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 62091,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 62392,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 57569,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 38421,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 52877,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 52133,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 46420,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 35538,
+          "render_calls": 3,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 58310,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 76244,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 74233,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 70763,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 65872,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 40965,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 47765,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 56166,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 49255,
+          "render_calls": 4,
+          "warm_calls": null,
+          "successful_presents": null
+        }
+      ],
+      "measurement_samples": 407,
+      "build_overlap_polls": 0,
+      "maximum_poll_gap_ms": 564.632,
+      "observer_cpu_ms": 13500.0,
+      "observer_scope": "v1 build-only observation; absence of concurrent native test runtimes not established"
+    },
+    "candidate-debug-legacy-block1-02": {
+      "selected": false,
+      "role": "candidate legacy control",
+      "protocol": "legacy_warm_v1",
+      "configuration": "Debug",
+      "run_id": "20261020T143845Z-37144-aecd545e19814d729a1de3b5d8c742f8",
+      "receipt_id": "e1420432e6018bdd929ab7f7e6016759e9977fdafdd823b9fb8ab3fbd8127180",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2680,
+        "median_us": 6421,
+        "max_us": 9822
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 58912,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 61379,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 80750,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 74170,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 66910,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 62725,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 43636,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 68402,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 59471,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 52545,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 33810,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 67367,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 85806,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 74535,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 77048,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 67773,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 46641,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 63489,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 86686,
+          "render_calls": 5,
+          "warm_calls": 1,
+          "successful_presents": 5
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 70073,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 37614,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 83793,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 122805,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 112333,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 86825,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 79036,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 41681,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 65797,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 68388,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 61464,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 29085,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 63809,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 87244,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 66515,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 64629,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 63114,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 44036,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 60225,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 52820,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 49164,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 38688,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 64844,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 75558,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 64828,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 66491,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 66304,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 39485,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 61243,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 51035,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 48665,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        }
+      ],
+      "measurement_samples": 383,
+      "build_overlap_polls": 2,
+      "maximum_poll_gap_ms": 689.927,
+      "observer_cpu_ms": 12187.5,
+      "observer_scope": "v2 build and known native-test-runtime observation"
+    },
+    "candidate-debug-legacy-block1-03": {
+      "selected": true,
+      "role": "candidate legacy control",
+      "protocol": "legacy_warm_v1",
+      "configuration": "Debug",
+      "run_id": "20261020T144049Z-74524-c3f896fa64464e8ca3f59c2088eaf28d",
+      "receipt_id": "e1420432e6018bdd929ab7f7e6016759e9977fdafdd823b9fb8ab3fbd8127180",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2560,
+        "median_us": 6021,
+        "max_us": 8277
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 33935,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 57806,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 78681,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 67649,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 67498,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 66418,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 40970,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 62573,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 54876,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 52223,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 31095,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 62496,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 77199,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 70424,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 70702,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 60596,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 39342,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 63377,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 63582,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 55189,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 28435,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 64029,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 82508,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 69352,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 63793,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 64440,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 40982,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 68371,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 55955,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 49979,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 30747,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 59159,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 77087,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 70084,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 68735,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 61040,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 44920,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 48226,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 56978,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 48662,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 30746,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 60339,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 82182,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 68162,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 64516,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 66889,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 39086,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 62467,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 53400,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 48097,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        }
+      ],
+      "measurement_samples": 392,
+      "build_overlap_polls": 0,
+      "maximum_poll_gap_ms": 683.581,
+      "observer_cpu_ms": 12453.125,
+      "observer_scope": "v2 build and known native-test-runtime observation"
+    },
+    "candidate-debug-legacy-block2-01": {
+      "selected": true,
+      "role": "candidate legacy control",
+      "protocol": "legacy_warm_v1",
+      "configuration": "Debug",
+      "run_id": "20261020T144715Z-69960-fb8bca9db2974089b0195477f36ea933",
+      "receipt_id": "e1420432e6018bdd929ab7f7e6016759e9977fdafdd823b9fb8ab3fbd8127180",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2634,
+        "median_us": 5975,
+        "max_us": 7799
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 35904,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 61626,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 80324,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 67403,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 68465,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 62348,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 44174,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 56366,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 54422,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 49131,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 32074,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 60992,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 76035,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 66857,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 75323,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 64061,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 44190,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 59270,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 58562,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 55424,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 35872,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 60170,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 79530,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 68607,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 66748,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 60415,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 40672,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 60594,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 55567,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 52760,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 36255,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 58003,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 75829,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 67740,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 67972,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 81209,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 37905,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 56123,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 62848,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 50200,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 37688,
+          "render_calls": 3,
+          "warm_calls": 1,
+          "successful_presents": 3
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 63601,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 80083,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 68454,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 64329,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 61578,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 39947,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 57186,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 56112,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 52320,
+          "render_calls": 4,
+          "warm_calls": 1,
+          "successful_presents": 4
+        }
+      ],
+      "measurement_samples": 395,
+      "build_overlap_polls": 0,
+      "maximum_poll_gap_ms": 579.398,
+      "observer_cpu_ms": 12375.0,
+      "observer_scope": "v2 build and known native-test-runtime observation"
+    },
+    "candidate-debug-product-block1-01": {
+      "selected": true,
+      "role": "candidate product paint",
+      "protocol": "product_paint_v2",
+      "configuration": "Debug",
+      "run_id": "20261020T144255Z-86324-93f676caedde45fab38622ac4f66fd77",
+      "receipt_id": "e1420432e6018bdd929ab7f7e6016759e9977fdafdd823b9fb8ab3fbd8127180",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2590,
+        "median_us": 6537,
+        "max_us": 11023
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 488,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 38274,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 49971,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 44567,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 35609,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 34501,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 21576,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 29021,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 33179,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 18907,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 596,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 49586,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 74502,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 66252,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 53162,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 49509,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 32270,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 47221,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 53923,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 28028,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 3192,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 66408,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 85351,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 75499,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 78079,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 48778,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 28028,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 34641,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 46341,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 22561,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 882,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 47883,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 54362,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 41358,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 34303,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 33265,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 18836,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 26521,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 36739,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 22365,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 386,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 35236,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 45762,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 40943,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 33328,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 33223,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 18340,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 25612,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 32081,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 17725,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        }
+      ],
+      "measurement_samples": 392,
+      "build_overlap_polls": 0,
+      "maximum_poll_gap_ms": 731.445,
+      "observer_cpu_ms": 12968.75,
+      "observer_scope": "v2 build and known native-test-runtime observation"
+    },
+    "candidate-debug-product-block2-01": {
+      "selected": true,
+      "role": "candidate product paint",
+      "protocol": "product_paint_v2",
+      "configuration": "Debug",
+      "run_id": "20261020T144507Z-83864-4fc1f327a87a457a8da83923dbd3da09",
+      "receipt_id": "e1420432e6018bdd929ab7f7e6016759e9977fdafdd823b9fb8ab3fbd8127180",
+      "all_sort_samples": 50,
+      "core_ordering": {
+        "count": 59,
+        "min_us": 2630,
+        "median_us": 6472,
+        "max_us": 9471
+      },
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 419,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 47588,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 71183,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 57109,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 49913,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 49694,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 23871,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 38373,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 45238,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 26322,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 387,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 41270,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 54671,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 47724,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 44344,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 41225,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 34537,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 30412,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 39575,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 20550,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 1007,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 34838,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 48500,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 40576,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 33761,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 32262,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 25074,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 29637,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 34228,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 17914,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 456,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 40792,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 46580,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 40895,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 34986,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 33172,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 19777,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 26518,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 33697,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 19074,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "name",
+          "direction": "ascending",
+          "duration_us": 324,
+          "render_calls": 0,
+          "warm_calls": 0,
+          "successful_presents": 0
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "extension",
+          "direction": "ascending",
+          "duration_us": 41164,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "time",
+          "direction": "descending",
+          "duration_us": 45050,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "size",
+          "direction": "descending",
+          "duration_us": 40381,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 33858,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "name",
+          "direction": "descending",
+          "duration_us": 32284,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "extension",
+          "direction": "descending",
+          "duration_us": 18194,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "time",
+          "direction": "ascending",
+          "duration_us": 28391,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "size",
+          "direction": "ascending",
+          "duration_us": 33001,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "none",
+          "direction": "ascending",
+          "duration_us": 18265,
+          "render_calls": 1,
+          "warm_calls": 0,
+          "successful_presents": 1
+        }
+      ],
+      "measurement_samples": 398,
+      "build_overlap_polls": 0,
+      "maximum_poll_gap_ms": 639.974,
+      "observer_cpu_ms": 12546.875,
+      "observer_scope": "v2 build and known native-test-runtime observation"
+    }
+  },
+  "scope": "The new product-paint protocol corrects timed synthetic work. Its difference from legacy warm timing is a measurement-protocol difference, not a production speedup. Core ordering, layout and presentation remain separate measurements."
+}

@@ -213,6 +213,7 @@
     <ClInclude Include="..\LocalizationManager.h" />
     <ClInclude Include="..\LocalFileTransaction.h" />
     <ClInclude Include="..\MinimumOsVersion.h" />
+    <ClInclude Include="..\NaturalSort.h" />
     <ClInclude Include="..\PaginationGuard.h" />
     <ClInclude Include="..\PaneVisualState.h" />
     <ClInclude Include="..\PluginConfiguration.h" />
@@ -220,11 +221,13 @@
     <ClInclude Include="..\RegistryUtils.h" />
     <ClInclude Include="..\SynchronousIoCancelWatch.h" />
     <ClInclude Include="..\LoopbackHttpFixture.h" />
-    <ClInclude Include="..\TestSandboxPath.h" />
-    <ClInclude Include="..\TestWindowActivationGuard.h" />
+    <ClInclude Include="..\Common.Tests.SandboxPath.h" />
+    <ClInclude Include="..\Common.Tests.PerfJsonl.h" />
+    <ClInclude Include="..\Common.Tests.WindowActivationGuard.h" />
     <ClInclude Include="..\ThemeDefinitionIo.h" />
     <ClInclude Include="..\ThemeExpression.h" />
     <ClInclude Include="..\WslDistributionCatalog.h" />
+    <ClInclude Include="..\ViewerMenuHost.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />

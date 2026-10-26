@@ -1,0 +1,3428 @@
+{
+  "schema": "viewer-space.apprelease-comparison-analysis.v1",
+  "campaign_id": "20261009T010343989Z-c7dc9e62",
+  "configuration": "x64 Release",
+  "candidate_functionality_note": "Candidate complete-ready includes its full delivered projection; baseline complete-ready is its complete product view. This comparison measures each product's complete ready view and does not attribute that additional candidate functionality to a regression or gain.",
+  "first_paint_note": "Historical open_to_first_paint_us is retained with its HRESULT because it is scan-start based and may capture an unsuccessful paint attempt; only SUCCEEDED HRESULT observations enter its summary. Candidate-only open_to_first_meaningful_paint_us starts at the valid IViewerOpen entry (including control creation) and ends at the first S_OK Present of non-empty published geometry with layout complete; it is evaluated against the absolute 250 ms target without inventing a baseline value.",
+  "p95_note": "Nearest-rank p95 with six samples equals the maximum; it is reported descriptively and should not be read as a statistically stable tail estimate.",
+  "measurement_order": [
+    "20261009T010343989Z-c7dc9e62-b1-p1",
+    "20261009T010343989Z-c7dc9e62-b1-p2",
+    "20261009T010343989Z-c7dc9e62-b1-p3",
+    "20261009T010343989Z-c7dc9e62-b1-p4",
+    "20261009T010343989Z-c7dc9e62-b2-p1",
+    "20261009T010343989Z-c7dc9e62-b2-p2",
+    "20261009T010343989Z-c7dc9e62-b2-p3",
+    "20261009T010343989Z-c7dc9e62-b2-p4",
+    "20261009T010343989Z-c7dc9e62-b3-p1",
+    "20261009T010343989Z-c7dc9e62-b3-p2",
+    "20261009T010343989Z-c7dc9e62-b3-p3",
+    "20261009T010343989Z-c7dc9e62-b3-p4"
+  ],
+  "build_receipts": {
+    "baseline": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+    "candidate": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4"
+  },
+  "runs": [
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b1-p1",
+      "side": "baseline",
+      "run_id": "20261009T010706Z-40224-dfe203b942094d2e8af1f2c1c45c4c1d",
+      "block": 1,
+      "position": 1,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "171e46273bf2aac6e670d1a5372889b7cc86f3c5e25239900125f685963ed0d1",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "4bab478320e99bee1f0159d28638e01a4d25888802d0919e19c8fd29d513787e",
+      "perf_metrics_curated_sha256": "6bed334e1b432d22fe12f08dd9edf9ac357818b9749c9095434858f363735e5a",
+      "commands_results_sha256": "734ee510329303df5ba813efd1412676dbd8a74865ece057054882da032de468",
+      "scenario_artifact_sha256": {
+        "small": "1e0161e50a7872fde3dde14435df809e1b6f77187151a93a9121fdf89b41b8c2",
+        "large": "23e82437cfe6e1fc4deff30b07ece37c77eb98ce64ac5dd143baa87b2bb8edf0"
+      },
+      "small": {
+        "scan_total_us": 1155319,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 94910,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4738099,
+        "harness_first_paint_wait_us": 34067,
+        "historical_scan_settle_wait_us": 860314,
+        "product_ready_wait_us": 185119,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 2388,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 111408,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228667392,
+            "privateBytes": 233545728
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278188032,
+            "privateBytes": 304689152
+          },
+          "completeReady": {
+            "workingSetBytes": 278188032,
+            "privateBytes": 304689152
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 269074432,
+            "privateBytes": 292954112
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 49520640,
+            "privateBytes": 71143424
+          },
+          "completeReady": {
+            "workingSetBytes": 49520640,
+            "privateBytes": 71143424
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 40407040,
+            "privateBytes": 59408384
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 3643413,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 40499,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 43301364,
+        "harness_first_paint_wait_us": 50654,
+        "historical_scan_settle_wait_us": 3437006,
+        "product_ready_wait_us": 187115,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 6764,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 103321,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231096320,
+            "privateBytes": 234323968
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 302379008,
+            "privateBytes": 403136512
+          },
+          "completeReady": {
+            "workingSetBytes": 302379008,
+            "privateBytes": 403136512
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 279887872,
+            "privateBytes": 310714368
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 71282688,
+            "privateBytes": 168812544
+          },
+          "completeReady": {
+            "workingSetBytes": 71282688,
+            "privateBytes": 168812544
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 48791552,
+            "privateBytes": 76390400
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b1-p2",
+      "side": "candidate",
+      "run_id": "20261009T010842Z-10476-c4b872559f1143e09319f7d97060a82a",
+      "block": 1,
+      "position": 2,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "a85bc5b76ac1a78b8d196da778347c13283237316f899589c7a2982125f50325",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "31c11c8e657e704f37ff91cfa131329200653270a270e6bd5f925ed2ef02deb3",
+      "perf_metrics_curated_sha256": "e93dcc3d638d8d3e5e81d5477acf8a59fd2bf020561a77765ba45a2df6126d12",
+      "commands_results_sha256": "733f75d50e71591f9158d1be2efd5bdd8f68db0152ebcfa7f3d7cf20f6ebef10",
+      "scenario_artifact_sha256": {
+        "small": "c87b84e2bc28e4ca77cb6c36bf71a089d57a2b2bc63176b561566c7d97576bcd",
+        "large": "ef8191448f3195f961a2767413c877db55bc887ab9a4c22da2c558ca1e465e05"
+      },
+      "small": {
+        "scan_total_us": 697130,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 102844,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 810714,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4303233,
+        "harness_first_paint_wait_us": 234017,
+        "historical_scan_settle_wait_us": 312690,
+        "product_ready_wait_us": 199936,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 3396,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 114798,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228741120,
+            "privateBytes": 233627648
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278990848,
+            "privateBytes": 305115136
+          },
+          "completeReady": {
+            "workingSetBytes": 278990848,
+            "privateBytes": 305115136
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 238456832,
+            "privateBytes": 260272128
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 50249728,
+            "privateBytes": 71487488
+          },
+          "completeReady": {
+            "workingSetBytes": 50249728,
+            "privateBytes": 71487488
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 9715712,
+            "privateBytes": 26644480
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5345954,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 63216,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 4362848,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 42952029,
+        "harness_first_paint_wait_us": 392818,
+        "historical_scan_settle_wait_us": 5568687,
+        "product_ready_wait_us": 200144,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 11308,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 111394,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231321600,
+            "privateBytes": 234024960
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 296857600,
+            "privateBytes": 400932864
+          },
+          "completeReady": {
+            "workingSetBytes": 296857600,
+            "privateBytes": 400932864
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 277585920,
+            "privateBytes": 317394944
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 65536000,
+            "privateBytes": 166907904
+          },
+          "completeReady": {
+            "workingSetBytes": 65536000,
+            "privateBytes": 166907904
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 46264320,
+            "privateBytes": 83369984
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b1-p3",
+      "side": "candidate",
+      "run_id": "20261009T011023Z-44704-1fed6d563e784be6a880bc33bad2c6a0",
+      "block": 1,
+      "position": 3,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "a0a9d596674f25c9aff82a226deb8cd0d1ed4331c36c8f08822ae110ab6ac3da",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "d11d007e7c2064ae423827abdd53615c6be2617a282e373f52594f8c9f079961",
+      "perf_metrics_curated_sha256": "070a4e396e0d8bd2077210fab98cdddf57c0ebc86c2456a5150276f82eaf0ebf",
+      "commands_results_sha256": "69c4ba85060986c6ad334714e841fd3e168d4ab5aa37f66578d846d51f553799",
+      "scenario_artifact_sha256": {
+        "small": "e694a096f42b8cc0b2bba340e04f041ea64f330b54fa28a53c6c56c4b987519b",
+        "large": "595b9f8d485eb215d96f018561f5c55a718dc176a164536ebcd2db870ca6970e"
+      },
+      "small": {
+        "scan_total_us": 570105,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 65958,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 817972,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4261703,
+        "harness_first_paint_wait_us": 315305,
+        "historical_scan_settle_wait_us": 186504,
+        "product_ready_wait_us": 181446,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 2941,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 115147,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228663296,
+            "privateBytes": 233521152
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 277737472,
+            "privateBytes": 303071232
+          },
+          "completeReady": {
+            "workingSetBytes": 277737472,
+            "privateBytes": 303071232
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 275718144,
+            "privateBytes": 300408832
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 49074176,
+            "privateBytes": 69550080
+          },
+          "completeReady": {
+            "workingSetBytes": 49074176,
+            "privateBytes": 69550080
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 47054848,
+            "privateBytes": 66887680
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5555909,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 65041,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 3035915,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 45993208,
+        "harness_first_paint_wait_us": 253017,
+        "historical_scan_settle_wait_us": 5892047,
+        "product_ready_wait_us": 180313,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 10431,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 106408,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231243776,
+            "privateBytes": 234000384
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 304488448,
+            "privateBytes": 397905920
+          },
+          "completeReady": {
+            "workingSetBytes": 304488448,
+            "privateBytes": 397905920
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 284921856,
+            "privateBytes": 313962496
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 73244672,
+            "privateBytes": 163905536
+          },
+          "completeReady": {
+            "workingSetBytes": 73244672,
+            "privateBytes": 163905536
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 53678080,
+            "privateBytes": 79962112
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b1-p4",
+      "side": "baseline",
+      "run_id": "20261009T011207Z-6732-fb85a4bc1cfa495f941999090aab09df",
+      "block": 1,
+      "position": 4,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "9ebf6a08d9b3774cd21b0d2ac27b8fd76321db6c68b62bd89f5b2bf3cec902ce",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "490c6ad6b8e6e91e765364571da43bd6ffd75f51f899ea79940b2f88ee092a71",
+      "perf_metrics_curated_sha256": "95d53d6f976e996cc347e02a40ace2363d080f1fdadea7ce2c749b2ba7f324fb",
+      "commands_results_sha256": "3f824ad50ebc8406826022ac9409a8e7065ed4c154e74da0797dd981b430166c",
+      "scenario_artifact_sha256": {
+        "small": "380e61895cc4e85b93e593b872cf83b01bbc5cae7b23a253cc6e68b7aa296478",
+        "large": "2d6ae872ecc3be6f2df1aa0bdc24c95d6a95cab62ffe908c72b92eb25590b5ee"
+      },
+      "small": {
+        "scan_total_us": 651588,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 104308,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4328126,
+        "harness_first_paint_wait_us": 124808,
+        "historical_scan_settle_wait_us": 191714,
+        "product_ready_wait_us": 181912,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 2495,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 107626,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228597760,
+            "privateBytes": 233467904
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 279769088,
+            "privateBytes": 305258496
+          },
+          "completeReady": {
+            "workingSetBytes": 279769088,
+            "privateBytes": 305258496
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 269574144,
+            "privateBytes": 293744640
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 51171328,
+            "privateBytes": 71790592
+          },
+          "completeReady": {
+            "workingSetBytes": 51171328,
+            "privateBytes": 71790592
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 40976384,
+            "privateBytes": 60276736
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 3639689,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 77400,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 43600035,
+        "harness_first_paint_wait_us": 111301,
+        "historical_scan_settle_wait_us": 3349052,
+        "product_ready_wait_us": 193774,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 12100,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 102827,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231194624,
+            "privateBytes": 234487808
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 304218112,
+            "privateBytes": 405487616
+          },
+          "completeReady": {
+            "workingSetBytes": 304218112,
+            "privateBytes": 405487616
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 245510144,
+            "privateBytes": 275615744
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 73023488,
+            "privateBytes": 170999808
+          },
+          "completeReady": {
+            "workingSetBytes": 73023488,
+            "privateBytes": 170999808
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 14315520,
+            "privateBytes": 41127936
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b2-p1",
+      "side": "baseline",
+      "run_id": "20261009T011344Z-45424-ac560e22d66149b9a67eacb76826b4cd",
+      "block": 2,
+      "position": 1,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "9e14c7f5d879176fcc7386262e6c324b21f655119011b0ebea1c3c1148c3ae1b",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "6017bad7b7d14333b7bc7a0405bb0bda5ca024f571f6cb27b9ef600b8aafefc2",
+      "perf_metrics_curated_sha256": "01bb54ca1641a64f00f1bbad2def74ff486651c3750330d48458b779cadb05cc",
+      "commands_results_sha256": "18255c62732e3fc6e39aac2c31e2f46f61a53374f9ee8b53ef33bec0d8433cb5",
+      "scenario_artifact_sha256": {
+        "small": "853c3ebbf5f76a5c0154fd04d93e5afd26962e5eab83635f1d31dbd16fd6a0d0",
+        "large": "60417979aa5a2f9d6dbfcbda1570c8974befcc41ed656e42d3dd09955b99cc2a"
+      },
+      "small": {
+        "scan_total_us": 907440,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 86763,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4337960,
+        "harness_first_paint_wait_us": 102651,
+        "historical_scan_settle_wait_us": 572077,
+        "product_ready_wait_us": 181949,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 2735,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 112233,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228573184,
+            "privateBytes": 233504768
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278917120,
+            "privateBytes": 304390144
+          },
+          "completeReady": {
+            "workingSetBytes": 278917120,
+            "privateBytes": 304390144
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 276865024,
+            "privateBytes": 301674496
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 50343936,
+            "privateBytes": 70885376
+          },
+          "completeReady": {
+            "workingSetBytes": 50343936,
+            "privateBytes": 70885376
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 48291840,
+            "privateBytes": 68169728
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 3738526,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 37415,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 42925897,
+        "harness_first_paint_wait_us": 49098,
+        "historical_scan_settle_wait_us": 3573160,
+        "product_ready_wait_us": 172460,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 6696,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 101613,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231030784,
+            "privateBytes": 234291200
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 301105152,
+            "privateBytes": 405164032
+          },
+          "completeReady": {
+            "workingSetBytes": 301105152,
+            "privateBytes": 405164032
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 271314944,
+            "privateBytes": 303976448
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 70074368,
+            "privateBytes": 170872832
+          },
+          "completeReady": {
+            "workingSetBytes": 70074368,
+            "privateBytes": 170872832
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 40284160,
+            "privateBytes": 69685248
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b2-p2",
+      "side": "candidate",
+      "run_id": "20261009T011519Z-13216-35c6551fcb654b1db2d7f993d60e8864",
+      "block": 2,
+      "position": 2,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "574c2fe6f18af8a97186d498064a68af21498f482260a1b58f51a5dcb54108af",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "7ac1cdd16d50b007b19f6b68e448ab44b24354304004b58670e66f23fb5b8a75",
+      "perf_metrics_curated_sha256": "3f710a0efb47196feb24953f060d5789891b6177f1708cc5ea4254a2e47b697e",
+      "commands_results_sha256": "531a6c1226edb0ce3c2f14972fa9cde64cc064a82470b5d0afec3665542977a7",
+      "scenario_artifact_sha256": {
+        "small": "8ddb85624ac9a3935538cdbb0c631e28e3776fccc7944de2b469902790dd426e",
+        "large": "6a5441b2088028e58ae904dd852a4252fc34935f338cee49e7ab5a90658acf59"
+      },
+      "small": {
+        "scan_total_us": 642035,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 60462,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 855352,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4258865,
+        "harness_first_paint_wait_us": 314035,
+        "historical_scan_settle_wait_us": 229950,
+        "product_ready_wait_us": 190021,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 3165,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 102898,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228798464,
+            "privateBytes": 233664512
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278401024,
+            "privateBytes": 303484928
+          },
+          "completeReady": {
+            "workingSetBytes": 278401024,
+            "privateBytes": 303484928
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 276430848,
+            "privateBytes": 300867584
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 49602560,
+            "privateBytes": 69820416
+          },
+          "completeReady": {
+            "workingSetBytes": 49602560,
+            "privateBytes": 69820416
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 47632384,
+            "privateBytes": 67203072
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5649610,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 69073,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 4192691,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 42790922,
+        "harness_first_paint_wait_us": 374969,
+        "historical_scan_settle_wait_us": 5813520,
+        "product_ready_wait_us": 185307,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 11803,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 112688,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231444480,
+            "privateBytes": 234205184
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 302010368,
+            "privateBytes": 406999040
+          },
+          "completeReady": {
+            "workingSetBytes": 302010368,
+            "privateBytes": 406999040
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 284164096,
+            "privateBytes": 323874816
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 70565888,
+            "privateBytes": 172793856
+          },
+          "completeReady": {
+            "workingSetBytes": 70565888,
+            "privateBytes": 172793856
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 52719616,
+            "privateBytes": 89669632
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b2-p3",
+      "side": "candidate",
+      "run_id": "20261009T011700Z-43236-2bafe074607d44829cda49500253f6b3",
+      "block": 2,
+      "position": 3,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "3a98739cfdc613296c472d72bd26a492c1ba83dca5ac5f121e464c38cbda51c1",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "138a94f0f45bc37f3aac72ec6204fd97a6494360f8ff7f085c2f927a1abd0bd0",
+      "perf_metrics_curated_sha256": "cc7bf80112a6a32481db51b76a9c39d97640b51c26314028e9f9a62f5504c506",
+      "commands_results_sha256": "9ebbe197a911b3bf94b795672ee30b0a5603e701e6f65f5636c02d029a854a2a",
+      "scenario_artifact_sha256": {
+        "small": "5ab199c592a536cfc36450604df3dbd51cd37b62a040a19de8abd8c86bcf9114",
+        "large": "205f56ad0cf5bc6ea3ae3c130d6c6dae2d8318d107c9b019e5b20fa937b763f5"
+      },
+      "small": {
+        "scan_total_us": 677307,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 62313,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 928427,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4445018,
+        "harness_first_paint_wait_us": 348331,
+        "historical_scan_settle_wait_us": 236136,
+        "product_ready_wait_us": 202440,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 2679,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 105568,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228892672,
+            "privateBytes": 233754624
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278732800,
+            "privateBytes": 303255552
+          },
+          "completeReady": {
+            "workingSetBytes": 275271680,
+            "privateBytes": 299171840
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 273350656,
+            "privateBytes": 296628224
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 49840128,
+            "privateBytes": 69500928
+          },
+          "completeReady": {
+            "workingSetBytes": 46379008,
+            "privateBytes": 65417216
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44457984,
+            "privateBytes": 62873600
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5673209,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 60145,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 4282223,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 42720738,
+        "harness_first_paint_wait_us": 126106,
+        "historical_scan_settle_wait_us": 5924914,
+        "product_ready_wait_us": 187107,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 10877,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 110273,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231415808,
+            "privateBytes": 234172416
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 305377280,
+            "privateBytes": 413851648
+          },
+          "completeReady": {
+            "workingSetBytes": 295346176,
+            "privateBytes": 403632128
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 276123648,
+            "privateBytes": 320155648
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 73961472,
+            "privateBytes": 179679232
+          },
+          "completeReady": {
+            "workingSetBytes": 63930368,
+            "privateBytes": 169459712
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44707840,
+            "privateBytes": 85983232
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b2-p4",
+      "side": "baseline",
+      "run_id": "20261009T011840Z-45768-6380ed0cb1cd4dc28940e5fea93cfadf",
+      "block": 2,
+      "position": 4,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "ffebabb5b7362a61f684b9db8ef77537ce5af28d740cfd6b2b4e2dcdd0ff79e1",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "220c5abab88849e2fd8c57c7ec46c64b1ddc79e92e449da6734614959482c109",
+      "perf_metrics_curated_sha256": "20731e80b2c189762c9cdd471d71d12b88f1e2eb5e8419582ce46a2d0e17b9e2",
+      "commands_results_sha256": "760ca6466ff9833ce06feef7b1186672b03d7dc6d076b57a640533e4f76d9283",
+      "scenario_artifact_sha256": {
+        "small": "9e88a6a262cf0931b15801013d809f62b64d13409742f08a88bf20683434c91f",
+        "large": "a98a01e6e35ff630906b3e3d28be35f178363df2aee185fcfda5721144f7a3a8"
+      },
+      "small": {
+        "scan_total_us": 1062698,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 88199,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4384091,
+        "harness_first_paint_wait_us": 75897,
+        "historical_scan_settle_wait_us": 769733,
+        "product_ready_wait_us": 201248,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 2203,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 104624,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228585472,
+            "privateBytes": 233484288
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 279453696,
+            "privateBytes": 306114560
+          },
+          "completeReady": {
+            "workingSetBytes": 274903040,
+            "privateBytes": 301101056
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 272842752,
+            "privateBytes": 298389504
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 50868224,
+            "privateBytes": 72630272
+          },
+          "completeReady": {
+            "workingSetBytes": 46317568,
+            "privateBytes": 67616768
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44257280,
+            "privateBytes": 64905216
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 4465589,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 69428,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 43427489,
+        "harness_first_paint_wait_us": 76213,
+        "historical_scan_settle_wait_us": 4231839,
+        "product_ready_wait_us": 184913,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 6624,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 105993,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 230912000,
+            "privateBytes": 234295296
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 301711360,
+            "privateBytes": 402350080
+          },
+          "completeReady": {
+            "workingSetBytes": 301711360,
+            "privateBytes": 402350080
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 278839296,
+            "privateBytes": 309833728
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 70799360,
+            "privateBytes": 168054784
+          },
+          "completeReady": {
+            "workingSetBytes": 70799360,
+            "privateBytes": 168054784
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 47927296,
+            "privateBytes": 75538432
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b3-p1",
+      "side": "baseline",
+      "run_id": "20261009T012016Z-13180-8a671038ba3c459b9045b36b88b7da2e",
+      "block": 3,
+      "position": 1,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "a484a74261ebe1a61845338120e9fc68c9077ed73c01c5c3e53d8b563292e7c6",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "319e8aecca1eed26a23711368c9608a61fb8429e0f4032e550d9e395f281ee22",
+      "perf_metrics_curated_sha256": "f2f146659a43258070f1380e4dbf86c3f0e62ad87a3b26b765a0af1f5238b69b",
+      "commands_results_sha256": "5461dcbc450e231b1360bf1629295cac76a04340b491ab1355041690b2c8c147",
+      "scenario_artifact_sha256": {
+        "small": "92b2c8b145e3d5c5d5022767213b0f2ada32579c04ea5c47f3acbd626f75e14a",
+        "large": "ef5d5f1c3928b3a1214e75da6f9453ba6f72519f871b1de8dffed2de2db1d969"
+      },
+      "small": {
+        "scan_total_us": 613047,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 131156,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4439928,
+        "harness_first_paint_wait_us": 93120,
+        "historical_scan_settle_wait_us": 204780,
+        "product_ready_wait_us": 185283,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 2720,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 112795,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228376576,
+            "privateBytes": 233254912
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 279834624,
+            "privateBytes": 306233344
+          },
+          "completeReady": {
+            "workingSetBytes": 279834624,
+            "privateBytes": 306233344
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 277581824,
+            "privateBytes": 303333376
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 51458048,
+            "privateBytes": 72978432
+          },
+          "completeReady": {
+            "workingSetBytes": 51458048,
+            "privateBytes": 72978432
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 49205248,
+            "privateBytes": 70078464
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 3794964,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 62822,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 43045189,
+        "harness_first_paint_wait_us": 35693,
+        "historical_scan_settle_wait_us": 3571603,
+        "product_ready_wait_us": 189472,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 6718,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 107275,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 230895616,
+            "privateBytes": 234188800
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 305164288,
+            "privateBytes": 394821632
+          },
+          "completeReady": {
+            "workingSetBytes": 299245568,
+            "privateBytes": 388874240
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 276131840,
+            "privateBytes": 298643456
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 74268672,
+            "privateBytes": 160632832
+          },
+          "completeReady": {
+            "workingSetBytes": 68349952,
+            "privateBytes": 154685440
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 45236224,
+            "privateBytes": 64454656
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b3-p2",
+      "side": "candidate",
+      "run_id": "20261009T012152Z-40460-a99be97c3ec14fc194af6c9d739f08bf",
+      "block": 3,
+      "position": 2,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "5e1cc60f43452976c9a4eddf083b300aaf11fc6f585a6b08669eac6c53a88d10",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "00123e1119b7ad5526001be1acf92462de3dd843bf92f5cb3e9a18077308520b",
+      "perf_metrics_curated_sha256": "5f81cf1e89956909095841f1d31ed2819ccf55aad092ee4cca45ec4eb7c30e05",
+      "commands_results_sha256": "49c8b234d511526cefb0c29d076388085dd1346b6365e53ef7e7174812c00af5",
+      "scenario_artifact_sha256": {
+        "small": "cc6f9375a81b8786c6d5dbb6b4dc21953c42d4c68a652c84e16ad8d64238fe37",
+        "large": "e925d4cabdae9ab8b9b448166f4c4b7591e6864b10ccbba9a55c86ab4700f9b1"
+      },
+      "small": {
+        "scan_total_us": 949700,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 53898,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 1064033,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4276807,
+        "harness_first_paint_wait_us": 406742,
+        "historical_scan_settle_wait_us": 515488,
+        "product_ready_wait_us": 176724,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 2960,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 103951,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228700160,
+            "privateBytes": 233558016
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278892544,
+            "privateBytes": 303550464
+          },
+          "completeReady": {
+            "workingSetBytes": 274907136,
+            "privateBytes": 299208704
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 272740352,
+            "privateBytes": 296423424
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 50192384,
+            "privateBytes": 69992448
+          },
+          "completeReady": {
+            "workingSetBytes": 46206976,
+            "privateBytes": 65650688
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44040192,
+            "privateBytes": 62865408
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5364113,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 65021,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 3842153,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 42338838,
+        "harness_first_paint_wait_us": 172599,
+        "historical_scan_settle_wait_us": 6007702,
+        "product_ready_wait_us": 204465,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 11735,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 113406,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231358464,
+            "privateBytes": 234086400
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 300658688,
+            "privateBytes": 405667840
+          },
+          "completeReady": {
+            "workingSetBytes": 300658688,
+            "privateBytes": 405667840
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 281395200,
+            "privateBytes": 322142208
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 69300224,
+            "privateBytes": 171581440
+          },
+          "completeReady": {
+            "workingSetBytes": 69300224,
+            "privateBytes": 171581440
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 50036736,
+            "privateBytes": 88055808
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b3-p3",
+      "side": "candidate",
+      "run_id": "20261009T012332Z-44628-053431d3eb6c430196345e822ad7ef51",
+      "block": 3,
+      "position": 3,
+      "build_receipt_id": "5460d693b903b362b27b4eb19581755f6064f238797467614271e7fee4d5a0e4",
+      "summary_sha256": "d9c1f7ca3f75488ad89a34a190ea1185f2d7c032c6d357faefbc0287da3bf3ce",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "480769d23434607de32e396fc26dd7f8fa423cbf595ff779fc710313da421421",
+      "perf_metrics_curated_sha256": "264c40ea38b2ac9eee6f6449d0a86ffccdaa6bb111bb6009adb31dbb16922b8b",
+      "commands_results_sha256": "2efabcd09ee9275eb615645c1ed4b6efb16c0290248fda65f0c45dfc373ad171",
+      "scenario_artifact_sha256": {
+        "small": "7d8f28625ec05d1614023da2e245ccff3ccd7f4f98d94aa5c77da112235b1cc2",
+        "large": "abfd249d8360b2d6a371859b89004173a302f509d1819fb46139246e442f2983"
+      },
+      "small": {
+        "scan_total_us": 914521,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 65711,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 867966,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 4265145,
+        "harness_first_paint_wait_us": 262794,
+        "historical_scan_settle_wait_us": 629670,
+        "product_ready_wait_us": 190308,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 3733,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 103543,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228687872,
+            "privateBytes": 233529344
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278704128,
+            "privateBytes": 304324608
+          },
+          "completeReady": {
+            "workingSetBytes": 274935808,
+            "privateBytes": 300269568
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 272752640,
+            "privateBytes": 297455616
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 50016256,
+            "privateBytes": 70795264
+          },
+          "completeReady": {
+            "workingSetBytes": 46247936,
+            "privateBytes": 66740224
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44064768,
+            "privateBytes": 63926272
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 5419425,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 109741,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "first_meaningful_paint_us": 4651175,
+        "first_meaningful_paint_hr": 0,
+        "first_meaningful_paint_target_us": 250000,
+        "first_meaningful_paint_target_met": false,
+        "fixture_creation_us": 42717224,
+        "harness_first_paint_wait_us": 247715,
+        "historical_scan_settle_wait_us": 5847579,
+        "product_ready_wait_us": 202097,
+        "product_ready_semantics": "full projection settled after scan: scan done, pending queue bytes zero, cache restore idle, layout and analysis inactive, animation idle, and non-empty analysis/draw lists.",
+        "worker_completion_wait_us": 11434,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "full-projection",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 115099,
+          "deferredDisposalCompletedCount": 1,
+          "deferredDisposalCompleted": true,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231305216,
+            "privateBytes": 233963520
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 303853568,
+            "privateBytes": 408981504
+          },
+          "completeReady": {
+            "workingSetBytes": 295546880,
+            "privateBytes": 400642048
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 276058112,
+            "privateBytes": 316866560
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 72548352,
+            "privateBytes": 175017984
+          },
+          "completeReady": {
+            "workingSetBytes": 64241664,
+            "privateBytes": 166678528
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44752896,
+            "privateBytes": 82903040
+          }
+        }
+      }
+    },
+    {
+      "label": "20261009T010343989Z-c7dc9e62-b3-p4",
+      "side": "baseline",
+      "run_id": "20261009T012511Z-44880-5484c4a38c9a467bb37f3a6eb890b82a",
+      "block": 3,
+      "position": 4,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "summary_sha256": "cbde95c05b18ba7f150f5d7869a26fd419924e202c87f591d8ea9db1ecf14091",
+      "machine_hash": "7d3a1247382a",
+      "perf_metrics_source_sha256": "e6c0549034969388d313967adb7788ca402b26c07e002c05ed1011b2d646dcf0",
+      "perf_metrics_curated_sha256": "f4d42f726510122eb0ceea75c54364ed967b23130cb769b7a851010bb80961e4",
+      "commands_results_sha256": "480f7a5cdd253e75a217161da5acced0b2820ed30e1df6a808f82953135508e8",
+      "scenario_artifact_sha256": {
+        "small": "2a93d63d27e73380607068cb1186d37ec3840579111d39920b83c667711b4191",
+        "large": "a09377002192e24423aeb006bcab9f598003e61c9b9d61d57bf27232bc11c53e"
+      },
+      "small": {
+        "scan_total_us": 157970,
+        "scan_file_count": 10000,
+        "scan_folder_count": 120,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 72344,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 4293749,
+        "harness_first_paint_wait_us": 404,
+        "historical_scan_settle_wait_us": 38,
+        "product_ready_wait_us": 183388,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 1822,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 121,
+        "file_candidate_count": 10000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 110780,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 228700160,
+            "privateBytes": 233635840
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 278323200,
+            "privateBytes": 302649344
+          },
+          "completeReady": {
+            "workingSetBytes": 275103744,
+            "privateBytes": 299511808
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 273248256,
+            "privateBytes": 297000960
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 49623040,
+            "privateBytes": 69013504
+          },
+          "completeReady": {
+            "workingSetBytes": 46403584,
+            "privateBytes": 65875968
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 44548096,
+            "privateBytes": 63365120
+          }
+        }
+      },
+      "large": {
+        "scan_total_us": 3759703,
+        "scan_file_count": 100000,
+        "scan_folder_count": 500,
+        "scan_detail": "done",
+        "scan_hr": 0,
+        "historical_open_to_first_paint_us": 67839,
+        "historical_open_to_first_paint_hr": 0,
+        "historical_open_to_first_paint_succeeded": true,
+        "historical_first_paint_detail": "phase0-current",
+        "fixture_creation_us": 42544759,
+        "harness_first_paint_wait_us": 4397,
+        "historical_scan_settle_wait_us": 3458611,
+        "product_ready_wait_us": 202071,
+        "product_ready_semantics": "legacy layout settled after scan: scan done, pending queue bytes zero, animation idle, non-empty draw list, and completed layout.",
+        "worker_completion_wait_us": 6850,
+        "first_paint_semantics": "legacy open_to_first_paint_us is scan-start based and retains its event HRESULT; harness_first_paint_wait_us is the test's separate bounded wait for a successful first-paint snapshot.",
+        "real_directory_count": 501,
+        "file_candidate_count": 100000,
+        "cleanup_witness": {
+          "readyKind": "legacy-layout",
+          "scanWorkerCompletedCount": 1,
+          "scanWorkerAbandonedEventCount": 0,
+          "windowClosed": true,
+          "viewerComReleased": true,
+          "providerComReleased": true,
+          "providerModuleReleased": true,
+          "postCloseQuietUs": 103715,
+          "satisfied": true
+        },
+        "process_memory": {
+          "beforeOpen": {
+            "workingSetBytes": 231018496,
+            "privateBytes": 234369024
+          },
+          "peakWhileOpen": {
+            "workingSetBytes": 300597248,
+            "privateBytes": 403791872
+          },
+          "completeReady": {
+            "workingSetBytes": 300597248,
+            "privateBytes": 403791872
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 279646208,
+            "privateBytes": 311889920
+          }
+        },
+        "memory_deltas_bytes": {
+          "peakWhileOpen": {
+            "workingSetBytes": 69578752,
+            "privateBytes": 169422848
+          },
+          "completeReady": {
+            "workingSetBytes": 69578752,
+            "privateBytes": 169422848
+          },
+          "closedAfterQuiet": {
+            "workingSetBytes": 48627712,
+            "privateBytes": 77520896
+          }
+        }
+      }
+    }
+  ],
+  "scenario_summaries": {
+    "small": {
+      "baseline": {
+        "scan_total_us": {
+          "n": 6,
+          "median": 779514.0,
+          "p95_nearest_rank": 1155319,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "harness_first_paint_wait_us": {
+          "n": 6,
+          "median": 84508.5,
+          "p95_nearest_rank": 124808,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.privateBytesDelta": {
+          "n": 6,
+          "median": 71467008.0,
+          "p95_nearest_rank": 72978432,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.workingSetBytesDelta": {
+          "n": 6,
+          "median": 50606080.0,
+          "p95_nearest_rank": 51458048,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.privateBytesDelta": {
+          "n": 6,
+          "median": 71014400.0,
+          "p95_nearest_rank": 72978432,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.workingSetBytesDelta": {
+          "n": 6,
+          "median": 49932288.0,
+          "p95_nearest_rank": 51458048,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.privateBytesDelta": {
+          "n": 6,
+          "median": 64135168.0,
+          "p95_nearest_rank": 70078464,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.workingSetBytesDelta": {
+          "n": 6,
+          "median": 44402688.0,
+          "p95_nearest_rank": 49205248,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        }
+      },
+      "candidate": {
+        "scan_total_us": {
+          "n": 6,
+          "median": 687218.5,
+          "p95_nearest_rank": 949700,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "harness_first_paint_wait_us": {
+          "n": 6,
+          "median": 314670.0,
+          "p95_nearest_rank": 406742,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.privateBytesDelta": {
+          "n": 6,
+          "median": 69906432.0,
+          "p95_nearest_rank": 71487488,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.workingSetBytesDelta": {
+          "n": 6,
+          "median": 49928192.0,
+          "p95_nearest_rank": 50249728,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.privateBytesDelta": {
+          "n": 6,
+          "median": 68145152.0,
+          "p95_nearest_rank": 71487488,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.workingSetBytesDelta": {
+          "n": 6,
+          "median": 47726592.0,
+          "p95_nearest_rank": 50249728,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.privateBytesDelta": {
+          "n": 6,
+          "median": 63399936.0,
+          "p95_nearest_rank": 67203072,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.workingSetBytesDelta": {
+          "n": 6,
+          "median": 44261376.0,
+          "p95_nearest_rank": 47632384,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        }
+      }
+    },
+    "large": {
+      "baseline": {
+        "scan_total_us": {
+          "n": 6,
+          "median": 3749114.5,
+          "p95_nearest_rank": 4465589,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "harness_first_paint_wait_us": {
+          "n": 6,
+          "median": 49876.0,
+          "p95_nearest_rank": 111301,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.privateBytesDelta": {
+          "n": 6,
+          "median": 169117696.0,
+          "p95_nearest_rank": 170999808,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.workingSetBytesDelta": {
+          "n": 6,
+          "median": 71041024.0,
+          "p95_nearest_rank": 74268672,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.privateBytesDelta": {
+          "n": 6,
+          "median": 169117696.0,
+          "p95_nearest_rank": 170999808,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.workingSetBytesDelta": {
+          "n": 6,
+          "median": 70436864.0,
+          "p95_nearest_rank": 73023488,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.privateBytesDelta": {
+          "n": 6,
+          "median": 72611840.0,
+          "p95_nearest_rank": 77520896,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.workingSetBytesDelta": {
+          "n": 6,
+          "median": 46581760.0,
+          "p95_nearest_rank": 48791552,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        }
+      },
+      "candidate": {
+        "scan_total_us": {
+          "n": 6,
+          "median": 5487667.0,
+          "p95_nearest_rank": 5673209,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "harness_first_paint_wait_us": {
+          "n": 6,
+          "median": 250366.0,
+          "p95_nearest_rank": 392818,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.privateBytesDelta": {
+          "n": 6,
+          "median": 172187648.0,
+          "p95_nearest_rank": 179679232,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "peakWhileOpen.workingSetBytesDelta": {
+          "n": 6,
+          "median": 71557120.0,
+          "p95_nearest_rank": 73961472,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.privateBytesDelta": {
+          "n": 6,
+          "median": 168183808.0,
+          "p95_nearest_rank": 172793856,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "completeReady.workingSetBytesDelta": {
+          "n": 6,
+          "median": 67418112.0,
+          "p95_nearest_rank": 73244672,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.privateBytesDelta": {
+          "n": 6,
+          "median": 84676608.0,
+          "p95_nearest_rank": 89669632,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        },
+        "closedAfterQuiet.workingSetBytesDelta": {
+          "n": 6,
+          "median": 48150528.0,
+          "p95_nearest_rank": 53678080,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate."
+        }
+      }
+    }
+  },
+  "abba_adjacent_pairs": [
+    {
+      "block": 1,
+      "pair": "left-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b1-p1",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b1-p2",
+      "baseline_run_id": "20261009T010706Z-40224-dfe203b942094d2e8af1f2c1c45c4c1d",
+      "candidate_run_id": "20261009T010842Z-10476-c4b872559f1143e09319f7d97060a82a",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 1155319,
+            "candidate": 697130,
+            "candidate_over_baseline": 0.6034091017286135,
+            "relative_change": -0.3965908982713865
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 34067,
+            "candidate": 234017,
+            "candidate_over_baseline": 6.869316347198168,
+            "relative_change": 5.869316347198168
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 71143424,
+            "candidate": 71487488,
+            "candidate_over_baseline": 1.004836202429616,
+            "relative_change": 0.004836202429615983
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 49520640,
+            "candidate": 50249728,
+            "candidate_over_baseline": 1.014722911497105,
+            "relative_change": 0.014722911497105046
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 71143424,
+            "candidate": 71487488,
+            "candidate_over_baseline": 1.004836202429616,
+            "relative_change": 0.004836202429615983
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 49520640,
+            "candidate": 50249728,
+            "candidate_over_baseline": 1.014722911497105,
+            "relative_change": 0.014722911497105046
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 59408384,
+            "candidate": 26644480,
+            "candidate_over_baseline": 0.44849696635410924,
+            "relative_change": -0.5515030336458908
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 40407040,
+            "candidate": 9715712,
+            "candidate_over_baseline": 0.24044602128737963,
+            "relative_change": -0.7595539787126204
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 94910,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 102844,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 1.0835949847223685,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 810714,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 3643413,
+            "candidate": 5345954,
+            "candidate_over_baseline": 1.4672928926805717,
+            "relative_change": 0.4672928926805718
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 50654,
+            "candidate": 392818,
+            "candidate_over_baseline": 7.754925573498638,
+            "relative_change": 6.754925573498638
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 168812544,
+            "candidate": 166907904,
+            "candidate_over_baseline": 0.9887174261173388,
+            "relative_change": -0.011282573882661231
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 71282688,
+            "candidate": 65536000,
+            "candidate_over_baseline": 0.9193817157961272,
+            "relative_change": -0.08061828420387289
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 168812544,
+            "candidate": 166907904,
+            "candidate_over_baseline": 0.9887174261173388,
+            "relative_change": -0.011282573882661231
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 71282688,
+            "candidate": 65536000,
+            "candidate_over_baseline": 0.9193817157961272,
+            "relative_change": -0.08061828420387289
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 76390400,
+            "candidate": 83369984,
+            "candidate_over_baseline": 1.0913672922252011,
+            "relative_change": 0.09136729222520107
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 48791552,
+            "candidate": 46264320,
+            "candidate_over_baseline": 0.9482034922766958,
+            "relative_change": -0.05179650772330423
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 40499,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 63216,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 1.5609274303069212,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 4362848,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    },
+    {
+      "block": 1,
+      "pair": "right-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b1-p4",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b1-p3",
+      "baseline_run_id": "20261009T011207Z-6732-fb85a4bc1cfa495f941999090aab09df",
+      "candidate_run_id": "20261009T011023Z-44704-1fed6d563e784be6a880bc33bad2c6a0",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 651588,
+            "candidate": 570105,
+            "candidate_over_baseline": 0.8749470524319048,
+            "relative_change": -0.12505294756809518
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 124808,
+            "candidate": 315305,
+            "candidate_over_baseline": 2.526320428177681,
+            "relative_change": 1.526320428177681
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 71790592,
+            "candidate": 69550080,
+            "candidate_over_baseline": 0.9687910081588407,
+            "relative_change": -0.031208991841159356
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 51171328,
+            "candidate": 49074176,
+            "candidate_over_baseline": 0.9590170495477467,
+            "relative_change": -0.04098295045225326
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 71790592,
+            "candidate": 69550080,
+            "candidate_over_baseline": 0.9687910081588407,
+            "relative_change": -0.031208991841159356
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 51171328,
+            "candidate": 49074176,
+            "candidate_over_baseline": 0.9590170495477467,
+            "relative_change": -0.04098295045225326
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 60276736,
+            "candidate": 66887680,
+            "candidate_over_baseline": 1.1096765425387334,
+            "relative_change": 0.10967654253873335
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 40976384,
+            "candidate": 47054848,
+            "candidate_over_baseline": 1.1483406637345062,
+            "relative_change": 0.1483406637345062
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 104308,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 65958,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.6323388426582812,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 817972,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 3639689,
+            "candidate": 5555909,
+            "candidate_over_baseline": 1.5264790480725139,
+            "relative_change": 0.5264790480725139
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 111301,
+            "candidate": 253017,
+            "candidate_over_baseline": 2.2732679850136117,
+            "relative_change": 1.2732679850136117
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 170999808,
+            "candidate": 163905536,
+            "candidate_over_baseline": 0.9585129826578519,
+            "relative_change": -0.04148701734214813
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 73023488,
+            "candidate": 73244672,
+            "candidate_over_baseline": 1.00302894323536,
+            "relative_change": 0.003028943235360108
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 170999808,
+            "candidate": 163905536,
+            "candidate_over_baseline": 0.9585129826578519,
+            "relative_change": -0.04148701734214813
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 73023488,
+            "candidate": 73244672,
+            "candidate_over_baseline": 1.00302894323536,
+            "relative_change": 0.003028943235360108
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 41127936,
+            "candidate": 79962112,
+            "candidate_over_baseline": 1.9442286624838163,
+            "relative_change": 0.9442286624838163
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 14315520,
+            "candidate": 53678080,
+            "candidate_over_baseline": 3.7496423462088697,
+            "relative_change": 2.7496423462088697
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 77400,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 65041,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.8403229974160207,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 3035915,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    },
+    {
+      "block": 2,
+      "pair": "left-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b2-p1",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b2-p2",
+      "baseline_run_id": "20261009T011344Z-45424-ac560e22d66149b9a67eacb76826b4cd",
+      "candidate_run_id": "20261009T011519Z-13216-35c6551fcb654b1db2d7f993d60e8864",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 907440,
+            "candidate": 642035,
+            "candidate_over_baseline": 0.7075233624261659,
+            "relative_change": -0.2924766375738341
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 102651,
+            "candidate": 314035,
+            "candidate_over_baseline": 3.0592493010297024,
+            "relative_change": 2.0592493010297024
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 70885376,
+            "candidate": 69820416,
+            "candidate_over_baseline": 0.9849763087946377,
+            "relative_change": -0.015023691205362302
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 50343936,
+            "candidate": 49602560,
+            "candidate_over_baseline": 0.9852737775608169,
+            "relative_change": -0.014726222439183142
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 70885376,
+            "candidate": 69820416,
+            "candidate_over_baseline": 0.9849763087946377,
+            "relative_change": -0.015023691205362302
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 50343936,
+            "candidate": 49602560,
+            "candidate_over_baseline": 0.9852737775608169,
+            "relative_change": -0.014726222439183142
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 68169728,
+            "candidate": 67203072,
+            "candidate_over_baseline": 0.9858198642071742,
+            "relative_change": -0.014180135792825812
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 48291840,
+            "candidate": 47632384,
+            "candidate_over_baseline": 0.9863443596268023,
+            "relative_change": -0.013655640373197626
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 86763,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 60462,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.6968638705438954,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 855352,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 3738526,
+            "candidate": 5649610,
+            "candidate_over_baseline": 1.5111864943563318,
+            "relative_change": 0.5111864943563319
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 49098,
+            "candidate": 374969,
+            "candidate_over_baseline": 7.637154262902766,
+            "relative_change": 6.637154262902766
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 170872832,
+            "candidate": 172793856,
+            "candidate_over_baseline": 1.0112424191576574,
+            "relative_change": 0.01124241915765755
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 70074368,
+            "candidate": 70565888,
+            "candidate_over_baseline": 1.0070142623334113,
+            "relative_change": 0.007014262333411269
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 170872832,
+            "candidate": 172793856,
+            "candidate_over_baseline": 1.0112424191576574,
+            "relative_change": 0.01124241915765755
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 70074368,
+            "candidate": 70565888,
+            "candidate_over_baseline": 1.0070142623334113,
+            "relative_change": 0.007014262333411269
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 69685248,
+            "candidate": 89669632,
+            "candidate_over_baseline": 1.2867806971139717,
+            "relative_change": 0.2867806971139717
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 40284160,
+            "candidate": 52719616,
+            "candidate_over_baseline": 1.3086934417895273,
+            "relative_change": 0.3086934417895272
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 37415,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 69073,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 1.8461312307897901,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 4192691,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    },
+    {
+      "block": 2,
+      "pair": "right-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b2-p4",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b2-p3",
+      "baseline_run_id": "20261009T011840Z-45768-6380ed0cb1cd4dc28940e5fea93cfadf",
+      "candidate_run_id": "20261009T011700Z-43236-2bafe074607d44829cda49500253f6b3",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 1062698,
+            "candidate": 677307,
+            "candidate_over_baseline": 0.6373466403437289,
+            "relative_change": -0.3626533596562711
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 75897,
+            "candidate": 348331,
+            "candidate_over_baseline": 4.58952264252869,
+            "relative_change": 3.5895226425286904
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 72630272,
+            "candidate": 69500928,
+            "candidate_over_baseline": 0.9569140536882472,
+            "relative_change": -0.04308594631175276
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 50868224,
+            "candidate": 49840128,
+            "candidate_over_baseline": 0.9797890329334085,
+            "relative_change": -0.020210967066591513
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 67616768,
+            "candidate": 65417216,
+            "candidate_over_baseline": 0.9674703174218561,
+            "relative_change": -0.03252968257814393
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 46317568,
+            "candidate": 46379008,
+            "candidate_over_baseline": 1.001326494517156,
+            "relative_change": 0.0013264945171559957
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 64905216,
+            "candidate": 62873600,
+            "candidate_over_baseline": 0.9686987252303421,
+            "relative_change": -0.03130127476965796
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 44257280,
+            "candidate": 44457984,
+            "candidate_over_baseline": 1.0045349375289219,
+            "relative_change": 0.004534937528921795
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 88199,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 62313,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.7065046088957925,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 928427,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 4465589,
+            "candidate": 5673209,
+            "candidate_over_baseline": 1.2704279323511412,
+            "relative_change": 0.27042793235114115
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 76213,
+            "candidate": 126106,
+            "candidate_over_baseline": 1.6546520934748665,
+            "relative_change": 0.6546520934748665
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 168054784,
+            "candidate": 179679232,
+            "candidate_over_baseline": 1.0691705866582173,
+            "relative_change": 0.06917058665821736
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 70799360,
+            "candidate": 73961472,
+            "candidate_over_baseline": 1.0446630026034134,
+            "relative_change": 0.04466300260341336
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 168054784,
+            "candidate": 169459712,
+            "candidate_over_baseline": 1.008359940529869,
+            "relative_change": 0.008359940529869117
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 70799360,
+            "candidate": 63930368,
+            "candidate_over_baseline": 0.902979461961238,
+            "relative_change": -0.09702053803876193
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 75538432,
+            "candidate": 85983232,
+            "candidate_over_baseline": 1.1382713371651665,
+            "relative_change": 0.13827133716516646
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 47927296,
+            "candidate": 44707840,
+            "candidate_over_baseline": 0.9328262541663106,
+            "relative_change": -0.06717374583368943
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 69428,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 60145,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.8662931382151293,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 4282223,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    },
+    {
+      "block": 3,
+      "pair": "left-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b3-p1",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b3-p2",
+      "baseline_run_id": "20261009T012016Z-13180-8a671038ba3c459b9045b36b88b7da2e",
+      "candidate_run_id": "20261009T012152Z-40460-a99be97c3ec14fc194af6c9d739f08bf",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 613047,
+            "candidate": 949700,
+            "candidate_over_baseline": 1.5491471290129468,
+            "relative_change": 0.5491471290129468
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 93120,
+            "candidate": 406742,
+            "candidate_over_baseline": 4.367933848797251,
+            "relative_change": 3.367933848797251
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 72978432,
+            "candidate": 69992448,
+            "candidate_over_baseline": 0.9590840208789359,
+            "relative_change": -0.04091597912106415
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 51458048,
+            "candidate": 50192384,
+            "candidate_over_baseline": 0.9754039640213324,
+            "relative_change": -0.024596035978667517
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 72978432,
+            "candidate": 65650688,
+            "candidate_over_baseline": 0.899590278947073,
+            "relative_change": -0.10040972105292698
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 51458048,
+            "candidate": 46206976,
+            "candidate_over_baseline": 0.8979543102762079,
+            "relative_change": -0.10204568972379209
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 70078464,
+            "candidate": 62865408,
+            "candidate_over_baseline": 0.8970717166403647,
+            "relative_change": -0.10292828335963528
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 49205248,
+            "candidate": 44040192,
+            "candidate_over_baseline": 0.8950303837509365,
+            "relative_change": -0.10496961624906351
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 131156,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 53898,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.41094574399951206,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 1064033,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 3794964,
+            "candidate": 5364113,
+            "candidate_over_baseline": 1.4134819197230857,
+            "relative_change": 0.4134819197230856
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 35693,
+            "candidate": 172599,
+            "candidate_over_baseline": 4.835654049813689,
+            "relative_change": 3.835654049813689
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 160632832,
+            "candidate": 171581440,
+            "candidate_over_baseline": 1.0681592166662417,
+            "relative_change": 0.06815921666624168
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 74268672,
+            "candidate": 69300224,
+            "candidate_over_baseline": 0.9331016986543128,
+            "relative_change": -0.06689830134568718
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 154685440,
+            "candidate": 171581440,
+            "candidate_over_baseline": 1.109228121276314,
+            "relative_change": 0.10922812127631405
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 68349952,
+            "candidate": 69300224,
+            "candidate_over_baseline": 1.013903038293282,
+            "relative_change": 0.013903038293282195
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 64454656,
+            "candidate": 88055808,
+            "candidate_over_baseline": 1.3661667513980682,
+            "relative_change": 0.36616675139806815
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 45236224,
+            "candidate": 50036736,
+            "candidate_over_baseline": 1.1061209706628032,
+            "relative_change": 0.10612097066280334
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 62822,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 65021,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 1.035003661137818,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 3842153,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    },
+    {
+      "block": 3,
+      "pair": "right-adjacent",
+      "baseline_label": "20261009T010343989Z-c7dc9e62-b3-p4",
+      "candidate_label": "20261009T010343989Z-c7dc9e62-b3-p3",
+      "baseline_run_id": "20261009T012511Z-44880-5484c4a38c9a467bb37f3a6eb890b82a",
+      "candidate_run_id": "20261009T012332Z-44628-053431d3eb6c430196345e822ad7ef51",
+      "scenarios": {
+        "small": {
+          "scan_total_us": {
+            "baseline": 157970,
+            "candidate": 914521,
+            "candidate_over_baseline": 5.78920681141989,
+            "relative_change": 4.78920681141989
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 404,
+            "candidate": 262794,
+            "candidate_over_baseline": 650.480198019802,
+            "relative_change": 649.480198019802
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 69013504,
+            "candidate": 70795264,
+            "candidate_over_baseline": 1.0258175559380378,
+            "relative_change": 0.025817555938037865
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 49623040,
+            "candidate": 50016256,
+            "candidate_over_baseline": 1.0079240610813043,
+            "relative_change": 0.007924061081304168
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 65875968,
+            "candidate": 66740224,
+            "candidate_over_baseline": 1.013119442890008,
+            "relative_change": 0.013119442890008083
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 46403584,
+            "candidate": 46247936,
+            "candidate_over_baseline": 0.9966457763262424,
+            "relative_change": -0.003354223673757613
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 63365120,
+            "candidate": 63926272,
+            "candidate_over_baseline": 1.0088558500323206,
+            "relative_change": 0.00885585003232062
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 44548096,
+            "candidate": 44064768,
+            "candidate_over_baseline": 0.9891504229496139,
+            "relative_change": -0.010849577050386172
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 72344,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 65711,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 0.9083130598252792,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 867966,
+            "target_us": 250000,
+            "target_met": false
+          }
+        },
+        "large": {
+          "scan_total_us": {
+            "baseline": 3759703,
+            "candidate": 5419425,
+            "candidate_over_baseline": 1.4414502954089725,
+            "relative_change": 0.44145029540897246
+          },
+          "harness_first_paint_wait_us": {
+            "baseline": 4397,
+            "candidate": 247715,
+            "candidate_over_baseline": 56.33727541505572,
+            "relative_change": 55.33727541505572
+          },
+          "peakWhileOpen.privateBytesDelta": {
+            "baseline": 169422848,
+            "candidate": 175017984,
+            "candidate_over_baseline": 1.0330246838962358,
+            "relative_change": 0.033024683896235765
+          },
+          "peakWhileOpen.workingSetBytesDelta": {
+            "baseline": 69578752,
+            "candidate": 72548352,
+            "candidate_over_baseline": 1.0426796962382998,
+            "relative_change": 0.042679696238299876
+          },
+          "completeReady.privateBytesDelta": {
+            "baseline": 169422848,
+            "candidate": 166678528,
+            "candidate_over_baseline": 0.983801948601407,
+            "relative_change": -0.016198051398592945
+          },
+          "completeReady.workingSetBytesDelta": {
+            "baseline": 69578752,
+            "candidate": 64241664,
+            "candidate_over_baseline": 0.9232942838641314,
+            "relative_change": -0.0767057161358686
+          },
+          "closedAfterQuiet.privateBytesDelta": {
+            "baseline": 77520896,
+            "candidate": 82903040,
+            "candidate_over_baseline": 1.0694282996935434,
+            "relative_change": 0.06942829969354328
+          },
+          "closedAfterQuiet.workingSetBytesDelta": {
+            "baseline": 48627712,
+            "candidate": 44752896,
+            "candidate_over_baseline": 0.9203167115902965,
+            "relative_change": -0.0796832884097035
+          },
+          "historical_open_to_first_paint": {
+            "baseline_us": 67839,
+            "baseline_hr": 0,
+            "baseline_succeeded": true,
+            "candidate_us": 109741,
+            "candidate_hr": 0,
+            "candidate_succeeded": true,
+            "candidate_over_baseline": 1.6176683028936159,
+            "ratio_omission_reason": null
+          },
+          "candidate_only_first_meaningful_paint": {
+            "baseline_us": null,
+            "candidate_us": 4651175,
+            "target_us": 250000,
+            "target_met": false
+          }
+        }
+      }
+    }
+  ],
+  "historical_open_to_first_paint": {
+    "small": {
+      "baseline": {
+        "events": [
+          {
+            "run_id": "20261009T010706Z-40224-dfe203b942094d2e8af1f2c1c45c4c1d",
+            "duration_us": 94910,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011207Z-6732-fb85a4bc1cfa495f941999090aab09df",
+            "duration_us": 104308,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011344Z-45424-ac560e22d66149b9a67eacb76826b4cd",
+            "duration_us": 86763,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011840Z-45768-6380ed0cb1cd4dc28940e5fea93cfadf",
+            "duration_us": 88199,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012016Z-13180-8a671038ba3c459b9045b36b88b7da2e",
+            "duration_us": 131156,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012511Z-44880-5484c4a38c9a467bb37f3a6eb890b82a",
+            "duration_us": 72344,
+            "hr": 0,
+            "succeeded": true
+          }
+        ],
+        "successful_observation_summary": {
+          "n": 6,
+          "median": 91554.5,
+          "p95_nearest_rank": 131156,
+          "p95_definition": "nearest-rank ceil(0.95*n); unsuccessful HRESULT rows remain in events but are excluded from this timing summary."
+        }
+      },
+      "candidate": {
+        "events": [
+          {
+            "run_id": "20261009T010842Z-10476-c4b872559f1143e09319f7d97060a82a",
+            "duration_us": 102844,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011023Z-44704-1fed6d563e784be6a880bc33bad2c6a0",
+            "duration_us": 65958,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011519Z-13216-35c6551fcb654b1db2d7f993d60e8864",
+            "duration_us": 60462,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011700Z-43236-2bafe074607d44829cda49500253f6b3",
+            "duration_us": 62313,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012152Z-40460-a99be97c3ec14fc194af6c9d739f08bf",
+            "duration_us": 53898,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012332Z-44628-053431d3eb6c430196345e822ad7ef51",
+            "duration_us": 65711,
+            "hr": 0,
+            "succeeded": true
+          }
+        ],
+        "successful_observation_summary": {
+          "n": 6,
+          "median": 64012.0,
+          "p95_nearest_rank": 102844,
+          "p95_definition": "nearest-rank ceil(0.95*n); unsuccessful HRESULT rows remain in events but are excluded from this timing summary."
+        }
+      },
+      "paired_candidate_over_baseline": {
+        "n": 6,
+        "median": 0.701684239719844,
+        "p95_nearest_rank": 1.0835949847223685,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_unsuccessful_hresult_pairs": 0,
+        "ratios": [
+          1.0835949847223685,
+          0.6323388426582812,
+          0.6968638705438954,
+          0.7065046088957925,
+          0.41094574399951206,
+          0.9083130598252792
+        ],
+        "definition": "candidate / baseline only when both historical first-paint rows had SUCCEEDED HRESULTs; unsuccessful attempts remain listed in per-run events."
+      }
+    },
+    "large": {
+      "baseline": {
+        "events": [
+          {
+            "run_id": "20261009T010706Z-40224-dfe203b942094d2e8af1f2c1c45c4c1d",
+            "duration_us": 40499,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011207Z-6732-fb85a4bc1cfa495f941999090aab09df",
+            "duration_us": 77400,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011344Z-45424-ac560e22d66149b9a67eacb76826b4cd",
+            "duration_us": 37415,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011840Z-45768-6380ed0cb1cd4dc28940e5fea93cfadf",
+            "duration_us": 69428,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012016Z-13180-8a671038ba3c459b9045b36b88b7da2e",
+            "duration_us": 62822,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012511Z-44880-5484c4a38c9a467bb37f3a6eb890b82a",
+            "duration_us": 67839,
+            "hr": 0,
+            "succeeded": true
+          }
+        ],
+        "successful_observation_summary": {
+          "n": 6,
+          "median": 65330.5,
+          "p95_nearest_rank": 77400,
+          "p95_definition": "nearest-rank ceil(0.95*n); unsuccessful HRESULT rows remain in events but are excluded from this timing summary."
+        }
+      },
+      "candidate": {
+        "events": [
+          {
+            "run_id": "20261009T010842Z-10476-c4b872559f1143e09319f7d97060a82a",
+            "duration_us": 63216,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011023Z-44704-1fed6d563e784be6a880bc33bad2c6a0",
+            "duration_us": 65041,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011519Z-13216-35c6551fcb654b1db2d7f993d60e8864",
+            "duration_us": 69073,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T011700Z-43236-2bafe074607d44829cda49500253f6b3",
+            "duration_us": 60145,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012152Z-40460-a99be97c3ec14fc194af6c9d739f08bf",
+            "duration_us": 65021,
+            "hr": 0,
+            "succeeded": true
+          },
+          {
+            "run_id": "20261009T012332Z-44628-053431d3eb6c430196345e822ad7ef51",
+            "duration_us": 109741,
+            "hr": 0,
+            "succeeded": true
+          }
+        ],
+        "successful_observation_summary": {
+          "n": 6,
+          "median": 65031.0,
+          "p95_nearest_rank": 109741,
+          "p95_definition": "nearest-rank ceil(0.95*n); unsuccessful HRESULT rows remain in events but are excluded from this timing summary."
+        }
+      },
+      "paired_candidate_over_baseline": {
+        "n": 6,
+        "median": 1.2979655457223696,
+        "p95_nearest_rank": 1.8461312307897901,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_unsuccessful_hresult_pairs": 0,
+        "ratios": [
+          1.5609274303069212,
+          0.8403229974160207,
+          1.8461312307897901,
+          0.8662931382151293,
+          1.035003661137818,
+          1.6176683028936159
+        ],
+        "definition": "candidate / baseline only when both historical first-paint rows had SUCCEEDED HRESULTs; unsuccessful attempts remain listed in per-run events."
+      }
+    }
+  },
+  "candidate_only_first_meaningful_paint": {
+    "metric": "viewer.space.open_to_first_meaningful_paint_us",
+    "target_us": 250000,
+    "target_ms": 250,
+    "baseline_value": null,
+    "baseline_note": "Not measured by the baseline build; no value is inferred.",
+    "scenarios": {
+      "small": {
+        "baseline": null,
+        "candidate": {
+          "n": 6,
+          "median": 861659.0,
+          "p95_nearest_rank": 1064033,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+          "target_us": 250000,
+          "target_met_count": 0,
+          "target_met_rate": 0.0,
+          "measurements_us": [
+            810714,
+            817972,
+            855352,
+            928427,
+            1064033,
+            867966
+          ]
+        }
+      },
+      "large": {
+        "baseline": null,
+        "candidate": {
+          "n": 6,
+          "median": 4237457.0,
+          "p95_nearest_rank": 4651175,
+          "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+          "target_us": 250000,
+          "target_met_count": 0,
+          "target_met_rate": 0.0,
+          "measurements_us": [
+            4362848,
+            3035915,
+            4192691,
+            4282223,
+            3842153,
+            4651175
+          ]
+        }
+      }
+    }
+  },
+  "claim": "Descriptive measurements only. No positive candidate performance gain is asserted by this script.",
+  "paired_ratio_summaries": {
+    "small": {
+      "scan_total_us": {
+        "n": 6,
+        "median": 0.7912352074290354,
+        "p95_nearest_rank": 5.78920681141989,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.6034091017286135,
+          0.8749470524319048,
+          0.7075233624261659,
+          0.6373466403437289,
+          1.5491471290129468,
+          5.78920681141989
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "harness_first_paint_wait_us": {
+        "n": 6,
+        "median": 4.478728245662971,
+        "p95_nearest_rank": 650.480198019802,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          6.869316347198168,
+          2.526320428177681,
+          3.0592493010297024,
+          4.58952264252869,
+          4.367933848797251,
+          650.480198019802
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "peakWhileOpen.privateBytesDelta": {
+        "n": 6,
+        "median": 0.9768836584767392,
+        "p95_nearest_rank": 1.0258175559380378,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.004836202429616,
+          0.9687910081588407,
+          0.9849763087946377,
+          0.9569140536882472,
+          0.9590840208789359,
+          1.0258175559380378
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "peakWhileOpen.workingSetBytesDelta": {
+        "n": 6,
+        "median": 0.9825314052471127,
+        "p95_nearest_rank": 1.014722911497105,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.014722911497105,
+          0.9590170495477467,
+          0.9852737775608169,
+          0.9797890329334085,
+          0.9754039640213324,
+          1.0079240610813043
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "completeReady.privateBytesDelta": {
+        "n": 6,
+        "median": 0.9768836584767392,
+        "p95_nearest_rank": 1.013119442890008,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.004836202429616,
+          0.9687910081588407,
+          0.9849763087946377,
+          0.9674703174218561,
+          0.899590278947073,
+          1.013119442890008
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "completeReady.workingSetBytesDelta": {
+        "n": 6,
+        "median": 0.9909597769435297,
+        "p95_nearest_rank": 1.014722911497105,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.014722911497105,
+          0.9590170495477467,
+          0.9852737775608169,
+          1.001326494517156,
+          0.8979543102762079,
+          0.9966457763262424
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "closedAfterQuiet.privateBytesDelta": {
+        "n": 6,
+        "median": 0.9772592947187582,
+        "p95_nearest_rank": 1.1096765425387334,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.44849696635410924,
+          1.1096765425387334,
+          0.9858198642071742,
+          0.9686987252303421,
+          0.8970717166403647,
+          1.0088558500323206
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "closedAfterQuiet.workingSetBytesDelta": {
+        "n": 6,
+        "median": 0.9877473912882081,
+        "p95_nearest_rank": 1.1483406637345062,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.24044602128737963,
+          1.1483406637345062,
+          0.9863443596268023,
+          1.0045349375289219,
+          0.8950303837509365,
+          0.9891504229496139
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      }
+    },
+    "large": {
+      "scan_total_us": {
+        "n": 6,
+        "median": 1.4543715940447721,
+        "p95_nearest_rank": 1.5264790480725139,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.4672928926805717,
+          1.5264790480725139,
+          1.5111864943563318,
+          1.2704279323511412,
+          1.4134819197230857,
+          1.4414502954089725
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "harness_first_paint_wait_us": {
+        "n": 6,
+        "median": 6.236404156358228,
+        "p95_nearest_rank": 56.33727541505572,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          7.754925573498638,
+          2.2732679850136117,
+          7.637154262902766,
+          1.6546520934748665,
+          4.835654049813689,
+          56.33727541505572
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "peakWhileOpen.privateBytesDelta": {
+        "n": 6,
+        "median": 1.0221335515269465,
+        "p95_nearest_rank": 1.0691705866582173,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.9887174261173388,
+          0.9585129826578519,
+          1.0112424191576574,
+          1.0691705866582173,
+          1.0681592166662417,
+          1.0330246838962358
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "peakWhileOpen.workingSetBytesDelta": {
+        "n": 6,
+        "median": 1.0050216027843857,
+        "p95_nearest_rank": 1.0446630026034134,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.9193817157961272,
+          1.00302894323536,
+          1.0070142623334113,
+          1.0446630026034134,
+          0.9331016986543128,
+          1.0426796962382998
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "completeReady.privateBytesDelta": {
+        "n": 6,
+        "median": 0.998538683323604,
+        "p95_nearest_rank": 1.109228121276314,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.9887174261173388,
+          0.9585129826578519,
+          1.0112424191576574,
+          1.008359940529869,
+          1.109228121276314,
+          0.983801948601407
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "completeReady.workingSetBytesDelta": {
+        "n": 6,
+        "median": 0.9631616135497457,
+        "p95_nearest_rank": 1.013903038293282,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.9193817157961272,
+          1.00302894323536,
+          1.0070142623334113,
+          0.902979461961238,
+          1.013903038293282,
+          0.9232942838641314
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "closedAfterQuiet.privateBytesDelta": {
+        "n": 6,
+        "median": 1.212526017139569,
+        "p95_nearest_rank": 1.9442286624838163,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          1.0913672922252011,
+          1.9442286624838163,
+          1.2867806971139717,
+          1.1382713371651665,
+          1.3661667513980682,
+          1.0694282996935434
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      },
+      "closedAfterQuiet.workingSetBytesDelta": {
+        "n": 6,
+        "median": 1.0271622314697495,
+        "p95_nearest_rank": 3.7496423462088697,
+        "p95_definition": "nearest-rank ceil(0.95*n); with n=6 this is the maximum observation, not a stable tail estimate.",
+        "n_pairs": 6,
+        "omitted_nonpositive_pairs": 0,
+        "ratios": [
+          0.9482034922766958,
+          3.7496423462088697,
+          1.3086934417895273,
+          0.9328262541663106,
+          1.1061209706628032,
+          0.9203167115902965
+        ],
+        "direction": "candidate / baseline; values below 1 are lower measurements and are not by themselves a performance-gain claim."
+      }
+    }
+  }
+}

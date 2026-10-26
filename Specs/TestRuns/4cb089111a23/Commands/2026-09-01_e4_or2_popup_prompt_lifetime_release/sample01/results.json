@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-09-01T18:30:10.301Z",
+    "duration_ms": 2538,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\e4-or2-release-01\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 1958,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+            "cases": [
+                {
+                    "name": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+                    "status": "passed",
+                    "duration_ms": 1342,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

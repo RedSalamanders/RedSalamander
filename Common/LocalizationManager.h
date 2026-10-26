@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,6 +50,9 @@ struct ResourceLookupResult final
 COMMON_API HRESULT RegisterResourceOwner(std::wstring_view ownerName, HINSTANCE embeddedInstance) noexcept;
 COMMON_API void UnregisterResourceOwner(HINSTANCE embeddedInstance) noexcept;
 COMMON_API HRESULT ApplyLanguagePreference(const LanguagePreference& preference) noexcept;
+// Cache invalidation token, not a resource lease. Successful reapplication also
+// changes it because satellites are reloaded; rejected preferences do not.
+COMMON_API uint64_t GetLanguagePreferenceRevision() noexcept;
 COMMON_API int LoadString(HINSTANCE embeddedInstance, UINT id, std::wstring& result) noexcept;
 COMMON_API HMENU LoadMenuResource(HINSTANCE embeddedInstance, UINT menuId) noexcept;
 COMMON_API HACCEL LoadAcceleratorsResource(HINSTANCE embeddedInstance, PCWSTR tableName) noexcept;

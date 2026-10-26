@@ -1,0 +1,55 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt f8fd5dc540b61b401e73b71bc6c19475964b99d78728b42ee50718a226f385ef).
+Validation plan: 8aba58ba60ac5ff3a98dc25306ff1fda1e03f2c977edd34779bc596f20d0c09a
+Entry fingerprints: ebcd59da3a830ccdd57abdba03410db7aabcac05627611d4996325d7b7de0751 (79 ms)
+Shadow affected set: 0/1 entries; advisory-build=none. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\RsI19Closeout\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal,cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode,cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor,cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane,cmd_pane_focus_follows_pointer_always_moves_focus_without_click,cmd_pane_navigationView_full_path_popup_edit_route,cmd_reliability_navigation_popup_close_survives_reentrant_restore,cmd_pane_navigationView_full_path_popup_owned_window_activation,cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor,cmd_pane_navigationView_region_tab_traversal,cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu,cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu,cmd_pane_navigationView_history_dropdown_keyboard_navigation --selftest-repeat=10
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+Commands
+  (1m 5,8s)
+         Passed: 130
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 130
+  Passed: 130
+  Failed: 0
+  Skipped: 0
+  Wall time: 1m 11,7s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20260913T115212Z-89904-b5e179268b834f45a4f6e9d937b11e21
+  Disk audit issues: 30
+  Last run: Z:\RedSalamander.Perf\runs\20260913T115212Z-89904-b5e179268b834f45a4f6e9d937b11e21\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+

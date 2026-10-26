@@ -1,0 +1,62 @@
+[
+  {
+    "sort": "name",
+    "direction": "ascending",
+    "baseline_us": 29118,
+    "candidate_us": 40239
+  },
+  {
+    "sort": "extension",
+    "direction": "ascending",
+    "baseline_us": 102450,
+    "candidate_us": 174585
+  },
+  {
+    "sort": "time",
+    "direction": "descending",
+    "baseline_us": 114835,
+    "candidate_us": 109052
+  },
+  {
+    "sort": "size",
+    "direction": "descending",
+    "baseline_us": 116181,
+    "candidate_us": 122000
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_us": 96867,
+    "candidate_us": 101891
+  },
+  {
+    "sort": "name",
+    "direction": "descending",
+    "baseline_us": 75244,
+    "candidate_us": 121063
+  },
+  {
+    "sort": "extension",
+    "direction": "descending",
+    "baseline_us": 84484,
+    "candidate_us": 155214
+  },
+  {
+    "sort": "time",
+    "direction": "ascending",
+    "baseline_us": 87136,
+    "candidate_us": 90548
+  },
+  {
+    "sort": "size",
+    "direction": "ascending",
+    "baseline_us": 87953,
+    "candidate_us": 113401
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_us": 79580,
+    "candidate_us": 87304
+  }
+]

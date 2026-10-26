@@ -1,0 +1,37 @@
+{
+  "source": "fac05d5b70b9a5933b12093c1b2337f76aee8cdc",
+  "ownerPid": 71684,
+  "scope": "focused diagnostic only; never Full qualification",
+  "label": "stage-viewer-cluster",
+  "suite": "Commands",
+  "filter": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk,cmd_viewer_space_refresh_preserves_display_until_adoption,cmd_viewer_space_refresh_cancel_keeps_display,cmd_viewer_space_refresh_budget_requires_explicit_rebuild,cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity,cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+  "repeat": 3,
+  "runId": "20261026T073454Z-71684-21fffc3a9fae41ae96af7bfb41b6caba",
+  "root": "E:\\RedSalamander.Perf",
+  "buildReceipt": "cf4e25ea5b9681e8367b93e0f28ef305221dffe9512c1143f65d612642a7a245",
+  "sourceSnapshot": "c0b8dc10e6e7a20d53e1756a01265ba1fcc437ac2c5733d790c1cbcee3f75430",
+  "artifacts": [
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+      "sha256": "B1D1267961B356BAD0924A74C56023B05A8AC8BD1B52167A2E8FC10803D13EEF"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamanderSearchService.exe",
+      "sha256": "C7DD4CF07E07F27914C1BD79A6506C27448B97D5ACE7E243AB5D3C169FF94AD5"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\Common.dll",
+      "sha256": "405E2051415C36E649CE884956AD711BF9FE0C51B01A3D69509C8CC3A8338675"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\Plugins\\ViewerSpace.dll",
+      "sha256": "1F296060C75DF6B024A56CA43FA59F7FA90047297A525EC0681B0EB9224C2A39"
+    }
+  ],
+  "desktopOperationSourceSha256": "F96309169EB717FC69D1EACF77228F3BAE66FC87ED7EA0FD6767122190C6D0D5",
+  "startedUtc": "2026-10-26T07:34:54.7282023Z",
+  "outcome": "running",
+  "log": "E:\\RedSalamander.Perf\\runs\\20261026T073454Z-71684-21fffc3a9fae41ae96af7bfb41b6caba\\artifacts\\selftest\\last_run\\native-output.txt",
+  "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T073454Z-71684-21fffc3a9fae41ae96af7bfb41b6caba\\artifacts\\selftest\\last_run\\native-error.txt",
+  "requestedMetricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T073454Z-71684-21fffc3a9fae41ae96af7bfb41b6caba\\artifacts\\selftest\\last_run\\residual-perf.jsonl"
+}

@@ -19,39 +19,39 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="PerformanceTests2.cpp">
+    <ClCompile Include="Performance.Tests.Runner.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="Performance.Tests.pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\RedSalamander\IconCache.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\RedSalamander\SelfTest\Common\SelfTestLatencyHooks.cpp">
+    <ClCompile Include="..\..\RedSalamander\SelfTest\Common\Common.Tests.LatencyHooks.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="FolderIconEnumerationPerfTest.cpp">
+    <ClCompile Include="Performance.Tests.FolderIconEnumerationPerfTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Common\Common\TraceProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FolderIconEnumerationDuplicatePathPerfTest.cpp">
+    <ClCompile Include="Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FolderViewColumnLayoutTests.cpp">
+    <ClCompile Include="Performance.Tests.FolderViewColumnLayout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\RedSalamander\FolderView.Enumeration.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="FolderViewRefreshDuplicatePathPerfTest.cpp">
+    <ClCompile Include="Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.h">
+    <ClInclude Include="Performance.Tests.pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

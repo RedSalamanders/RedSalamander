@@ -649,12 +649,12 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_GETDLGCODE: return DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTCHARS;
         case WndMsg::kEditSuggestResults:
         {
-            auto payload = TakeMessagePayload<EditSuggestResultsPayload>(lp);
+            auto payload = TakeMessagePayload<EditSuggestResultsPayload>(hwnd, msg, lp);
             return OnEditSuggestResults(std::move(payload));
         }
         case WndMsg::kNavigationMenuRequestPath:
         {
-            auto text = TakeMessagePayload<std::wstring>(lp);
+            auto text = TakeMessagePayload<std::wstring>(hwnd, msg, lp);
             return OnNavigationMenuRequestPath(std::move(text));
         }
         case WndMsg::kNavigationMenuShowSiblingsDropdown:
@@ -676,7 +676,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kNavigationViewShowDriveMenuDropdown: ShowFileSystemDriveMenuDropdown(); return 0;
         case WndMsg::kNavigationViewDriveInfoLoaded:
         {
-            auto payload = TakeMessagePayload<DriveInfoResultPayload>(lp);
+            auto payload = TakeMessagePayload<DriveInfoResultPayload>(hwnd, msg, lp);
             return OnDriveInfoLoaded(std::move(payload));
         }
         case WndMsg::kNavigationViewRestoreFolderFocus:

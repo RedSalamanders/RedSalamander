@@ -51,6 +51,15 @@ function New-RSSharedRuntimeCleanFixture {
     <RSBuildEnableTests Condition="'$(RSFixtureDisabledTests)'=='true'">false</RSBuildEnableTests>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.Common.CurrentVersion.targets" />
+  <PropertyGroup Condition="'$(RSFixtureNativeCpp)'=='true'">
+    <ExtensionsToDeleteOnClean>*.dll;Consumer*.pdb</ExtensionsToDeleteOnClean>
+  </PropertyGroup>
+  <UsingTask TaskName="CppClean" AssemblyFile="$(VCTargetsPath)\Microsoft.Build.CppTasks.Common.dll"
+             Condition="'$(RSFixtureNativeCpp)'=='true'" />
+  <Import Project="$(VCTargetsPath)\Microsoft.CppClean.targets" Condition="'$(RSFixtureNativeCpp)'=='true'" />
+  <ItemGroup Condition="'$(RSFixtureNativeCpp)'=='true'">
+    <CoreCppClean Include="$(OutDir)" />
+  </ItemGroup>
   <Import Project="__ROOT_TARGETS__" Condition="'$(RSFixtureDisabledTests)'!='true'" />
   <Import Project="__TEST_TARGETS__" Condition="'$(RSFixtureDisabledTests)'=='true'" />
   <!-- Deliberately registered AFTER the repo hook: vcpkg's link-skipped path
@@ -170,6 +179,19 @@ Describe 'Shared runtime DLL Clean ownership' -Tag RequiresBuildToolchain {
         Test-Path -LiteralPath $fixture.Files.Shared | Should Be $true
         Test-Path -LiteralPath $fixture.Files.SharedUpper | Should Be $true
         Test-Path -LiteralPath $fixture.Files.Own | Should Be $false
+    }
+
+    It 'protects shared runtimes from the native C++ cleanup task' {
+        foreach ($disabledTests in @('false', 'true')) {
+            $fixture = New-RSSharedRuntimeCleanFixture
+            Invoke-RSSharedRuntimeCleanFixture $fixture CoreCppClean @('/p:RSFixtureNativeCpp=true', "/p:RSFixtureDisabledTests=$disabledTests")
+            foreach ($key in @('Shared', 'SharedUpper', 'Source', 'Sibling')) {
+                (Get-Content -LiteralPath $fixture.Files[$key] -Raw) | Should Be "owned-fixture-$key"
+            }
+            foreach ($key in @('Own', 'Private', 'Orphan')) {
+                Test-Path -LiteralPath $fixture.Files[$key] | Should Be $false
+            }
+        }
     }
 
     It 'does not change cleanup behavior for a non-first-party project' {

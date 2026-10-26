@@ -1,0 +1,587 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19Closeout\RedSalamander.sln
+  Target:        All Projects
+  Configuration: Debug
+  Platform:      x64
+  Build workers: 2
+  Version:       7.0.100 beta Debug (x64)
+  Build number:  100
+  Version state: Z:\RsI19Closeout\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Installing DxUi dependencies (x64-windows)
+warning: The vcpkg Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\vcpkg-tool\vcpkg.exe is using detected vcpkg root Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\vcpkg-tool and ignoring mismatched VCPKG_ROOT environment value Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115. To suppress this message, unset the environment variable or use the --vcpkg-root command line switch.
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 137 us
+vcpkg dependencies are ready.
+DxUi update check unavailable; the exact pinned dependency remains selected. (Checked 2026-09-13 08:43:00Z)
+DxUi restored at 13788e95f1c9a16210a87988d742d9dfc6f66eef for x64; output identity db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  RedSalamander-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamander-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\Terminal-fr-FR.dll
+  Terminal-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\Terminal-ja-JP.dll
+  ViewerText-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerText-fr-FR.dll
+  Terminal-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\Terminal-sk-SK.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  compilation header save succeeded; see Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\Intermediate\x64\Debug\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\Intermediate\x64\Debug\DxUi\DxUiCompositeVS.cso
+  Main.cpp
+  compilation header save succeeded; see Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\Intermediate\x64\Debug\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\Intermediate\x64\Debug\DxUi\DxUiCompositePS.cso
+  ControlCatalog.cpp
+  RedLauncher.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedLauncher.exe
+  NativeMenuInterop.cpp
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Common.lib and object Z:\RsI19Closeout\.build\x64\Debug\Common.exp
+  Common.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Common.dll
+  Embedded.cpp
+  FileSystem7z.cpp
+  LocalSearchIndexCore.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+  Generating Code...
+  SearchServiceBroker.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.ComboBox.cpp
+  SqliteIndexStore.cpp
+  DxUi.Controls.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedSalamanderSearchService.exe
+  dllmain.cpp
+  Factory.cpp
+  SearchTextHelpers.cpp
+  DxUi.cpp
+  FileSystemCurl.CopyMove.cpp
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Grid.cpp
+  FileSystem.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.Menu.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystem.DirectoryOps.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystem.FileOps.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  FileSystemCurl.Shared.cpp
+  FileSystem.Menu.cpp
+  DxUi.SingleLineTextEditing.cpp
+  DxUi.TextInput.cpp
+  FileSystem.Path.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystem.Search.cpp
+  TextInputServices.cpp
+  Generating Code...
+  FileSystem.Watch.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemCurl.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemCurl.exp
+  FileSystemCurl.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemCurl.dll
+  TextClipboard.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem7z.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem7z.dll
+  Generating Code...
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Theme.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem.exp
+  FileSystem.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystem.dll
+  DxUi.Tree.cpp
+  FileSystemDummy.cpp
+  ls4.cpp
+  Generating Code...
+  ls4.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ls4.exe
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemDummy.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemDummy.exp
+  dllmain.cpp
+  Compiling...
+  DxUi.Typeahead.cpp
+  FileSystemDummy.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemDummy.dll
+  Factory.cpp
+  dllmain.cpp
+  Factory.cpp
+  DxUi.WindowHost.cpp
+  FilesInformationGoogleDrive.cpp
+  FilesInformationMicrosoftDrive.cpp
+  FileSystemGoogleDrive.cpp
+  Generating Code...
+  DxUi.vcxproj -> Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\x64\Debug\DxUi.lib
+  dllmain.cpp
+  FileSystemMicrosoftDrive.cpp
+  Factory.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  FilesInformationMtp.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  FileSystemMtp.Core.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemGoogleDrive.dll
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.exp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  FileSystemMicrosoftDrive.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.dll
+  dllmain.cpp
+  FileSystemMtp.Device.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  FileSystemMtp.FakeBackend.cpp
+  Factory.cpp
+  ViewerImgRaw.Decode.cpp
+  FileSystemMtp.Shared.cpp
+  ViewerImgRaw.Export.cpp
+  FilesInformationS3.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMtp.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemMtp.dll
+  ViewerImgRaw.cpp
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  FileSystemS3.Configuration.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerImgRaw.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerImgRaw.exp
+  ViewerImgRaw.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerImgRaw.dll
+  FileSystemS3.Core.cpp
+  RedSalamanderMonitor.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedSalamanderMonitor.exe
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  Factory.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  ViewerPE.cpp
+  FileSystemS3.Directory.cpp
+  ViewerText.Encoding.cpp
+  dllmain.cpp
+  Generating Code...
+  ViewerText.MenuTheme.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerPE.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerPE.exp
+  ViewerPE.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerPE.dll
+  FileSystemS3.DirectoryOps.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  ViewerText.cpp
+  ViewerSpace.cpp
+  FileSystemS3.DriveInfo.cpp
+  ViewerText.Text.cpp
+  FileSystemS3.IO.cpp
+  Generating Code...
+  ViewerText.Hex.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSpace.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSpace.exp
+  ViewerSpace.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSpace.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  FileSystemS3.Menu.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerText.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerText.exp
+  ViewerText.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerText.dll
+  ViewerSqlite.Engine.cpp
+  ViewerSqlite.cpp
+  FileSystemS3.S3.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  Terminal.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSqlite.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSqlite.exp
+  ViewerSqlite.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerSqlite.dll
+  FileSystemS3.S3Table.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  TerminalAccessibility.cpp
+  ViewerVLC.cpp
+  FileSystemS3.Shared.cpp
+  TerminalInternal.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerVLC.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerVLC.exp
+  ViewerVLC.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerVLC.dll
+  FileSystemS3.SelfTest.FakeS3.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  TerminalKittyImagePipeline.cpp
+  Factory.cpp
+  TerminalCommandSurfaceModel.cpp
+  ViewerWeb.cpp
+  TerminalRuntimeLoader.cpp
+  Generating Code...
+  TerminalSecurity.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemS3.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemS3.exp
+  FileSystemS3.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\FileSystemS3.dll
+  FileSystem-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerWeb.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerWeb.exp
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  ViewerWeb.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\ViewerWeb.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerImgRaw-fr-FR.dll
+  TerminalSession.cpp
+  ViewerPE-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerWeb-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMtp-sk-SK.dll
+  TerminalVt.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  RedConfigure-ja-JP.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedConfigure-ja-JP.dll
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  ls1.cpp
+  ls1.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ls1.exe
+  ls2.cpp
+  ls2.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ls2.exe
+  ls3.cpp
+  TerminalVtUpgradeTests.cpp
+  ls3.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ls3.exe
+  FlipSequentialDiscard.cpp
+  RedConfigure.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedConfigure.exe
+  Document.cpp
+  Generating Code...
+  FlipSequentialDiscard.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\FlipSequentialDiscard.exe
+  ViewerSqlite.Engine.cpp
+  EtwListener.cpp
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\Plugins\Terminal.lib and object Z:\RsI19Closeout\.build\x64\Debug\Plugins\Terminal.exp
+  Terminal.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Plugins\Terminal.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  ViewerSqliteTests.cpp
+  AppTheme.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  UiMetrics.cpp
+  Generating Code...
+  ViewerSqliteTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ViewerSqliteTests.exe
+  MonitorTest.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  ViewerPETests.cpp
+  ProductUiTests.cpp
+  Generating Code...
+  MonitorTest.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\MonitorTest.exe
+  Generating Code...
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  ProductUiTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ProductUiTests.exe
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  ViewerPETests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ViewerPETests.exe
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  LocalizationTests-fr-FR.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\LocalizationTests-fr-FR.dll
+  PluginContractTests.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  SettingsSchemaTests.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  FileSystemPathIdentity.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  SettingsSchemaParser.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  FileSystemRouteContract.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Generating Code...
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Generating Code...
+  Preferences.Panes.cpp
+  PluginContractTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\PluginContractTests.exe
+  LocalizationTests.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  SettingsSchemaTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\SettingsSchemaTests.exe
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  SelfTestCommon.cpp
+  SelfTestLatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  CrashHandlingTests.cpp
+  LocalizationTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\LocalizationTests.exe
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  pch.cpp
+  CrashQuarantine.cpp
+  TraceProvider.cpp
+  CrashHandler.cpp
+  SelfTestLatencyHooks.cpp
+  FileSystemPluginManager.cpp
+  CrashQuarantine.TestStubs.cpp
+  Generating Code...
+  PluginModuleLifecycle.cpp
+  CrashHandlingTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\CrashHandlingTests.exe
+  FileSystemCurl.ImapHelpers.cpp
+  ViewerPluginManager.cpp
+  FileSystemCurlTests.cpp
+  Generating Code...
+  FileSystemCurlTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\FileSystemCurlTests.exe
+  Generating Code...
+  FileSystem-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem-cs-CZ.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  FolderView.Enumeration.Access.cpp
+  FileSystem-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem-sk-SK.dll
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  IconCache.cpp
+  RedConfigureRoot.cpp
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+  RedConfigureSession.cpp
+  FolderIconEnumerationPerfTest.cpp
+  FolderViewColumnLayoutTests.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  RedConfigureWorkflow.cpp
+  PerformanceTests2.cpp
+  PluginManager.TestStubs.cpp
+  Generating Code...
+     Creating library Z:\RsI19Closeout\.build\x64\Debug\PerformanceTests2.lib and object Z:\RsI19Closeout\.build\x64\Debug\PerformanceTests2.exp
+  PerformanceTests2.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\PerformanceTests2.dll
+  RedConfigureTraceProvider.cpp
+  FileSystem7z-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemDummy-sk-SK.dll
+  RedConfigureUiHelpers.cpp
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerPE-cs-CZ.dll
+  ThemeCatalog.cpp
+  ViewerPE-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerText-sk-SK.dll
+  ThemePreviewModel.cpp
+  ViewerVLC-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamander-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\LocalizationTests-sk-SK.dll
+  WorkspaceDiscovery.cpp
+  RedConfigure-cs-CZ.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\Lang\RedConfigure-sk-SK.dll
+  RedConfigureTests.cpp
+  RedSalamander.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedSalamander.exe
+  Generating Code...
+  RedConfigureTests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\RedConfigureTests.exe
+Captured log: Z:\RsI19Closeout\.build\logs\msbuild-20260913_104308_201-pid87256-aedda9f4.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: db7bd1f6b053b871868b3bfbd691bb691cdef156d7bfff41247a30eeda18444a
+
+========================================
+Build completed successfully!
+Configuration: Debug | Platform: x64
+Build time: 03:24
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "Z:\RsI19Closeout\.build\x64\Debug\RedLauncher.exe" # 2.96 MiB
+& "Z:\RsI19Closeout\.build\x64\Debug\RedSalamander.exe" # 77.27 MiB
+& "Z:\RsI19Closeout\.build\x64\Debug\RedSalamanderMonitor.exe" # 7.95 MiB

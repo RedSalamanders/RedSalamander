@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-26T19:26:05.455Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T192605Z-88584-61352cbea48049608bbc6a1f19fd49ef\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 3949,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "search_service_sqlite_default_store_uses_build_specific_programdata_root",
+            "status": "passed",
+            "duration_ms": 313,
+            "repeat_index": 1
+        },
+        {
+            "name": "search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root",
+            "status": "passed",
+            "duration_ms": 301,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_service_single_request_uses_query",
+            "status": "passed",
+            "duration_ms": 3298,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

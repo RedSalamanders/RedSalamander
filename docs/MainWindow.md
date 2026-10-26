@@ -1,12 +1,15 @@
 # Main Window & Panes
 
+The native dual-pane workspace below uses an in-memory demonstration filesystem.
+Its navigation, file lists, status bars and function bar are the product controls.
+
+![Brief and Detailed panes with invented project folders and default shortcut labels](res/folder-view-brief-detailed.png)
+
 RedSalamander is a **dual-pane** file manager:
 
 - **Left pane** and **Right pane** each have an optional Navigation bar, Folder view, optional Filter bar, and optional Status bar.
 - A splitter between panes controls the width ratio.
 - Most commands apply to the **focused pane** (the one that currently has keyboard focus).
-
-![Main window overview](res/main-window.png)
 
 ## Panes, focus, and “other pane”
 
@@ -28,8 +31,6 @@ The Navigation bar is the strip above the Folder view:
 - **Path/Breadcrumb**: shows the current location.
 - **History**: opens the folder history dropdown.
 - **Disk info** (when available): shows total/used/free and a usage bar; may provide disk actions.
-
-![Navigation bar](res/navigation-view.png)
 
 Disk actions are exposed by the active file-system plugin. For local `file:` drives, the disk area can provide Windows drive actions such as **Disk Properties** and **Disk Cleanup**.
 
@@ -60,17 +61,11 @@ Display and sort (defaults):
 - `Ctrl+F2`: Sort = None
 - `Ctrl+F3..F6`: Sort by Name/Ext/Time/Size
 
-![Folder view](res/folder-view.png)
-
 Brief keeps the pane dense for keyboard work, Detailed adds common metadata,
 Extra Detailed gives each item a second metadata line, and Thumbnails uses
 larger visuals for image-heavy folders.
 
 An actual empty folder exposes a separate **Go to parent** action for `Enter`, double-click, and `Backspace`. It is not a file or a selected/current item. A filter with no matches does not expose that action.
-
-![Brief and Detailed folder views](res/folder-view-brief-detailed.png)
-
-![Extra Detailed and Thumbnails folder views](res/folder-view-extra-thumbnails.png)
 
 ### File properties
 
@@ -103,8 +98,6 @@ The properties dialog can show local or plugin-provided fields: general identity
 - **Left/Right → Navigation Bar**: show or hide the named pane's navigation bar. Address-bar commands show it automatically before focusing the address edit.
 
 ![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
-
-![Preview pane showing an embedded text preview](res/preview-pane-text.png)
 
 ## Status bar (per pane)
 
@@ -202,6 +195,7 @@ The **Commands** menu contains multi-step tools and integration commands.
 
 - Navigation and search: Change Directory, Find Files and Directories, Show Folders History, Quick Search, and Hot Paths through the Change Drive menu.
 - Comparison and reporting: Compare Directories, Calculate Occupied Space, Make File List, List of Opened Files, and Shared Directories.
+- Cleanup: Clean Up Leftovers of Interrupted Operations lists the temporary files an interrupted copy or move left in the current folder and deletes the ones you check (see [File Operations](FileOperations.md)).
 - Shell and external integration: Connect/Disconnect Network Drive, Connections Manager, Command Shell, terminal path-insertion commands, Pane Menu, Reread Associations, User Menu, and Open File Explorer for the current folder or known folders.
 - Link handling: Go to Shortcut or Link Target follows local `.lnk`, local `file:` `.url`, junction, mount point, and directory symlink targets where pane navigation can represent the target.
 
@@ -233,25 +227,28 @@ The folder-view context menu mirrors the most common item commands: Open, Open W
 - **Commands → Insert Current Directory/Focused Item/Full Path in Terminal**: inserts the requested quoted path without sending Enter (`Ctrl+Space`, `Ctrl+Enter`, or `Ctrl+Shift+Enter`)
 - **Commands → Open File Explorer → Current Folder** (`Shift+F3`)
 
-## Dialog and command screenshots
-
-Captured from the running Release build against generated, non-sensitive demo content.
+## Everyday commands
 
 ### Change Attributes (`Ctrl+F8`)
 
-![Change Attributes dialog](res/change-attributes.png)
+Change the attributes and timestamps offered by the active provider for the
+selected items. Review the enabled fields before applying the change.
 
 ### Change Case (`Ctrl+F7`)
 
-![Change Case dialog](res/change-case.png)
+Choose a case transformation and whether it affects the whole filename or only
+part of it. See [Selections and File Lists](SelectionsAndLists.md#properties-attributes-and-names).
 
 ### Quick Search (`Shift+Space`)
 
 Type a prefix to highlight and jump to matching names; the match query and `search:` status appear at the lower right.
 
-![Quick Search active in a pane](res/quick-search.png)
-
 ### Embedded Terminal
+
+See [Terminal](Terminal.md) for floating tabs, shell/path selection, history,
+paste protections and plugin settings. [Command Palette](CommandPalette.md)
+and [Selections and File Lists](SelectionsAndLists.md) explain command discovery
+and the selection/report utilities available from these menus.
 
 Open Command Shell, directory Edit, and path insertion use a Terminal tab in
 the opposite pane. A live Starting/Running Terminal is reused instead of

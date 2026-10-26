@@ -1,0 +1,935 @@
+{
+  "schema": "viewer-space-export-preparation-analysis-v1",
+  "qualification": false,
+  "method": "Exact export prepare metric rows split when the frozen row cursor restarts. Wall span uses recorded UTC metric timestamps; native gate elapsed uses its original steady clock. Capture itself has observer cost.",
+  "records": [
+    {
+      "runId": "20261026T010343Z-25936-70c4df1d80c14ba3b13c4d801673b4af",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4764652,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010343Z-25936-70c4df1d80c14ba3b13c4d801673b4af\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "3ac2bc74bcb236c54be4d2b2da974cc52c11ff0d28249f93cfca0c4737a5c145",
+      "metricRowCount": 580,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 142,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 185775.0,
+          "maxTurnUs": 2659.0,
+          "metricWallSpanMs": 4560.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 142,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 181511.0,
+          "maxTurnUs": 2291.0,
+          "metricWallSpanMs": 4438.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 150,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 203193.0,
+          "maxTurnUs": 2949.0,
+          "metricWallSpanMs": 4841.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 67.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 195570.0,
+          "maxTurnUs": 2815.0,
+          "metricWallSpanMs": 4713.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010412Z-25936-d11ec9e04e7445679b79737294d9c02c",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4830106,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010412Z-25936-d11ec9e04e7445679b79737294d9c02c\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "5ca075991b9a08f12d720a5b96f8585ca88d47bdf37323667908a3785a9cdb6d",
+      "metricRowCount": 579,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 199116.0,
+          "maxTurnUs": 2770.0,
+          "metricWallSpanMs": 4993.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 138,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 179184.0,
+          "maxTurnUs": 2470.0,
+          "metricWallSpanMs": 4282.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 197947.0,
+          "maxTurnUs": 4503.0,
+          "metricWallSpanMs": 4779.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194543.0,
+          "maxTurnUs": 4982.0,
+          "metricWallSpanMs": 4812.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 67.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010443Z-25936-49f8f514fcdd4da480dfa4950bb8e2fa",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4733770,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010443Z-25936-49f8f514fcdd4da480dfa4950bb8e2fa\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "00000c4e03dc4e2f391dd4a498ff2612e0fc152517b60dd6a262b549395ccb9d",
+      "metricRowCount": 575,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 138,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 178905.0,
+          "maxTurnUs": 2604.0,
+          "metricWallSpanMs": 4468.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 195410.0,
+          "maxTurnUs": 2706.0,
+          "metricWallSpanMs": 4622.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 195258.0,
+          "maxTurnUs": 2616.0,
+          "metricWallSpanMs": 4903.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 143,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 190690.0,
+          "maxTurnUs": 2743.0,
+          "metricWallSpanMs": 4683.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010512Z-25936-a5045b9d0ec64760a4821f30b01d121e",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4639565,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010512Z-25936-a5045b9d0ec64760a4821f30b01d121e\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "5cb1d992b8a9b5e1436f7db6231ff49d229ce41181b43cca1b03bb125c2be19f",
+      "metricRowCount": 566,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 140,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 179879.0,
+          "maxTurnUs": 2820.0,
+          "metricWallSpanMs": 4530.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 196575.0,
+          "maxTurnUs": 3397.0,
+          "metricWallSpanMs": 4747.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 65.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 140,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 179642.0,
+          "maxTurnUs": 2580.0,
+          "metricWallSpanMs": 4620.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 65.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 138,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 181221.0,
+          "maxTurnUs": 2529.0,
+          "metricWallSpanMs": 4590.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010541Z-25936-817ae8b823984c4887b45858949321ce",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4690579,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010541Z-25936-817ae8b823984c4887b45858949321ce\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "aa685929eb91edcf91ee6d1b0da46503ffda8283b677bad38aa2e3fdf099e42a",
+      "metricRowCount": 577,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 191314.0,
+          "maxTurnUs": 3495.0,
+          "metricWallSpanMs": 4717.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 66.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193941.0,
+          "maxTurnUs": 2783.0,
+          "metricWallSpanMs": 4745.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 189942.0,
+          "maxTurnUs": 2504.0,
+          "metricWallSpanMs": 4592.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193732.0,
+          "maxTurnUs": 2517.0,
+          "metricWallSpanMs": 4653.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010611Z-25936-ef4cef97c640468a9a4f1b333ed157fd",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4675289,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010611Z-25936-ef4cef97c640468a9a4f1b333ed157fd\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "7a7ca9ba08f2ac1cdc7e51b1ebc2325d8997a855868321e39ef0a15c142ee205",
+      "metricRowCount": 578,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 182488.0,
+          "maxTurnUs": 2363.0,
+          "metricWallSpanMs": 4557.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 187157.0,
+          "maxTurnUs": 3440.0,
+          "metricWallSpanMs": 4404.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 151,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 208947.0,
+          "maxTurnUs": 2638.0,
+          "metricWallSpanMs": 4807.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193392.0,
+          "maxTurnUs": 2478.0,
+          "metricWallSpanMs": 4622.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010641Z-25936-7cceae24ba53495a909293e9dc0fa1dd",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4671485,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010641Z-25936-7cceae24ba53495a909293e9dc0fa1dd\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "3101dcd199109a7a15b37fb865745d05834f218caff53741aa019f8f7280dcaf",
+      "metricRowCount": 575,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 136,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 177335.0,
+          "maxTurnUs": 2774.0,
+          "metricWallSpanMs": 4409.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194714.0,
+          "maxTurnUs": 2641.0,
+          "metricWallSpanMs": 4931.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 187548.0,
+          "maxTurnUs": 2482.0,
+          "metricWallSpanMs": 4683.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194803.0,
+          "maxTurnUs": 2890.0,
+          "metricWallSpanMs": 4622.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010710Z-25936-6438522c91e149ba91eba7024439cbf0",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4829568,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010710Z-25936-6438522c91e149ba91eba7024439cbf0\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "2cc1e7edb57c81425047aac8d3a5c4230db790b0f7db0e48306753a0d9ded69c",
+      "metricRowCount": 574,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 183413.0,
+          "maxTurnUs": 2121.0,
+          "metricWallSpanMs": 4715.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 139,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 181716.0,
+          "maxTurnUs": 5006.0,
+          "metricWallSpanMs": 4654.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 192150.0,
+          "maxTurnUs": 2604.0,
+          "metricWallSpanMs": 4748.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 65.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 195347.0,
+          "maxTurnUs": 2565.0,
+          "metricWallSpanMs": 4776.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010739Z-25936-2b77de6dc2f74a6a81eb7b0bfc322157",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4753567,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010739Z-25936-2b77de6dc2f74a6a81eb7b0bfc322157\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "85994f2abc07d3e9f55cab2a12ae4d7d43af1372446832ed4b4e94997ba5154a",
+      "metricRowCount": 590,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 197565.0,
+          "maxTurnUs": 2484.0,
+          "metricWallSpanMs": 4747.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194179.0,
+          "maxTurnUs": 2586.0,
+          "metricWallSpanMs": 4993.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 202164.0,
+          "maxTurnUs": 2823.0,
+          "metricWallSpanMs": 4837.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193948.0,
+          "maxTurnUs": 2678.0,
+          "metricWallSpanMs": 4738.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010809Z-25936-007151adb8f34419869cc7db299886d8",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4862488,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010809Z-25936-007151adb8f34419869cc7db299886d8\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "070d4373610c108360faa1a1914fd985f2067dfc689915eb9f8989bd99e453ed",
+      "metricRowCount": 566,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 134,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 170534.0,
+          "maxTurnUs": 2145.0,
+          "metricWallSpanMs": 4313.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 191079.0,
+          "maxTurnUs": 2880.0,
+          "metricWallSpanMs": 4839.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 190869.0,
+          "maxTurnUs": 4224.0,
+          "metricWallSpanMs": 4716.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 143,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 188083.0,
+          "maxTurnUs": 2380.0,
+          "metricWallSpanMs": 4811.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010838Z-25936-7a1522f5113e4cd6a033eb0b69c3112b",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4735244,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010838Z-25936-7a1522f5113e4cd6a033eb0b69c3112b\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "52b627949d37c3f954f850ad004e622bc9ff7d1c43c55b7a043e5c9a6f5338f2",
+      "metricRowCount": 581,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 197861.0,
+          "maxTurnUs": 2611.0,
+          "metricWallSpanMs": 4713.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 198332.0,
+          "maxTurnUs": 5480.0,
+          "metricWallSpanMs": 4747.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 195699.0,
+          "maxTurnUs": 2794.0,
+          "metricWallSpanMs": 4711.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 187058.0,
+          "maxTurnUs": 2520.0,
+          "metricWallSpanMs": 4719.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010908Z-25936-a615b516f8314df495e244e00dd2c702",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4607218,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010908Z-25936-a615b516f8314df495e244e00dd2c702\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "be37cd389bea35defe983cd9773f6cc3fa3893aaab91bd68ffc40608c6ad5aff",
+      "metricRowCount": 574,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194594.0,
+          "maxTurnUs": 2495.0,
+          "metricWallSpanMs": 4621.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 182452.0,
+          "maxTurnUs": 2251.0,
+          "metricWallSpanMs": 4471.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194826.0,
+          "maxTurnUs": 3137.0,
+          "metricWallSpanMs": 4748.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 141,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 182508.0,
+          "maxTurnUs": 2398.0,
+          "metricWallSpanMs": 4590.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T010937Z-25936-0c55a360405f4ef7be5323d932599abc",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4673954,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T010937Z-25936-0c55a360405f4ef7be5323d932599abc\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "39884b56863ff1887179c7e3d0b564c6c8490140b5f8c6292ad587727b8df855",
+      "metricRowCount": 583,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 142,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 187845.0,
+          "maxTurnUs": 2756.0,
+          "metricWallSpanMs": 4590.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 150,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 206838.0,
+          "maxTurnUs": 3381.0,
+          "metricWallSpanMs": 4744.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194826.0,
+          "maxTurnUs": 2565.0,
+          "metricWallSpanMs": 4843.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 66.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 186981.0,
+          "maxTurnUs": 2655.0,
+          "metricWallSpanMs": 4623.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T011007Z-25936-d1ccf69d44074fdebb3a0caf9cae8447",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4767156,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T011007Z-25936-d1ccf69d44074fdebb3a0caf9cae8447\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "d261ad103d0835798851907f82a122a1cfb7212b88c6b5b9e93ff680551402a4",
+      "metricRowCount": 576,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193593.0,
+          "maxTurnUs": 3464.0,
+          "metricWallSpanMs": 4904.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 142,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 187058.0,
+          "maxTurnUs": 2576.0,
+          "metricWallSpanMs": 4715.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 194415.0,
+          "maxTurnUs": 3428.0,
+          "metricWallSpanMs": 4434.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 193030.0,
+          "maxTurnUs": 3443.0,
+          "metricWallSpanMs": 4750.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T011036Z-25936-3844d4ae5a3b49628a69bf9327fb042e",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4520675,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T011036Z-25936-3844d4ae5a3b49628a69bf9327fb042e\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "d802e8f10b8c9d3f68047c4d6408149df1631b3963cad90c33db52c9a3ac58a9",
+      "metricRowCount": 565,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 147,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 197534.0,
+          "maxTurnUs": 2581.0,
+          "metricWallSpanMs": 4652.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 139,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 182696.0,
+          "maxTurnUs": 3762.0,
+          "metricWallSpanMs": 4498.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 144,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 190877.0,
+          "maxTurnUs": 4302.0,
+          "metricWallSpanMs": 4466.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 62.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 135,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 170779.0,
+          "maxTurnUs": 2519.0,
+          "metricWallSpanMs": 4468.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    },
+    {
+      "runId": "20261026T011105Z-25936-67978fc7d5074c5fb86a186c92a9dc9a",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+      "executableSha256": "7E4891E8FD78F5CAABD08207ED2AF3C470E0A5EE077E0F1D40142B5A7D16603D",
+      "pluginSha256": "5DDA846F28E204E5D492E51EC8011070655A9408DB762421006F2FA880C1ACB7",
+      "nativePassed": true,
+      "nativeGateElapsedUs": 4567696,
+      "metricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T011105Z-25936-67978fc7d5074c5fb86a186c92a9dc9a\\artifacts\\selftest\\last_run\\viewer-space-export-perf.jsonl",
+      "metricsSha256": "34f0d26b08c396e0b725c0947defb5fbd0e7f8b0e627b4a3b1e2d6c6fb8a915d",
+      "metricRowCount": 579,
+      "exports": [
+        {
+          "exportOrdinal": 1,
+          "turns": 140,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 185416.0,
+          "maxTurnUs": 3666.0,
+          "metricWallSpanMs": 4497.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 2,
+          "turns": 146,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 191723.0,
+          "maxTurnUs": 2531.0,
+          "metricWallSpanMs": 4655.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        },
+        {
+          "exportOrdinal": 3,
+          "turns": 148,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 196569.0,
+          "maxTurnUs": 2417.0,
+          "metricWallSpanMs": 4932.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 64.0
+        },
+        {
+          "exportOrdinal": 4,
+          "turns": 145,
+          "preparedRows": 2002,
+          "workRows": 2002.0,
+          "activePreparationUs": 191886.0,
+          "maxTurnUs": 3555.0,
+          "metricWallSpanMs": 4529.0,
+          "medianTurnGapMs": 31.0,
+          "maxTurnGapMs": 63.0
+        }
+      ]
+    }
+  ]
+}

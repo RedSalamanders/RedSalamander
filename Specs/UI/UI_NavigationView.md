@@ -1,5 +1,14 @@
 # NavigationView Specification
 
+File and folder autocomplete choices MUST use Windows natural display ordering through
+`NaturalSort::Less` before applying the suggestion/overflow limit. Normal and full-path
+edit suggestions share the same ordering; root display suggestions use it too. Names,
+inserted paths, cache-only enumeration and provider matching remain unchanged. Bounded
+menus add ordinal ties to retain deterministic subsets. Breadcrumb sibling menus (including
+ViewerSpace's private owner) use the same Windows natural policy. Regression:
+`cmd_natural_name_sorting_contracts`, `cmd_navigation_sibling_natural_sorting` and the
+ViewerSpace analysis-host navigation fixture.
+
 ## Overview
 
 **NavigationView** is a navigation bar component displayed at the top of FolderView, providing quick access to path navigation, history, disk switching, and storage information.
@@ -674,9 +683,25 @@ Segment[0] › Segment[1] › Segment[2] › Segment[3]
 - Clicking **separator N** shows siblings of **segment[N+1]** (the segment to the right)
 - To get siblings, use `segment[N+1].fullPath.parent_path()`
 - Example: Clicking separator 0 (after `"C:"`) uses segment[1] (`"C:\\Users"`), parent path is `"C:\\"`, shows folders in root
+- Every breadcrumb sibling dropdown uses [Windows natural name order](https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-strcmplogicalw) (`StrCmpLogicalW`): case-insensitive,
+  with each digit run compared numerically, so `Folder2` precedes `Folder10`. This applies to main-pane,
+  embedded Find/Batch Rename/destination and full-path popup breadcrumbs through the shared
+  `TryGetSiblingFolders` query, independently of pane sorting settings or provider enumeration order.
+  When Windows considers two distinct names equivalent, a case-sensitive ordinal name comparison makes
+  their presentation order deterministic. This is display ordering, never canonical path/provider identity;
+  Windows may refine natural collation between OS versions.
 - Enumeration retains at most `99` actionable sibling rows and must keep the current segment in that bounded set.
+  The retained rows are the earliest in that same natural order, replacing the latest non-current row
+  when the current segment would otherwise fall outside the bound. A smaller set, or exactly 99 rows,
+  does not report overflow. Only directories participate; ordinary files and dot/dot-dot entries are excluded.
+  Selection uses a heap bounded to those same 99 paths; retention prioritizes the current folder, then
+  the shared natural comparator. The final display sort uses only natural name order. No repeated
+  full retained-list scan, extra provider enumeration, or unbounded list is introduced.
   When more siblings exist, the popup adds a localized search/navigate row instead of materializing an unbounded
   menu; that row opens the existing address/full-path editor so the user can type the destination.
+  The query remains cache-only on the UI thread. `cmd_navigation_sibling_natural_sorting` exercises the
+  production query without creating windows and records warmed 12-/1000-folder query samples, including
+  empty/exact-limit sets, mixed-case numeric names, multiple digit runs, leading zeros and Unicode.
 
 **Implementation:**
 ```cpp
@@ -1724,9 +1749,9 @@ To determine if the current path is **under** a special folder (not just equal),
 
 Current behavior is exercised by:
 
-- `RedSalamander/SelfTest/Commands/Commands.SelfTest.Navigation.cpp` for
+- `RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp` for
   navigation routing and shell stability;
-- `RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp` for
+- `RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp` for
   breadcrumb, focus traversal, menus, history, edit suggestions, invalid paths,
   pointer routing, and teardown;
 - DxUi `Tests/Controls/DxUiTests.Menu.cpp` for shared popups and product `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` for NavigationView input-source

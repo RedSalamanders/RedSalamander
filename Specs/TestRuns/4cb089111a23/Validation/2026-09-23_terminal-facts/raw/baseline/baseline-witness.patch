@@ -1,0 +1,433 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index 6ed0f2647..2bbec7690 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -155,6 +155,9 @@ struct TaskSnapshot
+     uint64_t verificationItemCompletedBytes    = 0;
+     unsigned long verifiedItemCount            = 0;
+     unsigned long verificationProblemItemCount = 0;
++    unsigned long verificationFailedItemCount      = 0;
++    unsigned long verificationUnavailableItemCount = 0;
++    unsigned long verificationCanceledItemCount    = 0;
+     uint8_t verificationState                  = 0u; // FileOperations::VerificationState
+ 
+     // Best-effort top-level type breakdown while traversal totals are still open.
+@@ -233,6 +236,9 @@ struct TaskSnapshot
+     unsigned long errorCount   = 0;
+     std::wstring lastDiagnosticMessage;
+     std::wstring resultSummary;
++    unsigned long publishedItemCount          = 0;
++    unsigned long unknownPublicationItemCount = 0;
++    unsigned long removedSourceCount          = 0;
+     bool hasIndeterminateResult             = false;
+     bool interruptedMoveNotice              = false;
+     uint64_t interruptedOperationId         = 0u;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+index ff22e6841..d7c8fa09a 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -646,6 +646,7 @@ struct SelfTestState
+         Setup,
+         FileOps_VisualGallery,
+         FileOps_VisualGalleryInteraction,
++        FileOps_TerminalFactsProjection,
+         FileOps_CopyMergeIntoExistingFolder,
+         FileOps_MoveMergeIntoExistingFolderSameVolume,
+         Beeline_RenameMergeSkipKeepsSourceFolder,
+@@ -1146,6 +1147,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
+         case SelfTestState::Step::Setup: return L"Setup";
+         case SelfTestState::Step::FileOps_VisualGallery: return L"FileOps_VisualGallery";
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction: return L"FileOps_VisualGalleryInteraction";
++        case SelfTestState::Step::FileOps_TerminalFactsProjection: return L"FileOps_TerminalFactsProjection";
+         case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder: return L"FileOps_CopyMergeIntoExistingFolder";
+         case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume: return L"FileOps_MoveMergeIntoExistingFolderSameVolume";
+         case SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder: return L"Beeline_RenameMergeSkipKeepsSourceFolder";
+@@ -1385,6 +1387,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
+ 
+ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::Setup,                                           // Environment setup and plugin loading
++    SelfTestState::Step::FileOps_TerminalFactsProjection,                 // Completed summary reaches the production popup with independent terminal counts
+     SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder,             // Clearflow Phase 1 - copy folder into existing destination folder merges
+     SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume,   // Clearflow Phase 1 - same-volume move folder into existing destination folder merges
+     SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder,        // Beeline - rename merge answers Overwrite/Skip per child and keeps the source folder
+@@ -1392,7 +1395,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::FileOps_ProviderCapabilityMatrix,                // Clearflow Phase 7 - provider capability matrix and offline conformance
+     SelfTestState::Step::FileOps_ParallelGraphFairColorWeight,            // Clearflow Phase 3 - parallel graph hue weights are fair
+     SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus,     // Clearflow Phase 4 - partial move status is explicit
+-    SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets,   // Clearflow Phase 4 - copied reparse links keep their stored targets (C3 literal)
++    SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets,          // Clearflow Phase 4 - copied reparse links keep their stored targets (C3 literal)
+     SelfTestState::Step::FileOps_DeleteToctouSwapGuard,                   // Clearflow Phase 4 - delete path rejects stale check/act swaps
+     SelfTestState::Step::FileOps_ResolvedItemsExactDestinations,          // Clearflow Phase 4 - resolved compare-sync items use exact destinations
+     SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource, // Riptide R0-1 - same size/mtime move conflict must preserve source
+@@ -1405,7 +1408,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate,   // Floodgate FS-Track-C - apply-to-all decisions stay within one risk bucket
+     SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,   // Riptide R2-1 - empty real dir cannot be silently converted to a junction
+     SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,     // Riptide R2-1 - source junction never uses directory-merge rename path
+-    SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks,           // Fairstream 1E - moved trees keep literal link text
++    SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks,                // Fairstream 1E - moved trees keep literal link text
+     SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge,           // Fairstream 1B - concurrent cross-FS move uses the bridge
+     SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts, // Fairstream 2D - identical destinations require an explicit typed conflict decision
+     SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts,       // Fairstream 2D - same-size/same-mtime collisions still prompt when bytes differ
+@@ -1455,36 +1458,36 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker,   // Riptide R2-9 - host per-item scheduler shutdown waits for active
+                                                                                       // callbacks
+     SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock, // P1.5 - worker-only F2 bypasses Queue but waits on exact parent interlock
+-    SelfTestState::Step::C1_InlineRenameNameRefusedOnCard,               // C1 (b0) - an inline rename the provider refuses fails on its card, not in admission
++    SelfTestState::Step::C1_InlineRenameNameRefusedOnCard,                // C1 (b0) - an inline rename the provider refuses fails on its card, not in admission
+     SelfTestState::Step::R4A19_DiscoveryMeasurementFacts,                 // R4-A19 - observation-only discovery baseline facts
+     SelfTestState::Step::R4A19_DiscoveryProviderControls,                 // R4-A19 - delayed Dummy and serialized fake-MTP controls
+     SelfTestState::Step::R4A19_DiscoveryIndependentVolumes,               // R4-A19 - marked C/D independent task overlap
+-    SelfTestState::Step::DiscoveryScope_LeafCopy,                        // I21 - a known leaf closes its exact total before payload work
+-    SelfTestState::Step::DiscoveryScope_LeafMove,                        // I21 - the same leaf rule holds through exact Move source cleanup
+-    SelfTestState::Step::DiscoveryScope_ManagedDirectory,                // I21 - nested bound cleanup cannot close the walker's root
+-    SelfTestState::Step::DiscoveryScope_NativeRenameMerge,               // I21 - a refused Native rename hands discovery to the merge walk
+-    SelfTestState::Step::DiscoveryScope_MixedRoots,                      // I21 - the aggregate closes once on exact summed totals
+-    SelfTestState::Step::DiscoveryScope_ZeroByteAndVerifiedLeaf,        // I21 - a known empty file is a known zero total; verification admits the same-endpoint bridge
+-    SelfTestState::Step::DiscoveryScope_LocalDirectApi,                 // I23 - one governed provider call is one discovery scope with one closure
+-    SelfTestState::Step::DiscoveryScope_DummyDirectApi,                 // I22 - Dummy reports every direct route before it mutates
+-    SelfTestState::Step::DiscoveryScope_CurlDirectApi,                  // I22 - Curl reports on its enumeration, singular and bulk
+-    SelfTestState::Step::DiscoveryScope_S3DirectApi,                    // I22 - S3 reports its exact plan total before object work
+-    SelfTestState::Step::DiscoveryScope_GDriveDirectApi,                // I22 - Google Drive reports the leaf exactly and the tree per child
+-    SelfTestState::Step::DiscoveryScope_GraphDirectApi,                 // I22 - Microsoft Drive Native Move is one closed item-based record
+-    SelfTestState::Step::DiscoveryScope_MtpDirectApi,                   // I22 - MTP reports the leaf from the listing it already holds
+-    SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,      // R0f-SMB - a wedged synchronous provider call returns on cancel
+-    SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,            // R0f-SMB - read/write/create/rename/delete on a loopback share
+-    SelfTestState::Step::R0fCurl_FakeFtpReadWriteCreateDelete,            // R0f-Curl - cross-provider copy both ways, create/rename/delete on fake FTP
++    SelfTestState::Step::DiscoveryScope_LeafCopy,                         // I21 - a known leaf closes its exact total before payload work
++    SelfTestState::Step::DiscoveryScope_LeafMove,                         // I21 - the same leaf rule holds through exact Move source cleanup
++    SelfTestState::Step::DiscoveryScope_ManagedDirectory,                 // I21 - nested bound cleanup cannot close the walker's root
++    SelfTestState::Step::DiscoveryScope_NativeRenameMerge,                // I21 - a refused Native rename hands discovery to the merge walk
++    SelfTestState::Step::DiscoveryScope_MixedRoots,                       // I21 - the aggregate closes once on exact summed totals
++    SelfTestState::Step::DiscoveryScope_ZeroByteAndVerifiedLeaf, // I21 - a known empty file is a known zero total; verification admits the same-endpoint bridge
++    SelfTestState::Step::DiscoveryScope_LocalDirectApi,          // I23 - one governed provider call is one discovery scope with one closure
++    SelfTestState::Step::DiscoveryScope_DummyDirectApi,          // I22 - Dummy reports every direct route before it mutates
++    SelfTestState::Step::DiscoveryScope_CurlDirectApi,           // I22 - Curl reports on its enumeration, singular and bulk
++    SelfTestState::Step::DiscoveryScope_S3DirectApi,             // I22 - S3 reports its exact plan total before object work
++    SelfTestState::Step::DiscoveryScope_GDriveDirectApi,         // I22 - Google Drive reports the leaf exactly and the tree per child
++    SelfTestState::Step::DiscoveryScope_GraphDirectApi,          // I22 - Microsoft Drive Native Move is one closed item-based record
++    SelfTestState::Step::DiscoveryScope_MtpDirectApi,            // I22 - MTP reports the leaf from the listing it already holds
++    SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
++    SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
++    SelfTestState::Step::R0fCurl_FakeFtpReadWriteCreateDelete,       // R0f-Curl - cross-provider copy both ways, create/rename/delete on fake FTP
+     SelfTestState::Step::BR5_CurlHostDirectoryMove,
+     SelfTestState::Step::BR5_CurlHostDirectoryMoveRefused,
+-    SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete,               // R0f-S3 - cross-provider copy both ways, create/rename/delete on fake S3
+-    SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle,  // R0f-Graph - cross-provider copy both ways, create/rename/recycle on fake Graph
+-    SelfTestState::Step::R0fGDrive_FakeDriveReadWriteCreateMoveDelete,    // R0f-GDrive - cross-provider copy both ways, create/rename/move/delete on fake Drive
+-    SelfTestState::Step::C0_GDriveCommittedCopyResponseLost,              // C0/C2 - committed remote copy must never be replayed after response loss
++    SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete,              // R0f-S3 - cross-provider copy both ways, create/rename/delete on fake S3
++    SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle, // R0f-Graph - cross-provider copy both ways, create/rename/recycle on fake Graph
++    SelfTestState::Step::R0fGDrive_FakeDriveReadWriteCreateMoveDelete,   // R0f-GDrive - cross-provider copy both ways, create/rename/move/delete on fake Drive
++    SelfTestState::Step::C0_GDriveCommittedCopyResponseLost,             // C0/C2 - committed remote copy must never be replayed after response loss
+     SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost,
+     SelfTestState::Step::C0_NativeCopyFailurePreservesKnownAxes,
+     SelfTestState::Step::C0_MutationReceiptPrefixBoundary,
+-    SelfTestState::Step::C0_LocalKnownNoCommitReceipts,                   // C0 - Local Cancel/refused-rename/merge-cancel receipts stay known, never uncertain
++    SelfTestState::Step::C0_LocalKnownNoCommitReceipts, // C0 - Local Cancel/refused-rename/merge-cancel receipts stay known, never uncertain
+     SelfTestState::Step::C0_CurlNativeDeleteGuards,
+     SelfTestState::Step::C0_CurlCommittedMutationResponseLost,
+     SelfTestState::Step::C0_CurlHostCommittedDeleteResponseLost,
+@@ -1497,10 +1500,10 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::C0_CurlCopyTraversalTruth,
+     SelfTestState::Step::C0_CurlEntryLookupTruth,
+     SelfTestState::Step::C0_CurlImapListingTruth,
+-    SelfTestState::Step::C0_CurlImapTransportTruth,                       // C0 - production IMAP owners through real libcurl against a loopback server
+-    SelfTestState::Step::R3_1_IdentityLessReplaceDummy,                   // R3-1 - conditional replace through an atomic-final writer without bound authority
+-    SelfTestState::Step::R3_2_WriterProofDummy,       // R3-2 - writer content proof: Verified Copy without readback, Managed Move cleanup after proof
+-    SelfTestState::Step::R3_3_PublicationFaultMatrix, // R3-3 - every bridge fault hook x route x Copy/Move against the publication invariants
++    SelfTestState::Step::C0_CurlImapTransportTruth,     // C0 - production IMAP owners through real libcurl against a loopback server
++    SelfTestState::Step::R3_1_IdentityLessReplaceDummy, // R3-1 - conditional replace through an atomic-final writer without bound authority
++    SelfTestState::Step::R3_2_WriterProofDummy,         // R3-2 - writer content proof: Verified Copy without readback, Managed Move cleanup after proof
++    SelfTestState::Step::R3_3_PublicationFaultMatrix,   // R3-3 - every bridge fault hook x route x Copy/Move against the publication invariants
+     SelfTestState::Step::R3_4_ReplaceWithoutOccupantTokenRefused, // R0-RC3 - a granted replacement without an occupant token is refused, nothing written
+     SelfTestState::Step::RC3_9_TransferDestinationNameRefused,    // R0-RC3 (9) - a destination leaf the provider rejects is refused at admission
+     SelfTestState::Step::R4T_DeepTreeCopyCompletesIteratively,    // R4-T1 - a 300-level tree copies and moves through the iterative bridge walkers
+@@ -1513,32 +1516,34 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // R4-A02-2 - Run admits only the disclosed overlap and both result sets stay truthful
+     SelfTestState::Step::R4A02_LiveOutputGuardChoices,                // R4-A02-2 - uncovered live output parks; Skip/Queue/destructive and overflow stay safe
+     SelfTestState::Step::R4A02_DisjointWritesDoNotWarn,               // R4-A02-1 - disjoint source and destination roots warn nothing
+-    SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise,         // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide overflow
+-    SelfTestState::Step::R4A02_LatePublisherStillWarns,               // Step 4 (2026-09-06) - a task that publishes after a newer peer prepared still warns and queues after it
+-    SelfTestState::Step::Phase5_DiscoverySingleTraversal,             // Phase 5 — one traversal feeds execution and closes totals
+-    SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot,          // Phase 5 — cancel releases discovery/execution capacity
++    SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise, // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide
++                                                               // overflow
++    SelfTestState::Step::R4A02_LatePublisherStillWarns, // Step 4 (2026-09-06) - a task that publishes after a newer peer prepared still warns and queues after
++                                                        // it
++    SelfTestState::Step::Phase5_DiscoverySingleTraversal,                  // Phase 5 — one traversal feeds execution and closes totals
++    SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot,               // Phase 5 — cancel releases discovery/execution capacity
+     SelfTestState::Step::Phase5_CleanupDrainsOutstandingTasks,             // Failed-family cleanup drains paused and queued work
+-    SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal,          // Phase 5 — local discovery/transfer observes bounded cancellation
+-    SelfTestState::Step::Phase5_DiscoverySkipContinues,               // Phase 5 — Skip switches to just-in-time and completes the same selection
+-    SelfTestState::Step::BR3_CancelQueuePausedTransfer,               // Cancellation drains independently of the paused queue predecessor
+-    SelfTestState::Step::Phase5_CancelQueuedTask,                     // Phase 5 â€” canceling a queued (not-yet-running) task
+-    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery,  // Phase 5 — mode switch parallel→wait while discovery remains open
+-    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,           // Phase 5 â€” mode switch waitâ†’parallel and resume
+-    SelfTestState::Step::Phase6_PopupRateSmoothing,                   // Phase 6 - popup rate/ETA smoothing contract
+-    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,             // Phase 6 â€” popup resize and pause-button interaction
+-    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                // Phase 6 â€” delete reports meaningful byte counts in progress
+-    SelfTestState::Step::Phase6_LocalBandwidthThrottle,               // Phase 6 â€” local CopyFileEx bandwidth throttle duration and cancel latency
+-    SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness,    // Phase 6 â€” parallel throttle fairness: shared-only vs per-worker budget
+-    SelfTestState::Step::Phase7_WatcherChurn,                         // Phase 7 â€” directory watcher fires correctly under heavy churn
+-    SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation,       // Phase 7 â€” cached-but-unwatched folders still invalidate on routed mutations
+-    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal,         // Phase 7 â€” visible local panes auto-refresh on watcher-driven changes
+-    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy,         // Phase 7 â€” visible dummy panes stay in sync after in-app mutation routing
+-    SelfTestState::Step::Phase7_CrossPaneRelocateLocal,               // Phase 7 â€” deleting a visible subtree relocates impacted panes
+-    SelfTestState::Step::Phase7_LargeDirectoryEnumeration,            // Phase 7 â€” enumerate a directory with many entries
+-    SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                // Phase 7 â€” speed limits and parallelism knobs for copy/move
+-    SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf,            // Phase 7 / 8.2 â€” compare copy/move cap 8 vs 16 on the same machine
+-    SelfTestState::Step::Phase7_AutoConcurrencyHints,                 // Phase 7 â€” auto mode resolves copy/delete concurrency from storage hints
+-    SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,    // Phase 7 â€” per-item directory copy uses internal parallelism (popup lines)
++    SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal,               // Phase 5 — local discovery/transfer observes bounded cancellation
++    SelfTestState::Step::Phase5_DiscoverySkipContinues,                    // Phase 5 — Skip switches to just-in-time and completes the same selection
++    SelfTestState::Step::BR3_CancelQueuePausedTransfer,                    // Cancellation drains independently of the paused queue predecessor
++    SelfTestState::Step::Phase5_CancelQueuedTask,                          // Phase 5 â€” canceling a queued (not-yet-running) task
++    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery,       // Phase 5 — mode switch parallel→wait while discovery remains open
++    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                // Phase 5 â€” mode switch waitâ†’parallel and resume
++    SelfTestState::Step::Phase6_PopupRateSmoothing,                        // Phase 6 - popup rate/ETA smoothing contract
++    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                  // Phase 6 â€” popup resize and pause-button interaction
++    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                     // Phase 6 â€” delete reports meaningful byte counts in progress
++    SelfTestState::Step::Phase6_LocalBandwidthThrottle,                    // Phase 6 â€” local CopyFileEx bandwidth throttle duration and cancel latency
++    SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness,         // Phase 6 â€” parallel throttle fairness: shared-only vs per-worker budget
++    SelfTestState::Step::Phase7_WatcherChurn,                              // Phase 7 â€” directory watcher fires correctly under heavy churn
++    SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation,            // Phase 7 â€” cached-but-unwatched folders still invalidate on routed mutations
++    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal,              // Phase 7 â€” visible local panes auto-refresh on watcher-driven changes
++    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy,              // Phase 7 â€” visible dummy panes stay in sync after in-app mutation routing
++    SelfTestState::Step::Phase7_CrossPaneRelocateLocal,                    // Phase 7 â€” deleting a visible subtree relocates impacted panes
++    SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                 // Phase 7 â€” enumerate a directory with many entries
++    SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                     // Phase 7 â€” speed limits and parallelism knobs for copy/move
++    SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf,                 // Phase 7 / 8.2 â€” compare copy/move cap 8 vs 16 on the same machine
++    SelfTestState::Step::Phase7_AutoConcurrencyHints,                      // Phase 7 â€” auto mode resolves copy/delete concurrency from storage hints
++    SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,         // Phase 7 â€” per-item directory copy uses internal parallelism (popup lines)
+     SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism, // Phase 7 - plugin CopyItem/CopyItems(count==1) use recursive internal parallelism
+     SelfTestState::Step::Phase7_CopyItemsMultiRootUnevenRecursiveParallelism,  // Phase 7 - multi-root copies rebalance uneven recursive subtrees
+     SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix,                // Phase 7 - recursive copy/move matrix shapes and edge paths
+@@ -1568,42 +1573,44 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::Phase10_ContentVerification,                          // Phase 10 / P4.6 — optional BLAKE3 verification and truthful outcomes
+     SelfTestState::Step::Phase10_ArtifactTouchGuard,                           // Phase 10 / P5.4 — external launch artifact warning and exact revalidation
+     SelfTestState::Step::R1d_PreparingLifecycle,                               // R1d — common pre-consumption lifecycle and immutable preparation facts
+-    SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet,                  // C1 - application exit drains cancellation off the UI thread; the close resumes after the last reap
+-    SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename,                   // Beeline - a same-volume file and tree Move is one Native rename per item, identity preserved
+-    SelfTestState::Step::Beeline_LoopbackShareMoveIsRename,                    // Beeline - the SMB profile takes the same route: a Move inside the loopback share alias is one Native rename per item
+-    SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,                     // C1 - the permanent-delete confirmation is a card consent after Preparing pins the roots
+-    SelfTestState::Step::Phase11_CrossFileSystemBridge,                        // Phase 11 â€” copy/move across different file-system plugins
+-    SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
+-    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,   // Phase 11 â€” bridge: multi-folder copy keeps bounded early file admission
+-    SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf,               // Phase 11 â€” bridge: pipeline overlaps dummy read/write chunk latency
+-    SelfTestState::Step::Phase11_ConnectionOverridePrecedence,                 // Phase 11 / 8 â€” non-zero @conn override takes precedence over plugin default
+-    SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                 // Phase 11 â€” connection overrides apply globally across tasks
+-    SelfTestState::Step::Phase11_ConnectionOverrideClamp,                      // Phase 11 â€” connection manager overrides clamp per-task concurrency
+-    SelfTestState::Step::Phase12_ReparsePointPolicy,                           // Phase 12 â€” reparse-point (symlink/junction) handling policy
+-    SelfTestState::Step::Phase13_PostMortemDiagnostics,                        // Phase 13 â€” post-mortem diagnostics on task failure
+-    SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                       // Phase 14 â€” popup host lifetime guard (no UAF on late input)
+-    SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                    // Phase 15 â€” 7z IFileReader read/seek smoke on a large (>32MB) entry
+-    SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,                  // Phase 15 â€” 7z mounted panes retarget/exit on backing archive changes
+-    SelfTestState::Step::Phase16_RemoteWatchContractExposure,                  // Phase 16 â€” mutable remote plugins expose the watch contract offline
+-    SelfTestState::Step::Phase16_RemoteFtpSecret,                              // Phase 16 â€” secure secret retrieval (FTP)
+-    SelfTestState::Step::Phase16_RemoteFtpSandbox,                             // Phase 16 â€” remote sandbox root configuration (FTP)
+-    SelfTestState::Step::Phase16_RemoteSftpSecret,                             // Phase 16 â€” secure secret retrieval (SFTP)
+-    SelfTestState::Step::Phase16_RemoteSftpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SFTP)
+-    SelfTestState::Step::Phase16_RemoteScpSecret,                              // Phase 16 â€” secure secret retrieval (SCP)
+-    SelfTestState::Step::Phase16_RemoteScpSandbox,                             // Phase 16 â€” remote sandbox root configuration (SCP)
+-    SelfTestState::Step::Phase16_RemoteImapSecret,                             // Phase 16 â€” secure secret retrieval (IMAP)
+-    SelfTestState::Step::Phase16_RemoteImapSandbox,                            // Phase 16 â€” remote sandbox root configuration (IMAP)
+-    SelfTestState::Step::Phase16_RemoteS3Secret,                               // Phase 16 â€” secure secret retrieval (S3)
+-    SelfTestState::Step::Phase16_RemoteS3Sandbox,                              // Phase 16 â€” remote sandbox root configuration (S3)
+-    SelfTestState::Step::Phase16_RemoteS3FileOps,                              // Phase 16 â€” sandboxed CRUD/copy-move coverage (S3)
+-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                 // Phase 16 â€” secure secret retrieval (OneDrive Personal)
+-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,                // Phase 16 â€” remote sandbox root configuration (OneDrive Personal)
+-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,                // Phase 16 â€” sandboxed CRUD/copy-move coverage (OneDrive Personal)
+-    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                 // Phase 16 â€” secure secret retrieval (OneDrive Business)
+-    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,                // Phase 16 â€” remote sandbox root configuration (OneDrive Business)
+-    SelfTestState::Step::Phase16_RemoteSharePointSecret,                       // Phase 16 â€” secure secret retrieval (SharePoint)
+-    SelfTestState::Step::Phase16_RemoteSharePointSandbox,                      // Phase 16 â€” remote sandbox root configuration (SharePoint)
+-    SelfTestState::Step::Cleanup_RestorePluginConfig                           // Restore plugin config and delete temp files
++    SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet, // C1 - application exit drains cancellation off the UI thread; the close resumes after the last
++                                                              // reap
++    SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename,  // Beeline - a same-volume file and tree Move is one Native rename per item, identity preserved
++    SelfTestState::Step::Beeline_LoopbackShareMoveIsRename,   // Beeline - the SMB profile takes the same route: a Move inside the loopback share alias is one
++                                                              // Native rename per item
++    SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,    // C1 - the permanent-delete confirmation is a card consent after Preparing pins the roots
++    SelfTestState::Step::Phase11_CrossFileSystemBridge,       // Phase 11 â€” copy/move across different file-system plugins
++    SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
++    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: multi-folder copy keeps bounded early file admission
++    SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf,              // Phase 11 â€” bridge: pipeline overlaps dummy read/write chunk latency
++    SelfTestState::Step::Phase11_ConnectionOverridePrecedence,                // Phase 11 / 8 â€” non-zero @conn override takes precedence over plugin default
++    SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 â€” connection overrides apply globally across tasks
++    SelfTestState::Step::Phase11_ConnectionOverrideClamp,                     // Phase 11 â€” connection manager overrides clamp per-task concurrency
++    SelfTestState::Step::Phase12_ReparsePointPolicy,                          // Phase 12 â€” reparse-point (symlink/junction) handling policy
++    SelfTestState::Step::Phase13_PostMortemDiagnostics,                       // Phase 13 â€” post-mortem diagnostics on task failure
++    SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                      // Phase 14 â€” popup host lifetime guard (no UAF on late input)
++    SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                   // Phase 15 â€” 7z IFileReader read/seek smoke on a large (>32MB) entry
++    SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,                 // Phase 15 â€” 7z mounted panes retarget/exit on backing archive changes
++    SelfTestState::Step::Phase16_RemoteWatchContractExposure,                 // Phase 16 â€” mutable remote plugins expose the watch contract offline
++    SelfTestState::Step::Phase16_RemoteFtpSecret,                             // Phase 16 â€” secure secret retrieval (FTP)
++    SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 â€” remote sandbox root configuration (FTP)
++    SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 â€” secure secret retrieval (SFTP)
++    SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 â€” remote sandbox root configuration (SFTP)
++    SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 â€” secure secret retrieval (SCP)
++    SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SCP)
++    SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 â€” secure secret retrieval (IMAP)
++    SelfTestState::Step::Phase16_RemoteImapSandbox,                           // Phase 16 â€” remote sandbox root configuration (IMAP)
++    SelfTestState::Step::Phase16_RemoteS3Secret,                              // Phase 16 â€” secure secret retrieval (S3)
++    SelfTestState::Step::Phase16_RemoteS3Sandbox,                             // Phase 16 â€” remote sandbox root configuration (S3)
++    SelfTestState::Step::Phase16_RemoteS3FileOps,                             // Phase 16 â€” sandboxed CRUD/copy-move coverage (S3)
++    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Personal)
++    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Personal)
++    SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,               // Phase 16 â€” sandboxed CRUD/copy-move coverage (OneDrive Personal)
++    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Business)
++    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Business)
++    SelfTestState::Step::Phase16_RemoteSharePointSecret,                      // Phase 16 â€” secure secret retrieval (SharePoint)
++    SelfTestState::Step::Phase16_RemoteSharePointSandbox,                     // Phase 16 â€” remote sandbox root configuration (SharePoint)
++    SelfTestState::Step::Cleanup_RestorePluginConfig                          // Restore plugin config and delete temp files
+ });
+ 
+ constexpr std::array<SelfTestState::Step, 4> kFileOpsFamilyClearflowPhase01{{
+@@ -1923,7 +1930,12 @@ struct FileOpsFamilyDefinition
+     std::span<const SelfTestState::Step> phases;
+ };
+ 
++constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyTerminalFactsProjection{{
++    SelfTestState::Step::FileOps_TerminalFactsProjection,
++}};
++
+ constexpr auto kFileOpsFamilyDefinitions = std::to_array<FileOpsFamilyDefinition>({
++    FileOpsFamilyDefinition{L"FileOpsFamily_TerminalFactsProjection", {kFileOpsFamilyTerminalFactsProjection}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase01_DirectoryMerge", {kFileOpsFamilyClearflowPhase01}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase03_GraphFairness", {kFileOpsFamilyClearflowPhase03}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase04_Security", {kFileOpsFamilyClearflowPhase04}},
+@@ -6836,6 +6848,103 @@ using TickResult = std::optional<bool>;
+ 
+ #include "FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
+ 
++[[nodiscard]] std::wstring_view ValidateCompletedTerminalFactsProjection(SelfTestState& state) noexcept
++{
++    using Summary  = FolderWindow::FileOperationState::CompletedTaskSummary;
++    using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
++
++    auto* folder     = TryGetFolderWindow(state.mainWindow);
++    auto* operations = TryGetFileOps(folder);
++    if (! folder || ! operations || operations->HasActiveOperations() || operations->GetPopupHwndForSelfTest())
++    {
++        return L"Terminal-facts projection requires an idle File Operations state with no application popup.";
++    }
++
++    constexpr uint64_t taskId = 0xF26A000000000001ull;
++    std::vector<Summary> existing;
++    operations->CollectCompletedTasks(existing);
++    if (std::ranges::any_of(existing, [taskId](const Summary& value) noexcept { return value.taskId == taskId; }))
++    {
++        return L"Terminal-facts projection task ID is already in use.";
++    }
++
++    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
++    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
++    {
++        return L"Terminal-facts projection could not acquire the no-activation window guard.";
++    }
++
++    Summary completed{};
++    completed.taskId                           = taskId;
++    completed.operation                        = FILESYSTEM_MOVE;
++    completed.resultHr                         = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
++    completed.warningCount                     = 1u;
++    completed.completedTick                    = GetTickCount64();
++    completed.discoveryClosed                  = true;
++    completed.totalItems                       = 10u;
++    completed.completedItems                   = 10u;
++    completed.publishedItemCount               = 9u;
++    completed.unknownPublicationItemCount      = 1u;
++    completed.removedSourceCount               = 7u;
++    completed.retainedSourceCount              = 2u;
++    completed.retainedSourceNativeCount        = 1u;
++    completed.unknownSourceCount               = 1u;
++    completed.verifiedItemCount                = 6u;
++    completed.verificationFailedItemCount      = 1u;
++    completed.verificationUnavailableItemCount = 1u;
++    completed.verificationCanceledItemCount    = 1u;
++    completed.verificationProblemItemCount     = 3u;
++    completed.indeterminateItemCount           = 1u;
++    completed.sourcePath                       = L"C:\\TerminalFacts\\source.txt";
++    completed.destinationPath                  = L"D:\\TerminalFacts\\source.txt";
++    completed.resultSummary                    = L"Nine published; one publication unknown; two sources kept; one source unknown.";
++
++    FolderWindow::FileOperationState::TaskDiagnosticEntry issue{};
++    issue.taskId    = taskId;
++    issue.operation = FILESYSTEM_MOVE;
++    issue.severity  = FolderWindow::FileOperationState::DiagnosticSeverity::Warning;
++    issue.status    = completed.resultHr;
++    issue.category  = L"task.summary";
++    issue.message   = completed.resultSummary;
++    completed.issueDiagnostics.push_back(std::move(issue));
++
++    operations->DebugAppendCompletedTaskForSelfTest(std::move(completed));
++    const auto dismissTask = wil::scope_exit([operations, taskId]() noexcept { operations->DismissCompletedTask(taskId); });
++
++    auto lifetime = std::make_shared<int>(0);
++    wil::unique_hwnd popup(FileOperationsPopup::Create(operations, folder, state.mainWindow, lifetime));
++    auto closePopup = wil::scope_exit([&]() noexcept
++    {
++        // This private hidden popup is not registered as the application's popup. Expire its
++        // host token before WM_NCDESTROY so OnPopupDestroyed does not save application placement.
++        lifetime.reset();
++        popup.reset();
++    });
++    if (! popup)
++    {
++        return L"Terminal-facts projection could not create its private production popup.";
++    }
++
++    Snapshot projected{};
++    if (! DebugGetFileOperationsPopupTaskSnapshot(popup.get(), taskId, projected) || ! projected.finished)
++    {
++        return L"The private production popup did not project its completed task summary.";
++    }
++    if (projected.publishedItemCount != 9u || projected.unknownPublicationItemCount != 1u || projected.removedSourceCount != 7u ||
++        projected.retainedSourceCount != 2u || projected.retainedSourceNativeCount != 1u || projected.unknownSourceCount != 1u ||
++        projected.verifiedItemCount != 6u || projected.verificationFailedItemCount != 1u || projected.verificationUnavailableItemCount != 1u ||
++        projected.verificationCanceledItemCount != 1u || projected.verificationProblemItemCount != 3u)
++    {
++        return L"The popup lost independent completed publication, source, or verification counts.";
++    }
++    if (projected.resultSummary != L"Nine published; one publication unknown; two sources kept; one source unknown." || ! projected.verificationRequested ||
++        projected.verificationState != static_cast<uint8_t>(FileOperations::VerificationState::Failed))
++    {
++        return L"The popup changed the exact terminal summary or legacy selected verification state.";
++    }
++    return {};
++}
++
+ #pragma warning(push)
+ #pragma warning(disable : 4061) // Each helper intentionally owns only its phase subset; unmatched steps return nullopt.
+ #pragma warning(disable : 4883) // This test-only dispatcher includes the intentionally large Fairstream phase corpus; runtime optimization is irrelevant.
+@@ -7137,6 +7246,21 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+ 
+     switch (state.step)
+     {
++        case SelfTestState::Step::FileOps_TerminalFactsProjection:
++        {
++            if (! TryGetFolderWindow(state.mainWindow))
++                return false;
++            const std::wstring_view failure = ValidateCompletedTerminalFactsProjection(state);
++            if (! failure.empty())
++            {
++                // Fail performs suite cleanup; the validator's popup and injected task are now gone.
++                Fail(failure);
++                return true;
++            }
++            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
++            NextStep(state, SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder);
++            return false;
++        }
+         case SelfTestState::Step::FileOps_VisualGallery:
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction:
+         {
+@@ -7522,7 +7646,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+             }
+ 
+             AppendLog(L"Setup: complete");
+-            NextStep(state, SelfTestState::Step::Phase5_DiscoverySingleTraversal);
++            NextStep(state, SelfTestState::Step::FileOps_TerminalFactsProjection);
+             return false;
+         }
+ 

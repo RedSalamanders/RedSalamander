@@ -1,0 +1,75 @@
+{
+    "run_started_utc": "2026-10-17T17:54:33.846Z",
+    "duration_ms": 13155,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_natural_name_sorting_contracts,cmd_pane_find_dialog_header_click_sorts_results,cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties,cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged,cmd_pane_batchRename_folder_scope_collects_local_children_metadata,folderView_perf_sort_toggle_stress,cmd_navigation_sibling_natural_sorting,cmd_pane_fileops_decision_mirror_real_focus",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261017T175022Z-87992-4bca9bde66ea4d7d8a03a9b254a83a69\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 12351,
+            "passed": 8,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_natural_name_sorting_contracts,cmd_pane_find_dialog_header_click_sorts_results,cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties,cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged,cmd_pane_batchRename_folder_scope_collects_local_children_metadata,folderView_perf_sort_toggle_stress,cmd_navigation_sibling_natural_sorting,cmd_pane_fileops_decision_mirror_real_focus",
+            "cases": [
+                {
+                    "name": "cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
+                    "status": "passed",
+                    "duration_ms": 157,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties",
+                    "status": "passed",
+                    "duration_ms": 58,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged",
+                    "status": "passed",
+                    "duration_ms": 64,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_find_dialog_header_click_sorts_results",
+                    "status": "passed",
+                    "duration_ms": 411,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_fileops_decision_mirror_real_focus",
+                    "status": "passed",
+                    "duration_ms": 1549,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_natural_name_sorting_contracts",
+                    "status": "passed",
+                    "duration_ms": 2,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_navigation_sibling_natural_sorting",
+                    "status": "passed",
+                    "duration_ms": 699,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "folderView_perf_sort_toggle_stress",
+                    "status": "passed",
+                    "duration_ms": 7075,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0
+}

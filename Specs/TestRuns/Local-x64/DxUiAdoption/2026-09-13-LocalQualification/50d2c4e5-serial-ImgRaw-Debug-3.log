@@ -1,0 +1,72 @@
+[PASS] ViewerImgRaw scheduler test executable path resolves
+[PASS] ViewerImgRaw.dll is present for scheduler safety
+[PASS] ViewerImgRaw.dll loads for scheduler safety
+[PASS] ViewerImgRaw exposes factory, shutdown, and runtime unload-gate exports
+[PASS] ViewerImgRaw scheduler TestSandbox root is available
+[PASS] ViewerImgRaw scheduler fixtures are valid TIFF files
+[PASS] ViewerImgRaw creates an unopened viewer for live-instance unload gating
+[PASS] ViewerImgRaw runtime unload gate remains false while an unopened COM instance is retained
+[PASS] ViewerImgRaw runtime unload gate becomes true after the last unopened COM instance is released
+[PASS] ViewerImgRaw creates a viewer for scheduler safety
+[PASS] ViewerImgRaw accepts deterministic no-prefetch configuration
+[PASS] ViewerImgRaw latest-wins blocking events are created
+[PASS] ViewerImgRaw starts the first blocked decode
+[PASS] ViewerImgRaw first decode reaches a blocked provider Read while the window remains responsive
+[FAIL] ViewerImgRaw exposes exactly one active main decode while the provider is blocked
+[PASS] ViewerImgRaw exposes its progress-generation debug state
+[PASS] ViewerImgRaw accepts a queued current-generation progress probe
+[FAIL] ViewerImgRaw applies progress only when the queued request generation is current
+[PASS] ViewerImgRaw accepts a queued stale-generation progress probe
+[PASS] ViewerImgRaw drops queued progress from a stale request generation
+[PASS] ViewerImgRaw accepts a replaceable middle decode request
+[PASS] ViewerImgRaw accepts the latest decode request
+[FAIL] ViewerImgRaw bounds main scheduling to one active and one replaceable pending decode (active=1, pending=0, replaced=0, current=5, middleReaders=1, latestReaders=1, timedOutReads=2)
+[FAIL] ViewerImgRaw does not start pending providers while the active Read is blocked
+[PASS] ViewerImgRaw first blocked Read exits after release
+[PASS] ViewerImgRaw runs the latest pending request to one successful terminal result (success=1, failure=1, active=0, pending=0, loading=false, hasImage=true, middleReaders=1, latestReaders=1, warnings=1)
+[FAIL] ViewerImgRaw permanently drops the superseded middle request and reads only the latest
+[PASS] ViewerImgRaw caps each provider Read request at one MiB
+[FAIL] ViewerImgRaw latest-wins decode raises no warning
+[PASS] ViewerImgRaw exact-reader fixture has a bounded nonempty size
+[PASS] ViewerImgRaw accepts an oversized-provider decode request
+[PASS] ViewerImgRaw rejects a reported one-GiB-plus-one source before reading
+[PASS] ViewerImgRaw source cap rejects before issuing Read
+[PASS] ViewerImgRaw accepts the seek-mismatch decode request
+[PASS] ViewerImgRaw rejects a provider that lies about the initial seek position
+[PASS] ViewerImgRaw seek mismatch rejects before issuing Read
+[PASS] ViewerImgRaw accepts the premature-EOF decode request
+[PASS] ViewerImgRaw rejects premature EOF before the committed GetSize byte count
+[PASS] ViewerImgRaw accepts the trailing-byte decode request
+[PASS] ViewerImgRaw rejects bytes beyond the committed GetSize byte count
+[PASS] ViewerImgRaw accepts the impossible over-return decode request
+[PASS] ViewerImgRaw rejects Read counts larger than the requested buffer
+[PASS] ViewerImgRaw arms the result-allocation terminal-delivery fault
+[PASS] ViewerImgRaw starts the result-allocation fault request
+[PASS] ViewerImgRaw result-allocation failure exits loading through the allocation-free fallback
+[PASS] ViewerImgRaw result-allocation fallback preserves the live window
+[PASS] ViewerImgRaw arms the payload-post terminal-delivery fault
+[PASS] ViewerImgRaw starts the payload-post fault request
+[PASS] ViewerImgRaw payload-post failure exits loading through the allocation-free fallback
+[PASS] ViewerImgRaw payload-post fallback preserves the live window
+[PASS] ViewerImgRaw starts a normal decode after terminal faults
+[PASS] ViewerImgRaw recovers with a successful decode after terminal-delivery faults
+[PASS] ViewerImgRaw recovery adds no warning
+[PASS] ViewerImgRaw closes the settled scheduler fixture
+[PASS] ViewerImgRaw destroys the settled scheduler window
+[PASS] ViewerImgRaw close-path blocking events are created
+[PASS] ViewerImgRaw creates a viewer for blocked-provider close
+[PASS] ViewerImgRaw opens the blocked-provider fixture
+[PASS] ViewerImgRaw reaches blocked Read while its window remains responsive
+[PASS] ViewerImgRaw Close returns within 500 ms while the provider remains blocked (hr=0x00000000, elapsedMs=162, timedOutReads=0)
+[PASS] ViewerImgRaw destroys its HWND before the blocked provider returns
+[PASS] ViewerImgRaw provider remains blocked after non-waiting Close
+[PASS] ViewerImgRaw reports ViewerClosed exactly once with the registered cookie
+[PASS] ViewerImgRaw clears the raw lifecycle callback before releasing the blocked viewer
+[PASS] ViewerImgRaw detached worker retains the provider and viewer lifetime
+[PASS] ViewerImgRaw runtime unload gate rejects refresh while a provider Read is blocked
+[PASS] ViewerImgRaw worker keeps its DLL mapped after the caller releases the module handle
+[PASS] ViewerImgRaw blocked provider exits after release
+[PASS] ViewerImgRaw worker and provider self-references retire exactly once
+[PASS] ViewerImgRaw callback-return module pin unloads only after blocked work returns
+[PASS] ViewerImgRaw does not report a second close after worker retirement
+ViewerPETests failed.

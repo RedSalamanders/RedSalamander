@@ -1,0 +1,86 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-19T16:09:03.8409773Z",
+  "run_ended_utc": "2026-09-19T16:09:18.6788450Z",
+  "duration_ms": 14838,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "S:\\RedSalamander.Perf\\runs\\discovery-actions-retained-baseline\\artifacts\\selftest\\last_run",
+  "test_root": "S:\\RedSalamander.Perf",
+  "run_id": "discovery-actions-retained-baseline",
+  "fail_fast": false,
+  "timeout_scale": 3.0,
+  "case_filter": "cmd_pane_fileops_popup_throughput_disclosure",
+  "exit_code": 1,
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "total": 1,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "S:\\RedSalamander.Perf",
+    "run_id": "discovery-actions-retained-baseline",
+    "allowed_run_ids": [
+      "discovery-actions-retained-baseline"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 7868,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_fileops_popup_throughput_disclosure",
+          "status": "failed",
+          "reason": "French discovery actions must fit their live typography and remain reachable at 480 DIP: label=184.48828px, control=126px.",
+          "duration_ms": 3506,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "cmd_pane_fileops_popup_throughput_disclosure",
+          "status": "failed",
+          "reason": "French discovery actions must fit their live typography and remain reachable at 480 DIP: label=184.48828px, control=126px.",
+          "duration_ms": 3506,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

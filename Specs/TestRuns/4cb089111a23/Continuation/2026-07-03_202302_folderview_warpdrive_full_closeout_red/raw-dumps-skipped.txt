@@ -1,0 +1,1 @@
+Raw *.dmp files under SelfTest\last_run were skipped for this archive because Windows denied access to stale hang dump files during Copy-Item. The resumable evidence is preserved via stdout logs, run-all-tests-results.json, trace files, ViewerPETests.output.log, and sidecar text artifacts.

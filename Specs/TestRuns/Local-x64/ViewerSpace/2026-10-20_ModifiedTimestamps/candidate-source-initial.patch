@@ -1,0 +1,798 @@
+diff --git a/Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc b/Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc
+index d3eb3d531..cc4471233 100644
+--- a/Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc
++++ b/Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc
+@@ -87,6 +87,8 @@ BEGIN
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "Logické bajty"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "Podíl nadřazené složky"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "Stav"
++    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "Změněno"
++    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\nZměněno: {1}"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "Soubor"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "Složka"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "Ostatní"
+diff --git a/Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc b/Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc
+index f08731634..564fbfeb4 100644
+--- a/Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc
++++ b/Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc
+@@ -87,6 +87,8 @@ BEGIN
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "Octets logiques"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "Part du parent"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "État"
++    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "Modifié le"
++    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\nModifié le : {1}"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "Fichier"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "Dossier"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "Autres"
+diff --git a/Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc b/Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc
+index a94c07965..9190c9766 100644
+--- a/Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc
++++ b/Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc
+@@ -87,6 +87,8 @@ BEGIN
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "論理バイト数"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "親項目に対する割合"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "状態"
++    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "更新日時"
++    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\n更新日時: {1}"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "ファイル"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "フォルダー"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "その他"
+diff --git a/Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc b/Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc
+index 36cd75f09..225b2c3dd 100644
+--- a/Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc
++++ b/Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc
+@@ -87,6 +87,8 @@ BEGIN
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "Logické bajty"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "Podiel nadradenej položky"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "Stav"
++    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "Zmenené"
++    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\nZmenené: {1}"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "Súbor"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "Priečinok"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "Ostatné"
+diff --git a/Plugins/ViewerSpace/ViewerSpace.Analysis.cpp b/Plugins/ViewerSpace/ViewerSpace.Analysis.cpp
+index 7f3e1cafd..6312f8e7e 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.Analysis.cpp
++++ b/Plugins/ViewerSpace/ViewerSpace.Analysis.cpp
+@@ -1,4 +1,5 @@
+ #include "ViewerSpace.h"
++#include "FileMetadataFormatting.h"
+ #include "LocalizationManager.h"
+ #include "NaturalSort.h"
+ #include "ViewerDxUiTheme.h"
+@@ -48,6 +49,7 @@ void ViewerSpace::CreateAnalysisHost(HWND hwnd)
+                                    text(IDS_VIEWERSPACE_ANALYSIS_FIELD_KIND),
+                                    text(IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES),
+                                    text(IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE),
++                                   text(IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED),
+                                    text(IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE)};
+     Host::Callbacks callbacks;
+     callbacks.rowCount = [this] { return _analysisRows.size(); };
+@@ -610,14 +612,19 @@ void ViewerSpace::UpdateInspector() noexcept
+     ViewerSpaceAnalysis::AnalysisHost::InspectorText text;
+     if (item.has_value())
+     {
+-        const auto& value  = item.value();
+-        text.name          = value.isSynthetic ? LoadStringResource(g_hInstance, IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER) : std::wstring(value.name);
+-        text.path          = value.isSynthetic ? BuildNodePathText(value.parentId) : BuildItemPathText(value.id);
+-        text.kind          = LoadStringResource(g_hInstance,
+-                                                static_cast<UINT>(value.isSynthetic   ? IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER
+-                                                                  : value.isDirectory ? IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER
+-                                                                                      : IDS_VIEWERSPACE_ANALYSIS_KIND_FILE));
+-        text.logicalBytes  = FormatStringResource(g_hInstance, IDS_VIEWERSPACE_HEADER_SIZE_FORMAT, FormatBytesCompact(value.totalBytes), value.totalBytes);
++        const auto& value = item.value();
++        text.name         = value.isSynthetic ? LoadStringResource(g_hInstance, IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER) : std::wstring(value.name);
++        text.path         = value.isSynthetic ? BuildNodePathText(value.parentId) : BuildItemPathText(value.id);
++        text.kind         = LoadStringResource(g_hInstance,
++                                               static_cast<UINT>(value.isSynthetic   ? IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER
++                                                                 : value.isDirectory ? IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER
++                                                                                     : IDS_VIEWERSPACE_ANALYSIS_KIND_FILE));
++        text.logicalBytes = FormatStringResource(g_hInstance, IDS_VIEWERSPACE_HEADER_SIZE_FORMAT, FormatBytesCompact(value.totalBytes), value.totalBytes);
++        text.modified = Common::FileMetadata::FormatDisplayFields({value.lastWriteTime, 0u}, Common::FileMetadata::DisplayProfile::CompactDetails).localTime;
++        if (text.modified.empty())
++        {
++            text.modified = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_ANALYSIS_STATE_UNAVAILABLE);
++        }
+         const Node* parent = TryGetRealNode(value.parentId);
+         text.share         = LoadEmbeddedStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_SHARE_UNKNOWN);
+         if (parent && parent->totalBytes)
+diff --git a/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp b/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp
+index 7df04f8d7..4bedfacb0 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp
++++ b/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp
+@@ -301,8 +301,13 @@ void AnalysisHost::NotifyRowsChanged(std::optional<uint64_t> selectedRowId)
+ void AnalysisHost::SetInspector(const InspectorText& text)
+ {
+     _inspectorText = text;
+-    const std::array<std::wstring_view, 6u> values{
+-        _inspectorText.path, _inspectorText.name, _inspectorText.kind, _inspectorText.logicalBytes, _inspectorText.share, _inspectorText.state};
++    const std::array<std::wstring_view, 7u> values{_inspectorText.path,
++                                                   _inspectorText.name,
++                                                   _inspectorText.kind,
++                                                   _inspectorText.logicalBytes,
++                                                   _inspectorText.share,
++                                                   _inspectorText.modified,
++                                                   _inspectorText.state};
+     bool changed = false;
+     for (size_t index = 0u; index < values.size(); ++index)
+     {
+@@ -752,7 +757,7 @@ void AnalysisHost::BuildControls()
+                 _callbacks.inspectorLayoutChanged(_inspectorVisible, _inspectorRatio);
+         }
+     });
+-    constexpr std::array<std::wstring_view, 6u> valueAutomationIds{{L"Path", L"Name", L"Kind", L"LogicalBytes", L"Share", L"State"}};
++    constexpr std::array<std::wstring_view, 7u> valueAutomationIds{{L"Path", L"Name", L"Kind", L"LogicalBytes", L"Share", L"Modified", L"State"}};
+     for (size_t index = 0u; index < _inspectorFieldLabels.size(); ++index)
+     {
+         _inspectorFieldLabels[index] = _root->AddChild<DxUi::Label>(_captions.inspectorFields[index]);
+@@ -833,7 +838,7 @@ void AnalysisHost::Layout() noexcept
+     _inspectorSplitter->SetBounds(Rect(margin, contentTop, right, bottom));
+     const float splitExtent = sideInspector ? right - margin : bottom - contentTop;
+     _inspectorSplitter->SetMinimumFirstPane(std::max(sideInspector ? 240.0f : (compactHeight ? 48.0f : 72.0f), splitExtent * 0.30f - 6.0f));
+-    _inspectorSplitter->SetMinimumSecondPane(std::max(sideInspector ? 200.0f : (widthDip >= 480.0f ? 76.0f : 136.0f), splitExtent * 0.20f));
++    _inspectorSplitter->SetMinimumSecondPane(std::max(sideInspector ? 200.0f : (widthDip >= 480.0f ? 94.0f : 154.0f), splitExtent * 0.20f));
+     _inspectorSplitter->SetPosition(std::max(0.0f, splitExtent * (1.0f - _inspectorRatio) - 6.0f));
+     if (! _inspectorVisible)
+     {
+@@ -975,11 +980,16 @@ void AnalysisHost::LayoutInspector(float left, float top, float right, float bot
+     {
+         return;
+     }
+-    const std::array<std::wstring_view, 6u> fullValues{
+-        _inspectorText.path, _inspectorText.name, _inspectorText.kind, _inspectorText.logicalBytes, _inspectorText.share, _inspectorText.state};
++    const std::array<std::wstring_view, 7u> fullValues{_inspectorText.path,
++                                                       _inspectorText.name,
++                                                       _inspectorText.kind,
++                                                       _inspectorText.logicalBytes,
++                                                       _inspectorText.share,
++                                                       _inspectorText.modified,
++                                                       _inspectorText.state};
+     const float panelWidth  = std::max(0.0f, right - left);
+     const float panelHeight = std::max(0.0f, bottom - top);
+-    const bool pairedRows   = panelWidth >= 480.0f && panelHeight >= 76.0f;
++    const bool pairedRows   = panelWidth >= 480.0f && panelHeight >= 94.0f;
+     const float titleHeight = std::min(panelHeight, pairedRows ? 22.0f : 24.0f);
+     _inspectorToggle->SetDisclosureExpanded(_inspectorVisible);
+     _inspectorToggle->SetBounds(Rect(left, top, left + 22.0f, top + titleHeight));
+@@ -1010,30 +1020,33 @@ void AnalysisHost::LayoutInspector(float left, float top, float right, float bot
+         }
+         const float labelWidth = std::min(groupWidth * 0.48f, std::max(48.0f, widestLabelDip + 8.0f));
+         const float valueWidth = std::max(1.0f, groupWidth - labelWidth - 3.0f);
+-        std::array<float, 3u> rowHeights{};
++        std::array<float, (fullValues.size() + 1u) / 2u> rowHeights{};
+         float measuredRowsHeight = 0.0f;
+         for (size_t row = 0u; row < rowHeights.size(); ++row)
+         {
+-            const size_t firstIndex  = row * 2u;
+-            const float firstHeight  = MeasureWrappedTextHeightDip(_host, DxUi::FontRole::Body, valueWidth, fullValues[firstIndex]);
+-            const float secondHeight = MeasureWrappedTextHeightDip(_host, DxUi::FontRole::Body, valueWidth, fullValues[firstIndex + 1u]);
+-            rowHeights[row]          = std::max(16.0f, std::max(firstHeight, secondHeight) + 2.0f);
++            const size_t firstIndex = row * 2u;
++            const float firstHeight = MeasureWrappedTextHeightDip(_host, DxUi::FontRole::Body, valueWidth, fullValues[firstIndex]);
++            const float secondHeight =
++                firstIndex + 1u < fullValues.size() ? MeasureWrappedTextHeightDip(_host, DxUi::FontRole::Body, valueWidth, fullValues[firstIndex + 1u]) : 0.0f;
++            rowHeights[row] = std::max(16.0f, std::max(firstHeight, secondHeight) + 2.0f);
+             measuredRowsHeight += rowHeights[row];
+         }
+-        const float availableRowsHeight = std::max(0.0f, bottom - rowTop - 2.0f * rowSpacing);
++        const float availableRowsHeight = std::max(0.0f, bottom - rowTop - static_cast<float>(rowHeights.size() - 1u) * rowSpacing);
+         const bool canWrapValues        = measuredRowsHeight <= availableRowsHeight;
+         if (! canWrapValues)
+         {
+-            rowHeights.fill(std::max(16.0f, availableRowsHeight / 3.0f));
++            rowHeights.fill(std::max(16.0f, availableRowsHeight / static_cast<float>(rowHeights.size())));
+         }
+         float y = rowTop;
+-        for (size_t row = 0u; row < 3u; ++row)
++        for (size_t row = 0u; row < rowHeights.size(); ++row)
+         {
+             if (y >= bottom)
+             {
+                 for (size_t side = 0u; side < 2u; ++side)
+                 {
+                     const size_t index = row * 2u + side;
++                    if (index >= fullValues.size())
++                        continue;
+                     _inspectorFieldLabels[index]->SetVisible(false);
+                     _inspectorValues[index]->SetVisible(false);
+                 }
+@@ -1042,7 +1055,9 @@ void AnalysisHost::LayoutInspector(float left, float top, float right, float bot
+             const float rowBottom = std::min(bottom, y + rowHeights[row]);
+             for (size_t side = 0u; side < 2u; ++side)
+             {
+-                const size_t index     = row * 2u + side;
++                const size_t index = row * 2u + side;
++                if (index >= fullValues.size())
++                    continue;
+                 const float groupLeft  = left + static_cast<float>(side) * groupWidth;
+                 const float valueLeft  = std::min(right, groupLeft + labelWidth + 3.0f);
+                 const float groupRight = (side == 0u) ? left + groupWidth : right;
+@@ -1071,18 +1086,18 @@ void AnalysisHost::LayoutInspector(float left, float top, float right, float bot
+         }
+         const float labelWidth = std::min(panelWidth * 0.44f, std::max(68.0f, widestLabelDip + 8.0f));
+         const float valueWidth = std::max(1.0f, panelWidth - labelWidth - 4.0f);
+-        std::array<float, 6u> rowHeights{};
++        std::array<float, fullValues.size()> rowHeights{};
+         float measuredRowsHeight = 0.0f;
+         for (size_t index = 0u; index < rowHeights.size(); ++index)
+         {
+             rowHeights[index] = std::max(16.0f, MeasureWrappedTextHeightDip(_host, DxUi::FontRole::Body, valueWidth, fullValues[index]) + 2.0f);
+             measuredRowsHeight += rowHeights[index];
+         }
+-        const float availableRowsHeight = std::max(0.0f, bottom - rowTop - 5.0f);
++        const float availableRowsHeight = std::max(0.0f, bottom - rowTop - static_cast<float>(rowHeights.size() - 1u));
+         const bool canWrapValues        = measuredRowsHeight <= availableRowsHeight;
+         if (! canWrapValues)
+         {
+-            rowHeights.fill(std::max(16.0f, availableRowsHeight / 6.0f));
++            rowHeights.fill(std::max(16.0f, availableRowsHeight / static_cast<float>(rowHeights.size())));
+         }
+         float y = rowTop;
+         for (size_t index = 0u; index < _inspectorFieldLabels.size(); ++index)
+diff --git a/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h b/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h
+index 6fe66d1f3..8d182cd3c 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h
++++ b/Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h
+@@ -31,7 +31,7 @@ public:
+         std::wstring emptyState;
+         std::array<std::wstring, 5u> columns;
+         std::wstring inspectorTitle;
+-        std::array<std::wstring, 6u> inspectorFields;
++        std::array<std::wstring, 7u> inspectorFields;
+     };
+ 
+     struct InspectorText final
+@@ -41,6 +41,7 @@ public:
+         std::wstring kind;
+         std::wstring logicalBytes;
+         std::wstring share;
++        std::wstring modified;
+         std::wstring state;
+     };
+ 
+@@ -181,8 +182,8 @@ private:
+     bool _inspectorVisible             = true;
+     float _inspectorRatio              = 0.38f;
+     std::optional<float> _inspectorResizeStartRatio;
+-    std::array<DxUi::Label*, 6u> _inspectorFieldLabels{};
+-    std::array<DxUi::Label*, 6u> _inspectorValues{};
++    std::array<DxUi::Label*, 7u> _inspectorFieldLabels{};
++    std::array<DxUi::Label*, 7u> _inspectorValues{};
+     InspectorText _inspectorText;
+     RECT _boundsPx{};
+     bool _compactRows           = false;
+diff --git a/Plugins/ViewerSpace/ViewerSpace.cpp b/Plugins/ViewerSpace/ViewerSpace.cpp
+index b70d23946..656012b56 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.cpp
++++ b/Plugins/ViewerSpace/ViewerSpace.cpp
+@@ -1,4 +1,5 @@
+ #include "ViewerSpace.h"
++#include "FileMetadataFormatting.h"
+ #include "ViewerDxUiTheme.h"
+ #include "ViewerSpace.ListingValidation.h"
+ #include <windowsx.h>
+@@ -1743,6 +1744,7 @@ struct ScanResultCacheNode final
+     uint8_t scanState             = 0;
+     uint8_t flags                 = 0u;
+     uint64_t totalBytes           = 0;
++    int64_t lastWriteTime         = 0;
+     uint64_t observedOwnFileBytes = 0;
+     uint64_t observedChildBytes   = 0;
+     uint32_t childrenStart        = 0;
+@@ -1760,11 +1762,12 @@ constexpr uint8_t kScanResultCacheNodeKnownFlags         = kScanResultCacheNodeC
+ 
+ struct ScanResultCacheFileRecord final
+ {
+-    uint32_t id         = 0;
+-    uint32_t parentId   = 0;
+-    uint64_t bytes      = 0;
+-    uint32_t nameOffset = 0;
+-    uint32_t nameLength = 0;
++    uint32_t id           = 0;
++    uint32_t parentId     = 0;
++    uint64_t bytes        = 0;
++    int64_t lastWriteTime = 0;
++    uint32_t nameOffset   = 0;
++    uint32_t nameLength   = 0;
+ };
+ 
+ struct ScanResultSnapshot final
+@@ -7227,6 +7230,17 @@ std::wstring ViewerSpace::BuildTooltipText(uint32_t nodeId) const
+     }
+     const ResolvedItem& node = resolved.value();
+ 
++    const auto withModified = [&node](std::wstring text)
++    {
++        std::wstring modified =
++            Common::FileMetadata::FormatDisplayFields({node.lastWriteTime, 0u}, Common::FileMetadata::DisplayProfile::CompactDetails).localTime;
++        if (modified.empty())
++        {
++            modified = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_ANALYSIS_STATE_UNAVAILABLE);
++        }
++        return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT, text, modified);
++    };
++
+     const std::wstring pathText = BuildItemPathText(nodeId);
+ 
+     std::wstring name(node.name.data(), node.name.size());
+@@ -7275,10 +7289,10 @@ std::wstring ViewerSpace::BuildTooltipText(uint32_t nodeId) const
+                     case ScanState::Canceled: stateText = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_STATUS_CANCELED); break;
+                 }
+ 
+-            return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH, name, pathText, sizeText, shareText, stateText);
++            return withModified(FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH, name, pathText, sizeText, shareText, stateText));
+         }
+ 
+-        return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH_NO_STATE, name, pathText, sizeText, shareText);
++        return withModified(FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH_NO_STATE, name, pathText, sizeText, shareText));
+     }
+ 
+     if (node.contentNotMeasured || node.scanState != ScanState::Done)
+@@ -7299,10 +7313,10 @@ std::wstring ViewerSpace::BuildTooltipText(uint32_t nodeId) const
+                 case ScanState::Canceled: stateText = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_STATUS_CANCELED); break;
+             }
+ 
+-        return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH, name, sizeText, shareText, stateText);
++        return withModified(FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH, name, sizeText, shareText, stateText));
+     }
+ 
+-    return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH_NO_STATE, name, sizeText, shareText);
++    return withModified(FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH_NO_STATE, name, sizeText, shareText));
+ }
+ 
+ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache, bool retainPrevious)
+@@ -8760,6 +8774,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+         bool aggregateRoot      = false;
+         bool descend            = true;
+         std::wstring name;
++        int64_t lastWriteTime = 0;
+     };
+ 
+     struct StackItem final
+@@ -8841,6 +8856,25 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+         }
+         postProgress(progress, progressNodeId, item.path);
+ 
++        // Child timestamps arrive in their parent's listing. Only the scan root needs an optional
++        // metadata read, on the scan worker; selection and hover consume retained values exclusively.
++        if (item.modelNodeId == rootNodeId && ! stopToken.stop_requested())
++        {
++            wil::com_ptr<IFileSystemIO> io;
++            FileSystemBasicInformation info{};
++            info.sizeBytes = sizeof(info);
++            if (SUCCEEDED(fileSystem->QueryInterface(__uuidof(IFileSystemIO), io.put_void())) && io &&
++                SUCCEEDED(io->GetFileBasicInformation(item.path.c_str(), &info)) && info.sizeBytes == sizeof(info))
++            {
++                PendingUpdate metadata;
++                metadata.kind          = PendingUpdate::Kind::UpdateMetadata;
++                metadata.generation    = generation;
++                metadata.nodeId        = rootNodeId;
++                metadata.lastWriteTime = info.lastWriteTime;
++                PostUpdate(std::move(metadata));
++            }
++        }
++
+         wil::com_ptr<IFilesInformation> filesInformation;
+ #ifdef ENABLE_TESTS
+         HRESULT enumHr = E_FAIL;
+@@ -9033,6 +9067,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+                     ChildDir childDir;
+                     childDir.descend = ! isReparse;
+                     childDir.name.assign(name);
++                    childDir.lastWriteTime = entry.LastWriteTime;
+                     if (! childDir.descend)
+                     {
+                         item.nonDescendingFolders = ViewerSpaceScan::SaturatingAdd(item.nonDescendingFolders, uint64_t{1u});
+@@ -9062,7 +9097,8 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+                     else if (item.topFiles.size() < fileCandidateLimit)
+                     {
+                         FileSummaryItem candidate;
+-                        candidate.bytes = fileBytes;
++                        candidate.bytes         = fileBytes;
++                        candidate.lastWriteTime = entry.LastWriteTime;
+                         candidate.name.assign(name);
+                         candidateNameCopies = ViewerSpaceScan::SaturatingAdd(candidateNameCopies, uint64_t{1u});
+                         item.topFiles.push_back(std::move(candidate));
+@@ -9073,7 +9109,8 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+                         std::pop_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
+                         FileSummaryItem dropped = std::move(item.topFiles.back());
+                         FileSummaryItem candidate;
+-                        candidate.bytes = fileBytes;
++                        candidate.bytes         = fileBytes;
++                        candidate.lastWriteTime = entry.LastWriteTime;
+                         candidate.name.assign(name);
+                         candidateNameCopies  = ViewerSpaceScan::SaturatingAdd(candidateNameCopies, uint64_t{1u});
+                         item.topFiles.back() = std::move(candidate);
+@@ -9882,12 +9919,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
+                     }
+ 
+                     PendingUpdate addDir;
+-                    addDir.kind        = PendingUpdate::Kind::AddChild;
+-                    addDir.generation  = generation;
+-                    addDir.parentId    = item.modelNodeId;
+-                    addDir.nodeId      = child.modelNodeId;
+-                    addDir.name        = child.name;
+-                    addDir.isDirectory = true;
++                    addDir.kind          = PendingUpdate::Kind::AddChild;
++                    addDir.generation    = generation;
++                    addDir.parentId      = item.modelNodeId;
++                    addDir.nodeId        = child.modelNodeId;
++                    addDir.name          = child.name;
++                    addDir.isDirectory   = true;
++                    addDir.lastWriteTime = child.lastWriteTime;
+                     deferredUpdates.push_back(std::move(addDir));
+ 
+                     if (! child.descend)
+@@ -10523,13 +10561,14 @@ void ViewerSpace::DrainUpdates() noexcept
+                     }
+ 
+                     Node node;
+-                    node.id          = update.nodeId;
+-                    node.parentId    = update.parentId;
+-                    node.isDirectory = update.isDirectory;
+-                    node.isSynthetic = update.isSynthetic;
+-                    node.name        = CopyToArena(_model->nameArena, update.name);
+-                    node.totalBytes  = 0u;
+-                    node.scanState   = update.isDirectory ? ScanState::Queued : ScanState::Done;
++                    node.id            = update.nodeId;
++                    node.parentId      = update.parentId;
++                    node.isDirectory   = update.isDirectory;
++                    node.isSynthetic   = update.isSynthetic;
++                    node.name          = CopyToArena(_model->nameArena, update.name);
++                    node.totalBytes    = 0u;
++                    node.lastWriteTime = update.lastWriteTime;
++                    node.scanState     = update.isDirectory ? ScanState::Queued : ScanState::Done;
+ 
+                     const size_t requiredSize = static_cast<size_t>(node.id) + 1u;
+                     if (requiredSize > static_cast<size_t>(_scanResourcePolicy.maxRetainedDirectories) + 1u)
+@@ -10556,6 +10595,15 @@ void ViewerSpace::DrainUpdates() noexcept
+                     layoutChanged = true;
+                     break;
+                 }
++                case PendingUpdate::Kind::UpdateMetadata:
++                {
++                    if (Node* node = TryGetRealNode(update.nodeId))
++                    {
++                        node->lastWriteTime = update.lastWriteTime;
++                        inspectorDirty      = inspectorDirty || _selectedItemId == node->id;
++                    }
++                    break;
++                }
+                 case PendingUpdate::Kind::UpdateSize:
+                 {
+                     Node* node = TryGetRealNode(update.nodeId);
+@@ -11191,6 +11239,7 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
+             cachedNode.scanState            = static_cast<uint8_t>(node.scanState);
+             cachedNode.flags                = node.contentNotMeasured ? kScanResultCacheNodeContentNotMeasured : 0u;
+             cachedNode.totalBytes           = node.totalBytes;
++            cachedNode.lastWriteTime        = node.lastWriteTime;
+             cachedNode.observedOwnFileBytes = node.observedOwnFileBytes;
+             cachedNode.observedChildBytes   = node.observedChildBytes;
+             cachedNode.childrenStart        = node.childrenStart;
+@@ -11236,9 +11285,10 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
+         ScanResultCacheFileRecord cachedFile;
+         if (file.id != 0)
+         {
+-            cachedFile.id       = file.id;
+-            cachedFile.parentId = file.parentId;
+-            cachedFile.bytes    = file.bytes;
++            cachedFile.id            = file.id;
++            cachedFile.parentId      = file.parentId;
++            cachedFile.bytes         = file.bytes;
++            cachedFile.lastWriteTime = file.lastWriteTime;
+             if (snapshot->names.size() > std::numeric_limits<uint32_t>::max() ||
+                 file.name.size() > std::numeric_limits<uint32_t>::max() - snapshot->names.size())
+             {
+@@ -11738,6 +11788,7 @@ void ViewerSpace::ContinueScanCacheRestore() noexcept
+                         node.scanState            = cachedNode.id == _model->rootNodeId ? ScanState::Queued : static_cast<ScanState>(cachedNode.scanState);
+                         node.name                 = CopyToArena(_model->nameArena, name);
+                         node.totalBytes           = cachedNode.totalBytes;
++                        node.lastWriteTime        = cachedNode.lastWriteTime;
+                         node.observedOwnFileBytes = cachedNode.observedOwnFileBytes;
+                         node.observedChildBytes   = cachedNode.observedChildBytes;
+                         node.childrenStart        = cachedNode.childrenStart;
+@@ -11780,6 +11831,7 @@ void ViewerSpace::ContinueScanCacheRestore() noexcept
+                     record.id                  = cachedFile.id;
+                     record.parentId            = cachedFile.parentId;
+                     record.bytes               = cachedFile.bytes;
++                    record.lastWriteTime       = cachedFile.lastWriteTime;
+                     record.name                = CopyToArena(_model->nameArena, ScanSnapshotName(*snapshot, cachedFile.nameOffset, cachedFile.nameLength));
+                     _model->fileRecords[index] = std::move(record);
+                     ++_scanCacheRestoreFileRecordsNext;
+@@ -11985,6 +12037,7 @@ std::optional<ViewerSpace::ResolvedItem> ViewerSpace::ResolveTreemapItem(uint32_
+             .scanState          = ScanState::Done,
+             .name               = file->name,
+             .totalBytes         = file->bytes,
++            .lastWriteTime      = file->lastWriteTime,
+             .aggregateFolders   = 0,
+             .aggregateFiles     = 1,
+         };
+@@ -12002,6 +12055,7 @@ std::optional<ViewerSpace::ResolvedItem> ViewerSpace::ResolveTreemapItem(uint32_
+             .scanState          = node->scanState,
+             .name               = node->name,
+             .totalBytes         = node->totalBytes,
++            .lastWriteTime      = node->lastWriteTime,
+             .aggregateFolders   = node->aggregateFolders,
+             .aggregateFiles     = node->aggregateFiles,
+         };
+@@ -12423,6 +12477,7 @@ bool ViewerSpace::ApplyDirectorySummaryChunk(const PendingUpdate& update) noexce
+         record.parentId                = key.nodeId;
+         record.name                    = CopyToArena(_model->nameArena, file.name);
+         record.bytes                   = file.bytes;
++        record.lastWriteTime           = file.lastWriteTime;
+         _model->fileRecords[fileIndex] = record;
+         if (stage.hasChildArena)
+         {
+diff --git a/Plugins/ViewerSpace/ViewerSpace.h b/Plugins/ViewerSpace/ViewerSpace.h
+index 4c0019d2e..e032f8466 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.h
++++ b/Plugins/ViewerSpace/ViewerSpace.h
+@@ -129,7 +129,8 @@ private:
+     {
+         uint32_t nodeId = 0;
+         std::wstring name;
+-        uint64_t bytes = 0;
++        uint64_t bytes        = 0;
++        int64_t lastWriteTime = 0;
+     };
+ 
+     struct Node final
+@@ -144,6 +145,7 @@ private:
+         std::wstring_view name;
+ 
+         uint64_t totalBytes           = 0;
++        int64_t lastWriteTime         = 0;
+         uint64_t observedOwnFileBytes = 0;
+         uint64_t observedChildBytes   = 0;
+         uint32_t childrenStart        = 0;
+@@ -163,7 +165,8 @@ private:
+         uint32_t id       = 0;
+         uint32_t parentId = 0;
+         std::wstring_view name;
+-        uint64_t bytes = 0;
++        uint64_t bytes        = 0;
++        int64_t lastWriteTime = 0;
+     };
+ 
+     struct ResolvedItem final
+@@ -177,6 +180,7 @@ private:
+         ScanState scanState     = ScanState::Done;
+         std::wstring_view name;
+         uint64_t totalBytes       = 0;
++        int64_t lastWriteTime     = 0;
+         uint64_t aggregateFolders = 0;
+         uint64_t aggregateFiles   = 0;
+     };
+@@ -248,6 +252,7 @@ private:
+             AddChild,
+             UpdateSize,
+             UpdateState,
++            UpdateMetadata,
+             DirectorySummaryBegin,
+             DirectorySummaryChunk,
+             DirectorySummaryEnd,
+@@ -256,12 +261,13 @@ private:
+             ResourceSummary,
+         };
+ 
+-        Kind kind           = Kind::UpdateSize;
+-        uint32_t generation = 0;
+-        uint32_t nodeId     = 0;
+-        uint32_t parentId   = 0;
+-        uint64_t bytes      = 0;
+-        ScanState state     = ScanState::NotStarted;
++        Kind kind             = Kind::UpdateSize;
++        uint32_t generation   = 0;
++        uint32_t nodeId       = 0;
++        uint32_t parentId     = 0;
++        uint64_t bytes        = 0;
++        int64_t lastWriteTime = 0;
++        ScanState state       = ScanState::NotStarted;
+         std::wstring name;
+         bool isDirectory        = false;
+         bool isSynthetic        = false;
+diff --git a/Plugins/ViewerSpace/ViewerSpaceResources.rc b/Plugins/ViewerSpace/ViewerSpaceResources.rc
+index 8878b0bf3..36a26ace9 100644
+--- a/Plugins/ViewerSpace/ViewerSpaceResources.rc
++++ b/Plugins/ViewerSpace/ViewerSpaceResources.rc
+@@ -97,6 +97,8 @@ BEGIN
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "Logical bytes"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "% of parent"
+     IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "State"
++    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "Modified"
++    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\nModified: {1}"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "File"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "Folder"
+     IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "Other"
+diff --git a/Plugins/ViewerSpace/resource.h b/Plugins/ViewerSpace/resource.h
+index 36de5b77d..6d8aca47c 100644
+--- a/Plugins/ViewerSpace/resource.h
++++ b/Plugins/ViewerSpace/resource.h
+@@ -94,3 +94,5 @@
+ #define IDS_VIEWERSPACE_ANALYSIS_MODE 5081
+ #define IDS_VIEWERSPACE_HIDE_PANEL 5082
+ #define IDS_VIEWERSPACE_SHOW_PANEL 5083
++#define IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED 5084
++#define IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT 5085
+diff --git a/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp b/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
+index 3c64f3356..bcdbd9163 100644
+--- a/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
++++ b/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
+@@ -9719,9 +9719,10 @@ enum class ViewerSpaceProviderFault : uint8_t
+ struct ViewerSpaceProviderEntry final
+ {
+     std::wstring name;
+-    uint64_t bytes      = 0u;
+-    DWORD attributes    = 0u;
+-    unsigned long index = 0u;
++    uint64_t bytes        = 0u;
++    DWORD attributes      = 0u;
++    unsigned long index   = 0u;
++    int64_t lastWriteTime = 0;
+ };
+ 
+ struct ViewerSpaceProviderDirectory final
+@@ -9974,6 +9975,7 @@ private:
+             auto* entry                            = reinterpret_cast<FileInfo*>(buffer.data() + offset);
+             entry->FileIndex                       = source.index;
+             entry->FileAttributes                  = source.attributes;
++            entry->LastWriteTime                   = source.lastWriteTime;
+             entry->EndOfFile      = source.bytes > static_cast<uint64_t>((std::numeric_limits<__int64>::max)()) ? (std::numeric_limits<__int64>::max)()
+                                                                                                                 : static_cast<__int64>(source.bytes);
+             entry->AllocationSize = entry->EndOfFile;
+@@ -10211,11 +10213,12 @@ private:
+     // Synthetic virtual root forces inspector-path elision without filesystem path limits.
+     const std::wstring analysisRootPath = std::format(L"analysis-root/{}", std::wstring(384u, L'r'));
+     ViewerSpaceProviderDirectory root;
+-    root.entries.push_back({L"folder", 0u, FILE_ATTRIBUTE_DIRECTORY, 1u});
++    root.entries.push_back({L"folder", 0u, FILE_ATTRIBUTE_DIRECTORY, 1u, kViewerSpaceFolderModifiedTime});
+     root.entries.push_back({L"sibling", 0u, FILE_ATTRIBUTE_DIRECTORY, 3001u});
+     for (unsigned long index = 0u; index < 2000u; ++index)
+     {
+-        root.entries.push_back({std::format(L"item_{0:04}.bin", index), 1024u * 1024u, 0u, index + 2u});
++        const int64_t modified = index == 1u ? 0 : index == 2u ? (std::numeric_limits<int64_t>::max)() : kViewerSpaceFileModifiedTime;
++        root.entries.push_back({std::format(L"item_{0:04}.bin", index), 1024u * 1024u, 0u, index + 2u, modified});
+     }
+     provider.AddDirectory(analysisRootPath, std::move(root));
+     ViewerSpaceProviderDirectory folder;
+@@ -11172,12 +11175,12 @@ private:
+     ViewerSpaceSyntheticProvider provider;
+     provider.UseNonWin32Metadata();
+     ViewerSpaceProviderDirectory root;
+-    root.entries = {{L"Videos", 0u, FILE_ATTRIBUTE_DIRECTORY, 1u},
+-                    {L"project-plan.txt", 128u, FILE_ATTRIBUTE_NORMAL, 2u},
+-                    {L"review-notes.txt", 256u, FILE_ATTRIBUTE_NORMAL, 3u}};
++    root.entries = {{L"Videos", 0u, FILE_ATTRIBUTE_DIRECTORY, 1u, kViewerSpaceFolderModifiedTime},
++                    {L"project-plan.txt", 128u, FILE_ATTRIBUTE_NORMAL, 2u, kViewerSpaceFileModifiedTime},
++                    {L"review-notes.txt", 256u, FILE_ATTRIBUTE_NORMAL, 3u, kViewerSpaceFileModifiedTime}};
+     provider.AddDirectory(kRootPath, std::move(root));
+     ViewerSpaceProviderDirectory slow;
+-    slow.entries = {{L"session-01.mp4", 512u, FILE_ATTRIBUTE_NORMAL, 1u}};
++    slow.entries = {{L"session-01.mp4", 512u, FILE_ATTRIBUTE_NORMAL, 1u, kViewerSpaceFileModifiedTime}};
+     provider.AddDirectory(kSlowPath, std::move(slow));
+ 
+     ViewerSpaceLifecycleReadGate readGate(provider, kRootPath, kSlowPath);
+@@ -11338,10 +11341,12 @@ private:
+                SendMessageW(hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE;
+     };
+ 
+-    const std::wstring mainManifest =
+-        std::format(L"root={};slow={};entries=Videos:directory,project-plan.txt:128,review-notes.txt:256,session-01.mp4:512;gate=root#1,slow#1,root#2",
+-                    kRootPath,
+-                    kSlowPath);
++    const std::wstring mainManifest = std::format(L"root={};slow={};entries=Videos:directory,project-plan.txt:128,review-notes.txt:256,session-01.mp4:512;gate="
++                                                  L"root#1,slow#1,root#2;folderModified={};fileModified={};selected=review-notes.txt",
++                                                  kRootPath,
++                                                  kSlowPath,
++                                                  kViewerSpaceFolderModifiedTime,
++                                                  kViewerSpaceFileModifiedTime);
+     const auto manifestHash = [&](std::wstring_view manifest) { return hashBytes(std::as_bytes(std::span<const wchar_t>(manifest.data(), manifest.size()))); };
+     const auto captureState =
+         [&](HWND hwnd, HWND captureWindow, std::string_view name, std::string_view fixtureHash, auto&& expectedState, auto&& stateStable) noexcept
+@@ -11637,6 +11642,23 @@ private:
+                value.scannedFiles == 3u && value.analysisRowCount == 3u && ! value.analysisBuildActive && ! value.layoutBuildActive &&
+                ! value.layoutAnimationActive && idleRendererState(value);
+     };
++    bool selectedCaptureFile = false;
++    for (size_t index = 0u; index < doneSnapshot.drawItemCount; ++index)
++    {
++        WndMsg::ViewerSpaceDrawItemDebugSnapshot item{};
++        if (SendMessageW(window, WndMsg::kViewerSpaceDebugGetDrawItem, static_cast<WPARAM>(index), reinterpret_cast<LPARAM>(&item)) &&
++            std::wstring_view(item.name) == L"review-notes.txt")
++        {
++            const int x = static_cast<int>((item.current.left + item.current.right) * 0.5f * item.dpi / 96.0f);
++            const int y = static_cast<int>((item.current.top + item.current.bottom) * 0.5f * item.dpi / 96.0f);
++            SendMessageW(window, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
++            SendMessageW(window, WM_LBUTTONUP, 0u, MAKELPARAM(x, y));
++            WndMsg::ViewerSpacePerfDebugSnapshot selected{};
++            selectedCaptureFile = readSnapshot(window, selected) && selected.selectedItemId == item.nodeId;
++            break;
++        }
++    }
++    Check(selectedCaptureFile, L"Lifecycle screenshot selects the synthetic file with a known modified timestamp without activation", success);
+     captureState(window, ownerWindow.get(), "03-done", mainFixtureHash, donePredicate, stableLifecycleState);
+ 
+     wil::com_ptr<IInformations> workspaceInformation;
+diff --git a/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp b/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+index 9d3d4a0ec..03e71ab35 100644
+--- a/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
++++ b/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+@@ -1,4 +1,5 @@
+ #include "ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h"
++#include "FileMetadataFormatting.h"
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -807,6 +808,49 @@ bool CheckViewerSpaceAnalysisUia(HWND viewerWindow,
+             return fail(L"ViewerSpace inspector follows the selected UIA row");
+         }
+ 
++        const auto checkModified = [&](std::wstring_view name, std::wstring_view expected) noexcept
++        {
++            size_t rowIndex = initial.analysisRowCount;
++            for (size_t index = 0u; index < initial.analysisRowCount; ++index)
++            {
++                WndMsg::ViewerSpaceAnalysisRowDebugQuery row{};
++                if (ReadAnalysisRow(viewerWindow, index, row) && std::wstring_view(row.name) == name)
++                {
++                    rowIndex = index;
++                    break;
++                }
++            }
++            wil::com_ptr<IUIAutomationElement> cell;
++            wil::com_ptr<IUIAutomationElement> rowElement;
++            wil::com_ptr<IUIAutomationSelectionItemPattern> rowSelection;
++            wil::com_ptr<IUIAutomationElement> modified;
++            wil::unique_bstr value;
++            if (rowIndex >= initial.analysisRowCount || FAILED(currentGridPattern->GetItem(static_cast<int>(rowIndex), 0, cell.put())) || ! cell ||
++                FAILED(restoredWalker->GetParentElement(cell.get(), rowElement.put())) || ! rowElement ||
++                FAILED(rowElement->GetCurrentPatternAs(UIA_SelectionItemPatternId, __uuidof(IUIAutomationSelectionItemPattern), rowSelection.put_void())) ||
++                ! rowSelection || FAILED(rowSelection->Select()) ||
++                FAILED(FindByAutomationId(automation.get(), root.get(), L"ViewerSpaceAnalysis.Inspector.Modified", modified.put())) || ! modified ||
++                FAILED(modified->get_CurrentName(value.put())) || ! value || std::wstring_view(value.get()) != expected)
++            {
++                return false;
++            }
++            BOOL offscreen = TRUE;
++            RECT bounds{};
++            return SUCCEEDED(modified->get_CurrentIsOffscreen(&offscreen)) && offscreen == FALSE &&
++                   SUCCEEDED(modified->get_CurrentBoundingRectangle(&bounds)) && bounds.right > bounds.left && bounds.bottom > bounds.top;
++        };
++        const std::wstring expectedFileTime =
++            Common::FileMetadata::FormatDisplayFields({kViewerSpaceFileModifiedTime, 0u}, Common::FileMetadata::DisplayProfile::CompactDetails).localTime;
++        const std::wstring expectedFolderTime =
++            Common::FileMetadata::FormatDisplayFields({kViewerSpaceFolderModifiedTime, 0u}, Common::FileMetadata::DisplayProfile::CompactDetails).localTime;
++        if (expectedFileTime.empty() || expectedFolderTime.empty() || ! checkModified(L"folder", expectedFolderTime) ||
++            ! checkModified(L"item_0000.bin", expectedFileTime) || ! checkModified(L"item_0001.bin", L"Unavailable") ||
++            ! checkModified(L"item_0002.bin", L"Unavailable") || FAILED(selectionItem->Select()))
++        {
++            return fail(L"ViewerSpace shows retained folder/file modified times and rejects missing or invalid dates in its visible inspector");
++        }
++        std::wcout << L"[PASS] ViewerSpace modified timestamps: folder, file, missing and invalid provider dates.\n";
++
+         // Verify a deliberately long virtual path keeps its accessible value through
+         // narrow/wide/narrow resize transitions; visual ellipsis belongs to the UI.
+         if (expectedRootPath.empty())
+@@ -892,7 +936,7 @@ bool CheckViewerSpaceAnalysisUia(HWND viewerWindow,
+             {
+                 return false;
+             }
+-            return desktop.Sample();
++            return checkModified(selectedRow.name, expectedFileTime) && desktop.Sample();
+         };
+         if (! verifyPathAtWidth(kNarrowWidthDip) || ! verifyPathAtWidth(wideWidthDip) || ! verifyPathAtWidth(kNarrowWidthDip))
+         {
+diff --git a/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h b/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h
+index 8228ae41e..8a6ae1ce1 100644
+--- a/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h
++++ b/Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h
+@@ -17,6 +17,9 @@
+ #include "TestSupport/TestSupport.Tests.DesktopObservation.h"
+ #include <UIAutomation.h>
+ 
++inline constexpr int64_t kViewerSpaceFileModifiedTime   = 133830651000000000;
++inline constexpr int64_t kViewerSpaceFolderModifiedTime = 133799526000000000;
++
+ #pragma warning(push)
+ // WIL headers only: deleted special members, padding and SAL analysis. Owner: ViewerPETests; review on WIL/MSVC updates.
+ #pragma warning(disable : 4625 4626 5026 5027 4820 28182)

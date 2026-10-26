@@ -1,0 +1,38 @@
+[
+  {
+    "file": "rehearsal.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\rehearsal.json",
+    "bytes": 1899,
+    "sha256": "bf59995cf9b9dc8b93b77aeafe41642db28079a65af8bf8c40575f54990b6ffe"
+  },
+  {
+    "file": "verified-package-comparison.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\verified-package-comparison.json",
+    "bytes": 5384,
+    "sha256": "74112152d366ade71ff1f3e08f20a126faef01ef7c1e7fe2c19fa0fa31959433"
+  },
+  {
+    "file": "A1-package.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\A1-package.log",
+    "bytes": 634,
+    "sha256": "0e6d086c0fbdc9f12e7c7c1fcd2fd514a17f439a0fb548f2c8dc4a7d808f300c"
+  },
+  {
+    "file": "B-package.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\B-package.log",
+    "bytes": 638,
+    "sha256": "3390af2bec0d823789e4e3dfd3c0ffc2af3b165c02bc6bab19afb5951869bad4"
+  },
+  {
+    "file": "A2-package.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\A2-package.log",
+    "bytes": 634,
+    "sha256": "0e6d086c0fbdc9f12e7c7c1fcd2fd514a17f439a0fb548f2c8dc4a7d808f300c"
+  },
+  {
+    "file": "3a43186a-final-x64-Release-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-final-x64-Release-build.log",
+    "bytes": 35851,
+    "sha256": "216db8609ad389078a6d62b8be07ae77f69751e1a0a52cf8b4fa6db8f7f2687e"
+  }
+]

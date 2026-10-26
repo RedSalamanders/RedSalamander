@@ -1,0 +1,9 @@
+{
+  "reason": "Gate-only observer retired before any runner launch to add known concurrent DxUi functional runtimes. Only the verified owned controller was stopped; its console host was its sole child. No independent build/application/test was interrupted.",
+  "owned_controller_pid": 60480,
+  "owned_console_host_pids": [
+    37584
+  ],
+  "benchmark_started": false,
+  "retired_utc": "2026-10-20T14:25:08.6672263Z"
+}

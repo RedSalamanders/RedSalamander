@@ -14,7 +14,7 @@ contracts, they do not replace them.
 | --- | --- |
 | `RedSalamander/` | Main dual-pane shell, dialogs, settings, command routing, and app theming. |
 | `Common/` | Shared libraries, plugin interfaces, settings helpers, Win32 helpers, and product UI adapters. |
-| `Plugins/` | Built-in file-system and viewer plugins. |
+| `Plugins/` | Built-in file-system, viewer and Terminal plugins. |
 | `Tests/` | Deterministic selftests and component test executables, including `Tests/ProductUiTests`. |
 | `Specs/` | Authoritative product, UI, file-system, testing, and implementation-plan specs. |
 | `docs/` | User and developer documentation that can be published with GitHub Pages. |
@@ -27,43 +27,32 @@ Use the repository build wrapper from the repo root:
 .\build.ps1
 .\build.ps1 -Configuration Release
 .\build.ps1 -ProjectName RedSalamander
-.\build.ps1 -ProjectName DxUi
-.\build.ps1 -ProjectName DxUiTests
 ```
 
-The canonical local verification command is the full test runner (it builds, then
-runs the full suite); pass `-SkipBuild` to reuse an existing Debug build:
+Explain the affected scope before iteration, then use the governed entry point:
 
 ```powershell
-.\Tools\Run-AllTests.ps1 -Suite Full
-.\Tools\Run-AllTests.ps1 -SkipBuild
-.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Resume -ResumeFrom <run-id>
-.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Affected -ImpactBase origin/master
+.\Test-Changes.ps1 -Explain -TestRoot D:\RedSalamander.Perf
+.\Test-Changes.ps1 -TestRoot D:\RedSalamander.Perf
+.\Test-Changes.ps1 -Mode PrePush -Explain -TestRoot D:\RedSalamander.Perf
 ```
 
-Useful outputs:
+Use an already initialized, marked fixed-drive root. PrePush accounts for full
+local/PR obligations; uncertain or future CI is not a pass. Foreground-input
+tests require an agreed time. `Run-AllTests.ps1 -SkipBuild` verifies an exact
+test-enabled solution receipt; it is not permission to use any existing binary.
+Explicit Fresh Full and exact Resume remain available under their owning contract.
 
-- `.build\x64\Debug\RedSalamander.exe`
-- `.build\x64\Debug\RedSalamanderMonitor.exe`
-- `.build\x64\Debug\DxUiTests.exe`
-- `.build\x64\Release\DxUiTests.exe`
+Build outputs live under `.build/<platform>/<configuration>`. Tests, temporary
+data, logs and evidence live under the selected `X:\RedSalamander.Perf`, never
+in `.build`. Pinned DxUi development/testing follows [DxUi](DxUi.md) and its
+consumer integration; do not assume a retired local DxUi project or output path.
 
-Run focused DxUi suites while working on the shared UI layer:
-
-```powershell
-.\build\x64\Debug\DxUiTests.exe --suite=WindowHost
-.\build\x64\Debug\DxUiTests.exe --suite=Control
-.\build\x64\Debug\DxUiTests.exe --suite=Grid
-.\build\x64\Debug\DxUiTests.exe --suite=NativeTextInput
-.\build\x64\Debug\DxUiTests.exe --suite=Accessibility
-```
-
-Generate the public theme/control gallery screenshots:
-
-```powershell
-.\build\x64\Debug\DxUiTests.exe --suite=Gallery --gallery-output-directory=docs\res
-.\build\x64\Debug\DxUiTests.exe --suite=ButtonContrast --button-audit-output=docs\res\theme-button-states-after-fix.png
-```
+For exact-run cleanup, evidence preservation and harness-only screenshots with
+invented data, use [Tests, Evidence and Documentation Captures](dev/TestingAndScreenshots.md)
+and [Tests/README](../Tests/README.md). Generate into the sandbox, review the whole
+frame, then explicitly publish accepted captures with provenance. Do not send a
+test harness's output directly into `docs/res` or capture the desktop manually.
 
 ## Development rules to remember
 
@@ -101,7 +90,7 @@ and drift as the code changes.)
 - [Compare Directories Engine & Window](#compare-directories-engine--window)
 - [Batch Rename, Change Case & Rename Batching](#batch-rename-change-case--rename-batching)
 - [Connection Manager, Secrets & Windows Hello](#connection-manager-secrets--windows-hello)
-- [Theming (AppTheme) & the Preferences Dialog](#theming-apptheme--the-preferences-dialog)
+- [Theming (AppTheme) & the Preferences Dialog](#theming-version-2-authored-themes-apptheme-and-preferences)
 - [Diagnostics: ETW/TraceLogging, Debug Logging & Monitor](#diagnostics-etwtracelogging-debug-logging--monitor)
 - [Localization, Resources, Build & Test Infrastructure](#localization-resources-build--test-infrastructure)
 
@@ -251,24 +240,24 @@ See `Specs/UI/UI_NavigationView.md` and `Specs/UI/UI_FolderWindow.md`; user docs
 
 ### File Operations Engine: Queue, Scheduler & Data Safety
 
-_Background copy/move/delete execution: per-task worker threads, a Wait/Parallel start-gating queue, a shared per-item scheduler, host-driven pre-calc and cross-FS bridging, and inline conflict/data-safety arbitration._
+_Background copy/move/delete execution: per-task worker threads, a Queue/Parallel start-gating queue, a shared per-item scheduler, shared streaming discovery and cross-FS bridging, and inline conflict/data-safety arbitration._
 
-This subsystem runs every long file operation (Copy `F5`, Move `F6`, Delete `Del`/`Shift+Del`, clipboard paste, pane drag-drop, pack/unpack, Find Files commands) off the UI thread and surfaces it in the File Operations popup. The entry point is `FolderWindow::FileOperationState::StartOperation(...)`, which validates preconditions (provider capabilities via `CanSameFileSystemOperation`, same-folder/overlap rejection, destructive confirmation prompts), snapshots host-owned settings (pre-calc, cross-FS bridge buffer, default bandwidth) into a `Task`, then spawns one `std::jthread` per task running `Task::ThreadMain`.
+This subsystem runs every long file operation (Copy `F5`, Move `F6`, Delete `Del`/`Shift+Del`, clipboard paste, pane drag-drop, pack/unpack, Find Files commands) off the UI thread and surfaces it in the File Operations popup. UI commands enter `AdmitOperation` (or `AdmitInlineRename`) to capture endpoint/provider facts, qualify capabilities, check overlap and obtain required consent. `StartOperation` accepts the prepared admission, snapshots task defaults such as verification, bridge buffer and bandwidth, publishes the task and starts its owned `std::jthread` running `Task::ThreadMain`. See [the engine guide](dev/FileOperationsEngine.md) for current ownership and source-retention rules.
 
 #### Key files and types
 
 | File | Role |
 |------|------|
 | `FolderWindow.FileOperationsInternal.h` | `FileOperationState`, `Task` (impl `IFileSystemCallback` + `IFileSystemDirectorySizeCallback`), `ConflictArbiter`, `CompletedTaskSummary`, `TaskDiagnosticEntry` |
-| `FolderWindow.FileOperations.State.Runtime.Part.cpp` | `StartOperation`, `ApplyQueueMode`, `CancelAll`, `NotifyQueueChanged`, `Shutdown` |
-| `FolderWindow.FileOperations.State.Queue.Part.cpp` | `EnterOperation`, `LeaveOperation`, `UpdateQueuePausedTasks`, `PostCompleted` |
-| `FolderWindow.FileOperations.State.cpp` | `ThreadMain`, `ExecuteOperation`, `RunPreCalculation`, callbacks, `PerItemTaskScheduler`, conflict arbiter |
-| `FolderWindow.FileOperations.State.Diagnostics.Part.cpp` | `RecordCompletedTask`, diagnostics log + Issues capture |
+| `FolderWindow.FileOperations.State.Runtime.cpp` | `StartOperation`, `ApplyQueueMode`, `CancelAll`, `NotifyQueueChanged`, `Shutdown` |
+| `FolderWindow.FileOperations.State.Queue.cpp` | `EnterOperation`, `LeaveOperation`, `UpdateQueuePausedTasks`, `PostCompleted` |
+| `FolderWindow.FileOperations.State.cpp` | `ThreadMain`, `ExecuteOperation`, discovery/progress callbacks, `PerItemTaskScheduler`, conflict arbiter |
+| `FolderWindow.FileOperations.State.Diagnostics.cpp` | `RecordCompletedTask`, diagnostics log + Issues capture |
 | `FolderWindow.FileOperations.Popup.cpp` / `.IssuesPane.cpp` | D2D/DWrite UI; reads snapshots, posts user actions |
 
 #### Control flow
 
-`ThreadMain` enters the queue first via `EnterOperation`: if `_waitForOthers`, the task FIFO-blocks on `_queueCv` until `_activeOperations == 0` and it is the queue head (Wait mode); otherwise it bumps `_activeOperations` and proceeds (Parallel). Pre-calc runs while holding the slot. For Copy with pre-calc enabled, "5F early admission" runs `RunPreCalculation` on a side `std::jthread` (via `TryStartPreCalculationThread`) concurrently with the transfer so bytes move before the recursive scan finishes; Move/Delete keep serial pre-calc-then-execute because they mutate the source. `ExecuteOperation` either calls the same-context `IFileSystem` bulk/per-item APIs or, when `_destinationFileSystem` is set, drives the host cross-filesystem bridge. Per-item work uses one `QualifiedItemPolicy` for serial and parallel execution. For `maxConcurrency > 1`, `PerItemTaskScheduler` (`GetPerItemTaskScheduler()`) dispatches short `itemPolicy.Process(i)` calls through a shared bounded worker pool so one large operation never pins every worker. Completion calls `PostCompleted`, which sets `_taskFinished`, builds a `CompletedTaskSummary` (`RecordCompletedTask`), and posts `WndMsg::kFileOperationCompleted` to the FolderWindow (`OnFileOperationCompleted`).
+`ThreadMain` enters the queue first via `EnterOperation`: if `_waitForOthers`, the task FIFO-blocks on `_queueCv` until `_activeOperations == 0` and it is the queue head (Wait mode); otherwise it bumps `_activeOperations` and proceeds (Parallel). Shared discovery runs after that admission. Copy, Move and Delete publish provisional facts while the traversal schedules work; local selected-file metadata is checked freshly before payload. Skip counting changes scheduling capacity without skipping required work. `ExecuteOperation` either calls the same-context `IFileSystem` bulk/per-item APIs or, when `_destinationFileSystem` is set, drives the host cross-filesystem bridge. Per-item work uses one `QualifiedItemPolicy` for serial and parallel execution. For `maxConcurrency > 1`, `PerItemTaskScheduler` (`GetPerItemTaskScheduler()`) dispatches short `itemPolicy.Process(i)` calls through a shared bounded worker pool so one large operation never pins every worker. Completion calls `PostCompleted`, which sets `_taskFinished`, builds a `CompletedTaskSummary` (`RecordCompletedTask`), and posts `WndMsg::kFileOperationCompleted` to the FolderWindow (`OnFileOperationCompleted`).
 
 #### Threading rules
 
@@ -276,7 +265,7 @@ This subsystem runs every long file operation (Copy `F5`, Move `F6`, Delete `Del
 
 #### Data safety and conflicts
 
-`FileSystemIssue` classifies failures into `ConflictBucket`s and routes them through the `ConflictArbiter`: `BeginConflictPrompt` enforces at most one active prompt per task (`prompt.active`), `WaitForConflictDecision` blocks the worker on `decisionEvent`, and the popup posts back via `Task::SubmitConflictDecision`. Invariants: no implicit overwrite; Overwrite/ReplaceReadOnly grants are one-shot unless "Apply to all"; Retry is capped to one per `(item, bucket)` and never cached; directory-vs-directory is a merge, not a conflict; cross-volume Move partial failure surfaces `ERROR_PARTIAL_COPY` with "source preserved" diagnostics. Cancel sets `_cancelled` and wakes every wait primitive; pause blocks inside callbacks via `WaitWhilePaused`. The Riptide/Floodgate plans (`Specs/Plans/WIP/Operation_Riptide_*.md`, `Operation_Floodgate_*.md`) track remediation of silent data-loss and conflict-routing parity.
+`FileSystemIssue` classifies failures into `ConflictBucket`s and routes them through the `ConflictArbiter`: `BeginConflictPrompt` enforces at most one active prompt per task (`prompt.active`), `WaitForConflictDecision` blocks the worker on `decisionEvent`, and the popup posts back via `Task::SubmitConflictDecision`. Invariants: no implicit overwrite; Overwrite/ReplaceReadOnly grants are one-shot unless "Apply to all"; Retry is capped to one per `(item, bucket)` and never cached; directory-vs-directory is a merge, not a conflict; cross-volume Move partial failure surfaces `ERROR_PARTIAL_COPY` with a `task.result` diagnostic that counts the moved, kept and unknown sources from the typed results. Cancel sets `_cancelled` and wakes every wait primitive; pause blocks inside callbacks via `WaitWhilePaused`. Current ownership, conflict and source-retention requirements live in the authoritative File Operations specification.
 
 #### Extension points and gotchas
 
@@ -440,7 +429,7 @@ RedSalamander search is a host-owned feature: one Find experience that works for
 
 #### Architecture and main types
 
-The `cmd/pane/find` command (defaults `Alt+F7` / `Ctrl+F`) calls `ShowFindFilesWindow(...)` (`RedSalamander/FindFilesWindow.h`) with a `FindFilesPaneContext` snapshotting the target pane's `IFileSystem`, `pluginId`, `instanceContext`, and root path. Each invocation creates an independent modeless `FindFilesWindow` (`RedSalamander/FindFilesWindow.cpp`), a DxUI-hosted window implementing `IDxGridDelegate`.
+The `cmd/pane/find` command (defaults `Alt+F7` / `Ctrl+F`) calls `ShowFindFilesWindow(...)` (`RedSalamander/FindFilesWindow.h`) with a `FindFilesPaneContext` snapshotting the target pane's `IFileSystem`, `pluginId`, `instanceContext`, and root path. Each invocation creates an independent modeless `FindFilesWindow` (`RedSalamander/FindFilesWindow.cpp`), a DxUI-hosted window implementing `IGridDelegate`.
 
 | File / type | Role |
 |---|---|
@@ -464,7 +453,7 @@ The `cmd/pane/find` command (defaults `Alt+F7` / `Ctrl+F`) calls `ShowFindFilesW
 
 #### Invariants and extension points
 
-Result identity is `pluginId + normalized instanceContext + normalized fullPath` — used for de-dup and the Find/Append/Intersect/Subtract set operations. Regex is validated before traversal; invalid/unsafe patterns return `E_INVALIDARG` with one `REGEX_REJECTED` completion. The extension seam is `IFileSystemSearch` (`Specs/Plugins/Plugins_VirtualFileSystem.md`); without it, scan fallback still provides name search. The service is independent: `--register`, `--run-foreground` (FTXUI dashboard), `--compact`, `--request-compact`.
+Result identity is `pluginId + normalized instanceContext + normalized fullPath` — used for de-dup and the Find/Append/Intersect/Subtract set operations. Regex is validated before traversal; invalid/unsafe patterns return `E_INVALIDARG` with one `REGEX_REJECTED` completion, while an accepted pattern that hits the engine's complexity limit on some items reports `REGEX_INCOMPLETE` instead of silently returning fewer results. The extension seam is `IFileSystemSearch` (`Specs/Plugins/Plugins_VirtualFileSystem.md`); without it, scan fallback still provides name search. The service is independent: `--register`, `--run-foreground` (FTXUI dashboard), `--compact`, `--request-compact`.
 
 #### Gotchas
 
@@ -630,44 +619,29 @@ Static and event-time sources resolve on theme application or the relevant syste
 
 Theme application and event-time system-color resolution are **UI-thread only**. Theme resources held in state (`backgroundBrush`, `cardBrush`, `inputBrush`…) are `wil::unique_hbrush` (RAII). Never retain a stale `AppTheme&` or a pointer into a prior `ResolvedThemeColors` across selection/hot reload. Paint consumers may read only the immutable compiled program owned by the atomically installed theme. Semantic keys must be real runtime keys recognized by all intended adapters; preview-only aliases are forbidden. See `Specs/Core/Core_SettingsStore.md`, `Specs/Core/Core_RedConfigure.md`, `Specs/UI/UI_VisualStyle.md`, and `Specs/UI/UI_PreferencesDialog.md`.
 
-### Diagnostics: ETW/TraceLogging, Debug Logging & Monitor
+### Diagnostics: ETW/TraceLogging, Debug logging and RedMonitor
 
-_How RedSalamander emits structured diagnostics over ETW/TraceLogging via Debug:: helpers, and how RedSalamanderMonitor consumes and renders them in real time._
+RedSalamander's Debug helpers emit structured ETW events; the independently installed RedMonitor
+viewer receives them when available. File Operations retains its own daily logs/reports, and --perf
+retains its JSONL sink. A missing helper does not impair the application.
 
-RedSalamander has no log files: every diagnostic is a structured ETW (Event Tracing for Windows) event emitted through a single TraceLogging provider, and `RedSalamanderMonitor.exe` is the real-time consumer. This decouples producers from consumers - apps emit regardless of whether a monitor is running.
+Common/Helpers.h owns the existing per-module provider lifetime and metadata. Its EmitEtwEvent calls
+the pinned public Client.h WriteNormalizedEvent, preserving GUID/name and Type, ProcessId, ThreadId,
+FileTime and counted Unicode Message fields. Application is additive, and Message uses the normalized
+[RedSalamander] prefix. The shared payload ceiling is 16000 UTF-16 code units including that prefix.
+Disabled diagnostics return before formatting or allocation. Plugin ABI and callback quiescence stay
+owned by this application; no C++ provider ownership crosses a DLL boundary.
 
-#### Architecture: emit -> transport -> consume
+The viewer, listener, model, rendering, resources and their tests live in the independent
+[RedMonitor project](https://github.com/RedSalamanders/RedMonitor). It owns its own exact DxUi pin,
+production Release ZIP and installation. This solution verifies only the vendored header/license
+and immutable lock. See [the consumer contract](../Specs/Core/Core_RedSalamanderMonitor.md) and
+[diagnostic API details](dev/Diagnostics.md).
 
-All of the producer side lives in `Common/Helpers.h` inside `namespace Debug`. The provider is declared once with `TRACELOGGING_DECLARE_PROVIDER(g_RedSalamanderProvider)` and defined in exactly one `.cpp` per module via `#define REDSAL_DEFINE_TRACE_PROVIDER`. Critically, the GUID `{440c70f6-6c6b-4ff7-9a3f-0b7db411b31a}` is shared by every module but each EXE/DLL owns its own provider storage (TraceLogging cannot share handles across DLL boundaries). The same GUID is hard-coded in `EtwListener::kProviderGuid` so the consumer subscribes to all producers at once.
-
-| File / Type | Role |
-|---|---|
-| `Common/Helpers.h` `Debug::Error/Warning/Info/ErrorWithLastError` | Public logging API; all funnel into `Debug::Out` |
-| `Common/Helpers.h` `Debug::Perf::Scope`/`Emit*` | Perf events (`PerfScope`) + JSONL sink |
-| `Common/Helpers.h` `EmitEtwEvent`, `InfoParam` | Writes `DebugMessage` event; metadata struct |
-| `Common/Helpers.h` `CallTracer` / `TRACER*` macros | Per-thread indentation + timing |
-| `RedSalamanderMonitor/EtwListener.{h,cpp}` | Real-time ETW session + TDH decode |
-| `RedSalamanderMonitor/ColorTextView.cpp` | Cross-thread queue + batch intake + render |
-| `RedSalamanderMonitor/MonitorDiagnostics.h` | Self-event filtering policy |
-
-#### Data and control flow
-
-`Debug::Error(...)` and friends build an `InfoParam` (FILETIME, processID, threadID, `Type`) via `BuildInfoParam`, format the message, and call `EmitEtwEvent`, which calls `TraceLoggingWrite` with event name `"DebugMessage"` under `kDebugKeyword` (0x1). `Debug::Perf` emits `"PerfScope"` events under `kPerfKeyword` (0x2). Write/fail counters (`g_etwWritten`/`g_etwFailed`) are exposed via `GetTransportStats()`.
-
-On the consumer side `EtwListener::Start` stops any stale `RedSalamanderMonitor_ETW_Session`, calls `StartTrace` (256 KB buffers, 8-128 buffers), `EnableTraceEx2` on the provider, `OpenTrace`, then runs `ProcessTrace` on a `std::jthread`. `EventRecordCallback` -> `HandleEvent` -> `ExtractEventData` decodes properties with the TDH API (slow but off the UI thread) and synthesizes `[perf] ...` text for Perf events. The user callback (wired in `OnCreate` near line 3687) applies `ShouldAcceptEtwEventForDisplay`, then calls `ColorTextView::QueueEtwEvent`.
-
-#### Threading and UI-thread rules
-
-`QueueEtwEvent` runs on the ETW worker thread: it pushes onto `_etwEventQueue` (a `std::deque` under `wil::critical_section _etwQueueCS`) and posts `WndMsg::kColorTextViewEtwBatch` only when the queue was empty (coalescing). `OnAppEtwBatch` runs on the UI thread, drains up to `kMaxBatchSize`=200 entries, reposts if overflow remains, and calls `Document::AppendInfoLines` under a single write lock. Append/layout/paint must stay on the UI thread; everything else (the trace session) stays on the worker. See `Specs/Core/Core_RedSalamanderMonitor.md` for the two-mode (AUTO_SCROLL/SCROLL_BACK) rendering contract.
-
-#### Invariants and gotchas
-
-- Self-event suppression: by default Monitor filters out events whose `processID == GetCurrentProcessId()` and shows no startup text - only `--etw` (which sets `SetRuntimeMonitorDiagnosticsEnabled`) opts into self-diagnostics.
-- Build gating: Debug/ASan Debug builds emit Info/Perf/Debug by default; Release emits only Error/Warning unless `--etw`. See `ShouldEmitMonitorDiagnosticMessageType`.
-- ETW session start can fail with `ERROR_ACCESS_DENIED` - run `init-etw-trace.ps1` (Performance Log Users) or elevate; the UI offers a relaunch prompt.
-- `TRACER` logs only on exit; use `TRACER_INOUT` for entry+exit. Indentation is thread-local.
-- Perf has a second sink: JSONL via `--perf[=PATH]` (`WritePerfJsonl`), used by self-test perf gates. See [Monitor.md](Monitor.md) and [Troubleshooting.md](Troubleshooting.md).
-
+Explicit --redmonitor discovers only an installed production helper in LocalAppData/Programs/RedMonitor
+or ProgramFiles/RedMonitor. Bare Debug startup may launch it asynchronously; Release, help, tests and
+probes do not auto-launch. The app never waits for or kills the helper. Preferences keeps the legacy
+Release 7.0 monitor settings file for compatibility in every consumer configuration.
 ### Localization, Resources, Build & Test Infrastructure
 
 _How RedSalamander stores localizable UI in .rc resources with satellite DLLs, builds via build.ps1/MSBuild, and validates via in-product self-tests and the Run-AllTests harness._
@@ -676,11 +650,11 @@ This subsystem covers three intertwined concerns a new contributor touches const
 
 #### Localization and resources
 
-Every user-facing string and every static menu/dialog/accelerator lives in `.rc` resources, never hardcoded in C++ (`Specs/Core/Core_Localization.md`). English resources are embedded in each owner module (`RedSalamander/RedSalamander.rc`, `RedSalamanderMonitor/RedSalamanderMonitor.rc`, per-plugin `.rc`). The main `.rc` defines `LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US`, menus like `IDR_FOLDERVIEW_CONTEXT` and `IDR_COMPARE_DIRECTORIES_MENU`, dialogs (`IDD_PREFERENCES`, `IDD_COMPARE_DIRECTORIES_OPTIONS`), an `IDC_REDSALAMANDER ACCELERATORS` table, and many `STRINGTABLE` blocks.
+Every user-facing string and every static menu/dialog/accelerator lives in `.rc` resources, never hardcoded in C++ (`Specs/Core/Core_Localization.md`). English resources are embedded in each owner module (`RedSalamander/RedSalamander.rc`, per-plugin `.rc`). The main `.rc` defines `LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US`, menus like `IDR_FOLDERVIEW_CONTEXT` and `IDR_COMPARE_DIRECTORIES_MENU`, dialogs (`IDD_PREFERENCES`, `IDD_COMPARE_DIRECTORIES_OPTIONS`), an `IDC_REDSALAMANDER ACCELERATORS` table, and many `STRINGTABLE` blocks.
 
 Translations are resource-only satellite DLLs under `RedSalamander/Lang/<culture>/`, named `<OwnerStem>-<culture>.dll` (e.g. `RedSalamander-fr-FR.dll`). Each culture folder holds a generated `.rc` plus a `.vcxproj` that outputs to `.build\<Platform>\<Configuration>\Lang\`. Runtime lookup goes through the `Localization` namespace in `Common/LocalizationManager.h`: owners call `RegisterResourceOwner(ownerName, hInstance)` at startup (plugins pass `g_hInstance`, unregister on unload via `UnregisterResourceOwner`); `LoadString`, `LoadMenuResource`, `LoadAcceleratorsResource`, and `FindLocalizedResourceHandle` try the selected culture chain in satellites first, then fall back to embedded English. App code uses the `Common/Helpers.h` wrappers `LoadStringResource`, `FormatStringResource`, `MessageBoxResource`. Stable non-translatable tokens use `LoadEmbeddedStringResource`/`FormatEmbeddedStringResource` (owner-scoped, satellite-bypassing on purpose).
 
-**Contracts/invariants:** formatted strings use positional `std::format` placeholders (`{0}`, `{1:08X}`) — bare `{}`, `{:08X}`, and printf-style `%s`/`%d` are forbidden so translators can reorder safely. Command labels need both full (`IDS_CMD_*`) and short (`IDS_CMD_SHORT_BASE + IDS_CMD_*`, ids 20000-21999) forms. `FindLocalizedResourceHandle` results are transient — copy immediately, never cache across a language change. `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` enforces placeholder parity and the language-neutral inventory; run it after editing braced strings. See `.github/skills/localization/SKILL.md`.
+**Contracts/invariants:** formatted strings use positional `std::format` placeholders (`{0}`, `{1:08X}`) — bare `{}`, `{:08X}`, and printf-style `%s`/`%d` are forbidden so translators can reorder safely. Command labels need both full (`IDS_CMD_*`) and short (`IDS_CMD_SHORT_BASE + IDS_CMD_*`, ids 20000-22999) forms. `FindLocalizedResourceHandle` results are transient — copy immediately, never cache across a language change. `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` enforces placeholder parity and the language-neutral inventory; run it after editing braced strings. See `.github/skills/localization/SKILL.md`.
 
 #### Build
 
@@ -688,7 +662,7 @@ Translations are resource-only satellite DLLs under `RedSalamander/Lang/<culture
 
 #### Tests
 
-In-product self-tests are debug-only (`ENABLE_TESTS`) and split by suite under `RedSalamander/SelfTest/` (`Commands/`, `CompareDirectories/`, `FileOperations/`, shared `Common/SelfTestCommon.h`). They run via CLI flags parsed in `RedSalamander.cpp`: `--commands-selftest`, `--compare-selftest`, `--fileops-selftest`, with `--selftest-case=`, the governed Commands-only `--selftest-family=`, `--selftest-fail-fast`, `--selftest-list-cases`, and `--selftest-timeout-multiplier=`. The shared `SelfTest::RunCase` template records each declared case as `passed`/`failed`/`skipped` with a reason into `results.json` beneath exact `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run`; test tooling does not create, audit, or clean runtime data outside that marked root and never automatically writes `Specs/TestRuns/`. `Tools/Run-AllTests.ps1 -Suite Full` builds Debug, runs the suites plus standalone native/CppUnitTest/Pester tests, cross-checks each suite against `--selftest-list-cases` for coverage drift, and writes composite aggregate v2 plus a v1 compatibility sidecar. Fresh is the final-closeout authority; explicit exact Resume may reuse promoted entries, while Affected and Commands-family runs report repository `NOT_EVALUATED`. See `Specs/Testing/Testing_SelfTests.md`, `Specs/Testing/Testing_TestCoverage.md`, `Specs/Testing/Testing_ValidationEvidence.md`, `Specs/Testing/Testing_PerformanceValidation.md`.
+In-product self-tests are debug-only (`ENABLE_TESTS`; a test-enabled build is never distributable, and every packager plus the release gate rejects a binary carrying the `ENABLE_TESTS` version marker or a reserved test-only export, see "Distributable test surface" in `Specs/Build/Build_Toolchain.md`) and split by suite under `RedSalamander/SelfTest/` (`Commands/`, `CompareDirectories/`, `FileOperations/`, shared `Common/Common.Tests.Runner.h`). They run via CLI flags parsed in `RedSalamander.cpp`: `--commands-selftest`, `--compare-selftest`, `--fileops-selftest`, with `--selftest-case=`, the governed Commands-only `--selftest-family=`, `--selftest-fail-fast`, `--selftest-list-cases`, and `--selftest-timeout-multiplier=`. The shared `SelfTest::RunCase` template records each declared case as `passed`/`failed`/`skipped` with a reason into `results.json` beneath exact `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run`; test tooling does not create, audit, or clean runtime data outside that marked root and never automatically writes `Specs/TestRuns/`. `Tools/Run-AllTests.ps1 -Suite Full` builds Debug, runs the suites plus standalone native/CppUnitTest/Pester tests, cross-checks each suite against `--selftest-list-cases` for coverage drift, and writes composite aggregate v2 plus a v1 compatibility sidecar. Fresh is the final-closeout authority; explicit exact Resume may reuse promoted entries, while Affected and Commands-family runs report repository `NOT_EVALUATED`. See `Specs/Testing/Testing_SelfTests.md`, `Specs/Testing/Testing_TestCoverage.md`, `Specs/Testing/Testing_ValidationEvidence.md`, `Specs/Testing/Testing_PerformanceValidation.md`.
 
 #### Threading / UI-thread rules
 
@@ -703,7 +677,7 @@ GUI self-tests must run foreground (focus/pointer routing); launch the GUI-subsy
 | `Common/LocalizationManager.h` (`Localization::`) | Owner registration + localized resource lookup |
 | `Common/Helpers.h` | `LoadStringResource`/`FormatStringResource`/`MessageBoxResource` |
 | `build.ps1` + `Tools/README.md` | Build wrapper and catalog of versioning, packaging, audit, reporting, and support tools |
-| `RedSalamander/SelfTest/Common/SelfTestCommon.h` | `RunCase`, result/artifact contract |
+| `RedSalamander/SelfTest/Common/Common.Tests.Runner.h` | `RunCase`, result/artifact contract |
 | `Tools/Run-AllTests.ps1` | Unified runner + coverage cross-check |
 
 #### Gotchas
@@ -718,7 +692,7 @@ Satellite resources must never duplicate language-neutral IDs (it breaks the par
   generation and validation.
 - [Documentation Coverage Map](DocumentationMap.md) tracks what the public docs
   cover and which areas are still thin.
-- [Monitor.md](Monitor.md) introduces RedSalamanderMonitor for ETW/log
+- [Monitor.md](Monitor.md) introduces the independent RedMonitor viewer for ETW/log
   inspection.
 
 ## Specs worth reading first
@@ -732,5 +706,3 @@ Satellite resources must never duplicate language-neutral IDs (it breaks the par
 
 Use specs for normative behavior and `docs/` for onboarding, workflows, and
 public explanations.
-
-

@@ -1,0 +1,165 @@
+RunApplication: InitInstance begin
+InitInstance: begin
+InitInstance: RegisterClassExW ok
+OnMainWindowCreate: begin
+OnMainWindowCreate: folder window created
+FolderWindow::SetSettings: begin
+FolderWindow::SetSettings: settings assigned
+FolderWindow::SetSettings: left navigation set
+FolderWindow::SetSettings: right navigation set
+OnMainWindowCreate: folder settings pointer set
+FolderWindow::SetShortcutManager: begin
+FolderWindow::SetShortcutManager: shortcut pointer assigned
+FolderWindow::SetShortcutManager: function bar set
+FolderWindow::SetShortcutManager: left folder view set
+FolderWindow::SetShortcutManager: right folder view set
+OnMainWindowCreate: shortcut manager set
+OnMainWindowCreate: function bar visibility set
+OnMainWindowCreate: layout adjusted
+OnMainWindowCreate: theme applied
+OnMainWindowCreate: base folder settings applied
+OnMainWindowCreate: left status bar set
+OnMainWindowCreate: left sort set
+OnMainWindowCreate: left display mode set
+OnMainWindowCreate: left folder path skipped for selftest
+OnMainWindowCreate: right status bar set
+OnMainWindowCreate: right sort set
+OnMainWindowCreate: right display mode set
+OnMainWindowCreate: right folder path skipped for selftest
+OnMainWindowCreate: pane settings applied
+OnMainWindowCreate: folder history processed
+OnMainWindowCreate: hot reload start hr=0x00000001
+OnMainWindowCreate: command selftest dispatch processed
+OnMainWindowCreate: success
+InitInstance: CreateWindowW ok hwnd=0x13661C3E
+InitInstance: window placement restored
+InitInstance: splash owner set
+InitInstance: ShowWindow begin
+InitInstance: ShowWindow ok
+InitInstance: UpdateWindow begin
+InitInstance: UpdateWindow skipped for selftest
+InitInstance: ShowWindow/UpdateWindow ok
+RunApplication: InitInstance returned hwnd
+RunApplication: LoadAccelerators begin
+RunApplication: entering message loop
+CommandsSelfTest: begin
+CommandsSelfTest: calling CommandsSelfTest::Run
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+CommandsSelfTest: isolated execution order count=1 repeat=1 shuffleSeed=none
+FolderView::SetNameFilterState: enabled=0 trimmed='' refresh=1
+FolderView::SetNameFilterState: clearing filter and requesting refresh
+FolderView::RequestRefreshFromCache: skipped (no current folder or hwnd)
+FolderView::SetNameFilterState: enabled=0 trimmed='' refresh=1
+FolderView::SetNameFilterState: clearing filter and requesting refresh
+FolderView::RequestRefreshFromCache: skipped (no current folder or hwnd)
+Case: cmd_fileops_move_breadcrumb_durable_lifecycle
+TestSandbox: suite=commands case=fileops_move_breadcrumb root='C:\RedSalamander.Perf\runs\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\scratch\commands\fileops_move_breadcrumb'
+FolderView::SetNameFilterState: enabled=0 trimmed='' refresh=0
+FolderView::RequestRefreshFromCache: generation=5 folder='C:\RedSalamander.Perf\runs\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\scratch\commands\fileops_move_breadcrumb'
+FolderView::ProcessEnumerationResult: payload generation=5 current=5 status=0x00000000 itemCount=8
+FolderView::ProcessEnumerationResult: assigned items count=8
+FolderView::ProcessEnumerationResult: after sort focusedIndex=7 displayedFolder='C:\RedSalamander.Perf\runs\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\scratch\commands\fileops_move_breadcrumb'
+FolderView::ProcessEnumerationResult: after LayoutItems
+FolderView::ProcessEnumerationResult: after UpdateScrollMetrics
+FolderView::ProcessEnumerationResult: after EnsureVisible
+FolderView::ProcessEnumerationResult: after QueueIconLoading
+FolderView::ProcessEnumerationResult: after UpdateCompareNoDifferencesState
+FolderView::ProcessEnumerationResult: after ScheduleIdleLayoutCreation
+FolderView::ProcessEnumerationResult: after InvalidateRect
+FolderView::ProcessEnumerationResult: before enumeration callback
+FolderView::ProcessEnumerationResult: after enumeration callback
+FolderView::ProcessEnumerationResult: end
+FolderView::SetNameFilterState: enabled=0 trimmed='' refresh=0
+FolderView::ProcessEnumerationResult: payload generation=4 current=4 status=0x00000000 itemCount=1
+FolderView::ProcessEnumerationResult: assigned items count=1
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='C:\RedSalamander.Perf\runs\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\scratch\commands\fileops_move_breadcrumb\destination'
+FolderView::ProcessEnumerationResult: after LayoutItems
+FolderView::ProcessEnumerationResult: after UpdateScrollMetrics
+FolderView::ProcessEnumerationResult: after EnsureVisible
+FolderView::ProcessEnumerationResult: after QueueIconLoading
+FolderView::ProcessEnumerationResult: after UpdateCompareNoDifferencesState
+FolderView::ProcessEnumerationResult: after ScheduleIdleLayoutCreation
+FolderView::ProcessEnumerationResult: after InvalidateRect
+FolderView::ProcessEnumerationResult: before enumeration callback
+FolderView::ProcessEnumerationResult: after enumeration callback
+FolderView::ProcessEnumerationResult: end
+CommandsSelfTest: PASS
+CommandsSelfTest: PASS
+CommandsSelfTest: end: exit_code=0
+FolderWindow::SetSettings: begin
+FolderWindow::SetSettings: settings assigned
+FolderWindow::SetSettings: left navigation set
+FolderWindow::SetSettings: right navigation set
+FolderWindow::Destroy: begin
+FolderWindow::Destroy: dialogs closed
+FolderWindow::Destroy: function bar destroyed
+FolderWindow::Destroy: left navigation destroyed
+FolderWindow::Destroy: left folder view destroyed
+FolderWindow::Destroy: left chrome reset
+FolderWindow::Destroy: right navigation destroyed
+FolderWindow::Destroy: right folder view destroyed
+FolderWindow::Destroy: right chrome reset
+FolderWindow::Destroy: resetting hwnd
+FolderWindow::OnDestroy: begin
+FolderWindow::OnDestroy: viewers shutdown
+FolderWindow::OnDestroy: file ops shutdown
+FolderWindow::Destroy: complete
+OnMainWindowDestroy: folder window destroyed
+OnMainWindowDestroy: file-system plugin shutdown begin
+OnMainWindowDestroy: file-system plugin shutdown complete
+OnMainWindowDestroy: viewer plugin shutdown begin
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-web' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-web'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-web'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-web'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-vlc' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerVLC.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-vlc'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-vlc'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-vlc'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-sqlite' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSqlite.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-sqlite'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-sqlite'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-sqlite'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-pe' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerPE.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-pe'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-pe'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-pe'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-markdown' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-markdown'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-markdown'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-markdown'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-json' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-json'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-json'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-json'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-text' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerText.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-text'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-text'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-text'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/terminal' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\Terminal.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/terminal'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/terminal'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/terminal'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-space' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSpace.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-space'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-space'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-space'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-imgraw' path='C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerImgRaw.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-imgraw'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-imgraw'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-imgraw'
+OnMainWindowDestroy: viewer plugin shutdown complete
+OnMainWindowDestroy: session state cleared
+OnMainWindowDestroy: selftest monitor shutdown complete
+OnMainWindowDestroy: PostQuitMessage: exit_code=0
+RunApplication: message loop exit=0
+Archive: C:\RedSalamander.Perf\runs\20260831T102904Z-96656-d90fe2ef8fba473ea5402d5983d80c40\artifacts\archive\4cb089111a23\Commands\2026-08-31_122917
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+
+

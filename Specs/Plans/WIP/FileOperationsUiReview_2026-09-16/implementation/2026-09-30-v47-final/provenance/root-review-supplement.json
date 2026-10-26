@@ -1,0 +1,7 @@
+{
+  "schema": "redsal-gallery-review-supplement.v1",
+  "scope": "Three additional root inspections of current originals; base review already covers all500uniquehashes",
+  "file": "evidence/root-original-spot-checks.json",
+  "sha256": "00093914998c5d7b88544231da1f10999d27d85c0b9da0e5361855ef22553d72",
+  "basePublicationReceiptSha256": "9848171febb15ed0e81357675419851b7a5dc73b9ebb0c9b8283421e3f36a49b"
+}

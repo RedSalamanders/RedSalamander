@@ -4137,6 +4137,19 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     switch (msg)
     {
 #ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetMenuAttachmentSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerMenuAttachmentDebugSnapshot*>(lp);
+            if (! snapshot)
+                return FALSE;
+            *snapshot = {_menuAttachResult.inputMenu,
+                         _menuAttachResult.menuAfterAttach,
+                         static_cast<unsigned>(_menuAttachResult.outcome),
+                         _menuAttachResult.fallbackError,
+                         _menuAttachResult.attempted,
+                         _menuAttachResult.attached};
+            return TRUE;
+        }
         case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
         {
             auto* menuSnapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
@@ -4809,14 +4822,14 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             break;
         case kAsyncOpenCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncOpenResult>(lp);
+            auto result = TakeMessagePayload<AsyncOpenResult>(hwnd, msg, lp);
             OnAsyncOpenComplete(std::move(result));
             return 0;
         }
         case kAsyncOpenFailureMessage: OnAsyncOpenFailure(static_cast<uint64_t>(wp), static_cast<HRESULT>(lp)); return 0;
         case kAsyncTextStreamCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncTextStreamResult>(lp);
+            auto result = TakeMessagePayload<AsyncTextStreamResult>(hwnd, msg, lp);
             OnAsyncTextStreamComplete(std::move(result));
             return 0;
         }
@@ -5007,11 +5020,7 @@ void ViewerText::OnCreate(HWND hwnd)
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (! _menuHandle)
-    {
-        _menuHandle.reset(GetMenu(hwnd));
-    }
-    if (_menuHandle)
+    if (GetMenu(hwnd))
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this]
@@ -5037,7 +5046,6 @@ void ViewerText::OnCreate(HWND hwnd)
             }
             return true;
         });
-        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     static_cast<void>(RegisterTextViewClass(g_hInstance));
@@ -7150,7 +7158,7 @@ void ViewerText::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     _debugLastContextMenuScreenPoint    = screenPt;
 #endif
 
-    if (! _menuHandle)
+    if (! _menuHandle && ! GetMenu(hwnd))
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
     }
@@ -9709,6 +9717,11 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
 
             AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+            if (! _embeddedMode)
+            {
+                _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+                Layout(_hWnd.get());
+            }
             ShowWindow(_hWnd.get(), SW_SHOWNA);
         }
         else if (ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0)
@@ -9760,6 +9773,11 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
 
             AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+            if (! _embeddedMode)
+            {
+                _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+                Layout(_hWnd.get());
+            }
             ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
             static_cast<void>(SetForegroundWindow(_hWnd.get()));
         }
@@ -9808,6 +9826,11 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
 
             AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+            if (! _embeddedMode)
+            {
+                _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+                Layout(_hWnd.get());
+            }
             ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
             static_cast<void>(SetForegroundWindow(_hWnd.get()));
         }

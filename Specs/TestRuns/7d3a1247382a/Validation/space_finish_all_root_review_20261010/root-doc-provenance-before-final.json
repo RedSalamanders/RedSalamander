@@ -1,0 +1,151 @@
+{
+  "schema": "red-salamander.viewer-space-documentation-captures.v1",
+  "purpose": "Provenance for actual application screenshots used by the ViewerSpace user documentation.",
+  "captureMethod": "Deterministic test-harness captures; no desktop activation.",
+  "releaseExplorerAnalystCapture": {
+    "scenario": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+    "caseResult": "passed",
+    "caseDurationMs": 12926,
+    "caseResultRecord": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+    "sourceRunId": "20261009T105812Z-45252-f0afad3b7df24a939e082ae977fc6d21",
+    "sourceWorkspaceSnapshotId": "f43deb78049356ccb5e5fff99ba0f9f90b355b24d62a985b7df124c77ce2aea9",
+    "parentCommandsRunContext": "The x64 Release Commands filter passed 32 cases, failed 0 and skipped 2 gated opt-in cases (34 total); the archive records three sandbox-audit issues, so this is not a clean audit or full-suite qualification.",
+    "captureAcceptance": "Root accepted all 11 complete frames at original resolution for this exact 144-DPI Release capture set. The reviewed set includes clean current presented generations for the settled 503-DIP full-height map and 455-DIP body boundary. It does not qualify other DPI, locale, provider, platform, performance or manual accessibility profiles.",
+    "captureReviewSidecar": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/capture-review-sidecar.json",
+    "wholeFrameReviewRecord": {
+      "scope": "Root viewed all 11 original-resolution complete frames. Six boundary frames have clean current presented generations newer than their predecessor, including full-height map at 503 DIP and 455-DIP body. Done frames do not qualify queued/scanning spinner behavior. No other DPI, locale, platform, provider or performance endpoint is established.",
+      "reviewedUtc": "2026-10-09T13:08:54.729486+02:00",
+      "status": "accepted-for-exact-144dpi-complete-frames",
+      "reviewer": "root",
+      "sourceAudit": "Root verified all 29 archive hashes and replayed all 4,067 selected raw performance-metric lines from the preserved 34-MB JSONL; exact 11 PNG hashes and source bindings were checked. Before cleanup, the capture agent verified 22 original source pairs plus 7 curator outputs (29 manifest payloads). Twenty-one original run paths were subsequently cleaned, leaving one available immutable-receipt source pair. No cleaned source files are reconstructed.",
+      "record": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/capture-review-sidecar.json#/wholeFrameReview"
+    },
+    "build": {
+      "configuration": "Release",
+      "immutableReceiptSha256": "2cac4c4dd0c96b910d0aca5716765fa064ce6e6e67264aadc01706e476539f24",
+      "receiptId": "4a245de29d61893189be0ac558a0c15f6989b4f9daf95201b721b2a7e8c135fe",
+      "buildSnapshotId": "f43deb78049356ccb5e5fff99ba0f9f90b355b24d62a985b7df124c77ce2aea9",
+      "immutableReceipt": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/build-receipt.json",
+      "platform": "x64",
+      "testsEnabled": true
+    },
+    "dpi": 144,
+    "fixtureRecipe": {
+      "source": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/capture-review-sidecar.json#/fixtureDefinition/definitionRecordSha256",
+      "scenario": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+      "sourceFunction": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "startLine": 20925,
+        "endLine": 21556,
+        "sha256": "d57dcad8634bb9c6d3bc76c6b8cf5272862ce031a13abb92fb44a1c6542f8b4e",
+        "algorithm": "SHA-256 over exact function bytes from name through closing brace"
+      },
+      "isFilesystemContentDigest": false,
+      "sha256": "525ca8a7845dd4f90b0582fd5e85bf1df0edaa97266763070ee0529d6d483f6f",
+      "sourceFileSha256": "28ef40dafcf1c1324c6f02211da48ca6e56f101a1511b33d279282d85324fc36",
+      "meaning": "canonical JSON of recipe fields; not generated filesystem bytes"
+    },
+    "captures": [
+      {
+        "viewMode": "Explorer",
+        "harnessClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144
+        },
+        "captureManifestRecord": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/captures/raw-provenance.json#/frames[file=explorer-light.png]",
+        "file": "viewer-space-explorer.png",
+        "source": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/captures/explorer-light.png",
+        "pngPixelDimensions": {
+          "width": 1804,
+          "height": 1111
+        },
+        "archiveReviewSidecarRecord": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/capture-review-sidecar.json#/frames[file=explorer-light.png]",
+        "wholeFrameReviewStatus": "accepted-for-exact-144dpi-complete-frame",
+        "wholeFrameReviewRecord": {
+          "status": "accepted-for-exact-144dpi-complete-frame",
+          "reviewer": "root",
+          "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+        },
+        "sha256": "98ef201e0ce7e8b5949650bfc6df05c6167ac351c7fb4e9ded88d41ce0369c1a",
+        "bytes": 497459,
+        "theme": "Light"
+      },
+      {
+        "viewMode": "Analyst",
+        "harnessClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144
+        },
+        "captureManifestRecord": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/captures/raw-provenance.json#/frames[file=analyst-rainbow.png]",
+        "file": "viewer-space-analyst-rainbow.png",
+        "source": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/captures/analyst-rainbow.png",
+        "pngPixelDimensions": {
+          "width": 1804,
+          "height": 1111
+        },
+        "archiveReviewSidecarRecord": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_release_commands/capture-review-sidecar.json#/frames[file=analyst-rainbow.png]",
+        "wholeFrameReviewStatus": "accepted-for-exact-144dpi-complete-frame",
+        "wholeFrameReviewRecord": {
+          "status": "accepted-for-exact-144dpi-complete-frame",
+          "reviewer": "root",
+          "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+        },
+        "sha256": "da00c69836e83c42b1fadf10d110d4e00fdc46e198c64b5712f0277212a27b31",
+        "bytes": 382639,
+        "theme": "Rainbow"
+      }
+    ]
+  },
+  "nativeReleaseInflightCapture": {
+    "scenario": "02-partial-scan-observed-totals-inflight",
+    "caseResult": "passed",
+    "releaseQualification": "The x64 Release native ViewerSpace run passed all eight selected cases (0 failures, 0 skips); the focused run reports repository NOT_EVALUATED.",
+    "sourceRunId": "20261009T110333Z-43468-e449da6e305a42e5857425bc93947ccb",
+    "build": {
+      "configuration": "Release",
+      "immutableReceiptSha256": "2cac4c4dd0c96b910d0aca5716765fa064ce6e6e67264aadc01706e476539f24",
+      "receiptId": "4a245de29d61893189be0ac558a0c15f6989b4f9daf95201b721b2a7e8c135fe",
+      "buildSnapshotId": "f43deb78049356ccb5e5fff99ba0f9f90b355b24d62a985b7df124c77ce2aea9",
+      "immutableReceipt": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_native_release/immutable-build-receipt.json",
+      "platform": "x64",
+      "testsEnabled": true
+    },
+    "captureReviewSidecar": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_native_release/capture-review-sidecar.json",
+    "captureProvenance": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_native_release/viewer-space-02-partial-scan-observed-totals-inflight.provenance.json",
+    "captureAcceptance": "Root reviewed this provenance-bearing 02 partial-scan frame at original resolution on 2026-10-09 as part of the nine-frame native lifecycle review; its adjacent original provenance is preserved. Six frames were byte-identical to prior accepted frames and three current frames were newly viewed. The separate ninth owned-window frame still has no adjacent original provenance and is not used here.",
+    "file": "viewer-space-inflight.png",
+    "source": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_native_release/viewer-space-02-partial-scan-observed-totals-inflight.png",
+    "sha256": "b1c15f89042b6bb3c1c3a138d42a51e6db364aede86f4fb257d1acf46a644b62",
+    "bytes": 107885,
+    "pngPixelDimensions": {
+      "width": 1800,
+      "height": 1080
+    },
+    "dpi": 144,
+    "observedDuringCapture": {
+      "analysisRows": 3,
+      "files": 2,
+      "logicalBytes": 384,
+      "folders": 1,
+      "lastPresentHResult": 0,
+      "activeWorkerCallbacks": 1
+    },
+    "captureRoute": "Windows.Graphics.Capture + DirectComposition, no activation",
+    "captureProvenanceSha256": "5e06bb07bb623b09aef2fccd105e36ef428e0958424873666c8a4a98376a81cb",
+    "notUsed": "The separate ninth owned-window inflight-scan PNG has no adjacent original provenance and is excluded. This documentation asset uses the accepted 02 partial-scan lifecycle frame with its preserved adjacent provenance.",
+    "wholeFrameReviewRecord": {
+      "sourceAudit": "Root verified 28 native archive/source pairs before cleanup.",
+      "reviewedUtc": "2026-10-09T13:08:55.088607+02:00",
+      "reviewer": "root",
+      "record": "Specs/TestRuns/7d3a1247382a/Viewers/space_cache_policy_native_release/capture-review-sidecar.json#/frames[file=viewer-space-02-partial-scan-observed-totals-inflight.png]",
+      "status": "accepted"
+    }
+  },
+  "qualificationLimits": [
+    "The named Release Commands run passed 32 cases, failed zero and skipped two gated opt-ins (34 selected); the archive records three sandbox-audit issues. Root accepted all 11 complete frames for its exact 144-DPI capture case. This is not a full-suite or clean-audit result.",
+    "The named test-enabled Release native run passed all eight selected cases; root accepted nine lifecycle frames, six byte-identical to previously accepted frames and three newly reviewed. The selected in-flight documentation frame has original adjacent provenance; the separate ninth owned-window frame does not.",
+    "These build/test/capture results do not claim an overall performance gain, a green pull request, app ARM64 runtime qualification, other DPI/locale/provider profiles, or manual accessibility qualification."
+  ]
+}

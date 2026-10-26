@@ -16,12 +16,12 @@
 #include <string_view>
 #include <vector>
 
+#include "Common.Tests.Runner.h"
 #include "DxUiThemePalette.h"
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "PluginConfiguration.h"
-#include "SelfTestCommon.h"
 #include "SettingsHotReload.h"
 #include "ThemedInputFrames.h"
 #include "UiMetrics.h"

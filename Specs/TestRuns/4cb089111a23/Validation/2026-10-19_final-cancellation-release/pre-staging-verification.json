@@ -1,0 +1,26 @@
+{
+  "git_head": "a48e7d7880cb37ea6898d462ae188a6213a5f3f8",
+  "configuration": "Release",
+  "platform": "x64",
+  "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+  "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+  "source_file_count": 81,
+  "source_hash_mismatches": [],
+  "all_attested_artifacts_match": true,
+  "runtime_passed": 93.0,
+  "runtime_failed": 0,
+  "runtime_skipped": 1,
+  "viewer_cases": 3,
+  "tooling_passed": 421,
+  "root_markers": [
+    {
+      "path": "Z:/RedSalamander.Perf/.red-salamander-test-root",
+      "value": "red-salamander.test-sandbox-root.v1"
+    },
+    {
+      "path": "D:/RedSalamander.Perf/.red-salamander-test-root",
+      "value": "red-salamander.test-sandbox-root.v1"
+    }
+  ],
+  "qualification": "Selected x64 Release validation; evidence precedes staging/commit metadata changes"
+}

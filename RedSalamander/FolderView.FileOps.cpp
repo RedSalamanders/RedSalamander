@@ -1,8 +1,8 @@
 #include "FolderViewInternal.h"
 
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
-#include "SelfTest/Common/SelfTestLatencyHooks.h"
+#include "Common.Tests.Runner.h"
+#include "SelfTest/Common/Common.Tests.LatencyHooks.h"
 #endif
 
 namespace
@@ -214,8 +214,8 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
 
 [[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow) noexcept
 {
-    constexpr UINT kMaxClipboardDropPaths = 65'536u;
-    constexpr UINT kMaxClipboardPathChars = 32'768u;
+    constexpr UINT kMaxClipboardDropPaths    = 65'536u;
+    constexpr UINT kMaxClipboardPathChars    = 32'768u;
     constexpr size_t kMaxClipboardTotalChars = 16u * 1024u * 1024u;
 
     std::vector<std::filesystem::path> result;
@@ -382,8 +382,8 @@ void InvalidateMoveClipboardAfterVerifiedCompletion(DWORD expectedSequenceNumber
     for (int attempt = 0; attempt < 256; ++attempt)
     {
         const std::filesystem::path candidate = GenerateShortcutPath(destinationFolder, target, attempt);
-        bool exists                          = false;
-        const HRESULT existsHr               = QueryShellShortcutExactPathExists(candidate, exists);
+        bool exists                           = false;
+        const HRESULT existsHr                = QueryShellShortcutExactPathExists(candidate, exists);
         if (FAILED(existsHr))
         {
             return existsHr;
@@ -422,6 +422,12 @@ void FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::option
     g_debugMoveSelectedItemsDestination = std::move(destination);
 }
 
+bool FolderView::DebugIsNextMoveSelectedItemsDestinationPendingForSelfTest() noexcept
+{
+    std::scoped_lock lock(g_debugMoveSelectedItemsDestinationMutex);
+    return g_debugMoveSelectedItemsDestination.has_value();
+}
+
 void FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(bool enabled) noexcept
 {
     g_debugDirectFileOperationFallbackEnabled.store(enabled, std::memory_order_release);
@@ -458,10 +464,7 @@ bool FolderView::CommandViewWith(std::wstring_view actionId)
     return RequestViewFocusedItem(ViewFileRole::Primary, false, actionId);
 }
 
-bool FolderView::RequestViewFocusedItem(ViewFileRole role,
-                                        bool activateFallback,
-                                        std::wstring_view actionId,
-                                        const bool forceInternal)
+bool FolderView::RequestViewFocusedItem(ViewFileRole role, bool activateFallback, std::wstring_view actionId, const bool forceInternal)
 {
     if (_focusedIndex == static_cast<size_t>(-1) || _focusedIndex >= _items.size())
     {
@@ -483,9 +486,9 @@ bool FolderView::RequestViewFocusedItem(ViewFileRole role,
     if (_viewFileRequestCallback)
     {
         ViewFileRequest request;
-        request.role        = role;
-        request.actionId    = std::wstring(actionId);
-        request.focusedPath = GetItemFullPath(item);
+        request.role          = role;
+        request.actionId      = std::wstring(actionId);
+        request.focusedPath   = GetItemFullPath(item);
         request.forceInternal = forceInternal;
 
         for (const auto& candidate : _items)
@@ -824,7 +827,7 @@ bool FolderView::SupportsFileDropCut() const noexcept
 bool FolderView::CanPasteItemsFromClipboard() const noexcept
 {
     return _fileSystem && _currentFolder.has_value() && ! _currentFolder->empty() && IsCurrentFolderEnumerated() &&
-        IsClipboardFormatAvailable(CF_HDROP) != FALSE;
+           IsClipboardFormatAvailable(CF_HDROP) != FALSE;
 }
 
 void FolderView::PasteItemsFromClipboard()
@@ -868,8 +871,8 @@ void FolderView::PasteItemsFromClipboard()
         request.flags             = flags;
         if (moveRequested)
         {
-            request.moveClipboardSequence = clipboardSequenceNumber;
-            const HWND clipboardOwner      = _hWnd.get();
+            request.moveClipboardSequence   = clipboardSequenceNumber;
+            const HWND clipboardOwner       = _hWnd.get();
             request.preWorkerReleaseBarrier = [clipboardOwner, clipboardSequenceNumber]() noexcept
             { return ConsumeMoveClipboardForAdmission(clipboardOwner, clipboardSequenceNumber); };
         }
@@ -958,7 +961,7 @@ bool FolderView::PasteShortcutFromClipboard()
     }
 
     std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
-    const uint64_t sourceCount = static_cast<uint64_t>(sources.size());
+    const uint64_t sourceCount                 = static_cast<uint64_t>(sources.size());
     perf.SetValue0(sourceCount);
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(
@@ -1007,9 +1010,7 @@ bool FolderView::PasteShortcutFromClipboard()
 
     perf.SetValue1(1u);
 #ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard queued sources={} generation={}",
-                                              sourceCount,
-                                              _folderPathGeneration));
+    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard queued sources={} generation={}", sourceCount, _folderPathGeneration));
 #endif
     return true;
 }
@@ -1018,11 +1019,11 @@ bool FolderView::StartPasteShortcutWork(PasteShortcutRequest request)
 {
     struct PasteShortcutWork
     {
-        PasteShortcutWork() noexcept                              = default;
-        PasteShortcutWork(const PasteShortcutWork&)               = delete;
-        PasteShortcutWork& operator=(const PasteShortcutWork&)    = delete;
-        PasteShortcutWork(PasteShortcutWork&&)                    = delete;
-        PasteShortcutWork& operator=(PasteShortcutWork&&)         = delete;
+        PasteShortcutWork() noexcept                           = default;
+        PasteShortcutWork(const PasteShortcutWork&)            = delete;
+        PasteShortcutWork& operator=(const PasteShortcutWork&) = delete;
+        PasteShortcutWork(PasteShortcutWork&&)                 = delete;
+        PasteShortcutWork& operator=(PasteShortcutWork&&)      = delete;
 
         HWND hwnd = nullptr;
         PasteShortcutRequest request;
@@ -1074,7 +1075,7 @@ bool FolderView::StartPasteShortcutWork(PasteShortcutRequest request)
                 }
             }
 
-            result.elapsedUs = Debug::Perf::ElapsedUs(startedAt);
+            result.elapsedUs     = Debug::Perf::ElapsedUs(startedAt);
             auto recoveryPayload = std::make_unique<PasteShortcutResult>(result);
             auto payload         = std::make_unique<PasteShortcutResult>(std::move(result));
 #ifdef ENABLE_TESTS
@@ -1088,9 +1089,7 @@ bool FolderView::StartPasteShortcutWork(PasteShortcutRequest request)
                 const DWORD firstPostError = forceFirstPostFailure ? ERROR_NOT_ENOUGH_MEMORY : ::GetLastError();
                 if (! PostMessagePayload(hwnd, WndMsg::kFolderViewPasteShortcutComplete, 0, std::move(recoveryPayload)))
                 {
-                    Debug::Error(L"Paste Shortcut completion delivery failed twice (firstError={}, retryError={}).",
-                                 firstPostError,
-                                 ::GetLastError());
+                    Debug::Error(L"Paste Shortcut completion delivery failed twice (firstError={}, retryError={}).", firstPostError, ::GetLastError());
                 }
                 else
                 {
@@ -1109,7 +1108,7 @@ bool FolderView::StartPasteShortcutWork(PasteShortcutRequest request)
     work->result.targetFolder = work->request.targetFolder;
 
     const std::filesystem::path firstSource = ! work->request.sources.empty() ? work->request.sources.front() : std::filesystem::path{};
-    const uint64_t requestId = work->request.requestId;
+    const uint64_t requestId                = work->request.requestId;
 
     if (! SubmitOwnedThreadpoolCallback(work))
     {
@@ -1118,9 +1117,9 @@ bool FolderView::StartPasteShortcutWork(PasteShortcutRequest request)
         return false;
     }
 
-    _pasteShortcutInFlight = true;
+    _pasteShortcutInFlight        = true;
     _activePasteShortcutRequestId = requestId;
-    _pasteShortcutStartedAt = std::chrono::steady_clock::now();
+    _pasteShortcutStartedAt       = std::chrono::steady_clock::now();
     return true;
 }
 
@@ -1134,9 +1133,9 @@ void FolderView::RecoverStalePasteShortcutWork()
     }
 
     Debug::Warning(L"Paste Shortcut completion timed out; releasing stale request {} and continuing queued work.", _activePasteShortcutRequestId);
-    _pasteShortcutInFlight = false;
+    _pasteShortcutInFlight        = false;
     _activePasteShortcutRequestId = 0u;
-    _pasteShortcutStartedAt = {};
+    _pasteShortcutStartedAt       = {};
     StartNextPasteShortcutRequest();
 }
 
@@ -1160,12 +1159,7 @@ void FolderView::StartNextPasteShortcutRequest()
 
 void FolderView::OnPasteShortcutComplete(PasteShortcutResult result)
 {
-    Debug::Perf::Emit(L"clipboard.paste_shortcut_worker_us",
-                      L"",
-                      result.elapsedUs,
-                      static_cast<uint64_t>(result.createdLinks.size()),
-                      0u,
-                      result.firstFailure);
+    Debug::Perf::Emit(L"clipboard.paste_shortcut_worker_us", L"", result.elapsedUs, static_cast<uint64_t>(result.createdLinks.size()), 0u, result.firstFailure);
 
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutComplete created={} firstFailure=0x{:08X} target='{}'",
@@ -1174,7 +1168,7 @@ void FolderView::OnPasteShortcutComplete(PasteShortcutResult result)
                                               result.targetFolder.wstring()));
 #endif
 
-    const bool hasCurrentTarget = _currentFolder && OrdinalString::EqualsNoCasePath(result.targetFolder, _currentFolder.value());
+    const bool hasCurrentTarget  = _currentFolder && OrdinalString::EqualsNoCasePath(result.targetFolder, _currentFolder.value());
     const bool generationMatches = result.generation == _folderPathGeneration;
 
     if (result.fileSystem && ! result.createdLinks.empty())
@@ -1190,16 +1184,22 @@ void FolderView::OnPasteShortcutComplete(PasteShortcutResult result)
 
     if (FAILED(result.firstFailure))
     {
-        ShowClipboardFormattedOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED, result.failedSource, result.firstFailure);
+        ShowClipboardFormattedOverlay(
+            *this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED, result.failedSource, result.firstFailure);
     }
 
     if (result.requestId == _activePasteShortcutRequestId)
     {
-        _pasteShortcutInFlight = false;
+        _pasteShortcutInFlight        = false;
         _activePasteShortcutRequestId = 0u;
-        _pasteShortcutStartedAt = {};
+        _pasteShortcutStartedAt       = {};
         StartNextPasteShortcutRequest();
     }
+}
+
+bool FolderView::IsFileOperationRefusedByHost(FileSystemOperation operation) const
+{
+    return _fileOperationRefusalCallback && _fileOperationRefusalCallback(operation);
 }
 
 void FolderView::RenameFocusedItem()
@@ -1208,6 +1208,10 @@ void FolderView::RenameFocusedItem()
         return;
 
     if (! _fileSystem)
+        return;
+
+    // A refused rename (an accepted application exit) must not ask for a new name first.
+    if (IsFileOperationRefusedByHost(FILESYSTEM_RENAME))
         return;
 
     const auto& item                     = _items[_focusedIndex];
@@ -1310,6 +1314,12 @@ void FolderView::MoveSelectedItems()
     }
 
     if (paths.empty())
+    {
+        return;
+    }
+
+    // A refused Move (an accepted application exit) must not open the folder picker first.
+    if (IsFileOperationRefusedByHost(FILESYSTEM_MOVE))
     {
         return;
     }

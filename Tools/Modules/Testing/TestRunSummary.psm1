@@ -99,6 +99,8 @@ function New-RSTestRunSummary {
         [Parameter(Mandatory = $true)]
         [string]$ArtifactRoot,
 
+        [string]$OriginalArtifactRoot = '',
+
         [Parameter(Mandatory = $true)]
         [datetime]$RunStartedUtc,
 
@@ -206,6 +208,18 @@ function New-RSTestRunSummary {
     $quarantineRepairAttempts = @($QuarantineRepairAttempts | ForEach-Object {
             Convert-RSTestQuarantineRepairAttemptForRunSummary -RepairAttempt $_
         })
+    # Rebase only runner-owned navigation paths. Native result/log bytes retain their original provenance.
+    if (-not [string]::IsNullOrWhiteSpace($OriginalArtifactRoot)) {
+        foreach ($row in @($summarySuites) + @($quarantineRepairAttempts)) {
+            foreach ($navigation in @($row) + @($(if ($row.PSObject.Properties['retry_attempts']) { $row.retry_attempts }))) {
+                if ($null -eq $navigation) { continue }
+                $path = [string]$navigation.output_log_path
+                if ($path.StartsWith($OriginalArtifactRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                    $navigation.output_log_path = $ArtifactRoot.TrimEnd('\') + $path.Substring($OriginalArtifactRoot.TrimEnd('\').Length)
+                }
+            }
+        }
+    }
     $quarantineRepairReproducedCount = @($quarantineRepairAttempts | Where-Object { -not [bool]$_.passed }).Count
 
     [pscustomobject]@{

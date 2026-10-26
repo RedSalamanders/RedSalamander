@@ -12,7 +12,7 @@ Describe 'Delete-on-close temporary-file source contracts' {
         $microsoftDrive = Get-RSText -Path 'Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.cpp'
         $fileActionHeader = Get-RSText -Path 'RedSalamander\FileActionLauncher.h'
         $fileActionSource = Get-RSText -Path 'RedSalamander\FileActionLauncher.cpp'
-        $fileActionSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $fileActionSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $searchService = Get-RSText -Path 'RedSalamanderSearchService\Main.cpp'
 
         $providerSources = @(

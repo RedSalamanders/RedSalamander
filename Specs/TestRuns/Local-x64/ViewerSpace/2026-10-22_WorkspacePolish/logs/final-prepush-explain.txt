@@ -1,0 +1,22 @@
+Native test naming: 119 files checked.
+PR equivalence could not be verified; full local obligations remain selected.
+PENDING_INTERACTIVE (5): Commands, FileOperations, ViewerPETests.Interactive, ViewerSqliteTests.Interactive, RedSalamanderMonitorEtwLatency
+Shadow validation plan: a8ac752f90548f57fbf93dc1e025d360aa945a238d48750cc1b58fec0698a593
+Changed paths: 96; advisory build: full
+  AFFECTED   tooling.pester-build-toolchain                  unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   selftest.compare-directories                    unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.product-ui                           unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-pe.noninteractive                        unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-sqlite.noninteractive                    unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.filesystem-curl                      unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.monitor                              unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.localization                         unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.red-configure                        unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.plugin-contract                      unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.settings-schema                      unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.crash-handling                       unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   perf.performance-tests2                         unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.pester                                  unknown  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.vcpkg-merge-synthetic                   unknown  SOURCE_INPUT_CHANGED
+Estimated fresh duration: 0 ms (advisory only).
+Decision: D:\RedSalamander.Perf\evidence\explain-plan.json

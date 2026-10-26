@@ -1,0 +1,1442 @@
+// SettingsSchemaTests - direct unit tests for SettingsSchemaParser.
+//
+// The parser is pure string-in / struct-out logic that turns
+// Specs/SettingsStore.schema.json into the field model that drives the
+// Preferences UI and settings persistence. These tests exercise it against the
+// real shipped schema (characterization) and against synthetic inline JSON
+// (defaults, min/max, enums, malformed input, missing file, non-ASCII).
+//
+// Pass/fail strings ("[       OK ]" / "[ FAILED  ]") and the wmain 0/1 contract
+// match the other Tests\ suites so the runner's grep treats this like the rest.
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
+
+#include "PathUtils.h"
+#include "PluginConfiguration.h"
+#include "SettingsSchemaParser.h"
+#include "SettingsStore.h"
+#include "StringConversion.h"
+#include "TestSupport/TestSupport.Tests.ChildProcess.h"
+#include "TestSupport/TestSupport.Tests.FailureReports.h"
+
+namespace
+{
+
+// Copied verbatim from Tests\LocalizationTests\Localization.Tests.Runner.cpp:33-43 so the
+// pass/fail bracket spacing matches across suites.
+void Check(bool condition, const wchar_t* message, bool& success) noexcept
+{
+    if (! condition)
+    {
+        std::wcerr << L"[ FAILED  ] " << message << L"\n";
+        success = false;
+        return;
+    }
+
+    std::wcout << L"[       OK ] " << message << L"\n";
+}
+
+using SettingsSchemaParser::SettingField;
+
+// Resolve Specs\SettingsStore.schema.json robustly: the exe runs from
+// .build\x64\Debug, so walk up from the current directory looking for the file.
+// argv[1] (if given) is preferred. Returns empty if not found.
+[[nodiscard]] std::wstring FindSchemaPath(int argc, wchar_t** argv) noexcept
+{
+    namespace fs = std::filesystem;
+
+    if (argc >= 2 && argv[1] != nullptr)
+    {
+        std::error_code ec;
+        if (fs::exists(fs::path(argv[1]), ec))
+        {
+            return std::wstring(argv[1]);
+        }
+    }
+
+    std::error_code ec;
+    fs::path dir = fs::current_path(ec);
+    if (ec)
+    {
+        return {};
+    }
+
+    for (int i = 0; i < 12; ++i)
+    {
+        const fs::path candidate = dir / L"Specs" / L"SettingsStore.schema.json";
+        if (fs::exists(candidate, ec))
+        {
+            return candidate.wstring();
+        }
+
+        const fs::path parent = dir.parent_path();
+        if (parent == dir)
+        {
+            break;
+        }
+        dir = parent;
+    }
+
+    return {};
+}
+
+[[nodiscard]] const SettingField* FindByPath(const std::vector<SettingField>& fields, std::wstring_view jsonPath) noexcept
+{
+    for (const auto& f : fields)
+    {
+        if (f.jsonPath == jsonPath)
+        {
+            return &f;
+        }
+    }
+    return nullptr;
+}
+
+// --- Step 2: real-schema characterization -------------------------------------
+
+void TestRealSchema(const std::wstring& schemaPath, bool& success)
+{
+    const std::vector<SettingField> fields = SettingsSchemaParser::LoadAndParseSettingsSchema(schemaPath);
+
+    // 1. Non-empty.
+    Check(! fields.empty(), L"real schema: parse returns a non-empty field set", success);
+    if (fields.empty())
+    {
+        return; // nothing else is meaningful
+    }
+
+    // 2. Anchor fields (verified against Specs\SettingsStore.schema.json:1316-1340).
+    const SettingField* menuBar = FindByPath(fields, L"mainMenuSettings.menuBarVisible");
+    Check(menuBar != nullptr, L"real schema: anchor mainMenuSettings.menuBarVisible present", success);
+    if (menuBar != nullptr)
+    {
+        Check(menuBar->paneName == L"General", L"anchor menuBarVisible: paneName == General", success);
+        Check(menuBar->schemaType == L"boolean", L"anchor menuBarVisible: schemaType == boolean", success);
+        Check(menuBar->controlType == L"toggle", L"anchor menuBarVisible: controlType == toggle", success);
+        Check(menuBar->sectionHeader == L"Display", L"anchor menuBarVisible: section == Display", success);
+        Check(menuBar->displayOrder == 10, L"anchor menuBarVisible: displayOrder == 10", success);
+        Check(menuBar->defaultValue == L"true", L"anchor menuBarVisible: defaultValue == true", success);
+    }
+
+    const SettingField* funcBar = FindByPath(fields, L"mainMenuSettings.functionBarVisible");
+    Check(funcBar != nullptr, L"real schema: anchor mainMenuSettings.functionBarVisible present", success);
+    if (funcBar != nullptr)
+    {
+        Check(funcBar->paneName == L"General", L"anchor functionBarVisible: paneName == General", success);
+        Check(funcBar->schemaType == L"boolean", L"anchor functionBarVisible: schemaType == boolean", success);
+        Check(funcBar->controlType == L"toggle", L"anchor functionBarVisible: controlType == toggle", success);
+        Check(funcBar->displayOrder == 20, L"anchor functionBarVisible: displayOrder == 20", success);
+    }
+
+    // 3. Sort invariant: grouped by pane, then section, then non-descending order
+    //    within a pane+section (mirrors the parser's std::sort comparator).
+    bool sortedOk = true;
+    for (size_t i = 1; i < fields.size(); ++i)
+    {
+        const SettingField& a = fields[i - 1];
+        const SettingField& b = fields[i];
+        if (a.paneName != b.paneName)
+        {
+            if (! (a.paneName < b.paneName))
+            {
+                sortedOk = false;
+                break;
+            }
+        }
+        else if (a.sectionHeader != b.sectionHeader)
+        {
+            if (! (a.sectionHeader < b.sectionHeader))
+            {
+                sortedOk = false;
+                break;
+            }
+        }
+        else if (a.displayOrder > b.displayOrder)
+        {
+            sortedOk = false;
+            break;
+        }
+    }
+    Check(sortedOk, L"real schema: result sorted by pane -> section -> displayOrder", success);
+
+    // 4. GetFieldsForPane: known pane returns only that pane and at least one;
+    //    garbage pane returns empty.
+    const std::vector<SettingField> general = SettingsSchemaParser::GetFieldsForPane(fields, L"General");
+    Check(! general.empty(), L"GetFieldsForPane(General): returns at least one field", success);
+    bool allGeneral = true;
+    for (const auto& f : general)
+    {
+        if (f.paneName != L"General")
+        {
+            allGeneral = false;
+            break;
+        }
+    }
+    Check(allGeneral, L"GetFieldsForPane(General): every field belongs to General", success);
+
+    const std::vector<SettingField> nonexistent = SettingsSchemaParser::GetFieldsForPane(fields, L"NoSuchPane");
+    Check(nonexistent.empty(), L"GetFieldsForPane(NoSuchPane): returns empty", success);
+
+    // 5. GetNonCustomFieldsForPane: never includes a custom field, AND for a pane
+    //    that owns at least one custom field it returns strictly fewer than
+    //    GetFieldsForPane (proving the filter drops something). Discover such a
+    //    pane from the parsed data rather than hardcoding.
+    std::wstring paneWithCustom;
+    for (const auto& f : fields)
+    {
+        if (f.controlType == L"custom")
+        {
+            paneWithCustom = f.paneName;
+            break;
+        }
+    }
+    Check(! paneWithCustom.empty(), L"real schema: at least one custom-control field exists", success);
+    if (! paneWithCustom.empty())
+    {
+        const std::vector<SettingField> all     = SettingsSchemaParser::GetFieldsForPane(fields, paneWithCustom);
+        const std::vector<SettingField> noncust = SettingsSchemaParser::GetNonCustomFieldsForPane(fields, paneWithCustom);
+
+        bool noCustomInResult = true;
+        for (const auto& f : noncust)
+        {
+            if (f.controlType == L"custom")
+            {
+                noCustomInResult = false;
+                break;
+            }
+        }
+        Check(noCustomInResult, L"GetNonCustomFieldsForPane: result contains no custom fields", success);
+        Check(noncust.size() < all.size(), L"GetNonCustomFieldsForPane: drops at least one custom field", success);
+    }
+}
+
+// --- Step 3: synthetic inline-JSON tests --------------------------------------
+
+void TestSyntheticDefaults(bool& success)
+{
+    // properties-level boolean field with x-ui-pane but NO x-ui-control.
+    const char* json = R"({
+        "type": "object",
+        "properties": {
+            "flag": {
+                "type": "boolean",
+                "default": true,
+                "x-ui-pane": "General"
+            }
+        }
+    })";
+
+    const std::vector<SettingField> fields = SettingsSchemaParser::ParseSettingsSchema(json);
+    Check(fields.size() == 1, L"synthetic defaults: exactly one field parsed", success);
+    if (fields.size() == 1)
+    {
+        const SettingField& f = fields[0];
+        Check(f.jsonPath == L"flag", L"synthetic defaults: jsonPath == flag", success);
+        Check(f.controlType == L"edit", L"synthetic defaults: missing x-ui-control defaults to edit", success);
+        Check(f.title == f.jsonPath, L"synthetic defaults: missing title defaults to jsonPath", success);
+        Check(f.schemaType == L"boolean", L"synthetic defaults: schemaType == boolean", success);
+        Check(f.defaultValue == L"true", L"synthetic defaults: bool default true round-trips to L\"true\"", success);
+    }
+}
+
+void TestSyntheticMinMax(bool& success)
+{
+    const char* withBounds                  = R"({
+        "properties": {
+            "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "x-ui-pane": "Advanced",
+                "x-ui-control": "number"
+            }
+        }
+    })";
+    const std::vector<SettingField> bounded = SettingsSchemaParser::ParseSettingsSchema(withBounds);
+    Check(bounded.size() == 1, L"synthetic min/max: one field with bounds", success);
+    if (bounded.size() == 1)
+    {
+        Check(bounded[0].hasMin && bounded[0].minValue == 1, L"synthetic min/max: hasMin true, minValue 1", success);
+        Check(bounded[0].hasMax && bounded[0].maxValue == 100, L"synthetic min/max: hasMax true, maxValue 100", success);
+    }
+
+    const char* noBounds                      = R"({
+        "properties": {
+            "count": {
+                "type": "integer",
+                "x-ui-pane": "Advanced",
+                "x-ui-control": "number"
+            }
+        }
+    })";
+    const std::vector<SettingField> unbounded = SettingsSchemaParser::ParseSettingsSchema(noBounds);
+    Check(unbounded.size() == 1, L"synthetic min/max: one field without bounds", success);
+    if (unbounded.size() == 1)
+    {
+        Check(! unbounded[0].hasMin && ! unbounded[0].hasMax, L"synthetic min/max: no bounds -> hasMin/hasMax false", success);
+    }
+}
+
+void TestSyntheticEnum(bool& success)
+{
+    const char* json                       = R"({
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["alpha", "beta", "gamma"],
+                "x-ui-pane": "General",
+                "x-ui-control": "combo"
+            }
+        }
+    })";
+    const std::vector<SettingField> fields = SettingsSchemaParser::ParseSettingsSchema(json);
+    Check(fields.size() == 1, L"synthetic enum: one combo field", success);
+    if (fields.size() == 1)
+    {
+        const std::vector<std::wstring>& e = fields[0].enumValues;
+        const bool ok                      = e.size() == 3 && e[0] == L"alpha" && e[1] == L"beta" && e[2] == L"gamma";
+        Check(ok, L"synthetic enum: enumValues populated in schema order", success);
+    }
+}
+
+void TestSyntheticNoPane(bool& success)
+{
+    // Field WITHOUT x-ui-pane must NOT be returned.
+    const char* json                       = R"({
+        "properties": {
+            "hidden": {
+                "type": "boolean",
+                "default": false
+            }
+        }
+    })";
+    const std::vector<SettingField> fields = SettingsSchemaParser::ParseSettingsSchema(json);
+    Check(fields.empty(), L"synthetic no-pane: field without x-ui-pane is not returned", success);
+}
+
+void TestMalformedInput(bool& success)
+{
+    // These are characterization checks: a noexcept parser is expected to return
+    // an empty vector (or skip the bad field) rather than crash. If any of these
+    // crashed instead, that is a STOP condition reported separately.
+
+    Check(SettingsSchemaParser::ParseSettingsSchema("").empty(), L"malformed: empty string -> empty vector", success);
+
+    // Truncated JSON.
+    Check(SettingsSchemaParser::ParseSettingsSchema("{ \"properties\": { \"a\":").empty(), L"malformed: truncated JSON -> empty vector", success);
+
+    // Root is not an object.
+    Check(SettingsSchemaParser::ParseSettingsSchema("[1, 2, 3]").empty(), L"malformed: array root -> empty vector", success);
+
+    // Wrong type for minimum ("abc"): the field is still pane-attributed, so it
+    // is returned but minimum is ignored (TryGetInt64 rejects non-int).
+    const char* badMin                  = R"({
+        "properties": {
+            "count": {
+                "type": "integer",
+                "minimum": "abc",
+                "x-ui-pane": "Advanced",
+                "x-ui-control": "number"
+            }
+        }
+    })";
+    const std::vector<SettingField> bad = SettingsSchemaParser::ParseSettingsSchema(badMin);
+    // Documents current behavior: field is kept, bad minimum is simply not set.
+    const bool badMinOk = bad.size() == 1 && ! bad[0].hasMin;
+    Check(badMinOk, L"malformed: minimum:\"abc\" -> field kept, hasMin stays false", success);
+}
+
+void TestMissingFile(bool& success)
+{
+    const std::vector<SettingField> fields = SettingsSchemaParser::LoadAndParseSettingsSchema(L"Z:\\definitely\\no\\such\\schema_file_xyz.json");
+    Check(fields.empty(), L"missing file: LoadAndParseSettingsSchema returns empty, no crash", success);
+}
+
+void TestNonAscii(bool& success)
+{
+    // UTF-8 -> wstring round trip for title/description (German + accented chars).
+    // Build the UTF-8 bytes explicitly. Splitting adjacent string literals keeps
+    // a trailing letter from being absorbed into a preceding \xNN escape
+    // (e.g. "\xC3\x9F" "e" rather than "\xC3\x9Fe").
+    const char* json                       = "{\n"
+                                             "  \"properties\": {\n"
+                                             "    \"locale\": {\n"
+                                             "      \"type\": \"string\",\n"
+                                             "      \"title\": \"Gr\xC3\xB6\xC3\x9F"
+                                             "e\",\n" // "Größe"
+                                             "      \"description\": \"\xC3\x89l\xC3\xA9"
+                                             "ment\",\n" // "Élément"
+                                             "      \"x-ui-pane\": \"General\",\n"
+                                             "      \"x-ui-control\": \"edit\"\n"
+                                             "    }\n"
+                                             "  }\n"
+                                             "}\n";
+    const std::vector<SettingField> fields = SettingsSchemaParser::ParseSettingsSchema(json);
+    Check(fields.size() == 1, L"non-ASCII: one field parsed", success);
+    if (fields.size() == 1)
+    {
+        Check(fields[0].title == L"Größe", L"non-ASCII: title round-trips (Größe)", success);
+        Check(fields[0].description == L"Élément", L"non-ASCII: description round-trips (Élément)", success);
+    }
+}
+
+[[nodiscard]] bool HasPluginConfigurationIssue(const Common::PluginConfiguration::SchemaParseResult& result,
+                                               Common::PluginConfiguration::ValidationCode code) noexcept
+{
+    return std::ranges::any_of(result.issues, [code](const Common::PluginConfiguration::ValidationIssue& issue) noexcept { return issue.code == code; });
+}
+
+void TestPluginConfigurationModelAndCodec(bool& success)
+{
+    using namespace Common::PluginConfiguration;
+
+    constexpr std::string_view schemaJson = R"json({
+        "fields": [
+            { "key": "text", "type": "text", "label": "Text", "description": "Text value", "browse": "folder", "default": "default" },
+            { "key": "count", "type": "value", "min": 1, "max": 9, "default": 4, "x-ui-order": 20 },
+            { "key": "enabled", "type": "boolean", "default": "on", "x-ui-order": 10 },
+            { "key": "mode", "type": "option", "default": "a", "options": [
+                { "value": "a", "label": "Alpha" }, { "value": "b" }
+            ] },
+            { "key": "tags", "type": "selection", "default": ["a"], "options": [
+                { "value": "a" }, { "value": "b", "label": "Beta" }
+            ] },
+            { "key": "hidden", "type": "text", "default": "secret", "x-ui-hidden": true,
+              "x-ui-section": "Advanced", "x-ui-control": "custom", "futureSchemaMember": { "x": 1 } }
+        ],
+        "futureRootMember": true
+    })json";
+    const SchemaParseResult schema        = ParseSchema(schemaJson);
+    Check(! schema.HasErrors() && schema.fields.size() == 6u, L"plugin config schema: every supported field type parses without errors", success);
+    if (schema.fields.size() != 6u)
+    {
+        return;
+    }
+
+    Check(schema.fields[0].key == L"enabled" && schema.fields[1].key == L"count" && schema.fields[2].key == L"text",
+          L"plugin config schema: explicit UI order sorts first and stable source order follows",
+          success);
+    const auto textField = std::ranges::find_if(schema.fields, [](const Field& field) noexcept { return field.key == L"text"; });
+    Check(textField != schema.fields.end() && textField->browseFolder, L"plugin config schema: folder browse metadata is shared", success);
+    const auto hiddenField = std::ranges::find_if(schema.fields, [](const Field& field) noexcept { return field.key == L"hidden"; });
+    Check(hiddenField != schema.fields.end() && hiddenField->uiHidden && hiddenField->uiSection == L"Advanced" && hiddenField->uiControl == L"custom",
+          L"plugin config schema: shared UI metadata is preserved",
+          success);
+
+    Field booleanOption;
+    booleanOption.type    = FieldType::Option;
+    booleanOption.choices = {{L"disabled", L"Off"}, {L"enabled", L"On"}};
+    size_t onChoiceIndex  = kNoFieldIndex;
+    size_t offChoiceIndex = kNoFieldIndex;
+    Check(TryGetBoolToggleChoiceIndices(booleanOption, onChoiceIndex, offChoiceIndex) && onChoiceIndex == 1u && offChoiceIndex == 0u,
+          L"plugin config schema: bool-like option labels share the same toggle mapping",
+          success);
+    booleanOption.choices = {{L"false", L"Disabled"}, {L"true", L"Enabled"}};
+    Check(TryGetBoolToggleChoiceIndices(booleanOption, onChoiceIndex, offChoiceIndex) && onChoiceIndex == 1u && offChoiceIndex == 0u,
+          L"plugin config schema: bool-like option values are a toggle fallback",
+          success);
+    booleanOption.choices.push_back({L"auto", L"Automatic"});
+    Check(! TryGetBoolToggleChoiceIndices(booleanOption, onChoiceIndex, offChoiceIndex),
+          L"plugin config schema: multi-choice options remain combo boxes",
+          success);
+
+    constexpr std::string_view configurationJson = R"json({
+        "futureBefore": { "nested": [1, "keep"] },
+        "text": "configured",
+        "count": 7.9,
+        "enabled": "off",
+        "mode": "b",
+        "tags": ["a", 7, "future-option"],
+        "hidden": "retained-hidden",
+        "futureAfter": true
+    })json";
+    ConfigurationParseResult configuration       = ParseConfiguration(schema.fields, configurationJson);
+    Check(! configuration.HasErrors() && configuration.sourceWasObject && configuration.values.size() == schema.fields.size(),
+          L"plugin config model: configuration object overlays schema defaults",
+          success);
+    if (configuration.values.size() != schema.fields.size())
+    {
+        return;
+    }
+
+    const auto indexOf = [&](std::wstring_view key) noexcept
+    {
+        const auto field = std::ranges::find_if(schema.fields, [&](const Field& candidate) noexcept { return candidate.key == key; });
+        return field == schema.fields.end() ? kNoFieldIndex : static_cast<size_t>(std::distance(schema.fields.begin(), field));
+    };
+    const size_t enabledIndex = indexOf(L"enabled");
+    const size_t countIndex   = indexOf(L"count");
+    const size_t textIndex    = indexOf(L"text");
+    const size_t modeIndex    = indexOf(L"mode");
+    const size_t tagsIndex    = indexOf(L"tags");
+    Check(enabledIndex != kNoFieldIndex && ! configuration.values[enabledIndex].boolean,
+          L"plugin config model: bool token coercion matches both former editors",
+          success);
+    Check(countIndex != kNoFieldIndex && configuration.values[countIndex].integer == 7,
+          L"plugin config model: numeric values retain integral conversion behavior",
+          success);
+    Check(tagsIndex != kNoFieldIndex && configuration.values[tagsIndex].selection == std::vector<std::wstring>{L"a", L"future-option"},
+          L"plugin config model: selection arrays skip wrong types without losing future string values",
+          success);
+
+    configuration.values[textIndex].text       = L"edited";
+    configuration.values[countIndex].integer   = 99;
+    configuration.values[enabledIndex].boolean = true;
+    configuration.values[modeIndex].text       = L"a";
+    configuration.values[tagsIndex].selection  = {L"b"};
+    std::string serialized;
+    const HRESULT serializeHr = SerializeConfiguration(configurationJson, schema.fields, configuration.values, serialized);
+    Check(serializeHr == S_OK && ! serialized.empty(), L"plugin config codec: edited values serialize successfully", success);
+
+    Common::Settings::JsonValue serializedRoot;
+    Check(Common::Settings::ParseJsonValue(serialized, serializedRoot) == S_OK, L"plugin config codec: serialized output is valid JSON", success);
+    Check(Common::Settings::FindMember(serializedRoot, "futureBefore") != nullptr && Common::Settings::FindMember(serializedRoot, "futureAfter") != nullptr,
+          L"plugin config codec: unknown future members survive edits",
+          success);
+    Check(Common::Settings::GetWString(serializedRoot, "text") == std::make_optional<std::wstring>(L"edited") &&
+              Common::Settings::GetBool(serializedRoot, "enabled") == std::make_optional(true),
+          L"plugin config codec: text and bool edits are applied",
+          success);
+    const Common::Settings::JsonValue* countValue = Common::Settings::FindMember(serializedRoot, "count");
+    const bool countIsNine = countValue && ((std::get_if<int64_t>(&countValue->value) && *std::get_if<int64_t>(&countValue->value) == 9) ||
+                                            (std::get_if<uint64_t>(&countValue->value) && *std::get_if<uint64_t>(&countValue->value) == 9u));
+    Check(countIsNine, L"plugin config codec: integer constraints clamp during serialization", success);
+
+    constexpr std::string_view invalidSchema = R"json({ "fields": [
+        { "key": "duplicate", "type": "value", "min": 10, "max": 1 },
+        { "key": "duplicate", "type": "text" },
+        { "key": "future", "type": "future-type" }
+    ] })json";
+    const SchemaParseResult invalid          = ParseSchema(invalidSchema);
+    Check(invalid.HasErrors() && HasPluginConfigurationIssue(invalid, ValidationCode::InvalidConstraintRange) &&
+              HasPluginConfigurationIssue(invalid, ValidationCode::DuplicateFieldKey) && HasPluginConfigurationIssue(invalid, ValidationCode::UnsupportedType),
+          L"plugin config schema: invalid constraints, duplicate IDs, and future types have explicit validation results",
+          success);
+}
+
+[[nodiscard]] bool WriteTestBytes(const std::filesystem::path& path, std::string_view bytes) noexcept
+{
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(Common::Paths::ToExtendedWin32Path(path.parent_path().native())), ec);
+    if (ec)
+    {
+        return false;
+    }
+    if (bytes.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return false;
+    }
+
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    wil::unique_hfile output(CreateFileW(
+        extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! output)
+    {
+        return false;
+    }
+    DWORD written = 0u;
+    return bytes.empty() ||
+           (WriteFile(output.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != FALSE && written == static_cast<DWORD>(bytes.size()));
+}
+
+[[maybe_unused]] [[nodiscard]] bool ReplacePathWithPosixRename(const std::filesystem::path& source, const std::filesystem::path& target) noexcept
+{
+    const std::wstring extendedSource = Common::Paths::ToExtendedWin32Path(source.native());
+    wil::unique_hfile sourceFile(CreateFileW(
+        extendedSource.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! sourceFile)
+    {
+        return false;
+    }
+
+    const std::wstring targetNative = Common::Paths::ToExtendedWin32Path(target.native());
+    const size_t targetBytes        = targetNative.size() * sizeof(wchar_t);
+    if (targetBytes > (std::numeric_limits<DWORD>::max)())
+    {
+        return false;
+    }
+
+    std::vector<std::byte> storage(offsetof(FILE_RENAME_INFO, FileName) + targetBytes + sizeof(wchar_t));
+    auto* rename           = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->Flags          = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+    rename->RootDirectory  = nullptr;
+    rename->FileNameLength = static_cast<DWORD>(targetBytes);
+    std::memcpy(rename->FileName, targetNative.data(), targetBytes);
+    return SetFileInformationByHandle(sourceFile.get(), FileRenameInfoEx, rename, static_cast<DWORD>(storage.size())) != FALSE;
+}
+
+[[nodiscard]] std::string ReadTestBytes(const std::filesystem::path& path)
+{
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    wil::unique_hfile input(CreateFileW(
+        extendedPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! input)
+    {
+        return {};
+    }
+
+    LARGE_INTEGER size{};
+    if (! GetFileSizeEx(input.get(), &size) || size.QuadPart < 0 || static_cast<uint64_t>(size.QuadPart) > (std::numeric_limits<DWORD>::max)())
+    {
+        return {};
+    }
+
+    std::string bytes(static_cast<size_t>(size.QuadPart), '\0');
+    DWORD read = 0u;
+    if (! bytes.empty() &&
+        (! ReadFile(input.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) || static_cast<size_t>(read) != bytes.size()))
+    {
+        return {};
+    }
+    return bytes;
+}
+
+void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
+{
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    if (settingsPath.empty())
+    {
+        return;
+    }
+
+    std::error_code ec;
+    static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(settingsPath.native())), ec));
+    ec.clear();
+    const std::filesystem::path schemaPath = Common::Settings::GetSettingsSchemaPath(appId);
+    static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(schemaPath.native())), ec));
+    std::filesystem::path lockPath = settingsPath;
+    lockPath += L".lock";
+    ec.clear();
+    static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(lockPath.native())), ec));
+
+    const std::wstring backupPrefix = settingsPath.filename().wstring() + L".bad.";
+    ec.clear();
+    const std::filesystem::path extendedParent(Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
+    for (std::filesystem::directory_iterator it(extendedParent, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        const std::wstring fileName = it->path().filename().wstring();
+        if (fileName.starts_with(backupPrefix))
+        {
+            std::error_code removeError;
+            static_cast<void>(std::filesystem::remove(it->path(), removeError));
+        }
+    }
+}
+
+[[nodiscard]] bool HasSettingsBackupArtifact(std::wstring_view appId) noexcept
+{
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::wstring backupPrefix          = settingsPath.filename().wstring() + L".bad.";
+    std::error_code ec;
+    const std::filesystem::path extendedParent(Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
+    for (std::filesystem::directory_iterator it(extendedParent, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (it->path().filename().wstring().starts_with(backupPrefix))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool WaitForTestPath(const std::filesystem::path& path, std::chrono::milliseconds timeout) noexcept
+{
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    const auto deadline             = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        if (GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES)
+        {
+            return true;
+        }
+        Sleep(10u);
+    }
+    return GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+[[nodiscard]] int RunSettingsStoreCasChild(int argc, wchar_t** argv) noexcept
+{
+    if (argc != 5 || ! argv[2] || ! argv[3] || ! argv[4])
+    {
+        return 2;
+    }
+
+    Common::Settings::Settings staleWriter{};
+    if (Common::Settings::TryLoadSettingsNoRecovery(argv[2], staleWriter) != S_OK)
+    {
+        return 3;
+    }
+    if (! WriteTestBytes(argv[3], "ready"))
+    {
+        return 4;
+    }
+    if (! WaitForTestPath(argv[4], std::chrono::seconds(10)))
+    {
+        return 5;
+    }
+
+    staleWriter.theme.currentThemeId = L"builtin/highContrast";
+    return Common::Settings::SaveSettings(argv[2], staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? 0 : 6;
+}
+
+[[nodiscard]] int RunSettingsStoreBackupCasChild(int argc, wchar_t** argv) noexcept
+{
+    if (argc != 5 || ! argv[2] || ! argv[3] || ! argv[4])
+    {
+        return 2;
+    }
+
+    Common::Settings::SettingsFileStamp diagnosedStamp{};
+    if (Common::Settings::TryGetSettingsFileStamp(argv[2], diagnosedStamp) != S_OK)
+    {
+        return 3;
+    }
+    if (! WriteTestBytes(argv[3], "ready"))
+    {
+        return 4;
+    }
+    if (! WaitForTestPath(argv[4], std::chrono::seconds(10)))
+    {
+        return 5;
+    }
+
+    std::filesystem::path backupPath;
+    const HRESULT backupHr = Common::Settings::BackupSettingsForExplicitReplacement(argv[2], diagnosedStamp, backupPath);
+    return backupHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && backupPath.empty() ? 0 : 6;
+}
+
+void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsStoreGuards-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+
+    Common::Settings::Settings seed{};
+    seed.theme.currentThemeId = L"builtin/light";
+    Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings CAS: baseline save succeeds", success);
+
+    const std::wstring extendedSettingsPath = Common::Paths::ToExtendedWin32Path(settingsPath.native());
+    wil::unique_hfile compatibleReader(
+        CreateFileW(extendedSettingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    Common::Settings::Settings sharedLoad{};
+    Check(compatibleReader && Common::Settings::TryLoadSettingsNoRecovery(appId, sharedLoad) == S_OK && sharedLoad.theme.currentThemeId == L"builtin/light",
+          L"settings read sharing: an ordinary reader without FILE_SHARE_DELETE does not block a valid load",
+          success);
+    compatibleReader.reset();
+
+    Common::Settings::Settings firstWriter{};
+    Common::Settings::Settings staleWriter{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, firstWriter) == S_OK && Common::Settings::TryLoadSettingsNoRecovery(appId, staleWriter) == S_OK,
+          L"settings CAS: independent snapshots load from the same revision",
+          success);
+    firstWriter.theme.currentThemeId = L"builtin/dark";
+    Check(Common::Settings::SaveSettings(appId, firstWriter) == S_OK, L"settings CAS: first writer publishes and advances its revision", success);
+    staleWriter.theme.currentThemeId = L"builtin/highContrast";
+    Check(Common::Settings::SaveSettings(appId, staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+          L"settings CAS: stale writer cannot replace a newer file",
+          success);
+    Common::Settings::Settings afterConflict{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterConflict) == S_OK && afterConflict.theme.currentThemeId == L"builtin/dark",
+          L"settings CAS: rejected writer leaves the committed document intact",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Common::Settings::Settings invalidUnicode{};
+    invalidUnicode.theme.currentThemeId.assign(1u, static_cast<wchar_t>(0xD800u));
+    Check(Common::Settings::SaveSettings(appId, invalidUnicode) == HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) &&
+              GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()) == INVALID_FILE_ATTRIBUTES,
+          L"settings serialization: malformed UTF-16 aborts without publishing an empty substitute",
+          success);
+
+    constexpr std::string_view kOverflowFixture = R"json({
+  "schemaVersion": 16,
+  "windows": {
+    "MainWindow": {
+      "state": "normal",
+      "bounds": { "x": 1, "y": 2, "width": 800, "height": 600 },
+      "dpi": 4294967296
+    }
+  }
+})json";
+    Check(WriteTestBytes(settingsPath, kOverflowFixture), L"settings uint32: overflow fixture is written", success);
+    Common::Settings::Settings overflowLoaded{};
+    const HRESULT overflowLoadHr = Common::Settings::TryLoadSettingsNoRecovery(appId, overflowLoaded);
+    const auto overflowWindow    = overflowLoaded.windows.find(L"MainWindow");
+    Check(overflowLoadHr == S_OK && overflowWindow != overflowLoaded.windows.end() && ! overflowWindow->second.dpi.has_value(),
+          L"settings uint32: values above UINT32_MAX are rejected instead of truncated",
+          success);
+
+    wil::unique_hfile oversized(CreateFileW(extendedSettingsPath.c_str(),
+                                            GENERIC_WRITE,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            CREATE_ALWAYS,
+                                            FILE_ATTRIBUTE_NORMAL,
+                                            nullptr));
+    LARGE_INTEGER oversizedLength{};
+    oversizedLength.QuadPart = (16ll * 1024ll * 1024ll) + 1ll;
+    Check(oversized && SetFilePointerEx(oversized.get(), oversizedLength, nullptr, FILE_BEGIN) != FALSE && SetEndOfFile(oversized.get()) != FALSE,
+          L"settings recovery tri-state: oversized existing source is created without allocating payload memory",
+          success);
+    oversized.reset();
+    Common::Settings::Settings oversizedRecovered{};
+    Common::Settings::SettingsLoadRecoveryInfo oversizedRecovery{};
+    const HRESULT oversizedRecoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, oversizedRecovered, &oversizedRecovery);
+    Check(oversizedRecoveryHr == S_FALSE && oversizedRecovery.reason == Common::Settings::SettingsLoadRecoveryReason::ReadFailed &&
+              oversizedRecovered.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
+          L"settings recovery tri-state: present but unstamped read failure stays save-blocked",
+          success);
+    Check(Common::Settings::SaveSettings(appId, oversizedRecovered) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+          L"settings recovery tri-state: ordinary save cannot overwrite a present unstampable source",
+          success);
+
+    constexpr std::string_view kInvalidFixture = "{ invalid json";
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery: invalid fixture is written", success);
+    wil::unique_hfile replacementBlocker(
+        CreateFileW(extendedSettingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    Check(static_cast<bool>(replacementBlocker), L"settings recovery: source replacement is denied for the backup-failure drill", success);
+    Common::Settings::Settings recovered{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    const HRESULT recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery);
+    Check(recoveryHr == S_FALSE && ! recovery.backedUp &&
+              recovered.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
+          L"settings recovery: failed backup leaves defaults save-blocked",
+          success);
+    Check(Common::Settings::SaveSettings(appId, recovered) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(settingsPath) == kInvalidFixture,
+          L"settings recovery: automatic save cannot destroy the only recovery artifact",
+          success);
+}
+
+void TestFloatingTerminalSettingsPersistence(bool& success)
+{
+    constexpr std::wstring_view appId = L"SettingsSchemaTests.FloatingTerminal";
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+
+    Common::Settings::Settings source{};
+    Common::Settings::FloatingTerminalWindowSettings floating{};
+    floating.placement.state             = Common::Settings::WindowState::Maximized;
+    floating.placement.bounds            = {.x = 120, .y = 80, .width = 1280, .height = 720};
+    floating.placement.dpi               = 144u;
+    floating.placement.monitorDeviceName = L"\\\\.\\DISPLAY2";
+    floating.wasOpenAtCleanShutdown      = true;
+    floating.activeTabId                 = L"tab-b";
+    floating.tabs.push_back(Common::Settings::FloatingTerminalTabSettings{
+        .tabId = L"tab-a", .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Work"});
+    floating.tabs.push_back(Common::Settings::FloatingTerminalTabSettings{
+        .tabId = L"tab-b", .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Work"});
+    source.terminal = Common::Settings::TerminalSettings{.floatingWindow = std::move(floating)};
+
+    Check(Common::Settings::SaveSettings(appId, source) == S_OK, L"floating terminal settings: placement and duplicate-path tabs save", success);
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr  = Common::Settings::TryLoadSettingsNoRecovery(appId, loaded);
+    const bool roundTrips = loadHr == S_OK && loaded.terminal.has_value() && loaded.terminal->floatingWindow.has_value() &&
+                            loaded.terminal->floatingWindow->placement.state == Common::Settings::WindowState::Maximized &&
+                            loaded.terminal->floatingWindow->placement.bounds.width == 1280 && loaded.terminal->floatingWindow->placement.dpi == 144u &&
+                            loaded.terminal->floatingWindow->placement.monitorDeviceName == L"\\\\.\\DISPLAY2" &&
+                            loaded.terminal->floatingWindow->wasOpenAtCleanShutdown && loaded.terminal->floatingWindow->activeTabId == L"tab-b" &&
+                            loaded.terminal->floatingWindow->tabs.size() == 2u && loaded.terminal->floatingWindow->tabs[0].tabId == L"tab-a" &&
+                            loaded.terminal->floatingWindow->tabs[1].tabId == L"tab-b" &&
+                            loaded.terminal->floatingWindow->tabs[0].canonicalPath == loaded.terminal->floatingWindow->tabs[1].canonicalPath;
+    Check(roundTrips, L"floating terminal settings: placement, monitor, active tab, order, profile, provider, and duplicate paths round-trip", success);
+
+    if (roundTrips)
+    {
+        loaded.terminal->floatingWindow->tabs.erase(loaded.terminal->floatingWindow->tabs.begin());
+        Check(Common::Settings::SaveSettings(appId, loaded) == S_OK,
+              L"floating terminal settings: removing one tab persists without a closed-session ledger",
+              success);
+        Common::Settings::Settings afterRemoval{};
+        Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterRemoval) == S_OK && afterRemoval.terminal.has_value() &&
+                  afterRemoval.terminal->floatingWindow.has_value() && afterRemoval.terminal->floatingWindow->tabs.size() == 1u &&
+                  afterRemoval.terminal->floatingWindow->tabs.front().tabId == L"tab-b",
+              L"floating terminal settings: only the ordered live-tab record remains",
+              success);
+    }
+
+    CleanupSettingsTestArtifacts(appId);
+    const std::filesystem::path settingsPath  = Common::Settings::GetSettingsPath(appId);
+    constexpr std::string_view invalidFixture = R"json({
+  "schemaVersion": 16,
+  "terminal": {
+    "floatingWindow": {
+      "placement": { "state": "normal", "bounds": { "x": 1, "y": 2, "width": 800, "height": 600 } },
+      "wasOpenAtCleanShutdown": false,
+      "activeTabId": "duplicate",
+      "tabs": [
+        { "tabId": "duplicate", "profileId": "builtin/terminal", "providerId": "builtin/file-system", "canonicalPath": "C:\\\\One" },
+        { "tabId": "duplicate", "profileId": "builtin/terminal", "providerId": "builtin/file-system", "canonicalPath": "C:\\\\Two" }
+      ]
+    }
+  }
+})json";
+    Check(WriteTestBytes(settingsPath, invalidFixture), L"floating terminal settings: duplicate-ID recovery fixture is written", success);
+    Common::Settings::Settings recovered{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    const HRESULT recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery);
+    const bool terminalPreservedOpaque =
+        std::ranges::any_of(recovered.persistence.opaqueTopLevelMembers, [](const auto& member) noexcept { return member.first == "terminal"; });
+    Check(recoveryHr == S_FALSE && ! recovered.terminal.has_value() && recovery.reason == Common::Settings::SettingsLoadRecoveryReason::TerminalInvalid &&
+              terminalPreservedOpaque,
+          L"floating terminal settings: malformed tab identity recovers the optional section and preserves it opaquely",
+          success);
+}
+
+#ifdef ENABLE_TESTS
+void TestSettingsStoreRecoveryBackupCas(bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsRecoveryCas-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+
+    constexpr std::string_view kInvalidFixture    = "{ invalid json";
+    constexpr std::string_view kNewerValidFixture = R"json({
+  "schemaVersion": 16,
+  "theme": { "currentThemeId": "builtin/dark" }
+})json";
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery CAS: invalid source fixture is written", success);
+
+    wil::unique_event_nothrow backupEntered;
+    backupEntered.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow releaseBackup;
+    releaseBackup.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Check(backupEntered && releaseBackup, L"settings recovery CAS: deterministic barrier events are created", success);
+    if (! backupEntered || ! releaseBackup)
+    {
+        return;
+    }
+
+    HRESULT recoveryHr = E_PENDING;
+    Common::Settings::Settings recovered{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    std::jthread recoveryThread;
+    const auto releaseAndClearHook = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(SetEvent(releaseBackup.get()));
+        Common::Settings::DebugSetSettingsRecoveryBackupStallForTest(nullptr, nullptr);
+    });
+    Common::Settings::DebugSetSettingsRecoveryBackupStallForTest(backupEntered.get(), releaseBackup.get());
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD enteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(enteredWait == WAIT_OBJECT_0, L"settings recovery CAS: recovery pauses after reading the invalid revision", success);
+    if (enteredWait == WAIT_OBJECT_0)
+    {
+        std::filesystem::path newerPath = settingsPath;
+        newerPath += L".newer";
+        Check(WriteTestBytes(newerPath, kNewerValidFixture) && ReplacePathWithPosixRename(newerPath, settingsPath),
+              L"settings recovery CAS: a newer valid revision is published before backup",
+              success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    if (recoveryHr != S_OK || recovered.theme.currentThemeId != L"builtin/dark" || ReadTestBytes(settingsPath) != kNewerValidFixture || recovery.backedUp ||
+        ! recovery.backupPath.empty())
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] replacement recovery hr=0x{:08X}, theme='{}', canonicalBytes={}, backedUp={}, backup='{}'\n",
+                                  static_cast<unsigned long>(recoveryHr),
+                                  recovered.theme.currentThemeId,
+                                  ReadTestBytes(settingsPath).size(),
+                                  recovery.backedUp,
+                                  recovery.backupPath.c_str());
+    }
+    Check(recoveryHr == S_OK && recovered.theme.currentThemeId == L"builtin/dark",
+          L"settings recovery CAS: stale recovery reloads the newer valid revision",
+          success);
+    Check(ReadTestBytes(settingsPath) == kNewerValidFixture, L"settings recovery CAS: the newer valid revision remains canonical", success);
+    Check(! recovery.backedUp && recovery.backupPath.empty(), L"settings recovery CAS: stale recovery does not back up the newer revision", success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery identity: diagnosed source fixture is written", success);
+    static_cast<void>(ResetEvent(backupEntered.get()));
+    static_cast<void>(ResetEvent(releaseBackup.get()));
+    recoveryHr     = E_PENDING;
+    recovered      = Common::Settings::Settings{};
+    recovery       = Common::Settings::SettingsLoadRecoveryInfo{};
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD identityEnteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(identityEnteredWait == WAIT_OBJECT_0, L"settings recovery identity: recovery retains the diagnosed handle before quarantine", success);
+    std::filesystem::path replacementPath = settingsPath;
+    replacementPath += L".replacement";
+    if (identityEnteredWait == WAIT_OBJECT_0)
+    {
+        Check(WriteTestBytes(replacementPath, kNewerValidFixture) && ReplacePathWithPosixRename(replacementPath, settingsPath),
+              L"settings recovery identity: a different file identity replaces the canonical path",
+              success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    if (recoveryHr != S_OK || recovered.theme.currentThemeId != L"builtin/dark" || ReadTestBytes(settingsPath) != kNewerValidFixture)
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] identity recovery hr=0x{:08X}, theme='{}', canonicalBytes={}, backedUp={}, backup='{}'\n",
+                                  static_cast<unsigned long>(recoveryHr),
+                                  recovered.theme.currentThemeId,
+                                  ReadTestBytes(settingsPath).size(),
+                                  recovery.backedUp,
+                                  recovery.backupPath.c_str());
+    }
+    Check(recoveryHr == S_OK && recovered.theme.currentThemeId == L"builtin/dark" && ReadTestBytes(settingsPath) == kNewerValidFixture,
+          L"settings recovery identity: the replacement remains canonical and is reloaded",
+          success);
+    Check(HasSettingsBackupArtifact(appId), L"settings recovery identity: the exact diagnosed file is preserved as a backup", success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery CAS: deletion fixture is written", success);
+    static_cast<void>(ResetEvent(backupEntered.get()));
+    static_cast<void>(ResetEvent(releaseBackup.get()));
+    recoveryHr     = E_PENDING;
+    recovered      = Common::Settings::Settings{};
+    recovery       = Common::Settings::SettingsLoadRecoveryInfo{};
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD deletionEnteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(deletionEnteredWait == WAIT_OBJECT_0, L"settings recovery CAS: deletion recovery pauses after reading the source", success);
+    if (deletionEnteredWait == WAIT_OBJECT_0)
+    {
+        std::error_code deleteError;
+        const bool deleted = std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(settingsPath.native())), deleteError);
+        Check(deleted && ! deleteError, L"settings recovery CAS: diagnosed source is deleted before backup", success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    Check(recoveryHr == S_FALSE && recovery.reason == Common::Settings::SettingsLoadRecoveryReason::SettingsFileMissing,
+          L"settings recovery CAS: deleted source is re-resolved as missing",
+          success);
+    Check(! recovered.persistence.expectedFileStamp.has_value() && recovered.persistence.savePermission == Common::Settings::SettingsSavePermission::Automatic,
+          L"settings recovery CAS: defaults after deletion expect a missing canonical target",
+          success);
+    Check(GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()) == INVALID_FILE_ATTRIBUTES && ! recovery.backedUp &&
+              recovery.backupPath.empty(),
+          L"settings recovery CAS: deleted source is not recreated or backed up",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    constexpr std::string_view kCollisionFixture = "{ invalid collision fixture";
+    Check(WriteTestBytes(settingsPath, kCollisionFixture), L"settings recovery CAS: backup-name collision source is written", success);
+    Common::Settings::SettingsFileStamp collisionStamp{};
+    Check(Common::Settings::TryGetSettingsFileStamp(appId, collisionStamp) == S_OK,
+          L"settings recovery CAS: backup-name collision source stamp is captured",
+          success);
+    const std::filesystem::path occupiedBackupPath = settingsPath.parent_path() / std::format(L"{}.bad.20000101T000000Z", settingsPath.filename().wstring());
+    Check(WriteTestBytes(occupiedBackupPath, "occupied"), L"settings recovery CAS: base backup name is occupied", success);
+    Common::Settings::DebugUseFixedSettingsBackupTimestampForTest(true);
+    const auto restoreTimestamp = wil::scope_exit([]() noexcept { Common::Settings::DebugUseFixedSettingsBackupTimestampForTest(false); });
+    std::filesystem::path collisionBackupPath;
+    const HRESULT collisionBackupHr                   = Common::Settings::BackupSettingsForExplicitReplacement(appId, collisionStamp, collisionBackupPath);
+    std::filesystem::path expectedCollisionBackupPath = occupiedBackupPath;
+    expectedCollisionBackupPath += L".1";
+    if (collisionBackupHr != S_OK || collisionBackupPath != expectedCollisionBackupPath || ReadTestBytes(occupiedBackupPath) != "occupied" ||
+        ReadTestBytes(collisionBackupPath) != kCollisionFixture)
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] collision hr=0x{:08X}, backup='{}', expected='{}', occupiedBytes={}, backupBytes={}\n",
+                                  static_cast<unsigned long>(collisionBackupHr),
+                                  collisionBackupPath.c_str(),
+                                  expectedCollisionBackupPath.c_str(),
+                                  ReadTestBytes(occupiedBackupPath).size(),
+                                  ReadTestBytes(collisionBackupPath).size());
+        std::wcerr << std::format(L"[  DETAIL  ] collision sourceStampBytes={}, canonicalBytes={}, canonicalAttributes=0x{:08X}, backupAttributes=0x{:08X}\n",
+                                  collisionStamp.fileSize,
+                                  ReadTestBytes(settingsPath).size(),
+                                  GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()),
+                                  GetFileAttributesW(Common::Paths::ToExtendedWin32Path(collisionBackupPath.native()).c_str()));
+    }
+    Check(collisionBackupHr == S_OK && collisionBackupPath == expectedCollisionBackupPath,
+          L"settings recovery CAS: an occupied backup name selects a unique sibling",
+          success);
+    Check(ReadTestBytes(occupiedBackupPath) == "occupied" && ReadTestBytes(collisionBackupPath) == kCollisionFixture,
+          L"settings recovery CAS: collision handling preserves both the existing backup and diagnosed source",
+          success);
+}
+#endif
+
+void TestConnectionProfileIdentityGuards(bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderConnectionIdentity-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+
+    std::wstring generatedId;
+    Check(Common::Settings::CreateConnectionProfileId(generatedId) == S_OK, L"connection identity: shared ID generator succeeds", success);
+    std::wstring normalizedGeneratedId;
+    Check(Common::Settings::NormalizeConnectionProfileId(generatedId, normalizedGeneratedId) == S_OK && normalizedGeneratedId == generatedId,
+          L"connection identity: generated IDs are canonical lowercase GUIDs",
+          success);
+
+    constexpr std::string_view kCaseCollisionFixture = R"json({
+  "schemaVersion": 16,
+  "connections": {
+    "items": [
+      {
+        "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "name": "First legacy profile",
+        "pluginId": "builtin/file-system-ftp",
+        "host": "first.invalid",
+        "userName": "first-secret-owner",
+        "savePassword": true
+      },
+      {
+        "id": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+        "name": "Second legacy profile",
+        "pluginId": "builtin/file-system-ftp",
+        "host": "second.invalid",
+        "userName": "second-secret-owner",
+        "savePassword": true
+      }
+    ]
+  }
+})json";
+    Check(WriteTestBytes(settingsPath, kCaseCollisionFixture), L"connection identity: case-collision fixture is written", success);
+
+    Common::Settings::Settings strictLoad{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, strictLoad) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"connection identity: strict reload rejects case-colliding IDs",
+          success);
+
+    Common::Settings::Settings migrated{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    const HRESULT migrationHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, migrated, &recovery);
+    const bool hasTwoProfiles = migrated.connections.has_value() && migrated.connections->items.size() == 2u;
+    Check(migrationHr == S_FALSE && recovery.reason == Common::Settings::SettingsLoadRecoveryReason::ConnectionProfileIdsMigrated &&
+              recovery.connectionProfileIdMigrations.size() == 2u && hasTwoProfiles,
+          L"connection identity: startup load explicitly migrates every member of a collision group",
+          success);
+    if (hasTwoProfiles)
+    {
+        const auto& first  = migrated.connections->items[0];
+        const auto& second = migrated.connections->items[1];
+        std::wstring firstCanonical;
+        std::wstring secondCanonical;
+        Check(first.id != second.id && Common::Settings::NormalizeConnectionProfileId(first.id, firstCanonical) == S_OK && first.id == firstCanonical &&
+                  Common::Settings::NormalizeConnectionProfileId(second.id, secondCanonical) == S_OK && second.id == secondCanonical,
+              L"connection identity: migrated profiles receive distinct canonical IDs",
+              success);
+        Check(! first.savePassword && ! second.savePassword && recovery.connectionProfileIdMigrations[0].savedSecretReferenceCleared &&
+                  recovery.connectionProfileIdMigrations[1].savedSecretReferenceCleared,
+              L"connection identity: ambiguous saved-secret references are cleared instead of copied or aliased",
+              success);
+    }
+
+    Check(Common::Settings::SaveSettings(appId, migrated) == S_OK, L"connection identity: the explicit migration can be persisted with source CAS", success);
+    Common::Settings::Settings afterMigration{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterMigration) == S_OK && afterMigration.connections.has_value() &&
+              afterMigration.connections->items.size() == 2u,
+          L"connection identity: persisted migration passes strict reload",
+          success);
+
+    Common::Settings::Settings invalidSave{};
+    invalidSave.connections.emplace();
+    Common::Settings::ConnectionProfile duplicate;
+    duplicate.id       = L"11111111-2222-3333-4444-555555555555";
+    duplicate.name     = L"Duplicate A";
+    duplicate.pluginId = L"builtin/file-system-ftp";
+    duplicate.host     = L"duplicate-a.invalid";
+    invalidSave.connections->items.push_back(duplicate);
+    duplicate.name = L"Duplicate B";
+    duplicate.host = L"duplicate-b.invalid";
+    invalidSave.connections->items.push_back(duplicate);
+    Check(Common::Settings::SaveSettings(appId, invalidSave) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"connection identity: save rejects duplicate IDs before publication",
+          success);
+}
+
+void TestSettingsStoreCrossProcessCas(const std::filesystem::path& executablePath, bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsStoreCrossProcess-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+
+    Common::Settings::Settings seed{};
+    seed.theme.currentThemeId = L"builtin/light";
+    Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings cross-process CAS: baseline save succeeds", success);
+
+    Common::Settings::Settings parentWriter{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, parentWriter) == S_OK, L"settings cross-process CAS: parent loads the baseline revision", success);
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    std::filesystem::path readyPath          = settingsPath;
+    readyPath += L".child-ready";
+    std::filesystem::path goPath = settingsPath;
+    goPath += L".child-go";
+    const auto cleanupMarkers = wil::scope_exit([&]() noexcept
+    {
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(readyPath.native())), ec));
+        ec.clear();
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(goPath.native())), ec));
+    });
+
+    std::optional<RedSalamander::TestSupport::ChildProcessResult> childResult;
+    std::jthread child([&]() noexcept
+    {
+        childResult = RedSalamander::TestSupport::RunChildProcess({
+            .executablePath = executablePath,
+            .arguments      = {L"--settings-store-cas-child", appId, readyPath.wstring(), goPath.wstring()},
+            .timeout        = std::chrono::seconds(15),
+        });
+    });
+
+    const bool childLoaded = WaitForTestPath(readyPath, std::chrono::seconds(10));
+    Check(childLoaded, L"settings cross-process CAS: child loads the same baseline before release", success);
+    if (childLoaded)
+    {
+        parentWriter.theme.currentThemeId = L"builtin/dark";
+        Check(Common::Settings::SaveSettings(appId, parentWriter) == S_OK,
+              L"settings cross-process CAS: parent publishes while child holds a stale snapshot",
+              success);
+        Check(WriteTestBytes(goPath, "go"), L"settings cross-process CAS: child is released after parent commit", success);
+    }
+    child.join();
+
+    Check(childResult.has_value() && childResult->Completed() && childResult->exitCode == 0u,
+          L"settings cross-process CAS: stale child exits after observing ERROR_REVISION_MISMATCH",
+          success);
+    Common::Settings::Settings committed{};
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, committed) == S_OK && committed.theme.currentThemeId == L"builtin/dark",
+          L"settings cross-process CAS: the winning process remains authoritative",
+          success);
+}
+
+void TestSettingsStoreCrossProcessBackupCas(const std::filesystem::path& executablePath, bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsBackupCrossProcess-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup                           = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath     = Common::Settings::GetSettingsPath(appId);
+    constexpr std::string_view kDiagnosedFixture = "{ invalid diagnosed revision";
+    constexpr std::string_view kWinningFixture   = R"json({
+  "schemaVersion": 16,
+  "theme": { "currentThemeId": "builtin/dark" }
+})json";
+    Check(WriteTestBytes(settingsPath, kDiagnosedFixture), L"settings cross-process backup CAS: diagnosed source is written", success);
+
+    std::filesystem::path readyPath = settingsPath;
+    readyPath += L".backup-child-ready";
+    std::filesystem::path goPath = settingsPath;
+    goPath += L".backup-child-go";
+    const auto cleanupMarkers = wil::scope_exit([&]() noexcept
+    {
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(readyPath.native())), ec));
+        ec.clear();
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(goPath.native())), ec));
+    });
+
+    std::optional<RedSalamander::TestSupport::ChildProcessResult> childResult;
+    std::jthread child([&]() noexcept
+    {
+        childResult = RedSalamander::TestSupport::RunChildProcess({
+            .executablePath = executablePath,
+            .arguments      = {L"--settings-store-backup-cas-child", appId, readyPath.wstring(), goPath.wstring()},
+            .timeout        = std::chrono::seconds(15),
+        });
+    });
+
+    const bool childDiagnosed = WaitForTestPath(readyPath, std::chrono::seconds(10));
+    Check(childDiagnosed, L"settings cross-process backup CAS: child captures the diagnosed revision", success);
+    if (childDiagnosed)
+    {
+        Check(WriteTestBytes(settingsPath, kWinningFixture), L"settings cross-process backup CAS: parent publishes a newer valid revision", success);
+        Check(WriteTestBytes(goPath, "go"), L"settings cross-process backup CAS: child is released after publication", success);
+    }
+    child.join();
+
+    Check(childResult.has_value() && childResult->Completed() && childResult->exitCode == 0u,
+          L"settings cross-process backup CAS: stale child observes ERROR_REVISION_MISMATCH",
+          success);
+    Check(ReadTestBytes(settingsPath) == kWinningFixture && ! HasSettingsBackupArtifact(appId),
+          L"settings cross-process backup CAS: winning revision remains canonical and is never backed up",
+          success);
+}
+
+int RunEnvironmentObserver(int argc, wchar_t** argv)
+{
+    if (argc != 3 || argv[2] == nullptr)
+        return 2;
+    const DWORD needed = GetEnvironmentVariableW(argv[2], nullptr, 0u);
+    if (needed == 0u)
+        return 3;
+    std::wstring value(needed, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(argv[2], value.data(), needed);
+    if (copied == 0u || copied >= needed)
+        return 4;
+    value.resize(copied);
+    const auto utf8 = Common::Strings::TryUtf8FromUtf16Strict(value);
+    DWORD written   = 0u;
+    return utf8 && WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), utf8->data(), static_cast<DWORD>(utf8->size()), &written, nullptr) && written == utf8->size() ? 0
+                                                                                                                                                            : 5;
+}
+
+void TestChildEnvironment(const std::filesystem::path& executable, bool& success)
+{
+    using namespace RedSalamander::TestSupport;
+    using ChildProcessDetail::BuildEnvironmentBlock;
+    std::vector<wchar_t> block;
+    Check(BuildEnvironmentBlock({L"z=last", L"=C:=C:\\owned", L"PATH=original"}, {{L"path", L"replacement"}, {L"Empty", L""}}, block),
+          L"child environment: case-insensitive override and empty value accepted",
+          success);
+    // Independent records, ordinal ordering and terminators; avoid opaque byte counts.
+    std::vector<std::wstring> records;
+    for (size_t offset = 0u; offset < block.size() && block[offset] != L'\0';)
+    {
+        records.emplace_back(block.data() + offset);
+        offset += records.back().size() + 1u;
+    }
+    Check(records == std::vector<std::wstring>{L"=C:=C:\\owned", L"Empty=", L"path=replacement", L"z=last"} && block.size() >= 2u &&
+              block[block.size() - 1u] == L'\0' && block[block.size() - 2u] == L'\0',
+          L"child environment: inherited pseudo-variable/order/double-NUL preserved",
+          success);
+    Check(BuildEnvironmentBlock({}, {}, block) && block == std::vector<wchar_t>{L'\0', L'\0'}, L"child environment: empty pure block has two NULs", success);
+    Check(BuildEnvironmentBlock({L"Path=first", L"PATH=second"}, {}, block) && std::wstring_view(block.data()) == L"Path=first" && block.size() == 12u,
+          L"child environment: inherited aliases collapse to first observed key/value",
+          success);
+    Check(BuildEnvironmentBlock({L"Path=first", L"PATH=second"}, {{L"pAtH", L"explicit"}}, block) && std::wstring_view(block.data()) == L"pAtH=explicit" &&
+              block.size() == 15u,
+          L"child environment: explicit override wins over inherited aliases",
+          success);
+    Check(! BuildEnvironmentBlock({}, {{L"", L"value"}}, block) && ! BuildEnvironmentBlock({}, {{L"bad=name", L"value"}}, block) &&
+              ! BuildEnvironmentBlock({}, {{std::wstring(L"bad\0name", 8u), L"value"}}, block) &&
+              ! BuildEnvironmentBlock({}, {{L"name", std::wstring(L"bad\0value", 9u)}}, block) &&
+              ! BuildEnvironmentBlock({}, {{L"Name", L"one"}, {L"name", L"two"}}, block),
+          L"child environment: malformed and duplicate overrides rejected",
+          success);
+    std::array<wchar_t, 32768> systemRoot{};
+    const DWORD rootSize = GetEnvironmentVariableW(L"SystemRoot", systemRoot.data(), static_cast<DWORD>(systemRoot.size()));
+    Check(rootSize > 0u && rootSize < systemRoot.size(), L"child environment: real inherited SystemRoot available", success);
+    if (rootSize == 0u || rootSize >= systemRoot.size())
+        return;
+    const std::wstring original(systemRoot.data(), rootSize);
+    const auto expectedUtf8 = Common::Strings::TryUtf8FromUtf16Strict(original);
+    const auto inherited    = RunChildProcess({.executablePath = executable, .arguments = {L"--child-environment-observer", L"SystemRoot"}});
+    Check(inherited.Completed() && inherited.exitCode == 0u && expectedUtf8 && inherited.stdoutBytes == *expectedUtf8,
+          L"child environment: default runner keeps ambient inheritance",
+          success);
+    const auto overridden = RunChildProcess({.executablePath       = executable,
+                                             .arguments            = {L"--child-environment-observer", L"SystemRoot"},
+                                             .environmentOverrides = {{L"systemroot", L"D10-private-child-value"}}});
+    Check(overridden.Completed() && overridden.exitCode == 0u && overridden.stdoutBytes == "D10-private-child-value",
+          L"child environment: only child receives explicit override",
+          success);
+    const DWORD pathNeeded = GetEnvironmentVariableW(L"Path", nullptr, 0u);
+    std::wstring actualPath(pathNeeded, L'\0');
+    const DWORD pathCopied = pathNeeded == 0u ? 0u : GetEnvironmentVariableW(L"Path", actualPath.data(), pathNeeded);
+    Check(pathNeeded > 0u && pathCopied > 0u && pathCopied < pathNeeded, L"child environment: Windows-resolved inherited Path available", success);
+    if (pathNeeded > 0u && pathCopied > 0u && pathCopied < pathNeeded)
+    {
+        actualPath.resize(pathCopied);
+        const auto expectedPath = Common::Strings::TryUtf8FromUtf16Strict(actualPath);
+        const auto normalized   = RunChildProcess({.executablePath       = executable,
+                                                   .arguments            = {L"--child-environment-observer", L"Path"},
+                                                   .environmentOverrides = {{L"D10_PRIVATE_ENV_TEST", L"isolated"}}});
+        Check(normalized.Completed() && normalized.exitCode == 0u && expectedPath && normalized.stdoutBytes == *expectedPath,
+              L"child environment: normalized block retains Windows-observed Path even with inherited aliases",
+              success);
+    }
+    const auto malformed = RunChildProcess(
+        {.executablePath = executable, .arguments = {L"--child-environment-observer", L"SystemRoot"}, .environmentOverrides = {{L"invalid=name", L"value"}}});
+    Check(malformed.status == ChildProcessStatus::LaunchFailed && malformed.processId == 0u && malformed.win32Error == ERROR_INVALID_PARAMETER,
+          L"child environment: malformed block fails before process launch",
+          success);
+    const DWORD unchangedSize = GetEnvironmentVariableW(L"SystemRoot", systemRoot.data(), static_cast<DWORD>(systemRoot.size()));
+    Check(unchangedSize == rootSize && std::wstring_view(systemRoot.data(), unchangedSize) == original,
+          L"child environment: parent environment remains unchanged",
+          success);
+}
+
+} // namespace
+
+int wmain(int argc, wchar_t** argv)
+{
+    RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
+
+    if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--child-environment-observer")
+        return RunEnvironmentObserver(argc, argv);
+    if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--settings-store-cas-child")
+    {
+        return RunSettingsStoreCasChild(argc, argv);
+    }
+    if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--settings-store-backup-cas-child")
+    {
+        return RunSettingsStoreBackupCasChild(argc, argv);
+    }
+
+    bool success = true;
+
+    std::wcout << L"[----------] SettingsSchemaParser tests\n";
+
+    // Step 1 smoke: parser links and tolerates trivial input.
+    Check(SettingsSchemaParser::ParseSettingsSchema("{}").empty(), L"smoke: ParseSettingsSchema(\"{}\") returns empty", success);
+
+    // Step 3: synthetic-input tests (no external file needed).
+    Check(Common::Settings::GetSettingsPath(L"RedSalamanderMonitor").filename() == L"RedSalamanderMonitor-7.0.settings.json",
+          L"Monitor Preferences address the installed Release helper in every app configuration",
+          success);
+    TestSyntheticDefaults(success);
+    TestSyntheticMinMax(success);
+    TestSyntheticEnum(success);
+    TestSyntheticNoPane(success);
+    TestMalformedInput(success);
+    TestMissingFile(success);
+    TestNonAscii(success);
+    TestPluginConfigurationModelAndCodec(success);
+    TestSettingsStoreConflictAndPrimitiveGuards(success);
+    TestFloatingTerminalSettingsPersistence(success);
+#ifdef ENABLE_TESTS
+    TestSettingsStoreRecoveryBackupCas(success);
+#endif
+    TestConnectionProfileIdentityGuards(success);
+
+    std::array<wchar_t, 32768> executablePath{};
+    const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
+    Check(executableLength > 0u && executableLength < executablePath.size(), L"settings cross-process CAS: current test executable path is available", success);
+    if (executableLength > 0u && executableLength < executablePath.size())
+    {
+        const std::filesystem::path currentExecutable(std::wstring(executablePath.data(), executableLength));
+        TestChildEnvironment(currentExecutable, success);
+        TestSettingsStoreCrossProcessCas(currentExecutable, success);
+        TestSettingsStoreCrossProcessBackupCas(currentExecutable, success);
+    }
+
+    // Step 2: real-schema characterization (requires the schema file).
+    const std::wstring schemaPath = FindSchemaPath(argc, argv);
+    Check(! schemaPath.empty(), L"real schema: Specs\\SettingsStore.schema.json located", success);
+    if (! schemaPath.empty())
+    {
+        std::wcout << L"[----------] using schema: " << schemaPath << L"\n";
+        TestRealSchema(schemaPath, success);
+    }
+
+    if (success)
+    {
+        std::wcout << L"[  PASSED  ] all SettingsSchemaParser tests\n";
+        return 0;
+    }
+
+    std::wcerr << L"[  FAILED  ] one or more SettingsSchemaParser tests\n";
+    return 1;
+}

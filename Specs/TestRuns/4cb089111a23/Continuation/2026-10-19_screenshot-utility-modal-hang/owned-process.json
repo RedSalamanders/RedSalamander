@@ -1,0 +1,7 @@
+{
+  "ProcessId": 71816,
+  "ParentProcessId": 32576,
+  "ExecutablePath": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "CommandLine": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe --commands-selftest --selftest-no-activate --selftest-case=cmd_product_documentation_gallery",
+  "CreationDate": "2026-10-19T21:46:19.13443+02:00"
+}

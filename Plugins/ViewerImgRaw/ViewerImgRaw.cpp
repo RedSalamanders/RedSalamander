@@ -75,7 +75,8 @@ constexpr float kLoadingSpinnerDegPerSec              = 90.0f;
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerImgRaw.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerImgRaw.FileComboHostState";
 #if defined(ENABLE_TESTS)
-constexpr wchar_t kForceMenuAttachFailureEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_MENU_ATTACH_FAILURE";
+constexpr wchar_t kForceMenuAttachFailureEnvVar[]     = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_MENU_ATTACH_FAILURE";
+constexpr wchar_t kForceMenuPostDetachFailureEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_MENU_POST_DETACH_FAILURE";
 #endif
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -845,6 +846,19 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
     switch (msg)
     {
 #ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetMenuAttachmentSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerMenuAttachmentDebugSnapshot*>(lp);
+            if (! snapshot)
+                return FALSE;
+            *snapshot = {_menuAttachResult.inputMenu,
+                         _menuAttachResult.menuAfterAttach,
+                         static_cast<unsigned>(_menuAttachResult.outcome),
+                         _menuAttachResult.fallbackError,
+                         _menuAttachResult.attempted,
+                         _menuAttachResult.attached};
+            return TRUE;
+        }
         case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
         {
             auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
@@ -988,13 +1002,13 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             return 0;
         case kAsyncOpenCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncOpenResult>(lp);
+            auto result = TakeMessagePayload<AsyncOpenResult>(hwnd, msg, lp);
             OnAsyncOpenComplete(std::move(result));
             return 0;
         }
         case kAsyncExportCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncExportResult>(lp);
+            auto result = TakeMessagePayload<AsyncExportResult>(hwnd, msg, lp);
             OnAsyncExportComplete(std::move(result));
             return 0;
         }
@@ -1506,7 +1520,7 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
+    const HMENU menu = GetMenu(hwnd);
     if (menu)
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
@@ -1533,29 +1547,6 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
             }
             return true;
         });
-
-#if defined(ENABLE_TESTS)
-        const bool forceAttachFailure = EnvironmentVariables::IsTruthyFlagSet(kForceMenuAttachFailureEnvVar);
-#else
-        constexpr bool forceAttachFailure = false;
-#endif
-        const bool attached = ! forceAttachFailure && _menuBarHost.Attach(g_hInstance, hwnd, menu);
-        if (attached && GetMenu(hwnd) == nullptr)
-        {
-            // NativeMenuBarHost detached the menu from the HWND. Adopt it only after that
-            // ownership transfer succeeds so there is never a second DestroyMenu owner.
-            if (! _menuHandle)
-            {
-                _menuHandle.reset(menu);
-            }
-        }
-        else
-        {
-            // Attach failures keep the native menu visible and window-owned. If Attach
-            // reported success without detaching it, discard the partial DxUi host too.
-            _menuBarHost.Detach();
-            Debug::Warning(L"ViewerImgRaw: DxUi menu attach failed; keeping the native menu fallback.");
-        }
     }
 
     ApplyTheme(hwnd);
@@ -2681,7 +2672,7 @@ void ViewerImgRaw::OnCommand(HWND hwnd, UINT id, UINT code, HWND control)
 
 void ViewerImgRaw::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
-    if (! _menuHandle)
+    if (! _menuHandle && ! GetMenu(hwnd))
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
     }
@@ -3735,6 +3726,32 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
 
         ApplyTheme(_hWnd.get());
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+        if (! embeddedMode)
+        {
+#if defined(ENABLE_TESTS)
+            const bool forceAttachFailure     = EnvironmentVariables::IsTruthyFlagSet(kForceMenuAttachFailureEnvVar);
+            const bool forcePostDetachFailure = EnvironmentVariables::IsTruthyFlagSet(kForceMenuPostDetachFailureEnvVar);
+#else
+            constexpr bool forceAttachFailure     = false;
+            constexpr bool forcePostDetachFailure = false;
+#endif
+            const HMENU nativeMenu         = GetMenu(window);
+            const bool attached            = ! forceAttachFailure && nativeMenu && _menuBarHost.Attach(g_hInstance, window, nativeMenu);
+            const HMENU afterAttach        = GetMenu(window);
+            const bool simulateLateFailure = forcePostDetachFailure && attached && afterAttach == nullptr;
+            _menuAttachResult = RedSalamander::ViewerMenuHost::FinishAttach(window, nativeMenu, attached && ! simulateLateFailure, _menuBarHost, _menuHandle);
+            _menuAttachResult.inputMenu       = nativeMenu;
+            _menuAttachResult.menuAfterAttach = afterAttach;
+            _menuAttachResult.attempted       = ! forceAttachFailure && nativeMenu;
+            _menuAttachResult.attached        = attached;
+            if (_menuAttachResult.outcome != RedSalamander::ViewerMenuHost::AttachOutcome::Hosted)
+                Debug::Warning(L"ViewerImgRaw: menu fallback outcome={} input=0x{:X} afterAttach=0x{:X} error={}",
+                               static_cast<unsigned>(_menuAttachResult.outcome),
+                               reinterpret_cast<UINT_PTR>(nativeMenu),
+                               reinterpret_cast<UINT_PTR>(afterAttach),
+                               _menuAttachResult.fallbackError);
+            Layout(_hWnd.get());
+        }
         ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
         if (! embeddedMode)
         {

@@ -1,0 +1,7 @@
+{
+  "iteration": 1,
+  "test_case": "TestViewerShellComboHostsLongRunOpenCloseStayStable",
+  "exit_code": 0,
+  "output": "Z:\\RedSalamander.Perf\\evidence\\diagnostics\\i12-20260908\\viewer-space-longrun-fixed-1.output.txt",
+  "run_id": "viewer-space-longrun-fixed-0539af79263941c8ab90cd638b5661d3"
+}

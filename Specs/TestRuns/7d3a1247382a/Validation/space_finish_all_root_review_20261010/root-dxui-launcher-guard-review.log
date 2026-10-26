@@ -1,0 +1,32 @@
+PASS actual baseline/candidate DxUi pair rejected: Baseline/candidate DxUi runtime mismatch in 'archiveSha256'.
+PASS launcher matched dependency allows distinct exe hashes: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\codex-proposals\retained-reference-qualification
+PASS launcher rejects commit mismatch
+PASS launcher rejects API revision mismatch
+PASS launcher rejects boolean API revision mismatch
+PASS launcher rejects archive SHA mismatch
+PASS launcher rejects public headers tree mismatch
+PASS launcher rejects build identity fingerprint mismatch
+PASS launcher rejects build identity contents mismatch
+PASS launcher rejects platform mismatch
+PASS launcher rejects configuration mismatch
+PASS launcher rejects missing linkCommandSha256 schema field
+PASS launcher rejects duplicate JSON keys
+PASS launcher rejects missing sidecar
+PASS launcher rejects source-sidecar tampering after pinning
+PASS launcher rejects preserved-sidecar tampering
+PASS actual baseline/candidate DxUi pair rejected: Baseline/candidate DxUi runtime mismatch in 'archiveSha256'.
+PASS launcher matched dependency allows distinct exe hashes: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\codex-proposals\ordinary-current-qualification
+PASS launcher rejects commit mismatch
+PASS launcher rejects API revision mismatch
+PASS launcher rejects boolean API revision mismatch
+PASS launcher rejects archive SHA mismatch
+PASS launcher rejects public headers tree mismatch
+PASS launcher rejects build identity fingerprint mismatch
+PASS launcher rejects build identity contents mismatch
+PASS launcher rejects platform mismatch
+PASS launcher rejects configuration mismatch
+PASS launcher rejects missing linkCommandSha256 schema field
+PASS launcher rejects duplicate JSON keys
+PASS launcher rejects missing sidecar
+PASS launcher rejects source-sidecar tampering after pinning
+PASS launcher rejects preserved-sidecar tampering

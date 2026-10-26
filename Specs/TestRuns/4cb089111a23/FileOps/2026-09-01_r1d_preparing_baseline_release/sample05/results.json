@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-01T12:39:58.602Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\r1d-preparing-baseline-clean-05\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1296,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "R1d common Preparing gate was rejected for an ordinary Copy task.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1218,
+            "repeat_index": 1
+        },
+        {
+            "name": "R1d_PreparingLifecycle",
+            "status": "failed",
+            "duration_ms": 47,
+            "repeat_index": 1,
+            "reason": "R1d common Preparing gate was rejected for an ordinary Copy task."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

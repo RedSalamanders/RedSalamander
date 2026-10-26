@@ -1,0 +1,8 @@
+{
+  "receipt_id": "55affa3fcd77da21750796802b4b4eeafcf038e5cade4c09aaba6fa8993bf939",
+  "source_snapshot_id": "37d06f39d610f77df54fbdca90e0b83c068f6e6b512cd94d2a00dc914fb6660b",
+  "configuration": "Debug",
+  "platform": "x64",
+  "tests_enabled": true,
+  "toolchain_identity_digest": "270491a7822f6732b3fab0f322710a3d063368ace4d2ee50f8bea88e1401cb50"
+}

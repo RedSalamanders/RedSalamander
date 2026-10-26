@@ -1,0 +1,44 @@
+{
+    "run_started_utc": "2026-10-26T14:44:46.711Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T144443Z-81752-46d323f49ccb43e78a3c9e5869280515\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 30698,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 25534,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_rejects_stale_same_task_presentation",
+            "status": "passed",
+            "duration_ms": 292,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+            "status": "passed",
+            "duration_ms": 1273,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+            "status": "passed",
+            "duration_ms": 262,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_decision_mirror_real_focus",
+            "status": "passed",
+            "duration_ms": 1577,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

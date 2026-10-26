@@ -1,0 +1,13 @@
+# Pending conflict pane navigation: final
+
+Result: **18 passed, 0 failed, 0 skipped**, x64 Debug, six native Commands cases repeated three times. Source/build receipt identities match.
+
+Retained pre-change baseline: [qualified target final](../2026-09-20_160358-i26-inspection-target-final/README.md), 18/18. Common renderer median/p95 66561/66843 us; differing 66564/66846 us. Same machine, 480/640/760 DIP French fixture, five batches of eight redraws at each width, three repeats and 45 ordered samples per presentation.
+
+The owner dispatches qualified parent navigation into the captured active pane. Accepted requests complete through the enumeration settlement hook, rechecking original visit, live endpoint and pending prompt before exact selection. One request is retained; duplicates report busy, cancellation/new pane navigation report stale. Missing file, failed folder enumeration/restoration and unavailable qualification are distinct results. No worker/timer/polling or OS focus takeover is added. Callback composition preserves existing listeners. The caller still owns visible controls, popup hide/return and the final guarded foreground commit.
+
+Native coverage invokes real pending-conflict requests for both pane/role combinations, checks exact selection and unchanged OS focus, duplicate/cancel behavior, newer navigation, missing-item and failed-folder rollback, and stale prompt refusal. The harness alters only display inspection facts for missing targets; engine paths, bindings, decision and scope remain unchanged. Broader remote/provider switching, rollback failure, focus-transfer/UIA/AT and completed UI acceptance remain open.
+
+Navigation/qualification timings are candidate-only; compare retained renderer samples in summary.json, not as proof of full resource acceptance. Full raw captures/metrics/results: `S:/RedSalamander.Perf/evidence/i26-inspection-navigation-final-20260920`. Compacted metrics preserve raw hash and original row numbers. Original runner `C:/RedSalamander.Perf/evidence/i26-ui/inspection-navigation-final.log`, SHA256 `928563c69b4f02095c7d0bae57ff7bdb9f30c315f95e9fbc44fe246eab0b15da`; normalization only strips trailing whitespace and normalizes line endings.
+
+Final review retains the live pane COM adapter and identity strings across provider calls, rejects reentrant replacement, and tests a completion callback starting another request. Navigation outcome metric counts (enum Selected=0, MissingOrFiltered=1, Stale=4, NavigationFailed=5): `{0: 12, 4: 6, 1: 3, 5: 3}`. Across this mixed positive/negative local fixture, 24 calls have median 19793.5 us, p95 24834 us and max 27045 us. These are candidate-only end-to-end witnesses, not paired resource or remote-provider latency acceptance.

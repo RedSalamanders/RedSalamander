@@ -1,0 +1,38 @@
+{
+  "captures": [
+    {
+      "file": "keyboard-repeat-1.png",
+      "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-decision-candidate-v3-20260921\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\repeat-1\\bounded-body__480dip__fr-FR__144dpi__keyboard.png",
+      "sha256": "2bd658ab8dd011e0f9e9c6dfc97a00fb513ea6c62a4b36bcfb936b73f8f78cbd",
+      "repeat": 1,
+      "focus_pixels": 1294,
+      "text_pixels": 304,
+      "actual_focus_before_after": true,
+      "reduced_motion_before_after": true,
+      "direct_visual_review": true
+    },
+    {
+      "file": "keyboard-repeat-2.png",
+      "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-decision-candidate-v3-20260921\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\repeat-2\\bounded-body__480dip__fr-FR__144dpi__keyboard.png",
+      "sha256": "c798730a9b7f9046bcdbbddc4b925ffb4fda7c5e493150dc7a9548403ee15223",
+      "repeat": 2,
+      "focus_pixels": 1294,
+      "text_pixels": 304,
+      "actual_focus_before_after": true,
+      "reduced_motion_before_after": true,
+      "direct_visual_review": true
+    },
+    {
+      "file": "keyboard-repeat-3.png",
+      "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-decision-candidate-v3-20260921\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\repeat-3\\bounded-body__480dip__fr-FR__144dpi__keyboard.png",
+      "sha256": "fd704209ee65d5b4578c531a58ead08feb17cddfcc6ba3726339ba9d8076a9f0",
+      "repeat": 3,
+      "focus_pixels": 1294,
+      "text_pixels": 304,
+      "actual_focus_before_after": true,
+      "reduced_motion_before_after": true,
+      "direct_visual_review": true
+    }
+  ],
+  "limitation": "All keyboard captures pass their focus/text probes. The comparison test still fails display/DPI stability in repeat 2 (DISPLAY5, 2560x672 work area, 96/144 transition); no native monitor-workarea or performance acceptance is claimed."
+}

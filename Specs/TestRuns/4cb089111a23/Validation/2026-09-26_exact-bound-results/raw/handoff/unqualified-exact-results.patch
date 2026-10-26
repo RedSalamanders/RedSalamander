@@ -1,0 +1,1313 @@
+diff --git a/RedSalamander/FolderWindow.cpp b/RedSalamander/FolderWindow.cpp
+index 3b3ac1582..d06ac3e80 100644
+--- a/RedSalamander/FolderWindow.cpp
++++ b/RedSalamander/FolderWindow.cpp
+@@ -1362,6 +1362,10 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+             }
+             ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+             SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
++            ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest();
++            SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(false);
++            SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest::None);
++            SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
+             HostBeginPromptShutdown();
+             ShutdownFileOperations();
+             _debugFileOperationStateRetainedDuringNestedPromptShutdown = static_cast<bool>(_fileOperations);
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.cpp b/RedSalamander/FolderWindow.FileOperations.State.cpp
+index 96cdb546b..0736f6dd6 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.State.cpp
+@@ -142,6 +142,9 @@ SelfTestPausePoint g_fileOpsConflictMetadataPausePoint;
+ SelfTestPausePoint g_fileOpsKeepBothNestedConflictPausePoint;
+ SelfTestPausePoint g_fileOpsInlineRenameBeforeMutationPausePoint;
+ SelfTestPausePoint g_fileOpsBatchRenameBeforeExecutionPausePoint;
++SelfTestPausePoint g_fileOpsBatchRenameBeforeMutationPausePoint;
++std::atomic<FileOpsBatchRenameReceiptFaultForSelfTest> g_fileOpsBatchRenameReceiptFault{FileOpsBatchRenameReceiptFaultForSelfTest::None};
++std::atomic<FileOpsRecycleDeleteReceiptFaultForSelfTest> g_fileOpsRecycleDeleteReceiptFault{FileOpsRecycleDeleteReceiptFaultForSelfTest::None};
+ SelfTestPausePoint g_fileOpsRecycleEscalationBeforeBindPausePoint;
+ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeBindPausePoint;
+ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeRecheckPausePoint;
+@@ -5067,9 +5070,13 @@ struct ConflictPromptBeginResult
+                                                             unsigned int attemptCount,
+                                                             bool ignoreCachedDecision,
+                                                             bool allowDestructiveReplacement               = false,
+-                                                            const DeferredConsentPromptFacts* consentFacts = nullptr) noexcept
++                                                            const DeferredConsentPromptFacts* consentFacts = nullptr,
++                                                            bool exactExecutionPaths                       = false) noexcept
+ {
+-    auto [promptSourcePath, promptDestinationPath] = GetMostSpecificPathsForDiagnostics(task, perItemCookie, sourcePath, destinationPath);
++    // Exact paths are supplied only by an executor holding this mutation's bound authority.
++    // Provider callbacks/root traversal must retain their existing diagnostic-path resolution.
++    auto [promptSourcePath, promptDestinationPath] = exactExecutionPaths ? std::pair{std::wstring(sourcePath), std::wstring(destinationPath)}
++                                                                         : GetMostSpecificPathsForDiagnostics(task, perItemCookie, sourcePath, destinationPath);
+     const auto plans                               = task.LoadPlans();
+     const std::optional<size_t> displayItemIndex =
+         perItemCookie != nullptr ? std::optional<size_t>(perItemCookie->itemIndex) : (consentFacts != nullptr ? consentFacts->itemIndex : std::nullopt);
+@@ -5340,6 +5347,7 @@ struct DeferredConsentRequest
+     std::optional<FileOperations::ProviderIdentitySnapshot> sourceIdentity;
+     std::optional<FileOperations::ProviderIdentitySnapshot> destinationIdentity;
+     std::wstring consentDetail; // C1: what a permanent-delete confirmation deletes
++    bool exactExecutionPaths = false; // Set only by an executor holding this exact item's authority.
+ };
+ 
+ struct DeferredConsentResult
+@@ -5347,6 +5355,7 @@ struct DeferredConsentResult
+     HRESULT status        = E_FAIL;
+     ConflictAction action = ConflictAction::Cancel;
+     bool applyToAll       = false;
++    std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
+ };
+ 
+ [[nodiscard]] bool StoreDeferredConsentReceipt(Task& task, const DeferredConsentRequest& request, ConflictAction action, bool applyToAll) noexcept
+@@ -5416,12 +5425,14 @@ struct DeferredConsentResult
+                                                                       0u,
+                                                                       false,
+                                                                       false,
+-                                                                      &facts);
++                                                                      &facts,
++                                                                      request.exactExecutionPaths);
+     ConflictAction action                       = promptBegin.action;
+     bool applyToAll                             = false;
++    auto acceptedObservation                    = promptBegin.acceptedObservation;
+     if (promptBegin.ownsPrompt)
+     {
+-        const auto decision = WaitForConflictDecision(task, request.perItemCookie, promptBegin.decisionScope);
++        const auto decision = WaitForConflictDecision(task, request.perItemCookie, promptBegin.decisionScope, &acceptedObservation);
+         action              = decision.first;
+         applyToAll          = decision.second;
+     }
+@@ -5432,7 +5443,7 @@ struct DeferredConsentResult
+     }
+     if (promptBegin.fromCache)
+     {
+-        return {S_OK, action, true};
++        return {S_OK, action, true, acceptedObservation};
+     }
+     if (! StoreDeferredConsentReceipt(task, request, action, applyToAll))
+     {
+@@ -5444,7 +5455,7 @@ struct DeferredConsentResult
+                            request.destinationPath);
+         return {HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY), ConflictAction::Cancel, false};
+     }
+-    return {S_OK, action, applyToAll};
++    return {S_OK, action, applyToAll, acceptedObservation};
+ }
+ 
+ [[nodiscard]] bool IsModifierConflictAction(ConflictAction action) noexcept
+@@ -11210,6 +11221,35 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+         return FAILED(parentRevalidation.status) ? parentRevalidation.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+     }
+ 
++    // This callback owns exactly one admitted final rename and its bound source authority.
++    // Store terminal truth here while its conditional receipt and accepted reference coexist;
++    // the scheduler's later coarse HRESULT cannot reconstruct either mutation axis.
++    std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
++    bool ambiguousObservation                           = false;
++    FileOperations::PublicationState publication        = FileOperations::PublicationState::NotPublished;
++    FileOperations::SourceDisposition sourceDisposition = FileOperations::SourceDisposition::Retained;
++    const auto finish                                   = [&](HRESULT status) noexcept
++    {
++        FileOperations::FileOperationItemResult result{};
++        result.sourceIndex          = operationIndex;
++        result.strategy             = FileOperations::OperationStrategy::Native;
++        result.publication          = publication;
++        result.sourceDisposition    = sourceDisposition;
++        result.verification         = FileOperations::VerificationState::NotApplicable;
++        result.status               = status == S_FALSE ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : status;
++        result.completion           = status == S_FALSE                                   ? FileOperations::ItemCompletion::Skipped
++                                      : IsCancellationOutcome(status)                     ? FileOperations::ItemCompletion::Canceled
++                                      : status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ? FileOperations::ItemCompletion::Indeterminate
++                                      : SUCCEEDED(status)                                 ? FileOperations::ItemCompletion::Completed
++                                                                                          : FileOperations::ItemCompletion::Failed;
++        result.finalSourcePath      = admittedStep.source.providerPath;
++        result.finalDestinationPath = admittedStep.providerJoinedPath;
++        if (! ambiguousObservation)
++            result.conflictObservation = acceptedObservation;
++        static_cast<void>(StoreTypedItemResult(std::move(result)));
++        return status;
++    };
++
+     PerItemCallbackCookie cookie{operationIndex};
+     cookie.operationDestinationPath = destinationPath.native();
+     FileSystemFlags itemFlags       = FILESYSTEM_FLAG_NONE;
+@@ -11219,12 +11259,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+     {
+         if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
+         {
+-            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
++            return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+         }
+         const HRESULT providerNameHr = revalidateProviderName();
+         if (FAILED(providerNameHr))
+         {
+-            return providerNameHr;
++            return finish(providerNameHr);
+         }
+         FileOperations::ObjectBindingResult destination =
+             FileOperations::BindObjectAuthority(_fileSystem.get(), destinationPath.native(), rename->endpoint.profileId, destinationBindFlags);
+@@ -11235,12 +11275,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+             const HRESULT sameHr = FileOperations::CrossCheckBoundObjectIdentity(sourceAuthority, destination.authority, destinationIsSource, sameRevision);
+             if (FAILED(sameHr))
+             {
+-                return sameHr;
++                return finish(sameHr);
+             }
+         }
+         else if (destination.state != FileOperations::ObjectBindingState::Missing)
+         {
+-            return FAILED(destination.status) ? destination.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
++            return finish(FAILED(destination.status) ? destination.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+         }
+ 
+         HRESULT renameHr = S_OK;
+@@ -11263,12 +11303,51 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+                                                                                                                : nullptr);
+             renameHr = sourceAuthority.boundObject->RenameIfUnchanged(
+                 destinationPath.c_str(), expectedDestination, itemFlags, &options, &mutation, renamedObject.put());
++#ifdef ENABLE_TESTS
++            if (renameHr == S_OK)
++            {
++                // Exercise the real consumer boundary after the provider has mutated the
++                // fixture files. Fault injection changes only the one returned receipt.
++                const auto fault = g_fileOpsBatchRenameReceiptFault.exchange(FileOpsBatchRenameReceiptFaultForSelfTest::None, std::memory_order_acq_rel);
++                switch (fault)
++                {
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::UnknownOutcome: mutation.outcomeKnown = FALSE; break;
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::NoCommitNoOriginal:
++                        mutation.mutationCommitted    = FALSE;
++                        mutation.originalStillPresent = FALSE;
++                        break;
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::CommittedOriginalRetained: mutation.originalStillPresent = TRUE; break;
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::InvalidBoolean: mutation.outcomeKnown = 2; break;
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::ShortPrefix: mutation.sizeBytes = 0u; break;
++                    case FileOpsBatchRenameReceiptFaultForSelfTest::None: break;
++                }
++            }
++#endif
++
++            // The bound-object receipt has a different ABI field order. Map its understood
++            // fields explicitly into the canonical destructive-mutation validator; never cast it.
++            const FileSystemItemMutationResult itemMutation{sizeof(FileSystemItemMutationResult),
++                                                            mutation.outcomeKnown,
++                                                            mutation.mutationCommitted,
++                                                            mutation.originalStillPresent,
++                                                            FileSystemOwnedStageDisposition::NotApplicable};
++            const bool validMutation  = mutation.sizeBytes == sizeof(mutation) && FileSystemRouteContract::IsValidItemMutationResultPrefix(itemMutation);
++            const auto failedMutation = FileSystemRouteContract::ClassifyFailedMutation(true, renameHr, validMutation ? &itemMutation : nullptr);
++            // Final Rename either leaves the original in place without committing,
++            // or commits and removes that original name. Unlike Copy, both true is invalid.
++            const bool knownMutation = validMutation && mutation.outcomeKnown == TRUE && mutation.mutationCommitted != mutation.originalStillPresent &&
++                                       failedMutation != FileSystemRouteContract::MutationClassification::ContractViolation;
++            publication              = ! knownMutation                       ? FileOperations::PublicationState::Unknown
++                                       : mutation.mutationCommitted != FALSE ? FileOperations::PublicationState::Published
++                                                                             : FileOperations::PublicationState::NotPublished;
++            sourceDisposition        = ! knownMutation                          ? FileOperations::SourceDisposition::Unknown
++                                       : mutation.originalStillPresent != FALSE ? FileOperations::SourceDisposition::Retained
++                                                                                : FileOperations::SourceDisposition::Removed;
+             if (SUCCEEDED(renameHr))
+             {
+-                if (! renamedObject || mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted == FALSE ||
+-                    mutation.originalStillPresent != FALSE)
++                if (! renamedObject || ! knownMutation || mutation.mutationCommitted != TRUE || mutation.originalStillPresent != FALSE)
+                 {
+-                    renameHr = E_UNEXPECTED;
++                    renameHr = ! knownMutation || mutation.mutationCommitted != FALSE ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : E_UNEXPECTED;
+                 }
+                 else
+                 {
+@@ -11292,8 +11371,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+                     }
+                 }
+             }
+-            else if (mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted != FALSE)
++            else if (! knownMutation || failedMutation != FileSystemRouteContract::MutationClassification::RetryableNoCommit)
+             {
++                // Unknown, contradictory or committed receipts cannot authorize another attempt.
+                 renameHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+             }
+         }
+@@ -11302,12 +11382,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+         {
+             NoteLiveOutputPublished(destinationPath.native());
+             ClearConflictPrompt(*this);
+-            return S_OK;
++            return finish(S_OK);
+         }
+         if (renameHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
+         {
+             ClearConflictPrompt(*this);
+-            return renameHr;
++            return finish(renameHr);
+         }
+ 
+         const wil::com_ptr<IFileSystemIO> fileSystemIo = QueryFileSystemIo(_fileSystem.get());
+@@ -11324,11 +11404,21 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+                                 allowRetry,
+                                 retryCount,
+                                 false,
+-                                destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource);
++                                destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource,
++                                nullptr,
++                                true);
+         ConflictAction action = promptBegin.action;
++        auto currentObservation = promptBegin.acceptedObservation;
+         if (promptBegin.ownsPrompt)
+         {
+-            action = WaitForConflictDecision(*this, &cookie, promptBegin.decisionScope).first;
++            action = WaitForConflictDecision(*this, &cookie, promptBegin.decisionScope, &currentObservation).first;
++        }
++        if (currentObservation.has_value())
++        {
++            if (acceptedObservation.has_value() && acceptedObservation != currentObservation)
++                ambiguousObservation = true;
++            else if (! ambiguousObservation)
++                acceptedObservation = currentObservation;
+         }
+ 
+         if (action == ConflictAction::Overwrite || action == ConflictAction::ReplaceReadOnly || action == ConflictAction::ReplaceLink)
+@@ -11336,7 +11426,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+             if (destination.state != FileOperations::ObjectBindingState::Bound || destinationIsSource)
+             {
+                 ClearConflictPrompt(*this);
+-                return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
++                return finish(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
+             }
+             grantedExpectedDestination = destination.authority.boundObject;
+             itemFlags                  = static_cast<FileSystemFlags>(itemFlags | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+@@ -11360,9 +11450,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
+         ClearConflictPrompt(*this);
+         if (action == ConflictAction::Skip || action == ConflictAction::SkipAll)
+         {
+-            return S_FALSE;
++            return finish(S_FALSE);
+         }
+-        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
++        return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+     }
+ }
+ 
+@@ -11522,6 +11612,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
+         return status;
+     }
+ 
++#ifdef ENABLE_TESTS
++    // Let the deterministic fixture create a destination occupant after successful
++    // batch preflight; the real bound mutation then owns and presents the conflict.
++    g_fileOpsBatchRenameBeforeMutationPausePoint.Pause(5'000ull);
++#endif
++
+     struct ExecutionContext final
+     {
+         Task* task                                                     = nullptr;
+@@ -11590,6 +11686,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
+         {
+             continue;
+         }
++        bool storedAtMutation = false;
++        {
++            std::scoped_lock lock(_sourceItemStatusMutex);
++            storedAtMutation = item.operationIndex < _sourceItemResultBuilders.size() && _sourceItemResultBuilders[item.operationIndex].terminal.has_value();
++        }
++        if (storedAtMutation)
++        {
++            if (item.completed)
++                StorePublishedTopLevelCompletionSnapshot(*this, MarkTopLevelItemCompleted(*this, item.operationIndex));
++            continue;
++        }
++        // Never-invoked/precondition-rejected rows have no mutation receipt or accepted reference.
+         const FileOperations::RenameStep& step = rename->finalMappings[item.operationIndex];
+         FileOperations::FileOperationItemResult result{};
+         result.sourceIndex          = item.operationIndex;
+@@ -17724,7 +17832,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                                               FileOperations::OwnedStageDisposition ownedStageDisposition,
+                                               FileOperations::VerificationState verification,
+                                               const FileOperations::ProviderIdentitySnapshot* retainedSourceIdentity,
+-                                              bool selectedRootVerificationNotApplicable = false) noexcept
++                                              bool selectedRootVerificationNotApplicable,
++                                              std::optional<FileOperations::ConflictObservationReference> exactDeleteObservation) noexcept
+     {
+         FileOperations::FileOperationItemResult result{};
+         result.sourceIndex           = sourceIndex;
+@@ -17908,11 +18017,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+             // directory itself does not have a file-content verification axis.
+             result.verification = FileOperations::VerificationState::NotApplicable;
+         }
++        // Only the Recycle escalation's bound selected item supplies this reference.
++        result.conflictObservation = exactDeleteObservation;
+         static_cast<void>(StoreTypedItemResult(std::move(result)));
+     };
+ 
+-    const auto executeRecycleEscalation =
+-        [&](size_t sourceIndex, PerItemCallbackCookie* perItemCookie, HRESULT recycleStatus, std::wstring_view sourcePath) noexcept -> HRESULT
++    const auto executeRecycleEscalation = [&](size_t sourceIndex,
++                                              PerItemCallbackCookie* perItemCookie,
++                                              HRESULT recycleStatus,
++                                              std::wstring_view sourcePath,
++                                              std::optional<FileOperations::ConflictObservationReference>& exactDeleteObservation) noexcept -> HRESULT
+     {
+         if (_operation != FILESYSTEM_DELETE || sourceIndex >= deletePlanBySourceIndex.size() || sourcePath.empty())
+         {
+@@ -18036,11 +18150,17 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+         request.bytesKnown                  = current.authority.committedSizeBytes != std::numeric_limits<uint64_t>::max();
+         request.bytes                       = request.bytesKnown ? current.authority.committedSizeBytes : 0u;
+         request.sourceIdentity              = current.authority.identity;
++        request.exactExecutionPaths         = true;
+         const DeferredConsentResult consent = RequestDeferredConsent(*this, request);
+         if (FAILED(consent.status))
+         {
+             return consent.status;
+         }
++        if ((consent.action == ConflictAction::Skip || consent.action == ConflictAction::PermanentDelete) && consent.acceptedObservation.has_value() &&
++            consent.acceptedObservation->taskId == _taskId && consent.acceptedObservation->promptGeneration != 0u)
++        {
++            exactDeleteObservation = consent.acceptedObservation;
++        }
+         if (consent.action == ConflictAction::Skip)
+         {
+             storeSourceMutationTruth(sourceIndex, S_FALSE, recycleMutation);
+@@ -18058,15 +18178,48 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+         // Keeping that handle through the prompt is the revalidation boundary: DeleteIfUnchanged
+         // mutates the exact retained object and never reopens the pathname after consent.
+         const HRESULT deleteHr = current.authority.boundObject->DeleteIfUnchanged(FILESYSTEM_FLAG_NONE, &deleteOptions, &mutationResult);
+-        const FileOperations::ManagedCleanupAttemptDisposition disposition = FileOperations::ClassifyManagedCleanupMutation({
+-            .status               = deleteHr,
+-            .outcomeKnown         = mutationResult.outcomeKnown == TRUE,
+-            .mutationCommitted    = mutationResult.mutationCommitted == TRUE,
+-            .originalStillPresent = mutationResult.originalStillPresent == TRUE,
+-        });
+-
+-        FileSystemItemMutationResult finalMutation{
+-            sizeof(FileSystemItemMutationResult), mutationResult.outcomeKnown, mutationResult.mutationCommitted, mutationResult.originalStillPresent};
++#ifdef ENABLE_TESTS
++        if (deleteHr == S_OK)
++        {
++            // The provider has already deleted the real file. Corrupt only the
++            // one consumer-visible receipt to exercise the fail-closed reducer.
++            const auto fault = g_fileOpsRecycleDeleteReceiptFault.exchange(FileOpsRecycleDeleteReceiptFaultForSelfTest::None, std::memory_order_acq_rel);
++            switch (fault)
++            {
++                case FileOpsRecycleDeleteReceiptFaultForSelfTest::ShortPrefix: mutationResult.sizeBytes = 0u; break;
++                case FileOpsRecycleDeleteReceiptFaultForSelfTest::InvalidBoolean: mutationResult.outcomeKnown = 2; break;
++                case FileOpsRecycleDeleteReceiptFaultForSelfTest::CommittedOriginalRetained: mutationResult.originalStillPresent = TRUE; break;
++                case FileOpsRecycleDeleteReceiptFaultForSelfTest::None: break;
++            }
++        }
++#endif
++        // Conditional receipts use a different ABI layout. Validate the advertised
++        // prefix and exact BOOL values before reducing them to native booleans.
++        FileSystemItemMutationResult finalMutation{sizeof(FileSystemItemMutationResult),
++                                                   mutationResult.outcomeKnown,
++                                                   mutationResult.mutationCommitted,
++                                                   mutationResult.originalStillPresent,
++                                                   FileSystemOwnedStageDisposition::NotApplicable};
++        const bool validMutation =
++            mutationResult.sizeBytes == sizeof(mutationResult) && FileSystemRouteContract::IsValidItemMutationResultPrefix(finalMutation);
++        const FileOperations::ManagedCleanupAttemptDisposition disposition = validMutation
++                                                                                 ? FileOperations::ClassifyManagedCleanupMutation({
++                                                                                       .status               = deleteHr,
++                                                                                       .outcomeKnown         = mutationResult.outcomeKnown == TRUE,
++                                                                                       .mutationCommitted    = mutationResult.mutationCommitted == TRUE,
++                                                                                       .originalStillPresent = mutationResult.originalStillPresent == TRUE,
++                                                                                   })
++                                                                                 : FileOperations::ManagedCleanupAttemptDisposition::ProviderContractViolation;
++        if (disposition == FileOperations::ManagedCleanupAttemptDisposition::ProviderContractViolation)
++        {
++            // A malformed receipt proves neither removal nor retention. Preserve an
++            // indeterminate terminal fact and never offer another destructive attempt.
++            finalMutation.outcomeKnown         = FALSE;
++            finalMutation.mutationCommitted    = FALSE;
++            finalMutation.originalStillPresent = FALSE;
++            storeSourceMutationTruth(sourceIndex, HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE), finalMutation);
++            return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
++        }
+         switch (disposition)
+         {
+             case FileOperations::ManagedCleanupAttemptDisposition::Removed:
+@@ -19449,6 +19602,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                     bool finalSelectedRootVerificationNotApplicable     = false;
+                     std::optional<FileOperations::PublicationState> finalPartialPublication;
+                     std::optional<FileOperations::ProviderIdentitySnapshot> finalRetainedSourceIdentity;
++                    std::optional<FileOperations::ConflictObservationReference> finalExactDeleteObservation;
+                     QualifiedItemFailurePhase finalFailurePhase      = QualifiedItemFailurePhase::None;
+                     HRESULT finalFailureStatus                       = S_OK;
+                     uint32_t finalMutationAttemptFlags               = 0u;
+@@ -19910,7 +20064,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                                 bucketOperation, itemFlags, bucketFileSystemIo, itemHr, sourceText, destinationItemText, bridgeUnsupportedReparse);
+                             if (bucket == ConflictBucket::RecycleFailed)
+                             {
+-                                const HRESULT escalationHr = executeRecycleEscalation(index, &cookie, itemHr, sourceText);
++                                const HRESULT escalationHr = executeRecycleEscalation(index, &cookie, itemHr, sourceText, finalExactDeleteObservation);
+                                 if (escalationHr == S_OK)
+                                 {
+                                     finalItemStatus    = S_OK;
+@@ -19937,6 +20091,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                             const bool allowRetry           = IsRetryableConflictBucket(bucket);
+                             const unsigned int attemptCount = provisionalBucketIndex < retryCounts.size() ? retryCounts[provisionalBucketIndex] : 0u;
+ 
++                            // A later provider-returned decision is a different prompt scope; the
++                            // exact Recycle escalation reference cannot describe its result.
++                            finalExactDeleteObservation.reset();
+                             ConflictPromptBeginResult promptBegin = BeginProviderReturnedConflictPrompt(
+                                 task, &cookie, bucket, itemHr, sourceText, destinationItemText, allowRetry, attemptCount, false);
+                             bucket                   = promptBegin.bucket;
+@@ -20116,7 +20273,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                                              finalOwnedStageDisposition,
+                                              finalVerification,
+                                              finalRetainedSourceIdentity ? &finalRetainedSourceIdentity.value() : nullptr,
+-                                             finalSelectedRootVerificationNotApplicable);
++                                             finalSelectedRootVerificationNotApplicable,
++                                             finalExactDeleteObservation);
+ 
+                     const uint64_t publicationValue = finalPartialPublication.has_value()
+                                                           ? static_cast<uint64_t>(finalPartialPublication.value())
+@@ -20296,7 +20454,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
+                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+             }
+ 
+-            const HRESULT escalationHr = executeRecycleEscalation(index, nullptr, itemStatus, _sourcePaths[index].native());
++            // Bulk mode has no per-item policy terminal handoff. Do not attach a root-index
++            // association here; a separate exact bulk-result slice must own that mapping.
++            std::optional<FileOperations::ConflictObservationReference> ignoredBulkObservation;
++            const HRESULT escalationHr = executeRecycleEscalation(index, nullptr, itemStatus, _sourcePaths[index].native(), ignoredBulkObservation);
+             if (escalationHr == S_FALSE)
+             {
+                 hadEscalationSkip = true;
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.Private.h b/RedSalamander/FolderWindow.FileOperations.State.Private.h
+index 3d1cdcb6e..bcf7c311a 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.Private.h
++++ b/RedSalamander/FolderWindow.FileOperations.State.Private.h
+@@ -122,6 +122,9 @@ extern SelfTestPausePoint g_fileOpsConflictMetadataPausePoint;
+ extern SelfTestPausePoint g_fileOpsKeepBothNestedConflictPausePoint;
+ extern SelfTestPausePoint g_fileOpsInlineRenameBeforeMutationPausePoint;
+ extern SelfTestPausePoint g_fileOpsBatchRenameBeforeExecutionPausePoint;
++extern SelfTestPausePoint g_fileOpsBatchRenameBeforeMutationPausePoint;
++extern std::atomic<FileOpsBatchRenameReceiptFaultForSelfTest> g_fileOpsBatchRenameReceiptFault;
++extern std::atomic<FileOpsRecycleDeleteReceiptFaultForSelfTest> g_fileOpsRecycleDeleteReceiptFault;
+ extern SelfTestPausePoint g_fileOpsRecycleEscalationBeforeBindPausePoint;
+ extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeBindPausePoint;
+ extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeRecheckPausePoint;
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.Queue.cpp b/RedSalamander/FolderWindow.FileOperations.State.Queue.cpp
+index 7147c427b..25935afef 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.Queue.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.State.Queue.cpp
+@@ -519,6 +519,31 @@ void ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest() noexcept
+     g_fileOpsBatchRenameBeforeExecutionPausePoint.Release();
+ }
+ 
++void SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest fault) noexcept
++{
++    g_fileOpsBatchRenameReceiptFault.store(fault, std::memory_order_release);
++}
++
++void SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest fault) noexcept
++{
++    g_fileOpsRecycleDeleteReceiptFault.store(fault, std::memory_order_release);
++}
++
++void SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(bool enabled) noexcept
++{
++    g_fileOpsBatchRenameBeforeMutationPausePoint.Set(enabled);
++}
++
++bool HasFileOpsBatchRenameBeforeMutationPauseEnteredForSelfTest() noexcept
++{
++    return g_fileOpsBatchRenameBeforeMutationPausePoint.HasEntered();
++}
++
++void ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest() noexcept
++{
++    g_fileOpsBatchRenameBeforeMutationPausePoint.Release();
++}
++
+ void SetFileOpsRecycleEscalationBeforeBindPauseForSelfTest(bool enabled) noexcept
+ {
+     g_fileOpsRecycleEscalationBeforeBindPausePoint.Set(enabled);
+diff --git a/RedSalamander/FolderWindow.FileOperationsInternal.h b/RedSalamander/FolderWindow.FileOperationsInternal.h
+index ee1de0710..7d0800db9 100644
+--- a/RedSalamander/FolderWindow.FileOperationsInternal.h
++++ b/RedSalamander/FolderWindow.FileOperationsInternal.h
+@@ -2255,6 +2255,27 @@ void ReleaseFileOpsInlineRenameBeforeMutationPauseForSelfTest() noexcept;
+ void SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(bool enabled) noexcept;
+ bool HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() noexcept;
+ void ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest() noexcept;
++enum class FileOpsBatchRenameReceiptFaultForSelfTest : uint8_t
++{
++    None,
++    UnknownOutcome,
++    NoCommitNoOriginal,
++    CommittedOriginalRetained,
++    InvalidBoolean,
++    ShortPrefix,
++};
++void SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest fault) noexcept;
++enum class FileOpsRecycleDeleteReceiptFaultForSelfTest : uint8_t
++{
++    None,
++    ShortPrefix,
++    InvalidBoolean,
++    CommittedOriginalRetained,
++};
++void SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest fault) noexcept;
++void SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(bool enabled) noexcept;
++bool HasFileOpsBatchRenameBeforeMutationPauseEnteredForSelfTest() noexcept;
++void ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest() noexcept;
+ void SetFileOpsRecycleEscalationBeforeBindPauseForSelfTest(bool enabled) noexcept;
+ bool HasFileOpsRecycleEscalationBeforeBindPauseEnteredForSelfTest() noexcept;
+ void ReleaseFileOpsRecycleEscalationBeforeBindPauseForSelfTest() noexcept;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.BatchRenameExactResult.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.BatchRenameExactResult.cpp
+new file mode 100644
+index 000000000..d2e6cb126
+--- /dev/null
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.BatchRenameExactResult.cpp
+@@ -0,0 +1,328 @@
++// Included by FolderWindow.FileOperations.SelfTest.cpp, not compiled separately.
++// One real local batch-rename hop per round. The test pause is after the worker's
++// final-slot preflight, so the destination appears only between preflight and mutation.
++
++[[nodiscard]] HRESULT PopulateBatchRenameExactResultProviderFacts(IFileSystem* fileSystem, BatchRenameExecutionOp& operation) noexcept
++{
++    if (! fileSystem || operation.originalSource.empty() || operation.finalLeaf.empty())
++        return E_INVALIDARG;
++
++    const FileSystemPathIdentity identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
++    std::wstring parentPath;
++    std::wstring sourceLeaf;
++    if (! TryGetFileSystemParentPath(identity, operation.originalSource.native(), parentPath) ||
++        ! TryGetFileSystemLeafName(identity, operation.originalSource.native(), sourceLeaf))
++        return E_INVALIDARG;
++    const std::optional<std::wstring> parentKey = TryMakePathKey(identity, parentPath);
++    if (! parentKey.has_value())
++        return E_INVALIDARG;
++
++    const auto source = FileSystemRouteContract::QueryChildNameContract(fileSystem, parentPath, sourceLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
++    const auto final  = FileSystemRouteContract::QueryChildNameContract(fileSystem, parentPath, operation.finalLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
++    const auto statusFor = [](const FileSystemRouteContract::ChildNameContractResult& result) noexcept
++    {
++        if (result.state == FileSystemRouteContract::QueryState::Available && result.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
++            FAILED(result.failureStatus))
++            return result.failureStatus;
++        return FAILED(result.status) ? result.status : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
++    };
++    if (source.state != FileSystemRouteContract::QueryState::Available || source.nameStatus != FILESYSTEM_CHILD_NAME_VALID || source.collisionKey.empty())
++        return statusFor(source);
++    if (final.state != FileSystemRouteContract::QueryState::Available || final.nameStatus != FILESYSTEM_CHILD_NAME_VALID || final.joinedPath.empty() ||
++        final.collisionKey.empty())
++        return statusFor(final);
++
++    operation.providerFinalPath          = std::filesystem::path(final.joinedPath);
++    operation.providerParentKey          = parentKey.value();
++    operation.providerSourceCollisionKey = source.collisionKey;
++    operation.providerFinalCollisionKey  = final.collisionKey;
++    return S_OK;
++}
++
++[[nodiscard]] TickResult TickBatchRenameExactResultCarrier(SelfTestState& state) noexcept
++{
++    if (state.step != SelfTestState::Step::FileOps_BatchRenameExactResultCarrier)
++        return std::nullopt;
++
++    using Task              = FolderWindow::FileOperationState::Task;
++    const auto releasePause = []() noexcept
++    {
++        ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest();
++        SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(false);
++    };
++    const auto failAndRelease = [&](std::wstring_view message) noexcept -> TickResult
++    {
++        // Fail immediately runs cleanup and waits for workers. Unblock the worker first.
++        releasePause();
++        Fail(message);
++        return true;
++    };
++
++    if (! state.fileOps || ! state.folderWindow)
++        return failAndRelease(L"Exact batch-rename result requires the local FileOps setup.");
++    if (state.stepState == 0u)
++        state.batchRenameExactPaneFileSystem = state.folderWindow->GetFileSystem(FolderWindow::Pane::Left);
++    const wil::com_ptr<IFileSystem>& paneFileSystem = state.batchRenameExactPaneFileSystem;
++    if (! paneFileSystem)
++        return failAndRelease(L"Exact batch-rename result lost the left pane's filesystem instance.");
++    constexpr std::array<std::wstring_view, 7> roundNames{{
++        L"replace",
++        L"skip",
++        L"receipt-unknown-outcome",
++        L"receipt-no-commit-no-original",
++        L"receipt-committed-original-retained",
++        L"receipt-invalid-boolean",
++        L"receipt-short-prefix",
++    }};
++    constexpr std::array<FileOpsBatchRenameReceiptFaultForSelfTest, 7> receiptFaults{{
++        FileOpsBatchRenameReceiptFaultForSelfTest::None,
++        FileOpsBatchRenameReceiptFaultForSelfTest::None,
++        FileOpsBatchRenameReceiptFaultForSelfTest::UnknownOutcome,
++        FileOpsBatchRenameReceiptFaultForSelfTest::NoCommitNoOriginal,
++        FileOpsBatchRenameReceiptFaultForSelfTest::CommittedOriginalRetained,
++        FileOpsBatchRenameReceiptFaultForSelfTest::InvalidBoolean,
++        FileOpsBatchRenameReceiptFaultForSelfTest::ShortPrefix,
++    }};
++    if (state.stepState >= 4u * roundNames.size())
++        return failAndRelease(L"Exact batch-rename result state moved past all seven rounds.");
++
++    const size_t round                     = state.stepState / 4u;
++    const bool skipRound                   = round == 1u;
++    const bool faultRound                  = round >= 2u;
++    const uint32_t phase                   = state.stepState % 4u;
++    const std::filesystem::path root       = state.tempRoot / L"batch-rename-exact-result" / std::wstring(roundNames[round]);
++    const std::filesystem::path sourcePath = root / L"original.txt";
++    const std::filesystem::path finalPath  = root / L"renamed.txt";
++    const std::string sourceBytes          = std::format("source-round-{}-926", round);
++    const std::string occupantBytes        = std::format("occupant-round-{}-178", round);
++    const Task::ConflictAction action      = skipRound ? Task::ConflictAction::Skip : Task::ConflictAction::Overwrite;
++    const uint64_t taskId                  = state.batchRenameExactCurrentTaskId;
++
++    wil::com_ptr<IFileSystemIO> io;
++    if (FAILED(paneFileSystem->QueryInterface(IID_PPV_ARGS(io.addressof()))) || ! io)
++        return failAndRelease(L"Left-pane local provider did not supply file I/O for exact batch-rename fixture.");
++
++    if (phase == 0u)
++    {
++        if (round == 0u)
++        {
++            state.batchRenameExactAutoAcceptBefore = HostGetAutoAcceptPrompts();
++            HostResetPromptShutdown();
++            HostSetAutoAcceptPrompts(false);
++        }
++        SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest::None);
++        if (state.fileOps->HasActiveOperations())
++            return failAndRelease(L"Exact batch-rename fixture requires no prior active operation.");
++        std::error_code ec;
++        std::filesystem::create_directories(root, ec);
++        if (ec)
++            return failAndRelease(L"Could not create owned exact batch-rename fixture directory.");
++        const bool sourceAlreadyExists = std::filesystem::exists(sourcePath, ec);
++        if (ec || sourceAlreadyExists)
++            return failAndRelease(L"Exact batch-rename source path was not initially absent.");
++        const bool finalAlreadyExists = std::filesystem::exists(finalPath, ec);
++        if (ec || finalAlreadyExists || ! WriteFileTextFsIo(io, sourcePath, sourceBytes))
++            return failAndRelease(L"Could not prepare an absent final slot and a distinct source file.");
++
++        BatchRenameExecutionOp operation{};
++        operation.originalSource              = sourcePath;
++        operation.finalLeaf                   = finalPath.filename().native();
++        const HRESULT factsHr                 = PopulateBatchRenameExactResultProviderFacts(paneFileSystem.get(), operation);
++        const FileSystemPathIdentity identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
++        if (factsHr != S_OK || ! EquivalentPath(identity, operation.providerFinalPath.native(), finalPath.native()))
++            return failAndRelease(L"Local provider did not attest exact batch-rename source/final namespace facts.");
++
++        std::vector<BatchRenameExecutionOp> operations;
++        operations.push_back(std::move(operation));
++        state.batchRenameExactPromptGeneration = 0u;
++        SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(true);
++        uint64_t admittedTaskId = 0u;
++        const HRESULT admitHr   = state.fileOps->AdmitBatchRename(FolderWindow::Pane::Left, paneFileSystem, std::move(operations), {}, {}, &admittedTaskId);
++        if (admitHr != S_OK || admittedTaskId == 0u)
++            return failAndRelease(L"Exact batch-rename operation did not admit a published task.");
++        state.batchRenameExactCurrentTaskId = admittedTaskId;
++        state.markerTick                    = GetTickCount64();
++        ++state.stepState;
++        return false;
++    }
++
++    if (taskId == 0u)
++        return failAndRelease(L"Exact batch-rename round lost its published task ID.");
++
++    if (phase == 1u)
++    {
++        if (! HasFileOpsBatchRenameBeforeMutationPauseEnteredForSelfTest())
++        {
++            const ULONGLONG nowTick = GetTickCount64();
++            if (state.completedTasks.contains(taskId) || (nowTick >= state.markerTick && nowTick - state.markerTick > SelfTest::ScaleTimeout(10'000ull)))
++                return failAndRelease(L"Batch-rename worker failed to pause after successful final-slot preflight.");
++            return false;
++        }
++        std::error_code ec;
++        const bool sourceExists = std::filesystem::exists(sourcePath, ec);
++        if (ec)
++            return failAndRelease(L"Could not inspect source before post-preflight race injection.");
++        const bool finalExists = std::filesystem::exists(finalPath, ec);
++        if (ec || ! sourceExists || finalExists || ! WriteFileTextFsIo(io, finalPath, occupantBytes))
++            return failAndRelease(L"Post-preflight race did not start with source present and final slot absent.");
++        std::string actualOccupant;
++        if (! ReadFileTextFsIo(io, finalPath, actualOccupant) || actualOccupant != occupantBytes)
++            return failAndRelease(L"Post-preflight race occupant bytes were not retained before worker release.");
++        releasePause();
++        ++state.stepState;
++        return false;
++    }
++
++    if (phase == 2u)
++    {
++        Task* task        = state.fileOps->FindTask(taskId);
++        const auto prompt = TryGetConflictPromptCopy(task);
++        if (! prompt.has_value())
++        {
++            const ULONGLONG nowTick = GetTickCount64();
++            if (state.completedTasks.contains(taskId) || (nowTick >= state.markerTick && nowTick - state.markerTick > SelfTest::ScaleTimeout(30'000ull)))
++                return failAndRelease(L"Batch-rename race completed without an actionable exact collision prompt.");
++            return false;
++        }
++        if (! prompt->sourceMetadata.available || ! prompt->destinationMetadata.available)
++        {
++            const ULONGLONG nowTick = GetTickCount64();
++            if (nowTick >= state.markerTick && nowTick - state.markerTick > SelfTest::ScaleTimeout(30'000ull))
++                return failAndRelease(L"Batch-rename collision prompt metadata did not become actionable.");
++            return false;
++        }
++        const FileSystemPathIdentity identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
++        if (prompt->generation == 0u || ! EquivalentPath(identity, prompt->sourcePath, sourcePath.native()) ||
++            ! EquivalentPath(identity, prompt->destinationPath, finalPath.native()) || prompt->status != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) ||
++            ! PromptHasAction(prompt.value(), action))
++            return failAndRelease(L"Batch-rename collision prompt lacked exact generation, paths, metadata or action.");
++
++        state.batchRenameExactPromptGeneration = prompt->generation;
++        if (faultRound)
++            SetFileOpsBatchRenameReceiptFaultForSelfTest(receiptFaults[round]);
++        task->SubmitConflictDecision(action, false);
++        ++state.stepState;
++        return false;
++    }
++
++    const auto completed = state.completedTasks.find(taskId);
++    if (completed == state.completedTasks.end())
++    {
++        if (const auto prompt = TryGetConflictPromptCopy(state.fileOps->FindTask(taskId));
++            prompt.has_value() && prompt->generation != state.batchRenameExactPromptGeneration)
++            return failAndRelease(L"Exact batch-rename mutation surfaced a second conflict prompt.");
++        const ULONGLONG nowTick = GetTickCount64();
++        if (nowTick >= state.markerTick && nowTick - state.markerTick > SelfTest::ScaleTimeout(60'000ull))
++            return failAndRelease(L"Exact batch-rename task did not complete after conflict decision.");
++        return false;
++    }
++    if (Task* task = state.fileOps->FindTask(taskId); TryGetConflictPromptCopy(task).has_value())
++        return failAndRelease(L"Exact batch-rename task completed with another unresolved prompt.");
++    const HRESULT expectedTaskHr = faultRound ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : (skipRound ? S_FALSE : S_OK);
++    if (completed->second.hr != expectedTaskHr)
++        return failAndRelease(L"Exact batch-rename task returned the wrong Replace/Skip aggregate status.");
++
++    std::error_code ec;
++    const bool sourceExists = std::filesystem::exists(sourcePath, ec);
++    if (ec)
++        return failAndRelease(L"Could not inspect source after exact batch-rename completion.");
++    const bool finalExists = std::filesystem::exists(finalPath, ec);
++    std::string actualSource;
++    std::string actualFinal;
++    if (ec || ! finalExists || ! ReadFileTextFsIo(io, finalPath, actualFinal) || (! skipRound && (sourceExists || actualFinal != sourceBytes)) ||
++        (skipRound && (! sourceExists || ! ReadFileTextFsIo(io, sourcePath, actualSource) || actualSource != sourceBytes || actualFinal != occupantBytes)))
++        return failAndRelease(L"Exact batch-rename Replace/Skip disk bytes or source retention were wrong.");
++
++    std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> diagnostics;
++    state.fileOps->CollectDiagnostics(diagnostics);
++    std::optional<FileOperations::AcceptedConflictDecision> accepted;
++    std::optional<FileOperations::ConflictResultObservation> result;
++    size_t acceptedCount = 0u;
++    size_t resultCount   = 0u;
++    for (const auto& entry : diagnostics)
++    {
++        if (entry.taskId != taskId)
++            continue;
++        if (entry.acceptedDecision.has_value())
++        {
++            ++acceptedCount;
++            accepted = entry.acceptedDecision;
++        }
++        if (entry.category == L"item.conflict.result")
++        {
++            ++resultCount;
++            result = entry.conflictResult;
++        }
++    }
++    const FileOperations::PublicationState expectedPublication =
++        faultRound ? FileOperations::PublicationState::Unknown
++                   : (skipRound ? FileOperations::PublicationState::NotPublished : FileOperations::PublicationState::Published);
++    const FileOperations::SourceDisposition expectedSourceDisposition =
++        faultRound ? FileOperations::SourceDisposition::Unknown
++                   : (skipRound ? FileOperations::SourceDisposition::Retained : FileOperations::SourceDisposition::Removed);
++    const FileOperations::ItemCompletion expectedCompletion =
++        faultRound ? FileOperations::ItemCompletion::Indeterminate
++                   : (skipRound ? FileOperations::ItemCompletion::Skipped : FileOperations::ItemCompletion::Completed);
++    const HRESULT expectedResultStatus = faultRound ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : (skipRound ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK);
++    if (acceptedCount != 1u || resultCount != 1u || ! accepted.has_value() || ! result.has_value() || accepted->taskId != taskId ||
++        accepted->promptGeneration != state.batchRenameExactPromptGeneration || accepted->promptGeneration == 0u || accepted->action != action ||
++        accepted->applyToAll || result->reference.taskId != accepted->taskId || result->reference.promptGeneration != accepted->promptGeneration ||
++        result->publication != expectedPublication || result->sourceDisposition != expectedSourceDisposition || result->completion != expectedCompletion ||
++        result->verification != FileOperations::VerificationState::NotApplicable || result->status != expectedResultStatus)
++        return failAndRelease(L"Exact batch-rename result lacked the accepted prompt reference or truthful outcome axes.");
++
++    if (faultRound)
++    {
++        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
++        state.fileOps->CollectCompletedTasks(summaries);
++        const auto summary = std::ranges::find_if(summaries, [&](const auto& value) noexcept { return value.taskId == taskId; });
++        if (summary == summaries.end() || summary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || summary->publishedItemCount != 0u ||
++            summary->unknownPublicationItemCount != 1u || summary->removedSourceCount != 0u || summary->retainedSourceCount != 0u ||
++            summary->unknownSourceCount != 1u || summary->indeterminateItemCount != 1u)
++            return failAndRelease(L"Faulted receipt must reach completed history as unknown publication/source and indeterminate result.");
++
++        FileOperationsPopupInternal::TaskSnapshot popup{};
++        if (! TryGetPopupTaskSnapshot(state.fileOps, taskId, popup) || ! popup.finished || popup.resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ||
++            ! popup.hasIndeterminateResult || popup.publishedItemCount != 0u || popup.unknownPublicationItemCount != 1u || popup.removedSourceCount != 0u ||
++            popup.retainedSourceCount != 0u || popup.unknownSourceCount != 1u)
++            return failAndRelease(L"Faulted receipt must project unknown terminal facts into the actual popup snapshot.");
++    }
++
++    std::filesystem::path reportPath;
++    if (! state.fileOps->ExportTaskIssuesReport(taskId, &reportPath, false))
++        return failAndRelease(L"Exact batch-rename issue report export failed.");
++    wil::unique_handle report(CreateFileW(
++        reportPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
++    LARGE_INTEGER reportSize{};
++    if (! report || ! GetFileSizeEx(report.get(), &reportSize) || reportSize.QuadPart <= 0 || reportSize.QuadPart > 1024 * 1024 ||
++        reportSize.QuadPart % sizeof(wchar_t) != 0)
++        return failAndRelease(L"Exact batch-rename issue report was not bounded UTF-16.");
++    std::wstring reportText(static_cast<size_t>(reportSize.QuadPart) / sizeof(wchar_t), L'\0');
++    DWORD bytesRead = 0u;
++    if (! ReadFile(report.get(), reportText.data(), static_cast<DWORD>(reportSize.QuadPart), &bytesRead, nullptr) ||
++        bytesRead != static_cast<DWORD>(reportSize.QuadPart) ||
++        reportText.find(FileOperations::FormatAcceptedConflictDecisionDiagnostic(accepted.value())) == std::wstring::npos ||
++        reportText.find(FileOperations::FormatConflictResultDiagnostic(result.value())) == std::wstring::npos)
++        return failAndRelease(L"Exact batch-rename report omitted the accepted decision or mutation result.");
++
++    if (round + 1u < roundNames.size())
++    {
++        state.batchRenameExactCurrentTaskId = 0u;
++        state.stepState                     = static_cast<uint32_t>((round + 1u) * 4u);
++        return false;
++    }
++    releasePause();
++    SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest::None);
++    if (state.batchRenameExactAutoAcceptBefore.has_value())
++    {
++        HostResetPromptShutdown();
++        HostSetAutoAcceptPrompts(state.batchRenameExactAutoAcceptBefore.value());
++        state.batchRenameExactAutoAcceptBefore.reset();
++    }
++    state.batchRenameExactCurrentTaskId = 0u;
++    state.batchRenameExactPaneFileSystem.reset();
++    state.batchRenameExactPromptGeneration = 0u;
++    RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
++    NextStep(state, SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder);
++    return false;
++}
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+index 410a7725b..5c5223611 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -63,6 +63,7 @@
+ #include <yyjson.h>
+ #pragma warning(pop)
+ 
++#include "BatchRenameExecutionEngine.h"
+ #include "Blake3Digest.h"
+ #include "ConnectionProfileUtils.h"
+ #include "ContentDigest.h"
+@@ -647,6 +648,7 @@ struct SelfTestState
+         FileOps_VisualGallery,
+         FileOps_VisualGalleryInteraction,
+         FileOps_TerminalFactsProjection,
++        FileOps_BatchRenameExactResultCarrier,
+         FileOps_CopyMergeIntoExistingFolder,
+         FileOps_MoveMergeIntoExistingFolderSameVolume,
+         Beeline_RenameMergeSkipKeepsSourceFolder,
+@@ -873,6 +875,10 @@ struct SelfTestState
+     std::vector<Step> activePhaseOrder;
+     std::vector<Step> reportedPhaseOrder;
+     uint32_t stepState    = 0;
++    uint64_t batchRenameExactPromptGeneration = 0u;
++    uint64_t batchRenameExactCurrentTaskId    = 0u;
++    std::optional<bool> batchRenameExactAutoAcceptBefore;
++    wil::com_ptr<IFileSystem> batchRenameExactPaneFileSystem;
+     uint64_t runStartTick = 0;
+ 
+     std::vector<SelfTest::SelfTestCaseResult> phaseResults;
+@@ -1025,6 +1031,7 @@ struct SelfTestState
+     bool autoDismissSuccessOriginal            = false;
+     ULONGLONG stepStartTick                    = 0;
+     ULONGLONG markerTick                       = 0;
++    size_t recycleMalformedRound               = 0;
+     DWORD beelineVolumeSerial                  = 0;
+     ULONGLONG beelineFileIndex                 = 0;
+     uint64_t beelineCopyMs                     = 0;
+@@ -1148,6 +1155,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
+         case SelfTestState::Step::FileOps_VisualGallery: return L"FileOps_VisualGallery";
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction: return L"FileOps_VisualGalleryInteraction";
+         case SelfTestState::Step::FileOps_TerminalFactsProjection: return L"FileOps_TerminalFactsProjection";
++        case SelfTestState::Step::FileOps_BatchRenameExactResultCarrier: return L"FileOps_BatchRenameExactResultCarrier";
+         case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder: return L"FileOps_CopyMergeIntoExistingFolder";
+         case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume: return L"FileOps_MoveMergeIntoExistingFolderSameVolume";
+         case SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder: return L"Beeline_RenameMergeSkipKeepsSourceFolder";
+@@ -1388,6 +1396,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
+ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+     SelfTestState::Step::Setup,                                           // Environment setup and plugin loading
+     SelfTestState::Step::FileOps_TerminalFactsProjection,                 // Completed summary reaches the production popup with independent terminal counts
++    SelfTestState::Step::FileOps_BatchRenameExactResultCarrier,           // Post-preflight rename conflict reports exact accepted prompt and mutation result
+     SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder,             // Clearflow Phase 1 - copy folder into existing destination folder merges
+     SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume,   // Clearflow Phase 1 - same-volume move folder into existing destination folder merges
+     SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder,        // Beeline - rename merge answers Overwrite/Skip per child and keeps the source folder
+@@ -2518,6 +2527,11 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
+     static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_BRIDGE_REPLACE_PUBLISHED_DESTINATION_PAYLOAD", nullptr));
+     ReleaseFileOpsKeepBothNestedConflictPauseForSelfTest();
+     SetFileOpsKeepBothNestedConflictPauseForSelfTest(false);
++    ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest();
++    SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(false);
++    SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest::None);
++    SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
++    static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_RECYCLE_FAIL_PATH", nullptr));
+     ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+     SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
+     ReleaseFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest();
+@@ -2540,6 +2554,14 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
+         }
+         return false;
+     }
++    if (state.batchRenameExactAutoAcceptBefore.has_value())
++    {
++        HostResetPromptShutdown();
++        HostSetAutoAcceptPrompts(state.batchRenameExactAutoAcceptBefore.value());
++        state.batchRenameExactAutoAcceptBefore.reset();
++    }
++    state.batchRenameExactPaneFileSystem.reset();
++    state.batchRenameExactCurrentTaskId = 0u;
+ 
+     if (state.fileOps)
+     {
+@@ -6724,6 +6746,10 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
+     state.fileOps      = nullptr;
+     state.taskA.reset();
+     state.taskB.reset();
++    state.batchRenameExactPromptGeneration = 0u;
++    state.batchRenameExactCurrentTaskId    = 0u;
++    state.batchRenameExactAutoAcceptBefore.reset();
++    state.batchRenameExactPaneFileSystem.reset();
+     state.taskC.reset();
+     state.queuePausedTask.reset();
+     state.popupOriginalRect      = {};
+@@ -6846,6 +6872,7 @@ namespace
+ {
+ using TickResult = std::optional<bool>;
+ 
++#include "FolderWindow.FileOperations.SelfTest.BatchRenameExactResult.cpp"
+ #include "FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
+ 
+ [[nodiscard]] std::wstring_view ValidateCompletedTerminalFactsProjection(SelfTestState& state) noexcept
+@@ -7183,6 +7210,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+     {
+         return result.value();
+     }
++    if (const TickResult result = dispatchPhase(TickBatchRenameExactResultCarrier); result.has_value())
++    {
++        return result.value();
++    }
+     if (const TickResult result = dispatchPhase(TickCopyMerge); result.has_value())
+     {
+         return result.value();
+@@ -7258,7 +7289,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+                 return true;
+             }
+             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+-            NextStep(state, SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder);
++            NextStep(state, SelfTestState::Step::FileOps_BatchRenameExactResultCarrier);
+             return false;
+         }
+         case SelfTestState::Step::FileOps_VisualGallery:
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp
+index f14f7e357..e217f0d60 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp
+@@ -1068,6 +1068,7 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
+     if (HasTimedOut(state, nowTick, 120'000ull))
+     {
+         static_cast<void>(SetEnvironmentVariableW(kRecycleFailurePathEnvVar, nullptr));
++        SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
+         ReleaseFileOpsRecycleEscalationBeforeBindPauseForSelfTest();
+         SetFileOpsRecycleEscalationBeforeBindPauseForSelfTest(false);
+         state.lockedFileHandle.reset();
+@@ -1246,11 +1247,12 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
+         }
+         if (! prompt->deferredConsent || prompt->bucket != ConflictBucket::RecycleFailed || prompt->applyToAllEligible ||
+             ! PromptHasAction(prompt.value(), ConflictAction::PermanentDelete) || PromptHasAction(prompt.value(), ConflictAction::SkipAll) ||
+-            ! prompt->sourceIdentity.has_value())
++            ! prompt->sourceIdentity.has_value() || prompt->generation == 0u || prompt->sourcePath != escalationSource.native())
+         {
+             Fail(L"Exact Recycle escalation did not expose the one-item identity-bound consent prompt.");
+             return true;
+         }
++        state.markerTick = prompt->generation;
+         task->SubmitConflictDecision(ConflictAction::PermanentDelete, true);
+         AppendLog(L"Phase10 Recycle escalation permanent-delete consent submitted");
+         state.stepState = 2;
+@@ -1270,6 +1272,60 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
+             Fail(std::format(L"Exact Recycle escalation failed or retained the source: hr=0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+             return true;
+         }
++        // Export flushes queued diagnostics before snapshotting the completed task.
++        std::filesystem::path resultReport;
++        if (! state.fileOps->ExportTaskIssuesReport(state.taskA.value(), &resultReport, false))
++        {
++            Fail(L"Exact Recycle escalation did not export its independent decision and result.");
++            return true;
++        }
++        std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> diagnostics;
++        state.fileOps->CollectDiagnostics(diagnostics);
++        const auto accepted = std::ranges::find_if(diagnostics, [&](const auto& entry) noexcept {
++            return entry.taskId == state.taskA.value() && entry.acceptedDecision.has_value() &&
++                   entry.acceptedDecision->action == ConflictAction::PermanentDelete;
++        });
++        const auto result   = std::ranges::find_if(
++            diagnostics, [&](const auto& entry) noexcept { return entry.taskId == state.taskA.value() && entry.category == L"item.conflict.result"; });
++        if (accepted == diagnostics.end() || result == diagnostics.end() || ! result->conflictResult.has_value())
++        {
++            Fail(L"Exact Recycle escalation needs separate accepted-choice and bound-delete result diagnostics.");
++            return true;
++        }
++        const auto& choice  = accepted->acceptedDecision.value();
++        const auto& outcome = result->conflictResult.value();
++        if (choice.taskId != state.taskA.value() || choice.promptGeneration != state.markerTick || outcome.reference.taskId != choice.taskId ||
++            outcome.reference.promptGeneration != choice.promptGeneration || outcome.publication != FileOperations::PublicationState::NotAttempted ||
++            outcome.sourceDisposition != FileOperations::SourceDisposition::Removed || outcome.completion != FileOperations::ItemCompletion::Completed ||
++            outcome.status != S_OK)
++        {
++            Fail(L"Exact Recycle escalation result did not reference the accepted generation and committed source removal.");
++            return true;
++        }
++        wil::unique_handle reportFile(CreateFileW(resultReport.c_str(),
++                                                  GENERIC_READ,
++                                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++                                                  nullptr,
++                                                  OPEN_EXISTING,
++                                                  FILE_ATTRIBUTE_NORMAL,
++                                                  nullptr));
++        LARGE_INTEGER reportSize{};
++        if (! reportFile || ! GetFileSizeEx(reportFile.get(), &reportSize) || reportSize.QuadPart <= 0 || reportSize.QuadPart > 1024 * 1024 ||
++            reportSize.QuadPart % sizeof(wchar_t) != 0)
++        {
++            Fail(L"Exact Recycle escalation export was not bounded UTF-16 text.");
++            return true;
++        }
++        std::wstring reportText(static_cast<size_t>(reportSize.QuadPart) / sizeof(wchar_t), L'\0');
++        DWORD reportRead = 0u;
++        if (! ReadFile(reportFile.get(), reportText.data(), static_cast<DWORD>(reportSize.QuadPart), &reportRead, nullptr) ||
++            reportRead != static_cast<DWORD>(reportSize.QuadPart) ||
++            reportText.find(FileOperations::FormatAcceptedConflictDecisionDiagnostic(choice)) == std::wstring::npos ||
++            reportText.find(FileOperations::FormatConflictResultDiagnostic(outcome)) == std::wstring::npos)
++        {
++            Fail(L"Exact Recycle escalation export lost its accepted decision or mutation result.");
++            return true;
++        }
+         AppendLog(L"Phase10 exact Recycle escalation completed");
+ 
+         if (! WriteTestFile(swapSource, 1024u))
+@@ -1329,28 +1385,200 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
+         return false;
+     }
+ 
+-    auto* swapTask = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+-    if (TryGetConflictPromptCopy(swapTask).has_value())
++    if (state.stepState == 4)
+     {
+-        swapTask->RequestCancel();
+-        Fail(L"Recycle identity replacement reached a permanent-delete prompt instead of failing before consent.");
+-        return true;
++        auto* swapTask = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
++        if (TryGetConflictPromptCopy(swapTask).has_value())
++        {
++            swapTask->RequestCancel();
++            Fail(L"Recycle identity replacement reached a permanent-delete prompt instead of failing before consent.");
++            return true;
++        }
++        const auto completed = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
++        if (completed == state.completedTasks.end())
++        {
++            return false;
++        }
++        std::error_code ec;
++        if (SUCCEEDED(completed->second.hr) || ! std::filesystem::exists(swapSource, ec) || ! std::filesystem::exists(swapOriginal, ec))
++        {
++            Fail(std::format(L"Recycle identity-swap fail-closed result mismatch: hr=0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
++            return true;
++        }
++        AppendLog(L"Phase10 Recycle identity-swap failed closed");
++        static_cast<void>(SetEnvironmentVariableW(kRecycleFailurePathEnvVar, nullptr));
++        state.recycleMalformedRound = 0u;
++        state.stepState             = 5;
++        return false;
+     }
+-    const auto completed = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+-    if (completed == state.completedTasks.end())
++
++    constexpr std::array<FileOpsRecycleDeleteReceiptFaultForSelfTest, 3> receiptFaults{{
++        FileOpsRecycleDeleteReceiptFaultForSelfTest::ShortPrefix,
++        FileOpsRecycleDeleteReceiptFaultForSelfTest::InvalidBoolean,
++        FileOpsRecycleDeleteReceiptFaultForSelfTest::CommittedOriginalRetained,
++    }};
++    if (state.recycleMalformedRound >= receiptFaults.size())
+     {
++        SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
++        static_cast<void>(SetEnvironmentVariableW(kRecycleFailurePathEnvVar, nullptr));
++        NextStep(state, SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention);
+         return false;
+     }
+-    std::error_code ec;
+-    if (SUCCEEDED(completed->second.hr) || ! std::filesystem::exists(swapSource, ec) || ! std::filesystem::exists(swapOriginal, ec))
++    const std::filesystem::path malformedSource = state.tempRoot / std::format(L"recycle-malformed-{}.bin", state.recycleMalformedRound);
++    const auto failMalformed                    = [&](std::wstring message) noexcept
+     {
+-        Fail(std::format(L"Recycle identity-swap fail-closed result mismatch: hr=0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+-        return true;
++        SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
++        static_cast<void>(SetEnvironmentVariableW(kRecycleFailurePathEnvVar, nullptr));
++        Fail(std::move(message));
++    };
++
++    if (state.stepState == 5)
++    {
++        if (! WriteTestFile(malformedSource, 1024u + state.recycleMalformedRound) ||
++            SetEnvironmentVariableW(kRecycleFailurePathEnvVar, malformedSource.c_str()) == FALSE)
++        {
++            failMalformed(L"Could not create or arm the real-file malformed Recycle receipt fixture.");
++            return true;
++        }
++        state.taskA = StartFileOperationAndGetId(state.fileOps,
++                                                 FILESYSTEM_DELETE,
++                                                 FolderWindow::Pane::Left,
++                                                 std::nullopt,
++                                                 state.fsLocal,
++                                                 {malformedSource},
++                                                 {},
++                                                 FILESYSTEM_FLAG_USE_RECYCLE_BIN,
++                                                 false,
++                                                 0,
++                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
++                                                 false);
++        if (! state.taskA.has_value())
++        {
++            failMalformed(L"Could not start the malformed Recycle receipt task.");
++            return true;
++        }
++        state.stepState = 6;
++        return false;
+     }
+-    AppendLog(L"Phase10 Recycle identity-swap failed closed");
++    if (state.stepState == 6)
++    {
++        auto* task        = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
++        const auto prompt = TryGetConflictPromptCopy(task);
++        if (! prompt.has_value())
++        {
++            return false;
++        }
++        if (! prompt->deferredConsent || prompt->bucket != ConflictBucket::RecycleFailed || prompt->applyToAllEligible ||
++            ! PromptHasAction(prompt.value(), ConflictAction::PermanentDelete) || prompt->sourcePath != malformedSource.native() ||
++            ! prompt->sourceIdentity.has_value() || prompt->generation == 0u)
++        {
++            failMalformed(L"Malformed Recycle receipt fixture did not reach exact identity-bound consent.");
++            return true;
++        }
++        state.markerTick = prompt->generation;
++        // One-shot fault is armed only after the prompt, immediately before the
++        // accepted decision resumes the real conditional provider mutation.
++        SetFileOpsRecycleDeleteReceiptFaultForSelfTest(receiptFaults[state.recycleMalformedRound]);
++        task->SubmitConflictDecision(ConflictAction::PermanentDelete, false);
++        state.stepState = 7;
++        return false;
++    }
++    if (state.stepState == 7)
++    {
++        const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
++        if (completed == state.completedTasks.end())
++        {
++            return false;
++        }
++        const HRESULT incomplete = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
++        std::error_code ec;
++        if (completed->second.hr != incomplete || std::filesystem::exists(malformedSource, ec) || ec)
++        {
++            failMalformed(L"Malformed receipt must report IO_INCOMPLETE after the real provider removed the source.");
++            return true;
++        }
+ 
+-    NextStep(state, SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention);
+-    return false;
++        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
++        state.fileOps->CollectCompletedTasks(summaries);
++        const auto summary = std::ranges::find_if(summaries, [&](const auto& item) noexcept { return item.taskId == state.taskA.value(); });
++        FileOperationsPopupInternal::TaskSnapshot popup{};
++        if (summary == summaries.end() || summary->resultHr != incomplete || summary->unknownSourceCount != 1u || summary->removedSourceCount != 0u ||
++            summary->retainedSourceCount != 0u || summary->indeterminateItemCount != 1u ||
++            ! TryGetPopupTaskSnapshot(state.fileOps, state.taskA.value(), popup) || ! popup.finished || popup.resultHr != incomplete ||
++            ! popup.hasIndeterminateResult || popup.unknownSourceCount != 1u || popup.removedSourceCount != 0u || popup.retainedSourceCount != 0u)
++        {
++            failMalformed(L"Malformed Recycle receipt projected a false removed/retained source or lost its indeterminate popup result.");
++            return true;
++        }
++
++        std::filesystem::path resultReport;
++        if (! state.fileOps->ExportTaskIssuesReport(state.taskA.value(), &resultReport, false))
++        {
++            failMalformed(L"Malformed Recycle receipt did not export its accepted decision and result.");
++            return true;
++        }
++        std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> diagnostics;
++        state.fileOps->CollectDiagnostics(diagnostics);
++        const auto accepted = std::ranges::find_if(diagnostics, [&](const auto& entry) noexcept {
++            return entry.taskId == state.taskA.value() && entry.acceptedDecision.has_value() &&
++                   entry.acceptedDecision->action == ConflictAction::PermanentDelete;
++        });
++        const auto result   = std::ranges::find_if(
++            diagnostics, [&](const auto& entry) noexcept { return entry.taskId == state.taskA.value() && entry.category == L"item.conflict.result"; });
++        const auto acceptedCount = std::ranges::count_if(
++            diagnostics, [&](const auto& entry) noexcept { return entry.taskId == state.taskA.value() && entry.acceptedDecision.has_value(); });
++        const auto resultCount = std::ranges::count_if(
++            diagnostics, [&](const auto& entry) noexcept { return entry.taskId == state.taskA.value() && entry.category == L"item.conflict.result"; });
++        if (acceptedCount != 1 || resultCount != 1 || accepted == diagnostics.end() || result == diagnostics.end() || ! result->conflictResult.has_value())
++        {
++            failMalformed(L"Malformed Recycle receipt retried or lost the single accepted choice/result pair.");
++            return true;
++        }
++        const auto& choice  = accepted->acceptedDecision.value();
++        const auto& outcome = result->conflictResult.value();
++        if (choice.taskId != state.taskA.value() || choice.promptGeneration != state.markerTick || choice.originatingPromptGeneration != state.markerTick ||
++            choice.sourceItemIndex != std::optional<size_t>{0u} || choice.applyToAll || choice.origin != FileOperations::ConflictDecisionOrigin::User ||
++            outcome.reference.taskId != choice.taskId || outcome.reference.promptGeneration != choice.promptGeneration ||
++            outcome.publication != FileOperations::PublicationState::NotAttempted || outcome.verification != FileOperations::VerificationState::NotRequested ||
++            outcome.sourceDisposition != FileOperations::SourceDisposition::Unknown || outcome.completion != FileOperations::ItemCompletion::Indeterminate ||
++            outcome.status != incomplete)
++        {
++            failMalformed(L"Malformed Recycle receipt falsely promoted accepted consent to known source removal.");
++            return true;
++        }
++        wil::unique_handle reportFile(CreateFileW(resultReport.c_str(),
++                                                  GENERIC_READ,
++                                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++                                                  nullptr,
++                                                  OPEN_EXISTING,
++                                                  FILE_ATTRIBUTE_NORMAL,
++                                                  nullptr));
++        LARGE_INTEGER reportSize{};
++        if (! reportFile || ! GetFileSizeEx(reportFile.get(), &reportSize) || reportSize.QuadPart <= 0 || reportSize.QuadPart > 1024 * 1024 ||
++            reportSize.QuadPart % sizeof(wchar_t) != 0)
++        {
++            failMalformed(L"Malformed Recycle receipt export was not bounded UTF-16 text.");
++            return true;
++        }
++        std::wstring reportText(static_cast<size_t>(reportSize.QuadPart) / sizeof(wchar_t), L'\0');
++        DWORD reportRead = 0u;
++        if (! ReadFile(reportFile.get(), reportText.data(), static_cast<DWORD>(reportSize.QuadPart), &reportRead, nullptr) ||
++            reportRead != static_cast<DWORD>(reportSize.QuadPart) ||
++            reportText.find(FileOperations::FormatAcceptedConflictDecisionDiagnostic(choice)) == std::wstring::npos ||
++            reportText.find(FileOperations::FormatConflictResultDiagnostic(outcome)) == std::wstring::npos)
++        {
++            failMalformed(L"Malformed Recycle receipt export lost the linked accepted decision or unknown result.");
++            return true;
++        }
++        AppendLog(std::format(L"Phase10 malformed Recycle receipt round {} preserved indeterminate truth", state.recycleMalformedRound));
++        SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
++        static_cast<void>(SetEnvironmentVariableW(kRecycleFailurePathEnvVar, nullptr));
++        ++state.recycleMalformedRound;
++        state.stepState = 5;
++        return false;
++    }
++    failMalformed(L"Malformed Recycle receipt fixture entered an unexpected step.");
++    return true;
+ }
+ case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
+ {

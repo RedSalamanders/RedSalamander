@@ -1,0 +1,120 @@
+931: ViewerPETests passed.
+959: ViewerPETests passed.
+1001: ViewerPETests passed.
+1009: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process reports an exit code
+1010: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes
+1018: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+1019: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+1027: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+1028: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+1037: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1038: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1086: ViewerPETests passed.
+1133: ViewerPETests passed.
+1178: ViewerPETests passed.
+1211: ViewerPETests passed.
+1228: ViewerPETests passed.
+1232: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1233: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1241: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1242: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1250: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1251: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1259: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process reports an exit code
+1260: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness run passes
+1282: ViewerPETests passed.
+1310: ViewerPETests passed.
+1352: ViewerPETests passed.
+1396: ViewerPETests passed.
+1397: resh harness process reports an exit code
+1398: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes
+1406: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+1407: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+1415: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+1416: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+1425: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1426: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1434: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1435: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1485: ViewerPETests passed.
+1530: ViewerPETests passed.
+1563: ViewerPETests passed.
+1578: ViewerPETests passed.
+1583: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1584: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1592: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1593: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1601: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process reports an exit code
+1602: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness run passes
+1610: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process reports an exit code
+1611: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes
+1645: ViewerPETests passed.
+1687: ViewerPETests passed.
+1731: ViewerPETests passed.
+1778: ViewerPETests passed.
+1780: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+1781: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+1789: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+1790: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+1799: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1800: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1808: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1809: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1817: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1818: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1864: ViewerPETests passed.
+1897: ViewerPETests passed.
+1914: ViewerPETests passed.
+1929: ViewerPETests passed.
+1936: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+1937: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+1945: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process reports an exit code
+1946: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness run passes
+1954: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process reports an exit code
+1955: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes
+1963: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+1964: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+1996: ViewerPETests passed.
+2038: ViewerPETests passed.
+2082: ViewerPETests passed.
+2129: ViewerPETests passed.
+2174: ViewerPETests passed.
+2178: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+2179: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+2188: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+2189: [PASS] TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+2197: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+2198: [PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+2206: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+2207: [PASS] TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+2215: [PASS] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+2248: ViewerPETests passed.
+2263: ViewerPETests passed.
+2291: ViewerPETests passed.
+2292: ] TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes
+2300: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process reports an exit code
+2301: [PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness run passes
+2309: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process reports an exit code
+2310: [PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes
+2318: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness process reports an exit code
+2319: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+2327: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+2328: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+2329: ViewerPETests passed.
+2357: ViewerPETests passed.
+2383: ViewerPETests passed.
+2399: ViewerPETests passed.
+2400: dMute fresh harness process reports an exit code
+2401: [PASS] TestViewerVlcConfigurationPersistsLastVolumeAndMute fresh harness run passes
+2409: [PASS] TestViewerShellComboHostsLongRunOpenCloseStayStable fresh harness process reports an exit code
+2410: [PASS] TestViewerShellComboHostsLongRunOpenCloseStayStable fresh harness run passes
+2418: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness process reports an exit code
+2419: [PASS] TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts fresh harness run passes
+2427: [PASS] TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback fresh harness process reports an exit code
+2428: [PASS] TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback fresh harness run passes
+2436: [PASS] TestViewerTextHexShortReadDropsPhantomTailBytes fresh harness process reports an exit code
+2437: [PASS] TestViewerTextHexShortReadDropsPhantomTailBytes fresh harness run passes
+2595: ViewerPETests passed.
+2599: [PASS] TestViewerTextDiffModesAndPlaceholders fresh harness process reports an exit code
+2600: [PASS] TestViewerTextDiffModesAndPlaceholders fresh harness run passes
+2601: ViewerPETests failed.

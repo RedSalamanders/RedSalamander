@@ -1,0 +1,12 @@
+{
+    "run_started_utc": "2026-09-01T01:42:16.309Z",
+    "duration_ms": 6931,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_ProviderCapabilityMatrix",
+    "suites": [],
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0
+}

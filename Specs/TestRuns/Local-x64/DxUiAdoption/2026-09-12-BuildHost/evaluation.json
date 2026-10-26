@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Read-only real MSBuild evaluation of the ARM64 host default; not a successful native build receipt",
+  "hostArchitecture": "x64",
+  "candidateParent": "310cee2c4c7c70bc972f25482e3e5c9a20cae346",
+  "candidateDirectoryBuildPropsSha256": "A8614EA5657B7140E8D201ADC179262508D86C99125737A360D6551D71463F59",
+  "results": [
+    {
+      "repo": "Z:/RsI19",
+      "head": "751437d27ebae8cbc90066bf9bbe8ada8fd1a48f",
+      "configuration": "Debug",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x86"
+    },
+    {
+      "repo": "Z:/RsI19",
+      "head": "751437d27ebae8cbc90066bf9bbe8ada8fd1a48f",
+      "configuration": "Release",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x86"
+    },
+    {
+      "repo": "Z:/RsI19",
+      "head": "751437d27ebae8cbc90066bf9bbe8ada8fd1a48f",
+      "configuration": "ASan Debug",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x86"
+    },
+    {
+      "repo": "Z:/RsI19Toolchain",
+      "head": "310cee2c4c7c70bc972f25482e3e5c9a20cae346",
+      "configuration": "Debug",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x64"
+    },
+    {
+      "repo": "Z:/RsI19Toolchain",
+      "head": "310cee2c4c7c70bc972f25482e3e5c9a20cae346",
+      "configuration": "Release",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x64"
+    },
+    {
+      "repo": "Z:/RsI19Toolchain",
+      "head": "310cee2c4c7c70bc972f25482e3e5c9a20cae346",
+      "configuration": "ASan Debug",
+      "platform": "ARM64",
+      "preferredToolArchitecture": "x64"
+    }
+  ],
+  "focusedPester": {
+    "failed": 0,
+    "skipped": 0,
+    "passed": 36
+  },
+  "limitations": [
+    "Candidate source was uncommitted during queries; property file hash binds the tested change.",
+    "Explicit x86 overrides pass for all six profiles in DxUiDependency.Tests.ps1.",
+    "ARM64 native runtime remains untested on this x64 host."
+  ]
+}

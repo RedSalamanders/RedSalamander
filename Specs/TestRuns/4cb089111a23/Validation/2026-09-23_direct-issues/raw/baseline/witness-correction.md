@@ -1,0 +1,1 @@
+Initial compile failure retained in ../direct-issues-baseline-20260923. Replace the Windows near macro collision and explicitly type the resource ID; add the Issues-without-More transition to both baseline and candidate. No production action rendering added.

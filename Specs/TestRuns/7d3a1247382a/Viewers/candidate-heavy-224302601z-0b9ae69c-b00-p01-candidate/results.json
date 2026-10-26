@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-09T22:43:24.039Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T224305Z-42696-6a56004e8deb44eb938f09454d6503bd\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 198394,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_viewer_space_memory_heavy_four_root_optin",
+            "status": "passed",
+            "duration_ms": 197742,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

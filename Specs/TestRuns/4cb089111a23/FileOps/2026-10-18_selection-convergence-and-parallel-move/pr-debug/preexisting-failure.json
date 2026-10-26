@@ -1,0 +1,9 @@
+{
+  "failure": "keeps historical workflows frozen behind their explicit archival triggers",
+  "path": ".github/workflows/terminal-engine-gate0.yml",
+  "expectedSha256": "e6f15b6fef9c0d367e12dc7f43cb769106dc982934658f501120728599f32d1c",
+  "actualSha256": "cc43e0fdd4f239e6623ab9cd95837c4c0ed4ef864cf29400822a62eac94a5e64",
+  "gitStatus": "clean for the workflow and its integrity test",
+  "origin": "HEAD contains dependency action version bumps since sealed commit 3e84e87b7",
+  "changedByThisTask": false
+}

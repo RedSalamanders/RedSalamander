@@ -1,0 +1,88 @@
+{
+  "source": "7b3ae28ce1f6cc99bbeb6453354c123fd7b43721",
+  "runId": "20261025T233252Z-47996-0803f51e1828486a9ac0dd816e416783",
+  "ownerPid": 47996,
+  "interruptedUtc": "2026-10-26T00:39:51.7082448Z",
+  "reason": "Owned Ctrl-C after ViewerPE export lifetime-gate failure; stop the failed/incomplete pass to diagnose before spending several more hours on remaining entries. Three Fresh Full profiles remain mandatory on the final repaired source.",
+  "rawControllerOutcome": "running",
+  "rawLedgerSha256": "4D64AC6B076EF8E2A641B833C29AD39C665244D2440FBB196283682F3821E26A",
+  "entryStatuses": [
+    {
+      "id": "tooling.pester-build-toolchain",
+      "status": "promoted"
+    },
+    {
+      "id": "selftest.compare-directories",
+      "status": "running"
+    },
+    {
+      "id": "selftest.commands",
+      "status": "pending"
+    },
+    {
+      "id": "selftest.file-operations",
+      "status": "pending"
+    },
+    {
+      "id": "standalone.product-ui",
+      "status": "promoted"
+    },
+    {
+      "id": "viewer-pe.noninteractive",
+      "status": "failed"
+    },
+    {
+      "id": "viewer-pe.interactive",
+      "status": "pending"
+    },
+    {
+      "id": "viewer-sqlite.noninteractive",
+      "status": "promoted"
+    },
+    {
+      "id": "viewer-sqlite.interactive",
+      "status": "pending"
+    },
+    {
+      "id": "standalone.filesystem-curl",
+      "status": "pending"
+    },
+    {
+      "id": "standalone.localization",
+      "status": "promoted"
+    },
+    {
+      "id": "standalone.red-configure",
+      "status": "promoted"
+    },
+    {
+      "id": "standalone.plugin-contract",
+      "status": "promoted"
+    },
+    {
+      "id": "standalone.settings-schema",
+      "status": "promoted"
+    },
+    {
+      "id": "standalone.crash-handling",
+      "status": "promoted"
+    },
+    {
+      "id": "perf.performance-tests2",
+      "status": "pending"
+    },
+    {
+      "id": "tooling.pester",
+      "status": "promoted"
+    },
+    {
+      "id": "tooling.vcpkg-merge-synthetic",
+      "status": "promoted"
+    }
+  ],
+  "ownerExited": true,
+  "integrationBinaryProcessesRemaining": 0,
+  "independentlyLaunchedReleasePid": 99316,
+  "releaseStillRunning": true,
+  "qualification": false
+}

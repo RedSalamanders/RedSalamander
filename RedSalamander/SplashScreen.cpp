@@ -139,6 +139,11 @@ void CenterOverOwner(HWND hwnd, HWND owner) noexcept;
 class SplashRootControl final : public DxUi::Panel
 {
 public:
+    SplashRootControl(const SplashRootControl&)            = delete;
+    SplashRootControl(SplashRootControl&&)                 = delete;
+    SplashRootControl& operator=(const SplashRootControl&) = delete;
+    SplashRootControl& operator=(SplashRootControl&&)      = delete;
+
     explicit SplashRootControl(SplashWindowState* state) noexcept : _state(state)
     {
     }

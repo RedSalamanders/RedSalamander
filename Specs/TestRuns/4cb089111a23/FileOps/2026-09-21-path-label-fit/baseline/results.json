@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-21T09:29:58.372Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\i26-path-labels-baseline-20260921\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 86532,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "French path labels must fit their actual painted rectangles without overlapping the accessible path; see PathLabelFit diagnostics.",
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "failed",
+            "duration_ms": 86485,
+            "repeat_index": 1,
+            "reason": "French path labels must fit their actual painted rectangles without overlapping the accessible path; see PathLabelFit diagnostics."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

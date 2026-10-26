@@ -1,0 +1,562 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19Before\RedSalamander.sln
+  Target:        All Projects
+  Configuration: ASan Debug
+  Platform:      x64
+  Build workers: 2
+  Version:       7.0.100 beta ASan Debug (x64)
+  Build number:  100
+  Version state: Z:\RsI19Before\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  RedSalamander-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamander-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\Terminal-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerText-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  DxUi.Accessibility.cpp
+  Main.cpp
+  RedLauncher.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedLauncher.exe
+  dllmain.cpp
+  Factory.cpp
+  DxUi.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Common.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Common.exp
+  Common.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Common.dll
+  FileSystem7z.cpp
+  LocalSearchIndexCore.cpp
+  DxUi.ComboBox.cpp
+  Generating Code...
+  SearchServiceBroker.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.Controls.cpp
+  SqliteIndexStore.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedSalamanderSearchService.exe
+  dllmain.cpp
+  Factory.cpp
+  DxUi.FrameRuntime.cpp
+  SearchTextHelpers.cpp
+  FileSystemCurl.CopyMove.cpp
+  DxUi.Grid.cpp
+  dllmain.cpp
+  Factory.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.Menu.cpp
+  FileSystem.cpp
+  FileSystemCurl.Imap.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  DxUi.PointerInput.cpp
+  FileSystem.FileOps.cpp
+  DxUi.Scrollbar.cpp
+  FileSystemCurl.Shared.cpp
+  DxUi.SingleLineTextEditing.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystem.Path.cpp
+  DxUi.TextInput.cpp
+  Generating Code...
+  FileSystem.Search.cpp
+  DxUi.Tree.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemCurl.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemCurl.exp
+  FileSystemCurl.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemCurl.dll
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem7z.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem7z.dll
+  FileSystem.Watch.cpp
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Typeahead.cpp
+  FileSystemDummy.cpp
+  Generating Code...
+  DxUi.Theme.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem.exp
+  Generating Code...
+  FileSystem.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystem.dll
+  dllmain.cpp
+  Factory.cpp
+  DxUi.WindowHost.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemDummy.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemDummy.exp
+  FileSystemDummy.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemDummy.dll
+  dllmain.cpp
+  Factory.cpp
+  FilesInformationGoogleDrive.cpp
+  FilesInformationMicrosoftDrive.cpp
+  Generating Code...
+  FileSystemGoogleDrive.cpp
+  FileSystemMicrosoftDrive.cpp
+  DxUi.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\DxUi.lib
+  ls4.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  ls4.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ls4.exe
+  dllmain.cpp
+  Factory.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  FilesInformationMtp.cpp
+  Generating Code...
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemGoogleDrive.dll
+  Generating Code...
+  FileSystemMtp.Core.cpp
+  dllmain.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMicrosoftDrive.dll
+  dllmain.cpp
+  Factory.cpp
+  FileSystemMtp.Device.cpp
+  Factory.cpp
+  ViewerImgRaw.Decode.cpp
+  FileSystemMtp.FakeBackend.cpp
+  ViewerImgRaw.Export.cpp
+  FilesInformationS3.cpp
+  FileSystemMtp.Shared.cpp
+  ViewerImgRaw.cpp
+  FileSystemS3.Configuration.cpp
+  Generating Code...
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMtp.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemMtp.dll
+  Generating Code...
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  FileSystemS3.Core.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.Directory.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerImgRaw.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerImgRaw.exp
+  Terminal.cpp
+  ViewerImgRaw.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerImgRaw.dll
+  RedSalamanderMonitor.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedSalamanderMonitor.exe
+  dllmain.cpp
+  Factory.cpp
+  TerminalAccessibility.cpp
+  ViewerText.Encoding.cpp
+  FileSystemS3.DirectoryOps.cpp
+  TerminalInternal.cpp
+  ViewerText.MenuTheme.cpp
+  FileSystemS3.DriveInfo.cpp
+  TerminalKittyImagePipeline.cpp
+  ViewerText.cpp
+  TerminalCommandSurfaceModel.cpp
+  FileSystemS3.IO.cpp
+  TerminalRuntimeLoader.cpp
+  ViewerText.Text.cpp
+  TerminalSecurity.cpp
+  FileSystemS3.Menu.cpp
+  ViewerText.Hex.cpp
+  TerminalSession.cpp
+  Generating Code...
+  FileSystemS3.S3.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerText.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerText.exp
+  ViewerText.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerText.dll
+  TerminalVt.cpp
+  Factory.cpp
+  FileSystemS3.S3Table.cpp
+  ViewerPE.cpp
+  TerminalVtUpgradeTests.cpp
+  dllmain.cpp
+  Generating Code...
+  FileSystemS3.Shared.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerPE.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerPE.exp
+  ViewerPE.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerPE.dll
+  Generating Code...
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\Terminal.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\Terminal.exp
+  Terminal.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\Terminal.dll
+  dllmain.cpp
+  ViewerSpace.cpp
+  Factory.cpp
+  FileSystemS3.SelfTest.FakeS3.cpp
+  ViewerSqlite.Engine.cpp
+  Generating Code...
+  ViewerSqlite.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSpace.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSpace.exp
+  Generating Code...
+  ViewerSpace.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSpace.dll
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  ViewerVLC.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemS3.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemS3.exp
+  FileSystemS3.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\FileSystemS3.dll
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSqlite.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSqlite.exp
+  ViewerSqlite.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerSqlite.dll
+  FileSystem-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem7z-fr-FR.dll
+  ViewerWeb.cpp
+  FileSystemCurl-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemCurl-fr-FR.dll
+  Generating Code...
+  FileSystemDummy-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerVLC.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerVLC.exp
+  ViewerVLC.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerVLC.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerVLC-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSqlite-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSpace-ja-JP.dll
+  Generating Code...
+  ViewerSqlite-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerWeb-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMtp-sk-SK.dll
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerWeb.lib and object Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerWeb.exp
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  RedConfigure-ja-JP.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedConfigure-ja-JP.dll
+  ViewerWeb.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Plugins\ViewerWeb.dll
+  ls1.cpp
+  ls1.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ls1.exe
+  ls2.cpp
+  ls3.cpp
+  ls2.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ls2.exe
+  ls3.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ls3.exe
+  FlipSequentialDiscard.cpp
+  Document.cpp
+  FlipSequentialDiscard.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\FlipSequentialDiscard.exe
+  RedConfigure.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedConfigure.exe
+  ViewerSqlite.Engine.cpp
+  AppTheme.cpp
+  EtwListener.cpp
+  ViewerSqliteTests.cpp
+  UiMetrics.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  DxUiTests.cpp
+  Generating Code...
+  ViewerSqliteTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ViewerSqliteTests.exe
+  MonitorTest.cpp
+  ViewerPETests.cpp
+  DxUiTests.Accessibility.cpp
+  Generating Code...
+  MonitorTest.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\MonitorTest.exe
+  PluginContractTests.cpp
+  ViewerPETests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\ViewerPETests.exe
+  DxUiTests.Animation.cpp
+  LocalizationTests-fr-FR.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\LocalizationTests-fr-FR.dll
+  LocalizationTests.cpp
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  DxUiTests.ComboBox.cpp
+  LocalizationTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\LocalizationTests.exe
+  Generating Code...
+  SettingsSchemaTests.cpp
+  PluginContractTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\PluginContractTests.exe
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  DxUiTests.Controls.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  SettingsSchemaParser.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  Generating Code...
+  DxUiTests.Gallery.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  SettingsSchemaTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\SettingsSchemaTests.exe
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  CrashHandlingTests.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  DxUiTests.Grid.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  CrashQuarantine.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  DxUiTests.Menu.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  SelfTestCommon.cpp
+  SelfTestLatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  CrashHandler.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  CrashQuarantine.TestStubs.cpp
+  DxUiTests.MultilineText.cpp
+  Generating Code...
+  CrashHandlingTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\CrashHandlingTests.exe
+  DxUiTests.NewControls.cpp
+  pch.cpp
+  TraceProvider.cpp
+  DxUiTests.NativeTextInput.cpp
+  SelfTestLatencyHooks.cpp
+  FileSystemPluginManager.cpp
+  DxUiTests.ReadOnly.cpp
+  PluginModuleLifecycle.cpp
+  DxUiTests.Rendering.cpp
+  ViewerPluginManager.cpp
+  DxUiTests.TextField.cpp
+  Generating Code...
+  FolderView.Enumeration.Access.cpp
+  DxUiTests.Theme.cpp
+  IconCache.cpp
+  DxUiTests.Tooltip.cpp
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+  FolderIconEnumerationPerfTest.cpp
+  DxUiTests.Tree.cpp
+  FolderViewColumnLayoutTests.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  PerformanceTests2.cpp
+  DxUiTests.WindowHost.cpp
+  PluginManager.TestStubs.cpp
+  Generating Code...
+LINK : warning LNK4300: ignoring '/INCREMENTAL' because input module contains ASAN metadata [Z:\RsI19Before\Tests\PerformanceTests2\PerformanceTests2.vcxproj]
+     Creating library Z:\RsI19Before\.build\x64\ASan Debug\PerformanceTests2.lib and object Z:\RsI19Before\.build\x64\ASan Debug\PerformanceTests2.exp
+  PerformanceTests2.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\PerformanceTests2.dll
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Generating Code...
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  DxUiTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\DxUiTests.exe
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystemCurlTests.cpp
+  Generating Code...
+  RedConfigureSession.cpp
+  FileSystemCurlTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\FileSystemCurlTests.exe
+  FileSystem-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  RedConfigureWorkflow.cpp
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSqlite-cs-CZ.dll
+  RedSalamander.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedSalamander.exe
+  ViewerSqlite-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerSqlite-sk-SK.dll
+  RedConfigureTraceProvider.cpp
+  ViewerText-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerWeb-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\ViewerWeb-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamander-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamanderMonitor-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedSalamanderMonitor-cs-CZ.dll
+  LocalizationTests-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\Lang\RedConfigure-sk-SK.dll
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  RedConfigureTests.cpp
+  Generating Code...
+  RedConfigureTests.vcxproj -> Z:\RsI19Before\.build\x64\ASan Debug\RedConfigureTests.exe
+Captured log: Z:\RsI19Before\.build\logs\msbuild-20260913_092731_891-pid102376-e3c7120a.log
+Diagnostics: 1 warning(s), 0 error(s)
+Build artifacts attested: bb8fd0af581afa89f3c89e5fb718921add7e98deb941c8b5da4bb4768e794977
+
+========================================
+Build completed successfully!
+Configuration: ASan Debug | Platform: x64
+Build time: 04:16
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "Z:\RsI19Before\.build\x64\ASan Debug\RedLauncher.exe" # 2.96 MiB
+& "Z:\RsI19Before\.build\x64\ASan Debug\RedSalamander.exe" # 141.01 MiB
+& "Z:\RsI19Before\.build\x64\ASan Debug\RedSalamanderMonitor.exe" # 11.97 MiB

@@ -1,0 +1,24 @@
+
+
+
+
+
+Describing Resource localization contracts
+ [+] keeps resource format placeholders positional and translation-safe 6.39s
+ [+] keeps documented language-neutral string ids embedded-only in their owning resource module 475ms
+ [+] loads documented language-neutral string ids through embedded helpers only 1.25s
+ [+] keeps satellite string ids complete except documented embedded-only ids 981ms
+Tests completed in 9.09s
+Passed: 4 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+TagFilter        : {}
+ExcludeTagFilter : {}
+TestNameFilter   : 
+TotalCount       : 4
+PassedCount      : 4
+FailedCount      : 0
+SkippedCount     : 0
+PendingCount     : 0
+Time             : 00:00:09.0948656
+TestResult       : {@{Describe=Resource localization contracts; Context=; Name=keeps resource format placeholders positional and translation-safe; Result=Passed; Passed=True; Time=00:00:06.3927419; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=keeps documented language-neutral string ids embedded-only in their owning resource module; Result=Passed; Passed=True; Time=00:00:00.4756211; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=loads documented language-neutral string ids through embedded helpers only; Result=Passed; Passed=True; Time=00:00:01.2452901; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=keeps satellite string ids complete except documented embedded-only ids; Result=Passed; Passed=True; Time=00:00:00.9812125; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}}
+

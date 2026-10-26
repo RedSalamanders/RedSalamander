@@ -1,0 +1,57 @@
+[
+  {
+    "phase": "baseline",
+    "run_id": "20261017T170024Z-95968-d086509ea68a443483f0f734a032439c",
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "configuration": "Debug",
+    "exit_code": 1,
+    "passed_checks": 63,
+    "failed_checks": 4,
+    "samples": 32,
+    "receipt": "0a66197beddf05eade37ca6bf167d48554bbc333c107584e32a1dae48a6e52a3"
+  },
+  {
+    "phase": "candidate-debug",
+    "run_id": "20261017T170352Z-75380-9d678f923f894b94b1e23c2c293f1b75",
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "configuration": "Debug",
+    "exit_code": 0,
+    "passed_checks": 67,
+    "failed_checks": 0,
+    "samples": 32,
+    "receipt": "ff01abe52754f0db033a336615eac60cda4c4f1ac6214aa62e0062f35024c55c"
+  },
+  {
+    "phase": "candidate-debug-ambient",
+    "run_id": "20261017T170428Z-88144-1f637f550a7649dcac206f745dcb959e",
+    "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+    "configuration": "Debug",
+    "exit_code": 0,
+    "passed_checks": 67,
+    "failed_checks": 0,
+    "samples": 32,
+    "receipt": "ff01abe52754f0db033a336615eac60cda4c4f1ac6214aa62e0062f35024c55c"
+  },
+  {
+    "phase": "candidate-release",
+    "run_id": "20261017T171058Z-3560-4a0ac381a522475b982fa66f7d0e01bf",
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "configuration": "Release",
+    "exit_code": 0,
+    "passed_checks": 67,
+    "failed_checks": 0,
+    "samples": 32,
+    "receipt": "b2f01c4e6165fe9f242734bd45bdcbdca28a703c3a4bf58dacd3a42c822a07fc"
+  },
+  {
+    "phase": "candidate-release-ambient",
+    "run_id": "20261017T171100Z-3560-1048928973574b6b964c8c5d68a2e55d",
+    "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+    "configuration": "Release",
+    "exit_code": 0,
+    "passed_checks": 67,
+    "failed_checks": 0,
+    "samples": 32,
+    "receipt": "b2f01c4e6165fe9f242734bd45bdcbdca28a703c3a4bf58dacd3a42c822a07fc"
+  }
+]

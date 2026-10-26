@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-01T18:58:54.504Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\r0e-or1-baseline-release-02\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 1325,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Local blocked read did not remain in kernel-pending state long enough to observe cooperative cancellation.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_local_blocked_reader_cancel_is_bounded",
+            "status": "failed",
+            "duration_ms": 802,
+            "repeat_index": 1,
+            "reason": "Local blocked read did not remain in kernel-pending state long enough to observe cooperative cancellation."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

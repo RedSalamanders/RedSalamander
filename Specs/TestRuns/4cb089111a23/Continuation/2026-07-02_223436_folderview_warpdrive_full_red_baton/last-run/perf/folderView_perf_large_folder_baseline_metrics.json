@@ -1,0 +1,18 @@
+{
+  "case": "folderView_perf_large_folder_baseline",
+  "root": "C:\Users\eric\AppData\Local\RedSalamander\SelfTest\last_run\commands\work\folder_perf_baseline_{2C1418B5-BEE2-4553-A30D-004757D2014D}",
+  "itemCount": 241,
+  "bitmapIconCount": 241,
+  "clientWidthPx": 534,
+  "clientHeightPx": 549,
+  "enumerationCount": 3,
+  "warmRenderInvocations": 5,
+  "metrics": {
+    "warmRenderingCalls": 5,
+    "deferredInitCalls": 5,
+    "renderCalls": 20,
+    "queueIconLoadingCalls": 12,
+    "processIconQueueCalls": 0,
+    "batchIconUpdateCalls": 5
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "variant": "detail-candidate-v5",
+  "passed": 48,
+  "failed": 15,
+  "skipped": 0,
+  "source_snapshot": "5e42d0ff7287d546428ff70056b2655c2ff4e3001988c136fac79c6f7923641f",
+  "caption_probes": [
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    }
+  ],
+  "metrics": {
+    "FileOps.Issues.TypedProjection.RefreshUs": {
+      "samples_us": [
+        2460,
+        2683,
+        2427,
+        3065,
+        2506,
+        2889
+      ],
+      "median_us": 2594.5,
+      "p95_us": 3065
+    },
+    "FileOps.Issues.DetailCapture.CaptionPixels": {
+      "samples_us": [
+        0,
+        0,
+        0
+      ],
+      "median_us": 0,
+      "p95_us": 0
+    },
+    "FileOps.Issues.TypedProjection.UnchangedRefreshUs": {
+      "samples_us": [
+        464,
+        419,
+        358,
+        383,
+        374,
+        455
+      ],
+      "median_us": 401.0,
+      "p95_us": 464
+    }
+  }
+}

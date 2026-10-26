@@ -28,42 +28,48 @@ struct DisplayFields
     std::wstring attributes;
 };
 
+// Share the display-validity policy with numeric exports without constructing display strings.
+// Failed conversion clears the output; Windows local-time conversion and its accepted FILETIME range remain authoritative.
+[[nodiscard]] inline bool TryGetLocalWriteTime(int64_t lastWriteTime100nsSince1601, SYSTEMTIME& localSystemTime) noexcept
+{
+    localSystemTime = {};
+    // The largest FILETIME that FileTimeToSystemTime can represent (30827-12-31 23:59:59.9999999 UTC).
+    // Beyond it the conversion outcome depends on the process time zone: with a zero bias the Windows
+    // APIs still produce a year-30828 SYSTEMTIME, so an out-of-range time must be rejected explicitly.
+    constexpr int64_t kMaxConvertibleFileTime = 0x7FFF35F4F06C7FFF;
+
+    if (lastWriteTime100nsSince1601 <= 0 || lastWriteTime100nsSince1601 > kMaxConvertibleFileTime)
+        return false;
+    ULARGE_INTEGER ticks{};
+    ticks.QuadPart = static_cast<ULONGLONG>(lastWriteTime100nsSince1601);
+    FILETIME utcFileTime{};
+    utcFileTime.dwLowDateTime  = ticks.LowPart;
+    utcFileTime.dwHighDateTime = ticks.HighPart;
+    FILETIME localFileTime{};
+    SYSTEMTIME converted{};
+    if (FileTimeToLocalFileTime(&utcFileTime, &localFileTime) == FALSE || FileTimeToSystemTime(&localFileTime, &converted) == FALSE)
+        return false;
+    localSystemTime = converted;
+    return true;
+}
+
 // CompactDetails uses local time at minute precision and the established RHSACETOP attribute ordering.
 // Size formatting and omission remain with the caller because directories and unknown sizes have different
 // localized presentation contracts in Folder View, Compare Directories, and the status bar.
 [[nodiscard]] inline DisplayFields FormatDisplayFields(const NormalizedMetadata& metadata, DisplayProfile profile) noexcept
 {
     if (profile != DisplayProfile::CompactDetails)
-    {
         return {};
-    }
-
-    // The largest FILETIME that FileTimeToSystemTime can represent (30827-12-31 23:59:59.9999999 UTC).
-    // Beyond it the conversion outcome depends on the process time zone: with a zero bias the Windows
-    // APIs still produce a year-30828 SYSTEMTIME, so an out-of-range time must be rejected explicitly.
-    constexpr int64_t kMaxConvertibleFileTime = 0x7FFF35F4F06C7FFF;
-
     DisplayFields fields;
-    if (metadata.lastWriteTime100nsSince1601 > 0 && metadata.lastWriteTime100nsSince1601 <= kMaxConvertibleFileTime)
+    SYSTEMTIME localSystemTime{};
+    if (TryGetLocalWriteTime(metadata.lastWriteTime100nsSince1601, localSystemTime))
     {
-        ULARGE_INTEGER ticks{};
-        ticks.QuadPart = static_cast<ULONGLONG>(metadata.lastWriteTime100nsSince1601);
-
-        FILETIME utcFileTime{};
-        utcFileTime.dwLowDateTime  = ticks.LowPart;
-        utcFileTime.dwHighDateTime = ticks.HighPart;
-
-        FILETIME localFileTime{};
-        SYSTEMTIME localSystemTime{};
-        if (FileTimeToLocalFileTime(&utcFileTime, &localFileTime) != FALSE && FileTimeToSystemTime(&localFileTime, &localSystemTime) != FALSE)
-        {
-            fields.localTime = std::format(L"{:04d}-{:02d}-{:02d} {:02d}:{:02d}",
-                                           localSystemTime.wYear,
-                                           localSystemTime.wMonth,
-                                           localSystemTime.wDay,
-                                           localSystemTime.wHour,
-                                           localSystemTime.wMinute);
-        }
+        fields.localTime = std::format(L"{:04d}-{:02d}-{:02d} {:02d}:{:02d}",
+                                       localSystemTime.wYear,
+                                       localSystemTime.wMonth,
+                                       localSystemTime.wDay,
+                                       localSystemTime.wHour,
+                                       localSystemTime.wMinute);
     }
 
     fields.attributes.reserve(10u);

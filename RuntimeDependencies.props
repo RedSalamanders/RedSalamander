@@ -8,6 +8,10 @@
     OutputName is relative to that selected root and may name a validated child directory.
   -->
   <ItemGroup>
+    <RSRuntimeDependency Include="redmonitor-client-license">
+      <Projects>RedSalamander</Projects><Flavor>Any</Flavor><Platform>Any</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>ThirdParty\RedMonitor\LICENSE.txt</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>RedMonitor-LICENSE.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
     <RSRuntimeDependency Include="search-service-sqlite-debug">
       <Projects>RedSalamanderSearchService</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\sqlite3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>sqlite3.dll</OutputName><Required>true</Required>

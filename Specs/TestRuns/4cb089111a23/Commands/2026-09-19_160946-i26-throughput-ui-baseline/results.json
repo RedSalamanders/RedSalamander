@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-19T14:12:27.772Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260919T140946Z-30692-40a1c88c38c146e5b487e81e1b92807e\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2533,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "An eligible running task must expose a throughput disclosure without collapsing the task card.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 2044,
+            "repeat_index": 1,
+            "reason": "An eligible running task must expose a throughput disclosure without collapsing the task card."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

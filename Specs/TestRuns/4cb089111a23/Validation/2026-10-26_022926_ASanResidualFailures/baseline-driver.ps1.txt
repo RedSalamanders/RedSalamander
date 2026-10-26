@@ -1,0 +1,67 @@
+param([Parameter(Mandatory)][string]$ExpectedHead)
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$repoPath = 'E:\RedSalamander.Perf\integration-20261024'
+$statePath = Join-Path $PSScriptRoot 'export-preparation-qualification.json'
+$records = [System.Collections.Generic.List[object]]::new()
+$deadline = [DateTime]::UtcNow.AddHours(2)
+$predecessor = Get-Content $statePath -Raw | ConvertFrom-Json
+if ($predecessor.head -ne $ExpectedHead) { throw 'Unexpected predecessor source.' }
+$predecessorProcess = Get-Process -Id $predecessor.ownerPid -ErrorAction SilentlyContinue
+$predecessorStarted = if ($predecessorProcess) { $predecessorProcess.StartTime.ToUniversalTime() } else { $null }
+while ($predecessorProcess) {
+    if ([DateTime]::UtcNow -gt $deadline) { throw 'Qualification predecessor did not exit within the diagnostic wait.' }
+    Start-Sleep -Seconds 3
+    $predecessorProcess = Get-Process -Id $predecessor.ownerPid -ErrorAction SilentlyContinue
+    if ($predecessorProcess -and $predecessorProcess.StartTime.ToUniversalTime() -ne $predecessorStarted) { break }
+}
+$predecessor = Get-Content $statePath -Raw | ConvertFrom-Json
+if ($predecessor.outcome -ne 'failed' -or @($predecessor.entries | Where-Object { $_.phase -like '*-Full' -and $_.exitCode -eq 1 }).Count -ne 1) {
+    throw 'The complete failed Full must be retained before diagnostic replays.'
+}
+Set-Location -LiteralPath $repoPath
+function Assert-FrozenSource {
+    if ((git rev-parse HEAD) -ne $ExpectedHead -or (git status --porcelain)) { throw 'Residual baseline source changed.' }
+}
+Assert-FrozenSource
+$profilePath = Join-Path $repoPath '.build\x64\ASan Debug'
+$receipt = Get-Content (Join-Path $profilePath 'build-receipt.json') -Raw | ConvertFrom-Json
+if ($receipt.git_head -ne $ExpectedHead -or $receipt.exit_code -ne 0 -or -not $receipt.tests_enabled) { throw 'Invalid ASan baseline receipt.' }
+$artifacts = foreach ($name in @('RedSalamander.exe','RedSalamanderSearchService.exe','Plugins\ViewerSpace.dll')) {
+    $path = Join-Path $profilePath $name
+    if (-not (Test-Path -LiteralPath $path)) { throw "Missing baseline artifact: $path" }
+    [pscustomobject]@{ path=$path; sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+}
+Import-Module ./Tools/Modules/Testing/TestInvocation.psm1 -Force
+$buildEnv = Get-RSBuildEnvironmentOverrides -Suite Full
+foreach ($key in $buildEnv.Keys) { [Environment]::SetEnvironmentVariable($key,$buildEnv[$key],'Process') }
+if (-not [string]::IsNullOrWhiteSpace($env:REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED)) { throw 'Traversal override is forbidden for this baseline.' }
+$filter = @(
+    'cmd_viewer_space_dense_files_exposes_more_than_legacy_topk',
+    'cmd_viewer_space_refresh_preserves_display_until_adoption',
+    'cmd_viewer_space_refresh_cancel_keeps_display',
+    'cmd_viewer_space_refresh_budget_requires_explicit_rebuild',
+    'cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity',
+    'cmd_viewer_space_close_does_not_wait_for_retired_model_disposal'
+) -join ','
+foreach ($attempt in @(
+    @{name='viewer-predecessor-cluster';suite='Commands';filter=$filter;repeat=3},
+    @{name='sqlite-stale-root-1';suite='Compare';filter='search_service_sqlite_cold_start_stale_root_refreshes_before_query';repeat=1},
+    @{name='sqlite-stale-root-2';suite='Compare';filter='search_service_sqlite_cold_start_stale_root_refreshes_before_query';repeat=1}
+)) {
+    Assert-FrozenSource
+    foreach ($artifact in $artifacts) {
+        if ((Get-FileHash -LiteralPath $artifact.path -Algorithm SHA256).Hash -ne $artifact.sha256) { throw 'Baseline binary changed.' }
+    }
+    $started = [DateTime]::UtcNow
+    $log = Join-Path $PSScriptRoot ('residual-baseline-' + $attempt.name + '.log')
+    [ordered]@{head=$ExpectedHead;ownerPid=$PID;phase=$attempt.name;outcome='running';updatedUtc=$started.ToString('o');artifacts=$artifacts;buildReceipt=$receipt.receipt_id;entries=$records.ToArray()} |
+        ConvertTo-Json -Depth 7 | Set-Content (Join-Path $PSScriptRoot 'residual-failure-baseline.json')
+    & ./Tools/Run-AllTests.ps1 -Suite $attempt.suite -ValidationMode Fresh -SkipBuild -Platform x64 -Configuration 'ASan Debug' -TestRoot E:\RedSalamander.Perf -CaseFilter $attempt.filter -SelfTestRepeat $attempt.repeat *> $log
+    $code = $LASTEXITCODE
+    Assert-FrozenSource
+    $records.Add([pscustomobject]@{name=$attempt.name;suite=$attempt.suite;filter=$attempt.filter;repeat=$attempt.repeat;root='E:\RedSalamander.Perf';exitCode=$code;startedUtc=$started.ToString('o');finishedUtc=[DateTime]::UtcNow.ToString('o');log=$log})
+    if ($code -notin @(0,1)) { throw "Baseline was not evaluated ($code)." }
+}
+[ordered]@{head=$ExpectedHead;ownerPid=$PID;phase='complete';outcome='diagnostic_only_not_qualification';updatedUtc=[DateTime]::UtcNow.ToString('o');artifacts=$artifacts;buildReceipt=$receipt.receipt_id;entries=$records.ToArray()} |
+    ConvertTo-Json -Depth 7 | Set-Content (Join-Path $PSScriptRoot 'residual-failure-baseline.json')

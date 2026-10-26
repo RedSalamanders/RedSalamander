@@ -1,0 +1,72 @@
+[
+  {
+    "ordinal": 1,
+    "policy": "A",
+    "repo": "C:/RsI26P0",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\01-A",
+    "exe_sha256": "e272b9048bada0be080c4694bb6b6e35d6fe856ae9f97dace376531e3f21b6d2"
+  },
+  {
+    "ordinal": 2,
+    "policy": "B",
+    "repo": "C:/RsI26Final",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\02-B",
+    "exe_sha256": "59382c322b828159ca38ff11cfd17de66b08912fac8c94c02295928bffb6fd3e"
+  },
+  {
+    "ordinal": 3,
+    "policy": "B",
+    "repo": "C:/RsI26Final",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\03-B",
+    "exe_sha256": "59382c322b828159ca38ff11cfd17de66b08912fac8c94c02295928bffb6fd3e"
+  },
+  {
+    "ordinal": 4,
+    "policy": "A",
+    "repo": "C:/RsI26P0",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\04-A",
+    "exe_sha256": "e272b9048bada0be080c4694bb6b6e35d6fe856ae9f97dace376531e3f21b6d2"
+  },
+  {
+    "ordinal": 5,
+    "policy": "A",
+    "repo": "C:/RsI26P0",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\05-A",
+    "exe_sha256": "e272b9048bada0be080c4694bb6b6e35d6fe856ae9f97dace376531e3f21b6d2"
+  },
+  {
+    "ordinal": 6,
+    "policy": "B",
+    "repo": "C:/RsI26Final",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\06-B",
+    "exe_sha256": "59382c322b828159ca38ff11cfd17de66b08912fac8c94c02295928bffb6fd3e"
+  },
+  {
+    "ordinal": 7,
+    "policy": "B",
+    "repo": "C:/RsI26Final",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\07-B",
+    "exe_sha256": "59382c322b828159ca38ff11cfd17de66b08912fac8c94c02295928bffb6fd3e"
+  },
+  {
+    "ordinal": 8,
+    "policy": "A",
+    "repo": "C:/RsI26P0",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\08-A",
+    "exe_sha256": "e272b9048bada0be080c4694bb6b6e35d6fe856ae9f97dace376531e3f21b6d2"
+  },
+  {
+    "ordinal": 9,
+    "policy": "A",
+    "repo": "C:/RsI26P0",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\09-A",
+    "exe_sha256": "e272b9048bada0be080c4694bb6b6e35d6fe856ae9f97dace376531e3f21b6d2"
+  },
+  {
+    "ordinal": 10,
+    "policy": "B",
+    "repo": "C:/RsI26Final",
+    "directory": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-current-crossover-20260927\\10-B",
+    "exe_sha256": "59382c322b828159ca38ff11cfd17de66b08912fac8c94c02295928bffb6fd3e"
+  }
+]

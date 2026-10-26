@@ -1,0 +1,74 @@
+[
+  {
+    "sha256": "263eb85b502a259f84ef477fc03514baa7dd052dc960e12f0d016d30a7f2bab1",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-root__dark__480dip__fr-FR__display1__144dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Root of UNC path is visible, full selection remains within field. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "4e4320af3978ca2796676df8a83ac2417a686e99f16a82b0b8f1af26a2f973ce",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-root__dark__480dip__fr-FR__display2__96dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Root of UNC path is visible, full selection remains within field. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "9a8011034f2f6c13ac2a6c29020392e896ef53ed2c1e14b7f9b06e2d5a01b8d5",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-root__light__480dip__fr-FR__display1__144dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Root of UNC path is visible, full selection remains within field. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "3605ede6264b71a4177fc3fa0831280a893b26f70d0d0cd94cb71a5b7431e2d4",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-root__light__480dip__fr-FR__display2__96dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Root of UNC path is visible, full selection remains within field. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "4ab5c778fb32bdfad47749cc0d3d01a6df3b3f6664f9d751b38f34e4fbf3e20d",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-scrolled__dark__480dip__fr-FR__display1__144dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Scrolled text stays within field; no caret or selection paint escapes into title/actions. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "37d2151b9e79f1d02466979bca0dd456f5a58c419ec6748910a4cf7774c155f2",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-scrolled__dark__480dip__fr-FR__display2__96dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Scrolled text stays within field; no caret or selection paint escapes into title/actions. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "58a671622b1b2d82c256d75cce8d7e48e78cf341752c8a1d3f0249cce0097525",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-scrolled__light__480dip__fr-FR__display1__144dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Scrolled text stays within field; no caret or selection paint escapes into title/actions. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  },
+  {
+    "sha256": "0bd0390fdd09427a184da4b56ad0016d2e2eea54e5bfa6c12ed6228ef342e481",
+    "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\27-long-unicode-paths-detail-scrolled__light__480dip__fr-FR__display2__96dpi.png",
+    "reviewer": "root",
+    "method": "Viewed each original deterministic harness PNG with view_image",
+    "visualStatus": "pass",
+    "finding": "Scrolled text stays within field; no caret or selection paint escapes into title/actions. French title and complete Copy full path / Close captions fit; stacked actions remain outside the scrolling body at native DPI. Boundary clipping of the last text row is intentional viewport clipping, not a cropped action.",
+    "reviewBoundary": "Eight static French 480-DIP dark/light root/scrolled captures on actual96/144-DPI displays. Interaction and arbitrary full-path reachability require native behavior receipts, not these pixels."
+  }
+]

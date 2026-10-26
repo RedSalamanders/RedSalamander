@@ -1,0 +1,1 @@
+{"schema":"red-salamander.case-history.v1","run_id":"20260709T153112Z-59880-236e24407dad4b4dbe5a68ae755e5ee4","run_started_utc":"2026-07-09T15:31:12.7616789Z","suite":"Commands","harness":"Commands","case":"settings_file_operations_precalc_roundtrip","duration_ms":32,"status":"passed","reason":"","classification":"PASSED","seed":"","attempt":1,"source":"case","mode":""}

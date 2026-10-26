@@ -1,0 +1,173 @@
+{
+  "run": "20260923T073719Z-42432-e1fe95a19d3b4e7cacc6659c1bce0835",
+  "overallResult": "failed",
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "sourceSnapshot": "f7dea5f158ac5de23a7bcc4ed26c89e6c8759e2116323ec01cad17984ae16b6c",
+  "buildReceipt": "59b68183749a7848a4bcef8b5ff3695d780ef4ff399d7404f3ea119676e7fd02",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "passed": false,
+      "successful_returns": 2
+    },
+    {
+      "repetition": 2,
+      "passed": true,
+      "successful_returns": 12
+    },
+    {
+      "repetition": 3,
+      "passed": true,
+      "successful_returns": 12
+    }
+  ],
+  "captures": [
+    {
+      "path": "captures/returned__left__destination__enter__fr-FR.png",
+      "pane": "left",
+      "role": "destination",
+      "activation": "enter",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "e6708098790a535fadffa85c205b8074d2a73d2a9e65ec2a7bdeaf6688649c81"
+    },
+    {
+      "path": "captures/returned__left__destination__space__fr-FR.png",
+      "pane": "left",
+      "role": "destination",
+      "activation": "space",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "4d703741e7281690330b7d04e7b92714f1985f6bddbd1a5552502c1570bf5b0e"
+    },
+    {
+      "path": "captures/returned__left__destination__uia__fr-FR.png",
+      "pane": "left",
+      "role": "destination",
+      "activation": "uia",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "e113938a08e2a81e641908b290043960e8bbeeae43758db499eef1a5934254c4"
+    },
+    {
+      "path": "captures/returned__left__source__enter__fr-FR.png",
+      "pane": "left",
+      "role": "source",
+      "activation": "enter",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "ff68afac57b745ace1b56ce86df2f67bcd8530342404dde4fd53dd7dc4d042b7"
+    },
+    {
+      "path": "captures/returned__left__source__space__fr-FR.png",
+      "pane": "left",
+      "role": "source",
+      "activation": "space",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "fec14c8148629d299239ea60f1d80099338555942e5fe2f602a6688ec19360ba"
+    },
+    {
+      "path": "captures/returned__left__source__uia__fr-FR.png",
+      "pane": "left",
+      "role": "source",
+      "activation": "uia",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "23ecb239375cf4dd301a9b6b14c9290c3095f3d5c8607a67e23cfcf92eb88f12"
+    },
+    {
+      "path": "captures/returned__right__destination__enter__fr-FR.png",
+      "pane": "right",
+      "role": "destination",
+      "activation": "enter",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "e6708098790a535fadffa85c205b8074d2a73d2a9e65ec2a7bdeaf6688649c81"
+    },
+    {
+      "path": "captures/returned__right__destination__space__fr-FR.png",
+      "pane": "right",
+      "role": "destination",
+      "activation": "space",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "51661516af8ef49c26c1b7d33c222670ecf5a2480970265b089360255f5b295f"
+    },
+    {
+      "path": "captures/returned__right__destination__uia__fr-FR.png",
+      "pane": "right",
+      "role": "destination",
+      "activation": "uia",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "9421ed7af3b80b90c39105300e34beb9a7a1a55c7456b44026861cc1851e2f6b"
+    },
+    {
+      "path": "captures/returned__right__source__enter__fr-FR.png",
+      "pane": "right",
+      "role": "source",
+      "activation": "enter",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "b6c47febd2da8627ce2bd37814210f3dcdc6179dfe885bb68f9d1a5c97b23da9"
+    },
+    {
+      "path": "captures/returned__right__source__space__fr-FR.png",
+      "pane": "right",
+      "role": "source",
+      "activation": "space",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "9c4ebb8501377e56ea360ad2bd5ad93de7deceab132f997ee9b7336b6fcfaedf"
+    },
+    {
+      "path": "captures/returned__right__source__uia__fr-FR.png",
+      "pane": "right",
+      "role": "source",
+      "activation": "uia",
+      "language": "fr-FR",
+      "width": 724,
+      "height": 737,
+      "nativeDpi": null,
+      "repetition": 3,
+      "sha256": "8149ab30365647ad12efbf3d573b09221000b60cb8898c14331d264025855982"
+    }
+  ],
+  "selectedPaneCaptureStatus": "build passed; not executed"
+}

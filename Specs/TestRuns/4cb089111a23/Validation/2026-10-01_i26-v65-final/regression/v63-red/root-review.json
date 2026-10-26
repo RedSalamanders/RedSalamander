@@ -1,0 +1,28 @@
+{
+  "schema": "i26-v63-red-root-review.v1",
+  "reviewer": "root",
+  "reviewUtc": "2026-10-01T09:24:42.2058626+00:00",
+  "status": "expected-red",
+  "runId": "20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "summarySha256": "bf75c45aa73fe2ac1bf4e13a429a6fd573213ea174fbe2072fe993aad8103ee8",
+  "runnerResultSha256": "9a7cd36ea1c65e2ccc90f37792b47390bc58e0a51afdf9af8985829fc4fd6bad",
+  "nativeResultSha256": "e552de2c12ae7d71ead48cf1b7714bb5a4635b86471a2b6f992900dcb90645da",
+  "traceSha256": "cb89cee41c876e6fa7f145b9f7f0c7501b4c45712c7bc5818a726cfdbc635fa2",
+  "counts": [
+    0,
+    1,
+    0
+  ],
+  "sandboxClean": true,
+  "manifestSha256": "e3dfb1c06a8d422cd1764c8174a5f5c7c13dafaeb0f80e1a545ba5978383db07",
+  "sourceSnapshotId": "1f311234bb99a4cc11c6f35dfe5551e8988839a425281b93fccbcc091840784f",
+  "receiptSha256": "8a576a080ad5ed455ded14ca97b7ac564acd160f62623a650796a64e68063b9f",
+  "nativeReason": "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=48, top=-22, height=27, viewport=[0,348].",
+  "redAndGreenTestSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "testByteIdentical": true,
+  "oldProductSha256": "cebf940372483f6bd6bc4b8c9e58fa6faaf9856d7629f5058469db536e07bba8",
+  "greenProductSha256": "0ba4bef8d41b37678756e80b853cb02799848a8442501d99735c0c936580ab1d",
+  "causality": "Direct prepaint focus visibility regression reproduced against old product. This does not prove the cause of historical V58 badge failure.",
+  "acceptanceEffect": "Regression reproduction only; GREEN and broad gates remain separate",
+  "wholePlanComplete": false
+}

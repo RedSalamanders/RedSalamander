@@ -1,0 +1,32 @@
+
+
+
+
+
+Describing Canonical DxUi source ownership
+ [+] keeps the shared implementation and control suites out of the consumer tree 380ms
+ [+] keeps owned project inputs separate from the restored library implementation 228ms
+Describing Exact DxUi consumer dependency
+ [+] rejects malformed locks before source lookup or restore 161ms
+ [+] requires source for artifact use and rejects tracked and untracked source changes 552ms
+ [+] binds module provenance to the exact archive and rejects stale or ambiguous inputs 1.02s
+Describing DxUi consumer profile evaluation
+warning: in the working copy of 'Tools/ConsumerBuild.psm1', LF will be replaced by CRLF the next time Git touches it
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for x64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+DxUi restored at 070e5e93ed7aae341e7b395fe3b6a488f7969a14 for ARM64; output identity aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.
+ [+] uses the first-party host during restore and restores the caller environment after success or failure 6.43s
+ [+] evaluates the six real consumer profiles with sanitizer settings and a 64-bit cross-compiler host 3.54s
+Describing Packaged DxUi module provenance
+ [+] ships only included module sidecars and rejects mismatched pins or module bytes 95ms
+Tests completed in 12.4s
+Passed: 8 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0

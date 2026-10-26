@@ -1,0 +1,92 @@
+{
+    "run_started_utc": "2026-10-25T20:51:44.901Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261025T205119Z-30012-ade9faa31ea640e286d50126ddb705e0\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 92392,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "passed",
+            "duration_ms": 34197,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_durable_store_safe_mechanics",
+            "status": "passed",
+            "duration_ms": 237,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 399,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_result_retention",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_accepted_decision_records",
+            "status": "passed",
+            "duration_ms": 5311,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 10951,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+            "status": "passed",
+            "duration_ms": 2075,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 4650,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+            "status": "passed",
+            "duration_ms": 5896,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+            "status": "passed",
+            "duration_ms": 5731,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+            "status": "passed",
+            "duration_ms": 6075,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+            "status": "passed",
+            "duration_ms": 5725,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+            "status": "passed",
+            "duration_ms": 6304,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

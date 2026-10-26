@@ -1,0 +1,71 @@
+{
+  "schema": "viewer-space.campaign-archive-copy.v1",
+  "archive_folder": "retained-reference-231508122z-399289c9-b03-p03-candidate",
+  "archive_kind": "run",
+  "campaign_id": "20261009T231508122Z-399289c9",
+  "campaign_mode": "RetainedReference",
+  "campaign_schema": "viewer-space.memory-qualification.v1",
+  "campaign_scope_state": "campaign-state-preserved",
+  "campaign_manifest_sha256": "8cee74348b3f1c4d320a1e1e18b5841cc635d4ec607a31453b72f88d06869c1a",
+  "expected_receipts": {
+    "candidate": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd",
+    "baseline": "935a4954a73b50d93f37a9df89f4f880aecf50ec4e5d55f7663ac0de13c8cf44"
+  },
+  "expected_build_source_snapshot_ids": {
+    "candidate": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+    "baseline": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b"
+  },
+  "repository_verdict": "NOT_EVALUATED",
+  "sibling_archive_folders": [
+    "retained-reference-231508122z-399289c9-overview",
+    "retained-reference-231508122z-399289c9-warmup-baseline",
+    "retained-reference-231508122z-399289c9-warmup-candidate",
+    "retained-reference-231508122z-399289c9-b01-p01-baseline",
+    "retained-reference-231508122z-399289c9-b01-p02-candidate",
+    "retained-reference-231508122z-399289c9-b01-p03-candidate",
+    "retained-reference-231508122z-399289c9-b01-p04-baseline",
+    "retained-reference-231508122z-399289c9-b02-p01-baseline",
+    "retained-reference-231508122z-399289c9-b02-p02-candidate",
+    "retained-reference-231508122z-399289c9-b02-p03-candidate",
+    "retained-reference-231508122z-399289c9-b02-p04-baseline",
+    "retained-reference-231508122z-399289c9-b03-p01-baseline",
+    "retained-reference-231508122z-399289c9-b03-p02-candidate",
+    "retained-reference-231508122z-399289c9-b03-p04-baseline"
+  ],
+  "generated_files": [],
+  "runs": [
+    {
+      "archive_folder": "retained-reference-231508122z-399289c9-b03-p03-candidate",
+      "manifest_run_index": 12,
+      "archived_file_count": 11,
+      "archived_payload_bytes": 887225,
+      "block": 3,
+      "label": "20261009T231508122Z-399289c9-b3-p3-candidate",
+      "mode": "RetainedReference",
+      "position": 3,
+      "role": "measurement",
+      "run_id": "20261010T001107Z-15012-3753b679588f4f22824b19eee8c7ceb8",
+      "side": "candidate",
+      "source_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\runs\\20261009T231508122Z-399289c9-b3-p3-candidate",
+      "status": "PASSED",
+      "case_status": "passed",
+      "curation_status": "qualified",
+      "qualification_status": null,
+      "curation_errors": [],
+      "source_files": [
+        "build-log-index.json",
+        "build-receipt.json",
+        "metric-replay-map.json",
+        "perf-metrics-curated.jsonl",
+        "provenance.json",
+        "raw-metrics-source-index.json",
+        "results.json",
+        "run-all-tests-results.json",
+        "runner-stdout.log",
+        "viewer_space_memory_heavy_four_root_retained_reference_metrics.json",
+        "workspace-final.json"
+      ],
+      "generated_replay_map": null
+    }
+  ]
+}

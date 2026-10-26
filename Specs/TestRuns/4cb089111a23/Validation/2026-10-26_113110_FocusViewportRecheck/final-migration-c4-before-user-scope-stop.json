@@ -1,0 +1,109 @@
+{
+  "head": "c4c7399b0ccf700d5f761be5245f6a1e3c513fea",
+  "repository": "E:\\RedSalamander.Perf\\integration-20261024",
+  "ownerPid": 100188,
+  "ownerStartUtc": "2026-10-26T10:53:46.6793070Z",
+  "phase": "PrePush-Debug-planning-only",
+  "outcome": "running",
+  "updatedUtc": "2026-10-26T11:24:24.5501689Z",
+  "entries": [
+    {
+      "phase": "reuse-x64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T10:53:48.2499469Z",
+      "finishedUtc": "2026-10-26T10:54:01.5975939Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-reuse-x64-ASan-Debug-build.log"
+    },
+    {
+      "phase": "reuse-x64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T10:54:01.7872261Z",
+      "finishedUtc": "2026-10-26T10:54:13.2768651Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-reuse-x64-Release-build.log"
+    },
+    {
+      "phase": "ASan-product-ui",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T10:54:13.4960927Z",
+      "finishedUtc": "2026-10-26T10:54:28.2874829Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ASan-product-ui.log"
+    },
+    {
+      "phase": "ASan-uncaptured-exports",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T10:54:28.4718102Z",
+      "finishedUtc": "2026-10-26T10:59:47.8211270Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ASan-uncaptured-exports.log"
+    },
+    {
+      "phase": "ASan-captured-exports",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T10:59:48.0162293Z",
+      "finishedUtc": "2026-10-26T11:01:21.3234679Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ASan-captured-exports.log"
+    },
+    {
+      "phase": "ASan-export-analysis",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:01:21.5313738Z",
+      "finishedUtc": "2026-10-26T11:01:22.0539339Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ASan-export-analysis.log"
+    },
+    {
+      "phase": "Release-captured-exports",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:01:22.2690197Z",
+      "finishedUtc": "2026-10-26T11:01:53.9872819Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-Release-captured-exports.log"
+    },
+    {
+      "phase": "Release-export-analysis",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:01:54.2729608Z",
+      "finishedUtc": "2026-10-26T11:01:54.6907119Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-Release-export-analysis.log"
+    },
+    {
+      "phase": "export-paired-comparison",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:01:54.9752710Z",
+      "finishedUtc": "2026-10-26T11:01:56.0192756Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-export-paired-comparison.log"
+    },
+    {
+      "phase": "x64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:01:56.2251351Z",
+      "finishedUtc": "2026-10-26T11:06:44.9883526Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-x64-Debug-build.log"
+    },
+    {
+      "phase": "ARM64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:06:45.2128186Z",
+      "finishedUtc": "2026-10-26T11:12:11.6480013Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ARM64-Debug-build.log"
+    },
+    {
+      "phase": "ARM64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:12:11.9289187Z",
+      "finishedUtc": "2026-10-26T11:18:54.2766280Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ARM64-Release-build.log"
+    },
+    {
+      "phase": "ARM64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:18:54.6076614Z",
+      "finishedUtc": "2026-10-26T11:24:24.0604973Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-ARM64-ASan-Debug-build.log"
+    },
+    {
+      "phase": "reuse-exact-source-static-validation",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T11:24:24.2770755Z",
+      "finishedUtc": "2026-10-26T11:24:24.3129466Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-migration-c4c7399b0-reuse-exact-source-static-validation.log"
+    }
+  ]
+}

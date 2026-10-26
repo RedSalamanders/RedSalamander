@@ -1,0 +1,24 @@
+param([Parameter(Mandatory)][ValidateSet('Single','Duplicate')][string]$Mode)
+$ErrorActionPreference='Stop'
+Import-Module Pester -RequiredVersion 3.4.0 -Force
+if($Mode -eq 'Duplicate'){
+ Import-Module 'Z:/RsI19/Tools/Modules/Build/DxUiDependency.psm1' -Force
+}
+Import-Module 'Z:/RsI19Closeout/Tools/Modules/Build/DxUiDependency.psm1' -Force
+$modules=@(Get-Module DxUiDependency | Select-Object Name,Path)
+$succeeded=$false
+$message=$null
+try{
+ $result=InModuleScope DxUiDependency { 'module lookup succeeded' }
+ $succeeded=($result -eq 'module lookup succeeded')
+}catch{
+ $message=$_.Exception.Message
+}
+$expected=if($Mode -eq 'Single'){$modules.Count -eq 1 -and $succeeded}else{
+ $modules.Count -eq 2 -and -not $succeeded -and $message -match "Multiple Script modules named 'DxUiDependency'"
+}
+$output='Z:/RedSalamander.Perf/evidence/I19-20260909/a20f6680-module-scope-'+$Mode+'.json'
+if(Test-Path -LiteralPath $output){throw 'Preserve existing module-scope probe'}
+[ordered]@{mode=$Mode;source='a20f6680dd5f82835a549f4c231e5666e4047eda';pesterVersion='3.4.0';modules=$modules;lookupSucceeded=$succeeded;error=$message;expectedOutcomeObserved=$expected;scope='Module lookup only; no build, product test or artifact mutation';completedUtc=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $output
+if(-not $expected){throw 'Unexpected module-scope result'}
+Write-Output ($Mode+': expected module-scope result observed.')

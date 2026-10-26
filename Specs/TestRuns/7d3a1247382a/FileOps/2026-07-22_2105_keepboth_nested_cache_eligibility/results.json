@@ -1,0 +1,68 @@
+{
+  "schema": "red-salamander.curated-fileops-closeout.v1",
+  "finding": "EG-FOPS-01",
+  "machineHash": "7d3a1247382a",
+  "red": {
+    "runnerId": "20260722T182102Z-49896-344cc6c22ae74eefb38573285309eae4",
+    "archive": "2026-07-22_202107",
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failure": "Cached Keep Both scenario copy-sequential completed without prompting for the ineligible nested collision."
+  },
+  "green": [
+    {
+      "configuration": "Debug",
+      "scope": "Phase9_ConflictPrompt_KeepBothNestedCacheEligibility",
+      "archive": "2026-07-22_202903",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "configuration": "Debug",
+      "scope": "Phase9_",
+      "archive": "2026-07-22_203027",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "configuration": "Debug",
+      "scope": "FileOperations",
+      "archive": "2026-07-22_204841",
+      "passed": 112,
+      "failed": 0,
+      "skipped": 20
+    },
+    {
+      "configuration": "Release",
+      "scope": "Phase9_ConflictPrompt_KeepBothNestedCacheEligibility",
+      "archive": "2026-07-22_205643",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "configuration": "Debug",
+      "scope": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "runnerId": "20260730T082023Z-37776-d77936d2e4074b41b0cf89be0360931f",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "TestHarnessSourceContracts.Tests.ps1",
+      "passed": 150,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "shippingReleaseBuild": {
+    "configuration": "Release",
+    "testsEnabled": false,
+    "errors": 0,
+    "warnings": 3,
+    "log": ".build/logs/msbuild-20260730_101125_366.log"
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "schema": "i26-v65-integrated-pair-embedded-root-review.v1",
+  "reviewer": "root",
+  "reviewUtc": "2026-10-01T13:54:02.9065685+00:00",
+  "interpretationReviewed": true,
+  "doesNotEstablishWholePlanAcceptance": true,
+  "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+  "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+  "runCount": 8,
+  "pairInvocationsSha256": "d5254ce4f1522fee5ec919457219baa91efefe00331d9dc39f4996ea219539fc",
+  "comparisonSummarySha256": "e31d26fb4e414aabd574705ac715431e755a575c9d8486d00e58905cdb794d31",
+  "a78ManifestSha256": "ca58d25c058233ea1fcf08697e20aedfd6b0cf9dc528cd1cc3baf2649289e23e",
+  "a78EmbeddedReceiptSha256": "7e7b07e787b5b55d663caf242f8155e62318fbc53c8795d269770894d17851d5",
+  "b19PostFullReceiptSha256": "b0346b50cd65acb8b8e96469677006c47ec6b99241793a878895b701c27a5d3c",
+  "compilerDebugInformation": "Embedded",
+  "acceptanceEffect": "accepted-for-I26-with-stated-limits",
+  "comparatorVerdictPreserved": "descriptive-needs-product-source-review",
+  "sourceDeltaSha256": "5c7a96f8b7f534bf8cdd46798c6befdcd7665ae6067bd59e1620bde5d72c3ce8",
+  "sourceInterpretation": "Equal fixture, asserted input/content contract, feature states and geometry across retained A78 and B19 application plus library revisions. Root reviewed synthetic running/Issues/scan entry points and the source delta; read-only delegate independently checked manifest coverage. Worker admission, runtime execution and breadcrumb B-only counterparts are outside this measured path. Missing counterparts remain unverified. No whole-product, pixel equality or DxUi-only attribution claim.",
+  "sourceReviewCarry": "Source-delta.csv exactly matches prior source-reviewed comparison. A78 and B19 snapshots, fixture/helper and product bytes unchanged; only matched compiler debug-information build profile changed. Original review and measurements remain separate.",
+  "originalProgramDatabaseReviewSha256": "1f03b7d800efe556394e61e54471ba021b9d022b4e50c6ee1677c0914bbcf102",
+  "features": {
+    "fixtureSha256": "90f7301cc91e96d50985bf61451d6dcb1799254a5de6212928978137757ce740",
+    "helperSha256": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5",
+    "dpi": 144,
+    "taskDigest": "11213680259031909754",
+    "scanDigest": "522876664971784321",
+    "equalFeatureAndGeometryWitnesses": true
+  },
+  "latency": [
+    {
+      "metric": "FileOps.IntegratedPresentation.ChurnUpdate8Us",
+      "medianOfProcessMediansUsA": 66667.25,
+      "medianOfProcessMediansUsB": 66659.25,
+      "medianDifferencePercent": -0.011999895000918743,
+      "medianOfProcessP95UsA": 70477.5,
+      "medianOfProcessP95UsB": 73764.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.GraphCollapsedRedraw8Us",
+      "medianOfProcessMediansUsA": 66628.0,
+      "medianOfProcessMediansUsB": 66651.0,
+      "medianDifferencePercent": 0.03452002161253527,
+      "medianOfProcessP95UsA": 66706.5,
+      "medianOfProcessP95UsB": 66745.5
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.GraphOpenRedraw8Us",
+      "medianOfProcessMediansUsA": 66636.0,
+      "medianOfProcessMediansUsB": 66636.5,
+      "medianDifferencePercent": 0.0007503451587730355,
+      "medianOfProcessP95UsA": 66751.0,
+      "medianOfProcessP95UsB": 67110.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.IssuesDetailRedraw8Us",
+      "medianOfProcessMediansUsA": 66658.0,
+      "medianOfProcessMediansUsB": 66644.0,
+      "medianDifferencePercent": -0.021002730354946143,
+      "medianOfProcessP95UsA": 66725.0,
+      "medianOfProcessP95UsB": 66725.5
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusChangingRedraw8Us/change-attributes",
+      "medianOfProcessMediansUsA": 66671.5,
+      "medianOfProcessMediansUsB": 66677.5,
+      "medianDifferencePercent": 0.00899934754730282,
+      "medianOfProcessP95UsA": 69450.5,
+      "medianOfProcessP95UsB": 66703.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusChangingRedraw8Us/change-case",
+      "medianOfProcessMediansUsA": 66680.5,
+      "medianOfProcessMediansUsB": 66671.0,
+      "medianDifferencePercent": -0.014247043738424277,
+      "medianOfProcessP95UsA": 66778.5,
+      "medianOfProcessP95UsB": 66837.5
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusChangingRedraw8Us/compare",
+      "medianOfProcessMediansUsA": 66675.0,
+      "medianOfProcessMediansUsB": 66667.5,
+      "medianDifferencePercent": -0.01124859392575928,
+      "medianOfProcessP95UsA": 66804.0,
+      "medianOfProcessP95UsB": 66841.5
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusChangingRedraw8Us/file-list",
+      "medianOfProcessMediansUsA": 66647.5,
+      "medianOfProcessMediansUsB": 66675.5,
+      "medianDifferencePercent": 0.04201207847256086,
+      "medianOfProcessP95UsA": 66814.5,
+      "medianOfProcessP95UsB": 66737.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusCleanRedraw8Us/change-attributes",
+      "medianOfProcessMediansUsA": 66627.5,
+      "medianOfProcessMediansUsB": 66674.0,
+      "medianDifferencePercent": 0.06979100221380061,
+      "medianOfProcessP95UsA": 66778.5,
+      "medianOfProcessP95UsB": 67274.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusCleanRedraw8Us/change-case",
+      "medianOfProcessMediansUsA": 66648.0,
+      "medianOfProcessMediansUsB": 66666.0,
+      "medianDifferencePercent": 0.02700756211739287,
+      "medianOfProcessP95UsA": 67100.0,
+      "medianOfProcessP95UsB": 67124.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusCleanRedraw8Us/compare",
+      "medianOfProcessMediansUsA": 66656.5,
+      "medianOfProcessMediansUsB": 66659.5,
+      "medianDifferencePercent": 0.004500686354669087,
+      "medianOfProcessP95UsA": 66890.0,
+      "medianOfProcessP95UsB": 69829.0
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusCleanRedraw8Us/file-list",
+      "medianOfProcessMediansUsA": 66643.0,
+      "medianOfProcessMediansUsB": 66649.0,
+      "medianDifferencePercent": 0.009003196134627793,
+      "medianOfProcessP95UsA": 66731.0,
+      "medianOfProcessP95UsB": 66695.5
+    }
+  ],
+  "latencyInterpretation": "All twelve median-of-process-median series differ by less than0.07 percent. Churn median process P95 increases3.2865ms; clean compare median of five-sample maxima increases2.939ms. Other series move both directions, with overlapping process ranges and individual outliers retained. Four process repetitions do not establish causal tail regression. Five-sample P95 is the maximum, and synchronous redraw is not FPS. No threshold is relaxed.",
+  "resourcePoints": [
+    {
+      "run": "A78-1",
+      "uiCpuDeltaUs": 1343750,
+      "processCpuDeltaUs": 1500000,
+      "coldPrivateMiB": 257.078125,
+      "endPrivateMiB": 256.15234375,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "A78-2",
+      "uiCpuDeltaUs": 1359375,
+      "processCpuDeltaUs": 1609375,
+      "coldPrivateMiB": 259.34375,
+      "endPrivateMiB": 256.2578125,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "A78-3",
+      "uiCpuDeltaUs": 1765625,
+      "processCpuDeltaUs": 2500000,
+      "coldPrivateMiB": 258.4765625,
+      "endPrivateMiB": 256.015625,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "A78-4",
+      "uiCpuDeltaUs": 2109375,
+      "processCpuDeltaUs": 2953125,
+      "coldPrivateMiB": 260.26171875,
+      "endPrivateMiB": 255.796875,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "B19-1",
+      "uiCpuDeltaUs": 1343750,
+      "processCpuDeltaUs": 1531250,
+      "coldPrivateMiB": 260.9375,
+      "endPrivateMiB": 258.8203125,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "B19-2",
+      "uiCpuDeltaUs": 1937500,
+      "processCpuDeltaUs": 2640625,
+      "coldPrivateMiB": 256.60546875,
+      "endPrivateMiB": 256.25,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "B19-3",
+      "uiCpuDeltaUs": 1562500,
+      "processCpuDeltaUs": 1656250,
+      "coldPrivateMiB": 259.68359375,
+      "endPrivateMiB": 256.4453125,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    },
+    {
+      "run": "B19-4",
+      "uiCpuDeltaUs": 1781250,
+      "processCpuDeltaUs": 2171875,
+      "coldPrivateMiB": 259.7734375,
+      "endPrivateMiB": 256.55078125,
+      "handles": 37,
+      "hosts": 0,
+      "gdi": 0,
+      "user": 3,
+      "attachments": 0
+    }
+  ],
+  "cpuInterpretation": "UI CPU totals range A1.344-2.109s and B1.344-1.938s; process totals A1.500-2.953s and B1.531-2.641s. Positive and negative median differences remain in raw comparison; overlapping quantized measurements do not isolate product causality. No zero-wakeup claim.",
+  "memoryInterpretation": "Cold private memory A257.08-260.26MiB and B256.61-260.94MiB; final A255.80-256.26MiB and B256.25-258.82MiB. Final median is about0.414MiB higher in B and all samples are retained. These point samples do not establish peak memory, driver allocation or a new attributable regression; existing accepted grid/menu costs remain applicable without expansion.",
+  "lifetimeInterpretation": "All eight end-minus-cold observations: hosts0, attachments0, GDI0, USER+3, handles+37. All sixteen popup/Issues hidden intervals preserve three render/resize, extent/bytes and cache observations. Issues format count7->8 is bounded; no per-entry allocation size inferred. SurfaceCounters remainsE_NOTIMPL; logical BGRA extents do not prove GPU residency/peak/release.",
+  "binaryProfile": "A Embedded EXE85e756593c9de73bb04ef71b4c612c96176997ced87e3c0aff5261277b41a4f9 and DxUi.lib97f38b080b036347a4bce56f9bd3fd631f8e4197797dfa38e4b5d492db29e0c2; B final Full EXE1287c08658659dc62d9cd4c63eb7ee187a3ffa1485fd76fee586a08c895e2872 and DxUi.libf36f8f3198fc805f43ed15d33a9843c16ab2f32aef410e4d4874b59e4bd2444e verified.",
+  "nativeReview": "Root read all eight1/0/0 native results and actual runner disk-audit clean fields; exact original run IDs/receipts/manifest/conditions retained."
+}

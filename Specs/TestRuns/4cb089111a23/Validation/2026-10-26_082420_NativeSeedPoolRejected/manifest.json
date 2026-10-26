@@ -1,0 +1,236 @@
+{
+  "schema": "red-salamander.rejected-native-seed-pool.v1",
+  "source": "7ce7fcee0da65c4084c6f1fe1deb25f9d9b387d3",
+  "baselineSource": "fac05d5b70b9a5933b12093c1b2337f76aee8cdc",
+  "outcome": "rejected-memory-regression",
+  "files": [
+    {
+      "file": "qualification-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\native-seed-pool-qualification.json",
+      "sha256": "C1AC6739C5494C1FDA961A44760C55794DDF8B94EF5A27722A5CEE6C18612D43",
+      "bytes": 4185
+    },
+    {
+      "file": "paired-comparison.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ntfs-seed-pool-comparison.json",
+      "sha256": "5ACB2C4EACD82170A9F851940ADE6A96FFC96A2740D3B9EF8A75AC5F81E999D4",
+      "bytes": 16154
+    },
+    {
+      "file": "qualification-driver.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Invoke-NativeSeedPoolQualification.ps1",
+      "sha256": "A74303BE0B74E3C34D22B825D0C3D8B0A63021227C986F54AB7F6A82D6C0169F",
+      "bytes": 4080
+    },
+    {
+      "file": "paired-comparison.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Test-NtfsSeedPoolComparison.ps1",
+      "sha256": "63351CBE2EB319C543603B57301ACB92FC620D43042C4C554BD023557444A242",
+      "bytes": 5838
+    },
+    {
+      "file": "owned-probe.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Invoke-OwnedResidualProbe.ps1",
+      "sha256": "22F2D0742B009751836273DFE84FD33FB751C51721F0528B68983183AF2A47D6",
+      "bytes": 10010
+    },
+    {
+      "file": "memory-sampler.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Sample-OwnedResidualMemory.ps1",
+      "sha256": "496EBF4DC07E912083EF4F26393609FB1602A350910A34B7FDD0A19E87A9B8A2",
+      "bytes": 2315
+    },
+    {
+      "file": "build-asan.json",
+      "source": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\build-receipt.json",
+      "sha256": "661B6D69A87B78BAA90EA5089598319873DC25EDA94C07C6284191268627DE0B",
+      "bytes": 90385
+    },
+    {
+      "file": "asan-1-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-asan-1.json",
+      "sha256": "23266ECBD3549ADA06EB6C205A6C647F1FECB466836DF24441A89527B22BA2AB",
+      "bytes": 3433
+    },
+    {
+      "file": "asan-1-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T082855Z-62028-85e27682f89446e5a78c36d84a5008de\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "15C4BA76F5DAE63FB05848C59677CE0FFEA88AAD8E7F443ABB6F45797BD8A443",
+      "bytes": 619
+    },
+    {
+      "file": "asan-1-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T082855Z-62028-85e27682f89446e5a78c36d84a5008de\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "61C96490ACFD365A1D6F0211FF42D6452DE6450226D5BCAA518DFC1EB1C72F5C",
+      "bytes": 5608
+    },
+    {
+      "file": "asan-1-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T082855Z-62028-85e27682f89446e5a78c36d84a5008de\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "631719F6F3850809F4856D1F8375FD292CEBAE1B931CE2F6B95BD0BA11743F45",
+      "bytes": 77201
+    },
+    {
+      "file": "asan-2-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-asan-2.json",
+      "sha256": "80C1CBA54F0D7ED28C1747B3ADE45A73A4B2C1CB3AA9B7BB993A8BC4BD72AB86",
+      "bytes": 3433
+    },
+    {
+      "file": "asan-2-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083011Z-49648-4f43910a14fd4cbe87aecce76bd83b59\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "99CE3CBDDE19B59BC59964B8358B5E8E521177DB37707180230BF88C499CFC1A",
+      "bytes": 619
+    },
+    {
+      "file": "asan-2-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083011Z-49648-4f43910a14fd4cbe87aecce76bd83b59\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "F86E8F49D12D76A09C6C2FB4335C821D86F4663AB512E5E071FFD1A880DE4D70",
+      "bytes": 5608
+    },
+    {
+      "file": "asan-2-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083011Z-49648-4f43910a14fd4cbe87aecce76bd83b59\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "72DC66ECB0CD565855014948B57017FEE05B49D9CDBA59C4D96F1EF3FCB5ECE6",
+      "bytes": 64438
+    },
+    {
+      "file": "asan-3-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-asan-3.json",
+      "sha256": "3AEB506D9D3E1A4BC01A51F25B71B72B9437F712095A2E7B1F7055739FF404AA",
+      "bytes": 3425
+    },
+    {
+      "file": "asan-3-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083114Z-9412-fb9976798e5948e39f020478beee618f\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "B0BB1AA57DDDDF4C343C63E42CD9506F8373F6A7409C190D1032E2BD710C2BAF",
+      "bytes": 618
+    },
+    {
+      "file": "asan-3-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083114Z-9412-fb9976798e5948e39f020478beee618f\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "55E80172556ECC772FA7ADE7AA324186A691E0750CA8D84F1DEAA10A6CDA1784",
+      "bytes": 5608
+    },
+    {
+      "file": "asan-3-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083114Z-9412-fb9976798e5948e39f020478beee618f\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "1B9D7A6535C1826572C6E4424F36773FFEED1C198A174852AA642C742F3B6A7D",
+      "bytes": 57441
+    },
+    {
+      "file": "asan-parser-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-pool-asan-parser.json",
+      "sha256": "F9C112687933C070F45F208D9FA9A5E1B486362E2E7CE134AE2F69C524CD1512",
+      "bytes": 3025
+    },
+    {
+      "file": "asan-parser-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T082852Z-73892-a787b7d185ba4e908060416dd4f5ad08\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "960460821F73A6A31426A5442F316516CC00DD5B290533D4A71BBB6237C99AB9",
+      "bytes": 790
+    },
+    {
+      "file": "build-release.json",
+      "source": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\build-receipt.json",
+      "sha256": "C651437BD58139546DE00CEAAEF1FE79C450544B841E708A9E06F4F480C953BD",
+      "bytes": 86662
+    },
+    {
+      "file": "release-1-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-release-1.json",
+      "sha256": "E044A36B53C0DFD368133351A7584E2A2CD2CD3220DA81192A7D671C827608D8",
+      "bytes": 3420
+    },
+    {
+      "file": "release-1-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083939Z-56260-eb163ad5dc4641d9b43a523be752f921\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "4AEB317930674D41EAD37F50FE8F620DE5CE40B7C852BA66DEC06B1DBA0FB98A",
+      "bytes": 617
+    },
+    {
+      "file": "release-1-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083939Z-56260-eb163ad5dc4641d9b43a523be752f921\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "80FD4779678E01CB8F1E73EDD62181FFBA07ABDBC493C6D565A5E4ADAD25755F",
+      "bytes": 5541
+    },
+    {
+      "file": "release-1-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083939Z-56260-eb163ad5dc4641d9b43a523be752f921\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "15D4C4D4AEF11F839835BA6CEBE1523F9AB76608CF0896E0C5033AD8002175E5",
+      "bytes": 7984
+    },
+    {
+      "file": "release-2-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-release-2.json",
+      "sha256": "9A1785C114E120B5F8959DE37A897B80670B5613902793B64511F1F3B5B5C7A4",
+      "bytes": 3420
+    },
+    {
+      "file": "release-2-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083950Z-57412-157af85cc9c94334a73fd76efdd333bf\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "89F9F869BCACD4131E1DFA474C1E3C3391EE28A66CFE0175371A18115E18D19B",
+      "bytes": 617
+    },
+    {
+      "file": "release-2-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083950Z-57412-157af85cc9c94334a73fd76efdd333bf\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "BADCC93C993A34768DB3C6332DF8A818C431F2D6FAA53F6697AAAD9A94FA0462",
+      "bytes": 5541
+    },
+    {
+      "file": "release-2-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083950Z-57412-157af85cc9c94334a73fd76efdd333bf\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "39D025C3ABCEFA7341EC7A2C057F586D24A32763B743BD18F7B5821B06AB2568",
+      "bytes": 8592
+    },
+    {
+      "file": "release-3-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-memory-candidate-release-3.json",
+      "sha256": "A019C5DD3A88E894CC0FF19696DD95561F60D39A382413CEBDD470B667FA31E2",
+      "bytes": 3420
+    },
+    {
+      "file": "release-3-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T084001Z-83020-dd4885a3d00d4667b4e277d71fea1f8a\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "55061AE66D94273245D4334F526B7270B1618C1C06EFE446DDD97E1C4F5DD5F2",
+      "bytes": 617
+    },
+    {
+      "file": "release-3-metrics.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T084001Z-83020-dd4885a3d00d4667b4e277d71fea1f8a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "sha256": "B8C01F4605D5921A5264EF369D09A94D41BF2A75F4FB24628B0A3D653552B444",
+      "bytes": 5541
+    },
+    {
+      "file": "release-3-memory.jsonl",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T084001Z-83020-dd4885a3d00d4667b4e277d71fea1f8a\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+      "sha256": "050E7A12D3FC063B14FFCF439095B98C373C3D838DD89783110AA7CE8B6C017B",
+      "bytes": 8592
+    },
+    {
+      "file": "release-parser-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-pool-release-parser.json",
+      "sha256": "A0802524C29F5FB933C5B3F5D4B288447B029DA11F2DA3353AC1CE09D19438CF",
+      "bytes": 3013
+    },
+    {
+      "file": "release-parser-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083937Z-39892-5a9b5ed89b5f468592f09231feff633b\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "CF23C7B2D1694EDA630A7B6196A9873DAF663B7F19CDEC336BFD8084B967D011",
+      "bytes": 790
+    },
+    {
+      "file": "asan-service-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-seed-pool-asan-service-regressions.json",
+      "sha256": "F120BD52A17931C6F1374FC2529C843A3D361A9E10D87B1D98899DF4C05074E9",
+      "bytes": 3723
+    },
+    {
+      "file": "asan-service-native.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T083211Z-100148-988f7a1b89374b0d875c7183a1643043\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "A78621E0CB51F4C40D0064082194D3610235BFE7625D0976A22DE9C223533EE7",
+      "bytes": 1826
+    }
+  ]
+}

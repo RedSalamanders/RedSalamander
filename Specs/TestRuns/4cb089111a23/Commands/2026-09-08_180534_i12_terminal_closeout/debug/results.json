@@ -1,0 +1,50 @@
+{
+    "run_started_utc": "2026-09-08T16:05:21.159Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T160151Z-96976-68fa7bc472ff4deeb072ad767c29a12b\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 4616,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+            "status": "passed",
+            "duration_ms": 313,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 22,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+            "status": "passed",
+            "duration_ms": 171,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_completed_post_failure_still_applies_ui_contract",
+            "status": "passed",
+            "duration_ms": 204,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_open_command_shell_prefers_windows_terminal",
+            "status": "passed",
+            "duration_ms": 40,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_terminal_session_menu_floating_dispatch",
+            "status": "passed",
+            "duration_ms": 1922,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

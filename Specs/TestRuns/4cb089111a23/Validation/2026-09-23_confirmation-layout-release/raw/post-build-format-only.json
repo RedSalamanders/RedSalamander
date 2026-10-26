@@ -1,0 +1,7 @@
+{
+  "path": "Common/WindowMessages.h",
+  "beforeSha256": "e424a52214829ce34cbef13b8a001dec17ed2983f2ff02c4196e5695fc309f66",
+  "afterSha256": "7d446e7098d85b3e1570bd875ca8bcbf5fd1391e3fcac904b61aa286c531f8d5",
+  "change": "Only align three new constexpr declaration equals signs; source tokens and line count unchanged. Native build/tests use before hash.",
+  "nonWhitespaceBytesIdentical": true
+}

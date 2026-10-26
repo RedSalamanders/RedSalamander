@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "generatedUtc": "2026-10-15T14:12:13.4355838Z",
+  "scope": "Static resource inventory of BuildConflictPromptQuestion and its shared FormatConflictProblemText/ConflictClassMessageId; no build or runtime tests",
+  "counts": {
+    "conflictClassValuesIncludingUnknownExcludingCount": 26,
+    "distinctBaseQuestionProblemTemplatesOnQuestionFormatterPath": 36,
+    "compositionTemplates": 6,
+    "questionFormatterStaticResourceTotal": 42,
+    "additionalDirectProblemClassSummaries": 4,
+    "unionStaticResourceIds": 46,
+    "boundedDecisionCacheDistinctScopes": 64,
+    "boundedDeferredConsentReceiptSlots": 64
+  },
+  "method": [
+    "Distinct localization resource IDs, not enum values, rendered strings or grammatical sentences.",
+    "The card overrides four generic class summaries with overlap/live-output/permanent-delete variants; direct Issues/problem formatting can still use those four.",
+    "ReadOnlyRegularFile and ReadOnlyRegularFileExists share one base resource.",
+    "Includes Outcome unknown because this resource is emitted by the error formatter as problem text; excludes unrelated status rows, action/button labels, headings and fact-row resources.",
+    "Counts formatter branches statically; does not prove every enum/risk is currently produced by every provider route."
+  ],
+  "locations": {
+    "conflictEnum": "RedSalamander/FolderWindow.FileOperationsInternal.h:569",
+    "classMapping": "RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp:407",
+    "unknownErrorBranch": "RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp:442",
+    "questionBranches": "RedSalamander/FolderWindow.FileOperations.PromptText.cpp:22",
+    "questionComposition": "RedSalamander/FolderWindow.FileOperations.PromptText.cpp:87",
+    "popupDelegation": "RedSalamander/FolderWindow.FileOperations.Popup.cpp:1074",
+    "mirrorDelegation": "RedSalamander/FolderWindow.FileOperations.DecisionMirror.cpp:616"
+  },
+  "baseTemplates": [
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_ACCESS_DENIED",
+      "definition": "RedSalamander/RedSalamander.rc:1740",
+      "sourceText": "IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    \"Access denied.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_DISK_FULL",
+      "definition": "RedSalamander/RedSalamander.rc:1742",
+      "sourceText": "IDS_FILEOPS_CONFLICT_DISK_FULL                        \"The disk is full. Free some space, then retry.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_EXISTS",
+      "definition": "RedSalamander/RedSalamander.rc:1732",
+      "sourceText": "IDS_FILEOPS_CONFLICT_EXISTS                           \"Destination already exists.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_MISSING_FILE",
+      "definition": "RedSalamander/RedSalamander.rc:1747",
+      "sourceText": "IDS_FILEOPS_CONFLICT_MISSING_FILE                     \"A required file could not be found. Check the item locations, then try again.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_MISSING_PATH",
+      "definition": "RedSalamander/RedSalamander.rc:1748",
+      "sourceText": "IDS_FILEOPS_CONFLICT_MISSING_PATH                     \"A required folder could not be found. Check the item locations, then try again.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE",
+      "definition": "RedSalamander/RedSalamander.rc:1737",
+      "sourceText": "IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           \"The item name or path is not valid for this operation.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_NETWORK",
+      "definition": "RedSalamander/RedSalamander.rc:1745",
+      "sourceText": "IDS_FILEOPS_CONFLICT_NETWORK                          \"Network is unavailable.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_PATH_TOO_LONG",
+      "definition": "RedSalamander/RedSalamander.rc:1743",
+      "sourceText": "IDS_FILEOPS_CONFLICT_PATH_TOO_LONG                    \"Path is too long.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_READONLY",
+      "definition": "RedSalamander/RedSalamander.rc:1739",
+      "sourceText": "IDS_FILEOPS_CONFLICT_READONLY                         \"Item is read-only.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_READONLY_DELETE_FILE",
+      "definition": "RedSalamander/RedSalamander.rc:1753",
+      "sourceText": "IDS_FILEOPS_CONFLICT_READONLY_DELETE_FILE              \"This item is read-only. Permanently delete it?\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_READONLY_DELETE_FOLDER",
+      "definition": "RedSalamander/RedSalamander.rc:1754",
+      "sourceText": "IDS_FILEOPS_CONFLICT_READONLY_DELETE_FOLDER            \"This folder is read-only or contains read-only items. Permanently delete it and all of its contents?\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_RECYCLE_BIN",
+      "definition": "RedSalamander/RedSalamander.rc:1744",
+      "sourceText": "IDS_FILEOPS_CONFLICT_RECYCLE_BIN                      \"Recycle Bin delete failed.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_RECYCLE_BIN_BY_NAME",
+      "definition": "RedSalamander/RedSalamander.rc:2006",
+      "sourceText": "IDS_FILEOPS_CONFLICT_RECYCLE_BIN_BY_NAME              \"Recycle Bin delete failed. This location can only delete by name.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_REPARSE_POINT",
+      "definition": "RedSalamander/RedSalamander.rc:1735",
+      "sourceText": "IDS_FILEOPS_CONFLICT_REPARSE_POINT                    \"Destination is a link or reparse point.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_SHARING",
+      "definition": "RedSalamander/RedSalamander.rc:1741",
+      "sourceText": "IDS_FILEOPS_CONFLICT_SHARING                          \"File is in use.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_TARGET",
+      "definition": "RedSalamander/RedSalamander.rc:1738",
+      "sourceText": "IDS_FILEOPS_CONFLICT_TARGET                           \"A required link target is unavailable.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_TYPE_MISMATCH",
+      "definition": "RedSalamander/RedSalamander.rc:1736",
+      "sourceText": "IDS_FILEOPS_CONFLICT_TYPE_MISMATCH                    \"Source and destination item types do not match.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_UNKNOWN",
+      "definition": "RedSalamander/RedSalamander.rc:1746",
+      "sourceText": "IDS_FILEOPS_CONFLICT_UNKNOWN                          \"The operation could not be completed. No further error details are available.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE",
+      "definition": "RedSalamander/RedSalamander.rc:1781",
+      "sourceText": "IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              \"Directory reparse point cannot be preserved for this operation.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT",
+      "definition": "RedSalamander/RedSalamander.rc:1758",
+      "sourceText": "IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT                  \"The destination will store this item without encryption. Continuing the move removes the encrypted original after a successful transfer.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_EFS_PLAINTEXT",
+      "definition": "RedSalamander/RedSalamander.rc:1967",
+      "sourceText": "IDS_FILEOPS_CONSENT_EFS_PLAINTEXT                     \"The destination will store an unencrypted copy of this encrypted item.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_LOW_SPACE",
+      "definition": "RedSalamander/RedSalamander.rc:1965",
+      "sourceText": "IDS_FILEOPS_CONSENT_LOW_SPACE                         \"The destination reports insufficient free space. Continuing may fail after work has already been published.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_METADATA_LOSS",
+      "definition": "RedSalamander/RedSalamander.rc:1970",
+      "sourceText": "IDS_FILEOPS_CONSENT_METADATA_LOSS                     \"Moving this item would lose security-significant metadata such as Mark-of-the-Web, alternate streams, or extended attributes.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION",
+      "definition": "RedSalamander/RedSalamander.rc:1969",
+      "sourceText": "IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION             \"Continuing requires downloading placeholder content.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_SPACE_UNKNOWN",
+      "definition": "RedSalamander/RedSalamander.rc:1966",
+      "sourceText": "IDS_FILEOPS_CONSENT_SPACE_UNKNOWN                     \"The destination cannot report available space. The operation can continue until an actual write failure.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_SPARSE_INFLATION",
+      "definition": "RedSalamander/RedSalamander.rc:1968",
+      "sourceText": "IDS_FILEOPS_CONSENT_SPARSE_INFLATION                  \"The destination cannot preserve sparse allocation and will consume the full logical size.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_RESULT_UNKNOWN",
+      "definition": "RedSalamander/RedSalamander.rc:2000",
+      "sourceText": "IDS_FILEOPS_RESULT_UNKNOWN                             \"Outcome unknown\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE",
+      "definition": "RedSalamander/RedSalamander.rc:1648",
+      "sourceText": "IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             \"Permanently delete {0}:\\r\\nfrom: {1}\\r\\n\\r\\nThis cannot be undone.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_LIVE_OUTPUT_QUESTION",
+      "definition": "RedSalamander/RedSalamander.rc:1983",
+      "sourceText": "IDS_FMT_FILEOPS_LIVE_OUTPUT_QUESTION                  \"Operation #{0} is still writing output here. Changing this item now can invalidate that operation's result.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_DELETED_BY_NAME_READ",
+      "definition": "RedSalamander/RedSalamander.rc:2034",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_DELETED_BY_NAME_READ          \"Task #{0} may delete by name an item that this task reads, or a folder that holds it. The two cannot run at the same time: queued, this task starts once task #{0} has ended, and what it reads may be gone by then.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_DELETED_BY_NAME_WRITTEN",
+      "definition": "RedSalamander/RedSalamander.rc:2033",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_DELETED_BY_NAME_WRITTEN       \"Task #{0} may delete by name an item that this task writes or changes, or a folder that holds it. The two cannot run at the same time: queued, this task starts once task #{0} has ended, and what it writes to may be gone by then.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_REMOVES_PUBLISHED",
+      "definition": "RedSalamander/RedSalamander.rc:1991",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_REMOVES_PUBLISHED             \"This operation may remove or rename files that operation #{0} is still writing.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_REMOVES_READ",
+      "definition": "RedSalamander/RedSalamander.rc:1988",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_REMOVES_READ                  \"This task may remove items that task #{0} is still reading.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_REPLACES_READ",
+      "definition": "RedSalamander/RedSalamander.rc:1992",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_REPLACES_READ                 \"This task may replace items that task #{0} is still reading.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_SAME_MEMBERS",
+      "definition": "RedSalamander/RedSalamander.rc:1990",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_SAME_MEMBERS                  \"This task and task #{0} may remove or rename the same items.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_OVERLAP_SAME_NAMES",
+      "definition": "RedSalamander/RedSalamander.rc:1989",
+      "sourceText": "IDS_FMT_FILEOPS_OVERLAP_SAME_NAMES                    \"This task and task #{0} may create or replace the same names.\""
+    }
+  ],
+  "compositionTemplates": [
+    {
+      "resourceId": "IDS_FMT_FILEOPS_CONFLICT_STATUS",
+      "definition": "RedSalamander/RedSalamander.rc:1762",
+      "sourceText": "IDS_FMT_FILEOPS_CONFLICT_STATUS                       \"{0} (0x{1:08X})\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_CONFLICT_ATTEMPT_FAILED",
+      "definition": "RedSalamander/RedSalamander.rc:1764",
+      "sourceText": "IDS_FMT_FILEOPS_CONFLICT_ATTEMPT_FAILED               \"Attempt {0} failed.\""
+    },
+    {
+      "resourceId": "IDS_FMT_FILEOPS_DESTINATION_CHANGE_QUESTION",
+      "definition": "RedSalamander/RedSalamander.rc:1689",
+      "sourceText": "IDS_FMT_FILEOPS_DESTINATION_CHANGE_QUESTION          \"Change the destination to {0}? {1}\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_DISK_FULL_SKIP_ALL_NOTE",
+      "definition": "RedSalamander/RedSalamander.rc:1756",
+      "sourceText": "IDS_FILEOPS_DISK_FULL_SKIP_ALL_NOTE                    \"Skip all skips remaining items with this error in this task.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_REPEAT_CACHE_FULL",
+      "definition": "RedSalamander/RedSalamander.rc:1751",
+      "sourceText": "IDS_FILEOPS_REPEAT_CACHE_FULL                         \"This task cannot remember another choice. Repeated choices are unavailable for this conflict.\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_SKIP_ALL_UNQUALIFIED",
+      "definition": "RedSalamander/RedSalamander.rc:1760",
+      "sourceText": "IDS_FILEOPS_SKIP_ALL_UNQUALIFIED                       \"A shared destination for the remaining items could not be confirmed. Retry this item or cancel the task.\""
+    }
+  ],
+  "additionalDirectProblemSummaries": [
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_PERMANENT_DELETE",
+      "definition": "RedSalamander/RedSalamander.rc:1982",
+      "sourceText": "IDS_FILEOPS_CONSENT_PERMANENT_DELETE                  \"Permanent delete\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME_TITLE",
+      "definition": "RedSalamander/RedSalamander.rc:2005",
+      "sourceText": "IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME_TITLE    \"Permanent delete by name\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_SAME_HOST_LIVE_OUTPUT",
+      "definition": "RedSalamander/RedSalamander.rc:1981",
+      "sourceText": "IDS_FILEOPS_CONSENT_SAME_HOST_LIVE_OUTPUT             \"Another operation is still writing here\""
+    },
+    {
+      "resourceId": "IDS_FILEOPS_CONSENT_SAME_HOST_OVERLAP",
+      "definition": "RedSalamander/RedSalamander.rc:1977",
+      "sourceText": "IDS_FILEOPS_CONSENT_SAME_HOST_OVERLAP                 \"Another task is working in the same place\""
+    }
+  ],
+  "dynamicSources": [
+    "TryFormatSystemMessage(GetSystemMessageIdFromHResult(status)) or supplied systemText for otherwise Unknown real HRESULTs.",
+    "Task IDs, paths, names, attempt numbers and consentDetail/consentNote supplied by producers are variable.",
+    "Question fragments can combine; final displayed sentences therefore do not have a fixed count."
+  ],
+  "capacityInterpretation": "64 bounds distinct task-local cached decision scopes, not question templates or selected files. Checked same-risk/same-root deferred consent reuses one receipt/cache scope; unchecked item-specific answers can independently consume up to64 receipt slots.",
+  "confidence": "High for static resource-ID counts; no runtime validation performed"
+}

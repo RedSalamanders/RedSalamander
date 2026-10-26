@@ -1,0 +1,14 @@
+[PASS] ViewerSpace nonactivating desktop observation contracts
+ViewerPETests passed.
+[PASS] TestViewerSpaceDesktopObservationContracts harness path resolves
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness process launches
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness process resumes
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness process exits before timeout
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness process reports an exit code
+[PASS] TestViewerSpaceDesktopObservationContracts fresh harness run passes
+[PASS] TestViewerSpaceDesktopObservationContracts owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

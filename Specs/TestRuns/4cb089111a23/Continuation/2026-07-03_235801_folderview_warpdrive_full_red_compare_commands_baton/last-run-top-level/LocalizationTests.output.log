@@ -1,0 +1,66 @@
+[ RUN      ] TestEmbeddedFallbackWithoutSatellite
+[       OK ] test module handle resolves
+[       OK ] resource owner registration succeeds
+[       OK ] existing embedded resource loads without satellite
+[       OK ] missing embedded resource returns empty
+[ RUN      ] TestSatelliteOverridesEmbeddedString
+[       OK ] test module handle resolves for satellite lookup
+[       OK ] test custom dialog control class registers on embedded module
+[       OK ] resource owner registration succeeds for satellite lookup
+[       OK ] fr-FR language preference applies
+[       OK ] satellite string overrides embedded English
+[       OK ] embedded string helper bypasses satellite string
+[       OK ] embedded format helper bypasses satellite format string
+[       OK ] satellite menu resource loads
+[       OK ] satellite menu overrides embedded English
+[       OK ] missing satellite and embedded resource returns empty
+[       OK ] missing satellite string falls back to embedded English
+[       OK ] satellite dialog resource handle resolves
+[       OK ] satellite dialog template bytes load
+[       OK ] localized dialog template creates a modeless dialog
+[       OK ] localized dialog creates custom child class registered by embedded module
+[       OK ] satellite dialog overrides embedded English caption
+[       OK ] unregistered resource owner falls back to embedded English
+[ RUN      ] TestInvalidCultureFallsBackToEmbedded
+[       OK ] test module handle resolves for invalid culture fallback
+[       OK ] test custom dialog control class registers for embedded fallback
+[       OK ] resource owner registration succeeds for invalid culture fallback
+[       OK ] missing concrete culture preference applies
+[       OK ] missing culture satellite falls back to embedded English
+[       OK ] embedded menu fallback loads for missing culture satellite
+[       OK ] missing culture menu falls back to embedded English
+[       OK ] missing culture dialog falls back to embedded English handle
+[       OK ] embedded dialog fallback creates a modeless dialog
+[       OK ] embedded dialog fallback creates custom child class registered by embedded module
+[       OK ] missing culture dialog falls back to embedded English caption
+[ RUN      ] TestUiLanguageSettings
+[       OK ] settings JSON with empty ui is written
+[       OK ] settings JSON loads without recovery
+[       OK ] empty ui object loads ui settings
+[       OK ] missing ui.language loads as system
+[       OK ] settings JSON with system language is written
+[       OK ] settings JSON loads without recovery
+[       OK ] system language loads ui settings
+[       OK ] ui.language system loads as system
+[       OK ] settings JSON with fr-FR language is written
+[       OK ] settings JSON loads without recovery
+[       OK ] fr-FR language loads ui settings
+[       OK ] ui.language fr-FR loads as fr-FR
+[       OK ] settings JSON with fr language is written
+[       OK ] settings JSON loads without recovery
+[       OK ] fr language loads ui settings
+[       OK ] ui.language fr loads as fr
+[       OK ] settings JSON with invalid language is written
+[       OK ] settings JSON loads without recovery
+[       OK ] invalid language loads ui settings
+[       OK ] invalid ui.language loads as system
+[       OK ] default language settings save
+[       OK ] default language settings JSON can be read
+[       OK ] default ui.language is omitted on save
+[       OK ] fr-FR language settings save
+[       OK ] fr-FR language settings JSON can be read
+[       OK ] concrete ui.language is written on save
+[       OK ] saved fr-FR language settings reload
+[       OK ] saved fr-FR language reloads ui settings
+[       OK ] saved ui.language reloads as fr-FR
+LocalizationTests passed.

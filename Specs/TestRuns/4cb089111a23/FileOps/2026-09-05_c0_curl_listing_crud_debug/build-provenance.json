@@ -1,0 +1,11 @@
+{
+  "receipt_id": "15c07d7e8de2a32e9b3d33023e48c93c858e8685cec91686004e1f9e9b8ef21e",
+  "source_snapshot_id": "80931b760b2b6757c44172031d2ed2f143530d37d6497481791b2d0e1b0b576d",
+  "git_head": "d63fbe5338b731beb6544de860e550bceb4729cd",
+  "target": "solution",
+  "tests_enabled": true,
+  "configuration": "Debug",
+  "platform": "x64",
+  "exit_code": 0,
+  "duration_ms": 187944
+}

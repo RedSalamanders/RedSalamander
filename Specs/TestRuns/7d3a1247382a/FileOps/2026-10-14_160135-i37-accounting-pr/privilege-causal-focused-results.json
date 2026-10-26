@@ -1,0 +1,244 @@
+{
+  "kind": "focused unchanged-fixture causal diagnostic",
+  "runId": "20261014T162213Z-39604-4e5fc57d57454a5784c194db79be654e",
+  "passed": 34,
+  "failed": 5,
+  "skipped": 0,
+  "originalPesterOutcomeRemainsFailed": true,
+  "cases": [
+    {
+      "name": "creates only reparse-free destinations beneath an exact guarded repository root",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a junction escape before creating anything in the junction target",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a .build junction before touching its external sentinel",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "atomically publishes a same-directory guarded file and preserves prior bytes on rejected input",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a final-file reparse destination without changing its external target",
+      "result": "Failed",
+      "failureMessage": "Administrator privilege required for this operation.",
+      "stackTrace": "at line: 395 in C:\\Users\\PVB\\.codex\\worktrees\\folder-copy-progress\\RedSalamander\\Tools\\Modules\\Testing\\TestSandbox.psm1"
+    },
+    {
+      "name": "uses a canonical repository identity and supports balanced same-thread reentrancy",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "requires an explicit production artifact profile and keeps repository fallback opt-in",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects unknown coordination kinds instead of silently selecting a profile lock",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "matches command-line paths only at complete token boundaries",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "matches combined MSBuild property lists without crossing configuration or platform scope",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "requires distinct nested coordination locks to release in same-thread LIFO order",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects stale owner PID reuse when the executable path no longer matches metadata",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "creates the process inside the exact containment job and preserves Unicode arguments and redirected streams",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "allows only the explicit standard handles to cross process creation",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "kills an immediately spawned grandchild when the containment job closes",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "cleans native launch resources after repeated creation failures",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a same-profile process while allowing a disjoint configuration concurrently",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a parallel runspace in the owner process instead of treating it as local nesting",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "delegates only to a direct child after kill-on-close containment is active",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "makes a surviving stale descendant acquire abandoned ownership instead of bypassing it",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "reports abandoned ownership and persists contamination until explicitly cleared",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects only residual tools proven to target the same repository and output profile",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "keeps the CI managed tool checkout outside product source identity",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "preserves distinct base index and worktree identities for every Git mutation class",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "changes identity for committed and pre/post worktree mutations",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects reparse inputs and unsafe impact-base arguments without fetching",
+      "result": "Failed",
+      "failureMessage": "Administrator privilege required for this operation.",
+      "stackTrace": "at line: 395 in C:\\Users\\PVB\\.codex\\worktrees\\folder-copy-progress\\RedSalamander\\Tools\\Modules\\Testing\\TestSandbox.psm1"
+    },
+    {
+      "name": "uses the local merge base and includes committed divergence without fetching",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "preserves the included side of staged and unstaged boundary-crossing renames",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "preserves exact marked root, lexical descendant and ADS authority",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects an injected missing marker without changing the real marker",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "permits multiple missing descendants while checking their existing ancestors",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "preserves existing Unicode and deep ordinary paths and permits their missing leaves",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects an existing junction leaf and ancestor even when the descendant is absent",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "rejects a real directory symbolic-link ancestor",
+      "result": "Failed",
+      "failureMessage": "Administrator privilege required for this operation.",
+      "stackTrace": "at line: 395 in C:\\Users\\PVB\\.codex\\worktrees\\folder-copy-progress\\RedSalamander\\Tools\\Modules\\Testing\\TestSandbox.psm1"
+    },
+    {
+      "name": "rejects a real file symbolic link and a dangling symbolic-link component",
+      "result": "Failed",
+      "failureMessage": "Administrator privilege required for this operation.",
+      "stackTrace": "at line: 395 in C:\\Users\\PVB\\.codex\\worktrees\\folder-copy-progress\\RedSalamander\\Tools\\Modules\\Testing\\TestSandbox.psm1"
+    },
+    {
+      "name": "refuses a test link that would live or point outside its marked sandbox, before creating it",
+      "result": "Failed",
+      "failureMessage": "Administrator privilege required for this operation.",
+      "stackTrace": "at line: 395 in C:\\Users\\PVB\\.codex\\worktrees\\folder-copy-progress\\RedSalamander\\Tools\\Modules\\Testing\\TestSandbox.psm1"
+    },
+    {
+      "name": "observes an ordinary ancestor replaced by a junction between successive calls",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "propagates a named injected IOException instead of treating it as a missing path",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    },
+    {
+      "name": "propagates a named injected UnauthorizedAccessException instead of treating it as a missing path",
+      "result": "Passed",
+      "failureMessage": "",
+      "stackTrace": ""
+    }
+  ]
+}

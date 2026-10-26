@@ -1,6 +1,6 @@
 # Themes
 
-RedSalamander applies one theme across the main window, folder panes, navigation bars, menus, file operations, dialogs, viewers, and RedSalamanderMonitor.
+RedSalamander applies one theme across the main window, folder panes, navigation bars, menus, file operations, dialogs and viewers. The independently installed RedMonitor owns its own compatible theme adapter and settings; this application does not build or update that helper.
 
 ![Themes in Preferences](res/preferences-themes.png)
 
@@ -139,10 +139,33 @@ The complete format, limits, semantic-key catalog, and evaluation rules are defi
 
 ## Running-application examples
 
-![Light theme](res/theme-light.png)
+## Theme control illustrations
 
-![Dark theme](res/theme-dark.png)
+These retained harness galleries show shipped control labels and theme treatment.
+They contain no user folders or account data and are not current-build qualification.
+Full-window theme illustrations with workspace breadcrumbs have been retired.
 
-![Rainbow theme](res/theme-rainbow.png)
+![Light control gallery](res/theme-controls-light.png)
 
-![High Contrast App theme](res/theme-high-contrast-app.png)
+![Dark control gallery](res/theme-controls-dark.png)
+
+![Rainbow Light control gallery](res/theme-controls-rainbow-light.png)
+
+![High Contrast control gallery](res/theme-controls-high-contrast.png)
+
+See [the screenshot inventory](res/README.md) for capture provenance policy and
+the remaining full-window illustration backlog.
+
+## Native workspace examples
+
+These complete native workspace frames use the same invented folders, fixed timestamps
+and shortcut defaults. They change only the application theme; the harness does not
+change Windows theme or take foreground focus.
+
+![Light workspace](res/theme-light.png)
+
+![Dark workspace](res/theme-dark.png)
+
+![Application High Contrast workspace](res/theme-high-contrast-app.png)
+
+![Rainbow workspace](res/theme-rainbow.png)

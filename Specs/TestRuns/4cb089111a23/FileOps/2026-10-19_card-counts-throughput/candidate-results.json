@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-19T07:52:43.322Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T074800Z-93124-e2af00322c84424c95b204bdd1774620\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 33766,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1297,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_ReviewRemediationContracts",
+            "status": "passed",
+            "duration_ms": 32422,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

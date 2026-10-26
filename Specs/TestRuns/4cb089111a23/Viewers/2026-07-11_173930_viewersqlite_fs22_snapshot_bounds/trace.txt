@@ -1,0 +1,38 @@
+ViewerSqlite F-S2-2 focused validation
+Machine: 4cb089111a23
+Configuration: x64 Debug
+Status: PASS (52 assertions, 0 failures)
+
+Builds:
+- ViewerSqlite: exit 0, 0 warnings, 0 errors (msbuild-20260711_171554_837.log)
+- ViewerSqliteTests: exit 0, 0 warnings, 0 errors (msbuild-20260711_173834_962.log)
+
+TestSnapshotConnectionBoundsCancellationAndSanitization:
+- one cached read-only NOMUTEX connection; maximum concurrent use = 1
+- exact control/bidi/600-character identifiers remain queryable while display text is bounded and sanitized
+- oversized TEXT/header materialization is bounded
+- invalid sort ordinal and row offset above INT64_MAX are rejected
+- generation cancellation and deterministic SQLite VM budget terminate
+- concurrent callers serialize successfully
+
+TestLocalWalSnapshotVirtualLimitsAndStaleScavenging:
+- local SQLite backup includes committed WAL state and remains isolated from later commits
+- deterministic 4 KiB cap rejects the local database before backup
+- identifiers above the 16K exact-identity ceiling are rejected
+- virtual WAL header, >8 GiB advertisement, wrong rewind position, provider over-read, and cancelled copy are rejected
+- rollback-mode virtual copy succeeds
+- close deterministically deletes snapshots
+- next open scavenges a closed exact-prefix stale artifact
+- a live snapshot denies FILE_SHARE_DELETE and survives concurrent scavenging
+
+Existing focused UI proof in the same work session:
+- TestViewerWindowUsesDxUiHostWithNoVisibleChildControls: PASS
+- TestViewerWindowPagingAndSortFlows: PASS
+- TestViewerWindowLongRunOpenCloseStaysStable (12 cycles): PASS
+
+Metrics summary:
+- viewer.sqlite.snapshot_us: 10 samples, 147..11180 us
+- viewer.sqlite.page_us: 9 samples, 98..1689 us
+- accepted local backups: 10329..11180 us for approximately 2.08..2.19 MiB
+- accepted virtual copy: 3411 us for 2187264 bytes
+- table/query page samples: 98..1689 us

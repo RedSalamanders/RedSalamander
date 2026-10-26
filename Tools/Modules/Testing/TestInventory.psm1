@@ -86,8 +86,8 @@ function Get-RSFileOpsPhaseIntegrity {
         [string]$FilePath
     )
 
-    # VisualGallery is an explicitly selected documentation fixture, never a broad-suite phase.
-    $excluded = @('Idle', 'Setup', 'FileOps_VisualGallery', 'FileOps_VisualGalleryInteraction', 'Cleanup_RestorePluginConfig', 'Done', 'Failed')
+    # Documentation captures and the paired presentation benchmark require exact selection.
+    $excluded = @('Idle', 'Setup', 'FileOps_VisualGallery', 'FileOps_VisualGalleryInteraction', 'FileOps_CommonPresentationPerf', 'FileOps_IntegratedPresentationPerf', 'Cleanup_RestorePluginConfig', 'Done', 'Failed')
     $enumValues = @(Get-RSFileOpsStepEnumNames -FilePath $FilePath)
     $orderedPhases = @(Get-RSFileOpsPhaseOrderNames -FilePath $FilePath)
     $activeEnumValues = @($enumValues | Where-Object { $_ -notin $excluded })
@@ -303,11 +303,11 @@ function Get-RSTestInventory {
     )
 
     $commandsFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\Commands') -Filter '*.cpp')
-    $commandsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
+    $commandsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
     $compareFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\CompareDirectories') -Filter '*.cpp')
-    $fileOpsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+    $fileOpsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
     $performanceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tests\PerformanceTests2') -Filter '*.cpp')
-    $productUiTests = Join-Path $RepoRoot 'Tests\ProductUiTests\ProductUiTests.cpp'
+    $productUiTests = Join-Path $RepoRoot 'Tests\ProductUiTests\ProductUi.Tests.Runner.cpp'
     $toolTestFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tools\Tests') -Filter '*.Tests.ps1')
     $sourceContractFile = Join-Path $RepoRoot 'Tools\Tests\TestHarnessSourceContracts.Tests.ps1'
     $syntheticScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-synthetic-test.ps1'
@@ -315,20 +315,20 @@ function Get-RSTestInventory {
     $runPlanInventory = Get-RSTestRunPlanSurfaceInventory -RepoRoot $RepoRoot
 
     $commandsFamilyFiles = [ordered]@{
-        Settings = 'Commands.SelfTest.Settings.cpp'
-        BatchRename = 'Commands.SelfTest.BatchRename.cpp'
-        PluginConfig = 'Commands.SelfTest.PluginConfig.cpp'
-        Connections = 'Commands.SelfTest.Connections.cpp'
-        'Preferences Dispatch' = 'Commands.SelfTest.Preferences.Dispatch.cpp'
-        CompareOptions = 'Commands.SelfTest.CompareOptions.cpp'
-        Search = 'Commands.SelfTest.Search.cpp'
-        Shortcuts = 'Commands.SelfTest.Shortcuts.cpp'
-        ViewCommands = 'Commands.SelfTest.ViewCommands.cpp'
-        FileOps = 'Commands.SelfTest.FileOps.cpp'
-        Navigation = 'Commands.SelfTest.Navigation.cpp'
-        Dialogs = 'Commands.SelfTest.Dialogs.cpp'
-        ShellCommands = 'Commands.SelfTest.ShellCommands.cpp'
-        ThemeOverlay = 'Commands.SelfTest.ThemeOverlay.cpp'
+        Settings = 'Commands.Tests.Settings.cpp'
+        BatchRename = 'Commands.Tests.BatchRename.cpp'
+        PluginConfig = 'Commands.Tests.PluginConfig.cpp'
+        Connections = 'Commands.Tests.Connections.cpp'
+        'Preferences Dispatch' = 'Commands.Tests.Preferences.Dispatch.cpp'
+        CompareOptions = 'Commands.Tests.CompareOptions.cpp'
+        Search = 'Commands.Tests.Search.cpp'
+        Shortcuts = 'Commands.Tests.Shortcuts.cpp'
+        ViewCommands = 'Commands.Tests.ViewCommands.cpp'
+        FileOps = 'Commands.Tests.FileOps.cpp'
+        Navigation = 'Commands.Tests.Navigation.cpp'
+        Dialogs = 'Commands.Tests.Dialogs.cpp'
+        ShellCommands = 'Commands.Tests.ShellCommands.cpp'
+        ThemeOverlay = 'Commands.Tests.ThemeOverlay.cpp'
     }
     $commandsFamilyCases = [ordered]@{}
     foreach ($entry in $commandsFamilyFiles.GetEnumerator()) {

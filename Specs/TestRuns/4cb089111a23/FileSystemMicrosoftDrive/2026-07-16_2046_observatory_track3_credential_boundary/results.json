@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "scenario": "observatory_track3_microsoft_drive_credential_boundary",
+  "status": "passed",
+  "machineHash": "4cb089111a23",
+  "workingTreeBase": "f4e0c8c3bed8",
+  "platform": "x64",
+  "correctness": {
+    "pluginContractTests": "passed",
+    "microsoftDriveDebugAssertionsPassed": 103,
+    "microsoftDriveDebugAssertionsFailed": 0,
+    "sourceContractsPassed": 133,
+    "sourceContractsFailed": 0,
+    "sourceContractsSkipped": 0,
+    "debugPluginBuildWarnings": 0,
+    "debugPluginBuildErrors": 0,
+    "releasePluginBuildWarnings": 0,
+    "releasePluginBuildErrors": 0
+  },
+  "requestCountContract": {
+    "approvedSameOriginTwoPageListing": 2,
+    "foreignContinuationBeforeRejection": 1,
+    "plaintextContinuationBeforeRejection": 1,
+    "repeatedContinuationBeforeRejection": 2,
+    "validationNetworkRoundTrips": 0
+  },
+  "diagnosticSentinelsLeaked": 0,
+  "liveNetworkMetricsCaptured": false,
+  "liveNetworkMetricsBlocker": "No deterministic Microsoft Graph fixture or test credentials are available in this workspace."
+}

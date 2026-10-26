@@ -27,6 +27,7 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "ViewerMenuHost.h"
 #include <DxUi/DxUi.h>
 #include <DxUi/NativeMenuInterop.h>
 
@@ -623,6 +624,7 @@ private:
     bool _allowEraseBkgndHexView  = true;
 
     wil::unique_hmenu _menuHandle;
+    RedSalamander::ViewerMenuHost::AttachResult _menuAttachResult;
     DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hEdit;
     wil::unique_hwnd _hHex;

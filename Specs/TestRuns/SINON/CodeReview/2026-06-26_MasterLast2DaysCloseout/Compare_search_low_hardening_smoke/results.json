@@ -1,0 +1,30 @@
+{
+    "run_started_utc": "2026-06-26T16:12:52.719Z",
+    "duration_ms": 829,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "case_filter": "search_low_hardening_smoke",
+    "suites": [
+        {
+            "suite": "CompareDirectories",
+            "artifact_root": "C:\\Users\\PVB\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare",
+            "duration_ms": 110,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "case_filter": "search_low_hardening_smoke",
+            "cases": [
+                {
+                    "name": "search_low_hardening_smoke",
+                    "status": "passed",
+                    "duration_ms": 88
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

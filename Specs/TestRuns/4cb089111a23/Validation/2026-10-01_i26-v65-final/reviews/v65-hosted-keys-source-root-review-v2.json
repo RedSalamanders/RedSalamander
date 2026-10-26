@@ -1,0 +1,37 @@
+{
+  "schema": "i26-v65-hosted-keys-source-review.v1",
+  "reviewer": "root",
+  "status": "reviewed-not-executed",
+  "utc": "2026-10-01T10:10:51.2457087+00:00",
+  "testPath": "Z:/src/RedSalamander/RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+  "testSha256": "ce155d10601d6db24ebfb5da5b2a4ffbbf1bc76d22f06db6349ab08271701129",
+  "priorV64TestSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "addedLines": 191,
+  "removedLines": 0,
+  "case": "cmd_pane_fileops_conflict_hosted_decision_keys",
+  "scenarios": [
+    "ordinary no-focus Enter invokes published Cancel default",
+    "same-host B Escape cancels B; original A immutable Copy prompt remains pending",
+    "RecycleFailed Enter starts with safe Cancel focused and cancels",
+    "RecycleFailed Escape cancels"
+  ],
+  "method": "Actual admitted tasks, direct HWND key down/up through retained WindowHost, exact task/default/focus IDs, terminal cancellation and original payload checks. Not OS-injected keyboard coverage.",
+  "checks": [
+    "Task copy ReadSource scope persists while per-item Exists prompt waits; source Delete publishes genuine RemovesRead SameHostOverlap",
+    "Existing exact-path recycle failure environment applies to builtin provider; no synthetic policy or direct submission for tested keys",
+    "Canonical ScopedEnvironmentVariable outlives fixture drain; prompt/queue overrides restored; failure short circuits before input",
+    "Initial Cancel/default assertions preserve policy; task terminal accepted only cancellation with zero published/removal counts",
+    "Root checked DxUi WindowHost focused-control/default/cancel dispatch from qualified pin19",
+    "Sol review found no blocking compile/lifetime/fixture issue",
+    "Formatter22.1.3 dry-run passes"
+  ],
+  "coverageAuditPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v64-closeout-doc-audit\\bounded-acceptance-coverage-audit-v2-249f33db.json",
+  "coverageAuditSha256": "249f33dbf347239cfe20345f055e47e66665b6047b1b6a6fec23986e74a26791",
+  "compileVerified": false,
+  "nativeVerified": false,
+  "candidateV64Unchanged": true,
+  "wholePlanComplete": false,
+  "predecessorReviewSha256": "85ed396e7471fce7ee30a731128f00c8c7adf41a1f1082bb897fc1429614603e",
+  "predecessorAuditPreservedPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v64-closeout-doc-audit\\bounded-acceptance-coverage-audit-v1-420c3d7a.json",
+  "auditVerdict": "Root reviewed all 16 P0-P3 and four P5 facets. Only additional hosted-key fixture was needed; other corrections add references to existing registered tests. Source-equivalent V55 Debug and V64 protected carries retain original provenance; native execution of new test remains pending."
+}

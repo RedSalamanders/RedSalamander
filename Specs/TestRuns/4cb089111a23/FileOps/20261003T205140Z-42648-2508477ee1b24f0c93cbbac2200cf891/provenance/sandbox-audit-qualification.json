@@ -1,0 +1,16 @@
+[
+  {
+    "root": "C:\\RedSalamander.Perf",
+    "external_entry_set_unchanged": true,
+    "global_is_clean": false,
+    "external_issue_count": 265,
+    "scope": "Exact selected run closure plus unchanged external audit entry set; global historical cleanliness is neither suppressed nor claimed."
+  },
+  {
+    "root": "D:\\RedSalamander.Perf",
+    "external_entry_set_unchanged": true,
+    "global_is_clean": false,
+    "external_issue_count": 275,
+    "scope": "Exact selected run closure plus unchanged external audit entry set; global historical cleanliness is neither suppressed nor claimed."
+  }
+]

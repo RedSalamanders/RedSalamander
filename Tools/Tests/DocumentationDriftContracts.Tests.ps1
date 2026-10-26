@@ -2,8 +2,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Drift-prevention contracts for the documentation-completeness work
-# (Operation_Codex_DocumentationCompleteness). These guard the two regression
-# classes the documentation audit found: keyboard shortcut/spec drift away from
+# (Operation_Codex_DocumentationCompleteness). These guard regression
+# classes the documentation audit found: published capture identity/privacy,
+# keyboard shortcut/spec drift away from
 # the code of record, and settings keys read/written in code but missing from the
 # schema. See Specs/Plans/Done/Operation_Codex_DocumentationCompleteness_2026-06-18.md.
 
@@ -12,15 +13,15 @@ Import-Module (Join-Path $repoRoot 'Tools\Modules\Tooling\SpecInformationArchite
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 Describe 'Specification information architecture integration' {
-    # The protected Done history is measured from base commit 6aecfde8e, which a squashed or
+    # The protected Done history is measured from base commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853, which a squashed or
     # shallow clone (hosted runners check out one commit) does not carry.
-    & git -C $repoRoot rev-parse --verify --quiet '6aecfde8e^{commit}' *> $null
+    & git -C $repoRoot rev-parse --verify --quiet '4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853^{commit}' *> $null
     $protectedHistoryBaseAvailable = ($LASTEXITCODE -eq 0)
     if (-not $protectedHistoryBaseAvailable) {
-        Write-Host 'Skipping the protected Done history contract: base commit 6aecfde8e is not in this (squashed or shallow) clone.'
+        Write-Host 'Skipping the protected Done history contract: base commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853 is not in this (squashed or shallow) clone.'
     }
     It 'keeps every approved post-Terminal Done history blob unchanged' -Skip:(-not $protectedHistoryBaseAvailable) {
-        $history = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot -BaseCommit '6aecfde8e'
+        $history = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot -BaseCommit '4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853'
 
         $history.Available | Should Be $true
         $history.BaselineCount | Should Be 133
@@ -34,7 +35,7 @@ Describe 'Visible native audit contracts' {
 
         $audit | Should Match '\\vcpkg_installed\\'
         $audit | Should Not Match 'Common\\DxUi\\'
-        $audit | Should Match 'Tests\\TestSupport\\DirectedSelfTestInputWarning\.h'
+        $audit | Should Match 'Tests\\TestSupport\\TestSupport\.Tests\.DirectedSelfTestInputWarning\.h'
         $audit | Should Not Match 'Tests\\DxUiTests\\'
         { & (Join-Path $repoRoot 'Tools\Audit-ComctlReportSurfaces.ps1') | Out-Null } | Should Not Throw
         { & (Join-Path $repoRoot 'Tools\Audit-VisibleNativeSurfaces.ps1') | Out-Null } | Should Not Throw
@@ -137,7 +138,7 @@ Describe 'File Operations popup documentation drift contracts' {
     It 'tracks split popup cases in source and domain specs without freezing them in coverage policy' {
         $coverage = Get-RSText -Path 'Specs\Testing\Testing_TestCoverage.md'
         $fileOperations = Get-RSText -Path 'Specs\FileSystem\FileSystem_FileOperations.md'
-        $caseSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.FileOps.cpp'
+        $caseSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.FileOps.cpp'
         $uxPlan = Get-RSText -Path 'Specs\Plans\Done\UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md'
         $splitCases = @(
             'cmd_pane_fileops_popup_progress_contracts',
@@ -298,5 +299,127 @@ Describe 'Historical audit governance contracts' {
         }
         ($patterns -contains 'wil') | Should Be $true
         ($patterns -contains 'yyjson') | Should Be $true
+    }
+}
+
+Describe 'Published File Operations capture provenance' {
+    It 'binds all documented count and lifecycle scenes to reviewed native synthetic captures' {
+        $images = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs/res') -Filter 'file-operations-*.png' -File)
+        $expectedNames = @('popup','counting','move-totals','file-progress','paused','queued','completed','conflict','wrapped-note','issues') |
+            ForEach-Object { 'file-operations-'+$_+'.png' }
+        (($images.Name | Sort-Object) -join ',') | Should Be (($expectedNames | Sort-Object) -join ',')
+        foreach ($image in $images) {
+            $provenancePath = [IO.Path]::ChangeExtension($image.FullName, '.provenance.json')
+            (Test-Path -LiteralPath $provenancePath -PathType Leaf) | Should Be $true
+            $provenance = Get-Content -LiteralPath $provenancePath -Raw | ConvertFrom-Json
+            (Get-FileHash -LiteralPath $image.FullName -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $provenance.sha256
+            $provenance.kind | Should Be 'native-production-renderer-harness-capture'
+            $provenance.sourceRunId | Should Match '^\d{8}T\d{6}Z-\d+-[a-f0-9]{32}$'
+            $provenance.build.receiptId | Should Match '^[a-f0-9]{64}$'
+            $provenance.privacy.dataOrigin | Should Be 'invented harness fixture'
+            $provenance.privacy.personalData | Should Be $false
+            $provenance.privacy.redactionLabels | Should Be $false
+            $provenance.capture.noActivation | Should Be $true
+            $provenance.capture.desktopGlobalInput | Should Be $false
+            $provenance.capture.wholeFrame | Should Be $true
+            $provenance.capture.imageEdits | Should Be 'none'
+            $provenance.review.completeFrame | Should Be $true
+            foreach ($value in $provenance.syntheticData.PSObject.Properties.Value) {
+                $value | Should Not Match '(?i)RedSalamander\.Perf|\.build|[a-z]:[\\/]Users[\\/]'
+                if ($value -match '^[a-zA-Z]:[\\/]') {
+                    $value | Should Match '^[a-zA-Z]:[\\/](?:Demo|Example|Samples)[\\/]'
+                }
+            }
+        }
+    }
+}
+
+Describe 'Published product scenario capture provenance' {
+    $gallery = Get-Content -LiteralPath (Join-Path $repoRoot 'docs/res/product-scenarios.provenance.json') -Raw | ConvertFrom-Json
+    $supplement = Get-Content -LiteralPath (Join-Path $repoRoot 'docs/res/supplemental-scenarios.provenance.json') -Raw | ConvertFrom-Json
+    $allCaptures = @($gallery.captures) + @($supplement.captures)
+
+    It 'closes the Terminal, utility-dialog, provider and real-playback illustration gaps' {
+        @($supplement.captures).Count | Should Be 21
+        foreach ($name in @('change-case','change-attributes','selection-mask','file-filter','make-file-list','create-directory','new-file',
+                'archive-pack','archive-unpack','shared-directories','shortcuts-terminal','terminal-embedded','terminal-floating-tabs','terminal-find',
+                'provider-ftp','provider-google-drive','provider-onedrive','provider-s3','provider-mtp','viewer-vlc-playback','viewer-vlc-paused')) {
+            ($supplement.captures.name -contains $name) | Should Be $true
+        }
+        $supplement.realAccounts | Should Be $false
+        $supplement.terminalShellStarted | Should Be $false
+        $supplement.mediaOrigin | Should Be 'generated silent AVI'
+    }
+
+    It 'covers Search, Space, actual viewers, plugins and every Preferences category' {
+        $gallery.schema | Should Be 'red-salamander.product-documentation-gallery.v1'
+        @($gallery.captures).Count | Should Be 47
+        @($gallery.captures.name | Select-Object -Unique).Count | Should Be 47
+        @($gallery.captures | Where-Object group -eq 'product').Count | Should Be 26
+        @($gallery.captures | Where-Object group -eq 'viewer').Count | Should Be 8
+        @($gallery.captures | Where-Object group -eq 'space').Count | Should Be 13
+        foreach ($name in @('find-files','find-files-empty','plugins','preferences-plugin-mtp','connections','connections-mtp','command-palette',
+                'folder-view-brief-detailed','folder-view-extra-detailed','theme-light','theme-dark','theme-high-contrast-app','theme-rainbow',
+                'viewer-text','viewer-text-hex','viewer-imgraw','viewer-pe','viewer-web','viewer-json','viewer-markdown','viewer-vlc-unavailable',
+                'viewer-space-scanning','viewer-space-inflight','viewer-space-analyst','viewer-space-refreshing','viewer-space-refresh-canceled',
+                'viewer-space-refresh-refused','viewer-space-empty','viewer-space-error','viewer-space-explorer','viewer-space-bottom-panel','viewer-space-map-only','viewer-space-excluded','viewer-space-cleanup-review')) {
+            ($gallery.captures.name -contains $name) | Should Be $true
+        }
+        foreach ($page in @('general','panes','viewers','editors','keyboard','mouse','themes','advanced','compare-directories','hot-paths','file-operations','user-menu','monitor')) {
+            ($gallery.captures.name -contains ('preferences-'+$page)) | Should Be $true
+        }
+    }
+
+    It 'binds every whole native frame to its origin receipt and reviewed synthetic data' {
+        foreach ($capture in $allCaptures) {
+            $path = Join-Path $repoRoot ('docs/res/'+$capture.name+'.png')
+            $sidecar = Get-Content -LiteralPath (Join-Path $repoRoot $capture.provenance) -Raw | ConvertFrom-Json
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $digest | Should Be $capture.sha256
+            $digest | Should Be $sidecar.sha256
+            $sidecar.scenario | Should Be $capture.scenario
+            $sidecar.kind | Should Be 'native-production-renderer-harness-capture'
+            $sidecar.sourceRunId | Should Match '^\d{8}T\d{6}Z-\d+-[a-f0-9]{32}$'
+            (Get-FileHash -LiteralPath (Join-Path $repoRoot $sidecar.source) -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $digest
+            $archive = Split-Path -Parent (Split-Path -Parent (Join-Path $repoRoot $sidecar.source))
+            $receiptName = if ($capture.group -eq 'product') { 'app-build-receipt.json' } else { 'viewer-build-receipt.json' }
+            $receipt = Get-Content -LiteralPath (Join-Path $archive $receiptName) -Raw | ConvertFrom-Json
+            $sidecar.build.receiptId | Should Be $receipt.receipt_id
+            $sidecar.build.sourceSnapshotId | Should Be $receipt.source_snapshot_id
+            $sidecar.build.executableSha256 | Should Match '^[a-f0-9]{64}$'
+            ($receipt.outputs.sha256 -contains $sidecar.build.executableSha256) | Should Be $true
+            $sidecar.display.dpi | Should BeGreaterThan 0
+            $sidecar.display.pixelWidth | Should BeGreaterThan 0
+            $sidecar.display.pixelHeight | Should BeGreaterThan 0
+            $sidecar.capture.noActivation | Should Be $true
+            $sidecar.capture.desktopGlobalInput | Should Be $false
+            $sidecar.capture.wholeFrame | Should Be $true
+            $sidecar.capture.imageEdits | Should Be 'none'
+            $sidecar.review.completeFrame | Should Be $true
+            $sidecar.privacy.dataOrigin | Should Be 'invented harness fixture'
+            $sidecar.privacy.personalData | Should Be $false
+            $sidecar.privacy.redactionLabels | Should Be $false
+            $sidecar.privacy.realAccounts | Should Be $false
+            foreach ($root in $sidecar.syntheticData.roots) {
+                $root | Should Match '^(?:[A-Z]:[\\/]Demo[\\/]|/?Demo/|/@conn:Demo (?:Drive|OneDrive)/|/Fake Phone/Internal Storage/|/demo-library/|//anonymous@127\.0\.0\.1:[0-9]+/)'
+                $root | Should Not Match '(?i)RedSalamander\.Perf|\.build|[\\/]Users[\\/]'
+            }
+            if ($capture.group -eq 'space') {
+                $native = Get-Content -LiteralPath (Join-Path $repoRoot $sidecar.nativeCaptureProvenance) -Raw | ConvertFrom-Json
+                $native.valid | Should Be $true
+                $native.foreground_preserved | Should Be $true
+            }
+        }
+    }
+
+    It 'links every published scenario from a guide or its scenario table' {
+        $guides = (Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs') -File -Filter '*.md' |
+            ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+        foreach ($capture in $allCaptures) {
+            $guides | Should Match ([regex]::Escape('res/'+$capture.name+'.png'))
+        }
+        $tour = Get-RSText -Path 'docs/VisualTour.md'
+        $tour | Should Match 'live\s+accounts/devices'
+        $tour | Should Match 'FileOperations\.md'
     }
 }

@@ -1,0 +1,52 @@
+{
+    "run_started_utc": "2026-09-21T00:26:22.158Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-bounded-body-candidate-v13-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 32648,
+    "passed": 5,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Keyboard capture must retain the fixed explanation and show scope focus: repeat=1, text=304/304, focus=0, keyboard=true/true, foreground=true/true, scopeTop=452/452.",
+    "cases": [
+        {
+            "name": "file_operations_phase0_typed_contract_source_guard",
+            "status": "passed",
+            "duration_ms": 436,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "failed",
+            "duration_ms": 18620,
+            "repeat_index": 1,
+            "reason": "Keyboard capture must retain the fixed explanation and show scope focus: repeat=1, text=304/304, focus=0, keyboard=true/true, foreground=true/true, scopeTop=452/452."
+        },
+        {
+            "name": "file_operations_phase0_typed_contract_source_guard",
+            "status": "passed",
+            "duration_ms": 447,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 5370,
+            "repeat_index": 2
+        },
+        {
+            "name": "file_operations_phase0_typed_contract_source_guard",
+            "status": "passed",
+            "duration_ms": 436,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 5325,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

@@ -20,7 +20,9 @@
 .EXAMPLE
     .\Installer\msix\build-msix.ps1 -Version 7.0.184 -Platform x64
 .OUTPUTS
-    None. MSBuild writes the unsigned package beneath .build\AppPackages.
+    None. MSBuild writes the unsigned package beneath .build\AppPackages; a package
+    rejected for an ENABLE_TESTS surface is removed with its package folder (never
+    through a link). A package MSBuild left up to date is checked without removal.
 .NOTES
     Mutates package outputs but never the tracked package manifest. Interrupted
     packaging may leave an unused unique staged manifest and fails closed for
@@ -50,6 +52,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $artifactOperationLockModule = Join-Path $repoRoot 'Tools\Modules\Build\ArtifactOperationLock.psm1'
 $sanitizedEnvironmentModule = Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1'
+$releaseArtifactPolicyModule = Join-Path $repoRoot 'Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1'
 $generateAssetsScript = Join-Path $PSScriptRoot 'GenerateAssets.ps1'
 $updateManifestScript = Join-Path $PSScriptRoot 'UpdateManifestVersion.ps1'
 $installerProject = Join-Path $PSScriptRoot 'RedSalamanderInstaller.wapproj'
@@ -57,6 +60,7 @@ $installerProject = Join-Path $PSScriptRoot 'RedSalamanderInstaller.wapproj'
 foreach ($requiredPath in @(
         $artifactOperationLockModule,
         $sanitizedEnvironmentModule,
+        $releaseArtifactPolicyModule,
         $generateAssetsScript,
         $updateManifestScript,
         $installerProject)) {
@@ -67,6 +71,7 @@ foreach ($requiredPath in @(
 
 Import-Module $artifactOperationLockModule -Force -ErrorAction Stop
 Import-Module $sanitizedEnvironmentModule -Force -ErrorAction Stop
+Import-Module $releaseArtifactPolicyModule -Force -ErrorAction Stop
 
 $resolvedMSBuildPath = if (-not [string]::IsNullOrWhiteSpace($MSBuildPath)) {
     [IO.Path]::GetFullPath($MSBuildPath)
@@ -177,6 +182,7 @@ try {
         "/p:TargetPlatformVersion=$TargetPlatformVersion",
         "/p:SolutionDir=$solutionDirWithSlash",
         "/p:RSAppxManifestPath=$stagedManifestPath",
+        '/p:RSBuildEnableTests=false',
         '/p:AppxPackageSigningEnabled=false',
         '/p:GenerateAppInstallerFile=false',
         '/p:AppxBundle=Never',
@@ -208,6 +214,11 @@ try {
         -RepoRoot $repoRoot `
         -Scope $sharedDependencyScope
 
+    $appPackagesRoot = Resolve-RSGuardedRepositoryPath `
+        -RepoRoot $repoRoot -GuardedRelativeRoot '.build\AppPackages' `
+        -Path '.build\AppPackages'
+    $msixBefore = Get-RSMsixOutputSnapshot -AppPackagesRoot $appPackagesRoot
+
     $exitCode = Invoke-RSProcess `
         -FilePath $resolvedMSBuildPath `
         -Arguments $msixArguments `
@@ -215,6 +226,20 @@ try {
     if ($exitCode -ne 0) {
         throw "MSIX build failed with exit code $exitCode"
     }
+
+    # The package also takes plugin and runtime binaries straight from the compiled profile, which
+    # a test-enabled validation build may have produced; inspect what was actually packaged and
+    # remove a rejected package from its normal output path. A package MSBuild found up to date
+    # (a re-run with the same -Version) is checked in place and is not an error. The repository
+    # chain is re-checked for links right before anything can be removed.
+    $appPackagesRoot = Resolve-RSGuardedRepositoryPath `
+        -RepoRoot $repoRoot -GuardedRelativeRoot '.build\AppPackages' `
+        -Path $appPackagesRoot
+    Assert-RSMsixPackagingOutput `
+        -AppPackagesRoot $appPackagesRoot `
+        -Before $msixBefore `
+        -ReleaseVersion $Version `
+        -Platform $Platform
 }
 finally {
     if (-not [string]::IsNullOrWhiteSpace($stagedManifestPath)) {

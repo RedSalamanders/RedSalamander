@@ -1,0 +1,12 @@
+{
+  "run_id": "20261018T163029Z-108580-dec549c82c59418fb9f619cb219c65b9",
+  "case_filter": "FileOps_ReviewRemediationContracts",
+  "configuration": "Debug",
+  "receipt_id": "da781aec89fe0beb1ae1e3070e7ff3ec5b594d081c454863777ad6b6b52231b0",
+  "native_passed": 3,
+  "native_failed": 0,
+  "new_regression_rows": 0,
+  "qualification": "NOT_EXECUTED: new helper was registered in neighboring safety case; this is not collapse acceptance",
+  "raw_archive": "Z:/RedSalamander.Perf/evidence/completed-card-collapse/20261018T163029Z-108580-dec549c82c59418fb9f619cb219c65b9/artifacts",
+  "archive_script_failure": "Empty filtered metrics produced a null-array WriteAllLines error after complete raw preservation. Fixed typed array and required four metric rows before acceptance."
+}

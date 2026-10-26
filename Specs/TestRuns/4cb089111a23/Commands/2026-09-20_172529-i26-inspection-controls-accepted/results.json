@@ -1,0 +1,122 @@
+{
+    "run_started_utc": "2026-09-20T15:25:32.521Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T152156Z-85728-9262ee79fa744e57a969fd025b427dcf\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 31077,
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4396,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 1361,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1083,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 993,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4515,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 1793,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1473,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1013,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 168,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4780,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 1392,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1183,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1003,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 175,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

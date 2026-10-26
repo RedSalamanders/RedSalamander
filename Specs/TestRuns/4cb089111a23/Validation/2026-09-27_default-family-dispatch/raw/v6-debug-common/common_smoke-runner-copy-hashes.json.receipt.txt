@@ -1,0 +1,110 @@
+[
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/commands_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/compare_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/env.txt",
+    "sha256": "b9803dcaa651f6cb665d29f19d22034d4baf78481fd69e30711d6d85f6a10a54"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/fileops_results.json",
+    "sha256": "ef0a1fbf1108158c3a6ca0e60e2933fb59d95de2e47b9b5f6e5f8280c343237f"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/fileops_trace.txt",
+    "sha256": "46f2ce1d7f5b9f806ea3cff511df6afdb091e97d4cc1ab4b279eed300f9a7772"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/selftest_run_results.json",
+    "sha256": "dd2e9f0cb1bf028d56edaacd50dc3875500c012ce70198065bf93b5915e5aad2"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/selftest_run_trace.txt",
+    "sha256": "0dd4a8cb1883be8046d8b276d2e52c906eb1da5e756ab262084bc2b7f5fb2cb6"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/selftest.txt",
+    "sha256": "bff08662dc2ed33d20d4e13beebeca5c640ca312e5fce3c87ce1c90ed72e897e"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-27_152753/perf/perf_metrics.jsonl",
+    "sha256": "5f535e811a8d5d7cc547b445ed06f4a7a1f76393526ea1224231c99618a69179"
+  },
+  {
+    "path": "artifacts/selftest/last_run/results.json",
+    "sha256": "dd2e9f0cb1bf028d56edaacd50dc3875500c012ce70198065bf93b5915e5aad2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+    "sha256": "03779f6f839e1dd1637a4730372a0f31200d09f31b7405ea69c0f7f7137b44f2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+    "sha256": "d1afff45bb5f64b135767897cb7324a2f43191043158b2d398890830a6d61e9e"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+    "sha256": "fc807c6ae0e4a12e657238677e3d4e1484c040e8e38800343b60405aa2acbea6"
+  },
+  {
+    "path": "artifacts/selftest/last_run/trace.txt",
+    "sha256": "0dd4a8cb1883be8046d8b276d2e52c906eb1da5e756ab262084bc2b7f5fb2cb6"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-selftest.file-operations.json",
+    "sha256": "13795cb1782c9a917aefd72f3bcfe6637a17d4e32edc9fb506eb5b3000a2b07b"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-final.json",
+    "sha256": "b72be4055ed9368d05fcba9866a236560f33d4cd2b909b3ea1f43895b653ae49"
+  },
+  {
+    "path": "artifacts/selftest/last_run/commands/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/compare/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/results.json",
+    "sha256": "ef0a1fbf1108158c3a6ca0e60e2933fb59d95de2e47b9b5f6e5f8280c343237f"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/trace.txt",
+    "sha256": "46f2ce1d7f5b9f806ea3cff511df6afdb091e97d4cc1ab4b279eed300f9a7772"
+  },
+  {
+    "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+    "sha256": "5f535e811a8d5d7cc547b445ed06f4a7a1f76393526ea1224231c99618a69179"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/entry-fingerprints.json",
+    "sha256": "f3c5f5c7cdca1b3cf04d94cd23e8ecf4f6eb137ebec991b113db054b9919fda6"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan-decision.json",
+    "sha256": "5774ddd6713f24ae81eace3da92011c01888b68c187f77b27f81bce3344e5090"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan.json",
+    "sha256": "11a172d4d840f19b34afe6e57cae8e955a4d766ca6a50b1d0ae44991a518eb98"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/workspace-initial.json",
+    "sha256": "f460257934578459b0bc2ffeae41ed9ae0ff2fa83920a3a87fd3100b9d130824"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-20260927.jsonl",
+    "sha256": "c96d26f81b229fd3e07dfa40b93d81ace58a3ccbac604c41707b4a891c516d81"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Settings/RedSalamander-debug.settings.json",
+    "sha256": "980eb30e7de059cddcca46132525c056a4e23e7a20924d23aa4b935a455f9a69"
+  }
+]

@@ -1,0 +1,54 @@
+{
+  "schema": "red-salamander.i35-nas-nested.perf-compaction.v2",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the rows of the I35 NAS nested Copy claims (self-test rows with the many-folders Copy wall times, refused and unsupported restores, the walkers' walk stats, discovery and operation rows) are kept in their original order; the one-per-folder restore rows and the one-per-file FileOps.Bridge.Copy rows are replaced by their deterministic summaries; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.SelfTest.",
+      "fileops.local.created_directory.restore_refused",
+      "fileops.local.created_directory.identity_unavailable",
+      "fileops.bridge.created_directory.restore_refused",
+      "fileops.bridge.created_directory.restore_unsupported",
+      "FileOps.CopyRecursiveParallel.",
+      "FileOps.Bridge.",
+      "FileOps.Discovery.",
+      "FileOps.Operation"
+    ],
+    "summarizedMetrics": [
+      "fileops.local.created_directory.restored",
+      "fileops.bridge.created_directory.restored",
+      "FileOps.Bridge.Copy"
+    ]
+  },
+  "source": {
+    "bytes": 10798394,
+    "rows": 26679,
+    "sha256": "50f6352f0c400a46c30a1e31608c55e185b4c0826ade9f4f5866d5f7341d46df"
+  },
+  "kept": {
+    "bytes": 30366,
+    "rows": 82,
+    "sha256": "3bf866ddf79bc3fe6eb316f1f95787d9db25c3cfece0cd4eab097df38bf4d35f"
+  },
+  "summaries": [
+    {
+      "metric": "fileops.local.created_directory.restored",
+      "rows": 0
+    },
+    {
+      "metric": "fileops.bridge.created_directory.restored",
+      "rows": 0
+    },
+    {
+      "metric": "FileOps.Bridge.Copy",
+      "rows": 288,
+      "distinctDetails": 288,
+      "durationUs": {
+        "sum": 35586,
+        "mean": 123.6,
+        "median": 119.5,
+        "p95NearestRank": 171,
+        "max": 232
+      }
+    }
+  ]
+}

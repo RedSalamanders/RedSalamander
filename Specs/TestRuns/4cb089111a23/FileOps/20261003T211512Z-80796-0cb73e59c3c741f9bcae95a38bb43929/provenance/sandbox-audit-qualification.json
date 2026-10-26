@@ -1,0 +1,10 @@
+{
+  "schema": "i27.exact-run-external-audit-qualification.v1",
+  "run_id": "20261003T211512Z-80796-0cb73e59c3c741f9bcae95a38bb43929",
+  "global_is_clean": false,
+  "external_issue_count": 265,
+  "external_entry_set_unchanged": true,
+  "selected_run_archive_closed": true,
+  "baseline": "../sandbox-audit-baseline.json",
+  "scope": "Exact selected run plus unchanged external audit entry set; no global-clean or historical-tree byte claim."
+}

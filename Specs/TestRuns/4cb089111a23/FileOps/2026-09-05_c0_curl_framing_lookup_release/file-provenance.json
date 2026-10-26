@@ -1,0 +1,52 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 869,
+    "sha256": "75056f2d556df500253f28eed09a26baccc4f999a9cf6dbb98f1683b67786c11",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5440,
+    "sha256": "e31dbaf38eb57031fd41d7fe9d3856d2a043dbdc49a9839e30298763e8c5d5ea",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1393,
+    "sha256": "0506fc842efe679a1298ffd0a6c5dea96763d3a918c4373d9e398d24639041c4",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19988,
+    "sha256": "b91efce8034901d259738765feba996626fe106947755d176802229394f3abc7",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 30591,
+    "sha256": "760fc1ca7cf5634bb30c5f69cfe020e4a2bba5dc62e7eb908dab8e7a81ed60de",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1694,
+    "sha256": "9d27a14ba569a7a8c4f62a8b9f9f1a2d38424515ef25615b60dcbea379b871f4",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-final-lookup-release-20260905\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "bytes": 165391,
+    "rows": 443,
+    "sha256": "4cb034577dd212a2688078d0b1ae494b3ba3da4ef2494fc8ac9ac346fe73c896",
+    "transform": "none"
+  }
+]

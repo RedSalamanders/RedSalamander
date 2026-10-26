@@ -294,7 +294,7 @@ third request, case-distinct opaque IDs, case-distinct names, literal suffix-lik
 configuration rollback, and eight alternating Curl/Google physical-unload cycles in which the surviving plugin
 still creates a curl easy handle. These tests use an injected local transport and require no Google credentials.
 
-R0f-GDrive adds a deterministic loopback Drive fixture (`FileSystemGoogleDrive.SelfTest.FakeDrive.cpp`,
+R0f-GDrive adds a deterministic loopback Drive fixture (`FileSystemGoogleDrive.Tests.FakeDrive.cpp`,
 test-enabled builds only): the plugin's Drive and token endpoints are redirected to it through
 `FileSystemGoogleDriveSelfTest::ConfigureFakeDrive` and `/@conn:google-drive-selftest/...` resolves to a
 synthetic connection. The plugin witness (`PluginContractTests --google-drive-r0f-containment-selftests`,

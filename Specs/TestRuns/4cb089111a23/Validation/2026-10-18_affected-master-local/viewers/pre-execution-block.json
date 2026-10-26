@@ -1,0 +1,7 @@
+{
+  "stage": "before native launch",
+  "executed_native_cases": 0,
+  "error": "Focused orchestration omitted mandatory SchemaPath on Read-RSBuildReceipt",
+  "repair": "Pass the canonical Specs/Build/BuildReceipt.schema.json; no repository source changed",
+  "qualified": false
+}

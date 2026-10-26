@@ -1,0 +1,2274 @@
+{
+  "schema": "i26-v65-acceptance-results-binding.v1",
+  "candidate": {
+    "version": "V65",
+    "pin": "19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1",
+    "logicalFiles": 86,
+    "physicalFiles": 85,
+    "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce"
+  },
+  "carriedV55": {
+    "manifestSha256": "d0fccec5b902e58352c457d6f820ce4c7efd98ed6a423067e4bb9831ec4cdba1",
+    "debugInvocationPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gates\\FileOps\\fileops-x64-debug-full\\invocation.json",
+    "debugInvocationSha256": "ec356eae1d2e2641042d3c7eda1758dc14f8f3cc6901881ec1455d1083d7c744",
+    "status": "Original V55 Debug FileOps and gallery provenance retained; no native result is relabelled."
+  },
+  "v56ReadinessStage": {
+    "manifestPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v56-20261001\\candidate-inputs.json",
+    "manifestSha256": "2d48670000336a7afe9351113d1c9e263e9b25b2767b29bbf9bccba1369eadeb",
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v56-20261001\\root-source-review.json",
+    "rootReviewSha256": "df30b5ceab139088d33a1ba375c1b6c7a082300fcec00ba12f1e13895cfdd9d0",
+    "changes": [
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+        "previous": "174eb489a52df7415c56c581044f73cc15e6200a5532a10ea14c22d61d70cfea",
+        "current": "3bd4d9bb627e0cdaf518453b994f00ba369bf2a40b83e262d8e8b8be71a35b8a"
+      },
+      {
+        "path": "Specs/FileSystem/FileSystem_FileOperations.md",
+        "previous": "3f9f4ca5fd74ccb77cbf869912dee5f5e376af28f61800d0858b255f412fc411",
+        "current": "3b285373bc8ad419acda278aa0cba49e8883455307ac6cf390052930a6d95508"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "d01010860f5de3a3acc88f0b366b7fa447386143bd8e386d1f48587514cfe059",
+        "current": "dfc51dfffd3ea2d4999a6f9fe7675c04eb63f232c187dce81d98d8c1169165b3"
+      },
+      {
+        "path": "Specs/Testing/Testing_PerformanceValidation.md",
+        "previous": "c9ffd67c342e1e645d6f89d9d1669ee3817c08d764f40d6b31ec95276c9b3f4d",
+        "current": "b3165f7809595ea20ff55fbcd68bc449b36929342f8229d332c237003bffd751"
+      },
+      {
+        "path": "Specs/Testing/Testing_TestCoverage.md",
+        "previous": "205fa06f2b2d21d5bacdcbe044bd7f5172a2a2a791b56436d51bb70cfbdab6c0",
+        "current": "36a6498ef4be298a50e0acdc135adcbd342d0826bfe08bd606a509cf024bdd26"
+      },
+      {
+        "path": "Specs/UI/UI_FileOperationsPopup.md",
+        "previous": "cc117a39ae35624a71892aaa9ce2ee66246b35e27a938282df1482d62406205b",
+        "current": "ab47f5eb337bf356c3cd95a4fc17cf8041cc10d131c97117d3f01347d7c0dcad"
+      }
+    ],
+    "status": "Root-reviewed V55-to-V56 Commands-readiness/docs source equivalence retained."
+  },
+  "v57FormattingStage": {
+    "manifestPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v57-20261001\\candidate-inputs.json",
+    "manifestSha256": "86d11043dbae7aef033fb57507feb1fd68d45c2f98758708ae4d5302dfd561f3",
+    "sourceReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v57-20261001\\root-source-review.json",
+    "sourceReviewSha256": "ea7e0c722158b649207ada412a0f0f86d271f3def23c0984a361c23b247e2e83",
+    "formatReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v57-format-root-review.json",
+    "formatReviewSha256": "7f2d349efe09a4dd76be73fad0542a741726efe186d7935efe534e6fa4604bc1",
+    "changes": [
+      {
+        "path": "Common/LocalSearchIndexCore.cpp",
+        "previous": "ea698471245541eb5336334b4ebcb8ad4e2ff020b5d92ca5cfec9f4360dbe6b8",
+        "current": "228291ed39e0bc5553ef20e5b881b9ec35d48e6eace510488c2562464b54633f"
+      },
+      {
+        "path": "Common/SearchServiceBroker.cpp",
+        "previous": "963cc1fec4e09365bd4cb7d6709145cfdb7a68152636612764089e826c653979",
+        "current": "1a16ea3c0e4c5c0f86963e26308a0c288293c091bcced575ea2ad646a9b4116c"
+      },
+      {
+        "path": "RedSalamander/FileOperationMoveBreadcrumb.cpp",
+        "previous": "6dea7f77a2743ecda15277dcaa33612842dd49a1a3a78fc6f05dc117d6d846d7",
+        "current": "45f0f6f0b210a98e780c6dca28e72e4cfa745bdf717f850116de574a182992d8"
+      },
+      {
+        "path": "RedSalamander/FileOperationMoveBreadcrumb.h",
+        "previous": "ff034a92538274e797fb7ed1b84831ad832964b02d498d5508bf474580b506ac",
+        "current": "762529d6b8c65f783b63058cb5fc43d1cba6833f2e703f5d756fb0adf6c94b46"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.cpp",
+        "previous": "f28b957d0e07bdf79bbf07c791b621dc082baa82f063c01b4753375b7419330d",
+        "current": "c625a03dca3195fd67682e84817f4adfc60c0fbef0bc83770031b920a60043ed"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+        "previous": "bf56e991e70365f9a5e58f9d7c2474e44d62d20b74d3c60a6714d22c82a27aa7",
+        "current": "6217d8717f2309c6b32471196b163071c690eec8f8a9d06223759137a2eb2a4f"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.h",
+        "previous": "c50c0f93318414de51ff63b84710e9b6bae1c50d0f7b937839b6a8803b6f8540",
+        "current": "82e1f915242fce256f8d04423979ec78a6166b43a363a0e2a8cff863bf7b1384"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+        "previous": "bf66cb3b330b2d3ebed845dc8d9b6f43b4cf054c8b185465fdfedaa06d979ac5",
+        "current": "0e5cc470055106ea29871022b0c1381d1292e8b25f4b19b3108300415a011a2e"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+        "previous": "8ab2b216f8fb0094cd1889f87de7353706dd3037cd4baa5f63fdbec0d3e645da",
+        "current": "e87840879174f1420f987f10bdca8af0229df822ced3508d45e15b92ba0f2fdf"
+      },
+      {
+        "path": "RedSalamander/Resource.h",
+        "previous": "7b6675e03a3034f644d7d4202e3b459767a002ecbd6896ecc4d8498c58f9df8f",
+        "current": "ae79db07904bf25cf99e847598a0bf2f8f1b2617546c1bb0caae9044fa3f1a8f"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp",
+        "previous": "772d11f30047a1b336b84b973b8c7bda45d3f16544a175bb4f39c589f774c642",
+        "current": "13a49bc3344aa18c51fb0c4092c20b8e2c148be9874b128a41a5aec484c87122"
+      },
+      {
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp",
+        "previous": "4378bc887e51baec099f45d186035e3e3107a02f4100a72dee9eea88ad9c1541",
+        "current": "f99bee1fe9bee4a11410d99ddb56c1d4fc629e4bd5f46b080098adea19cd579c"
+      },
+      {
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.cpp",
+        "previous": "7f99c942e0c2ed6d3983c4f309b58603efef9d7d57280c9c1c402a293c099b0c",
+        "current": "061d3219b799bb1f12df6c21ebeae952840dda436cc1fbb2ef613c2b3ced48d3"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FileOperationsSurfaceResources.h",
+        "previous": "e7643158d8812ad3dad490dfeae12e88e41ac7d9689ef76556a6cb345846fb70",
+        "current": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp",
+        "previous": "263cdd7f163e945f7e21b5cea2d0b257b3763ed99f5e4b308ddce8f2f5f6561a",
+        "current": "0acf25709e58d29baad3557798f715e0b5f50996413a3dd0a2d36489e6642282"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp",
+        "previous": "0d7c7ef58b388c2c10b95ffb2a8514cdb840ff4ff438df77d0f8d064b067196c",
+        "current": "59cbcd21559175d5155f35c928fb57095d32d784efa258325bdcf44fafd58a6c"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "dfc51dfffd3ea2d4999a6f9fe7675c04eb63f232c187dce81d98d8c1169165b3",
+        "current": "c535414c7b09b7791fb2f272833ed53d2955ba28d0725a6d5e08dacef4bb6ff5"
+      }
+    ],
+    "status": "Original root-reviewed V56-to-V57 formatting/header-ordering stage retained."
+  },
+  "carriedV58SourceStage": {
+    "manifestPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v58-20261001\\candidate-inputs.json",
+    "manifestSha256": "bab0169a74f116109f5d4434e9e9ec2319403a1dc9831252e55af3ab651e784c",
+    "inventoryPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v58-20261001\\source-inventory.json",
+    "inventorySha256": "1f492c1c0d5a9508be29f4e980198c3e821a5c3466b7759b2543b586b2495344",
+    "pinScopePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v58-20261001\\pin-scope.json",
+    "pinScopeSha256": "d5ab7569c60e814a78033f77b2cc7b2c2983e525ef89be87d12a8c1d46aedc67",
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v58-20261001\\root-source-review.json",
+    "rootReviewSha256": "af3bdb2dfb658b1d292230752c3f60d657f836aa5046af6e4fd322d7c59c5332",
+    "sourceGuardReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v58-source-guard-root-review.json",
+    "sourceGuardReviewSha256": "7448fdf0f703cefd77456e11cc2490be711872c111cd1af990f20d66ff5c90e0",
+    "pesterGuardReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v58-pester-guard-root-review.json",
+    "pesterGuardReviewSha256": "c770d03f9002d44973eaa9f2858c8b4facec30ed34b305d8c0aeced64befcf00",
+    "pesterResultsPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v58-pester-guard-check\\pester-results.json",
+    "pesterResultsSha256": "a58d36b63b0f2ed61e71dd3dffbcabae3f592fef237c8f1f536e7d63f74b5e89",
+    "v57EquivalencePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v57-20261001/root-source-review.json",
+    "v57EquivalenceSha256": "ea7e0c722158b649207ada412a0f0f86d271f3def23c0984a361c23b247e2e83",
+    "changes": [
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp",
+        "previous": "72ad7f9d73320ebfc878645296a2067dcd9813c3ae597bdd690ce6f6244a9c5c",
+        "current": "a2eef35462baeca89d85eef6f33067687e729209e3ef6f6ef295a899d068c19f"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "c535414c7b09b7791fb2f272833ed53d2955ba28d0725a6d5e08dacef4bb6ff5",
+        "current": "b85128b8d67cbe500ee7617e64707f67a3de53fd0d97314f93571fb8abdc291f"
+      },
+      {
+        "path": "Specs/Testing/Testing_SelfTests.md",
+        "previous": "683efdbe226313aa9c4317dc6a9ee1a8eae56e177d53726fe9cf99ded7578913",
+        "current": "f45ab8869c5975b697c57a5ea803c86539b89b5f65ea5a6a5be805f814e09d52"
+      },
+      {
+        "path": "Specs/Testing/Testing_TestCoverage.md",
+        "previous": "36a6498ef4be298a50e0acdc135adcbd342d0826bfe08bd606a509cf024bdd26",
+        "current": "4c2ec4a0dc23e8e57292cc134a7f1872b7db62768e48014b2bf50c165e706a0c"
+      },
+      {
+        "path": "Specs/UI/UI_FileOperationsPopup.md",
+        "previous": "ab47f5eb337bf356c3cd95a4fc17cf8041cc10d131c97117d3f01347d7c0dcad",
+        "current": "7d701c48f8c2029cd39123c2cbae307062710c1fba7622d62cfc9997142b2f77"
+      },
+      {
+        "path": "Tools/README.md",
+        "previous": "c31f590f20bff096b2df09cd30c0c1929769084298dfcf7f9408f87c37212d74",
+        "current": "7c19f023fd6256381553d94d88b8c4425afa78e9d9e0516770fa7b2be419d7c6"
+      },
+      {
+        "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+        "previous": "b23607253d6512e649b9af2f4af4ff95e27634bc1965663b586a8fd10ac95829",
+        "current": "d745d67a7efb4e197427f67b62cdc12419c339ff45e7a9380edb0f24a840a627"
+      },
+      {
+        "path": "Tools/tool-inventory.json",
+        "previous": "ff71e65ddb00e9f28584a70cb41c5e6e591c7224f66a858d2f3879337d46fede",
+        "current": "0466fc5de8616746a23d6307128f4b8cfad270b6d2910ccd1c4866ba2a5cda7e"
+      }
+    ],
+    "status": "Root-reviewed V57-to-V58 eight-path source delta verified."
+  },
+  "historicalV64SourceStage": {
+    "manifestPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v64-20261001\\candidate-inputs.json",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "inventorySha256": "1f492c1c0d5a9508be29f4e980198c3e821a5c3466b7759b2543b586b2495344",
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v64-20261001\\root-source-review.json",
+    "rootReviewSha256": "2dd68a77f371bd683e0e998179d75f71145c9797cd9fd1db555cb1950bbc68be",
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e",
+    "changes": [
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+        "previous": "cebf940372483f6bd6bc4b8c9e58fa6faaf9856d7629f5058469db536e07bba8",
+        "current": "0ba4bef8d41b37678756e80b853cb02799848a8442501d99735c0c936580ab1d"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+        "previous": "3bd4d9bb627e0cdaf518453b994f00ba369bf2a40b83e262d8e8b8be71a35b8a",
+        "current": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3"
+      },
+      {
+        "path": "Specs/Core/Core_SharedHelpers.md",
+        "previous": "8fbbb51143987d8d34241fa3596e51a5770f9c7e1874d0d355663b5cd8e3e662",
+        "current": "ab8a12084c33e7cac390b59641d8c1369f3f7509b727ab447c529c514cb299d8"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "b85128b8d67cbe500ee7617e64707f67a3de53fd0d97314f93571fb8abdc291f",
+        "current": "936a88c75e87e0a77ca24f6c650e4cc9b902f962f82d51f3dd2a9efd90fcd6d6"
+      },
+      {
+        "path": "Specs/UI/UI_FileOperationsPopup.md",
+        "previous": "7d701c48f8c2029cd39123c2cbae307062710c1fba7622d62cfc9997142b2f77",
+        "current": "4e341d491283485c06e409e714c866e15174791e5018e1f74b19470562a25dbc"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp",
+        "previous": "0a62a531eef350091e1fe07dfdb1103eb22177994044893ed628a80239bda7f9",
+        "current": "d1a95031042c466032812f07c898c00bc3629f6a342b848ceb62489ce776f1bf"
+      }
+    ],
+    "v55Changes": [
+      {
+        "path": "RedSalamander/FileOperationMoveBreadcrumb.cpp",
+        "previous": "6dea7f77a2743ecda15277dcaa33612842dd49a1a3a78fc6f05dc117d6d846d7",
+        "current": "45f0f6f0b210a98e780c6dca28e72e4cfa745bdf717f850116de574a182992d8"
+      },
+      {
+        "path": "RedSalamander/FileOperationMoveBreadcrumb.h",
+        "previous": "ff034a92538274e797fb7ed1b84831ad832964b02d498d5508bf474580b506ac",
+        "current": "762529d6b8c65f783b63058cb5fc43d1cba6833f2e703f5d756fb0adf6c94b46"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+        "previous": "bf56e991e70365f9a5e58f9d7c2474e44d62d20b74d3c60a6714d22c82a27aa7",
+        "current": "6217d8717f2309c6b32471196b163071c690eec8f8a9d06223759137a2eb2a4f"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.h",
+        "previous": "c50c0f93318414de51ff63b84710e9b6bae1c50d0f7b937839b6a8803b6f8540",
+        "current": "82e1f915242fce256f8d04423979ec78a6166b43a363a0e2a8cff863bf7b1384"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+        "previous": "cebf940372483f6bd6bc4b8c9e58fa6faaf9856d7629f5058469db536e07bba8",
+        "current": "0ba4bef8d41b37678756e80b853cb02799848a8442501d99735c0c936580ab1d"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+        "previous": "8ab2b216f8fb0094cd1889f87de7353706dd3037cd4baa5f63fdbec0d3e645da",
+        "current": "e87840879174f1420f987f10bdca8af0229df822ced3508d45e15b92ba0f2fdf"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+        "previous": "bf66cb3b330b2d3ebed845dc8d9b6f43b4cf054c8b185465fdfedaa06d979ac5",
+        "current": "0e5cc470055106ea29871022b0c1381d1292e8b25f4b19b3108300415a011a2e"
+      },
+      {
+        "path": "RedSalamander/FolderWindow.FileOperations.cpp",
+        "previous": "f28b957d0e07bdf79bbf07c791b621dc082baa82f063c01b4753375b7419330d",
+        "current": "c625a03dca3195fd67682e84817f4adfc60c0fbef0bc83770031b920a60043ed"
+      },
+      {
+        "path": "RedSalamander/Resource.h",
+        "previous": "7b6675e03a3034f644d7d4202e3b459767a002ecbd6896ecc4d8498c58f9df8f",
+        "current": "ae79db07904bf25cf99e847598a0bf2f8f1b2617546c1bb0caae9044fa3f1a8f"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+        "previous": "174eb489a52df7415c56c581044f73cc15e6200a5532a10ea14c22d61d70cfea",
+        "current": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp",
+        "previous": "72ad7f9d73320ebfc878645296a2067dcd9813c3ae597bdd690ce6f6244a9c5c",
+        "current": "a2eef35462baeca89d85eef6f33067687e729209e3ef6f6ef295a899d068c19f"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FileOperationsSurfaceResources.h",
+        "previous": "e7643158d8812ad3dad490dfeae12e88e41ac7d9689ef76556a6cb345846fb70",
+        "current": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp",
+        "previous": "263cdd7f163e945f7e21b5cea2d0b257b3763ed99f5e4b308ddce8f2f5f6561a",
+        "current": "0acf25709e58d29baad3557798f715e0b5f50996413a3dd0a2d36489e6642282"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp",
+        "previous": "0d7c7ef58b388c2c10b95ffb2a8514cdb840ff4ff438df77d0f8d064b067196c",
+        "current": "59cbcd21559175d5155f35c928fb57095d32d784efa258325bdcf44fafd58a6c"
+      },
+      {
+        "path": "RedSalamander/resource.h",
+        "previous": "7b6675e03a3034f644d7d4202e3b459767a002ecbd6896ecc4d8498c58f9df8f",
+        "current": "ae79db07904bf25cf99e847598a0bf2f8f1b2617546c1bb0caae9044fa3f1a8f"
+      },
+      {
+        "path": "Specs/Core/Core_SharedHelpers.md",
+        "previous": "8fbbb51143987d8d34241fa3596e51a5770f9c7e1874d0d355663b5cd8e3e662",
+        "current": "ab8a12084c33e7cac390b59641d8c1369f3f7509b727ab447c529c514cb299d8"
+      },
+      {
+        "path": "Specs/FileSystem/FileSystem_FileOperations.md",
+        "previous": "3f9f4ca5fd74ccb77cbf869912dee5f5e376af28f61800d0858b255f412fc411",
+        "current": "3b285373bc8ad419acda278aa0cba49e8883455307ac6cf390052930a6d95508"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "d01010860f5de3a3acc88f0b366b7fa447386143bd8e386d1f48587514cfe059",
+        "current": "936a88c75e87e0a77ca24f6c650e4cc9b902f962f82d51f3dd2a9efd90fcd6d6"
+      },
+      {
+        "path": "Specs/Testing/Testing_PerformanceValidation.md",
+        "previous": "c9ffd67c342e1e645d6f89d9d1669ee3817c08d764f40d6b31ec95276c9b3f4d",
+        "current": "b3165f7809595ea20ff55fbcd68bc449b36929342f8229d332c237003bffd751"
+      },
+      {
+        "path": "Specs/Testing/Testing_SelfTests.md",
+        "previous": "683efdbe226313aa9c4317dc6a9ee1a8eae56e177d53726fe9cf99ded7578913",
+        "current": "f45ab8869c5975b697c57a5ea803c86539b89b5f65ea5a6a5be805f814e09d52"
+      },
+      {
+        "path": "Specs/Testing/Testing_TestCoverage.md",
+        "previous": "205fa06f2b2d21d5bacdcbe044bd7f5172a2a2a791b56436d51bb70cfbdab6c0",
+        "current": "4c2ec4a0dc23e8e57292cc134a7f1872b7db62768e48014b2bf50c165e706a0c"
+      },
+      {
+        "path": "Specs/UI/UI_FileOperationsPopup.md",
+        "previous": "cc117a39ae35624a71892aaa9ce2ee66246b35e27a938282df1482d62406205b",
+        "current": "4e341d491283485c06e409e714c866e15174791e5018e1f74b19470562a25dbc"
+      },
+      {
+        "path": "Tools/README.md",
+        "previous": "c31f590f20bff096b2df09cd30c0c1929769084298dfcf7f9408f87c37212d74",
+        "current": "7c19f023fd6256381553d94d88b8c4425afa78e9d9e0516770fa7b2be419d7c6"
+      },
+      {
+        "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+        "previous": "b23607253d6512e649b9af2f4af4ff95e27634bc1965663b586a8fd10ac95829",
+        "current": "d745d67a7efb4e197427f67b62cdc12419c339ff45e7a9380edb0f24a840a627"
+      },
+      {
+        "path": "Tools/tool-inventory.json",
+        "previous": "ff71e65ddb00e9f28584a70cb41c5e6e591c7224f66a858d2f3879337d46fede",
+        "current": "0466fc5de8616746a23d6307128f4b8cfad270b6d2910ccd1c4866ba2a5cda7e"
+      },
+      {
+        "path": "Common/LocalSearchIndexCore.cpp",
+        "previous": "ea698471245541eb5336334b4ebcb8ad4e2ff020b5d92ca5cfec9f4360dbe6b8",
+        "current": "228291ed39e0bc5553ef20e5b881b9ec35d48e6eace510488c2562464b54633f"
+      },
+      {
+        "path": "Common/SearchServiceBroker.cpp",
+        "previous": "963cc1fec4e09365bd4cb7d6709145cfdb7a68152636612764089e826c653979",
+        "current": "1a16ea3c0e4c5c0f86963e26308a0c288293c091bcced575ea2ad646a9b4116c"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp",
+        "previous": "772d11f30047a1b336b84b973b8c7bda45d3f16544a175bb4f39c589f774c642",
+        "current": "13a49bc3344aa18c51fb0c4092c20b8e2c148be9874b128a41a5aec484c87122"
+      },
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp",
+        "previous": "0a62a531eef350091e1fe07dfdb1103eb22177994044893ed628a80239bda7f9",
+        "current": "d1a95031042c466032812f07c898c00bc3629f6a342b848ceb62489ce776f1bf"
+      },
+      {
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp",
+        "previous": "4378bc887e51baec099f45d186035e3e3107a02f4100a72dee9eea88ad9c1541",
+        "current": "f99bee1fe9bee4a11410d99ddb56c1d4fc629e4bd5f46b080098adea19cd579c"
+      },
+      {
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.cpp",
+        "previous": "7f99c942e0c2ed6d3983c4f309b58603efef9d7d57280c9c1c402a293c099b0c",
+        "current": "061d3219b799bb1f12df6c21ebeae952840dda436cc1fbb2ef613c2b3ced48d3"
+      }
+    ],
+    "baselineScopeReviewSha256": "17a639f06efb00a3cd6da4396e6fc1e1bae601b2a234e0ac46f0f661804b7e3c"
+  },
+  "v65FinalSourceStage": {
+    "manifestPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v65-20261001\\candidate-inputs.json",
+    "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+    "inventorySha256": "f0400c7fef4e8143a165aa3b0bc86f11edd89f477357041e35ae57d63fe297de",
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v65-20261001\\root-source-review.json",
+    "rootReviewSha256": "3b9211463db614ecd2a4becb5af38f0c04d9ce289840ed1003a541834b64d898",
+    "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+    "changes": [
+      {
+        "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+        "previous": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+        "current": "ce155d10601d6db24ebfb5da5b2a4ffbbf1bc76d22f06db6349ab08271701129"
+      },
+      {
+        "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+        "previous": "51eb14585536871816ba4571cb10976d7b3efb2d185eff7508b2c4e9d79c4bbe",
+        "current": "7e0d05bb17370e4f497fe4a1a3d4fd2f67ae72da06907a5c196238519089ee10"
+      },
+      {
+        "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+        "previous": "936a88c75e87e0a77ca24f6c650e4cc9b902f962f82d51f3dd2a9efd90fcd6d6",
+        "current": "193b78469bf5f4e0da23e9cc8571dbe61965a4fe43afe999c97eae88f08f2b27"
+      },
+      {
+        "path": "Specs/Testing/Testing_PerformanceValidation.md",
+        "previous": "b3165f7809595ea20ff55fbcd68bc449b36929342f8229d332c237003bffd751",
+        "current": "8d2dc072cca2fb65fd1024790bfdf35a08d5f12f1b65d1fb0ce541ec7e1a90c5"
+      }
+    ],
+    "addedPaths": [
+      {
+        "path": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+        "current": "be845f80ad7704358814deafafff47fbae753651b0fd9685e2d1910ae163623a",
+        "previousCandidate": "afc8dbc72569c3250805cd90d09d7829405a3fda3b05be827de4ebc05aebd066"
+      }
+    ],
+    "carryRootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-carry-root-review.json",
+    "carryRootReviewSha256": "f6d47b64c7b833f8dc05bf3ffef1eb933268eeac303b602277d0289093c75ce4",
+    "productBytesIdenticalToV64": true,
+    "capturedImagesRetainOriginalIdentities": true
+  },
+  "nativeFileOpsCurrent": {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "sha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+    "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e"
+  },
+  "v64ProtectedCompanion": {
+    "runId": "20261001T090259Z-87868-9a93d2a753794f9490d57400b1a022f9",
+    "sequencePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v64-gallery\\ProtectedInteraction\\sequence.json",
+    "sequenceSha256": "224bc6b90ad04c39090f7638a417bc95d463a29157eae5852b4f31febe8d9eed",
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v64-protected-root-review.json",
+    "rootReviewSha256": "cfd98152b12af106aa3c90aedefe41f98642ad4bfcf4bd66af77a9bc9283851a",
+    "imageComparisonSha256": "ad5956d4657456e55d679cee926c415ea7d2369400108fbcde21e15d07636653",
+    "originalV55PngBytesRetained": true,
+    "pngsRepublished": false,
+    "coverage": "FooterOptions native 144/96/144; task prepaint focus is the separate Commands GREEN case"
+  },
+  "hostedKeysCurrent": {
+    "rootReviews": [
+      {
+        "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-hosted-keys-debug-root-review.json",
+        "sha256": "d252909d97fe84d5f7e99df566e61bb31cbae3b0a874b070bb8bae1b88e32af9"
+      },
+      {
+        "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-hosted-keys-release-root-review.json",
+        "sha256": "d0c4f1fb9473d61f6d908f7f4eb8c61e0583ac2fa01b26c02fa1627a12f722fb"
+      }
+    ],
+    "runs": [
+      {
+        "configuration": "Debug",
+        "runId": "20261001T113214Z-63820-2c8d88dff6c54bda82569d94542cb2ec",
+        "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-hosted-keys-debug-root-review.json",
+        "rootReviewSha256": "d252909d97fe84d5f7e99df566e61bb31cbae3b0a874b070bb8bae1b88e32af9",
+        "qualificationPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v65-decision-keys\\qualification.json",
+        "qualificationSha256": "33eeeecb1cd75619ba54b3cb53a18cde706ddf46ab582c47cd00ce0a5c388b59",
+        "nativePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\commands\\results.json",
+        "nativeSha256": "8a89ad58b36ffc621e494e6f5dcd66df6e12c0dbe061dcea378701bb76c04d39",
+        "runnerPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+        "runnerSha256": "bf2ef9a8f1496195a27c3faa499c12691ca77dd2f1a7bcd1057265507d3d86be",
+        "tracePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+        "traceSha256": "f957a187ff32df522bb025e4696be01c7181872c4d8d6be33585b1d852fd9d32",
+        "receiptPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v65-decision-keys\\build-receipt.json",
+        "receiptSha256": "70511744e8896fb87fd52319a5caf55f641efeb7f2ab97ec1a64871275ae0f59",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "configuration": "Release",
+        "runId": "20261001T112207Z-80192-1f5f873df736462f91655cb76638d1a9",
+        "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-hosted-keys-release-root-review.json",
+        "rootReviewSha256": "d0c4f1fb9473d61f6d908f7f4eb8c61e0583ac2fa01b26c02fa1627a12f722fb",
+        "qualificationPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-decision-keys\\qualification.json",
+        "qualificationSha256": "e70ecd164c66640d28fbedd7d63a2eb398461d98a4250915679c8dc61b195339",
+        "nativePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\commands\\results.json",
+        "nativeSha256": "850b9ab8f5b1084ab9c80978c7e4bac266edf9a4a4c8efb06fa151ca5ab65bf6",
+        "runnerPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+        "runnerSha256": "9501691c9c2864f53b9ac7790983a45aab146b393e2d212510f7509096ef6e7c",
+        "tracePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-decision-keys\\runner-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+        "traceSha256": "d63cc207c7746ae361b3924fc9a87ab072a517502142ba02161a72885c4acaaa",
+        "receiptPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-decision-keys\\build-receipt.json",
+        "receiptSha256": "833ba176b221c1be11abb67adc6a49347fdaf2cd878c5eda8097cdfd44d73564",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "keyboardScope": "Real HWND key dispatch; not OS injected input"
+  },
+  "wholePlanComplete": false,
+  "finalPostFullReceipt": {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\build-receipt-post-full.json",
+    "sha256": "b0346b50cd65acb8b8e96469677006c47ec6b99241793a878895b701c27a5d3c",
+    "receiptId": "7442adedcaf17d954a58b726f49756312beabb2c2426589e4fd71af42584fdac",
+    "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c"
+  },
+  "rootReviewedCaseMap": {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-acceptance-case-map-draft-v4-86x85.json",
+    "sha256": "5cd10a1d5edc247c034fbbfb4b45ab012ff0b550ef0e38071d66ddcab46cc927",
+    "schema": "i26-v65-acceptance-case-map-draft.v1",
+    "exactCaseLiteralsVerified": true,
+    "rootReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v65-acceptance-case-map-root-review-86x85.json",
+    "rootReviewSha256": "4a8aba3c6f9b950afd632d4a1eba1acf3c26c51cf04dc4b5587825fd74d849ed"
+  },
+  "fullFresh": {
+    "status": "PASSED",
+    "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+    "v2Path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "v2Sha256": "d48a8c4e9b9a0b1eb01c10df69422ab117590acab9400d9bace4518b89d30da4",
+    "v1Path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+    "v1Sha256": "6ec5940757a446a28cbdf204e8f5da59c7e98b13bd1ef6b10fdc8ac30d043582",
+    "caseCounts": {
+      "failed": 0,
+      "passed": 2211,
+      "skipped": 46,
+      "total": 2257
+    }
+  },
+  "carriedV55DebugFileOps": {
+    "status": "nonfailing_suite_receipt",
+    "runId": "20261001T010532Z-89108-35279440c388486683c7646e58d45f24",
+    "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gates\\FileOps\\fileops-x64-debug-full\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "resultSha256": "51995765954c6df5cbb1ec850fb691d873e5c658120121554956f23bc230bf51",
+    "passed": 197,
+    "failed": 0,
+    "skipped": 20
+  },
+  "boundCaseCount": 39,
+  "planFacetCaseRows": 62,
+  "caseRows": [
+    {
+      "planRow": "P0@2426",
+      "acceptanceFacets": [
+        "real repeat-scope checked state",
+        "long French content fits",
+        "speed dialog locale/error/DPI layout and focus"
+      ],
+      "caseId": "cmd_pane_fileops_accepted_decision_records",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_accepted_decision_records",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 3455
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20359",
+      "coveredAssertion": "scope checkbox checked/unchecked, UIA/Space/pointer parity, accepted user versus cached-scope decision",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P0@2426",
+      "acceptanceFacets": [
+        "real repeat-scope checked state",
+        "long French content fits",
+        "speed dialog locale/error/DPI layout and focus"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_comparison_rows",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 5567
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20350",
+      "coveredAssertion": "long French comparison content, bounded card and actions",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P0@2426",
+      "acceptanceFacets": [
+        "real repeat-scope checked state",
+        "long French content fits",
+        "speed dialog locale/error/DPI layout and focus"
+      ],
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1264
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20407",
+      "coveredAssertion": "live speed prompt interaction",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P0@2426",
+      "acceptanceFacets": [
+        "real repeat-scope checked state",
+        "long French content fits",
+        "speed dialog locale/error/DPI layout and focus"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp:1256-1315",
+      "coveredAssertion": "same invalid French prompt moved across physical monitors and back; exact HWND/edit/text/error/selection/focus/foreground/work-area/geometry assertions; current V55 StaticGallery required",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P0@2429",
+      "acceptanceFacets": [
+        "final unchanged/candidate fixture pairing",
+        "equal feature states",
+        "current detail/graph and resource evidence"
+      ],
+      "caseId": "FileOps_IntegratedPresentationPerf",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_IntegratedPresentationPerf",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 7485
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\B19-1\\integrated-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "63195c75ac26b015d7e5b799028ba6f7b0f4a2a3fd63e6b1ecc055d6661297ef",
+      "runId": "20261001T134424Z-99728-2992ef3411c94348a86259781bbfc870",
+      "resultSource": "V65 integrated presentation fixture",
+      "evidenceType": "runtime_assertion_and_metrics",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp:611-617,1140-1146,2086-2090",
+      "coveredAssertion": "candidate integrated presentation performance fixture",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P0@2429",
+      "acceptanceFacets": [
+        "final unchanged/candidate fixture pairing",
+        "equal feature states",
+        "current detail/graph and resource evidence"
+      ],
+      "caseId": "FileOps_CommonPresentationPerf",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_CommonPresentationPerf",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 4360
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\common-p0-baseline-v2-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "2295e52b404cb75e35e93c987001dc545743b05cec715f32e45171bc4f242d25",
+      "runId": "20260927T121059Z-66920-e1995a32a97a433188a3af89acfaa57f",
+      "resultSource": "retained historical common-workload baseline",
+      "evidenceType": "historical_baseline",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp:611-617,1140-1146,2080-2084",
+      "coveredAssertion": "retained common-workload baseline only; not the final equal-feature comparison",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2446",
+      "acceptanceFacets": [
+        "French action text wrapping",
+        "measured footer height reserved before task content"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_comparison_rows",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 5567
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20350",
+      "coveredAssertion": "long French conflict layout and action bounds",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2446",
+      "acceptanceFacets": [
+        "French action text wrapping",
+        "measured footer height reserved before task content"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp:scenario gallery assertions/capture registration",
+      "coveredAssertion": "current visual geometry; exact current scenario execution remains required",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2470",
+      "acceptanceFacets": [
+        "visible checked/unchecked repeat-scope control",
+        "absent while loading/ineligible",
+        "Space/pointer/UIA parity",
+        "model synchronization does not originate consent"
+      ],
+      "caseId": "cmd_pane_fileops_accepted_decision_records",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_accepted_decision_records",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 3455
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20359",
+      "coveredAssertion": "UIA, Space and pointer scope interaction; accepted versus cached decision provenance",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2470",
+      "acceptanceFacets": [
+        "visible checked/unchecked repeat-scope control",
+        "absent while loading/ineligible",
+        "Space/pointer/UIA parity",
+        "model synchronization does not originate consent"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 956
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20345",
+      "coveredAssertion": "loading/ineligible actions and scope absent until eligible",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2470",
+      "acceptanceFacets": [
+        "visible checked/unchecked repeat-scope control",
+        "absent while loading/ineligible",
+        "Space/pointer/UIA parity",
+        "model synchronization does not originate consent"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 260
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20374",
+      "coveredAssertion": "scope retained across inspect/return route",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2475",
+      "acceptanceFacets": [
+        "speed/validation dialog reflow after creation",
+        "locale/DPI/new errors",
+        "work-area fit and distinct input/help/error/action regions"
+      ],
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 3451
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20404",
+      "coveredAssertion": "speed prompt surface contract",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2475",
+      "acceptanceFacets": [
+        "speed/validation dialog reflow after creation",
+        "locale/DPI/new errors",
+        "work-area fit and distinct input/help/error/action regions"
+      ],
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1264
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20407",
+      "coveredAssertion": "live dialog interaction",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P1@2475",
+      "acceptanceFacets": [
+        "speed/validation dialog reflow after creation",
+        "locale/DPI/new errors",
+        "work-area fit and distinct input/help/error/action regions"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp:1256-1315",
+      "coveredAssertion": "live invalid French form across physical monitors; see root review for full assertion list",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 2328
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20383",
+      "coveredAssertion": "presentation settings and taskbar behavior",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1264
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20407",
+      "coveredAssertion": "dialog input/terminal key behavior where applicable",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 8532
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20362",
+      "coveredAssertion": "Original exact prompt Close hides; Escape cancels that immutable current task and preserves source/destination bytes; window-message route.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_hosted_decision_keys",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1354
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20365",
+      "coveredAssertion": "New real-worker ordinary default Enter, exact B same-host Escape, Recycle safe Enter/Escape; cancel result, no publication/source removal, unchanged payloads, unaffected A; primary only until built and run.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1641
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1248",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_DontStartCancelsBeforeMutation",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_DontStartCancelsBeforeMutation",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1437
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1249",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_ReadReadDoesNotWarn",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_ReadReadDoesNotWarn",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 250
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1250",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_SameDestinationWarns",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_SameDestinationWarns",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 328
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1251",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_RunConcurrentSameDestinationStaysSafe",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_RunConcurrentSameDestinationStaysSafe",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 12938
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1252",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_LiveOutputGuardChoices",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_LiveOutputGuardChoices",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1266
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1253",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_DisjointWritesDoNotWarn",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_DisjointWritesDoNotWarn",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1254",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_RenamePublishKeepsIndexPrecise",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_RenamePublishKeepsIndexPrecise",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 187
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1255",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "R4A02_LatePublisherStillWarns",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "R4A02_LatePublisherStillWarns",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 438
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp:1256",
+      "coveredAssertion": "Existing same-host overlap/live-output admission, queue/cancel/concurrent outcome/index safety; engine family does not substitute hosted keyboard proof.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2488",
+      "acceptanceFacets": [
+        "placement and presentation settings",
+        "stale/default/Enter/Escape/same-host/Recycle behavior",
+        "required configuration matrix"
+      ],
+      "caseId": "Phase10_DeferredConsentAndRecycleEscalation",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "Phase10_DeferredConsentAndRecycleEscalation",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1203
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "21a8311140c4d88387644de17f617392da50aac9099a4a87bd4ec14d33b3216b",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release native FileOps phase results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:/src/RedSalamander/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp:1063",
+      "coveredAssertion": "Existing real two-file exact Recycle/per-item Skip and deferred-consent carriers; engine/typed-result evidence separate from new hosted keys.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2490",
+      "acceptanceFacets": [
+        "R1 common prominent filename",
+        "single complete conflict/loading indicator",
+        "parent paths and metadata without repeated filename or waiting"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 956
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20345",
+      "coveredAssertion": "loading identity and no premature actions; conflict prompt metadata/actions",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2490",
+      "acceptanceFacets": [
+        "R1 common prominent filename",
+        "single complete conflict/loading indicator",
+        "parent paths and metadata without repeated filename or waiting"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_comparison_rows",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 5567
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20350",
+      "coveredAssertion": "qualified conflict comparison rows",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2490",
+      "acceptanceFacets": [
+        "R1 common prominent filename",
+        "single complete conflict/loading indicator",
+        "parent paths and metadata without repeated filename or waiting"
+      ],
+      "caseId": "cmd_pane_fileops_issues_pane_complete_french_detail",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 664
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20248",
+      "coveredAssertion": "complete French issue detail projection",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2494",
+      "acceptanceFacets": [
+        "approved French labels",
+        "exact path detail/copy",
+        "Incoming above Existing",
+        "measured warning and full checkbox text"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_comparison_rows",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 5567
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20350",
+      "coveredAssertion": "French comparison text and layout",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2494",
+      "acceptanceFacets": [
+        "approved French labels",
+        "exact path detail/copy",
+        "Incoming above Existing",
+        "measured warning and full checkbox text"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 956
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20345",
+      "coveredAssertion": "prompt identity/actions",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2494",
+      "acceptanceFacets": [
+        "approved French labels",
+        "exact path detail/copy",
+        "Incoming above Existing",
+        "measured warning and full checkbox text"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp:scenario gallery assertions/capture registration",
+      "coveredAssertion": "current French labels/path detail visual proof",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2518",
+      "acceptanceFacets": [
+        "R3 source/destination inspection from last-active pane",
+        "both panes and both roles",
+        "UIA/Space/Enter/pointer routes",
+        "selection/focus/control/scope return",
+        "missing/filtered/stale, multitask and teardown"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 260
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20374",
+      "coveredAssertion": "4 activation routes x 2 panes x 2 roles; same invoking control/scroll/scope/default/cancel restored; short viewport/focus traversal and teardown",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2518",
+      "acceptanceFacets": [
+        "R3 source/destination inspection from last-active pane",
+        "both panes and both roles",
+        "UIA/Space/Enter/pointer routes",
+        "selection/focus/control/scope return",
+        "missing/filtered/stale, multitask and teardown"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_remote_case_sensitive_nested_inspection",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_remote_case_sensitive_nested_inspection",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 758
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20371",
+      "coveredAssertion": "remote case-sensitive nested source/destination routes in both panes and roles",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2518",
+      "acceptanceFacets": [
+        "R3 source/destination inspection from last-active pane",
+        "both panes and both roles",
+        "UIA/Space/Enter/pointer routes",
+        "selection/focus/control/scope return",
+        "missing/filtered/stale, multitask and teardown"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_two_pending_task_identity",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1328
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20368",
+      "coveredAssertion": "two simultaneous pending task identities",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2531",
+      "acceptanceFacets": [
+        "oversized conflict card bounded to viewport",
+        "scroll comparison with fixed actions",
+        "reveal focused card without stealing focus",
+        "preserve focus/action identity on reflow",
+        "safe fallback when actions disappear"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_comparison_rows",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 5567
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20350",
+      "coveredAssertion": "oversized French content, fixed action bounds, wheel scroll and UIA/keyboard reveal; root checkpoint identifies this as the existing witness",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2531",
+      "acceptanceFacets": [
+        "oversized conflict card bounded to viewport",
+        "scroll comparison with fixed actions",
+        "reveal focused card without stealing focus",
+        "preserve focus/action identity on reflow",
+        "safe fallback when actions disappear"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 260
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20374",
+      "coveredAssertion": "short viewport and focus reveal without invoking hidden action",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2544",
+      "acceptanceFacets": [
+        "correlate mutation results only by exact typed reference",
+        "retain unknown/missing/evicted as unknown",
+        "no path/root-index/task-completion joins"
+      ],
+      "caseId": "cmd_pane_fileops_issues_pane_result_retention",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_result_retention",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 46
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20356",
+      "coveredAssertion": "one-shot result retention and no correlation for uncorrelated executor",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2544",
+      "acceptanceFacets": [
+        "correlate mutation results only by exact typed reference",
+        "retain unknown/missing/evicted as unknown",
+        "no path/root-index/task-completion joins"
+      ],
+      "caseId": "cmd_pane_fileops_accepted_decision_records",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_accepted_decision_records",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 3455
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20359",
+      "coveredAssertion": "Copy result cannot attach by paths/root index/task completion; unknown is the required outcome without exact carrier",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2553",
+      "acceptanceFacets": [
+        "problem, decision and result are separate typed states",
+        "unavailable old data remains unknown",
+        "cached grant is not new consent",
+        "no Issues mutation"
+      ],
+      "caseId": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 276
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20251",
+      "coveredAssertion": "typed decision projection",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2553",
+      "acceptanceFacets": [
+        "problem, decision and result are separate typed states",
+        "unavailable old data remains unknown",
+        "cached grant is not new consent",
+        "no Issues mutation"
+      ],
+      "caseId": "cmd_pane_fileops_issues_pane_complete_french_detail",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 664
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20248",
+      "coveredAssertion": "complete typed issue detail",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2553",
+      "acceptanceFacets": [
+        "problem, decision and result are separate typed states",
+        "unavailable old data remains unknown",
+        "cached grant is not new consent",
+        "no Issues mutation"
+      ],
+      "caseId": "cmd_pane_fileops_accepted_decision_records",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_accepted_decision_records",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 3455
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20359",
+      "coveredAssertion": "original problem, accepted decision, cached/user origin and outcome separation",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P2@2553",
+      "acceptanceFacets": [
+        "problem, decision and result are separate typed states",
+        "unavailable old data remains unknown",
+        "cached grant is not new consent",
+        "no Issues mutation"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp:637-1025; gallery phase selector in FolderWindow.FileOperations.SelfTest.cpp:611-617,1142,2092-2096",
+      "coveredAssertion": "missing, accepted-pending, cached, typed failure/success/delete visual cases",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2579",
+      "acceptanceFacets": [
+        "expanded by default",
+        "collapse retains rate/qualified ETA/actions",
+        "hidden plots perform no visual work",
+        "bounded history and no settings writes from sampling/paint"
+      ],
+      "caseId": "cmd_pane_fileops_popup_throughput_disclosure",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_throughput_disclosure",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 47335
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20327",
+      "coveredAssertion": "expanded/collapsed throughput disclosure state",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2579",
+      "acceptanceFacets": [
+        "expanded by default",
+        "collapse retains rate/qualified ETA/actions",
+        "hidden plots perform no visual work",
+        "bounded history and no settings writes from sampling/paint"
+      ],
+      "caseId": "cmd_pane_fileops_popup_throughput_external_reload",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_throughput_external_reload",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1113
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20330",
+      "coveredAssertion": "external settings reload",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2579",
+      "acceptanceFacets": [
+        "expanded by default",
+        "collapse retains rate/qualified ETA/actions",
+        "hidden plots perform no visual work",
+        "bounded history and no settings writes from sampling/paint"
+      ],
+      "caseId": "cmd_pane_fileops_popup_throughput_restart",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_throughput_restart",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 13729
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20333",
+      "coveredAssertion": "restart persistence",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2579",
+      "acceptanceFacets": [
+        "expanded by default",
+        "collapse retains rate/qualified ETA/actions",
+        "hidden plots perform no visual work",
+        "bounded history and no settings writes from sampling/paint"
+      ],
+      "caseId": "cmd_pane_fileops_popup_resource_lifetime",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_resource_lifetime",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 26238
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion_and_metrics",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20336",
+      "coveredAssertion": "bounded resource/history behavior",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2581",
+      "acceptanceFacets": [
+        "distinct discovery/transfer/verification hierarchy",
+        "honest unknown totals",
+        "translated progress fragments",
+        "parent completion/terminal/UIA/resource gates"
+      ],
+      "caseId": "cmd_pane_fileops_popup_progress_contracts",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_progress_contracts",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20321",
+      "coveredAssertion": "progress contracts and staged state semantics",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2581",
+      "acceptanceFacets": [
+        "distinct discovery/transfer/verification hierarchy",
+        "honest unknown totals",
+        "translated progress fragments",
+        "parent completion/terminal/UIA/resource gates"
+      ],
+      "caseId": "cmd_pane_fileops_completed_group_and_navigation",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_completed_group_and_navigation",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1031
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20386",
+      "coveredAssertion": "completed group/navigation presentation",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2581",
+      "acceptanceFacets": [
+        "distinct discovery/transfer/verification hierarchy",
+        "honest unknown totals",
+        "translated progress fragments",
+        "parent completion/terminal/UIA/resource gates"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp:registered progress/gallery scenarios",
+      "coveredAssertion": "translated progress fragments/current visual state",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2586",
+      "acceptanceFacets": [
+        "confirmation locale/theme/resource acceptance",
+        "eligibility/ingress unchanged",
+        "safe default/Escape",
+        "I18 ownership"
+      ],
+      "caseId": "cmd_pane_fileops_hosted_cancel_all_confirmation",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_hosted_cancel_all_confirmation",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 379
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20395",
+      "coveredAssertion": "hosted cancel-all confirmation route",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2586",
+      "acceptanceFacets": [
+        "confirmation locale/theme/resource acceptance",
+        "eligibility/ingress unchanged",
+        "safe default/Escape",
+        "I18 ownership"
+      ],
+      "caseId": "cmd_pane_fileops_popup_footer_menu_action_routes",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_popup_footer_menu_action_routes",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1573
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20398",
+      "coveredAssertion": "footer confirmation/action routes",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2586",
+      "acceptanceFacets": [
+        "confirmation locale/theme/resource acceptance",
+        "eligibility/ingress unchanged",
+        "safe default/Escape",
+        "I18 ownership"
+      ],
+      "caseId": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 956
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20345",
+      "coveredAssertion": "conflict action eligibility/default/cancel actions",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2586",
+      "acceptanceFacets": [
+        "confirmation locale/theme/resource acceptance",
+        "eligibility/ingress unchanged",
+        "safe default/Escape",
+        "I18 ownership"
+      ],
+      "caseId": "FileOps_VisualGallery",
+      "suite": "FileOps",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 127109
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v55-gallery\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "resultSha256": "02f1cb4672510c4b44899856b52498ae65cd021bf4605136f10708b881a41aa0",
+      "runId": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+      "resultSource": "V55 carried static gallery",
+      "evidenceType": "gallery_assertion_and_capture",
+      "reviewedSourceWitness": "V55 final static/scenarios.tsv:102-confirmation-0..9 plus narrow/short variants",
+      "coveredAssertion": "Actual V55 confirmation visuals/themes/locales; original capture identity retained, not current runtime input; protected 109-114 remain separate focus/DPI evidence.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2586",
+      "acceptanceFacets": [
+        "confirmation locale/theme/resource acceptance",
+        "eligibility/ingress unchanged",
+        "safe default/Escape",
+        "I18 ownership"
+      ],
+      "caseId": "cmd_app_prompt_uses_alert_overlay_window",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_app_prompt_uses_alert_overlay_window",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 677
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:/src/RedSalamander/RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp:11919",
+      "coveredAssertion": "Real DX AlertOverlay Escape/reopen Enter plus Copy/Move/Delete presentation, caller-owned Copy options, shutdown cancel; I18 route preserved.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2590",
+      "acceptanceFacets": [
+        "truthful terminal summaries",
+        "publication/source-removal/verification facts separate",
+        "partial/failure Issues action"
+      ],
+      "caseId": "cmd_pane_fileops_completed_group_and_navigation",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_completed_group_and_navigation",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1031
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20386",
+      "coveredAssertion": "completed group and terminal navigation",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2590",
+      "acceptanceFacets": [
+        "truthful terminal summaries",
+        "publication/source-removal/verification facts separate",
+        "partial/failure Issues action"
+      ],
+      "caseId": "cmd_pane_fileops_issues_pane_result_retention",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_result_retention",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 46
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20356",
+      "coveredAssertion": "retained typed terminal result",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2590",
+      "acceptanceFacets": [
+        "truthful terminal summaries",
+        "publication/source-removal/verification facts separate",
+        "partial/failure Issues action"
+      ],
+      "caseId": "cmd_pane_fileops_completed_export_action_route",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_completed_export_action_route",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 1396
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20389",
+      "coveredAssertion": "terminal report export",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2590",
+      "acceptanceFacets": [
+        "truthful terminal summaries",
+        "publication/source-removal/verification facts separate",
+        "partial/failure Issues action"
+      ],
+      "caseId": "cmd_pane_fileops_completed_show_log_action_route",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_completed_show_log_action_route",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 490
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20392",
+      "coveredAssertion": "terminal log action",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    },
+    {
+      "planRow": "P3@2590",
+      "acceptanceFacets": [
+        "truthful terminal summaries",
+        "publication/source-removal/verification facts separate",
+        "partial/failure Issues action"
+      ],
+      "caseId": "cmd_pane_fileops_retained_source_and_mixed_journeys",
+      "suite": "Commands",
+      "caseStatus": "passed",
+      "caseEntries": [
+        {
+          "name": "cmd_pane_fileops_retained_source_and_mixed_journeys",
+          "status": "passed",
+          "repeatIndex": 1,
+          "durationMs": 2703
+        }
+      ],
+      "resultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v65-full-fresh\\runner-run\\artifacts\\archive\\4cb089111a23\\Commands\\2026-10-01_145605\\commands_results.json",
+      "resultSha256": "b12e82264968136ebaf4469528f5382fcab1086a8c5caba2db5acbebd3dab06e",
+      "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+      "resultSource": "Full/Fresh x64 Release Commands native results",
+      "evidenceType": "runtime_assertion",
+      "reviewedSourceWitness": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp:20401",
+      "coveredAssertion": "Real worker retained-source Move/Skip and exact recovery UIA/menu; live/finished informational task identity and mixed cohort outcome.",
+      "doesNotEstablishPerformanceOrWholeFacetAcceptance": true
+    }
+  ],
+  "externalResourceReview": {
+    "status": "separate_root_review_required_not_established_by_case_binding",
+    "performanceOrResourceAcceptance": false,
+    "evidenceType": "external_equal_feature_pair_and_root_review",
+    "note": "The exact runtime case bindings below do not establish baseline pairing, resource thresholds, or whole-facet acceptance. Attach the separate root-reviewed external pair result."
+  },
+  "doesNotEstablishPerformanceOrWholeFacetAcceptance": true,
+  "checkboxActions": "None. The reviewed case map and actual case statuses are evidence inputs only; the owner decides checklist updates."
+}

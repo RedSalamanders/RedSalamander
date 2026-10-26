@@ -1,0 +1,78 @@
+{
+    "run_started_utc": "2026-07-03T15:42:16.545Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 10267,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_plugin_configuration_dialog_access_keys_route_expected_actions",
+            "status": "passed",
+            "duration_ms": 471
+        },
+        {
+            "name": "cmd_plugin_configuration_dialog_pointer_click_toggles_visible_dx_toggle",
+            "status": "passed",
+            "duration_ms": 246
+        },
+        {
+            "name": "cmd_connection_manager_window_uses_dxui_command_buttons",
+            "status": "passed",
+            "duration_ms": 126
+        },
+        {
+            "name": "cmd_connection_manager_window_uses_dxui_form_inputs",
+            "status": "passed",
+            "duration_ms": 132
+        },
+        {
+            "name": "cmd_connection_manager_window_layout_keeps_cards_and_fields_clean",
+            "status": "passed",
+            "duration_ms": 130
+        },
+        {
+            "name": "cmd_connection_manager_window_uses_dxui_form_action_buttons",
+            "status": "passed",
+            "duration_ms": 124
+        },
+        {
+            "name": "cmd_connection_manager_window_protocol_churn_keeps_form_and_uia_stable",
+            "status": "passed",
+            "duration_ms": 199
+        },
+        {
+            "name": "cmd_connection_manager_window_mtp_picker_populates_profile",
+            "status": "passed",
+            "duration_ms": 410
+        },
+        {
+            "name": "cmd_connection_manager_window_modeless_connect_posts_left_navigation",
+            "status": "passed",
+            "duration_ms": 302
+        },
+        {
+            "name": "cmd_connection_manager_window_modeless_connect_posts_right_navigation",
+            "status": "passed",
+            "duration_ms": 355
+        },
+        {
+            "name": "cmd_connection_manager_window_rejects_blank_profile_name",
+            "status": "passed",
+            "duration_ms": 2584
+        },
+        {
+            "name": "cmd_connection_manager_window_rejects_duplicate_profile_name_case_insensitive",
+            "status": "passed",
+            "duration_ms": 2538
+        },
+        {
+            "name": "cmd_connection_manager_window_rejects_reserved_quick_profile_name",
+            "status": "passed",
+            "duration_ms": 2490
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

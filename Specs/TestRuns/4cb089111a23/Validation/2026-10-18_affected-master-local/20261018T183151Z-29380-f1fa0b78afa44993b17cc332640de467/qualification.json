@@ -1,0 +1,13 @@
+{
+  "commit": "9a4d243416fa503899c2f44e4242a1276db1cef9",
+  "source_snapshot_id": "06bd32c8dac88276328262dfe952060ea2dda9a13cfc4afebb4f30d79d569933",
+  "receipt_id": "b1ac26bc09c7963d9192ddb4a573e6ea0198650800a31f439585d3190bdf0f4d",
+  "suite": "FileOps",
+  "filter": "FileOps_SmbNativeRouteConcurrencyBudget",
+  "run_id": "20261018T183151Z-29380-f1fa0b78afa44993b17cc332640de467",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\affected-merged-master-2026-10-18\\20261018T183151Z-29380-f1fa0b78afa44993b17cc332640de467"
+}

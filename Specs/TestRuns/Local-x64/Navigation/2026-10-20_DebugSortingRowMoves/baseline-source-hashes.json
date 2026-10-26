@@ -1,0 +1,22 @@
+[
+  {
+    "path": "RedSalamander/FolderView.h",
+    "baseline_sha256": "BB586FD803B52D757BAC1254FB0F4CCF67F07D7FECD06D6A431C3CECCB0F6A3B"
+  },
+  {
+    "path": "RedSalamander/FolderView.cpp",
+    "baseline_sha256": "896C9159F74C803F4550955860E0C1AAFB8FB17E620AB9160505CC5823C080BE"
+  },
+  {
+    "path": "RedSalamander/FolderView.Enumeration.cpp",
+    "baseline_sha256": "12368775E5DBB82CE68D4DB924363EE7C7ECA346CC3CFCEC5B7AAB2B8DF1ACB8"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+    "baseline_sha256": "6168ACF8825DCF7989459E93187D61B022D97CC55EF2F2EAF926D79D10442613"
+  },
+  {
+    "path": "Common/NaturalSort.h",
+    "baseline_sha256": "46BBFEB89E08027F5E2A07689547B5765E7DE9A0C60523A7FD314C13C13BAE52"
+  }
+]

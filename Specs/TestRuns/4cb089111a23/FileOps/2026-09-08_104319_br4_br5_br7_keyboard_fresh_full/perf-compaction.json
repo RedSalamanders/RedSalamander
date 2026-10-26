@@ -1,0 +1,25 @@
+{
+  "streams": [
+    {
+      "originalFile": "runs\\20260908T104319Z-97448-ff25c4b1b0d545fe9b3654fc1edfb85f\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-08_135106\\perf\\perf_metrics.jsonl",
+      "originalBytes": 349163675,
+      "originalRows": 929952,
+      "originalSha256": "bbe70c5c6273cb457b88840b418c51fc596e9b461c57fdb3e893facc780978ae",
+      "selectedFile": "perf\\perf_metrics.jsonl",
+      "selectedRows": 246,
+      "selectedBytes": 107561,
+      "selectedSha256": "d3a01bc9272a8a3bcac7fae20439f45842ef2032d235970f072849e83d96dea6"
+    },
+    {
+      "originalFile": "runs\\20260908T104319Z-97448-ff25c4b1b0d545fe9b3654fc1edfb85f\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-08_132956\\perf\\perf_metrics.jsonl",
+      "originalBytes": 316772399,
+      "originalRows": 856579,
+      "originalSha256": "c37f46e56c501b1be5497748e7845ce969d9e873aba06cea3a7ac8099831b0cc",
+      "selectedFile": "commands\\perf\\perf_metrics.jsonl",
+      "selectedRows": 6,
+      "selectedBytes": 2426,
+      "selectedSha256": "0bb98cdb5821011bae468a6b06d4029cc9ee037efbb2ddb67bb7e2893f26567b"
+    }
+  ],
+  "selection": "All FileOps.SelfTest.* rows and the exact input_target/popup_close_focus witnesses. Original bytes and order preserved separately for each suite. This is correctness/latency evidence, not a general throughput comparison."
+}

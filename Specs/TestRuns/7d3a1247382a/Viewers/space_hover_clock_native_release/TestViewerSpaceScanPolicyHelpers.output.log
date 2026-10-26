@@ -1,0 +1,26 @@
+[PASS] ViewerSpace helper fixture creates a provider buffer
+[PASS] ViewerSpace helper fixture exposes provider metadata
+[PASS] ViewerSpace provider contract accepts a bounded aligned buffer
+[PASS] ViewerSpace provider parser accepts the first aligned record
+[PASS] ViewerSpace provider parser reaches the exact terminal record
+[PASS] ViewerSpace provider parser reconciles the terminal record extent with used bytes
+[PASS] ViewerSpace provider contract rejects used bytes beyond allocation
+[PASS] ViewerSpace provider contract rejects excessive advertised counts
+[PASS] ViewerSpace provider contract rejects excessive advertised allocation
+[PASS] ViewerSpace child-name policy rejects path injection, cycles, and embedded NULs
+[PASS] ViewerSpace accounting saturates instead of wrapping
+[PASS] ViewerSpace child arena covers geometric live blocks plus every predecessor block at the child-reference ceiling
+[PASS] ViewerSpace provider parser rejects a misaligned record base
+ViewerPETests passed.
+[PASS] TestViewerSpaceScanPolicyHelpers harness path resolves
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process launches
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process resumes
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process exits before timeout
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness process reports an exit code
+[PASS] TestViewerSpaceScanPolicyHelpers fresh harness run passes
+[PASS] TestViewerSpaceScanPolicyHelpers owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

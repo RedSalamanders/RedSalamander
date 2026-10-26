@@ -1,0 +1,1825 @@
+[START] Grid
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] Grid
+[START] Theme
+[DONE] Theme
+[START] Control
+[DONE] Control
+[START] Menu
+  [START] TestFolderViewIncrementalSearchKeepsContainsHighlightButUsesPrefixFocus
+  [DONE] TestFolderViewIncrementalSearchKeepsContainsHighlightButUsesPrefixFocus
+  [START] TestFolderViewInactiveVisualStateDimsNormalTextAndIcons
+  [DONE] TestFolderViewInactiveVisualStateDimsNormalTextAndIcons
+  [START] TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout
+  [DONE] TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout
+  [START] TestPointerInputEventMouseMoveUsesDeliveredPoint
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestPointerInputEventMouseMoveUsesDeliveredPoint
+  [START] TestPointerInputEventButtonUsesDeliveredPointAndFlags
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestPointerInputEventButtonUsesDeliveredPointAndFlags
+  [START] TestPointerInputEventWheelUsesDeliveredScreenPoint
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestPointerInputEventWheelUsesDeliveredScreenPoint
+  [START] TestPointerInputEventHasNoLiveCursorState
+  [DONE] TestPointerInputEventHasNoLiveCursorState
+  [START] TestPointerInputOriginAbstractionIsRemoved
+  [DONE] TestPointerInputOriginAbstractionIsRemoved
+  [START] TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate
+  [DONE] TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate
+  [START] TestMenuWindowClassRegistrationCachesOnlySuccess
+  [DONE] TestMenuWindowClassRegistrationCachesOnlySuccess
+  [START] TestMenuPopupWindowRegionTransfersOwnershipOnlyAfterSuccess
+  [DONE] TestMenuPopupWindowRegionTransfersOwnershipOnlyAfterSuccess
+  [START] TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting
+  [DONE] TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting
+  [START] TestContextMenuDebugStateProbeBoundsWedgedWindowThread
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestContextMenuDebugStateProbeBoundsWedgedWindowThread
+  [START] TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen
+  [START] TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets
+  [START] TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive
+  [START] TestMenuGraphicalSliderSupportsClickDragAndAnimation
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuGraphicalSliderSupportsClickDragAndAnimation
+  [START] TestMenuMnemonicHonorsExplicitAmpersandLabels
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuMnemonicHonorsExplicitAmpersandLabels
+  [START] TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface
+  [START] TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands
+  [DONE] TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands
+  [START] TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease
+  [START] TestSplitButtonContextMenuSentMouseMessagesHoverAndInvokeImmediately
+SKIPPED: DxUi menu popup requires an interactive desktop for split-button invoke routing
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestSplitButtonContextMenuSentMouseMessagesHoverAndInvokeImmediately
+  [START] TestSplitButtonContextMenuOwnerMessageFloodDoesNotStarvePointerInput
+SKIPPED: DxUi menu popup requires an interactive desktop for owner-message-flood routing
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestSplitButtonContextMenuOwnerMessageFloodDoesNotStarvePointerInput
+  [START] TestMenuKeyboardNavigationSkipsInfoRows
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardNavigationSkipsInfoRows
+  [START] TestMenuKeyboardRightArrowMatchesWindowsMenuLoop
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardRightArrowMatchesWindowsMenuLoop
+  [START] TestStationaryMouseDoesNotOverrideKeyboardRootSwitch
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestStationaryMouseDoesNotOverrideKeyboardRootSwitch
+  [START] TestMenuPointerOverSiblingRootSwitchesOpenMenu
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPointerOverSiblingRootSwitchesOpenMenu
+  [START] TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch
+  [START] TestMenuOwnerMouseMoveRoutesRootSwitchImmediately
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuOwnerMouseMoveRoutesRootSwitchImmediately
+  [START] TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup
+  [START] TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar
+  [START] TestMenuRootSwitchUsesDeliveredOwnerMouseMoveAfterPopupSwitch
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuRootSwitchUsesDeliveredOwnerMouseMoveAfterPopupSwitch
+  [START] TestMenuRootSwitchDoesNotPollCursorWhileIdle
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuRootSwitchDoesNotPollCursorWhileIdle
+  [START] TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay
+  [START] TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay
+  [START] TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay
+  [START] TestMenuKeyboardTabExitsMenuLoop
+SKIPPED: DxUi menu popup requires an interactive desktop for native menu-bar focus dismissal
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardTabExitsMenuLoop
+  [START] TestMenuKeyboardF10ExitsMenuLoop
+SKIPPED: DxUi menu popup requires an interactive desktop for native menu-bar focus dismissal
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardF10ExitsMenuLoop
+  [START] TestMenuKeyboardAltExitsMenuLoop
+SKIPPED: DxUi menu popup requires an interactive desktop for native menu-bar focus dismissal
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardAltExitsMenuLoop
+  [START] TestMenuKeyboardLeftArrowMatchesWindowsMenuLoop
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuKeyboardLeftArrowMatchesWindowsMenuLoop
+  [START] TestNativeMenuBarRestoresFocusAfterMenuDismiss
+SKIPPED: DxUi menu popup requires an interactive desktop for native menu-bar focus restoration
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeMenuBarRestoresFocusAfterMenuDismiss
+  [START] TestNativeMenuBarNestedPopupCanDestroyHostSafely
+SKIPPED: DxUi native menu destruction proof requires an interactive desktop
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeMenuBarNestedPopupCanDestroyHostSafely
+  [START] TestMenuInfoRowsDoNotDismissOnClick
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuInfoRowsDoNotDismissOnClick
+  [START] TestMenuPopupPositionClampsAcrossDpiMatrix
+  [DONE] TestMenuPopupPositionClampsAcrossDpiMatrix
+  [START] TestMenuPopupPositionSupportsRightAlignedRootAnchors
+  [DONE] TestMenuPopupPositionSupportsRightAlignedRootAnchors
+  [START] TestMenuPopupPositionSupportsAboveRightAlignedRootAnchors
+  [DONE] TestMenuPopupPositionSupportsAboveRightAlignedRootAnchors
+  [START] TestMenuInfoRowsUseMeasuredValueColumnWidth
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuInfoRowsUseMeasuredValueColumnWidth
+  [START] TestMenuStandardRowsDeriveAndAlignShortcutColumnFromTabbedText
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuStandardRowsDeriveAndAlignShortcutColumnFromTabbedText
+  [START] TestMenuShortcutRowsReserveChevronLaneWhenAnySubmenuExists
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuShortcutRowsReserveChevronLaneWhenAnySubmenuExists
+  [START] TestMenuBitmapIconsReachPopupLayout
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuBitmapIconsReachPopupLayout
+  [START] TestMenuPopupMaterialsProduceDistinctCaptures
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupMaterialsProduceDistinctCaptures
+  [START] TestMenuRainbowHoverUsesSeededHighlightContrast
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuRainbowHoverUsesSeededHighlightContrast
+  [START] TestMenuHoverContrastAppliesToGlyphsAcrossThemes
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuHoverContrastAppliesToGlyphsAcrossThemes
+  [START] TestMenuRainbowCheckedItemUsesAccentIndicator
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuRainbowCheckedItemUsesAccentIndicator
+  [START] TestMenuCheckedRowsDoNotPaintSecondFullRowSelection
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuCheckedRowsDoNotPaintSecondFullRowSelection
+  [START] TestMenuCheckedRowsDoNotPaintLeadingCheckedBox
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuCheckedRowsDoNotPaintLeadingCheckedBox
+  [START] TestMenuPopupCompositionHostUsesTransparentShadowMargins
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupCompositionHostUsesTransparentShadowMargins
+  [START] TestMenuPopupWindowClassDoesNotUseNativeDropShadow
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupWindowClassDoesNotUseNativeDropShadow
+  [START] TestMenuPopupSubmenuFlipsLeftNearRightEdge
+  [DONE] TestMenuPopupSubmenuFlipsLeftNearRightEdge
+  [START] TestMenuPopupAcrylicLightVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupAcrylicLightVisualBaseline
+  [START] TestMenuPopupKeepsSystemBackdropDisabledForAppRenderedMaterials
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuPopupKeepsSystemBackdropDisabledForAppRenderedMaterials
+  [START] TestMenuAcrylicBackdropScenarioEmitsMetrics
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMenuAcrylicBackdropScenarioEmitsMetrics
+  [START] TestSplitButtonContextMenuSentMouseMessagesHoverAndOutsideDismiss
+SKIPPED: DxUi menu popup requires an interactive desktop for split-button outside-dismiss routing
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestSplitButtonContextMenuSentMouseMessagesHoverAndOutsideDismiss
+  [START] TestContextMenuPopupRelayoutsOnDpiChanged
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestContextMenuPopupRelayoutsOnDpiChanged
+[DONE] Menu
+[START] NewControls
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] NewControls
+[START] TextField
+  [START] TestTextFieldHoverStyleUsesSharedOverlayChrome
+  [DONE] TestTextFieldHoverStyleUsesSharedOverlayChrome
+  [START] TestTextFieldHighContrastFocusStaysVisibleWithoutKeyboardFocus
+  [DONE] TestTextFieldHighContrastFocusStaysVisibleWithoutKeyboardFocus
+  [START] TestTextFieldHighContrastDisabledBorderStaysVisible
+  [DONE] TestTextFieldHighContrastDisabledBorderStaysVisible
+  [START] TestTextFieldCaretOverrideLeavesFocusBorderUnchanged
+  [DONE] TestTextFieldCaretOverrideLeavesFocusBorderUnchanged
+  [START] TestTextInputCaretRectsTolerateSubDipTextViewport
+  [DONE] TestTextInputCaretRectsTolerateSubDipTextViewport
+  [START] TestTextFieldUsesViewerDerivedInputChrome
+  [DONE] TestTextFieldUsesViewerDerivedInputChrome
+  [START] TestWindowHostSpaceAndReturnToggleFocusedNonEditableComboWithoutDefaultButtonFallback
+  [DONE] TestWindowHostSpaceAndReturnToggleFocusedNonEditableComboWithoutDefaultButtonFallback
+  [START] TestWindowHostReturnStaysOnFocusedEditableComboWithoutDefaultButtonFallback
+  [DONE] TestWindowHostReturnStaysOnFocusedEditableComboWithoutDefaultButtonFallback
+  [START] TestEditableComboBoxDoesNotAutoSelectFirstHistoryEntry
+  [DONE] TestEditableComboBoxDoesNotAutoSelectFirstHistoryEntry
+  [START] TestEditableComboBoxTypingAndSubmit
+  [DONE] TestEditableComboBoxTypingAndSubmit
+  [START] TestEditableComboBoxThirdClickAfterWordSelectionSelectsAll
+  [DONE] TestEditableComboBoxThirdClickAfterWordSelectionSelectsAll
+  [START] TestTextFieldThirdClickAfterWordSelectionSelectsAll
+  [DONE] TestTextFieldThirdClickAfterWordSelectionSelectsAll
+  [START] TestEditableComboBoxDropDownSelectionSyncsText
+  [DONE] TestEditableComboBoxDropDownSelectionSyncsText
+  [START] TestEditableComboBoxPopupFiltersByPrefix
+  [DONE] TestEditableComboBoxPopupFiltersByPrefix
+  [START] TestEditableComboBoxCanAutoOpenSuggestionsOnTyping
+  [DONE] TestEditableComboBoxCanAutoOpenSuggestionsOnTyping
+  [START] TestEditableComboBoxKeyboardNavigationUsesFilteredPopupOrder
+  [DONE] TestEditableComboBoxKeyboardNavigationUsesFilteredPopupOrder
+  [START] TestEditableComboBoxNoMatchPopupKeepsTypedText
+  [DONE] TestEditableComboBoxNoMatchPopupKeepsTypedText
+  [START] TestTextFieldCopyWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestTextFieldCopyWithoutSelectionLeavesClipboardUnchanged
+  [START] TestTextFieldCtrlInsertCopiesSelection
+  [DONE] TestTextFieldCtrlInsertCopiesSelection
+  [START] TestTextFieldShiftInsertPastesClipboard
+  [DONE] TestTextFieldShiftInsertPastesClipboard
+  [START] TestTextFieldCtrlVPasteStripsSingleLineControlCharacters
+  [DONE] TestTextFieldCtrlVPasteStripsSingleLineControlCharacters
+  [START] TestEditableComboCopyWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestEditableComboCopyWithoutSelectionLeavesClipboardUnchanged
+  [START] TestEditableComboShiftInsertPastesClipboard
+  [DONE] TestEditableComboShiftInsertPastesClipboard
+  [START] TestEditableComboShiftInsertStripsSingleLineControlCharacters
+  [DONE] TestEditableComboShiftInsertStripsSingleLineControlCharacters
+  [START] TestTextFieldCtrlBackspaceDeletesPreviousWord
+  [DONE] TestTextFieldCtrlBackspaceDeletesPreviousWord
+  [START] TestTextFieldCtrlWordNavigationMovesCaretByWord
+  [DONE] TestTextFieldCtrlWordNavigationMovesCaretByWord
+  [START] TestTextFieldCtrlDeleteDeletesNextWord
+  [DONE] TestTextFieldCtrlDeleteDeletesNextWord
+  [START] TestTextFieldClickPlacesCaretNearPointer
+  [DONE] TestTextFieldClickPlacesCaretNearPointer
+  [START] TestTextFieldShiftArrowSelectionReplacesSelectedText
+  [DONE] TestTextFieldShiftArrowSelectionReplacesSelectedText
+  [START] TestTextFieldCtrlASelectionReplacesAllText
+  [DONE] TestTextFieldCtrlASelectionReplacesAllText
+  [START] TestTextFieldDoubleClickSelectsWordThroughHostMessage
+  [DONE] TestTextFieldDoubleClickSelectsWordThroughHostMessage
+  [START] TestTextFieldMouseDragSelectionReplacesDraggedRange
+  [DONE] TestTextFieldMouseDragSelectionReplacesDraggedRange
+  [START] TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint
+  [DONE] TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint
+  [START] TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint
+  [DONE] TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint
+  [START] TestTextFieldUndoAfterSurrogatePairInsertionRemovesWholeCodePoint
+  [DONE] TestTextFieldUndoAfterSurrogatePairInsertionRemovesWholeCodePoint
+  [START] TestTextFieldUndoCoalescesTypingRun
+  [DONE] TestTextFieldUndoCoalescesTypingRun
+  [START] TestTextFieldUndoSplitsTypingRunsAfterCaretMove
+  [DONE] TestTextFieldUndoSplitsTypingRunsAfterCaretMove
+  [START] TestTextFieldUndoCoalescesBackspaceRun
+  [DONE] TestTextFieldUndoCoalescesBackspaceRun
+  [START] TestTextFieldUndoCoalescesDeleteRun
+  [DONE] TestTextFieldUndoCoalescesDeleteRun
+  [START] TestTextFieldCoalescedDirectEditsCaptureHistoryOnlyOnce
+  [DONE] TestTextFieldCoalescedDirectEditsCaptureHistoryOnlyOnce
+  [START] TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement
+  [DONE] TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement
+  [START] TestTextFieldEmojiZwJDeleteDeletesWholeTextElement
+  [DONE] TestTextFieldEmojiZwJDeleteDeletesWholeTextElement
+  [START] TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement
+  [DONE] TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement
+  [START] TestTextFieldRegionalIndicatorFlagDeleteDeletesWholeTextElement
+  [DONE] TestTextFieldRegionalIndicatorFlagDeleteDeletesWholeTextElement
+  [START] TestTextFieldEmojiSuffixBackspaceAndDeleteDeletesWholeTextElement
+  [DONE] TestTextFieldEmojiSuffixBackspaceAndDeleteDeletesWholeTextElement
+  [START] TestTextFieldEmojiShiftArrowSelectionExpandsByWholeTextElement
+  [DONE] TestTextFieldEmojiShiftArrowSelectionExpandsByWholeTextElement
+  [START] TestEditableComboBoxCtrlBackspaceDeletesPreviousWord
+  [DONE] TestEditableComboBoxCtrlBackspaceDeletesPreviousWord
+  [START] TestEditableComboBoxShiftArrowSelectionReplacesSelectedText
+  [DONE] TestEditableComboBoxShiftArrowSelectionReplacesSelectedText
+  [START] TestEditableComboBoxCtrlASelectionReplacesAllText
+  [DONE] TestEditableComboBoxCtrlASelectionReplacesAllText
+  [START] TestEditableComboBoxCtrlWordNavigationMovesCaretByWord
+  [DONE] TestEditableComboBoxCtrlWordNavigationMovesCaretByWord
+  [START] TestEditableComboBoxCtrlDeleteDeletesNextWord
+  [DONE] TestEditableComboBoxCtrlDeleteDeletesNextWord
+  [START] TestEditableComboBoxDoubleClickSelectsWord
+  [DONE] TestEditableComboBoxDoubleClickSelectsWord
+  [START] TestEditableComboBoxMouseDragSelectionReplacesDraggedRange
+  [DONE] TestEditableComboBoxMouseDragSelectionReplacesDraggedRange
+  [START] TestEditableComboBoxSurrogatePairBackspaceDeletesWholeCodePoint
+  [DONE] TestEditableComboBoxSurrogatePairBackspaceDeletesWholeCodePoint
+  [START] TestEditableComboBoxSurrogatePairDeleteDeletesWholeCodePoint
+  [DONE] TestEditableComboBoxSurrogatePairDeleteDeletesWholeCodePoint
+  [START] TestTextFieldSubmit
+  [DONE] TestTextFieldSubmit
+  [START] TestSingleLineTextFieldTabDoesNotInsertCharacter
+  [DONE] TestSingleLineTextFieldTabDoesNotInsertCharacter
+  [START] TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy
+  [DONE] TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy
+  [START] TestMaskedTextFieldExactMaskUsesTextElementCount
+  [DONE] TestMaskedTextFieldExactMaskUsesTextElementCount
+  [START] TestTextFieldDoesNotExposeLiveSecureClearTeardownApi
+  [DONE] TestTextFieldDoesNotExposeLiveSecureClearTeardownApi
+  [START] TestTextFieldDestructorOwnsSecureStorageWipe
+  [DONE] TestTextFieldDestructorOwnsSecureStorageWipe
+  [START] TestSingleLineSelectionPaintReusesOneTextLayout
+  [DONE] TestSingleLineSelectionPaintReusesOneTextLayout
+  [START] TestSingleLineTextClippedReusesOneTextLayout
+  [DONE] TestSingleLineTextClippedReusesOneTextLayout
+  [START] TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame
+  [DONE] TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame
+  [START] TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths
+  [DONE] TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths
+  [START] TestTextFieldMaskedDotCountStaysBounded
+  [DONE] TestTextFieldMaskedDotCountStaysBounded
+  [START] TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification
+  [START] TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements
+  [START] TestTextFieldCompactDensityShrinksDefaultVerticalPadding
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldCompactDensityShrinksDefaultVerticalPadding
+  [START] TestTextFieldLongSelectionPaintStaysInsideTextViewport
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldLongSelectionPaintStaysInsideTextViewport
+  [START] TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons
+  [START] TestTextFieldBidiSelectionPaintUsesDirectWriteRangeBounds
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldBidiSelectionPaintUsesDirectWriteRangeBounds
+  [START] TestTextFieldSelectedEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestTextFieldSelectedEmojiUsesColorFontRendering
+  [START] TestNativeTextFieldUnselectedEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeTextFieldUnselectedEmojiUsesColorFontRendering
+  [START] TestNativeTextFieldSelectedEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeTextFieldSelectedEmojiUsesColorFontRendering
+  [START] TestNativeMultilineTextFieldEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeMultilineTextFieldEmojiUsesColorFontRendering
+  [START] TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering
+  [START] TestNativeMaskedTextFieldEmojiSuppressesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeMaskedTextFieldEmojiSuppressesColorFontRendering
+  [START] TestTextFieldClearButtonClickClearsTextWhenFocused
+  [DONE] TestTextFieldClearButtonClickClearsTextWhenFocused
+  [START] TestTextFieldClearButtonNotVisibleWhenReadOnly
+  [DONE] TestTextFieldClearButtonNotVisibleWhenReadOnly
+[DONE] TextField
+[START] NativeTextInput
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] NativeTextInput
+[START] ComboBox
+  [START] TestComboRightClickInvokesContextMenuWithoutOpeningPopup
+  [DONE] TestComboRightClickInvokesContextMenuWithoutOpeningPopup
+  [START] TestComboBoxClosesOnFocusLoss
+  [DONE] TestComboBoxClosesOnFocusLoss
+  [START] TestComboBoxSecondClickTogglesPopupClosed
+  [DONE] TestComboBoxSecondClickTogglesPopupClosed
+  [START] TestAttachedComboBoxSentMouseHoverAndOutsideDismiss
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxSentMouseHoverAndOutsideDismiss
+  [START] TestComboBoxPopupOverlayBlocksUnderlyingHover
+  [DONE] TestComboBoxPopupOverlayBlocksUnderlyingHover
+  [START] TestComboBoxPopupOverlayBlocksUnderlyingClick
+  [DONE] TestComboBoxPopupOverlayBlocksUnderlyingClick
+  [START] TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates
+  [DONE] TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates
+  [START] TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates
+  [START] TestAttachedComboBoxPopupMouseLeaveRestoresKeyboardHighlightedItem
+  [DONE] TestAttachedComboBoxPopupMouseLeaveRestoresKeyboardHighlightedItem
+  [START] TestComboBoxPopupFlipsAboveWhenBelowSpaceIsInsufficient
+  [DONE] TestComboBoxPopupFlipsAboveWhenBelowSpaceIsInsufficient
+  [START] TestAttachedComboBoxFlippedPopupItemRectsStayInsidePopupBounds
+  [DONE] TestAttachedComboBoxFlippedPopupItemRectsStayInsidePopupBounds
+  [START] TestComboBoxPageDownUsesClampedVisiblePopupRows
+  [DONE] TestComboBoxPageDownUsesClampedVisiblePopupRows
+  [START] TestComboBoxPopupWidensForLongVisibleEntries
+  [DONE] TestComboBoxPopupWidensForLongVisibleEntries
+  [START] TestComboBoxPopupWidthRemainsStableAcrossPopupScroll
+  [DONE] TestComboBoxPopupWidthRemainsStableAcrossPopupScroll
+  [START] TestComboBoxPopupScrollbarPagesLongLists
+  [DONE] TestComboBoxPopupScrollbarPagesLongLists
+  [START] TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost
+  [DONE] TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost
+  [START] TestComboBoxPopupCapsVisibleItemsAndScrolls
+  [DONE] TestComboBoxPopupCapsVisibleItemsAndScrolls
+  [START] TestComboBoxTypeaheadSelectsMatchingItem
+  [DONE] TestComboBoxTypeaheadSelectsMatchingItem
+  [START] TestComboBoxEightItemsAllFitInDefaultPopup
+  [DONE] TestComboBoxEightItemsAllFitInDefaultPopup
+  [START] TestComboBoxSetMaxVisibleItemsAllowsLargerPopup
+  [DONE] TestComboBoxSetMaxVisibleItemsAllowsLargerPopup
+  [START] TestComboBoxCompactEditableTextRectPreservesInsetAndWidth
+  [DONE] TestComboBoxCompactEditableTextRectPreservesInsetAndWidth
+  [START] TestNativeEditableComboBoxEmojiUsesColorFontRendering
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestNativeEditableComboBoxEmojiUsesColorFontRendering
+  [START] TestEditableComboBoxPaintReusesSingleLineLayoutAndCaretOffset
+  [DONE] TestEditableComboBoxPaintReusesSingleLineLayoutAndCaretOffset
+  [START] TestPopupBackdropCaptureUsesSharedBoundedHelper
+  [DONE] TestPopupBackdropCaptureUsesSharedBoundedHelper
+  [START] TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth
+  [DONE] TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth
+  [START] TestComboBoxPopupUsesRoundSmallCornerRadius
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestComboBoxPopupUsesRoundSmallCornerRadius
+  [START] TestComboBoxRainbowPopupUsesAccentDerivedHighlight
+  [DONE] TestComboBoxRainbowPopupUsesAccentDerivedHighlight
+[DONE] ComboBox
+[START] WindowHost
+  [START] TestDxUiTypographyMapsFontRolesToSegoeUiVariableFamilies
+  [DONE] TestDxUiTypographyMapsFontRolesToSegoeUiVariableFamilies
+  [START] TestDxUiTypographyMeasurementCachesFormatsAndFamilyResolution
+  [DONE] TestDxUiTypographyMeasurementCachesFormatsAndFamilyResolution
+  [START] TestConnectionCredentialPromptDestroysWindowOnModalQuit
+  [DONE] TestConnectionCredentialPromptDestroysWindowOnModalQuit
+  [START] TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers
+  [DONE] TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers
+  [START] TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers
+  [DONE] TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers
+  [START] TestWindowHostPaintUsesWilBeginPaintRaii
+  [DONE] TestWindowHostPaintUsesWilBeginPaintRaii
+  [START] TestWindowHostKeyboardInputMarksFocusVisible
+  [DONE] TestWindowHostKeyboardInputMarksFocusVisible
+  [START] TestWindowHostPointerInputClearsKeyboardFocusVisible
+  [DONE] TestWindowHostPointerInputClearsKeyboardFocusVisible
+  [START] TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount
+  [START] TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed
+  [START] TestWindowHostDestructorDetachesBeforeMemberTeardown
+  [DONE] TestWindowHostDestructorDetachesBeforeMemberTeardown
+  [START] TestWindowHostEmitsFrameStageMetricsForCaptureRender
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostEmitsFrameStageMetricsForCaptureRender
+  [START] TestWindowHostBlocksLayoutMutationDuringRender
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostBlocksLayoutMutationDuringRender
+  [START] TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads
+  [DONE] TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads
+  [START] TestContiguousPostedPayloadCoalescingPreservesQueueOrderAndOperationKeys
+  [DONE] TestContiguousPostedPayloadCoalescingPreservesQueueOrderAndOperationKeys
+  [START] TestSharedTestSupportPreservesSandboxAndEnvironmentPolicies
+  [DONE] TestSharedTestSupportPreservesSandboxAndEnvironmentPolicies
+  [START] TestSharedTestSupportPumpsMessagesAndBoundsSnapshotPolling
+  [DONE] TestSharedTestSupportPumpsMessagesAndBoundsSnapshotPolling
+  [START] TestWindowHostMouseMoveUpdatesHoverTarget
+  [DONE] TestWindowHostMouseMoveUpdatesHoverTarget
+  [START] TestWindowHostMouseLeaveOverForeignPopupClearsHover
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostMouseLeaveOverForeignPopupClearsHover
+  [START] TestWindowHostMouseLeaveWithForeignCaptureClearsHover
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostMouseLeaveWithForeignCaptureClearsHover
+  [START] TestWindowHostTabTraversal
+  [DONE] TestWindowHostTabTraversal
+  [START] TestWindowHostShiftTabTraversal
+  [DONE] TestWindowHostShiftTabTraversal
+  [START] TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal
+  [DONE] TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal
+  [START] TestWindowHostReturnInvokesDefaultButtonWhenFocusedControlDoesNotOwnEnter
+  [DONE] TestWindowHostReturnInvokesDefaultButtonWhenFocusedControlDoesNotOwnEnter
+  [START] TestWindowHostReturnInvokesDefaultButtonWhenNoControlIsFocused
+  [DONE] TestWindowHostReturnInvokesDefaultButtonWhenNoControlIsFocused
+  [START] TestWindowHostReturnDoesNotInvokeDefaultButtonWhenFocusedControlOwnsEnter
+  [DONE] TestWindowHostReturnDoesNotInvokeDefaultButtonWhenFocusedControlOwnsEnter
+  [START] TestButtonKeyboardActivationCanReplaceRootSafely
+  [DONE] TestButtonKeyboardActivationCanReplaceRootSafely
+  [START] TestWindowHostSpaceAndReturnInvokeFocusedButtonWithoutDefaultButtonFallback
+  [DONE] TestWindowHostSpaceAndReturnInvokeFocusedButtonWithoutDefaultButtonFallback
+  [START] TestWindowHostDpiChangedIsHandled
+  [DONE] TestWindowHostDpiChangedIsHandled
+  [START] TestWindowHostDpiChangedInvalidatesMultilineCachesAndResizesAttachedWindow
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostDpiChangedInvalidatesMultilineCachesAndResizesAttachedWindow
+  [START] TestWindowHostDpiChangedRecreatesTargetBitmapWhenSizeIsUnchanged
+  [DONE] TestWindowHostDpiChangedRecreatesTargetBitmapWhenSizeIsUnchanged
+  [START] TestWindowHostAttachedWindowsRenderAcrossUiThreads
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostAttachedWindowsRenderAcrossUiThreads
+  [START] TestWindowHostEscapeInvokesCancelButton
+  [DONE] TestWindowHostEscapeInvokesCancelButton
+  [START] TestWindowHostEscapeClosesComboPopupBeforeCancelButton
+  [DONE] TestWindowHostEscapeClosesComboPopupBeforeCancelButton
+  [START] TestWindowHostMenuKeyInvokesFocusedButtonContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedButtonContextMenu
+  [START] TestWindowHostShiftF10InvokesFocusedToggleContextMenu
+  [DONE] TestWindowHostShiftF10InvokesFocusedToggleContextMenu
+  [START] TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu
+  [START] TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback
+  [DONE] TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback
+  [START] TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton
+  [DONE] TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton
+  [START] TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls
+  [DONE] TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls
+  [START] TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls
+  [DONE] TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls
+  [START] TestWindowHostMenuKeyInvokesFocusedTreeContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedTreeContextMenu
+  [START] TestWindowHostShiftF10InvokesFocusedTreeContextMenu
+  [DONE] TestWindowHostShiftF10InvokesFocusedTreeContextMenu
+  [START] TestWindowHostMenuKeyInvokesFocusedGridContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedGridContextMenu
+  [START] TestWindowHostShiftF10InvokesFocusedGridContextMenu
+  [DONE] TestWindowHostShiftF10InvokesFocusedGridContextMenu
+  [START] TestWindowHostMenuKeyInvokesFocusedTextFieldContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedTextFieldContextMenu
+  [START] TestWindowHostMenuKeyInvokesFocusedComboContextMenu
+  [DONE] TestWindowHostMenuKeyInvokesFocusedComboContextMenu
+  [START] TestWindowHostSetRootClearsDestroyedTreeInteractionState
+  [DONE] TestWindowHostSetRootClearsDestroyedTreeInteractionState
+  [START] TestWindowHostDetachDeactivatesSecureTextInputBeforeDestroyingRoot
+  [DONE] TestWindowHostDetachDeactivatesSecureTextInputBeforeDestroyingRoot
+  [START] TestWindowHostClearChildrenPrunesDestroyedTreeInteractionState
+  [DONE] TestWindowHostClearChildrenPrunesDestroyedTreeInteractionState
+  [START] TestWindowHostKeyDownCallbackDisablingFocusPrunesBeforePostDispatchSync
+  [DONE] TestWindowHostKeyDownCallbackDisablingFocusPrunesBeforePostDispatchSync
+  [START] TestWindowHostCharCallbackDisablingFocusPrunesBeforePostDispatchSync
+  [DONE] TestWindowHostCharCallbackDisablingFocusPrunesBeforePostDispatchSync
+  [START] TestWindowHostFocusLossCallbackRevalidatesRequestedFocusTarget
+  [DONE] TestWindowHostFocusLossCallbackRevalidatesRequestedFocusTarget
+  [START] TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot
+  [DONE] TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot
+  [START] TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot
+  [DONE] TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot
+  [START] TestWindowHostCaptureLossClearsPressedButtonState
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostCaptureLossClearsPressedButtonState
+  [START] TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture
+  [START] TestWindowHostPointerDispatchDoesNotReuseTargetAfterRootReplacement
+  [DONE] TestWindowHostPointerDispatchDoesNotReuseTargetAfterRootReplacement
+  [START] TestWindowHostHoverEnterDoesNotReuseTargetAfterRootReplacement
+  [DONE] TestWindowHostHoverEnterDoesNotReuseTargetAfterRootReplacement
+  [START] TestWindowHostDeviceLossSchedulesRepaintAndForcesFullPresent
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostDeviceLossSchedulesRepaintAndForcesFullPresent
+  [START] TestWindowHostRenderSurvivesForcedNullSolidBrushes
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostRenderSurvivesForcedNullSolidBrushes
+  [START] TestWindowHostSmokeOverlayRendersBelowRootOverlay
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostSmokeOverlayRendersBelowRootOverlay
+  [START] TestWindowHostOverlayHitTestingPrecedesContentHitTesting
+  [DONE] TestWindowHostOverlayHitTestingPrecedesContentHitTesting
+  [START] TestWindowHostEscapeClosesMouseOpenedComboPopupBeforeCancelButton
+  [DONE] TestWindowHostEscapeClosesMouseOpenedComboPopupBeforeCancelButton
+  [START] TestWindowHostTabTraversalIncludesComboBox
+  [DONE] TestWindowHostTabTraversalIncludesComboBox
+  [START] TestWindowHostTabTraversalStaysConsistentAcrossFieldComboTreeGridAndButtons
+  [DONE] TestWindowHostTabTraversalStaysConsistentAcrossFieldComboTreeGridAndButtons
+  [START] TestWindowHostGroupedListNavigationKeepsTreeTypeaheadAndGridSelectionVisible
+  [DONE] TestWindowHostGroupedListNavigationKeepsTreeTypeaheadAndGridSelectionVisible
+  [START] TestWindowHostAltDownOpensComboPopup
+  [DONE] TestWindowHostAltDownOpensComboPopup
+  [START] TestWindowHostAltUpClosesComboPopup
+  [DONE] TestWindowHostAltUpClosesComboPopup
+  [START] TestWindowHostMnemonicActivatesButton
+  [DONE] TestWindowHostMnemonicActivatesButton
+  [START] TestWindowHostLabelMnemonicTargetsField
+  [DONE] TestWindowHostLabelMnemonicTargetsField
+  [START] TestWindowHostUnknownMnemonicRemainsUnhandled
+  [DONE] TestWindowHostUnknownMnemonicRemainsUnhandled
+  [START] TestWindowHostHiddenAnimationTickDropsSubscriptionUntilShown
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostHiddenAnimationTickDropsSubscriptionUntilShown
+  [START] TestWindowHostRestoreFromMinimizeRearmsSuspendedAnimation
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestWindowHostRestoreFromMinimizeRearmsSuspendedAnimation
+[DONE] WindowHost
+[START] Tree
+[DONE] Tree
+[START] MultilineText
+  [START] TestMultilineTextFieldCtrlASelectionReplacesAllText
+  [DONE] TestMultilineTextFieldCtrlASelectionReplacesAllText
+  [START] TestWrappedMultilineTextFieldCtrlASelectionReplacesAllText
+  [DONE] TestWrappedMultilineTextFieldCtrlASelectionReplacesAllText
+  [START] TestMultilineTextFieldSelectAllReplacesAllText
+  [DONE] TestMultilineTextFieldSelectAllReplacesAllText
+  [START] TestWrappedMultilineTextFieldSelectAllReplacesAllText
+  [DONE] TestWrappedMultilineTextFieldSelectAllReplacesAllText
+  [START] TestMultilineTextFieldBackspaceDeleteRemoveSelectedRange
+  [DONE] TestMultilineTextFieldBackspaceDeleteRemoveSelectedRange
+  [START] TestWrappedMultilineTextFieldBackspaceDeleteRemoveSelectedRange
+  [DONE] TestWrappedMultilineTextFieldBackspaceDeleteRemoveSelectedRange
+  [START] TestMultilineTextFieldBackspaceDeleteRemovesSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldBackspaceDeleteRemovesSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged
+  [DONE] TestMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged
+  [START] TestWrappedMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged
+  [DONE] TestWrappedMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged
+  [START] TestMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
+  [DONE] TestMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
+  [START] TestMultilineTextFieldBackspaceDeleteAtLogicalNewlineMergesLines
+  [DONE] TestMultilineTextFieldBackspaceDeleteAtLogicalNewlineMergesLines
+  [START] TestWrappedMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
+  [DONE] TestWrappedMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
+  [START] TestMultilineTextFieldCtrlInsertCopiesSelection
+  [DONE] TestMultilineTextFieldCtrlInsertCopiesSelection
+  [START] TestMultilineTextFieldCtrlCCopiesSelection
+  [DONE] TestMultilineTextFieldCtrlCCopiesSelection
+  [START] TestMultilineTextFieldCtrlInsertWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestMultilineTextFieldCtrlInsertWithoutSelectionLeavesClipboardUnchanged
+  [START] TestMultilineTextFieldCtrlCWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestMultilineTextFieldCtrlCWithoutSelectionLeavesClipboardUnchanged
+  [START] TestMultilineTextFieldCtrlXCutsSelection
+  [DONE] TestMultilineTextFieldCtrlXCutsSelection
+  [START] TestMultilineTextFieldCtrlInsertCopiesSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldCtrlInsertCopiesSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldCtrlCCopiesSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldCtrlCCopiesSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldCtrlXCutsSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldCtrlXCutsSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldCtrlXWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestMultilineTextFieldCtrlXWithoutSelectionLeavesClipboardUnchanged
+  [START] TestMultilineTextFieldShiftDeleteCutsSelection
+  [DONE] TestMultilineTextFieldShiftDeleteCutsSelection
+  [START] TestMultilineTextFieldShiftDeleteCutsSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldShiftDeleteCutsSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldShiftDeleteWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestMultilineTextFieldShiftDeleteWithoutSelectionLeavesClipboardUnchanged
+  [START] TestWrappedMultilineTextFieldCtrlInsertCopiesSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlInsertCopiesSelection
+  [START] TestWrappedMultilineTextFieldCtrlCCopiesSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlCCopiesSelection
+  [START] TestWrappedMultilineTextFieldCtrlInsertWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestWrappedMultilineTextFieldCtrlInsertWithoutSelectionLeavesClipboardUnchanged
+  [START] TestWrappedMultilineTextFieldCtrlCWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestWrappedMultilineTextFieldCtrlCWithoutSelectionLeavesClipboardUnchanged
+  [START] TestWrappedMultilineTextFieldCtrlXCutsSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlXCutsSelection
+  [START] TestWrappedMultilineTextFieldCtrlInsertCopiesPartialSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlInsertCopiesPartialSelection
+  [START] TestWrappedMultilineTextFieldCtrlCCopiesPartialSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlCCopiesPartialSelection
+  [START] TestWrappedMultilineTextFieldCtrlXCutsPartialSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlXCutsPartialSelection
+  [START] TestWrappedMultilineTextFieldCtrlXWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestWrappedMultilineTextFieldCtrlXWithoutSelectionLeavesClipboardUnchanged
+  [START] TestWrappedMultilineTextFieldShiftDeleteCutsSelection
+  [DONE] TestWrappedMultilineTextFieldShiftDeleteCutsSelection
+  [START] TestWrappedMultilineTextFieldShiftDeleteCutsPartialSelection
+  [DONE] TestWrappedMultilineTextFieldShiftDeleteCutsPartialSelection
+  [START] TestWrappedMultilineTextFieldShiftDeleteWithoutSelectionLeavesClipboardUnchanged
+  [DONE] TestWrappedMultilineTextFieldShiftDeleteWithoutSelectionLeavesClipboardUnchanged
+  [START] TestMultilineTextFieldShiftInsertPastesClipboard
+  [DONE] TestMultilineTextFieldShiftInsertPastesClipboard
+  [START] TestWrappedMultilineTextFieldShiftInsertPastesClipboard
+  [DONE] TestWrappedMultilineTextFieldShiftInsertPastesClipboard
+  [START] TestMultilineTextFieldCtrlVPastesClipboard
+  [DONE] TestMultilineTextFieldCtrlVPastesClipboard
+  [START] TestWrappedMultilineTextFieldCtrlVPastesClipboard
+  [DONE] TestWrappedMultilineTextFieldCtrlVPastesClipboard
+  [START] TestMultilineTextFieldShiftInsertReplacesPartialSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldShiftInsertReplacesPartialSelectionAcrossLogicalNewline
+  [START] TestMultilineTextFieldCtrlVReplacesPartialSelectionAcrossLogicalNewline
+  [DONE] TestMultilineTextFieldCtrlVReplacesPartialSelectionAcrossLogicalNewline
+  [START] TestWrappedMultilineTextFieldShiftInsertReplacesPartialSelection
+  [DONE] TestWrappedMultilineTextFieldShiftInsertReplacesPartialSelection
+  [START] TestWrappedMultilineTextFieldCtrlVReplacesPartialSelection
+  [DONE] TestWrappedMultilineTextFieldCtrlVReplacesPartialSelection
+  [START] TestMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion
+  [DONE] TestMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion
+  [START] TestWrappedMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion
+  [DONE] TestWrappedMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion
+  [START] TestMultilineTextFieldUndoRedoRestoresSelectAllReplacement
+  [DONE] TestMultilineTextFieldUndoRedoRestoresSelectAllReplacement
+  [START] TestWrappedMultilineTextFieldUndoRedoRestoresSelectAllReplacement
+  [DONE] TestWrappedMultilineTextFieldUndoRedoRestoresSelectAllReplacement
+  [START] TestMultilineTextFieldUndoRedoRestoresPartialSelectionReplacement
+  [DONE] TestMultilineTextFieldUndoRedoRestoresPartialSelectionReplacement
+  [START] TestWrappedMultilineTextFieldUndoRedoRestoresPartialSelectionReplacement
+  [DONE] TestWrappedMultilineTextFieldUndoRedoRestoresPartialSelectionReplacement
+  [START] TestMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchanged
+  [DONE] TestMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchanged
+  [START] TestWrappedMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchanged
+  [DONE] TestWrappedMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchanged
+  [START] TestMultilineTextFieldRedoClearsAfterNewEdit
+  [DONE] TestMultilineTextFieldRedoClearsAfterNewEdit
+  [START] TestWrappedMultilineTextFieldRedoClearsAfterNewEdit
+  [DONE] TestWrappedMultilineTextFieldRedoClearsAfterNewEdit
+  [START] TestMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret
+  [DONE] TestMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret
+  [START] TestMultilineTextFieldDragSelectionReplacesDraggedRange
+  [DONE] TestMultilineTextFieldDragSelectionReplacesDraggedRange
+  [START] TestMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange
+  [DONE] TestMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange
+  [START] TestMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange
+  [DONE] TestMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange
+  [START] TestMultilineTextFieldArrowKeysMoveCaretByCodeUnit
+  [DONE] TestMultilineTextFieldArrowKeysMoveCaretByCodeUnit
+  [START] TestMultilineTextFieldShiftArrowExtendsSelection
+  [DONE] TestMultilineTextFieldShiftArrowExtendsSelection
+  [START] TestMultilineTextFieldHomeEndUseLineBoundaries
+  [DONE] TestMultilineTextFieldHomeEndUseLineBoundaries
+  [START] TestMultilineTextFieldShiftHomeEndExtendSelection
+  [DONE] TestMultilineTextFieldShiftHomeEndExtendSelection
+  [START] TestMultilineTextFieldCtrlShiftHomeEndExtendSelection
+  [DONE] TestMultilineTextFieldCtrlShiftHomeEndExtendSelection
+  [START] TestMultilineTextFieldCtrlBackspaceDeletesPreviousWord
+  [DONE] TestMultilineTextFieldCtrlBackspaceDeletesPreviousWord
+  [START] TestMultilineTextFieldCtrlDeleteDeletesNextWord
+  [DONE] TestMultilineTextFieldCtrlDeleteDeletesNextWord
+  [START] TestMultilineTextFieldCtrlArrowMovesByWordBoundary
+  [DONE] TestMultilineTextFieldCtrlArrowMovesByWordBoundary
+  [START] TestMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord
+  [DONE] TestMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord
+  [START] TestMultilineTextFieldUpDownPreservePreferredColumn
+  [DONE] TestMultilineTextFieldUpDownPreservePreferredColumn
+  [START] TestMultilineTextFieldShiftUpDownExtendSelection
+  [DONE] TestMultilineTextFieldShiftUpDownExtendSelection
+  [START] TestMultilineTextFieldPageUpDownUseViewportLines
+  [DONE] TestMultilineTextFieldPageUpDownUseViewportLines
+  [START] TestWrappedMultilineTextFieldArrowKeysUseVisualLines
+  [DONE] TestWrappedMultilineTextFieldArrowKeysUseVisualLines
+  [START] TestWrappedMultilineTextFieldCtrlArrowUsesWordBoundaries
+  [DONE] TestWrappedMultilineTextFieldCtrlArrowUsesWordBoundaries
+  [START] TestWrappedMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord
+  [DONE] TestWrappedMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord
+  [START] TestWrappedMultilineTextFieldShiftArrowExtendsSelectionAndReplacesRange
+  [DONE] TestWrappedMultilineTextFieldShiftArrowExtendsSelectionAndReplacesRange
+  [START] TestWrappedMultilineTextFieldShiftHomeEndExtendSelectionAndReplaceRange
+  [DONE] TestWrappedMultilineTextFieldShiftHomeEndExtendSelectionAndReplaceRange
+  [START] TestWrappedMultilineTextFieldCtrlShiftHomeEndExtendSelectionAndReplaceRange
+  [DONE] TestWrappedMultilineTextFieldCtrlShiftHomeEndExtendSelectionAndReplaceRange
+  [START] TestWrappedMultilineTextFieldShiftUpDownExtendSelectionAndReplaceRange
+  [DONE] TestWrappedMultilineTextFieldShiftUpDownExtendSelectionAndReplaceRange
+  [START] TestWrappedMultilineTextFieldCtrlBackspaceDeleteUsesWordBoundaries
+  [DONE] TestWrappedMultilineTextFieldCtrlBackspaceDeleteUsesWordBoundaries
+  [START] TestWrappedMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret
+  [DONE] TestWrappedMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret
+  [START] TestWrappedMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange
+  [DONE] TestWrappedMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange
+  [START] TestWrappedMultilineTextFieldDragSelectionReplacesDraggedRange
+  [DONE] TestWrappedMultilineTextFieldDragSelectionReplacesDraggedRange
+  [START] TestWrappedMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange
+  [DONE] TestWrappedMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange
+  [START] TestWrappedMultilineTextFieldPageKeysUseVisualLines
+  [DONE] TestWrappedMultilineTextFieldPageKeysUseVisualLines
+  [START] TestWrappedMultilineTextFieldShiftPageDownExtendsSelectionAndReplacesRange
+  [DONE] TestWrappedMultilineTextFieldShiftPageDownExtendsSelectionAndReplacesRange
+  [START] TestWrappedMultilineTextFieldShiftPageUpExtendsSelectionAndReplacesRange
+  [DONE] TestWrappedMultilineTextFieldShiftPageUpExtendsSelectionAndReplacesRange
+  [START] TestWrappedMultilineTextFieldHomeEndUseVisualLineBoundaries
+  [DONE] TestWrappedMultilineTextFieldHomeEndUseVisualLineBoundaries
+  [START] TestWrappedMultilineTextFieldCtrlHomeEndUseDocumentBoundaries
+  [DONE] TestWrappedMultilineTextFieldCtrlHomeEndUseDocumentBoundaries
+  [START] TestMultilineTextFieldShiftPageDownExtendsSelection
+  [DONE] TestMultilineTextFieldShiftPageDownExtendsSelection
+  [START] TestMultilineTextFieldShiftPageUpExtendsSelection
+  [DONE] TestMultilineTextFieldShiftPageUpExtendsSelection
+  [START] TestMultilineTextFieldImportKeepsLaterCaretVisible
+  [DONE] TestMultilineTextFieldImportKeepsLaterCaretVisible
+  [START] TestMultilineTextFieldMouseWheelScrollsViewport
+  [DONE] TestMultilineTextFieldMouseWheelScrollsViewport
+  [START] TestMultilineTextFieldLargeWheelDeltaUsesFullMagnitude
+  [DONE] TestMultilineTextFieldLargeWheelDeltaUsesFullMagnitude
+  [START] TestMultilineTextFieldAccumulatesPartialWheelDelta
+  [DONE] TestMultilineTextFieldAccumulatesPartialWheelDelta
+  [START] TestWrappedMultilineTextFieldMouseWheelUsesLineMetrics
+  [DONE] TestWrappedMultilineTextFieldMouseWheelUsesLineMetrics
+  [START] TestWrappedMultilineTextFieldCtrlWordNavigationUsesWrappedBoundaries
+  [DONE] TestWrappedMultilineTextFieldCtrlWordNavigationUsesWrappedBoundaries
+  [START] TestWrappedMultilineTextFieldCtrlShiftWordSelectionUsesWrappedBoundaries
+  [DONE] TestWrappedMultilineTextFieldCtrlShiftWordSelectionUsesWrappedBoundaries
+  [START] TestMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection
+  [DONE] TestMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection
+  [START] TestMultilineTextFieldReturnReplacesSelectionWithNewline
+  [DONE] TestMultilineTextFieldReturnReplacesSelectionWithNewline
+  [START] TestWrappedMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection
+  [DONE] TestWrappedMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection
+  [START] TestWrappedMultilineTextFieldReturnReplacesSelectionWithNewline
+  [DONE] TestWrappedMultilineTextFieldReturnReplacesSelectionWithNewline
+  [START] TestMultilineTextFieldMenuKeyInvokesContextMenu
+  [DONE] TestMultilineTextFieldMenuKeyInvokesContextMenu
+  [START] TestWrappedMultilineTextFieldMenuKeyInvokesContextMenu
+  [DONE] TestWrappedMultilineTextFieldMenuKeyInvokesContextMenu
+  [START] TestMultilineTextFieldShiftF10InvokesContextMenu
+  [DONE] TestMultilineTextFieldShiftF10InvokesContextMenu
+  [START] TestWrappedMultilineTextFieldShiftF10InvokesContextMenu
+  [DONE] TestWrappedMultilineTextFieldShiftF10InvokesContextMenu
+  [START] TestMultilineTextFieldMixedDialogFlowKeepsReturnEscapeAndTabRoutingCorrect
+  [DONE] TestMultilineTextFieldMixedDialogFlowKeepsReturnEscapeAndTabRoutingCorrect
+  [START] TestWrappedMultilineTextFieldMixedDialogFlowKeepsReturnEscapeAndTabRoutingCorrect
+  [DONE] TestWrappedMultilineTextFieldMixedDialogFlowKeepsReturnEscapeAndTabRoutingCorrect
+[DONE] MultilineText
+[START] ReadOnly
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] ReadOnly
+[START] Tooltip
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] Tooltip
+[START] Rendering
+  [START] TestDxUiCoreControlsDarkVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiCoreControlsDarkVisualBaseline
+  [START] TestDxUiCoreControlsLightVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiCoreControlsLightVisualBaseline
+  [START] TestDxUiHighContrastVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiHighContrastVisualBaseline
+  [START] TestDxUiPopupAndBarsVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPopupAndBarsVisualBaseline
+  [START] TestDxUiPopupAndBarsAcrylicLightVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPopupAndBarsAcrylicLightVisualBaseline
+  [START] TestDxUiPageTransitionVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPageTransitionVisualBaseline
+  [START] TestDxUiAdvancedControlsVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiAdvancedControlsVisualBaseline
+  [START] TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame
+    [TRACE] rendering combo hover: begin
+    [TRACE] rendering combo hover: root attached
+    [TRACE] rendering combo hover: before ShowWindow
+    [TRACE] rendering combo hover: after ShowWindow
+    [TRACE] rendering combo hover: dispatching initial msg=799 hwnd=0000000000F21852 isWindow=1 class=RedSalamander.DxUiTests.AttachedHostWindow wp=1 lp=0
+    [TRACE] rendering combo hover: dispatched initial msg=799 hwnd=0000000000F21852
+    [TRACE] rendering combo hover: dispatching initial msg=15 hwnd=0000000000F21852 isWindow=1 class=RedSalamander.DxUiTests.AttachedHostWindow wp=0 lp=0
+    [TRACE] rendering combo hover: dispatched initial msg=15 hwnd=0000000000F21852
+    [TRACE] rendering combo hover: dispatching initial msg=49561 hwnd=0000000000F21852 isWindow=1 class=RedSalamander.DxUiTests.AttachedHostWindow wp=0 lp=0
+    [TRACE] rendering combo hover: dispatched initial msg=49561 hwnd=0000000000F21852
+    [TRACE] rendering combo hover: window shown
+    [TRACE] rendering combo hover: popup toggle handled
+    [TRACE] rendering combo hover: initial redraw complete
+    [TRACE] rendering combo hover: popup geometry ready
+    [TRACE] rendering combo hover: first hover complete
+    [TRACE] rendering combo hover: second-row hover complete
+    [TRACE] rendering combo hover: repeat hover complete
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame
+  [START] TestAttachedGridPaintHandlesDegenerateScrollbarTracks
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedGridPaintHandlesDegenerateScrollbarTracks
+  [START] TestGridIncludesBottomClippedTrailingRow
+  [DONE] TestGridIncludesBottomClippedTrailingRow
+  [START] TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeGridPaintReusesCellDataStringStorage
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridPaintReusesCellDataStringStorage
+  [START] TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader
+  [START] TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedLargeGroupedGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGroupedGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeCheckboxGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeCheckboxGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeGroupedGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGroupedGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedLargeCheckboxGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeCheckboxGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedComboBoxPopupScrollingStaysStable
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupScrollingStaysStable
+  [START] TestAttachedComboBoxPopupLongRunScrollingStaysStable
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupLongRunScrollingStaysStable
+  [START] TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain
+  [START] TestAttachedHostResizeDoesNotFlushD2DInWrongState
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostResizeDoesNotFlushD2DInWrongState
+  [START] TestAttachedHostRecoversAfterSimulatedDeviceLoss
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostRecoversAfterSimulatedDeviceLoss
+[DONE] Rendering
+[START] Animation
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] Animation
+[START] Accessibility
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] Accessibility
+All DxUi tests passed.

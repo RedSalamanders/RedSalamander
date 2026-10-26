@@ -1,0 +1,152 @@
+{
+  "runId": "20261014T142626Z-18816-41980d0c482e453ca765f130f1f4950c",
+  "receipt": "5452a238493e88f9073aab00dfc593eecd653c24f7779b581b5cdbfd649249a0",
+  "sourceSnapshotId": "07a5572cd5811cb583ac74b558e819358f14582fdee8c2dd9fb32551fe3e32b6",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-debug-20261014-04",
+  "nativeVerdict": "FAILED",
+  "runnerVerdict": "FAILED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, untouched and separate from selected failure.",
+  "note": "Actual open8/33/16MiB,16/33/32MiB,24/33/48MiB prefixes remain open after capture; ink0 arose from missing actual brush-color observation field, not a proven missing product string. Parallel first named file had valid early/late pixels but no admitted650ms finalization frame. Full cache is statically updated before real commit;1024-message harness batching can delay sampling. Calibrated late frame precedes commit; no single long paint block explains it. Preserve mixed timing limitations; final fixture bounds only these samplers to8 and logs phase/full/terminal transitions. Final counts/content and all other controls pass.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 93727,
+      "sha256": "0C7C4673962552B8CFA05A8C870D95DB5BC2E49726B56B76528822C80DE23417"
+    },
+    {
+      "path": "captures\\bridge-open-prefix-15.png",
+      "bytes": 78256,
+      "sha256": "3E60909C2AB0C7528ABB23F7985E7D9B00B6188333B6EF8E55C5026168BA05CF"
+    },
+    {
+      "path": "captures\\bridge-open-prefix-23.png",
+      "bytes": 83976,
+      "sha256": "8994AB3E96094D8C5F8AEFA4338F9783B726622185AF271FAEBA3224C7F22910"
+    },
+    {
+      "path": "captures\\bridge-open-prefix-7.png",
+      "bytes": 78590,
+      "sha256": "DF52580AD9E3650C3372ED8AAA5AE21D47DD98E58149C71A97C593D4DABC2E43"
+    },
+    {
+      "path": "captures\\bridge-parallel-counts.png",
+      "bytes": 47373,
+      "sha256": "9DF96C5960D66BCBFE2151E591B8D037C5F1FFD71C8CB1C86436E9ABBA400BAE"
+    },
+    {
+      "path": "captures\\bridge-parallel-early.png",
+      "bytes": 47373,
+      "sha256": "9DF96C5960D66BCBFE2151E591B8D037C5F1FFD71C8CB1C86436E9ABBA400BAE"
+    },
+    {
+      "path": "captures\\bridge-parallel-late.png",
+      "bytes": 80696,
+      "sha256": "4586478752B6485441CBCEFD1F651581D105C12A6F68A429F38A853C2B403933"
+    },
+    {
+      "path": "captures\\bridge-small-publishing.png",
+      "bytes": 60392,
+      "sha256": "FFF9C71A0721D241ED06F22AFFC5B6583659BE27B276B33BBD330D845CE972B3"
+    },
+    {
+      "path": "captures\\bridge-verify-counts.png",
+      "bytes": 70404,
+      "sha256": "0B83F567BD4CF596A70D795FF0A45F7FC72569430FA744A3A5EA73517A9ABCCC"
+    },
+    {
+      "path": "captures\\bridge-verify-early.png",
+      "bytes": 74938,
+      "sha256": "4B71F83FAE9A544B1F24BF851F49362E230290D96EF7946B88AE7CA9BE9AF1F3"
+    },
+    {
+      "path": "captures\\bridge-verify-late.png",
+      "bytes": 76848,
+      "sha256": "CDC0B0B7E5733BD3CBE98FE1A09B8867940C510970F705B710984CCD2F5F861F"
+    },
+    {
+      "path": "captures\\local-overwrite-counts.png",
+      "bytes": 43914,
+      "sha256": "98EB1255C005CBD11C8CF2D092AB6FBDA40CD4AC34159FD187998BF00EB0AEB3"
+    },
+    {
+      "path": "captures\\local-overwrite-early.png",
+      "bytes": 54623,
+      "sha256": "40725FD1A05C547AACFDCB72681A89A8601B5089802199AB13B1FEC45959FEEA"
+    },
+    {
+      "path": "captures\\local-overwrite-finalizing.png",
+      "bytes": 62234,
+      "sha256": "A5D7816383163D943BA801C2E74649400CE7925323B39F44A8AC0703F4B53572"
+    },
+    {
+      "path": "captures\\local-overwrite-late.png",
+      "bytes": 58062,
+      "sha256": "70B780C7055232CBD26093178C583087E2CFE4920B4BDCC67215D726027EDB80"
+    },
+    {
+      "path": "captures\\local-parallel-counts.png",
+      "bytes": 50977,
+      "sha256": "293DD7184E62B76663F69651FB9ABBA20A3675B4F6BE598D4124057841FC17D9"
+    },
+    {
+      "path": "captures\\local-parallel-early.png",
+      "bytes": 72783,
+      "sha256": "63DFB1CE29C0C9DE8557E5E18D5273C650E3D8D4EC0C70F210BDF42BC86DD780"
+    },
+    {
+      "path": "captures\\local-parallel-late.png",
+      "bytes": 75667,
+      "sha256": "D02D04AB500E0E367002BB2154A5FAA94C89877B4FB5471CAD0CEE000EBEE08F"
+    },
+    {
+      "path": "captures\\local-serial-counts.png",
+      "bytes": 38760,
+      "sha256": "C64C94DE321EDEA5428A92C50FA86E0E5FCF0D1424BE2ABFF63CA6804F77A985"
+    },
+    {
+      "path": "captures\\local-serial-early.png",
+      "bytes": 50198,
+      "sha256": "7A00DFF6D6500406F41B0C6ACB62E22FA597312BE8F80CB068B52BB74BDCB447"
+    },
+    {
+      "path": "captures\\local-serial-finalizing.png",
+      "bytes": 57943,
+      "sha256": "CCEDF2F7C1E7BBDF288467624B3B0925037D1DCE3CF153A351E53F5FD6B7CCD0"
+    },
+    {
+      "path": "captures\\local-serial-late.png",
+      "bytes": 53370,
+      "sha256": "895FA2FFA66F84C71CDA4882D46FD1EB4256D48B9FA3EBB3AA4A4BAB8207C818"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 105826,
+      "sha256": "9FAD64CC9C8503D129D904C90D01A43FCDB8A571451EBFF4110CA62E431739AD"
+    },
+    {
+      "path": "perf_metrics-002.jsonl",
+      "bytes": 644736,
+      "sha256": "8A51509E04CE7DAAA52224931155111D8A3E6E8D80629E3D1A21020E4BC0E982"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 1749887,
+      "sha256": "34C3070B14847EB02EFFFFCA33D412438E9D7332B74A9F3BBEF0C3782855E581"
+    },
+    {
+      "path": "results.json",
+      "bytes": 1146,
+      "sha256": "9EAA387EA41F8351E21CEB0345A2DEC79E9C888EBFC6DCA3F30CF06EAA37A5E0"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3910,
+      "sha256": "84793018630323C7668267AD43F0BE66D03A0F4BED4D11EFA1246A9F0E03F6DC"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 39022,
+      "sha256": "15A2B4A36C0BF00750D6EE36AE58E686A9EB0B2DB66D87128E68860668BB10CB"
+    }
+  ]
+}

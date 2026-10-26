@@ -1,0 +1,448 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-21T17:08:35.6572420Z",
+  "run_ended_utc": "2026-07-21T17:20:47.7234723Z",
+  "duration_ms": 732066,
+  "suite": "Full",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "D:\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run",
+  "test_root": "D:\\RedSalamander\\.build\\TestSandbox",
+  "run_id": "20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "__skip_in_product_selftests__",
+  "exit_code": 1,
+  "passed": 12,
+  "failed": 6,
+  "skipped": 0,
+  "total": 18,
+  "classifications": {
+    "passed": 12,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 5
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 13,
+    "test_root": "D:\\RedSalamander\\.build\\TestSandbox",
+    "run_id": "20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8",
+    "allowed_run_ids": [
+      "20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T103500Z-msdrive-merge-red",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104000Z-msdrive-merge-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104200Z-msdrive-merge-adversarial",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104400Z-msdrive-merge-adversarial-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T110300Z-s3-directory-probe-red",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T111000Z-s3-directory-probe-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T111500Z-s3-directory-probe-repeat5",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131000Z-msdrive-merge-release-check",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131302Z-msdrive-merge-sample-02",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131303Z-msdrive-merge-sample-03",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131304Z-msdrive-merge-sample-04",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131305Z-msdrive-merge-sample-05",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T132300Z-msdrive-merge-debug-check",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "CompareDirectories",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 1474,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "no expected cases matched the requested filter",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    },
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 2063,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "no expected cases matched the requested filter",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    },
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 1326,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "no expected cases matched the requested filter",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    },
+    {
+      "suite": "DxUiTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 76222,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\DxUiTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "FileSystemCurlTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 179,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\FileSystemCurlTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "ViewerPETests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 151632,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\ViewerPETests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "ViewerSqliteTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 10574,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\ViewerSqliteTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "MonitorTest",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 8285,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\MonitorTest.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "LocalizationTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 369,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\LocalizationTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "RedConfigureTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 1801,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\RedConfigureTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "PluginContractTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 9260,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\PluginContractTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "SettingsSchemaTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 397,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\SettingsSchemaTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "CrashHandlingTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 193,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\CrashHandlingTests.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "RedSalamanderMonitorEtwLatency",
+      "kind": "Executable",
+      "exit_code": 1,
+      "duration_ms": 721,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\RedSalamanderMonitorEtwLatency.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": [
+        {
+          "name": "RedSalamanderMonitorEtwLatency",
+          "status": "failed",
+          "reason": "Process exited with code 1.",
+          "duration_ms": 721,
+          "attempt": 1
+        }
+      ]
+    },
+    {
+      "suite": "PerformanceTests2",
+      "kind": "CppUnitTest",
+      "exit_code": 0,
+      "duration_ms": 38801,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T170824Z-73372-1b56dc1adc5540a8a024742aec0466e8\\artifacts\\selftest\\last_run\\PerformanceTests2.output.log",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "ToolsPesterTests",
+      "kind": "Pester",
+      "exit_code": 1,
+      "duration_ms": 427732,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": [
+        {
+          "name": "ToolsPesterTests",
+          "status": "failed",
+          "reason": "Process exited with code 1.",
+          "duration_ms": 427732,
+          "attempt": 1
+        }
+      ]
+    },
+    {
+      "suite": "VcpkgMergeSynthetic",
+      "kind": "PowerShellScript",
+      "exit_code": 0,
+      "duration_ms": 276,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    }
+  ]
+}

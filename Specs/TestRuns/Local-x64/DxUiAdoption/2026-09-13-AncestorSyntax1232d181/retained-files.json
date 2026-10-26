@@ -1,0 +1,32 @@
+[
+  {
+    "file": "e61d5e34-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\e61d5e34-history-context\\build.log",
+    "bytes": 28029,
+    "sha256": "3f34b48b775d6a72c72e22741d83be2cd342d01a8eee0aa71e4c749bd001e9d2"
+  },
+  {
+    "file": "e61d5e34-driver.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\e61d5e34-history-context-driver.log",
+    "bytes": 265,
+    "sha256": "df59c412ff40cf7a0e14cda9654fb7c9558c3533ee15a0098ff9bb52b7c3e446"
+  },
+  {
+    "file": "source-contract.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ancestor-syntax-source-check\\source-contract.log",
+    "bytes": 16859,
+    "sha256": "92c63150bf3e16c6f1c03ea77bf9957f3399c7d828ed4ed785988df07685c108"
+  },
+  {
+    "file": "source-contract.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ancestor-syntax-source-check\\source-contract.json",
+    "bytes": 349,
+    "sha256": "3f3e6a786cb483b52a6e977a27ee64c1bc0a9e971b355268d5fc26f1109d6730"
+  },
+  {
+    "file": "ancestor-syntax-review.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ancestor-syntax-review.json",
+    "bytes": 775,
+    "sha256": "c35265f833365b2def9d7ed76c67d7db5158b8abf7b46a204a79b3a4cbee60dd"
+  }
+]

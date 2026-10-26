@@ -1,0 +1,65 @@
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -644,6 +644,7 @@
+     {
+         Idle,
+         Setup,
++        FileOps_CommonPresentationPerf,
+         FileOps_VisualGallery,
+         FileOps_VisualGalleryInteraction,
+@@ -1145,6 +1146,7 @@
+     {
+         case SelfTestState::Step::Idle: return L"Idle";
+         case SelfTestState::Step::Setup: return L"Setup";
++        case SelfTestState::Step::FileOps_CommonPresentationPerf: return L"FileOps_CommonPresentationPerf";
+         case SelfTestState::Step::FileOps_VisualGallery: return L"FileOps_VisualGallery";
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction: return L"FileOps_VisualGalleryInteraction";
+@@ -2059,6 +2061,12 @@
+ [[nodiscard]] RunSelection ResolveRunSelection(std::wstring_view filter)
+ {
+     RunSelection selection{};
++    if (EqualsIgnoreCase(filter, L"FileOps_CommonPresentationPerf"))
++    {
++        selection.reportedPhases = {SelfTestState::Step::FileOps_CommonPresentationPerf};
++        selection.activePhases   = selection.reportedPhases;
++        return selection;
++    }
+     // Opt-in documentation fixture; not added to broad runtime/performance qualification.
+     if (EqualsIgnoreCase(filter, L"FileOps_VisualGallery") || EqualsIgnoreCase(filter, L"FileOps_VisualGalleryInteraction"))
+@@ -6830,6 +6838,8 @@
+     state.reportedPhaseOrder  = selection.reportedPhases;
+     state.step = EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGallery") ? SelfTestState::Step::FileOps_VisualGallery : SelfTestState::Step::Setup;
+     if (EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGalleryInteraction"))
+         state.step = SelfTestState::Step::FileOps_VisualGalleryInteraction;
++    if (EqualsIgnoreCase(options.caseFilter, L"FileOps_CommonPresentationPerf"))
++        state.step = SelfTestState::Step::FileOps_CommonPresentationPerf;
+     state.runStartTick        = GetTickCount64();
+@@ -6849,6 +6859,7 @@
+ #include "FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
++#include "FolderWindow.FileOperations.SelfTest.CommonPresentationPerf.cpp"
+ 
+ [[nodiscard]] std::wstring_view ValidateCompletedTerminalFactsProjection(SelfTestState& state) noexcept
+@@ -7261,6 +7272,27 @@
+             NextStep(state, SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder);
+             return false;
+         }
++        case SelfTestState::Step::FileOps_CommonPresentationPerf:
++        {
++            static bool measurementInProgress = false;
++            if (measurementInProgress || ! TryGetFolderWindow(state.mainWindow))
++                return false;
++            measurementInProgress = true;
++            auto resetMeasurement = wil::scope_exit([] { measurementInProgress = false; });
++            const bool measured   = RunFileOpsCommonPresentationPerf(state);
++            RecordCurrentPhase(state,
++                               measured ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::failed,
++                               measured ? L"" : L"Common presentation measurement failed; see trace.");
++            state.failed.store(! measured, std::memory_order_release);
++            state.step = SelfTestState::Step::Done;
++            state.running.store(false, std::memory_order_release);
++            state.done.store(true, std::memory_order_release);
++            return true;
++        }
+         case SelfTestState::Step::FileOps_VisualGallery:
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction:

@@ -1,0 +1,50 @@
+{
+    "run_started_utc": "2026-09-13T03:06:51.506Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T030625Z-100644-708365fede064f4c82a4793bd4464ea0\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 50454,
+    "passed": 0,
+    "failed": 5,
+    "skipped": 0,
+    "failureMessage": "Embedded preview should expose the focused alpha file text before reuse.",
+    "cases": [
+        {
+            "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+            "status": "failed",
+            "duration_ms": 7145,
+            "repeat_index": 1,
+            "reason": "Embedded preview should expose the focused alpha file text before reuse."
+        },
+        {
+            "name": "viewer_text_hex_byte_color_perf",
+            "status": "failed",
+            "duration_ms": 15661,
+            "repeat_index": 1,
+            "reason": "ViewerText perf scenario 'off': initial hex snapshot did not reach the expected state."
+        },
+        {
+            "name": "viewer_text_diff_perf",
+            "status": "failed",
+            "duration_ms": 15579,
+            "repeat_index": 1,
+            "reason": "ViewerText diff perf scenario 'large_multi_file_side_by_side': initial parsed diff snapshot did not arrive."
+        },
+        {
+            "name": "cmd_viewer_text_context_menu_uses_delivered_anchor",
+            "status": "failed",
+            "duration_ms": 5262,
+            "repeat_index": 1,
+            "reason": "ViewerText did not render text before context-menu delivered-anchor test."
+        },
+        {
+            "name": "cmd_viewer_text_hover_uses_delivered_point",
+            "status": "failed",
+            "duration_ms": 5241,
+            "repeat_index": 1,
+            "reason": "ViewerText did not render text before hover delivered-point test."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

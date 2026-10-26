@@ -29,6 +29,11 @@ shipped. The Microsoft Visual C++ runtime for the target architecture is bundled
 Before compression, packaging validates the build output through `Tools/Modules/Packaging/RuntimeDependencies.psm1`. A missing
 required runtime dependency or retained obsolete dependency aborts packaging and names the offending path.
 
+A Release ZIP is distributable. After compression and before the clean-extraction smoke, packaging inspects every
+`.exe` and `.dll` in the staged archive and aborts when any carries the `ENABLE_TESTS` version marker or a reserved
+test-only export (see "Distributable test surface" in `Specs/Build/Build_Toolchain.md`). Debug ZIPs are diagnostic
+only, are never published, and are not subject to this check; the release workflow's final artifact gate rejects them.
+
 The standalone ZIP entrypoint holds the selected artifact-profile lease before
 reading build output, then acquires the repository-wide packaging coordination
 scope before publishing beneath `.build\AppPackages`. It holds both through
@@ -129,3 +134,5 @@ non-shipped test/standalone artifacts do not cause extra package contents.
 The extracted smoke harness must run without repository discovery. Its explicit governed test root is validated
 independently of executable placement; missing or unmarked roots still fail closed. The local-writer probe must
 create its scratch through TestSupport within that root, never beside the extracted executable.
+
+RedMonitor is installed separately. Portable packages carry RedMonitor-LICENSE.txt and reject legacy viewer payload.

@@ -17,7 +17,7 @@ Update **ALL** of these locations:
 3. `Common/ThemeExpression.h` / `Common/Common/ThemeExpression.cpp` - Shared source parser, resolver, and compiled dynamic evaluator
 4. `Common/ThemeDefinitionIo.h` / `Common/Common/ThemeDefinitionIo.cpp` - Shared JSON5 reader/writer
 5. `RedSalamander/AppTheme.h` / `AppTheme.cpp` - Defaults
-6. Runtime override mappings in RedSalamander, RedSalamanderMonitor, and hot reload
+6. Runtime override mappings in RedSalamander and hot reload. RedMonitor owns its independent theme adapter and dependency update; no viewer source is changed implicitly here.
 7. `Specs/Themes/*.theme.json5` - Shipped themes
 8. Component specs and tests referencing the token
 9. Public documentation in `docs/Themes.md`, `docs/Preferences.md`, `docs/UserGuide.md`, and `docs/DeveloperGuide.md`

@@ -1,0 +1,102 @@
+{
+  "schema": "i27.closed-owned-c-audit-seed-validation.v1",
+  "records_path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\closed-owned-audit-seed-review\\F6-five-closed-owned-records.proposed.json",
+  "records_sha256": "bb8c451c9dbd3a37efb9cb94d919b79dec3a58e523de1a858621d1c4bcb6e93e",
+  "run_ids": [
+    "20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d",
+    "20261003T200006Z-113580-b6d1dd02de354b54b2a4cf2db93a61ea",
+    "20261003T202133Z-8548-2f962e758a2847fc95e7f53c6a91e966",
+    "20261003T202914Z-98660-555165fa2d904012b6799bf73bff863a",
+    "20261003T203112Z-98660-f3b9322659444f52936dee2c280e57df"
+  ],
+  "validated_records": [
+    {
+      "record": {
+        "run_id": "20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d",
+        "case_filter": "FileOps_AdmissionBaseline",
+        "archive_manifest": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-stack-buffers-idle-comparison-20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d\\C-archive\\archive-manifest.json",
+        "invocation": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-stack-buffers-idle-comparison-20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d\\invocation.json"
+      },
+      "archive_manifest_sha256": "837b00940ca14bdf2da8609d972d4923acf9c474af765005ddfc7a4bf9d1fdb2",
+      "invocation_sha256": "6c15f7e2a499ffff3c9d60848dd4136c20e41f1995242641363e256e9bfe15db",
+      "report_sha256": "4e3a646d9f8f317ed4c85071b9389fc326a9c79aebea81908c1c4c316c7e46c3",
+      "native_sha256": "c01cebd45fa5f364dcde4cf7beab75739a1eb1fdbed5bdb02090f8431195853e",
+      "validated_closed_c_archive": true,
+      "native_outcome": "3/0/0",
+      "prior_disposition": "Native 3/0/0; prior controller/performance disposition unchanged.",
+      "failure_trace_sha256": null,
+      "qualification": "Prior control/performance disposition unchanged; exact closed C audit seed only."
+    },
+    {
+      "record": {
+        "run_id": "20261003T200006Z-113580-b6d1dd02de354b54b2a4cf2db93a61ea",
+        "case_filter": "FileOps_SafetyRemediationContracts",
+        "archive_manifest": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T195937Z-028ff301e3d449c6ad202fd2d6667c51\\01-suspension-off-20261003T200006Z-113580-b6d1dd02de354b54b2a4cf2db93a61ea\\C\\archive-manifest.json",
+        "invocation": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T195937Z-028ff301e3d449c6ad202fd2d6667c51\\01-suspension-off-20261003T200006Z-113580-b6d1dd02de354b54b2a4cf2db93a61ea\\invocation.json"
+      },
+      "archive_manifest_sha256": "87fe813c04ebc4e8dc8a23453bbc8503a395cfba07ed0327c8094cc83d7930e2",
+      "invocation_sha256": "3847c5c6a8f5702240b308092fc592cff25c635cca8861bc67da71d265660798",
+      "report_sha256": "7d02347381b46a0b44ecd4d6869278829207c2cfc7977906a94efefbf0bbb8e9",
+      "native_sha256": "77a40e941633ed5825caab7a6103efc44b1659e9a2965f8545aa3a792fd01435",
+      "validated_closed_c_archive": true,
+      "native_outcome": "3/0/0",
+      "prior_disposition": "Native 3/0/0; prior controller/performance disposition unchanged.",
+      "failure_trace_sha256": null,
+      "qualification": "Prior control/performance disposition unchanged; exact closed C audit seed only."
+    },
+    {
+      "record": {
+        "run_id": "20261003T202133Z-8548-2f962e758a2847fc95e7f53c6a91e966",
+        "case_filter": "FileOps_SafetyRemediationContracts",
+        "archive_manifest": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202054Z-3399404ce22548bea7b970eaf8ff0689\\01-suspension-off-20261003T202133Z-8548-2f962e758a2847fc95e7f53c6a91e966\\C\\archive-manifest.json",
+        "invocation": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202054Z-3399404ce22548bea7b970eaf8ff0689\\01-suspension-off-20261003T202133Z-8548-2f962e758a2847fc95e7f53c6a91e966\\invocation.json",
+        "reviewed_closed_failure": "i27.f6.foreign-foreground-guard-20261003T202133Z.v1"
+      },
+      "archive_manifest_sha256": "edc4508d487b8defa8788257bbec48045545467f4500204b73d65454d79b7f29",
+      "invocation_sha256": "9fbe5b0beb4450abe56d3e53f9b2d87982505a02e12db183019cfe6631f454c4",
+      "report_sha256": "8c068b45bcc6187fe2287557e4010caa5072e723ca60db307aa0b311191c6254",
+      "native_sha256": "3c3502eabfa3436a477393b009ba16861a00ce7e72df2c3b27b44c551b407e52",
+      "validated_closed_c_archive": true,
+      "native_outcome": "2/1/0",
+      "prior_disposition": "FAILED native 2/1/0 and controller exit1; not qualified. Exact closed owned C audit seed only.",
+      "failure_trace_sha256": "f858d8be6501da4bdaf23f2b9ac0698238890a567aa497b7b325745f89807308",
+      "qualification": "Prior control/performance disposition unchanged; exact closed C audit seed only."
+    },
+    {
+      "record": {
+        "run_id": "20261003T202914Z-98660-555165fa2d904012b6799bf73bff863a",
+        "case_filter": "FileOps_SafetyRemediationContracts",
+        "archive_manifest": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202840Z-6ac2976c690146cbbcbeecdd0a9963f6\\01-suspension-off-20261003T202914Z-98660-555165fa2d904012b6799bf73bff863a\\C\\archive-manifest.json",
+        "invocation": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202840Z-6ac2976c690146cbbcbeecdd0a9963f6\\01-suspension-off-20261003T202914Z-98660-555165fa2d904012b6799bf73bff863a\\invocation.json"
+      },
+      "archive_manifest_sha256": "f55699cf3c9044a6b9dcf8f902e485b9257ecf5b784e864657f7a2d7811f1677",
+      "invocation_sha256": "75ad3290abc00e927fdb40372ea9d45e3b3b5e2543a165ca2646cca97767d535",
+      "report_sha256": "4651c2dedc100dc9c7f1aa572eae06d4af9226e4616d2320a0c6577426fc9786",
+      "native_sha256": "7e9c84a9f03f798c047e6d1f543c0abbb08f3cf7c687f2dce8a6155623afe311",
+      "validated_closed_c_archive": true,
+      "native_outcome": "3/0/0",
+      "prior_disposition": "Native 3/0/0; prior controller/performance disposition unchanged.",
+      "failure_trace_sha256": null,
+      "qualification": "Prior control/performance disposition unchanged; exact closed C audit seed only."
+    },
+    {
+      "record": {
+        "run_id": "20261003T203112Z-98660-f3b9322659444f52936dee2c280e57df",
+        "case_filter": "FileOps_SafetyRemediationContracts",
+        "archive_manifest": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202840Z-6ac2976c690146cbbcbeecdd0a9963f6\\02-suspension-on-20261003T203112Z-98660-f3b9322659444f52936dee2c280e57df\\C\\archive-manifest.json",
+        "invocation": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f6-release-review\\f6-controlled-20261003T202840Z-6ac2976c690146cbbcbeecdd0a9963f6\\02-suspension-on-20261003T203112Z-98660-f3b9322659444f52936dee2c280e57df\\invocation.json",
+        "reviewed_closed_failure": "i27.f6.foreign-foreground-guard-20261003T203112Z.v1"
+      },
+      "archive_manifest_sha256": "6126e1932a7c5ffdd18456871b8cf31b7cb2cadb22b80397ecfec0fd2ac696e5",
+      "invocation_sha256": "20497c6aefb19175d81cd77db36f5184dee197cc404ae47601b8b2525dc15693",
+      "report_sha256": "46db7856992a04f7c900508c576a6606b50f8973171dc1785734010e77e741d2",
+      "native_sha256": "d17fc703e8e8e3a7b3a567ed2a2e0dafcd0f40ff28b7e40c964d2898a2482f90",
+      "validated_closed_c_archive": true,
+      "native_outcome": "2/1/0",
+      "prior_disposition": "FAILED native 2/1/0 and controller exit1; not qualified. Exact closed owned C audit seed only.",
+      "failure_trace_sha256": "7ecfc22ac00e467dca0afdb5c0f756f1400be91d74b9fa2b8c627bb61cd9fe38",
+      "qualification": "Prior control/performance disposition unchanged; exact closed C audit seed only."
+    }
+  ],
+  "policy": "Canonical read-only AllowedRunIds for C only; no runner exemption, deletion, global clean or prior reclassification."
+}

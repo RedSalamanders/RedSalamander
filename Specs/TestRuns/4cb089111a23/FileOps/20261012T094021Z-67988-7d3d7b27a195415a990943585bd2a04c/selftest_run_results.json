@@ -1,0 +1,63 @@
+{
+    "run_started_utc": "2026-10-12T09:40:52.082Z",
+    "duration_ms": 102789,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_ClearflowPhase05_PerfEvaluation",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T094021Z-67988-7d3d7b27a195415a990943585bd2a04c\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 101875,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_ClearflowPhase05_PerfEvaluation",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1391,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySingleTraversal",
+                    "status": "passed",
+                    "duration_ms": 313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelLatencyLocal",
+                    "status": "passed",
+                    "duration_ms": 890,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 98016,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+                    "status": "passed",
+                    "duration_ms": 875,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 390,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+}

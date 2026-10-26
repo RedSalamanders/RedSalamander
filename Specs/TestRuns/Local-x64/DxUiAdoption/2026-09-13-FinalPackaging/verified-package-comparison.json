@@ -1,0 +1,129 @@
+{
+  "scope": "Serial portable A/B/A application --help, plugin contract and runtime-closure checks. No installed-product, persisted-settings, minimum-OS or native ARM64 claim.",
+  "checkedRuns": [
+    {
+      "stage": "A1",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "zipSha256": "C8564D98E8181850A5AF5738520CE86E2C5142268C7D81401C8BBF9AC5081720",
+      "compressedBytes": 30289465,
+      "expandedBytes": 78647558,
+      "entries": 171,
+      "mainExeBytes": 28911616,
+      "modules": []
+    },
+    {
+      "stage": "B",
+      "source": "3a43186a3507ca48eb41e7ad8dec8585aed732f9",
+      "zipSha256": "CB87D5FB294017FEA1EDBBF7239DA2881A7B0F7CD83F725B8E7244C001D5D11E",
+      "compressedBytes": 30694026,
+      "expandedBytes": 79758721,
+      "entries": 182,
+      "mainExeBytes": 29184000,
+      "modules": [
+        {
+          "module": "Plugins/Terminal.dll",
+          "sha256": "ffc2fcc14c2ad46144865967ad3c1b5ffdd11052b4de6dedb99e539057531653",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerImgRaw.dll",
+          "sha256": "695a7d3a1ff60dfc3bfd89ecebce8e3445c808e2174867fc611aca269eb17b55",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerPE.dll",
+          "sha256": "db582142d7fd83768dd41d998356221b33548cfbeb930b295ea7929dcfff4554",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerSpace.dll",
+          "sha256": "2e11afe01d8f14a07148564891ad454c843b3448907a968a273e8efd644e57b3",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerSqlite.dll",
+          "sha256": "bf9f94a14ef627c2de5ebbfcc27d7bf8e15faa92bd09a5c8c714363bf7231264",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerText.dll",
+          "sha256": "6a93182f500fabeb09516992c3cfaa59a91c3a1692825477fb383cf25df3c0dc",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerVLC.dll",
+          "sha256": "6d2443563417fa547f124a0e959df7ccda1ab8b26bb931037ad2fa93b92549ea",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "Plugins/ViewerWeb.dll",
+          "sha256": "34a9ec2f37c3f4a86b501d76a05de12ab68fe26bd109801f6c8c0f25d63bf470",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "PerformanceTests2.dll",
+          "sha256": "e43fb9f6f0208941e7b4028cb07915b693ef09bb4c7a70fd461e954925e95f4a",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "RedSalamander.exe",
+          "sha256": "9c79660590b00f941888d2be94571b597f5fd3397026bc2d03eeed625f882fe5",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        },
+        {
+          "module": "RedSalamanderMonitor.exe",
+          "sha256": "9dc834c95d364a97120787adb6d1d27291757eb5dd69698c664a0863c2174573",
+          "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+          "archiveSha256": "052FA706DEA3C25C30B37FA93B91F13366DDD9E0C74625D5665951DBE1BEE20A"
+        }
+      ]
+    },
+    {
+      "stage": "A2",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "zipSha256": "71655D843969F8B703BA674B58AC06BB42BC02B4CEA9CA0705E2FAFD0CE643CC",
+      "compressedBytes": 30289465,
+      "expandedBytes": 78647558,
+      "entries": 171,
+      "mainExeBytes": 28911616,
+      "modules": []
+    }
+  ],
+  "baselinePayloadIdenticalAfterCandidate": true,
+  "candidateDelta": {
+    "compressedBytes": {
+      "baseline": 30289465,
+      "candidate": 30694026,
+      "delta": 404561,
+      "percent": 1.3356492100471185
+    },
+    "expandedBytes": {
+      "baseline": 78647558,
+      "candidate": 79758721,
+      "delta": 1111163,
+      "percent": 1.4128385270398391
+    },
+    "entries": {
+      "baseline": 171,
+      "candidate": 182,
+      "delta": 11,
+      "percent": 6.432748538011701
+    },
+    "mainExeBytes": {
+      "baseline": 28911616,
+      "candidate": 29184000,
+      "delta": 272384,
+      "percent": 0.9421265141319024
+    }
+  }
+}

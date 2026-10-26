@@ -1,0 +1,247 @@
+{
+  "kind": "html-proposal-only",
+  "nativeApplicationAcceptance": false,
+  "cases": [
+    {
+      "widthCssPx": 480,
+      "short": false,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 331,
+          "y": 952,
+          "width": 185.890625,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 526.890625,
+          "y": 952,
+          "width": 127.25,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 664.140625,
+          "y": 952,
+          "width": 104.859375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 331,
+          "y": 1006,
+          "width": 438,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": true
+    },
+    {
+      "widthCssPx": 480,
+      "short": true,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 331,
+          "y": 622,
+          "width": 185.890625,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 526.890625,
+          "y": 622,
+          "width": 127.25,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 664.140625,
+          "y": 622,
+          "width": 104.859375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 331,
+          "y": 676,
+          "width": 438,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": true
+    },
+    {
+      "widthCssPx": 640,
+      "short": false,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 251,
+          "y": 1006,
+          "width": 181.453125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 442.453125,
+          "y": 1006,
+          "width": 122.828125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 575.28125,
+          "y": 1006,
+          "width": 100.4375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 685.71875,
+          "y": 1006,
+          "width": 163.28125,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": false
+    },
+    {
+      "widthCssPx": 640,
+      "short": true,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 251,
+          "y": 676,
+          "width": 181.453125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 442.453125,
+          "y": 676,
+          "width": 122.828125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 575.28125,
+          "y": 676,
+          "width": 100.4375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 685.71875,
+          "y": 676,
+          "width": 163.28125,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": true
+    },
+    {
+      "widthCssPx": 760,
+      "short": false,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 191,
+          "y": 1006,
+          "width": 211.453125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 412.453125,
+          "y": 1006,
+          "width": 152.828125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 575.28125,
+          "y": 1006,
+          "width": 130.4375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 715.71875,
+          "y": 1006,
+          "width": 193.28125,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": false
+    },
+    {
+      "widthCssPx": 760,
+      "short": true,
+      "errors": [],
+      "buttons": [
+        {
+          "text": "Conserver les deux",
+          "x": 191,
+          "y": 676,
+          "width": 211.453125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Remplacer",
+          "x": 412.453125,
+          "y": 676,
+          "width": 152.828125,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Ignorer",
+          "x": 575.28125,
+          "y": 676,
+          "width": 130.4375,
+          "height": 44,
+          "contained": true
+        },
+        {
+          "text": "Annuler la tâche",
+          "x": 715.71875,
+          "y": 676,
+          "width": 193.28125,
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "bodyScrollable": true
+    }
+  ],
+  "simulatedInspectionAndReturn": "passed"
+}

@@ -1,0 +1,686 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-08T10:40:41.4180527Z",
+  "run_ended_utc": "2026-09-08T10:42:19.3354316Z",
+  "duration_ms": 97917,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T103757Z-78504-caed44b440ff40a88a3b6da51e166283\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20260908T103757Z-78504-caed44b440ff40a88a3b6da51e166283",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_preferences_dialog_keyboard_",
+  "exit_code": 0,
+  "passed": 72,
+  "failed": 0,
+  "skipped": 0,
+  "total": 72,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 22,
+    "test_root": "Z:\\RedSalamander.Perf",
+    "run_id": "20260908T103757Z-78504-caed44b440ff40a88a3b6da51e166283",
+    "allowed_run_ids": [
+      "20260908T103757Z-78504-caed44b440ff40a88a3b6da51e166283"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-103144",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-110612",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-111140",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-112400",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-123440",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-129300",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-130500",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-136944",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-29644",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-40092",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-43748",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-50356",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-5160",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-55216",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-58844",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-65188",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-65888",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-74808",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-85920",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-86068",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-93268",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-99888",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 91784,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "908",
+      "repeat_count": 3,
+      "passed": 72,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_preferences_dialog_keyboard_commit_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1724,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_survive_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 470,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1217,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 163,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_exposes_live_uia_grid_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 199,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_swap_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1358,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 573,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 683,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_long_run_list_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 989,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_stay_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 274,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_remove_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1007,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1071,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1253,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 226,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 209,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1144,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_uses_dxui_shell_chrome",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 418,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_theme_cycle_keeps_surface_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 547,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_replace_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1425,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2414,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_capture_preview_and_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2450,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 486,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_resize_changes_visible_width",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 266,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 298,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_commit_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1717,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_survive_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 631,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1437,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 183,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_exposes_live_uia_grid_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 194,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_swap_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1487,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 606,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 820,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_long_run_list_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 996,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_stay_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 200,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_remove_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1032,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1279,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1434,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 227,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 230,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1243,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_uses_dxui_shell_chrome",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 413,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_theme_cycle_keeps_surface_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 557,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_replace_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1699,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2694,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_capture_preview_and_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1871,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 372,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_resize_changes_visible_width",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 214,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 249,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_commit_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1585,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_survive_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 607,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1444,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 160,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_exposes_live_uia_grid_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 192,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_swap_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1504,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 581,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 938,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_long_run_list_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 979,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_stay_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 225,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_remove_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1152,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1361,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1335,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 241,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 181,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1319,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_uses_dxui_shell_chrome",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 403,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_theme_cycle_keeps_surface_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 534,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_replace_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1711,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2600,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_capture_preview_and_assign_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2009,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 317,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_resize_changes_visible_width",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 187,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 248,
+          "attempt": 3
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "head": "b5ea0d679dd1fe7d4d418ee7e8d8cb49a7cb7d26",
+  "platform": "ARM64",
+  "configuration": "ASan Debug",
+  "ownerPid": 89488,
+  "ownerStartedUtc": "2026-10-26T19:13:48.4576805Z",
+  "outcome": "passed",
+  "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-asan-b5ea0d679-ARM64.log",
+  "fullRuntimeRun": false,
+  "exitCode": 0,
+  "finishedUtc": "2026-10-26T19:20:02.9938765Z"
+}

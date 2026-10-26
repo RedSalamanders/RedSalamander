@@ -1,0 +1,53 @@
+Skipping build (verified receipt bec7c09ebce367af13db1171cc0544254b72491ec9f11ef470aaff8ed9486bb3).
+Validation plan: ca50ffd7a6f4e64cdd8abfb8751924646d53b4d8c0ea1ba80117eb4210bc04f9
+Entry fingerprints: df0a9c87222a093559bdcda1e853706688404a0b0b0cac4dde8c362543adc278 (90 ms)
+Shadow affected set: 1/1 entries; advisory-build=targeted. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-timeout-multiplier=3 --selftest-case=Floodgate_InlineF2WorkerQueueBypassAndInterlock --selftest-repeat=3
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS]
+FileOperations
+  (4,5s)
+         Passed: 9
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall:
+PASSED
+  Total: 9
+  Passed: 9
+  Failed: 0
+  Skipped: 0
+  Wall time: 12,8s
+  Classifications:
+flaky=0
+regression=0
+isolation_suspect=0
+unclassified_failure=0
+  Quarantine:
+active=0
+invalid=0
+repair_attempts=0
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: S:\RedSalamander.Perf
+  Run id:    i26-typed-result-candidate-v2-20260921
+  Disk audit issues: 0
+  Last run: S:\RedSalamander.Perf\runs\i26-typed-result-candidate-v2-20260921\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json

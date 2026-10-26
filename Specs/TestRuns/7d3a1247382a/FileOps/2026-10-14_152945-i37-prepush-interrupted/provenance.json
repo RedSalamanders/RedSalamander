@@ -1,0 +1,96 @@
+{
+  "runId": "20261014T152945Z-38708-5b51627373364b24bf87799e4827dd51",
+  "nativeQualification": "Four earlier exact Debug/Release cases passed; this is broad interrupted accounting only.",
+  "files": [
+    {
+      "path": "artifacts\\selftest\\last_run\\entry-fingerprints.json",
+      "bytes": 17281,
+      "sha256": "49DD40B420F50B1D7F31D9BF219E5E3D1FF93CDEA89305FFFBD1238431226ABC"
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\validation-plan-decision.json",
+      "bytes": 7181,
+      "sha256": "66F83EE6E140CB9314A2079FCA4A3EEB5A2B2AA02AF0F44858987539B59BD484"
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\validation-plan.json",
+      "bytes": 18362,
+      "sha256": "8395D4B82F32BFDDCC1BE2763041FC6976ED6A21DD575E4C7FAB933959FB458F"
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\workspace-after-tooling.pester-build-toolchain.json",
+      "bytes": 14076,
+      "sha256": "4AD05D96C0D4DB274B79FC8F78F607E2855C5755527C532C25709177E8E78FDB"
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\workspace-initial.json",
+      "bytes": 14076,
+      "sha256": "2D82E18F51BF5AA534A1969A47DA30E9D802B4B0663C1D45899887CF3F2AD26B"
+    },
+    {
+      "path": "checkpoint\\decisions\\7558a720e9be082a9ca08e1472861d07cd1793e49073aefa6454cd67d6b1329a.json",
+      "bytes": 7181,
+      "sha256": "66F83EE6E140CB9314A2079FCA4A3EEB5A2B2AA02AF0F44858987539B59BD484"
+    },
+    {
+      "path": "checkpoint\\run-state.json",
+      "bytes": 5203,
+      "sha256": "E7ED3F31A54293A51D670E7A825AD0B4B01C0EBED00F8C14A1215556AF067D52"
+    },
+    {
+      "path": "checkpoint\\validation-plan.json",
+      "bytes": 18362,
+      "sha256": "8395D4B82F32BFDDCC1BE2763041FC6976ED6A21DD575E4C7FAB933959FB458F"
+    },
+    {
+      "path": "folder-copy-progress-final-affected-release-explain-20261014-01.json",
+      "bytes": 7181,
+      "sha256": "5681F92FD10973786C96D7D8D67531C797E57BD8C961C69CBCA3BBD7499DC46E"
+    },
+    {
+      "path": "msbuild-20261014_173154_273-pid29664-de0b5854.log",
+      "bytes": 34283,
+      "sha256": "36AC6EBEE2FEB38B4ABDCA58C0683F53BCCA900BFEFBAB433E95500A57D3434D"
+    },
+    {
+      "path": "observed-failure.json",
+      "bytes": 1505,
+      "sha256": "A4B01B576F05C45808C5C40E88098BB7263547C4AC31B43E7E4F77285A5454E1"
+    },
+    {
+      "path": "pester-targeted-plugin-deployment-20261014_173127_246.err.log",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "pester-targeted-plugin-deployment-20261014_173127_246.out.log.gz",
+      "bytes": 5016,
+      "sha256": "FBF8C9B4E50C8EF45F2AEA10D34381FBC46154E5CC4D6915C53AA7AE2EE5B4C7"
+    },
+    {
+      "path": "qualified-before-interruption-build-receipt.json",
+      "bytes": 95225,
+      "sha256": "0BC6AADCDA696C51A08812796B51172DD712FEEB288696BFD91C003E9D0C6B81"
+    },
+    {
+      "path": "qualified-input-source-manifest.json",
+      "bytes": 4069,
+      "sha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6"
+    },
+    {
+      "path": "raw-text-preservation.json",
+      "bytes": 899,
+      "sha256": "59E827D98096B6F16CB5AD12ACC7360F35E05C95A3600EF46D9C84C48A400FCA"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1564,
+      "sha256": "CE115598246A14B48B1FA1B8A2A54E94F02315556E0168E0907F52B3D51AF72C"
+    },
+    {
+      "path": "shared-dependency-x64-634c3ff6af81.contaminated.json",
+      "bytes": 941,
+      "sha256": "87B915AA7D3BB07777A903058759CC160FCFCDFD0D07CFB6BCDB0BEA99917A1C"
+    }
+  ]
+}

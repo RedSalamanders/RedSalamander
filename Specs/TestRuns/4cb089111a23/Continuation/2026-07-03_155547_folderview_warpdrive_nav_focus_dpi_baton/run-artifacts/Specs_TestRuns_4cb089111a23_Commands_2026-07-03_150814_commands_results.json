@@ -1,0 +1,18 @@
+{
+    "run_started_utc": "2026-07-03T13:08:13.035Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 601,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 594
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

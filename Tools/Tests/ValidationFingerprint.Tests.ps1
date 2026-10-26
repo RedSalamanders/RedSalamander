@@ -1,5 +1,6 @@
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force
 
 function Test-RSActionThrows {
@@ -267,7 +268,7 @@ Describe 'Operation Startrail workspace snapshots' {
         & git -C $fixture.Root reset --hard --quiet HEAD
         & git -C $fixture.Root clean -fdq
         $link = Join-Path $fixture.Root 'reparse.txt'
-        [void](New-Item -ItemType SymbolicLink -Path $link -Target (Join-Path $fixture.Root 'dirty.txt'))
+        [void](New-RSTestSandboxLink -ItemType SymbolicLink -Path $link -Target (Join-Path $fixture.Root 'dirty.txt'))
         (Test-RSActionThrows { Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root }) | Should Be $true
         Remove-Item -LiteralPath $link
         (Test-RSActionThrows { Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root -ImpactBase '--help' }) | Should Be $true

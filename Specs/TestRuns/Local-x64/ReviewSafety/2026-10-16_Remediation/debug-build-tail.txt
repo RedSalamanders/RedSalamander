@@ -1,0 +1,5 @@
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\Lang\LocalizationTests-sk-SK.dll
+  RedSalamander.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\Lang\RedConfigure-sk-SK.dll
+  RedConfigureTests.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\RedConfigureTests.exe

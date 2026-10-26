@@ -1,0 +1,4 @@
+{
+  "benchmark_started": false,
+  "reason": "Preserve Release baseline in the already-built isolated checkout so main-checkout implementation can proceed while independent builds finish. Same-checkout pairing retained within each profile."
+}

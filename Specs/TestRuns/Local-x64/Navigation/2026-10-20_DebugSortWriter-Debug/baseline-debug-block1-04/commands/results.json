@@ -1,0 +1,44 @@
+{
+    "run_started_utc": "2026-10-20T20:59:43.261Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20261020T205910Z-68428-7079b1d368264389878cc0a7e024c4f4\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 49246,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 9255,
+            "repeat_index": 1
+        },
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 9673,
+            "repeat_index": 2
+        },
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 9533,
+            "repeat_index": 3
+        },
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 9426,
+            "repeat_index": 4
+        },
+        {
+            "name": "folderView_perf_sort_toggle_stress",
+            "status": "passed",
+            "duration_ms": 9468,
+            "repeat_index": 5
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 5
+}

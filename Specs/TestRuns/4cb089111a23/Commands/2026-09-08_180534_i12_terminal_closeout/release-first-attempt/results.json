@@ -1,0 +1,90 @@
+{
+    "run_started_utc": "2026-09-08T16:17:43.454Z",
+    "duration_ms": 23368,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_embedded_terminal_command_state_truth,cmd_pane_embedded_terminal_plugin_lifecycle,cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target,cmd_terminal_session_menu_floating_dispatch,cmd_pane_open_command_shell_prefers_windows_terminal,pane_view_options_toggle_preview_pane_tabs_and_selection,cmd_pane_fileops_completed_post_failure_still_applies_ui_contract,cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs,cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T161338Z-5764-97bc7a953389469dacfdd1a277df917a\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 22907,
+            "passed": 8,
+            "failed": 2,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_embedded_terminal_command_state_truth,cmd_pane_embedded_terminal_plugin_lifecycle,cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target,cmd_terminal_session_menu_floating_dispatch,cmd_pane_open_command_shell_prefers_windows_terminal,pane_view_options_toggle_preview_pane_tabs_and_selection,cmd_pane_fileops_completed_post_failure_still_applies_ui_contract,cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs,cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+            "failureMessage": "Embedded preview should expose the focused alpha file text before reuse.",
+            "cases": [
+                {
+                    "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+                    "status": "failed",
+                    "duration_ms": 6322,
+                    "repeat_index": 1,
+                    "reason": "Embedded preview should expose the focused alpha file text before reuse."
+                },
+                {
+                    "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+                    "status": "passed",
+                    "duration_ms": 2,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+                    "status": "passed",
+                    "duration_ms": 160,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_fileops_completed_post_failure_still_applies_ui_contract",
+                    "status": "passed",
+                    "duration_ms": 187,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_open_command_shell_prefers_windows_terminal",
+                    "status": "passed",
+                    "duration_ms": 51,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_embedded_terminal_command_state_truth",
+                    "status": "passed",
+                    "duration_ms": 586,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_terminal_session_menu_floating_dispatch",
+                    "status": "passed",
+                    "duration_ms": 1436,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_embedded_terminal_plugin_lifecycle",
+                    "status": "failed",
+                    "duration_ms": 9599,
+                    "repeat_index": 1,
+                    "reason": "The terminal did not confirm the followed PowerShell cwd; status: Running."
+                },
+                {
+                    "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+                    "status": "passed",
+                    "duration_ms": 970,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+                    "status": "passed",
+                    "duration_ms": 403,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 8,
+    "failed": 2,
+    "skipped": 0
+}

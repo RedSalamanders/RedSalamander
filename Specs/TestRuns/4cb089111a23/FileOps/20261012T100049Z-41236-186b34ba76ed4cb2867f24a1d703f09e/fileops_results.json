@@ -1,0 +1,164 @@
+{
+    "run_started_utc": "2026-10-12T10:01:28.441Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T100049Z-41236-186b34ba76ed4cb2867f24a1d703f09e\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 80813,
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1391,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_LeafCopy",
+            "status": "passed",
+            "duration_ms": 656,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_LeafMove",
+            "status": "passed",
+            "duration_ms": 703,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_ManagedDirectory",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_NativeRenameMerge",
+            "status": "passed",
+            "duration_ms": 172,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_MixedRoots",
+            "status": "passed",
+            "duration_ms": 578,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_ZeroByteAndVerifiedLeaf",
+            "status": "passed",
+            "duration_ms": 1297,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_LocalDirectApi",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_DummyDirectApi",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_CurlDirectApi",
+            "status": "passed",
+            "duration_ms": 328,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_S3DirectApi",
+            "status": "passed",
+            "duration_ms": 735,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_GDriveDirectApi",
+            "status": "passed",
+            "duration_ms": 437,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_GraphDirectApi",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_MtpDirectApi",
+            "status": "passed",
+            "duration_ms": 141,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_FolderClosesBeforeLastFile",
+            "status": "passed",
+            "duration_ms": 17453,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_WideFolderClosesWithinQueueLead",
+            "status": "passed",
+            "duration_ms": 3594,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_NestedTreeMetadataRestoredAfterChildren",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_ManagedMoveListingCompleteBeforeRemoval",
+            "status": "passed",
+            "duration_ms": 406,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_WorkerFailureIsNotCanceled",
+            "status": "passed",
+            "duration_ms": 703,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_FlatFolderUsesFullConcurrency",
+            "status": "passed",
+            "duration_ms": 4656,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_ListingSilenceNoted",
+            "status": "passed",
+            "duration_ms": 6985,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_TenThousandSmallFilesCloseAfterListing",
+            "status": "passed",
+            "duration_ms": 11390,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_RetryDoesNotGrowAfterClose",
+            "status": "passed",
+            "duration_ms": 20469,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_HeldFolderFailureStillCloses",
+            "status": "passed",
+            "duration_ms": 7766,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

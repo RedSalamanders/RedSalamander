@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "captures": 277,
+    "sameSize": 277,
+    "samePixels": 276
+  },
+  "manifestSame": false,
+  "displaysSame": true
+}
+FileOps.Popup.Delete.Redraw8Us/144dpi/480dip {'count': 5, 'medianUs': 66624, 'p95Us': 66894, 'sumUs': 333029} {'count': 5, 'medianUs': 66685, 'p95Us': 66728, 'sumUs': 331837}
+FileOps.Popup.Delete.Redraw8Us/144dpi/760dip {'count': 5, 'medianUs': 66578, 'p95Us': 67500, 'sumUs': 312455} {'count': 5, 'medianUs': 66659, 'p95Us': 66982, 'sumUs': 329988}
+FileOps.Popup.Delete.Redraw8Us/96dpi/480dip {'count': 5, 'medianUs': 66671, 'p95Us': 66769, 'sumUs': 333321} {'count': 5, 'medianUs': 65835, 'p95Us': 67371, 'sumUs': 325600}
+FileOps.Popup.Delete.Redraw8Us/96dpi/760dip {'count': 5, 'medianUs': 66526, 'p95Us': 66703, 'sumUs': 318078} {'count': 5, 'medianUs': 64250, 'p95Us': 69043, 'sumUs': 317914}
+FileOps.Popup.DiscoveryActions.MeasureUs {'count': 4, 'medianUs': 18, 'p95Us': 46, 'sumUs': 119} {'count': 4, 'medianUs': 16, 'p95Us': 54, 'sumUs': 106}
+FileOps.Popup.FooterActions.MeasureUs {'count': 164, 'medianUs': 73, 'p95Us': 168, 'sumUs': 12767} {'count': 172, 'medianUs': 92, 'p95Us': 124, 'sumUs': 15705}
+FileOps.Popup.GraphLabels.MeasureUs {'count': 56, 'medianUs': 26, 'p95Us': 55, 'sumUs': 1595} {'count': 62, 'medianUs': 23, 'p95Us': 33, 'sumUs': 1447}
+FileOps.Popup.PathLabels.MeasureUs {'count': 212, 'medianUs': 10, 'p95Us': 26, 'sumUs': 2695} {'count': 220, 'medianUs': 9, 'p95Us': 20, 'sumUs': 2413}
+FileOps.Popup.PathLabels.Redraw8Us/144dpi/480dip {'count': 5, 'medianUs': 66669, 'p95Us': 80509, 'sumUs': 337317} {'count': 5, 'medianUs': 66622, 'p95Us': 67685, 'sumUs': 318847}
+FileOps.Popup.PathLabels.Redraw8Us/144dpi/760dip {'count': 5, 'medianUs': 66707, 'p95Us': 67073, 'sumUs': 318989} {'count': 5, 'medianUs': 66652, 'p95Us': 66682, 'sumUs': 321159}
+FileOps.Popup.PathLabels.Redraw8Us/96dpi/480dip {'count': 5, 'medianUs': 64916, 'p95Us': 69078, 'sumUs': 320530} {'count': 5, 'medianUs': 66627, 'p95Us': 66759, 'sumUs': 328245}
+FileOps.Popup.PathLabels.Redraw8Us/96dpi/760dip {'count': 5, 'medianUs': 65907, 'p95Us': 67430, 'sumUs': 322067} {'count': 5, 'medianUs': 66673, 'p95Us': 66732, 'sumUs': 325467}

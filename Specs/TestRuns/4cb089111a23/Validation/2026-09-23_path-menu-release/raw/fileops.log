@@ -1,0 +1,141 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt c45add5e7179adcc678eb3a1c0a792a15dae9948de81a04af1d35ebf087e0362).
+Validation plan: 8c2c4bd5ac8d00623c3f497195e939e57801a77ecfaa33677ff85e5f16559a82
+Entry fingerprints: bea4ed11a98785c0cc40530b26b5863bbec2c2de7d8411d476653491a74fcee0 (105 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Release\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+FileOperations
+  (14m 35,8s)
+         Passed: 193
+  Failed: 0
+  Skipped: 21
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 214
+  Passed: 193
+  Failed: 0
+  Skipped: 21
+  Wall time: 14m 45,6s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- SKIPPED CASES (21 cases) ---
+  SKIP 
+[FileOperations] 
+Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker
+ - FileSystem shared-scheduler shutdown selftests use a Debug-only plugin export; Debug coverage owns this proof.
+  SKIP 
+[FileOperations] 
+Phase15_FileSystem7zReadSeekSmoke
+ - 7z read/seek smoke skipped in the file-operations suite; 7z coverage remains in compare selftests.
+  SKIP 
+[FileOperations] 
+Phase15_FileSystem7zMountPathImpact
+ - 7z mount-path impact skipped in the file-operations suite; 7z coverage remains in compare selftests.
+  SKIP 
+[FileOperations] 
+Phase16_RemoteFtpSecret
+ - FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteFtpSandbox
+ - FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSftpSecret
+ - SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSftpSandbox
+ - SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteScpSecret
+ - SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteScpSandbox
+ - SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteImapSecret
+ - IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteImapSandbox
+ - IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3Secret
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3Sandbox
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3FileOps
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalSecret
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalSandbox
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalFileOps
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDriveBusinessSecret
+ - OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDriveBusinessSandbox
+ - OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSharePointSecret
+ - SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSharePointSandbox
+ - SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260923T113614Z-77640-e22df5f2325745d1839d9a66e31aa8df
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260923T113614Z-77640-e22df5f2325745d1839d9a66e31aa8df\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+

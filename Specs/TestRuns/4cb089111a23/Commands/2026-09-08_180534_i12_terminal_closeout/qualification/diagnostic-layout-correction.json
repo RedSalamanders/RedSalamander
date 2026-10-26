@@ -1,0 +1,20 @@
+{
+  "originalFocusedAuditIssueCount": 24,
+  "retainedOriginalAudits": [
+    "release/run-all-tests-results.json",
+    "release-first-attempt/run-all-tests-results.json"
+  ],
+  "resolvedByThisTask": [
+    {
+      "previousPath": "Z:\\RedSalamander.Perf\\tools\\i12-diagnostics",
+      "retainedAt": "Z:\\RedSalamander.Perf\\evidence\\diagnostics\\i12-20260908\\dotnet-tools",
+      "reason": "Diagnostic binaries belong under evidence, not a new top-level test-root directory."
+    },
+    {
+      "previousPath": "Z:\\RedSalamander.Perf\\runs\\i12-contracts-20260908",
+      "retainedAt": "Z:\\RedSalamander.Perf\\evidence\\diagnostics\\i12-20260908\\focused-contract-scratch",
+      "reason": "Completed standalone contract scratch has no live runner owner; retain it as diagnostic evidence."
+    }
+  ],
+  "note": "Both exact directory moves were containment-checked. No pre-existing ad hoc run was removed. Full final audit remains authoritative."
+}

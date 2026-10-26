@@ -1,0 +1,54 @@
+{
+    "run_started_utc": "2026-09-21T01:43:40.507Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-projection-baseline-v1-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3306,
+    "passed": 3,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Two explicit prompts, one legacy issue and one cached application must remain four rows; observed delta 2.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "failed",
+            "duration_ms": 143,
+            "repeat_index": 1,
+            "reason": "Two explicit prompts, one legacy issue and one cached application must remain four rows; observed delta 2."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 675,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "failed",
+            "duration_ms": 149,
+            "repeat_index": 2,
+            "reason": "Two explicit prompts, one legacy issue and one cached application must remain four rows; observed delta 2."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 126,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "failed",
+            "duration_ms": 172,
+            "repeat_index": 3,
+            "reason": "Two explicit prompts, one legacy issue and one cached application must remain four rows; observed delta 2."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 128,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

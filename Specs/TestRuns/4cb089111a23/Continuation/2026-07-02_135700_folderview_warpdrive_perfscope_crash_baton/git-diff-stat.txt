@@ -1,0 +1,8 @@
+ Common/Helpers.h                                   | 14 +++--
+ .../FolderWindow.FileOperations.Popup.cpp          | 20 ++++--
+ .../FolderWindow.FileSystem.Commands.Part.cpp      | 29 ++++++---
+ .../FolderWindow.FileSystem.Navigation.Part.cpp    | 47 ++++++++------
+ .../Commands/Commands.SelfTest.Settings.cpp        | 35 ++++++++++-
+ Tests/DxUiTests/DxUiTests.Controls.cpp             | 21 ++++++-
+ Tests/DxUiTests/DxUiTests.NativeTextInput.cpp      | 71 ++++++++++++++++++++++
+ 7 files changed, 195 insertions(+), 42 deletions(-)

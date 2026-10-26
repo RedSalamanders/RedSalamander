@@ -1,0 +1,12 @@
+[
+  {
+    "root": "Z:/RsI19Before",
+    "function": "[[nodiscard]] bool TestPreferencesDialogPluginsRoundTripRestoresDxUiSurface(",
+    "fixtureSha256": "640b226bc78b5eff7e935f8e21d2c78685a0daa845e504861fa090871ed6ccaf"
+  },
+  {
+    "root": "Z:/RsI19Closeout",
+    "function": "[[nodiscard]] bool TestPreferencesDialogPluginsRoundTripRestoresDxUiSurface(",
+    "fixtureSha256": "640b226bc78b5eff7e935f8e21d2c78685a0daa845e504861fa090871ed6ccaf"
+  }
+]

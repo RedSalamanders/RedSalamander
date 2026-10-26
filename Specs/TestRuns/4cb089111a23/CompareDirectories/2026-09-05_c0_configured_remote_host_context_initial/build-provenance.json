@@ -1,0 +1,9 @@
+{
+  "sourceFile": "msbuild-20260905_205848_413-pid79136-81625add.log",
+  "rawSha256": "88c5c74d8d9e2a674bc019b59776b36c1d1a5f428dafdd8d1e30e51459aa9d4f",
+  "rawBytes": 31411,
+  "normalizedSha256": "872559f8c2888e70586f29286e63afc81a366dd52a41a493250d1772e992c5f1",
+  "normalizedBytes": 31407,
+  "normalization": "Removed trailing spaces/tabs from two blank compiler template-context lines; UTF-8 without BOM. Line order and diagnostics retained.",
+  "changedLines": 2
+}

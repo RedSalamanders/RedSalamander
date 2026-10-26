@@ -1,0 +1,4 @@
+# SHA-256 manifest; exact source bytes verified after copy.
+# Columns: sha256  bytes  archived-name  source-path
+254634ac0fa1261b4d626322fa62e14dd282ad60b594e3258c6cd98dec720c52  7657  TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log  D:\RedSalamander.Perf\runs\20261009T223523Z-45208-85e484e24c8249f78bb3e3a7221599bb\artifacts\selftest\last_run\TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log
+9bbdda125a04e2ea7c0818535d72e472d6923228888cb30242b365282e816b8f  1507  viewer-space-focused-diagnostic.json  D:\RedSalamander.Perf\runs\20261009T223523Z-45208-85e484e24c8249f78bb3e3a7221599bb\artifacts\selftest\last_run\viewer-space-focused-diagnostic.json

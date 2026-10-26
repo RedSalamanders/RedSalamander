@@ -2,9 +2,9 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiUpdate.psm1') -Force
 
 function New-RSDxUiUpdateFixture {
-    param([string]$Root, [string]$Commit)
+    param([string]$Root, [string]$Commit, $ApiRevision = 3)
     [void](New-Item -ItemType Directory -Path (Join-Path $Root 'Dependencies') -Force)
-    [ordered]@{ repository='https://github.com/RedSalamanders/DxUi'; commit=$Commit; apiRevision=2; targets=@('DxUi') } |
+    [ordered]@{ repository='https://github.com/RedSalamanders/DxUi'; commit=$Commit; apiRevision=$ApiRevision; targets=@('DxUi') } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'Dependencies/DxUi.lock.json') -NoNewline
 }
 
@@ -46,5 +46,24 @@ Describe 'RedSalamander DxUi updater' {
         try { Invoke-RSDxUiUpdate -RepoRoot $root -UpdateOnly -Request (New-RSDxUiUpdateRequest -Current $current -Candidate $candidate -Conclusion 'failure') } catch { $failure = $_.Exception.Message }
         $failure | Should Match '^Cannot select a validated DxUi main candidate:'
         ((Get-Content -Raw -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json') | ConvertFrom-Json).commit) | Should Be $current
+    }
+
+    It 'moves only the commit: the lock keeps the API revision the product adopted' {
+        $current = '1' * 40; $candidate = '2' * 40; $root = Join-Path $TestDrive 'keeps-revision'
+        New-RSDxUiUpdateFixture -Root $root -Commit $current -ApiRevision 3
+        [void](Invoke-RSDxUiUpdate -RepoRoot $root -UpdateOnly -Request (New-RSDxUiUpdateRequest -Current $current -Candidate $candidate))
+        $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json') | ConvertFrom-Json
+        $lock.commit | Should Be $candidate
+        $lock.apiRevision | Should Be 3
+    }
+
+    It 'rejects a lock whose API revision is not a positive integer' {
+        $root = Join-Path $TestDrive 'bad-revision'
+        foreach ($revision in @(0, -1, '3', $null)) {
+            New-RSDxUiUpdateFixture -Root $root -Commit ('3' * 40) -ApiRevision $revision
+            $failure = $null
+            try { Invoke-RSDxUiUpdate -RepoRoot $root -UpdateOnly -Request (New-RSDxUiUpdateRequest -Current ('3' * 40) -Candidate ('4' * 40)) } catch { $failure = $_.Exception.Message }
+            $failure | Should Match 'positive integer API revision'
+        }
     }
 }

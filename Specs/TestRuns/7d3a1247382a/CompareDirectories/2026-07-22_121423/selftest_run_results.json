@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-07-22T10:14:13.970Z",
+    "duration_ms": 9171,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 3,
+    "case_filter": "search_service_store_writer_ownership_is_resource_scoped",
+    "suites": [
+        {
+            "suite": "CompareDirectories",
+            "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260722T101412Z-9092-bb59e2a052e547359b080c6496071721\\artifacts\\selftest\\last_run\\compare",
+            "duration_ms": 8624,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 3,
+            "case_filter": "search_service_store_writer_ownership_is_resource_scoped",
+            "cases": [
+                {
+                    "name": "search_service_store_writer_ownership_is_resource_scoped",
+                    "status": "passed",
+                    "duration_ms": 3079,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "search_service_store_writer_ownership_is_resource_scoped",
+                    "status": "passed",
+                    "duration_ms": 2701,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "search_service_store_writer_ownership_is_resource_scoped",
+                    "status": "passed",
+                    "duration_ms": 2776,
+                    "repeat_index": 3
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

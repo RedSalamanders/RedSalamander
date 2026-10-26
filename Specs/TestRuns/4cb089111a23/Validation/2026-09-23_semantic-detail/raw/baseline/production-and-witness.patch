@@ -1,0 +1,1218 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp b/RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp
+index 3f1e0c661..0f4574999 100644
+--- a/RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp
+@@ -435,6 +435,8 @@ public:
+         _dxHost.Invalidate();
+     }
+ 
++    [[nodiscard]] bool SelectTask(uint64_t taskId, uint64_t promptGeneration) noexcept;
++
+ #ifdef ENABLE_TESTS
+     void FillSelfTestSnapshot(FileOperationsIssuesPane::SelfTestSnapshot& outSnapshot, bool includeDetail) const noexcept;
+     bool SelfTestDetailKey(UINT key) noexcept
+@@ -454,7 +456,6 @@ public:
+     }
+ 
+     [[nodiscard]] bool SelfTestHitTestGridPoint(D2D1_POINT_2F pointDip, FileOperationsIssuesPane::SelfTestGridHit& outHit) const noexcept;
+-    [[nodiscard]] bool SelfTestSelectTask(uint64_t taskId, uint64_t promptGeneration) noexcept;
+     [[nodiscard]] bool SelfTestFocusGrid() noexcept;
+     [[nodiscard]] bool SelfTestRefresh(bool force) noexcept;
+     [[nodiscard]] bool SelfTestScrollByWheelDetents(int detents) noexcept;
+@@ -489,9 +490,7 @@ private:
+     void CaptureColumnPreferences() noexcept;
+     void ApplyGridPresentation(float contentWidth) noexcept;
+     void ApplyGridSort() noexcept;
+-#ifdef ENABLE_TESTS
+     [[nodiscard]] std::optional<size_t> FindRowIndexForTask(uint64_t taskId, uint64_t promptGeneration) const noexcept;
+-#endif
+ 
+     UINT _dpi                  = USER_DEFAULT_SCREEN_DPI;
+     bool _inThemeChange        = false;
+@@ -598,32 +597,16 @@ std::vector<IssuesRow> FileOperationsIssuesPaneState::BuildRows()
+     const auto appendIssue = [&](const FolderWindow::FileOperationState::TaskDiagnosticEntry& issue) noexcept
+     {
+         using Severity      = FolderWindow::FileOperationState::DiagnosticSeverity;
+-        // Typed decisions/results are separate facts even when their severity is Error.
+-        // Test raw presence so a rejected typed observation cannot become a legacy problem.
+-        const bool original = (issue.severity == Severity::Warning || issue.severity == Severity::Error) && ! issue.acceptedDecision.has_value() &&
+-                              ! issue.conflictResult.has_value();
++        const auto facts    = FolderWindow::FileOperationState::QualifyIssueFacts(issue);
++        if (! facts.ProjectsRow())
++            return;
++        const bool original = facts.originalProblem;
+         auto accepted       = issue.acceptedDecision;
+-        if (accepted.has_value())
+-        {
+-            const auto& choice = accepted.value();
+-            if (choice.taskId != issue.taskId || choice.taskId == 0u || choice.promptGeneration == 0u ||
+-                choice.action == FileOperations::ConflictAction::None ||
+-                (issue.conflictPrompt.has_value() &&
+-                 (issue.conflictPrompt->generation != choice.promptGeneration || issue.conflictPrompt->bucket != choice.scope.bucket ||
+-                  issue.conflictPrompt->sourceItemIndex != choice.sourceItemIndex)))
+-                accepted.reset();
+-        }
++        if (! facts.acceptedDecision)
++            accepted.reset();
+         auto result = issue.conflictResult;
+-        if (result.has_value())
+-        {
+-            const auto& reference = result->reference;
+-            if (reference.taskId != issue.taskId || reference.taskId == 0u || reference.promptGeneration == 0u ||
+-                (issue.conflictPrompt.has_value() && issue.conflictPrompt->generation != reference.promptGeneration) ||
+-                (accepted.has_value() && accepted->promptGeneration != reference.promptGeneration))
+-                result.reset();
+-        }
+-        if (! original && ! accepted.has_value() && ! result.has_value())
+-            return;
++        if (! facts.conflictResult)
++            result.reset();
+         const uint64_t generation = accepted.has_value()               ? accepted->promptGeneration
+                                     : result.has_value()               ? result->reference.promptGeneration
+                                     : issue.conflictPrompt.has_value() ? issue.conflictPrompt->generation
+@@ -973,7 +956,6 @@ void FileOperationsIssuesPaneState::RefreshRows(bool force) noexcept
+     _dxHost.Invalidate();
+ }
+ 
+-#ifdef ENABLE_TESTS
+ std::optional<size_t> FileOperationsIssuesPaneState::FindRowIndexForTask(uint64_t taskId, uint64_t promptGeneration) const noexcept
+ {
+     for (size_t rowIndex = 0; rowIndex < _rows.size(); ++rowIndex)
+@@ -987,6 +969,24 @@ std::optional<size_t> FileOperationsIssuesPaneState::FindRowIndexForTask(uint64_
+     return std::nullopt;
+ }
+ 
++bool FileOperationsIssuesPaneState::SelectTask(uint64_t taskId, uint64_t promptGeneration) noexcept
++{
++    if (! _grid)
++        return false;
++    RefreshRows(false);
++    const std::optional<size_t> rowIndex = FindRowIndexForTask(taskId, promptGeneration);
++    if (! rowIndex.has_value())
++        return false;
++
++    _grid->GetSelectionModel().SetSingle(_rows[rowIndex.value()].stableId);
++    _grid->NotifyDataChanged();
++    _grid->EnsureRowVisible(rowIndex.value());
++    UpdateDetail(true);
++    _dxHost.Invalidate();
++    return true;
++}
++
++#ifdef ENABLE_TESTS
+ void FileOperationsIssuesPaneState::FillSelfTestSnapshot(FileOperationsIssuesPane::SelfTestSnapshot& outSnapshot, bool includeDetail) const noexcept
+ {
+     outSnapshot                    = {};
+@@ -1083,6 +1083,7 @@ void FileOperationsIssuesPaneState::FillSelfTestSnapshot(FileOperationsIssuesPan
+ 
+     if (includeDetail)
+     {
++        outSnapshot.primarySelectedRowBounds = _grid->GetVisibleRowRect(rowIndex.value()).value_or(D2D1::RectF());
+         for (size_t column = 0u; column < _model.GetColumnCount(); ++column)
+         {
+             GridCellData cell{};
+@@ -1133,26 +1134,6 @@ bool FileOperationsIssuesPaneState::SelfTestHitTestGridPoint(D2D1_POINT_2F point
+     return true;
+ }
+ 
+-bool FileOperationsIssuesPaneState::SelfTestSelectTask(uint64_t taskId, uint64_t promptGeneration) noexcept
+-{
+-    if (! _grid)
+-    {
+-        return false;
+-    }
+-
+-    const std::optional<size_t> rowIndex = FindRowIndexForTask(taskId, promptGeneration);
+-    if (! rowIndex.has_value())
+-    {
+-        return false;
+-    }
+-
+-    _grid->GetSelectionModel().SetSingle(_rows[rowIndex.value()].stableId);
+-    _grid->NotifyDataChanged();
+-    UpdateDetail(true);
+-    _dxHost.Invalidate();
+-    return true;
+-}
+-
+ bool FileOperationsIssuesPaneState::SelfTestFocusGrid() noexcept
+ {
+     if (! _grid)
+@@ -1778,6 +1759,14 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
+     return pane;
+ }
+ 
++bool FileOperationsIssuesPane::SelectTask(HWND hwnd, uint64_t taskId, uint64_t promptGeneration) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++        return false;
++    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
++    return state && state->SelectTask(taskId, promptGeneration);
++}
++
+ #ifdef ENABLE_TESTS
+ uint64_t FileOperationsIssuesPane::SelfTestLiveStateCount() noexcept
+ {
+@@ -1824,13 +1813,7 @@ bool FileOperationsIssuesPane::SelfTestSetTechnicalExpanded(HWND hwnd, bool expa
+ 
+ bool FileOperationsIssuesPane::SelfTestSelectTask(HWND hwnd, uint64_t taskId, uint64_t promptGeneration) noexcept
+ {
+-    if (! hwnd || IsWindow(hwnd) == FALSE)
+-    {
+-        return false;
+-    }
+-
+-    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+-    return state && state->SelfTestSelectTask(taskId, promptGeneration);
++    return SelectTask(hwnd, taskId, promptGeneration);
+ }
+ 
+ bool FileOperationsIssuesPane::SelfTestHitTestGridPoint(HWND hwnd, float xDip, float yDip, SelfTestGridHit& outHit) noexcept
+diff --git a/RedSalamander/FolderWindow.FileOperations.IssuesPane.h b/RedSalamander/FolderWindow.FileOperations.IssuesPane.h
+index 597dea367..19468e47b 100644
+--- a/RedSalamander/FolderWindow.FileOperations.IssuesPane.h
++++ b/RedSalamander/FolderWindow.FileOperations.IssuesPane.h
+@@ -13,17 +13,19 @@ class FileOperationsIssuesPane final
+ {
+ public:
+     static HWND Create(FolderWindow::FileOperationState* fileOps, FolderWindow* folderWindow, HWND ownerWindow, std::weak_ptr<void> hostLifetime) noexcept;
++    [[nodiscard]] static bool SelectTask(HWND hwnd, uint64_t taskId, uint64_t promptGeneration = 0u) noexcept;
+ 
+ #ifdef ENABLE_TESTS
+     struct SelfTestSnapshot
+     {
+-        bool detailPresent           = false;
+-        bool technicalExpanded       = false;
+-        float detailScrollOffset     = 0.0f;
+-        D2D1_RECT_F detailViewport   = D2D1::RectF();
+-        D2D1_RECT_F firstRowBounds   = D2D1::RectF();
+-        D2D1_RECT_F copyDetailBounds = D2D1::RectF();
+-        D2D1_RECT_F technicalBounds  = D2D1::RectF();
++        bool detailPresent                   = false;
++        bool technicalExpanded               = false;
++        float detailScrollOffset             = 0.0f;
++        D2D1_RECT_F detailViewport           = D2D1::RectF();
++        D2D1_RECT_F firstRowBounds           = D2D1::RectF();
++        D2D1_RECT_F primarySelectedRowBounds = D2D1::RectF();
++        D2D1_RECT_F copyDetailBounds         = D2D1::RectF();
++        D2D1_RECT_F technicalBounds          = D2D1::RectF();
+         std::array<std::wstring, 9> detailTexts{};
+         std::array<D2D1_RECT_F, 9> detailTextBounds{};
+         std::array<float, 9> detailRequiredHeights{};
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index 166624245..bc7e21b88 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -4171,11 +4171,13 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
+ #endif
+     std::vector<FolderWindow::FileOperationState::Task*> tasks;
+     std::vector<FolderWindow::InformationalTaskUpdate> informationalTasks;
++    std::vector<uint64_t> issueTaskIds;
+     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
+     if (fileOps && hostLifetime.lock())
+     {
+         fileOps->CollectTasks(tasks);
+         fileOps->CollectInformationalTasks(informationalTasks);
++        fileOps->CollectProjectableIssueTaskIds(issueTaskIds);
+         fileOps->CollectCompletedTasks(completedTasks);
+     }
+ 
+@@ -4466,6 +4468,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
+         {
+             snap.itemCompletedBytes = std::min(snap.itemCompletedBytes, snap.itemTotalBytes);
+         }
++        snap.hasProjectableIssues = snap.finished && ! snap.interruptedMoveNotice && std::binary_search(issueTaskIds.begin(), issueTaskIds.end(), snap.taskId);
+         EnsureFinishedTaskDiagnosticAffordance(snap);
+         NormalizeCompletedTaskSnapshotForDisplay(snap);
+         snap.statusKind = ResolveTaskStatusKind(snap);
+@@ -4537,6 +4540,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
+         {
+             snap.completedBytes = std::min(snap.completedBytes, snap.totalBytes);
+         }
++        snap.hasProjectableIssues = snap.finished && ! snap.interruptedMoveNotice && std::binary_search(issueTaskIds.begin(), issueTaskIds.end(), snap.taskId);
+         EnsureFinishedTaskDiagnosticAffordance(snap);
+         NormalizeCompletedTaskSnapshotForDisplay(snap);
+         snap.statusKind = ResolveTaskStatusKind(snap);
+@@ -5078,6 +5082,59 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalFa
+     return hr;
+ }
+ 
++HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalActions(size_t slot,
++                                                                                      const TaskSnapshot& task,
++                                                                                      float widthPx,
++                                                                                      bool rightToLeft) noexcept
++{
++    if (slot >= _terminalActions.size() || ! _dwriteFactory || ! std::isfinite(widthPx) || widthPx <= 0.0f)
++        return E_INVALIDARG;
++    auto* format = _controlsHost.GetTextFormat(DxUi::FontRole::Body,
++                                               DWRITE_TEXT_ALIGNMENT_CENTER,
++                                               DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
++                                               true,
++                                               rightToLeft ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
++    if (! format)
++        return E_PENDING;
++    const float widthDip = _controlsHost.PixelsToDip(widthPx);
++    if (widthDip <= 52.0f)
++        return E_INVALIDARG;
++    std::array<std::wstring, 3> labels{{LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS),
++                                        task.hasProjectableIssues ? LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES) : std::wstring{},
++                                        CompletedTaskHasOverflowActions(task) ? std::wstring(L"\u2026") : std::wstring{}}};
++    auto& cached = _terminalActions[slot];
++    if (cached.format.get() == format && cached.widthDip == widthDip && cached.dpi == _dpi && cached.rightToLeft == rightToLeft && cached.labels == labels)
++        return S_OK;
++    const uint64_t startedUs = PerfNowUs();
++    std::array<D2D1_SIZE_F, 3> sizes{};
++    for (size_t index = 0u; index < labels.size(); ++index)
++    {
++        if (labels[index].empty())
++            continue;
++        const float padding = index == 2u ? 52.0f : 24.0f;
++        wil::com_ptr<IDWriteTextLayout> text;
++        RETURN_IF_FAILED(
++            _dwriteFactory->CreateTextLayout(labels[index].data(), static_cast<UINT32>(labels[index].size()), format, widthDip - padding, 4096.0f, text.put()));
++        DWRITE_TEXT_METRICS metrics{};
++        RETURN_IF_FAILED(text->GetMetrics(&metrics));
++        sizes[index] = D2D1::SizeF(std::min(widthDip, std::max(80.0f, std::ceil(metrics.widthIncludingTrailingWhitespace) + padding)),
++                                   std::max(32.0f, std::ceil(metrics.height) + 16.0f));
++    }
++    std::array<D2D1_RECT_F, 3> bounds{};
++    DxUi::MeasuredActionLayout layout{};
++    RETURN_IF_FAILED(DxUi::ArrangeMeasuredActions(
++        sizes, widthDip, D2D1::SizeF(8.0f, 6.0f), bounds, layout, rightToLeft ? DxUi::FlowDirection::RightToLeft : DxUi::FlowDirection::LeftToRight));
++    cached.labels      = std::move(labels);
++    cached.bounds      = bounds;
++    cached.format      = format;
++    cached.widthDip    = widthDip;
++    cached.heightDip   = layout.heightDip;
++    cached.dpi         = _dpi;
++    cached.rightToLeft = rightToLeft;
++    Debug::Perf::Emit(L"FileOps.Popup.TerminalActions.MeasureUs", L"current terminal actions cache miss", PerfElapsedUs(startedUs), 0u, layout.rowCount, S_OK);
++    return S_OK;
++}
++
+ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareCompletedGroup(float widthPx,
+                                                                                      uint32_t total,
+                                                                                      const std::array<uint32_t, 5>& counts) noexcept
+@@ -5921,6 +5978,7 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
+             }
+             return ConflictActionText(static_cast<ConflictAction>(hit.data), bucket, operation);
+         }
++        case PopupHitTest::Kind::TaskIssues: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+         case PopupHitTest::Kind::TaskDismiss: return LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS);
+         case PopupHitTest::Kind::FooterOptions:
+             return _controlsHost.HasFluentIconFont() ? std::wstring(1u, FluentIcons::kMore) : std::wstring(1u, FluentIcons::kFallbackMore);
+@@ -6485,7 +6543,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
+         button->SetAccessibleName(accessibleName);
+         button->SetTooltipText(accessibleName != controlText ? accessibleName : std::wstring{});
+         button->SetVariant(HostedButtonVariant(hit.kind));
+-        button->SetMultiline(hit.kind == PopupHitTest::Kind::TaskConflictAction || hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll);
++        button->SetMultiline(hit.kind == PopupHitTest::Kind::TaskConflictAction || hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll ||
++                             hit.kind == PopupHitTest::Kind::TaskIssues || hit.kind == PopupHitTest::Kind::TaskDismiss ||
++                             hit.kind == PopupHitTest::Kind::TaskCompletedMore);
+         if (hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll)
+         {
+             const auto task      = std::ranges::find(snapshot, hit.taskId, &TaskSnapshot::taskId);
+@@ -6947,6 +7007,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+         _completedGroupMeasurement = {};
+     _terminalSummaries.resize(snapshot.size());
+     _terminalFacts.resize(snapshot.size());
++    _terminalActions.resize(snapshot.size());
+     const uint64_t languageRevision = Localization::GetLanguagePreferenceRevision();
+     for (size_t index = 0u; index < snapshot.size(); ++index)
+     {
+@@ -6957,8 +7018,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+         {
+             _terminalSummaries[index] = {};
+             _terminalFacts[index]     = {};
++            _terminalActions[index]   = {};
+             continue;
+         }
++        if (FAILED(PrepareTerminalActions(index, task, conflictActionWidthPx, actionRightToLeft)))
++        {
++            static_cast<void>(EnterFailureSurface(hwnd));
++            return;
++        }
+         if (TaskHasTerminalFacts(task))
+         {
+             if (FAILED(PrepareTerminalFacts(index, task, conflictActionWidthPx, languageRevision)))
+@@ -7044,9 +7111,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                 const float diagnosticLines = task.interruptedMoveNotice ? 0.0f : (showHrLine ? 2.0f : 1.0f);
+                 const float pathLines       = task.operation == FILESYSTEM_DELETE ? 1.0f : 2.0f;
+                 const float noteLines       = task.lastDiagnosticMessage.empty() ? 0.0f : 1.0f;
+-                // Top/header, optional axis badges, exact body rows, then progress,
++                // Top/header, measured facts, exact body rows, then progress,
+                 // action gap, dismiss action and bottom inset. Outer scrolling owns overflow.
+-                h = DipsToPixels(8.0f + 18.0f + 48.0f, _dpi) + (diagnosticLines + pathLines + noteLines) * baseLineH;
++                h = DipsToPixels(8.0f + 18.0f + 24.0f + _terminalActions[row.taskIndex].heightDip, _dpi) +
++                    (diagnosticLines + pathLines + noteLines) * baseLineH;
+                 if (const auto& summary = _terminalSummaries[row.taskIndex]; summary.layout)
+                     h += summary.heightPx + DipsToPixels(10.0f, _dpi);
+                 if (const auto& facts = _terminalFacts[row.taskIndex].prepared; facts.layout)
+@@ -8600,7 +8668,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                         textY += lineH;
+                     }
+ 
+-                    const float dismissButtonH         = DipsToPixels(24.0f, _dpi);
++                    const float dismissButtonH         = DipsToPixels(_terminalActions[row.taskIndex].heightDip, _dpi);
+                     const float dismissButtonBottomPad = DipsToPixels(8.0f, _dpi);
+                     const float dismissButtonTop       = std::max(textY + DipsToPixels(4.0f, _dpi), cardRect.bottom - dismissButtonBottomPad - dismissButtonH);
+ 
+@@ -8621,38 +8689,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
+                     progressDescriptor.secondarySegmentValue = VerificationProofProgressPercent(task);
+                     _hostedProgressDescriptors.push_back(progressDescriptor);
+ 
+-                    if (CompletedTaskHasOverflowActions(task))
+-                    {
+-                        const float btnGap         = DipsToPixels(6.0f, _dpi);
+-                        const float totalW         = std::max(0.0f, contentRight - textX);
+-                        const float preferredMoreW = DipsToPixels(96.0f, _dpi);
+-                        const float moreW          = totalW > DipsToPixels(180.0f, _dpi) ? std::min(preferredMoreW, std::max(0.0f, totalW * 0.35f))
+-                                                                                         : std::max(0.0f, (totalW - btnGap) * 0.5f);
+-                        const float dismissW       = std::max(0.0f, totalW - btnGap - moreW);
+-
+-                        PopupButton dismissBtn{};
+-                        dismissBtn.bounds     = D2D1::RectF(textX, dismissButtonTop, textX + dismissW, dismissButtonTop + dismissButtonH);
+-                        dismissBtn.hit.kind   = PopupHitTest::Kind::TaskDismiss;
+-                        dismissBtn.hit.taskId = task.taskId;
+-                        _buttons.push_back(dismissBtn);
+-                        DrawButton(dismissBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS));
+-
+-                        PopupButton moreBtn{};
+-                        moreBtn.bounds     = D2D1::RectF(textX + dismissW + btnGap, dismissButtonTop, contentRight, dismissButtonTop + dismissButtonH);
+-                        moreBtn.hit.kind   = PopupHitTest::Kind::TaskCompletedMore;
+-                        moreBtn.hit.taskId = task.taskId;
+-                        moreBtn.hit.data   = 2u;
+-                        _buttons.push_back(moreBtn);
+-                        DrawMenuButton(moreBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE));
+-                    }
+-                    else
++                    const auto& actions = _terminalActions[row.taskIndex];
++                    constexpr std::array<PopupHitTest::Kind, 3> kinds{
++                        {PopupHitTest::Kind::TaskDismiss, PopupHitTest::Kind::TaskIssues, PopupHitTest::Kind::TaskCompletedMore}};
++                    for (size_t index = 0u; index < kinds.size(); ++index)
+                     {
+-                        PopupButton dismissBtn{};
+-                        dismissBtn.bounds     = D2D1::RectF(textX, dismissButtonTop, contentRight, dismissButtonTop + dismissButtonH);
+-                        dismissBtn.hit.kind   = PopupHitTest::Kind::TaskDismiss;
+-                        dismissBtn.hit.taskId = task.taskId;
+-                        _buttons.push_back(dismissBtn);
+-                        DrawButton(dismissBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS));
++                        if (actions.labels[index].empty())
++                            continue;
++                        const auto& local = actions.bounds[index];
++                        PopupButton action{};
++                        action.bounds = D2D1::RectF(textX + DipsToPixels(local.left, _dpi),
++                                                    dismissButtonTop + DipsToPixels(local.top, _dpi),
++                                                    textX + DipsToPixels(local.right, _dpi),
++                                                    dismissButtonTop + DipsToPixels(local.bottom, _dpi));
++                        action.hit    = {kinds[index], task.taskId, index == 2u ? 2u : 0u};
++                        _buttons.push_back(action);
++                        // Retained DxUi buttons own the measured, wrapped Body caption.
++                        // Paint only the fallback chrome here, without a duplicate small label.
++                        if (index == 2u)
++                            DrawMenuButton(action, nullptr, {});
++                        else
++                            DrawButton(action, nullptr, {});
+                     }
+ 
+                     const float gapAfter = (rowIndex + 1u < rowCount) ? cardGap : 0.0f;
+@@ -10779,11 +10836,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitCompletedOverf
+     }
+     else if (action == kCompletedOverflowActionFailedItems)
+     {
+-        if (! fileOps->IsIssuesPaneVisible())
+-        {
+-            fileOps->ToggleIssuesPane();
+-        }
+-        handled = fileOps->IsIssuesPaneVisible();
++        handled = fileOps->OpenIssuesForTask(taskId);
+     }
+     else if (action == kCompletedOverflowActionOpenSource)
+     {
+@@ -10873,13 +10926,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
+     items.reserve(8u);
+ 
+     const bool hasDiagnostics = ! taskIt->interruptedMoveNotice && (taskIt->warningCount > 0 || taskIt->errorCount > 0);
+-    if (hasDiagnostics)
+-    {
+-        DxUi::MenuFlyoutItem failedItemsItem{};
+-        failedItemsItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_FAILED_ITEMS);
+-        failedItemsItem.commandId = static_cast<int>(kCompletedOverflowActionFailedItems);
+-        items.push_back(std::move(failedItemsItem));
+-    }
+ 
+     if (ResolveCompletedTaskRevealLocation(*taskIt).has_value())
+     {
+@@ -11481,6 +11527,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnThemeChanged(HW
+     // WM_SETTINGCHANGE can replace the number-format locale without changing the
+     // selected language. Reformat localized count fragments on the next paint.
+     _terminalFacts.clear();
++    _terminalActions.clear();
+ 
+     if (folderWindow && hostLifetime.lock())
+     {
+@@ -11535,6 +11582,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy(HWND
+     _footerSummaryText.clear();
+     _terminalSummaries.clear();
+     _terminalFacts.clear();
++    _terminalActions.clear();
+     _completedGroupMeasurement = {};
+     _graphTrailingLabelFormat.reset();
+     _buttonFormat.reset();
+@@ -11606,6 +11654,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnDpiChanged(HWND
+     _footerSummaryText.clear();
+     _terminalSummaries.clear();
+     _terminalFacts.clear();
++    _terminalActions.clear();
+     _completedGroupMeasurement = {};
+     _graphTrailingLabelFormat.reset();
+     _buttonFormat.reset();
+@@ -12111,6 +12160,14 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
+         return 0;
+     }
+ 
++    if (hit.kind == PopupHitTest::Kind::TaskIssues)
++    {
++        if (fileOps)
++            static_cast<void>(fileOps->OpenIssuesForTask(hit.taskId));
++        Invalidate(hwnd);
++        return 0;
++    }
++
+     if (hit.kind == PopupHitTest::Kind::TaskCompletedMore)
+     {
+         ShowCompletedOverflowMenu(hwnd, hit.taskId);
+@@ -12240,7 +12297,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
+         payload->kind == PopupHitTest::Kind::TaskToggleCollapse || payload->kind == PopupHitTest::Kind::TaskToggleThroughput ||
+         payload->kind == PopupHitTest::Kind::TaskStartNow || payload->kind == PopupHitTest::Kind::TaskQueueMoveUp ||
+         payload->kind == PopupHitTest::Kind::TaskQueueMoveDown || payload->kind == PopupHitTest::Kind::TaskConflictInspectSource ||
+-        payload->kind == PopupHitTest::Kind::TaskConflictInspectDestination)
++        payload->kind == PopupHitTest::Kind::TaskConflictInspectDestination || payload->kind == PopupHitTest::Kind::TaskIssues)
+     {
+         // OnActivatedHit returns 0 for these kinds even on success; self-test callers need a
+         // dispatched-successfully signal.
+@@ -12790,7 +12847,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+         result.taskStatusTextSignalVisible  = ! statusChipText.empty() || ! StatusTextForTask(*taskIt, status, GetTickCount64()).empty();
+         result.taskStatusColorBlindSafeEncoding =
+             statusTone == PopupStatusVisualTone::None || result.taskStatusGlyphSignalVisible || result.taskStatusTextSignalVisible;
+-        result.completedFailedItemsActionVisible       = taskIt->finished && (taskIt->warningCount > 0 || taskIt->errorCount > 0);
++        // The old Failed items entry moved out of More. Do not infer menu membership
++        // from warning/error counters in this rendered-controls observer.
++        result.completedFailedItemsActionVisible       = false;
+         result.completedOpenDestinationActionVisible   = CompletedTaskCanUseDestinationActions(*taskIt);
+         result.completedRevealDestinationActionVisible = ResolveCompletedTaskRevealLocation(*taskIt).has_value();
+         result.taskHiddenByCompletedGroup              = completedGroupVisible && ! _completedGroupExpanded && IsCompletedGroupTask(*taskIt);
+@@ -12951,6 +13010,49 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                SUCCEEDED(_dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format, widthDip, 4096.0f, layout.put())) &&
+                SUCCEEDED(layout->GetMetrics(&metrics)) && metrics.widthIncludingTrailingWhitespace <= widthDip + 0.5f && metrics.height <= heightDip + 0.5f;
+     };
++    const auto completedActionFits = [&](size_t index, const PopupButton& button, bool& labelFits) noexcept
++    {
++        labelFits = false;
++        if (index >= _hostedButtons.size() || ! _hostedButtons[index] || ! rectHasArea(button.bounds))
++            return false;
++        const DxUi::Button& hosted      = *_hostedButtons[index];
++        const bool more                 = button.hit.kind == PopupHitTest::Kind::TaskCompletedMore;
++        const UINT labelId              = static_cast<UINT>(button.hit.kind == PopupHitTest::Kind::TaskIssues ? IDS_FILEOPS_BTN_ISSUES
++                                                            : more                                            ? IDS_FILEOPS_CONFLICT_BTN_MORE
++                                                                                                              : IDS_FILEOP_BTN_DISMISS);
++        const std::wstring label        = LoadStringResource(nullptr, labelId);
++        const std::wstring expectedText = more ? L"\u2026" : label;
++        const auto actualBounds         = hosted.GetBounds();
++        const auto boundsNear           = [](float a, float b) noexcept { return std::abs(a - b) <= 0.5f; };
++        const bool hostedBoundsMatch    = boundsNear(actualBounds.left, _controlsHost.PixelsToDip(button.bounds.left)) &&
++                                          boundsNear(actualBounds.top, _controlsHost.PixelsToDip(button.bounds.top)) &&
++                                          boundsNear(actualBounds.right, _controlsHost.PixelsToDip(button.bounds.right)) &&
++                                          boundsNear(actualBounds.bottom, _controlsHost.PixelsToDip(button.bounds.bottom));
++        const auto painted              = _paintedTaskBodiesForSelfTest.find(button.hit.taskId);
++        const bool insideCard = painted != _paintedTaskBodiesForSelfTest.end() && button.bounds.left >= painted->second.actions.left - 0.5f &&
++                                button.bounds.top >= painted->second.actions.top - 0.5f && button.bounds.right <= painted->second.actions.right + 0.5f &&
++                                button.bounds.bottom <= painted->second.actions.bottom + 0.5f && button.bounds.left >= painted->second.card.left - 0.5f &&
++                                button.bounds.right <= painted->second.card.right + 0.5f && button.bounds.bottom <= painted->second.card.bottom + 0.5f;
++        if (more)
++        {
++            const auto chrome = DxUi::ComputeButtonChromeLayout(actualBounds, DxUi::ButtonVariant::DropDown);
++            const float width =
++                MeasureTextWidth(_dwriteFactory.get(),
++                                 _controlsHost.GetTextFormat(DxUi::FontRole::Body, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false),
++                                 hosted.GetText(),
++                                 4096.0f,
++                                 128.0f);
++            labelFits = width > 0.0f && width <= chrome.textRect.right - chrome.textRect.left + 0.5f;
++        }
++        else
++            labelFits = hostedLabelFits(hosted, button.bounds, false);
++        const std::wstring automationId =
++            std::format(L"FileOperations.Action.{}.{}.{}", static_cast<uint32_t>(button.hit.kind), button.hit.taskId, button.hit.data);
++        return ! label.empty() && hostedBoundsMatch && insideCard && hasActiveHitTarget(button) && labelFits &&
++               hosted.GetVariant() == (more ? DxUi::ButtonVariant::DropDown : DxUi::ButtonVariant::Standard) && hosted.GetText() == expectedText &&
++               hosted.GetAccessibleName() == label && hosted.GetAccessibleAutomationId() == automationId;
++    };
++    size_t completedActionOrdinal = 0u;
+     for (size_t i = 0; i < _buttons.size(); ++i)
+     {
+         const PopupButton& button = _buttons[i];
+@@ -13047,16 +13149,44 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+             case PopupHitTest::Kind::TaskCompletedMore:
+                 if (result.found && button.hit.taskId == result.taskId)
+                 {
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == (result.completedIssuesVisible ? 2u : 1u);
++                    ++completedActionOrdinal;
+                     result.completedDiagnosticsMoreVisible           = true;
+                     result.completedDiagnosticsMoreButtonRectVisible = true;
+                     result.completedDiagnosticsMoreButtonRect        = button.bounds;
++                    bool labelFits                                   = false;
++                    result.completedActionRowFits                    = result.completedActionRowFits && completedActionFits(i, button, labelFits);
++                    ++result.completedVisibleActionCount;
++                }
++                break;
++            case PopupHitTest::Kind::TaskIssues:
++                if (result.found && button.hit.taskId == result.taskId)
++                {
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == 1u;
++                    ++completedActionOrdinal;
++                    result.completedIssuesVisible         = true;
++                    result.completedIssuesButtonRect      = button.bounds;
++                    result.completedIssuesHitTargetActive = hasActiveHitTarget(button);
++                    bool labelFits                        = false;
++                    const bool actionFits                 = completedActionFits(i, button, labelFits);
++                    result.completedIssuesLabelFits       = labelFits;
++                    result.completedActionRowFits         = result.completedActionRowFits && actionFits;
++                    if (i < _hostedButtons.size() && _hostedButtons[i])
++                    {
++                        result.completedIssuesHostedText = std::wstring(_hostedButtons[i]->GetText());
++                        result.completedIssuesHostedName = std::wstring(_hostedButtons[i]->GetAccessibleName());
++                    }
+                     ++result.completedVisibleActionCount;
+                 }
+                 break;
+             case PopupHitTest::Kind::TaskDismiss:
+                 if (result.found && button.hit.taskId == result.taskId)
+                 {
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == 0u;
++                    ++completedActionOrdinal;
+                     result.completedDismissVisible = true;
++                    bool labelFits                 = false;
++                    result.completedActionRowFits  = result.completedActionRowFits && completedActionFits(i, button, labelFits);
+                     ++result.completedVisibleActionCount;
+                 }
+                 break;
+@@ -13181,6 +13311,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+         }
+     }
+ 
++    result.completedActionRowFits = result.completedActionRowFits && ! result.taskHasVisibleButtonOverlap;
++
+     *snapshot = result;
+     return result.found ? 1 : 0;
+ }
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index d40dc70f4..fe281dd67 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -54,6 +54,7 @@ struct PopupHitTest
+         TaskToggleThroughput,
+         TaskConflictInspectSource,
+         TaskConflictInspectDestination,
++        TaskIssues,
+     };
+ 
+     Kind kind       = Kind::None;
+@@ -232,6 +233,8 @@ struct TaskSnapshot
+ 
+     bool finished              = false;
+     HRESULT resultHr           = S_OK;
++    // Actual retained projectable Issues rows, independent of severity counters.
++    bool hasProjectableIssues  = false;
+     unsigned long warningCount = 0;
+     unsigned long errorCount   = 0;
+     std::wstring lastDiagnosticMessage;
+@@ -314,6 +317,13 @@ struct PopupLayoutDebugSnapshot
+     bool conflictMoreVisible                       = false;
+     bool completedDiagnosticsMoreVisible           = false;
+     bool completedDiagnosticsMoreButtonRectVisible = false;
++    bool completedIssuesVisible                    = false;
++    bool completedIssuesHitTargetActive            = false;
++    bool completedIssuesLabelFits                  = false;
++    bool completedActionRowFits                    = true;
++    D2D1_RECT_F completedIssuesButtonRect{};
++    std::wstring completedIssuesHostedText;
++    std::wstring completedIssuesHostedName;
+     bool completedShowLogVisible                   = false;
+     bool completedExportIssuesVisible              = false;
+     bool completedFailedItemsActionVisible         = false;
+@@ -1189,6 +1199,20 @@ private:
+     std::vector<TerminalFactsLayout> _terminalFacts;
+     HRESULT PrepareTerminalFacts(size_t slot, const TaskSnapshot& task, float widthPx, uint64_t languageRevision) noexcept;
+ 
++    struct TerminalActionsLayout final
++    {
++        std::array<std::wstring, 3> labels;
++        std::array<D2D1_RECT_F, 3> bounds{};
++        wil::com_ptr<IDWriteTextFormat> format;
++        float widthDip   = 0.0f;
++        float heightDip  = 0.0f;
++        UINT dpi         = 0u;
++        bool rightToLeft = false;
++    };
++    // One bounded action layout per currently visible expanded terminal card.
++    std::vector<TerminalActionsLayout> _terminalActions;
++    HRESULT PrepareTerminalActions(size_t slot, const TaskSnapshot& task, float widthPx, bool rightToLeft) noexcept;
++
+     struct CompletedGroupMeasurement final
+     {
+         std::wstring clearText;
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp b/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
+index e34325c81..e9ea26d69 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
+@@ -36,6 +36,63 @@
+ 
+ using namespace FolderWindowFileOperationsStateInternal;
+ 
++FolderWindow::FileOperationState::QualifiedIssueFacts FolderWindow::FileOperationState::QualifyIssueFacts(const TaskDiagnosticEntry& issue) noexcept
++{
++    QualifiedIssueFacts facts{};
++    // Raw typed presence prevents malformed typed observations from becoming
++    // ordinary problems just because their diagnostic severity is Error.
++    facts.originalProblem = (issue.severity == DiagnosticSeverity::Warning || issue.severity == DiagnosticSeverity::Error) &&
++                            ! issue.acceptedDecision.has_value() && ! issue.conflictResult.has_value();
++    if (issue.acceptedDecision.has_value())
++    {
++        const auto& choice = issue.acceptedDecision.value();
++        if (choice.taskId == issue.taskId && choice.taskId != 0u && choice.promptGeneration != 0u && choice.action != FileOperations::ConflictAction::None &&
++            (! issue.conflictPrompt.has_value() ||
++             (issue.conflictPrompt.value().generation == choice.promptGeneration && issue.conflictPrompt.value().bucket == choice.scope.bucket &&
++              issue.conflictPrompt.value().sourceItemIndex == choice.sourceItemIndex)))
++            facts.acceptedDecision = &choice;
++    }
++    if (issue.conflictResult.has_value())
++    {
++        const auto& result    = issue.conflictResult.value();
++        const auto& reference = result.reference;
++        if (reference.taskId == issue.taskId && reference.taskId != 0u && reference.promptGeneration != 0u &&
++            (! issue.conflictPrompt.has_value() || issue.conflictPrompt.value().generation == reference.promptGeneration) &&
++            (! facts.acceptedDecision || facts.acceptedDecision->promptGeneration == reference.promptGeneration))
++            facts.conflictResult = &result;
++    }
++    return facts;
++}
++
++void FolderWindow::FileOperationState::CollectProjectableIssueTaskIds(std::vector<uint64_t>& outTaskIds) noexcept
++{
++    outTaskIds.clear();
++    // Mirror BuildRows' two retained reservoirs. Keep lock acquisition separate,
++    // as CollectDiagnostics and CollectCompletedTasks do, and never retain a
++    // borrowed fact pointer after leaving its entry's lock scope.
++    {
++        std::scoped_lock lock(_diagnosticsMutex);
++        for (const auto& issue : _diagnosticsInMemory)
++        {
++            if (issue.taskId != 0u && QualifyIssueFacts(issue).ProjectsRow())
++                outTaskIds.push_back(issue.taskId);
++        }
++    }
++    {
++        std::scoped_lock lock(_mutex);
++        for (const auto& task : _completedTasks)
++        {
++            for (const auto& issue : task.issueDiagnostics)
++            {
++                if (issue.taskId != 0u && QualifyIssueFacts(issue).ProjectsRow())
++                    outTaskIds.push_back(issue.taskId);
++            }
++        }
++    }
++    std::sort(outTaskIds.begin(), outTaskIds.end());
++    outTaskIds.erase(std::unique(outTaskIds.begin(), outTaskIds.end()), outTaskIds.end());
++}
++
+ namespace
+ {
+ [[nodiscard]] std::wstring ConflictPromptJson(const FileOperations::ConflictPromptObservation& prompt)
+@@ -382,6 +439,32 @@ void FolderWindow::FileOperationState::ToggleIssuesPane() noexcept
+     }
+ }
+ 
++bool FolderWindow::FileOperationState::OpenIssuesForTask(uint64_t taskId) noexcept
++{
++    if (taskId == 0u)
++        return false;
++    std::vector<uint64_t> projectableTaskIds;
++    CollectProjectableIssueTaskIds(projectableTaskIds);
++    if (! std::binary_search(projectableTaskIds.begin(), projectableTaskIds.end(), taskId))
++        return false;
++
++    // ToggleIssuesPane closes an already-visible pane. Use it only to create
++    // or reveal one, then select the originating task in its current sort order.
++    if (! IsIssuesPaneVisible())
++        ToggleIssuesPane();
++    HWND pane = nullptr;
++    {
++        std::scoped_lock lock(_mutex);
++        pane = _issuesPane.get();
++    }
++    if (! pane || IsWindow(pane) == FALSE || ! FileOperationsIssuesPane::SelectTask(pane, taskId))
++        return false;
++    if (IsIconic(pane) != FALSE)
++        ShowWindow(pane, SW_RESTORE);
++    SetForegroundWindow(pane);
++    return true;
++}
++
+ bool FolderWindow::FileOperationState::IsIssuesPaneVisible() noexcept
+ {
+     std::scoped_lock lock(_mutex);
+diff --git a/RedSalamander/FolderWindow.FileOperationsInternal.h b/RedSalamander/FolderWindow.FileOperationsInternal.h
+index 3447636b7..ee1de0710 100644
+--- a/RedSalamander/FolderWindow.FileOperationsInternal.h
++++ b/RedSalamander/FolderWindow.FileOperationsInternal.h
+@@ -924,6 +924,22 @@ struct FolderWindow::FileOperationState
+         unsigned long effectiveConcurrencyBudget = 0;
+     };
+ 
++    // Borrowed facts from one retained diagnostic. Do not retain these pointers past
++    // the entry's lifetime; the pane and action gate must use the same qualification.
++    struct QualifiedIssueFacts final
++    {
++        bool originalProblem                                             = false;
++        const FileOperations::AcceptedConflictDecision* acceptedDecision = nullptr;
++        const FileOperations::ConflictResultObservation* conflictResult  = nullptr;
++
++        [[nodiscard]] bool ProjectsRow() const noexcept
++        {
++            return originalProblem || acceptedDecision || conflictResult;
++        }
++    };
++
++    [[nodiscard]] static QualifiedIssueFacts QualifyIssueFacts(const TaskDiagnosticEntry& issue) noexcept;
++
+     struct CompletedTaskSummary
+     {
+         struct RetainedSourceActionItem final
+@@ -1829,6 +1845,7 @@ struct FolderWindow::FileOperationState
+     void CollectInformationalTasks(std::vector<FolderWindow::InformationalTaskUpdate>& outTasks) noexcept;
+     void CollectCompletedTasks(std::vector<CompletedTaskSummary>& outTasks) noexcept;
+     void CollectDiagnostics(std::vector<TaskDiagnosticEntry>& outEntries) noexcept;
++    void CollectProjectableIssueTaskIds(std::vector<uint64_t>& outTaskIds) noexcept;
+     void CollectTaskDiagnosticSnapshot(uint64_t taskId, unsigned long& warningCount, unsigned long& errorCount, std::wstring& lastDiagnosticMessage) noexcept;
+     [[nodiscard]] std::optional<UINT> RefreshDeferredTaskPresentation() noexcept;
+     void RevealPendingTasksImmediately() noexcept;
+@@ -1849,6 +1866,7 @@ struct FolderWindow::FileOperationState
+     bool SelectCompletedTaskRetainedSources(uint64_t taskId) noexcept;
+     bool CutCompletedTaskRetainedSourcesAgain(uint64_t taskId) noexcept;
+     void ToggleIssuesPane() noexcept;
++    [[nodiscard]] bool OpenIssuesForTask(uint64_t taskId) noexcept;
+     bool IsIssuesPaneVisible() noexcept;
+     bool TryGetIssuesPanePlacement(RECT& outRect, bool& outMaximized, UINT currentDpi) const noexcept;
+     void SaveIssuesPanePlacement(HWND hwnd) noexcept;
+diff --git a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+index e7dd50d8c..791e9aeed 100644
+--- a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
++++ b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+@@ -1555,6 +1555,7 @@ BEGIN
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Selhání ověření: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Nedostupná ověření: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Zrušená ověření: {0:L}"
++    IDS_FILEOPS_BTN_ISSUES                              "Problémy"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Možnosti"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Odkazy"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Zachovat"
+diff --git a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+index 896476185..f8cb10b77 100644
+--- a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
++++ b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+@@ -1555,6 +1555,7 @@ BEGIN
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Échecs de vérification : {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Vérifications indisponibles : {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Vérifications annulées : {0:L}"
++    IDS_FILEOPS_BTN_ISSUES                              "Problèmes"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Options"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Liens"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Préserver"
+diff --git a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+index c5a4d1ab3..abcae10b8 100644
+--- a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
++++ b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+@@ -1555,6 +1555,7 @@ BEGIN
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "検証に失敗した項目: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "検証を利用できない項目: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "検証がキャンセルされた項目: {0:L}"
++    IDS_FILEOPS_BTN_ISSUES                              "問題"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "オプション"
+     IDS_FILEOPS_CONFIRM_LINKS                             "リンク"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "保持"
+diff --git a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+index e5fe63dc0..7d86154db 100644
+--- a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
++++ b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+@@ -1555,6 +1555,7 @@ BEGIN
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Zlyhania overenia: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Nedostupné overenia: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Zrušené overenia: {0:L}"
++    IDS_FILEOPS_BTN_ISSUES                              "Problémy"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Možnosti"
+     IDS_FILEOPS_CONFIRM_LINKS                             "Odkazy"
+     IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Zachovať"
+diff --git a/RedSalamander/RedSalamander.rc b/RedSalamander/RedSalamander.rc
+index 6acf159ca..62d2c0611 100644
+--- a/RedSalamander/RedSalamander.rc
++++ b/RedSalamander/RedSalamander.rc
+@@ -1854,6 +1854,7 @@ BEGIN
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_FAILED                "Verification failures: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_UNAVAILABLE           "Unavailable verifications: {0:L}"
+     IDS_FMT_FILEOPS_TERMINAL_VERIFY_CANCELED              "Canceled verifications: {0:L}"
++    IDS_FILEOPS_BTN_ISSUES                              "Issues"
+     IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS                    "{0} — {1}"
+     IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN                    "{0} · {1}"
+     IDS_FILEOPS_FOOTER_OPTIONS                            "Options"
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp
+index 0477a4457..f1b08f8c3 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp
+@@ -916,6 +916,129 @@
+     return state.failure.empty();
+ }
+ 
++[[nodiscard]] bool TestFileOperationsIssuesDirectTaskProjection(CaseState& state) noexcept
++{
++    using State   = FolderWindow::FileOperationState;
++    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
++    state.Require(fileOps != nullptr, L"File-operations state is required for direct Issues projection.");
++    if (! fileOps)
++        return false;
++    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
++    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
++        state.Require(blocker.Start(), L"Direct Issues probe must block activation before pane creation.");
++    if (! state.failure.empty())
++        return false;
++    // Commands isolation closes visible windows, but an inherited hidden Issues pane
++    // can survive. Start this case with no retained pane or selection authority.
++    auto restoreView = ResetFileOperationsIssuesPaneViewStateForTest(fileOps);
++    state.Require(fileOps->GetIssuesPaneHwndForSelfTest() == nullptr, L"Direct Issues fixture must start without an inherited pane.");
++    if (! state.failure.empty())
++        return false;
++    const uint64_t firstTaskId            = 0xF510000000000000ull + GetTickCount64();
++    const uint64_t completedTaskId        = firstTaskId + 1u;
++    const uint64_t invalidCompletedTaskId = firstTaskId + 2u;
++    auto cleanup                          = wil::scope_exit([&]
++    {
++        fileOps->DebugRemoveDiagnosticsForTask(firstTaskId);
++        fileOps->DebugRemoveDiagnosticsForTask(completedTaskId);
++        fileOps->DebugRemoveDiagnosticsForTask(invalidCompletedTaskId);
++        // Destroy even a hidden test-owned pane; restoreView then restores exact
++        // saved sort/column preferences after the pane's close callback runs.
++        fileOps->DebugResetIssuesPaneForSelfTest();
++    });
++
++    const auto contains = [fileOps](uint64_t taskId) noexcept
++    {
++        std::vector<uint64_t> ids;
++        fileOps->CollectProjectableIssueTaskIds(ids);
++        return std::binary_search(ids.begin(), ids.end(), taskId);
++    };
++    state.Require(! contains(firstTaskId) && ! contains(completedTaskId) && ! contains(invalidCompletedTaskId),
++                  L"Fresh task IDs must not inherit unrelated Issues rows.");
++
++    State::TaskDiagnosticEntry invalid{};
++    invalid.taskId                           = firstTaskId;
++    invalid.severity                         = State::DiagnosticSeverity::Error;
++    invalid.conflictResult                   = FileOperations::ConflictResultObservation{};
++    invalid.conflictResult.value().reference = {firstTaskId + 99u, 1u};
++    fileOps->EnqueueTaskDiagnostic(invalid);
++    state.Require(! contains(firstTaskId) && ! fileOps->OpenIssuesForTask(firstTaskId),
++                  L"An Error-severity result with a foreign task reference must not create a direct Issues action.");
++    invalid.conflictResult.reset();
++    invalid.acceptedDecision                          = FileOperations::AcceptedConflictDecision{};
++    invalid.acceptedDecision.value().taskId           = firstTaskId;
++    invalid.acceptedDecision.value().promptGeneration = 1u;
++    invalid.acceptedDecision.value().action           = FileOperations::ConflictAction::None;
++    fileOps->EnqueueTaskDiagnostic(invalid);
++    state.Require(! contains(firstTaskId), L"An invalid accepted decision must not fall through as a legacy Error row.");
++
++    State::TaskDiagnosticEntry ordinary{};
++    ordinary.taskId   = firstTaskId;
++    ordinary.severity = State::DiagnosticSeverity::Warning;
++    ordinary.message  = L"Promptless retained warning";
++    fileOps->EnqueueTaskDiagnostic(ordinary);
++    state.Require(contains(firstTaskId), L"A retained promptless warning must enable direct Issues.");
++    // Separate legacy row identities put the completed-only task beyond the initial
++    // viewport. Selecting it must actually scroll, not merely change selection IDs.
++    for (unsigned index = 0u; index < 32u; ++index)
++    {
++        ordinary.message = std::format(L"Retained warning {}", index);
++        fileOps->EnqueueTaskDiagnostic(ordinary);
++    }
++    State::CompletedTaskSummary emptyCompleted{};
++    emptyCompleted.taskId = firstTaskId;
++    fileOps->DebugAppendCompletedTaskForSelfTest(std::move(emptyCompleted));
++    state.Require(contains(firstTaskId), L"A retained live warning remains projectable when its completed summary has no issue copies.");
++
++    State::TaskDiagnosticEntry completedDecision{};
++    completedDecision.taskId                          = completedTaskId;
++    completedDecision.severity                        = State::DiagnosticSeverity::Info;
++    completedDecision.conflictPrompt                  = FileOperations::ConflictPromptObservation{7u, FileOperations::ConflictClass::RegularFileExists, 0u};
++    completedDecision.acceptedDecision                = FileOperations::AcceptedConflictDecision{};
++    completedDecision.acceptedDecision.value().taskId = completedTaskId;
++    completedDecision.acceptedDecision.value().promptGeneration = 7u;
++    completedDecision.acceptedDecision.value().sourceItemIndex  = 0u;
++    completedDecision.acceptedDecision.value().scope.bucket     = FileOperations::ConflictClass::RegularFileExists;
++    completedDecision.acceptedDecision.value().action           = FileOperations::ConflictAction::Skip;
++    State::CompletedTaskSummary completed{};
++    completed.taskId = completedTaskId;
++    completed.issueDiagnostics.push_back(completedDecision);
++    fileOps->DebugAppendCompletedTaskForSelfTest(std::move(completed));
++
++    State::CompletedTaskSummary invalidCompleted{};
++    invalidCompleted.taskId       = invalidCompletedTaskId;
++    invalidCompleted.warningCount = 1u;
++    auto staleIssue               = completedDecision;
++    staleIssue.taskId             = invalidCompletedTaskId;
++    invalidCompleted.issueDiagnostics.push_back(staleIssue);
++    fileOps->DebugAppendCompletedTaskForSelfTest(std::move(invalidCompleted));
++    state.Require(contains(completedTaskId) && ! contains(invalidCompletedTaskId),
++                  L"Only the valid completed accepted decision must project; nonempty stale issue retention is insufficient.");
++
++    state.Require(fileOps->OpenIssuesForTask(firstTaskId), L"Direct Issues must open and select the retained live warning.");
++    const HWND pane = fileOps->GetIssuesPaneHwndForSelfTest();
++    FileOperationsIssuesPane::SelfTestSnapshot selected{};
++    state.Require(pane && fileOps->IsIssuesPaneVisible(), L"Direct Issues must leave its task pane visible.");
++    const auto selectedRowIsVisible = [&selected]() noexcept
++    {
++        const auto bounds = selected.primarySelectedRowBounds;
++        return bounds.right > bounds.left && bounds.bottom > bounds.top;
++    };
++    state.Require(pane && FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, selected, true) && selected.primarySelectedTaskId == firstTaskId &&
++                      selectedRowIsVisible(),
++                  L"Direct Issues must select its originating task row.");
++    state.Require(fileOps->OpenIssuesForTask(completedTaskId) && pane == fileOps->GetIssuesPaneHwndForSelfTest(),
++                  L"Direct Issues must reuse an already-visible pane for completed retention.");
++    state.Require(FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, selected, true) && selected.primarySelectedTaskId == completedTaskId &&
++                      selectedRowIsVisible(),
++                  L"Reopening Issues must select and scroll the completed task into the viewport.");
++    state.Require(fileOps->OpenIssuesForTask(firstTaskId) && FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, selected, true) &&
++                      selected.primarySelectedTaskId == firstTaskId && selectedRowIsVisible(),
++                  L"Returning to the earlier task must scroll its selected row back into view.");
++    state.Require(! fileOps->OpenIssuesForTask(invalidCompletedTaskId), L"A stale completed typed observation must not open or select an Issues row.");
++    return state.failure.empty();
++}
++
+ [[nodiscard]] bool TestFileOperationsIssuesPaneTeardownReleasesState(HWND mainWindow, CaseState& state) noexcept
+ {
+     auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+@@ -9857,14 +9980,17 @@ struct FileOperationsPopupTestFixture final
+         std::this_thread::sleep_for(20ms);
+     }
+     state.Require(expandedLayoutSettled, L"Expanded completed file-operation card's More hit target did not settle before activation.");
+-    state.Require(completedLayout.completedVisibleActionCount <= 2u,
+-                  std::format(L"Completed diagnostic task should expose at most 2 actions; saw {}.", completedLayout.completedVisibleActionCount));
++    state.Require(completedLayout.completedVisibleActionCount == 3u,
++                  std::format(L"Completed diagnostic task must expose Dismiss, Issues and More; saw {}.", completedLayout.completedVisibleActionCount));
++    state.Require(completedLayout.completedIssuesVisible && completedLayout.completedIssuesHitTargetActive && completedLayout.completedIssuesLabelFits &&
++                      completedLayout.completedActionRowFits,
++                  L"Completed diagnostics must expose a complete, measured direct Issues action.");
+     state.Require(completedLayout.completedDismissVisible, L"Completed diagnostic task should keep Dismiss as the primary action.");
+     state.Require(completedLayout.completedDiagnosticsMoreVisible, L"Completed diagnostic task should expose a More affordance for diagnostics.");
+     state.Require(completedLayout.completedDiagnosticsMoreButtonRectVisible, L"Completed diagnostic task should expose the More button rectangle.");
+     state.Require(! completedLayout.completedShowLogVisible, L"Completed diagnostic task should not expose Show log as a flat button.");
+     state.Require(! completedLayout.completedExportIssuesVisible, L"Completed diagnostic task should not expose Export issues as a flat button.");
+-    state.Require(completedLayout.completedFailedItemsActionVisible, L"Completed diagnostic task should expose Failed items in the More action set.");
++    state.Require(! completedLayout.completedFailedItemsActionVisible, L"Direct Issues replaces the duplicate Failed items overflow entry.");
+     state.Require(completedLayout.completedOpenDestinationActionVisible, L"Completed diagnostic task should expose Open destination in the More action set.");
+     state.Require(completedLayout.completedRevealDestinationActionVisible, L"Completed diagnostic task should expose Reveal item in the More action set.");
+     state.Require(! completedLayout.taskHasVisibleButtonOverlap, L"Completed diagnostic task rendered overlapping button hit targets.");
+@@ -14535,6 +14661,9 @@ void RunFileOpsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
+     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls", [=](CaseState& state) noexcept {
+         return TestFileOperationsIssuesPaneUsesDxUiHostWithNoVisibleChildControls(mainWindow, state);
+     });
++    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_issues_direct_task_projection", [=](CaseState& state) noexcept {
++        return TestFileOperationsIssuesDirectTaskProjection(state);
++    });
+     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_issues_pane_teardown_releases_state", [=](CaseState& state) noexcept {
+         return TestFileOperationsIssuesPaneTeardownReleasesState(mainWindow, state);
+     });
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+index 6be8f9c1c..2c6baff17 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -666,6 +666,26 @@ struct FileOpsVisualScenario final
+     task.verificationUnavailableItemCount = 1u;
+     task.verificationCanceledItemCount    = 1u;
+     add(L"144-terminal-move-mixed-facts", task);
++    // Direct Issues follows retained projectable rows, independently of the
++    // warning/error counters. The two diagnostic cards keep destination recovery
++    // in More; the clean Delete has only Dismiss.
++    task                      = done;
++    task.warningCount         = 2u;
++    task.errorCount           = 1u;
++    task.resultHr             = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
++    task.resultSummary        = L"Trois problèmes nécessitent une vérification.";
++    task.hasProjectableIssues = true;
++    add(L"145-direct-issues-row", task);
++    task.hasProjectableIssues = false;
++    add(L"146-diagnostic-counters-no-issues-row", task);
++    task           = done;
++    task.operation = FILESYSTEM_DELETE;
++    task.currentDestinationPath.clear();
++    task.destinationFolder.clear();
++    task.destinationPluginId.clear();
++    task.destinationPluginShortId.clear();
++    task.resultSummary = L"Suppression terminée.";
++    add(L"147-clean-no-issues", task);
+     return result;
+ }
+ 
+@@ -930,6 +950,10 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     size_t terminalFactsWitnessCount    = 0u;
+     bool terminalFactsTransitionsFit    = true;
+     size_t terminalFactsTransitionCount = 0u;
++    bool directIssuesFit                = true;
++    size_t directIssuesWitnessCount     = 0u;
++    bool directIssuesTransitionsFit     = true;
++    size_t directIssuesTransitionCount  = 0u;
+     bool statusChipLabelsFit = true;
+     size_t statusChipWitnessCount     = 0u;
+     bool hostedProgressValuesMatch    = true;
+@@ -953,7 +977,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+             {
+                 // All semantics in the dark baseline; representative risk/progress/layouts in other themes.
+                 if (themeIndex != 0u && sceneIndex != 9u && sceneIndex != 30u && sceneIndex != 32u && sceneIndex != 54u &&
+-                    ! (themeIndex == 3u && scenarios[sceneIndex].name == L"144-terminal-move-mixed-facts"))
++                    ! (themeIndex == 3u &&
++                       (scenarios[sceneIndex].name == L"144-terminal-move-mixed-facts" || scenarios[sceneIndex].name == L"145-direct-issues-row")))
+                     continue;
+                 const auto& scenario             = scenarios[sceneIndex];
+                 const bool waitingLayoutScenario = ! scenario.footerOnly && ! scenario.collapsed && ! scenario.compactDensity &&
+@@ -1259,6 +1284,40 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                                               fits,
+                                               facts.taskTerminalFactsText));
+                     }
++                    if (scenario.name == L"145-direct-issues-row" || scenario.name == L"146-diagnostic-counters-no-issues-row" ||
++                        scenario.name == L"147-clean-no-issues")
++                    {
++                        ++directIssuesWitnessCount;
++                        PopupLayoutDebugSnapshot actions{};
++                        actions.taskId             = scenario.tasks.front().taskId;
++                        const bool read            = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), actions);
++                        const bool issuesExpected  = scenario.name == L"145-direct-issues-row";
++                        const bool moreExpected    = scenario.name != L"147-clean-no-issues";
++                        const size_t countExpected = 1u + static_cast<size_t>(issuesExpected) + static_cast<size_t>(moreExpected);
++                        const std::wstring label   = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
++                        const bool issuesMatch =
++                            actions.completedIssuesVisible == issuesExpected &&
++                            (issuesExpected ? actions.completedIssuesHitTargetActive && actions.completedIssuesLabelFits &&
++                                                  actions.completedIssuesHostedText == label && actions.completedIssuesHostedName == label &&
++                                                  actions.completedIssuesButtonRect.right > actions.completedIssuesButtonRect.left &&
++                                                  actions.completedIssuesButtonRect.bottom > actions.completedIssuesButtonRect.top
++                                            : actions.completedIssuesHostedText.empty() && actions.completedIssuesHostedName.empty());
++                        const bool fits = read && ! label.empty() && issuesMatch && actions.completedDismissVisible &&
++                                          actions.completedDiagnosticsMoreVisible == moreExpected && actions.completedVisibleActionCount == countExpected &&
++                                          actions.completedActionRowFits && ! actions.taskHasVisibleButtonOverlap &&
++                                          ! actions.completedFailedItemsActionVisible;
++                        directIssuesFit = directIssuesFit && fits;
++                        AppendLog(std::format(L"DirectIssuesActionFit: {} dpi={} width={} theme={} issues={} more={} count={} rowFits={} fit={}",
++                                              scenario.name,
++                                              dpi,
++                                              widthDip,
++                                              themeNames[themeIndex],
++                                              actions.completedIssuesVisible,
++                                              actions.completedDiagnosticsMoreVisible,
++                                              actions.completedVisibleActionCount,
++                                              actions.completedActionRowFits,
++                                              fits));
++                    }
+                     if (scenario.name == L"31-completed-group-expanded" || scenario.name == L"32-completed-group-collapsed" ||
+                         scenario.name == L"69-all-items-skipped")
+                     {
+@@ -1615,6 +1674,68 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                         current.publishedItemCount  = 9u;
+                         static_cast<void>(inspect(L"original-restored", true, originalText, false, false));
+                     }
++                    if (themeIndex == 0u && widthDip == 480 && scenario.name == L"145-direct-issues-row")
++                    {
++                        // Mutate one retained presentation snapshot on one HWND. The
++                        // counter-only stage must retain recovery More without an
++                        // Issues button; a zero-counter row must still show Issues.
++                        auto& current                  = popupState->debugVisualScenario.value().front();
++                        const std::wstring issuesLabel = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
++                        const auto inspectActions      = [&](std::wstring_view stage, bool issues, bool more, size_t count, bool collapsed, bool footerOnly)
++                        {
++                            for (unsigned frame = 0u; frame < 2u; ++frame)
++                                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                            PopupLayoutDebugSnapshot observed{};
++                            observed.taskId = current.taskId;
++                            const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), observed);
++                            const bool issueContent =
++                                observed.completedIssuesVisible == issues &&
++                                (issues ? observed.completedIssuesHitTargetActive && observed.completedIssuesLabelFits &&
++                                              observed.completedIssuesHostedText == issuesLabel && observed.completedIssuesHostedName == issuesLabel
++                                        : observed.completedIssuesHostedText.empty() && observed.completedIssuesHostedName.empty());
++                            const bool fits = read && observed.taskCollapsed == collapsed && observed.footerOnly == footerOnly &&
++                                              observed.completedDismissVisible == (count != 0u) && observed.completedDiagnosticsMoreVisible == more &&
++                                              observed.completedVisibleActionCount == count && observed.completedActionRowFits &&
++                                              ! observed.taskHasVisibleButtonOverlap && ! observed.completedFailedItemsActionVisible && issueContent;
++                            directIssuesTransitionsFit = directIssuesTransitionsFit && fits;
++                            ++directIssuesTransitionCount;
++                            AppendLog(
++                                std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} count={} collapsed={} footerOnly={} fit={}",
++                                            dpi,
++                                            widthDip,
++                                            stage,
++                                            observed.completedIssuesVisible,
++                                            observed.completedDiagnosticsMoreVisible,
++                                            observed.completedVisibleActionCount,
++                                            observed.taskCollapsed,
++                                            observed.footerOnly,
++                                            fits));
++                        };
++                        current.hasProjectableIssues = false;
++                        inspectActions(L"row-removed-counters-retained", false, true, 2u, false, false);
++                        current.hasProjectableIssues = true;
++                        inspectActions(L"row-arrived", true, true, 3u, false, false);
++                        current.warningCount = 0u;
++                        current.errorCount   = 0u;
++                        inspectActions(L"row-without-counters", true, true, 3u, false, false);
++                        current.operation = FILESYSTEM_DELETE;
++                        inspectActions(L"issues-without-more", true, false, 2u, false, false);
++                        current.operation = scenario.tasks.front().operation;
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        inspectActions(L"collapsed", false, false, 0u, true, false);
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        inspectActions(L"expanded", true, true, 3u, false, false);
++                        operations->SetPopupFooterOnly(true);
++                        inspectActions(L"footer-hidden", false, false, 0u, false, true);
++                        operations->SetPopupFooterOnly(false);
++                        inspectActions(L"footer-restored", true, true, 3u, false, false);
++                        current.hasProjectableIssues = false;
++                        inspectActions(L"row-removed-zero-counters", false, true, 2u, false, false);
++                        current.hasProjectableIssues = true;
++                        current.warningCount         = scenario.tasks.front().warningCount;
++                        current.errorCount           = scenario.tasks.front().errorCount;
++                        inspectActions(L"original-restored", true, true, 3u, false, false);
++                    }
+                     if (scenario.menu != PopupHitTest::Kind::None)
+                     {
+                         // Menu dispatch follows the window-procedure convention of returning zero;
+@@ -1796,6 +1917,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     if (! terminalFactsTransitionsFit || terminalFactsTransitionCount != 12u * monitors.size())
+         Fail(L"Terminal facts must update and retire on one HWND across count, collapse, footer, settings-change, and empty-summary transitions; see "
+              L"TerminalFactsTransition diagnostics.");
++    if (! directIssuesFit || directIssuesWitnessCount != 8u * monitors.size())
++        Fail(L"Direct Issues must follow actual projectable rows, while counter-only diagnostics retain More and clean Delete retains Dismiss; all hosted "
++             L"terminal action labels, hit targets, and bounds must fit at both widths and tested themes.");
++    if (! directIssuesTransitionsFit || directIssuesTransitionCount != 10u * monitors.size())
++        Fail(L"Direct Issues must arrive and retire on one popup HWND independently of warning counters and hide for collapsed/footer-only views; see "
++             L"DirectIssuesTransition diagnostics.");
+     if (! terminalPresentationFits)
+         Fail(L"Completed-group actions and badges, and full expanded terminal results, must remain readable without clipping.");
+     if (! completedSemanticsFit || doneHeadingWitnessCount != 4u * monitors.size() || groupBadgeWitnessCount != 2u * monitors.size())
+@@ -1812,6 +1939,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+            hostedProgressWitnessCount == 9u * monitors.size() && completedSemanticsFit && doneHeadingWitnessCount == 4u * monitors.size() &&
+            groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && terminalFactsFit &&
+            terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit && terminalFactsTransitionCount == 12u * monitors.size() &&
+-           speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
+-           footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
++           directIssuesFit && directIssuesWitnessCount == 8u * monitors.size() && directIssuesTransitionsFit &&
++           directIssuesTransitionCount == 10u * monitors.size() && speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental &&
++           manifest.good() && pathLabelsFit && deletionPresentationFits && footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }

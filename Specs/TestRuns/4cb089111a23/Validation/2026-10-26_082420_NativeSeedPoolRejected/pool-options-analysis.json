@@ -1,0 +1,11 @@
+{
+  "toolchain": "MSVC 14.52.37025",
+  "header": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.37025\\include\\memory_resource",
+  "headerSha256": "EAD73BF0534F530FAC2E2FC59A6BCC20FD9B2964EBAB189D47A6D753249CF678",
+  "observation": "Default max_blocks_per_chunk normalizes to PTRDIFF_MAX; default largest_required_pool_block normalizes to (PTRDIFF_MAX >> 4) + 1. Large growing hash-table allocations therefore enter pools under these defaults.",
+  "nextCandidate": {
+    "largest_required_pool_block": 256,
+    "max_blocks_per_chunk": 1024
+  },
+  "scope": "Inspection of installed standard-library implementation; resource cause is an inference to test against the unchanged retained baselines."
+}

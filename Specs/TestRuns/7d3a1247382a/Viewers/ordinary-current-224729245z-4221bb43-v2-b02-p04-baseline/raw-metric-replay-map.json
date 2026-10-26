@@ -1,0 +1,36 @@
+{
+  "schema": "viewer-space.ordinary-current-raw-replay-map.v1",
+  "evidence": {
+    "source_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-ordinary-current-20261009T224729245Z-4221bb43\\curated\\baseline\\20261009T224729245Z-4221bb43-b2-p4\\evidence.json",
+    "archive_path": "evidence.json",
+    "bytes": 2890,
+    "sha256": "f7183c14d2e080fa7c4c2ff32d3247fca8aa5713c8ccc7ec5f0a396dd91a75c6"
+  },
+  "source_index": {
+    "source_path": "raw-sources/20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03/source-index.json",
+    "archive_path": "metrics/source-index.json",
+    "bytes": 886,
+    "sha256": "4bf63b99bb4cb11e31c29a45cf68d4ba09f0a9d32574fac3a09bf9e3a97ecbfc"
+  },
+  "source_path": "D:\\RedSalamander.Perf\\runs\\20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_bytes": 2455208,
+  "source_sha256": "524496a63db9b7a8780425d8d957e1c1e42c1db96c5e3311f81efc2affb3c54f",
+  "source_rows": 5870,
+  "machine_hash": "7d3a1247382a",
+  "fragments": [
+    {
+      "ordinal": 1,
+      "source_path": "raw-sources/20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03/perf_metrics.jsonl",
+      "archive_path": "metrics/perf_metrics.jsonl.part",
+      "bytes": 2097152,
+      "sha256": "76bae692c91e37967aa0e065de9d2b673952bcfad6e55bfb4476b9dbd370ac14"
+    },
+    {
+      "ordinal": 2,
+      "source_path": "raw-sources/20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03/perf_metrics-part2.jsonl",
+      "archive_path": "metrics/perf_metrics-part2.jsonl.part",
+      "bytes": 358056,
+      "sha256": "c0d1392428d3e7bf311db84baf566663c91f86033818ef6ae32333ad271f8f55"
+    }
+  ]
+}

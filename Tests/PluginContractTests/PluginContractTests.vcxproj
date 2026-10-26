@@ -110,7 +110,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="PluginContractTests.cpp" />
+    <ClCompile Include="PluginContract.Tests.Runner.cpp" />
     <!-- Compiled directly (not exported from Common.dll) so the contract test can invoke the exact
          host-side pathIdentity parser and prove each shipped plugin's capability block parses. -->
     <ClCompile Include="..\..\Common\FileSystemPathIdentity.cpp" />

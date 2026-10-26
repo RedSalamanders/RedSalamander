@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-19T20:03:29.555Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-resource-lifetime-measured\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 78302,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 25773,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 25722,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 25545,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

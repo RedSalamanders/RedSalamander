@@ -1,0 +1,176 @@
+{
+  "phase": "baseline-debug-01",
+  "configuration": "Debug",
+  "observer_sha256": "737B168FEF9B8098528CC8E7AB77BDED492E311297F57AC69640D37B40680CF0",
+  "scanner_sha256": "A947009E2027CD64378AB0A07187C1876CC6E85F2EF071B3F544BEBDCB98F9BB",
+  "idle_msbuild_nodes": [
+    {
+      "pid": 66272,
+      "start_ticks": 639280933533626747,
+      "cpu_ticks": 15312500,
+      "parent_pid": 93548,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3946245Z"
+    },
+    {
+      "pid": 58848,
+      "start_ticks": 639280933533628495,
+      "cpu_ticks": 16406250,
+      "parent_pid": 93548,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3949487Z"
+    },
+    {
+      "pid": 16240,
+      "start_ticks": 639280933533630854,
+      "cpu_ticks": 19375000,
+      "parent_pid": 93548,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3953482Z"
+    },
+    {
+      "pid": 67244,
+      "start_ticks": 639280933533632004,
+      "cpu_ticks": 15312500,
+      "parent_pid": 93548,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3954916Z"
+    },
+    {
+      "pid": 99420,
+      "start_ticks": 639280933534183483,
+      "cpu_ticks": 15156250,
+      "parent_pid": 93548,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3955773Z"
+    },
+    {
+      "pid": 83712,
+      "start_ticks": 639280934243612860,
+      "cpu_ticks": 19687500,
+      "parent_pid": 91920,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3960574Z"
+    },
+    {
+      "pid": 30520,
+      "start_ticks": 639280934243615406,
+      "cpu_ticks": 17812500,
+      "parent_pid": 91920,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3962591Z"
+    },
+    {
+      "pid": 51288,
+      "start_ticks": 639280934243619929,
+      "cpu_ticks": 19062500,
+      "parent_pid": 91920,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3964069Z"
+    },
+    {
+      "pid": 32724,
+      "start_ticks": 639280934243621805,
+      "cpu_ticks": 21250000,
+      "parent_pid": 91920,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.396529Z"
+    },
+    {
+      "pid": 106484,
+      "start_ticks": 639280934244171879,
+      "cpu_ticks": 14375000,
+      "parent_pid": 91920,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3966381Z"
+    },
+    {
+      "pid": 99368,
+      "start_ticks": 639280934285215034,
+      "cpu_ticks": 15781250,
+      "parent_pid": 88396,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3967502Z"
+    },
+    {
+      "pid": 15284,
+      "start_ticks": 639280934285218585,
+      "cpu_ticks": 16093750,
+      "parent_pid": 88396,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3968548Z"
+    },
+    {
+      "pid": 9256,
+      "start_ticks": 639280934285219402,
+      "cpu_ticks": 16562500,
+      "parent_pid": 88396,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3969549Z"
+    },
+    {
+      "pid": 95892,
+      "start_ticks": 639280934285224600,
+      "cpu_ticks": 19687500,
+      "parent_pid": 88396,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3971076Z"
+    },
+    {
+      "pid": 93656,
+      "start_ticks": 639280934285787956,
+      "cpu_ticks": 14375000,
+      "parent_pid": 88396,
+      "command_line": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\MSBuild.exe\" /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+      "observed_utc": "2026-10-20T12:07:39.3972346Z"
+    }
+  ],
+  "idle_node_policy": "Only exact reused-node identities whose original parent exited and CPU stayed unchanged for 30 seconds are excluded. New identities can qualify only during the gate, followed by the separate 30-second quiet interval. During measurement any new tool or CPU change remains contamination. Parent PID reuse is checked by start time.",
+  "observer": "Typed System.Diagnostics.Process.GetProcesses snapshots, nominal 200 ms, and batched cached command-line classification; same observer for baseline and candidate",
+  "event_subscription": "Snapshot observer by design; no privileged event subscription requested in this follow-up",
+  "gate_started_utc": "2026-10-20T13:54:14.5347794Z",
+  "gate_ended_utc": "2026-10-20T13:54:44.7278621Z",
+  "required_build_free_gate_seconds": 30,
+  "runner_started_utc": "2026-10-20T13:54:44.7296768Z",
+  "runner_ended_utc": "2026-10-20T13:56:23.8294020Z",
+  "measurement_sample_count": 407,
+  "measurement_contaminated_polls": 0,
+  "measurement_unresolved_shell_polls": 0,
+  "unresolved_shell_policy": "Retry classification every poll; unclassified orchestration shell lasting at least 1000 ms is a blocker. Shorter launches are logged as unresolved, not asserted to be build processes. Compiler/tool name detection is unconditional.",
+  "maximum_measurement_gap_ms": 564.632,
+  "sampling_queries_work_ms": 18874.336,
+  "measurement_observer_cpu_ms": 13500.0,
+  "all_sample_count": 529,
+  "tool_names": [
+    "MSBuild",
+    "cl",
+    "link",
+    "lib",
+    "rc",
+    "mt",
+    "clang",
+    "clang++",
+    "clang-cl",
+    "lld",
+    "lld-link",
+    "ninja",
+    "cmake",
+    "vcpkg",
+    "zig",
+    "gcc",
+    "g++",
+    "cc1",
+    "cc1plus",
+    "rustc",
+    "cargo",
+    "csc",
+    "vbc",
+    "dotnet",
+    "make",
+    "gmake",
+    "clang-scan-deps"
+  ],
+  "exit_code": 0,
+  "run_id": "20261020T135446Z-105980-c33ae48d89784168bdfb705492a65a52",
+  "build_free_eligible": true
+}

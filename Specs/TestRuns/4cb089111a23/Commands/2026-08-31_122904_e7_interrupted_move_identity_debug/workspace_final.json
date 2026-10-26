@@ -1,0 +1,3 @@
+{"acquisition_after":"08dd595a7158e008a2e27e07172305681a762b4fa2c3ce19873515240ddaa36a","acquisition_attempts":1,"acquisition_before":"08dd595a7158e008a2e27e07172305681a762b4fa2c3ce19873515240ddaa36a","base":"5e6213e9b9cfbb4ebbbefcdde0354dd015b75344","canonicalization":"rs-canonical-json-v1","canonicalization_ms":3,"computation_ms":1889,"content_hashing_ms":0,"created_utc":"2026-08-31T10:29:21.5220927Z","files":[],"git_discovery_ms":938,"git_head":"5e6213e9b9cfbb4ebbbefcdde0354dd015b75344","repo_identity":"130267d3ad785dc22d868aa8d9b0047ef865ab686a0cb55144eae718b851028e","schema":"red-salamander.workspace-snapshot.v1","snapshot_id":"08dd595a7158e008a2e27e07172305681a762b4fa2c3ce19873515240ddaa36a"}
+
+

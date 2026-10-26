@@ -47,6 +47,7 @@ struct LocalizationState final
 
     std::mutex mutex;
     LanguagePreference preference;
+    uint64_t preferenceRevision = 1u;
     std::unordered_map<HINSTANCE, ResourceOwner> ownersByInstance;
     std::unordered_set<std::wstring> warnedLoads;
 };
@@ -309,7 +310,15 @@ HRESULT ApplyLanguagePreference(const LanguagePreference& preference) noexcept
     {
         ReloadOwnerSatellite(owner, state.preference, state.warnedLoads);
     }
+    ++state.preferenceRevision;
     return S_OK;
+}
+
+uint64_t GetLanguagePreferenceRevision() noexcept
+{
+    auto& state = State();
+    std::scoped_lock lock(state.mutex);
+    return state.preferenceRevision;
 }
 
 int LoadString(HINSTANCE embeddedInstance, UINT id, std::wstring& result) noexcept
@@ -340,20 +349,35 @@ HMENU LoadMenuResource(HINSTANCE embeddedInstance, UINT menuId) noexcept
     const HINSTANCE instance = NormalizeInstance(embeddedInstance);
     if (! instance)
     {
+        const DWORD error = GetLastError();
+        Debug::Warning(L"Localization::LoadMenuResource has no module: id={} error={}", menuId, error);
+        SetLastError(error);
         return nullptr;
     }
 
-    auto& state = State();
-    std::scoped_lock lock(state.mutex);
-    if (ResourceOwner* owner = FindOwnerLocked(state, instance); owner && owner->satellite)
+    HMENU menu  = nullptr;
+    DWORD error = ERROR_SUCCESS;
     {
-        if (HMENU menu = LoadMenuW(owner->satellite.get(), MAKEINTRESOURCEW(menuId)))
+        auto& state = State();
+        std::scoped_lock lock(state.mutex);
+        if (ResourceOwner* owner = FindOwnerLocked(state, instance); owner && owner->satellite)
         {
-            return menu;
+            if (HMENU satelliteMenu = LoadMenuW(owner->satellite.get(), MAKEINTRESOURCEW(menuId)))
+            {
+                return satelliteMenu;
+            }
         }
-    }
 
-    return LoadMenuW(instance, MAKEINTRESOURCEW(menuId));
+        menu = LoadMenuW(instance, MAKEINTRESOURCEW(menuId));
+        if (! menu)
+            error = GetLastError();
+    }
+    if (! menu)
+    {
+        Debug::Warning(L"Localization::LoadMenuResource failed: module=0x{:X} id={} error={}", reinterpret_cast<UINT_PTR>(instance), menuId, error);
+        SetLastError(error);
+    }
+    return menu;
 }
 
 HACCEL LoadAcceleratorsResource(HINSTANCE embeddedInstance, PCWSTR tableName) noexcept

@@ -1,0 +1,41 @@
+{
+  "comparison": "Historical baseline uses different configuration and binary identity; no matched speedup claim",
+  "raw": {
+    "rows": 2761,
+    "bytes": 1037346,
+    "sha256": "35f16bd90279c3098565bb4ca7a7984c808e91f7b832f3d4f1c458a510430fe5",
+    "path": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "disposition": "Raw run artifact removed by subsequent governed stale-run cleanup; reviewed metric rows and original digest, byte and row counts are preserved here."
+  },
+  "selected": {
+    "bytes": 126396,
+    "rows": 337,
+    "file": "perf_metrics.jsonl",
+    "selection": "Original row order and JSON field values preserved; regex ^viewer\\.space\\.(workspace\\.|navigation\\.|render\\.(paint|present)_us); PowerShell UTF8 newline encoding recorded by the selected-file SHA256.",
+    "sha256": "4170a1c9bc4124a3687673597b8da4da43b37700ef9b909a7726aacca83f729e"
+  },
+  "statistics": [
+    {
+      "p95Us": 897,
+      "maxUs": 12175,
+      "metric": "viewer.space.workspace.layout_us",
+      "count": 25,
+      "p50Us": 531
+    },
+    {
+      "p95Us": 6287,
+      "maxUs": 29405,
+      "metric": "viewer.space.render.paint_us",
+      "count": 156,
+      "p50Us": 1818
+    },
+    {
+      "p95Us": 518,
+      "maxUs": 2413,
+      "metric": "viewer.space.render.present_us",
+      "count": 156,
+      "p50Us": 52
+    }
+  ],
+  "percentileMethod": "nearest-rank, includes zero and initial cold layout"
+}

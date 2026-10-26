@@ -65,6 +65,14 @@ point. The source-tree host and shipped plugins use the same ABI revision.
 
 `IHost` is a COM object that supports `QueryInterface` for specific service interfaces (alerts, prompts, future services).
 
+### Viewer actions bound to a provider instance
+
+`IHostViewerActions` (`5e077582-8ae2-4969-919a-01f6ee9d5794`) is an optional, separately queried service. Existing host interfaces/IIDs retain their slots. `ExecuteViewerAction` is synchronous on the host UI thread; wrong-thread calls return `RPC_E_WRONG_THREAD`. Callers retain the filesystem instance and all request strings for the call, and pin their viewer across possible modal message pumping. Borrowed pointers must not be queued.
+
+`HostViewerActionRequest` has one leading `sizeBytes` and reserved tail. The host rejects undersized records, accepts larger records while ignoring unknown tail bytes, requires 1–128 nonempty real provider paths (each at most 32768 UTF-16 units), and validates the action before dispatch. Stable action values are `OPEN_OTHER_PANE=1`, `RECYCLE=2`, `DELETE=3`, `OPEN_FOCUS_PANE=4`. Both pane actions require one directory path; optional `focusItemDisplayName` is a nonempty single leaf, prohibited for cleanup actions.
+
+The host matches COM identity to a current pane's exact filesystem instance and snapshots plugin ID, short ID and instance context before navigation/confirmation can pump messages. No match or conflicting contexts fail with `ERROR_NOT_SUPPORTED`. Focus targets the active pane and optionally reveals its leaf. Other pane targets the opposite active pane. Recycle/Delete enter normal File Operations with confirmation and return the accepted task ID; this is not completion or proof that data changed. Cancellation and unavailable bindings must not fall back to direct plugin mutation. Synthetic aggregate paths are never valid inputs.
+
 ### ABI evolution policy
 
 This is the governing rule for future host/plugin interface changes.
@@ -87,6 +95,7 @@ smaller reviewed prefix.
 - Callback shutdown/order validation and an old-plugin/new-host compatibility fixture are required before treating an interface evolution as complete.
 - Extensible in-process request/result records use one leading `uint32_t sizeBytes`; they do not duplicate that information with `version`, `apiVersion`, or `structSize` fields. The caller reports the bytes it actually provides. A consumer rejects a value shorter than the prefix it needs, accepts a larger value, and ignores unknown tail bytes. Compatible growth is optional and append-only; incompatible ownership or semantic changes require a new method or COM IID. Serialized files, settings, clipboard formats, and evidence retain their independent schema/format versions.
 - Runtime boundary tests, not frozen `sizeof` assertions, prove rejection of undersized records and acceptance of current/oversized records. Source-tree host, viewer, and terminal plugins are changed together when the current required prefix changes.
+- File-system operation options and the optional logical-file observer report retain their explicitly reviewed exact-current-size boundary in `FileSystem.h`; all source-tree consumers rebuild together when their suffix changes. No historical options prefixes are accepted. This does not alter the separate reviewed extensible route or mutation-result records.
 - A future release that supports mixed-generation or third-party binary plugins must first add an explicit, testable generation negotiation/rejection boundary before interface invocation. Supporting an older generation also requires new IIDs/adapters where layouts or semantics changed, frozen old-header fixtures in both host/plugin directions, and x64/ARM64 prefix/layout coverage. Until that stronger contract is approved and implemented, no loader or retained IID may infer an older layout from pointer, HWND, version, or shifted field bytes.
 
 ### File-system typed route ABI
@@ -191,6 +200,7 @@ those declarations.
   - dismissal:
     - if `closable == TRUE`, the host provides a close “X” and Esc dismiss behavior (within that scope),
     - if `closable == FALSE`, dismissal is programmatic (host clears on navigation/path change where appropriate, or plugin calls `ClearAlert`).
+  - `HOST_ALERT_SCOPE_WINDOW` lifetime: the host removes a window-scope alert when its `targetWindow` is destroyed; a later alert for a window that reuses that `HWND` value is a new alert. A window-scope alert and a prompt may share a target window; clearing the alert leaves the prompt in place.
 - **Prompts**:
   - `ShowPrompt` is blocking until the user responds.
   - pane-scoped prompts follow the same pane-cookie routing rules as alerts.
@@ -204,9 +214,11 @@ those declarations.
     choices, and writes values back only after OK/Yes. Cancel leaves the structure unchanged. The
     host and all in-tree plugins compile against this breaking request layout together; there is no
     legacy-size adapter.
-  - closing the prompt via window close (if allowed by the host) returns:
+  - destroying the prompt's target window (or its owner), closing the prompt via window close (if allowed by the host)
+    or pressing Escape ends the prompt with the button set's Escape result:
     - `HOST_PROMPT_RESULT_OK` for `HOST_PROMPT_BUTTONS_OK`
-    - `HOST_PROMPT_RESULT_CANCEL` for all other button sets
+    - `HOST_PROMPT_RESULT_CANCEL` for `HOST_PROMPT_BUTTONS_OK_CANCEL` and `HOST_PROMPT_BUTTONS_YES_NO_CANCEL`
+    - `HOST_PROMPT_RESULT_NO` for `HOST_PROMPT_BUTTONS_YES_NO`
 - **Connection Manager results**:
   - the current host requires the full current `HostConnectionManagerRequest` and `HostConnectionManagerResult` records; any earlier supported binary prefix remains an ABI-generation decision rather than an inferred compatibility promise,
   - result capacity is validated before the first result write; an undersized result returns `E_INVALIDARG` with the caller's bytes unchanged,

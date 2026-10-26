@@ -1,0 +1,112 @@
+{
+  "schema": "i26-v57-root-source-review.v1",
+  "manifestSha256": "86d11043dbae7aef033fb57507feb1fd68d45c2f98758708ae4d5302dfd561f3",
+  "inventorySha256": "1f492c1c0d5a9508be29f4e980198c3e821a5c3466b7759b2543b586b2495344",
+  "logicalInputs": 85,
+  "physicalInputs": 84,
+  "primary": "Z:/src/RedSalamander",
+  "candidate": "C:/RsI26Adopt",
+  "frozen": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v57-20261001",
+  "threeRootsVerified": true,
+  "frozenV56Verified": true,
+  "logicalChanges": 18,
+  "physicalChanges": 17,
+  "changes": [
+    {
+      "path": "Common/LocalSearchIndexCore.cpp",
+      "previous": "ea698471245541eb5336334b4ebcb8ad4e2ff020b5d92ca5cfec9f4360dbe6b8",
+      "current": "228291ed39e0bc5553ef20e5b881b9ec35d48e6eace510488c2562464b54633f"
+    },
+    {
+      "path": "Common/SearchServiceBroker.cpp",
+      "previous": "963cc1fec4e09365bd4cb7d6709145cfdb7a68152636612764089e826c653979",
+      "current": "1a16ea3c0e4c5c0f86963e26308a0c288293c091bcced575ea2ad646a9b4116c"
+    },
+    {
+      "path": "RedSalamander/FileOperationMoveBreadcrumb.cpp",
+      "previous": "6dea7f77a2743ecda15277dcaa33612842dd49a1a3a78fc6f05dc117d6d846d7",
+      "current": "45f0f6f0b210a98e780c6dca28e72e4cfa745bdf717f850116de574a182992d8"
+    },
+    {
+      "path": "RedSalamander/FileOperationMoveBreadcrumb.h",
+      "previous": "ff034a92538274e797fb7ed1b84831ad832964b02d498d5508bf474580b506ac",
+      "current": "762529d6b8c65f783b63058cb5fc43d1cba6833f2e703f5d756fb0adf6c94b46"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.cpp",
+      "previous": "f28b957d0e07bdf79bbf07c791b621dc082baa82f063c01b4753375b7419330d",
+      "current": "c625a03dca3195fd67682e84817f4adfc60c0fbef0bc83770031b920a60043ed"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+      "previous": "bf56e991e70365f9a5e58f9d7c2474e44d62d20b74d3c60a6714d22c82a27aa7",
+      "current": "6217d8717f2309c6b32471196b163071c690eec8f8a9d06223759137a2eb2a4f"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.h",
+      "previous": "c50c0f93318414de51ff63b84710e9b6bae1c50d0f7b937839b6a8803b6f8540",
+      "current": "82e1f915242fce256f8d04423979ec78a6166b43a363a0e2a8cff863bf7b1384"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+      "previous": "bf66cb3b330b2d3ebed845dc8d9b6f43b4cf054c8b185465fdfedaa06d979ac5",
+      "current": "0e5cc470055106ea29871022b0c1381d1292e8b25f4b19b3108300415a011a2e"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+      "previous": "8ab2b216f8fb0094cd1889f87de7353706dd3037cd4baa5f63fdbec0d3e645da",
+      "current": "e87840879174f1420f987f10bdca8af0229df822ced3508d45e15b92ba0f2fdf"
+    },
+    {
+      "path": "RedSalamander/Resource.h",
+      "previous": "7b6675e03a3034f644d7d4202e3b459767a002ecbd6896ecc4d8498c58f9df8f",
+      "current": "ae79db07904bf25cf99e847598a0bf2f8f1b2617546c1bb0caae9044fa3f1a8f"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp",
+      "previous": "772d11f30047a1b336b84b973b8c7bda45d3f16544a175bb4f39c589f774c642",
+      "current": "13a49bc3344aa18c51fb0c4092c20b8e2c148be9874b128a41a5aec484c87122"
+    },
+    {
+      "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp",
+      "previous": "4378bc887e51baec099f45d186035e3e3107a02f4100a72dee9eea88ad9c1541",
+      "current": "f99bee1fe9bee4a11410d99ddb56c1d4fc629e4bd5f46b080098adea19cd579c"
+    },
+    {
+      "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.cpp",
+      "previous": "7f99c942e0c2ed6d3983c4f309b58603efef9d7d57280c9c1c402a293c099b0c",
+      "current": "061d3219b799bb1f12df6c21ebeae952840dda436cc1fbb2ef613c2b3ced48d3"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FileOperationsSurfaceResources.h",
+      "previous": "e7643158d8812ad3dad490dfeae12e88e41ac7d9689ef76556a6cb345846fb70",
+      "current": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp",
+      "previous": "263cdd7f163e945f7e21b5cea2d0b257b3763ed99f5e4b308ddce8f2f5f6561a",
+      "current": "0acf25709e58d29baad3557798f715e0b5f50996413a3dd0a2d36489e6642282"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp",
+      "previous": "0d7c7ef58b388c2c10b95ffb2a8514cdb840ff4ff438df77d0f8d064b067196c",
+      "current": "59cbcd21559175d5155f35c928fb57095d32d784efa258325bdcf44fafd58a6c"
+    },
+    {
+      "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+      "previous": "dfc51dfffd3ea2d4999a6f9fe7675c04eb63f232c187dce81d98d8c1169165b3",
+      "current": "c535414c7b09b7791fb2f272833ed53d2955ba28d0725a6d5e08dacef4bb6ff5"
+    }
+  ],
+  "formatReviewPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v57-format-root-review.json",
+  "formatReviewSha256": "7f2d349efe09a4dd76be73fad0542a741726efe186d7935efe534e6fa4604bc1",
+  "v56EquivalencePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v56-20261001\\root-source-review.json",
+  "v56EquivalenceSha256": "df30b5ceab139088d33a1ba375c1b6c7a082300fcec00ba12f1e13895cfdd9d0",
+  "carryForward": "Original V55 broad Debug FileOps and static/protected gallery; original V56 seven-case three-repeat cluster. V55 to V56 is Commands test readiness plus docs; V56 to V57 is root-reviewed formatting/header permutations plus checkpoint. No relabelled runs or identical-binary claim.",
+  "requiredNewGates": [
+    "Full x64 Debug and Release builds",
+    "Release Full/Fresh with unchanged R0e ceiling",
+    "Eight-process final resource pair and root interpretation",
+    "Final docs/evidence/index/Done/automation closeout"
+  ]
+}

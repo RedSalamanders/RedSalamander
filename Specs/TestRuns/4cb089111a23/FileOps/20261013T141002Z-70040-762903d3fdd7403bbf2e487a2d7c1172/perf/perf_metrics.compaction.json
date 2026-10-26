@@ -1,0 +1,22 @@
+{
+  "schema": "red-salamander.smb-write-through.perf-compaction.v1",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): local regression reference for write-through on network shares (candidate w). The per-run throughput samples, the task cadence summaries and the commit and bridge copy timings are kept in their original order; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.SelfTest.Throughput.",
+      "FileOps.Progress.Cadence.",
+      "FileOps.Bridge.Copy",
+      "FileOps.Local.FileCommitUs"
+    ]
+  },
+  "source": {
+    "bytes": 9633181,
+    "rows": 25438,
+    "sha256": "b315d62ca2515fdfe96475663d8227d19d0327fd4c78c879bf048b8af25955bc"
+  },
+  "kept": {
+    "bytes": 125802,
+    "rows": 300,
+    "sha256": "4744963177046ce333f13349c80b6e270902b6e85603c3b2200c2a8d499aaefc"
+  }
+}

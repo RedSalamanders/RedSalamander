@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-08-31T17:48:24.501Z",
+    "duration_ms": 1226,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_fileops_start_operation_artifact_prompt_shutdown_during_nested_pump",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\e4-prompt-lifetime-release-20260831b\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 640,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_fileops_start_operation_artifact_prompt_shutdown_during_nested_pump",
+            "cases": [
+                {
+                    "name": "cmd_fileops_start_operation_artifact_prompt_shutdown_during_nested_pump",
+                    "status": "passed",
+                    "duration_ms": 111,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

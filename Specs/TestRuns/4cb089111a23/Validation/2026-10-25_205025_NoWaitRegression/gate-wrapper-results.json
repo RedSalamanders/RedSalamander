@@ -1,0 +1,133 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-25T20:50:51.0128789Z",
+  "run_ended_utc": "2026-10-25T20:51:17.4500858Z",
+  "duration_ms": 26437,
+  "suite": "Compare",
+  "platform": "x64",
+  "configuration": "ASan Debug",
+  "executable": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "local_search_index_status_snapshot_does_not_wait_for_warmup,local_search_index_nowait_query_does_not_wait_for_warmup,local_search_index_opportunistic_query_does_not_wait_for_warmup",
+  "exit_code": 1,
+  "passed": 1,
+  "failed": 2,
+  "skipped": 0,
+  "total": 3,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 5,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617",
+    "allowed_run_ids": [
+      "20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\changes-workflow-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr119-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr120-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\loc-20261010125413",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\pester-20261010125254",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "CompareDirectories",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 11013,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 2,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "local_search_index_status_snapshot_does_not_wait_for_warmup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 11,
+          "attempt": 1
+        },
+        {
+          "name": "local_search_index_nowait_query_does_not_wait_for_warmup",
+          "status": "failed",
+          "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=true hr=0x00000000 gateHeld=false elapsedUs=5011577 count=1 exact=true mode=3 live=true).",
+          "duration_ms": 5022,
+          "attempt": 1
+        },
+        {
+          "name": "local_search_index_opportunistic_query_does_not_wait_for_warmup",
+          "status": "failed",
+          "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=false hr=0x00000000 gateHeld=false elapsedUs=5014767 count=1 exact=true mode=3 live=true).",
+          "duration_ms": 5024,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "local_search_index_nowait_query_does_not_wait_for_warmup",
+          "status": "failed",
+          "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=true hr=0x00000000 gateHeld=false elapsedUs=5011577 count=1 exact=true mode=3 live=true).",
+          "duration_ms": 5022,
+          "attempt": 1
+        },
+        {
+          "name": "local_search_index_opportunistic_query_does_not_wait_for_warmup",
+          "status": "failed",
+          "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=false hr=0x00000000 gateHeld=false elapsedUs=5014767 count=1 exact=true mode=3 live=true).",
+          "duration_ms": 5024,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

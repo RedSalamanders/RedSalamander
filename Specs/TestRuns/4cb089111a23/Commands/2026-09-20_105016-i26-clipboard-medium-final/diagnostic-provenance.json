@@ -1,0 +1,32 @@
+[
+  {
+    "file": "clipboard-owned-probe.ps1.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-owned-probe.ps1",
+    "source_sha256": "99683b62de64cc6b3906cdac46b19199a1cbf1e3408f4fe4282e1ecdcd7ec0ff"
+  },
+  {
+    "file": "clipboard-owned-probe.log.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-owned-probe.log",
+    "source_sha256": "a0ed6d45ae9225b5c5e292b2563473037cc805653c00435acf67aa6378023d0d"
+  },
+  {
+    "file": "clipboard-owned-probe-v2.log.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-owned-probe-v2.log",
+    "source_sha256": "f0ff88260223834a0c5e7254a4b7c81deb5788326b64e1e102cf4c9a17aac9db"
+  },
+  {
+    "file": "clipboard-owned-probe-v3.log.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-owned-probe-v3.log",
+    "source_sha256": "320005e4383ba7fd19cc3e208ab8b8574206cf9a8ccce20e98e2e480477b4e3f"
+  },
+  {
+    "file": "clipboard-owned-probe-normalized.log.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-owned-probe-normalized.log",
+    "source_sha256": "0c716220966a4d6b01993979052e9f0954a37bb229e668333d9efa3b16c6b6c8"
+  },
+  {
+    "file": "clipboard-format-diagnostic.log.txt",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-format-diagnostic.log",
+    "source_sha256": "13e61f2af85071b8c264116857bb53e5b733209a35b594d63ac8f7b0548c43df"
+  }
+]

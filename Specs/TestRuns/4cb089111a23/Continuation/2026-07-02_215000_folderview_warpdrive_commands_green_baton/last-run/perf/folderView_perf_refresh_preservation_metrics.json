@@ -1,0 +1,26 @@
+{
+  "case": "folderView_perf_refresh_preservation",
+  "root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands\\work\\folder_refresh_preservation_{512B8CD3-D11E-4FA2-8B9A-9232B96F8C65}",
+  "createdFiles": 1,
+  "deletedFiles": 1,
+  "renamedFiles": 1,
+  "burstCreates": 8,
+  "burstDeletes": 8,
+  "finalItemCount": 12,
+  "mutationUs": 30526,
+  "settleUs": 101302,
+  "refreshDelta": 0,
+  "enumerationCount": 3,
+  "selectedCount": 2,
+  "focusedItem": "focus_anchor.txt",
+  "incrementalSearchQuery": "focus",
+  "refreshMetricRows": {
+    "preserve": 1,
+    "rebuild": 1,
+    "selectionPreserve": 1,
+    "renameTransfer": 1,
+    "requestToPaint": 1,
+    "debounceDelay": 1,
+    "enumeration": 1
+  }
+}

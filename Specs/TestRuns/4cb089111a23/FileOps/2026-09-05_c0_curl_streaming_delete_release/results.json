@@ -1,0 +1,105 @@
+{
+    "run_started_utc": "2026-09-05T11:03:18.422Z",
+    "duration_ms": 17405,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-streaming-delete-literal-release-20260905\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 16734,
+            "passed": 13,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "passed",
+                    "duration_ms": 219,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 172,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "passed",
+                    "duration_ms": 328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "passed",
+                    "duration_ms": 62,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteGuards",
+                    "status": "passed",
+                    "duration_ms": 3328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCommittedMutationResponseLost",
+                    "status": "passed",
+                    "duration_ms": 797,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 188,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 1328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 172,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteLateListing",
+                    "status": "passed",
+                    "duration_ms": 1765,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlDeleteTraversalBounds",
+                    "status": "passed",
+                    "duration_ms": 7047,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 94,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0
+}

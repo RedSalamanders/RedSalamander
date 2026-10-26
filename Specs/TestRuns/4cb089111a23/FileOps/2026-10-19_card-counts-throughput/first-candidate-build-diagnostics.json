@@ -1,0 +1,12 @@
+{
+  "buildReceiptId": "cb0a05a7cc57b33a5c44aded51a0bfb43f6e888d5974d09341e12bc93a3fbe47",
+  "warnings": [
+    "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.Tests.FileOps.cpp(9059,28): warning C4456: declaration of 'id' hides previous local declaration [Z:\\src\\RedSalamander\\RedSalamander\\RedSalamander.vcxproj]",
+    "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.Tests.FileOps.cpp(9060,65): warning C4456: declaration of 'provider' hides previous local declaration [Z:\\src\\RedSalamander\\RedSalamander\\RedSalamander.vcxproj]",
+    "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.Tests.FileOps.cpp(9124,1): warning C4868: compiler may not enforce left-to-right evaluation order in a brace enclosed initializer list [Z:\\src\\RedSalamander\\RedSalamander\\RedSalamander.vcxproj]",
+    "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.Tests.FileOps.cpp(9054,1): warning C4868: compiler may not enforce left-to-right evaluation order in a brace enclosed initializer list [Z:\\src\\RedSalamander\\RedSalamander\\RedSalamander.vcxproj]"
+  ],
+  "warningCount": 4,
+  "errorCount": 0,
+  "reason": "Test-local names shadowed the UIA fixture; std::array dynamic initializers triggered C4868. Renamed fact-local identifiers and sequenced formatting in the final candidate."
+}

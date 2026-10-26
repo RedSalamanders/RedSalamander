@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-08-09T16:12:10.238Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\TestSandbox\\runs\\20260809T161209Z-70380-24a0990fc9314a818875fba48791b3e3\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 3125,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1437,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_CrossFsMoveCommitSizeProofAvoidsImmediateRestat",
+            "status": "passed",
+            "duration_ms": 1641,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

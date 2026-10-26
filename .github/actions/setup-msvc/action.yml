@@ -1,0 +1,13 @@
+name: Required MSVC toolchain
+description: Verify or provision the repository's required MSVC family on a hosted Windows runner.
+inputs:
+  platform:
+    description: Native target architecture
+    default: x64
+runs:
+  using: composite
+  steps:
+    - shell: pwsh
+      env:
+        MSVC_SETUP_PLATFORM: ${{ inputs.platform }}
+      run: '& "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM'

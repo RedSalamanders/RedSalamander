@@ -23,21 +23,21 @@ inline constexpr UINT kFolderViewDeferredInit          = WM_APP + 0x307;
 inline constexpr UINT kFolderViewDirectoryImpact       = WM_APP + 0x308;
 inline constexpr UINT kFolderViewCreateThumbnailBitmap = WM_APP + 0x309;
 inline constexpr UINT kFolderViewPasteShortcutComplete = WM_APP + 0x30A;
+// Payload-less: the view settles the enumeration generation its user cancel recorded, if still newest.
+inline constexpr UINT kFolderViewEnumerationCanceled = WM_APP + 0x30B;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
 
-// DxUi accessibility dispatch. Provider creation is also used by production
-// notification delivery when the caller is not the window-owning thread.
-inline constexpr UINT kDxUiAccessibilityAction         = WM_APP + 0x06A;
-inline constexpr UINT kDxUiAccessibilityCreateProvider = WM_APP + 0x06B;
-inline constexpr UINT kDxUiWindowHostProcessExitDetach = WM_APP + 0x06C;
+// DxUi reserves nothing here. It registers its private window messages by name (RegisterWindowMessageW, values in
+// 0xC000-0xFFFF), so no value in this registry can collide with one. A window procedure that hosts a DxUi::WindowHost still
+// passes every message to HandleMessage, registered ones included (docs/DxUi.md).
 
 // Embedded Terminal plugin. These messages are process-global even though the
 // receiver lives in Terminal.dll, so they belong in the central registry.
-inline constexpr UINT kTerminalOutputReady   = WM_APP + 0x365;
-inline constexpr UINT kTerminalSessionExited = WM_APP + 0x366;
-inline constexpr UINT kTerminalClipboardWrite = WM_APP + 0x367;
-inline constexpr UINT kTerminalKittyReady = WM_APP + 0x368;
+inline constexpr UINT kTerminalOutputReady         = WM_APP + 0x365;
+inline constexpr UINT kTerminalSessionExited       = WM_APP + 0x366;
+inline constexpr UINT kTerminalClipboardWrite      = WM_APP + 0x367;
+inline constexpr UINT kTerminalKittyReady          = WM_APP + 0x368;
 inline constexpr UINT kTerminalCommandSurfaceReady = WM_APP + 0x369;
 // Payload-less cross-thread completion: wParam is TRUE only when the
 // authenticated shell accepted a pending Suggestions insertion response.
@@ -62,10 +62,12 @@ inline constexpr UINT kPaneSelectionSizeComputed = WM_APP + 0x401;
 inline constexpr UINT kPaneSelectionSizeProgress = WM_APP + 0x402;
 inline constexpr UINT kPaneRestoreFolderFocus    = WM_APP + 0x403;
 
-inline constexpr UINT kFileOperationCompleted           = WM_APP + 0x450;
-inline constexpr UINT kFileOperationPresentationChanged = WM_APP + 0x455;
+inline constexpr UINT kFileOperationCompleted                 = WM_APP + 0x450;
+inline constexpr UINT kFileOperationPresentationChanged       = WM_APP + 0x455;
 inline constexpr UINT kFileOperationBatchRenameArtifactPrompt = WM_APP + 0x457;
-inline constexpr UINT kFileOperationClipboardMoveReady  = WM_APP + 0x459;
+inline constexpr UINT kFileOperationClipboardMoveReady        = WM_APP + 0x459;
+// Posted right behind a deferred application close's WM_CLOSE; disarms the pending exit once that close was handled.
+inline constexpr UINT kFileOperationsDeferredCloseSettled = WM_APP + 0x45A;
 #ifdef ENABLE_TESTS
 inline constexpr UINT kFileOpsPopupSelfTestInvoke       = WM_APP + 0x451;
 inline constexpr UINT kFileOpsPopupSelfTestSnapshot     = WM_APP + 0x452;
@@ -143,7 +145,6 @@ inline constexpr UINT kPreferencesDeferredPaneAction      = WM_APP + 0x532;
 inline constexpr UINT kPreferencesApplyPageHostScroll       = WM_APP + 0x538;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
-inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;
 inline constexpr UINT kPreferencesRestoreCategoryTreeFocus  = WM_APP + 0x53A;
 inline constexpr UINT kThemeCycleOverlayFallbackDeadline    = WM_APP + 0x53B;
 
@@ -165,12 +166,16 @@ inline constexpr UINT kMakeFileListTaskUpdate = WM_APP + 0x547;
 inline constexpr UINT kMakeFileListCompleted  = WM_APP + 0x548;
 
 // File-operation artifact recovery (background)
+// I35 R7.5: the leftover cleanup listing (its subfolder walk, and its deferred close by the FolderWindow).
+inline constexpr UINT kLeftoverCleanupScanComplete            = WM_APP + 0x5C0;
+inline constexpr UINT kFolderWindowCloseLeftoverCleanupDialog = WM_APP + 0x5C1;
 
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
 inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;
 
 // Plugin viewers (async work completion / progress)
+inline constexpr UINT kViewerSpaceCacheRestoreContinue = WM_APP + 0x62;
 inline constexpr UINT kViewerTextAsyncOpenComplete     = WM_APP + 0x600;
 inline constexpr UINT kViewerTextAsyncOpenFailure      = WM_APP + 0x629;
 inline constexpr UINT kViewerTextAsyncStreamComplete   = WM_APP + 0x630;
@@ -434,35 +439,35 @@ enum class ViewerTextDebugAsyncStreamFault : uint8_t
 
 struct ViewerTextDebugGeometryRequest
 {
-    ViewerTextDebugGeometryOperation operation          = ViewerTextDebugGeometryOperation::ProbeLayout;
-    ViewerTextDebugAsyncStreamFault asyncStreamFault    = ViewerTextDebugAsyncStreamFault::None;
-    size_t cacheMaxEntries                              = 0u;
-    size_t cacheMaxBytes                                = 0u;
-    size_t segmentStart                                 = 0u;
-    size_t segmentEnd                                   = 0u;
-    size_t textPosition                                 = 0u;
-    size_t rangeStart                                   = 0u;
-    size_t rangeEnd                                     = 0u;
-    size_t logicalLine                                  = 0u;
-    float widthDip                                      = 0.0f;
-    float hitX                                          = 0.0f;
-    size_t normalizedTextPosition = 0u;
-    size_t previousTextPosition   = 0u;
-    size_t nextTextPosition       = 0u;
-    size_t hitTextPosition        = 0u;
-    float caretX                  = 0.0f;
-    float rangeLeft               = 0.0f;
-    float rangeRight              = 0.0f;
-    size_t wrappedSegmentCount    = 0u;
-    size_t wrappedCoveredStart    = 0u;
-    size_t wrappedCoveredEnd      = 0u;
-    size_t wrappedSecondSegmentStart = 0u;
-    size_t wrappedSecondSegmentEnd   = 0u;
-    float wrappedWidthDip         = 0.0f;
-    float wrappedLineHeightDip    = 0.0f;
-    bool wrappedHasGapOrOverlap   = false;
-    bool wrappedAllSegmentsFit    = false;
-    HRESULT result                = E_UNEXPECTED;
+    ViewerTextDebugGeometryOperation operation       = ViewerTextDebugGeometryOperation::ProbeLayout;
+    ViewerTextDebugAsyncStreamFault asyncStreamFault = ViewerTextDebugAsyncStreamFault::None;
+    size_t cacheMaxEntries                           = 0u;
+    size_t cacheMaxBytes                             = 0u;
+    size_t segmentStart                              = 0u;
+    size_t segmentEnd                                = 0u;
+    size_t textPosition                              = 0u;
+    size_t rangeStart                                = 0u;
+    size_t rangeEnd                                  = 0u;
+    size_t logicalLine                               = 0u;
+    float widthDip                                   = 0.0f;
+    float hitX                                       = 0.0f;
+    size_t normalizedTextPosition                    = 0u;
+    size_t previousTextPosition                      = 0u;
+    size_t nextTextPosition                          = 0u;
+    size_t hitTextPosition                           = 0u;
+    float caretX                                     = 0.0f;
+    float rangeLeft                                  = 0.0f;
+    float rangeRight                                 = 0.0f;
+    size_t wrappedSegmentCount                       = 0u;
+    size_t wrappedCoveredStart                       = 0u;
+    size_t wrappedCoveredEnd                         = 0u;
+    size_t wrappedSecondSegmentStart                 = 0u;
+    size_t wrappedSecondSegmentEnd                   = 0u;
+    float wrappedWidthDip                            = 0.0f;
+    float wrappedLineHeightDip                       = 0.0f;
+    bool wrappedHasGapOrOverlap                      = false;
+    bool wrappedAllSegmentsFit                       = false;
+    HRESULT result                                   = E_UNEXPECTED;
 };
 
 struct ViewerTextDebugSaveRequest
@@ -478,7 +483,7 @@ inline constexpr size_t kViewerTextDebugHexLineChars = 32u;
 
 struct ViewerTextDebugHexLineRequest
 {
-    uint64_t offset = 0u;
+    uint64_t offset   = 0u;
     size_t validBytes = 0u;
     wchar_t text[kViewerTextDebugHexLineChars]{};
     size_t sourceLengths[16]{};
@@ -536,16 +541,27 @@ struct ViewerNativeMenuModelDebugSnapshot
 
 inline constexpr UINT kViewerDebugGetNativeMenuModelSnapshot = WM_APP + 0x612;
 
+struct ViewerMenuAttachmentDebugSnapshot
+{
+    HMENU inputMenu       = nullptr;
+    HMENU menuAfterAttach = nullptr;
+    unsigned outcome      = 0u;
+    DWORD fallbackError   = ERROR_SUCCESS;
+    bool attempted        = false;
+    bool attached         = false;
+};
+inline constexpr UINT kViewerDebugGetMenuAttachmentSnapshot = WM_APP + 0x637;
+
 struct ViewerImgRawDecodeDebugSnapshot
 {
-    bool hasImage              = false;
-    bool displayingThumbnail   = false;
-    uint16_t baseOrientation   = 1u;
-    uint16_t viewOrientation   = 1u;
-    uint32_t sourceWidth       = 0u;
-    uint32_t sourceHeight      = 0u;
-    uint32_t orientedWidth     = 0u;
-    uint32_t orientedHeight    = 0u;
+    bool hasImage            = false;
+    bool displayingThumbnail = false;
+    uint16_t baseOrientation = 1u;
+    uint16_t viewOrientation = 1u;
+    uint32_t sourceWidth     = 0u;
+    uint32_t sourceHeight    = 0u;
+    uint32_t orientedWidth   = 0u;
+    uint32_t orientedHeight  = 0u;
 };
 
 inline constexpr UINT kViewerImgRawDebugGetDecodeSnapshot = WM_APP + 0x624;
@@ -597,6 +613,13 @@ struct ViewerVlcDebugSnapshot
     bool vlcModuleLoaded                 = false;
     bool vlcInstanceLoaded               = false;
     bool vlcPlayerCreated                = false;
+    uintptr_t vlcInstanceIdentity        = 0;
+    uintptr_t vlcPlayerIdentity          = 0;
+    bool mediaSwitchPending              = false;
+    bool mediaSwitchRestartRequested     = false;
+    uint64_t mediaSwitchCoalesced        = 0;
+    bool hudStopAvailable                = false;
+    bool hudStopFocused                  = false;
     bool hasVolumeMuteButton             = false;
     bool hasVolumeSlider                 = false;
     bool muted                           = false;
@@ -625,15 +648,18 @@ struct ViewerVlcDebugSnapshot
     uint64_t loadQueueAccepted           = 0;
     uint64_t loadQueueRejected           = 0;
     uint64_t staleLoadResults            = 0;
-    uint64_t cleanupCompletions           = 0;
-    uint64_t deferredCleanupCount         = 0;
-    uint64_t cleanupDeferrals             = 0;
-    uint64_t cleanupSubmitFailures        = 0;
-    uint64_t cleanupAllocationFailures    = 0;
-    uint64_t asyncResultPostFailures      = 0;
-    uint64_t loadPostFallbacks            = 0;
-    uint64_t cleanupPostFallbacks         = 0;
-    bool closePending                     = false;
+    uint64_t cleanupCompletions          = 0;
+    uint64_t deferredCleanupCount        = 0;
+    uint64_t cleanupDeferrals            = 0;
+    uint64_t cleanupSubmitFailures       = 0;
+    uint64_t cleanupAllocationFailures   = 0;
+    uint64_t asyncResultPostFailures     = 0;
+    uint64_t loadPostFallbacks           = 0;
+    uint64_t cleanupPostFallbacks        = 0;
+    bool closePending                    = false;
+    wchar_t overlayTitle[128]            = {};
+    wchar_t overlayBody[1024]            = {};
+    bool overlayOffersDownload           = false;
 };
 
 struct ViewerVlcDebugPlaybackState
@@ -653,18 +679,21 @@ struct ViewerVlcDebugWheel
 
 struct ViewerVlcDebugStopDelay
 {
-    uint32_t delayMs = 0;
+    uint32_t delayMs   = 0;
     HANDLE releaseGate = nullptr;
 };
 
 struct ViewerVlcDebugAsyncControl
 {
-    uint32_t loadDelayMs = 0;
-    bool failNextLoadSubmit = false;
-    bool failNextLoadCompletionPost = false;
+    uint32_t loadDelayMs             = 0;
+    bool failNextLoadSubmit          = false;
+    bool failNextLoadCompletionPost  = false;
     bool failNextCloseCompletionPost = false;
-    bool failNextCleanupSubmit = false;
-    bool failNextCleanupAllocation = false;
+    bool failNextCleanupSubmit       = false;
+    bool failNextCleanupAllocation   = false;
+    HANDLE mediaSwitchReleaseGate    = nullptr;
+    bool failNextMediaSubmit         = false;
+    bool failNextMediaCompletionPost = false;
 };
 
 inline constexpr UINT kViewerVlcDebugGetSnapshot         = WM_APP + 0x614;
@@ -685,6 +714,9 @@ struct ViewerSpaceTooltipDebugSnapshot
     float tooltipMaxWidthDip           = 0.0f;
     float tooltipMaxHeightDip          = 0.0f;
     uint64_t tooltipPaintCount         = 0u;
+    RECT tooltipPaintedBoundsPx        = {};
+    RECT treemapBoundsPx               = {};
+    bool hasPaintedTooltipBounds       = false;
     bool hasRenderTarget               = false;
     bool hasTooltipFormat              = false;
     uint32_t hoverNodeId               = 0;
@@ -724,10 +756,31 @@ struct ViewerSpacePerfDebugSnapshot
     size_t syntheticCount                    = 0u;
     size_t pendingQueueCount                 = 0u;
     uint64_t pendingQueueBytes               = 0u;
+    uint64_t pendingQueuePeakBytes           = 0u;
+    uint64_t queuePostedCount                = 0u;
+    uint64_t queueCoalescedCount             = 0u;
+    uint64_t queueDrainedCount               = 0u;
+    uint64_t queueLockHoldCount              = 0u;
+    uint64_t providerBufferCurrentBytes      = 0u;
+    uint64_t providerBufferPeakBytes         = 0u;
+    uint64_t validationScratchCurrentBytes   = 0u;
+    uint64_t validationScratchPeakBytes      = 0u;
+    uint64_t validationScratchRejectedCount  = 0u;
+    uint64_t workerStagingCurrentBytes       = 0u;
+    uint64_t workerStagingPeakBytes          = 0u;
+    uint64_t workerStagingRejectedCount      = 0u;
+    uint64_t scannerBookkeepingCurrentBytes  = 0u;
+    uint64_t scannerBookkeepingPeakBytes     = 0u;
+    uint64_t activePathCurrentBytes          = 0u;
+    uint64_t activePathPeakBytes             = 0u;
+    uint64_t activePathRejectedCount         = 0u;
     size_t drawItemCount                     = 0u;
     size_t visibleTileCount                  = 0u;
     size_t culledTileCount                   = 0u;
+    float treemapWidthDip                    = 0.0f;
+    float treemapHeightDip                   = 0.0f;
     uint64_t rootTotalBytes                  = 0u;
+    uint64_t firstRootDirectoryTotalBytes    = 0u; // Test/debug witness for progressive first-child ancestor propagation.
     uint64_t fileCandidateBytes              = 0u;
     uint64_t syntheticBytes                  = 0u;
     uint64_t lastTileDrawCount               = 0u;
@@ -738,49 +791,166 @@ struct ViewerSpacePerfDebugSnapshot
     uint64_t staticCacheRecordCount          = 0u;
     uint64_t staticCacheBytes                = 0u;
     uint64_t scanCacheSnapshotBytes          = 0u;
-    uint64_t lastStaticCacheRecordUs         = 0u;
-    uint64_t lastPaintUs                     = 0u;
-    uint64_t lastLayoutUs                    = 0u;
-    uint64_t lastDrainUs                     = 0u;
-    uint64_t lastWorkingSetBytes             = 0u;
-    uint64_t lastHitTestUs                   = 0u;
-    uint32_t lastHitTestCandidatesChecked    = 0u;
-    uint32_t effectiveFileCandidateBudget    = 0u;
-    uint32_t rendererDeviceCreateCount       = 0u;
-    uint32_t swapChainResizeCount            = 0u;
-    uint32_t rendererBrushCreateCount        = 0u;
-    uint32_t rendererTextFormatCreateCount   = 0u;
-    uint32_t swapChainWidthPx                = 0u;
-    uint32_t swapChainHeightPx               = 0u;
-    uint32_t rendererFailureStage            = 0u;
-    uint32_t rendererFailureHr               = 0u;
-    uint64_t layoutGeneration                = 0u;
-    uint32_t hitGridCellCount                = 0u;
-    uint32_t hitGridMaxCandidatesPerCell     = 0u;
-    uint64_t aggregateBytes                  = 0u;
-    uint64_t aggregateFolders                = 0u;
-    uint64_t aggregateFiles                  = 0u;
-    uint64_t scannedFolders                  = 0u;
-    uint64_t scannedFiles                    = 0u;
-    uint64_t childReferenceCount             = 0u;
-    uint64_t childArenaSlots                 = 0u;
-    uint64_t childArenaFreeSlots             = 0u;
-    uint64_t modelAcceptedEntries            = 0u;
-    uint64_t modelRejectedEntries            = 0u;
-    uint64_t modelCappedDirectories          = 0u;
-    uint64_t modelCappedFiles                = 0u;
-    uint64_t modelRetainedNameBytes          = 0u;
-    uint64_t modelRetainedChildReferences    = 0u;
-    uint64_t modelTraversedDirectories       = 0u;
-    uint64_t modelRetainedDirectoryLimit     = 0u;
-    uint64_t modelRetainedFileLimit          = 0u;
-    uint64_t modelChildReferenceLimit        = 0u;
-    uint64_t modelChildArenaSlotLimit        = 0u;
-    uint32_t modelValidationError            = 0u;
+    uint64_t scanCacheRestoreBytes           = 0u;
+    uint64_t scanCacheResidentBytes          = 0u;
+    uint64_t scanCacheRestoreUs              = 0u;
+    uint32_t cacheRestorePhase               = 0u;
+    uint64_t viewerOwnedBytes                = 0u;
+    uint64_t layoutTurnCount                 = 0u;
+    uint64_t layoutMaxTurnUs                 = 0u;
+    bool layoutBuildActive                   = false;
+    bool layoutCancellationPending           = false;
+    uint64_t layoutCancellationOwnedBytes    = 0u;
+    bool layoutDirty                         = false;
+    uint64_t summaryStageBytes               = 0u;
+    uint64_t summaryCommittedCount           = 0u;
+    uint64_t summaryRejectedCount            = 0u;
+    uint64_t summaryChunkMaxBytes            = 0u;
+    uint32_t scanPreviewPriorityJobs         = 0u;
+    bool summaryRootDoneDeferred             = false;
+    uint64_t scanCacheBuildBytes             = 0u;
+    size_t analysisRowCount                  = 0u;
+    uint32_t analysisGeneration              = 0u;
+    uint32_t selectedItemId                  = 0u;
+    uint64_t analysisCellRequests            = 0u;
+    uint64_t analysisMaxTurnUs               = 0u;
+    bool analysisBuildActive                 = false;
+    bool analysisDirty                       = false;
+    HWND analysisHwnd                        = nullptr;
+    HWND navigationHwnd                      = nullptr;
+    struct ChildHost final
+    {
+        uint32_t clientWidthPx               = 0u;
+        uint32_t clientHeightPx              = 0u;
+        uint32_t windowBackgroundArgb        = 0u;
+        uint32_t textArgb                    = 0u;
+        uint64_t renderCount                 = 0u;
+        uint64_t resizeCount                 = 0u;
+        uint64_t resizeFailureCount          = 0u;
+        uint64_t presentFailureCount         = 0u;
+        uint64_t prepareD2DFlushFailureCount = 0u;
+        uint64_t invalidateCount             = 0u;
+        uint32_t presentationMode            = 0u;
+        bool diagnosticsAvailable            = false;
+        bool hasWindow                       = false;
+        bool visible                         = false;
+        bool hasRoot                         = false;
+        bool hasD2DContext                   = false;
+        bool dark                            = false;
+        bool highContrast                    = false;
+    } analysisHost, navigationHost;
+    RECT analysisBoundsPx                     = {};
+    bool analysisDarkTheme                    = false;
+    bool navigationDarkTheme                  = false;
+    float analysisRootWidthDip                = 0.0f;
+    float analysisRootHeightDip               = 0.0f;
+    uint64_t inputPresentationCount           = 0u;
+    uint64_t lastInputPresentationUs          = 0u;
+    uint32_t lastRenderPresentHr              = 0u;
+    uint32_t headerStatusResourceId           = 0u;
+    bool refreshPending                       = false;
+    bool refreshRefused                       = false;
+    bool refreshFailed                        = false;
+    uint64_t previousModelBytes               = 0u;
+    uint64_t candidateModelBytes              = 0u;
+    uint32_t displayGeneration                = 0u;
+    uint32_t refreshDisposePending            = 0u;
+    uint32_t retiredRendererDeviceCount       = 0u;
+    uint64_t refreshDisposeMaxUs              = 0u;
+    uint64_t lastStaticCacheRecordUs          = 0u;
+    uint64_t lastPaintUs                      = 0u;
+    uint64_t lastLayoutUs                     = 0u;
+    uint64_t lastDrainUs                      = 0u;
+    uint64_t lastWorkingSetBytes              = 0u;
+    uint64_t lastHitTestUs                    = 0u;
+    uint32_t lastHitTestCandidatesChecked     = 0u;
+    uint32_t effectiveFileCandidateBudget     = 0u;
+    uint32_t rendererDeviceCreateCount        = 0u;
+    uint32_t swapChainResizeCount             = 0u;
+    uint32_t rendererBrushCreateCount         = 0u;
+    uint32_t rendererTextFormatCreateCount    = 0u;
+    uint32_t swapChainWidthPx                 = 0u;
+    uint32_t swapChainHeightPx                = 0u;
+    uint32_t rendererFailureStage             = 0u;
+    uint32_t rendererFailureHr                = 0u;
+    uint64_t layoutGeneration                 = 0u;
+    uint64_t presentedLayoutGeneration        = 0u;
+    uint64_t firstMeaningfulPaintUs           = 0u;
+    bool firstPositiveProjectionAttempted     = false;
+    bool hasPublishedPositiveGeometry         = false;
+    uint32_t hitGridCellCount                 = 0u;
+    uint32_t hitGridMaxCandidatesPerCell      = 0u;
+    uint64_t aggregateBytes                   = 0u;
+    uint64_t aggregateFolders                 = 0u;
+    uint64_t aggregateFiles                   = 0u;
+    uint64_t scannedFolders                   = 0u;
+    uint64_t scannedFiles                     = 0u;
+    uint64_t scannedBytes                     = 0u;
+    uint64_t childReferenceCount              = 0u;
+    uint64_t childArenaSlots                  = 0u;
+    uint64_t childArenaFreeSlots              = 0u;
+    uint64_t modelAcceptedEntries             = 0u;
+    uint64_t modelRejectedEntries             = 0u;
+    uint64_t modelCappedDirectories           = 0u;
+    uint64_t modelCappedFiles                 = 0u;
+    uint64_t modelRetainedNameBytes           = 0u;
+    uint64_t modelRetainedChildReferences     = 0u;
+    uint64_t modelTraversedDirectories        = 0u;
+    uint64_t modelRetainedDirectoryLimit      = 0u;
+    uint64_t modelRetainedFileLimit           = 0u;
+    uint64_t modelChildReferenceLimit         = 0u;
+    uint64_t modelChildArenaSlotLimit         = 0u;
+    uint32_t modelValidationError             = 0u;
     uint64_t postUpdateInnerGenerationRejects = 0u;
+    uint64_t scanFailedFolders                = 0u;
+    uint32_t scanEffectiveThreads             = 0u;
+    uint64_t localeInvalidations              = 0u;
+    bool animationTimerArmed                  = false;
+    uint32_t viewNodeId                       = 0u;
+    uint32_t viewNodeParentId                 = 0u;
+    bool viewContentNotMeasured               = false;
+    // 0 none, 1 grid, 2 linear because a layout animation is active, 3 linear, 4 grid miss then linear.
+    uint32_t lastHitTestPath   = 0u;
+    bool layoutAnimationActive = false;
+    // The tile the last WM_LBUTTONDOWN hit; 0 when it landed in the header strip or on no tile.
+    uint32_t lastLButtonDownHitNodeId = 0u;
+};
+
+struct ViewerSpaceDebugRectDip
+{
+    float left   = 0.0f;
+    float top    = 0.0f;
+    float right  = 0.0f;
+    float bottom = 0.0f;
+};
+
+// One layout draw item, selected by its layout-order index in wParam. Hit testing walks the items back to front against
+// `current`, which the paint path animates toward `target`.
+struct ViewerSpaceDrawItemDebugSnapshot
+{
+    size_t drawItemCount    = 0u;
+    float dpi               = 0.0f;
+    float headerBottomDip   = 0.0f;
+    uint32_t nodeId         = 0u;
+    uint32_t parentId       = 0u;
+    uint64_t logicalBytes   = 0u;
+    bool contentNotMeasured = false;
+    wchar_t name[260]{};
+    uint32_t depth                  = 0u;
+    bool isDirectory                = false;
+    bool isSynthetic                = false;
+    float labelHeightDip            = 0.0f;
+    ViewerSpaceDebugRectDip current = {};
+    ViewerSpaceDebugRectDip target  = {};
 };
 
 struct ViewerSpacePostUpdatePauseDebugControl
+{
+    HANDLE enteredEvent = nullptr;
+    HANDLE releaseEvent = nullptr;
+};
+
+struct ViewerSpaceValidationScratchPauseDebugControl
 {
     HANDLE enteredEvent = nullptr;
     HANDLE releaseEvent = nullptr;
@@ -804,13 +974,78 @@ enum class ViewerSpaceRendererFaultDebugMode : uint8_t
     DxgiDeviceRemoved = 2,
 };
 
-inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
-inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay = WM_APP + 0x61C;
-inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot    = WM_APP + 0x61D;
-inline constexpr UINT kViewerSpaceDebugForcePerfSample    = WM_APP + 0x61E;
-inline constexpr UINT kViewerSpaceDebugCompareHitTesting  = WM_APP + 0x61F;
-inline constexpr UINT kViewerSpaceDebugForceRendererFault = WM_APP + 0x623;
+inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot  = WM_APP + 0x61B;
+inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay  = WM_APP + 0x61C;
+inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot     = WM_APP + 0x61D;
+inline constexpr UINT kViewerSpaceDebugForcePerfSample     = WM_APP + 0x61E;
+inline constexpr UINT kViewerSpaceDebugCompareHitTesting   = WM_APP + 0x61F;
+inline constexpr UINT kViewerSpaceDebugForceRendererFault  = WM_APP + 0x623;
 inline constexpr UINT kViewerSpaceDebugPauseNextPostUpdate = WM_APP + 0x635;
+inline constexpr UINT kViewerSpaceDebugGetDrawItem         = WM_APP + 0x636;
+inline constexpr UINT kViewerSpaceDebugSetLayoutWorkUnits  = WM_APP + 0x639;
+// UI-thread, caller-owned synchronous test query, never used for cross-thread payload ownership.
+struct ViewerSpaceAnalysisRowDebugQuery
+{
+    ViewerSpacePerfScanState scanState = ViewerSpacePerfScanState::NotStarted;
+    size_t index                       = 0u;
+    uint64_t token                     = 0u;
+    uint32_t itemId                    = 0u;
+    uint32_t generation                = 0u;
+    uint64_t logicalBytes              = 0u;
+    uint64_t shownBytes                = 0u;
+    bool excluded                      = false;
+    bool cleanupMarked                 = false;
+    bool directory                     = false;
+    bool other                         = false;
+    bool contentNotMeasured            = false;
+    wchar_t name[260]{};
+};
+inline constexpr UINT kViewerSpaceDebugGetAnalysisRow               = WM_APP + 0x63A;
+inline constexpr UINT kViewerSpaceDebugSetAnalysisFilter            = WM_APP + 0x63B;
+inline constexpr UINT kViewerSpaceDebugDetachAnalysis               = WM_APP + 0x63C;
+inline constexpr UINT kViewerSpaceDebugRefreshAnalysisAccessibility = WM_APP + 0x63D;
+inline constexpr UINT kViewerSpaceDebugSetAnalysisSort              = WM_APP + 0x63E;
+inline constexpr UINT kViewerSpaceDebugPauseAfterValidationScratch  = WM_APP + 0x64E;
+inline constexpr UINT kViewerSpaceDebugPauseAfterWorkerStaging      = WM_APP + 0x64F;
+struct ViewerSpaceNavigationFolderDebugQuery
+{
+    uint64_t parentToken = 0u;
+    size_t index         = 0u;
+    size_t count         = 0u;
+    uint64_t token       = 0u;
+    bool navigate        = false;
+    wchar_t name[260]{};
+};
+inline constexpr UINT kViewerSpaceDebugNavigationFolder = WM_APP + 0x650;
+struct ViewerSpaceWorkspaceDebugSnapshot
+{
+    uint32_t generation        = 0u;
+    uint64_t discoveredBytes   = 0u;
+    uint64_t originalViewBytes = 0u;
+    uint64_t shownViewBytes    = 0u;
+    uint64_t ownedBytes        = 0u;
+    size_t exclusions          = 0u;
+    size_t unresolved          = 0u;
+    size_t cleanupMarks        = 0u;
+    bool rebinding             = false;
+    bool reviewing             = false;
+    bool exportBusy            = false;
+    bool factsReady            = false;
+    bool fileCountWeight       = false;
+    uint64_t shownFileCount    = 0u;
+};
+inline constexpr UINT kViewerSpaceDebugGetWorkspace = WM_APP + 0x651;
+// UI-thread synchronous test request. Path is copied and events are duplicated before return;
+// only paths inside an existing marked sandbox are admitted. No borrowed data is posted.
+struct ViewerSpaceExportDebugRequest
+{
+    const wchar_t* outputPath = nullptr;
+    bool csv                  = false;
+    HRESULT publishFailure    = S_OK;
+    HANDLE readyEvent         = nullptr;
+    HANDLE releaseEvent       = nullptr;
+};
+inline constexpr UINT kViewerSpaceDebugExport = WM_APP + 0x652;
 #endif
 
 // RedSalamanderMonitor / ColorTextView
@@ -820,6 +1055,13 @@ inline constexpr UINT kColorTextViewEtwBatch    = WM_APP + 0x622;
 
 // PoC / samples
 inline constexpr UINT kWin32HelloCredHelloResult = WM_APP + 0x680;
+
+// Alert overlay: semantic actions carry scalar IDs only, handled on its UI thread. Its synchronous
+// UI Automation marshal uses the registered message "RedSalamander.AlertOverlay.UiaCall" with a
+// SendMessagePayload token (AlertOverlayWindow.cpp); WM_APP + 0x76 is retired, do not reuse it.
+inline constexpr UINT kAlertOverlayInvokeButton  = WM_APP + 0x72;
+inline constexpr UINT kAlertOverlayInvokeDismiss = WM_APP + 0x73;
+inline constexpr UINT kAlertOverlayInvokeOption  = WM_APP + 0x74;
 
 // Custom control messages (WM_USER)
 inline constexpr UINT kModernComboSetCloseOutsideAccept  = WM_USER + 0x500u;

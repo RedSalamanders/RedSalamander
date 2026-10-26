@@ -1,0 +1,55 @@
+Stale TestSandbox run cleanup: 4 removed, 0 failed.
+Skipping build (verified receipt db7bd1f6b053b871868b3bfbd691bb691cdef156d7bfff41247a30eeda18444a).
+Validation plan: 01d8fbc0a11ca1adb401c044b5ab6eeec34d8aec31db4bf01f6a8a9d164e79d5
+Entry fingerprints: a55cc7a9ec837e542892be2fb8205b580e71817845082fe97ef729e3b40769db (94 ms)
+Shadow affected set: 0/1 entries; advisory-build=none. Fresh still executes all.
+
+======================================================================
+  Running: CompareDirectories
+======================================================================
+  Exe:  Z:\RsI19Closeout\.build\x64\Debug\RedSalamander.exe
+  Args: --compare-selftest --selftest-no-activate --selftest-case=content_pending_elided --selftest-repeat=10
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+CompareDirectories
+  (7,5s)
+         Passed: 10
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 10
+  Passed: 10
+  Failed: 0
+  Skipped: 0
+  Wall time: 12,9s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20260913T084638Z-87256-e7e8c2feb8684e0499072d7662b4167d
+  Disk audit issues: 30
+  Last run: Z:\RedSalamander.Perf\runs\20260913T084638Z-87256-e7e8c2feb8684e0499072d7662b4167d\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.compare-directories.json
+    workspace-final.json
+    compare\results.json
+

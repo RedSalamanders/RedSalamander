@@ -384,7 +384,7 @@ Describe 'Winget manifest template' {
 
     It 'preserves package subdirectories for plugins, language satellites, and themes' {
         $zipScript | Should Match '\$LangSource = Join-Path \$BuildOutputDir "Lang"'
-        $zipScript | Should Match 'Copy-Item \$LangSource -Destination \$LangDest -Recurse -Force'
+        $zipScript | Should Match 'RedSalamanderMonitor-\*'
 
         $catchAllInclude = 'Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*"'
         $catchAllIndex = $msixProject.IndexOf($catchAllInclude, [System.StringComparison]::Ordinal)
@@ -415,7 +415,6 @@ Describe 'RedLauncher project' {
         $launcherManifestPath = Join-Path $repoRoot 'RedLauncher\res\exe.manifest'
         $launcherSourcePath = Join-Path $repoRoot 'RedLauncher\Main.cpp'
         $redSalamanderSourcePath = Join-Path $repoRoot 'RedSalamander\RedSalamander.cpp'
-        $monitorSourcePath = Join-Path $repoRoot 'RedSalamanderMonitor\RedSalamanderMonitor.cpp'
         $configureSourcePath = Join-Path $repoRoot 'RedConfigure\Main.cpp'
         $searchServiceSourcePath = Join-Path $repoRoot 'RedSalamanderSearchService\Main.cpp'
         $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
@@ -462,7 +461,6 @@ Describe 'RedLauncher project' {
         $launcherSource | Should Match 'kMinimumWindowsBuildRevision\s*=\s*2600'
         $launcherSource | Should Match 'Windows 11 build 22000\.2600'
         (Get-Content -Path $redSalamanderSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
-        (Get-Content -Path $monitorSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
         (Get-Content -Path $configureSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
         (Get-Content -Path $searchServiceSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
     }

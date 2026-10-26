@@ -1,0 +1,49 @@
+{
+  "schema": "i27.final-serial-invocation-plan.v1",
+  "run_id": "20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463",
+  "kind": "Gallery",
+  "configuration": "Release",
+  "repo": "C:\\RsI27Followup",
+  "file": "C:\\Users\\eric\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+  "arguments": [
+    "-NoProfile",
+    "-File",
+    "C:\\RsI27Followup\\Tools\\Run-AllTests.ps1",
+    "-Suite",
+    "FileOps",
+    "-Platform",
+    "x64",
+    "-Configuration",
+    "Release",
+    "-ValidationMode",
+    "Fresh",
+    "-BuildNumber",
+    "1",
+    "-TestRoot",
+    "C:\\RedSalamander.Perf",
+    "-RunId",
+    "20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463",
+    "-SkipBuild",
+    "-CaseFilter",
+    "FileOps_VisualGallery"
+  ],
+  "child_overrides": {
+    "REDSALAMANDER_SELFTEST_ROOT": null,
+    "REDSALAMANDER_SELFTEST_F6_IDLE_MODE": null,
+    "REDSALAMANDER_TEST_ALTERNATE_ROOT": null,
+    "REDSALAMANDER_TEST_RUN_ID": null,
+    "REDSALAMANDER_TEST_ALLOW_ALTERNATE_VOLUME": null,
+    "RSBuildEnableTests": "true",
+    "RSBuildCompilerDebugInformation": "Embedded",
+    "REDSALAMANDER_TEST_ROOT": "C:\\RedSalamander.Perf"
+  },
+  "launcher_environment_mutated": false,
+  "reviewed_skip_build": true,
+  "scope": "Focused gallery/interaction/family evidence only; never substitutes for a fresh Full repository verdict.",
+  "archive_roots": [
+    {
+      "label": "C",
+      "root": "C:\\RedSalamander.Perf"
+    }
+  ]
+}

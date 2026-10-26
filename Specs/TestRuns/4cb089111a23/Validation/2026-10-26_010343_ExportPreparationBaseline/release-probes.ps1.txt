@@ -1,0 +1,49 @@
+param([Parameter(Mandatory)][string]$ExpectedHead,[ValidateRange(1,30)][int]$Attempts=10,[string]$Label='baseline',[switch]$StopAfterFailure,[switch]$CaptureMetrics,[ValidateSet('Debug','Release','ASan Debug')][string]$Configuration='ASan Debug')
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$repoPath='E:\RedSalamander.Perf\integration-20261024'
+Set-Location -LiteralPath $repoPath
+function Assert-FrozenSource { if ((git rev-parse HEAD) -ne $ExpectedHead -or (git status --porcelain)) { throw 'Export probe source changed.' } }
+if (Get-Process -Id 47996 -ErrorAction SilentlyContinue) { throw 'Full qualification owner is still alive; do not overlap probes.' }
+Assert-FrozenSource
+Import-Module ./Tools/Modules/Testing/TestSandbox.psm1 -Force
+Import-Module ./Tools/Modules/Build/ProcessStreaming.psm1 -Force
+$env:REDSALAMANDER_TEST_ROOT='E:\RedSalamander.Perf'
+$executable=Join-Path $repoPath ('.build\x64\'+$Configuration+'\ViewerPETests.exe')
+$plugin=Join-Path $repoPath ('.build\x64\'+$Configuration+'\Plugins\ViewerSpace.dll')
+$exeHash=(Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
+$pluginHash=(Get-FileHash -LiteralPath $plugin -Algorithm SHA256).Hash
+$records=[System.Collections.Generic.List[object]]::new()
+foreach ($attempt in 1..$Attempts) {
+  foreach ($caseName in @('TestViewerSpaceAnalysisHostVirtualGridAndLifetime','TestViewerSpaceAnalysisAllowsAmbientDesktopChanges')) {
+    Assert-FrozenSource
+    $context=New-RSTestRunContext -RepoRoot $repoPath -TestRootOverride 'E:\RedSalamander.Perf'
+    $env:REDSALAMANDER_TEST_RUN_ID=$context.RunId
+    $processTemp=New-RSTestSandboxScratchDirectory -RepoRoot $repoPath -Harness 'viewer-space-export-probes' -Case 'process-temp' -RunId $context.RunId
+    $environment=@{REDSALAMANDER_TEST_ROOT=$context.TestRoot;REDSALAMANDER_TEST_RUN_ID=$context.RunId;TEMP=$processTemp;TMP=$processTemp}
+    New-Item -ItemType Directory -Path $context.ArtifactRoot -Force | Out-Null
+    $log=Join-Path $context.ArtifactRoot 'viewer-space-export-output.txt'
+    $errorLog=Join-Path $context.ArtifactRoot 'viewer-space-export-error.txt'
+    $metricsPath=Join-Path $context.ArtifactRoot 'viewer-space-export-perf.jsonl'
+    $environment.REDSALAMANDER_PERF_JSONL_PATH=''
+    if ($CaptureMetrics) {
+        $environment.REDSALAMANDER_PERF_JSONL_PATH=$metricsPath
+        $environment.REDSALAMANDER_PERF_JSONL_SCENARIO='viewer-space-export-lifetime'
+        $environment.REDSALAMANDER_PERF_JSONL_COMMIT=$ExpectedHead
+        $environment.REDSALAMANDER_PERF_JSONL_RUN_ID=$context.RunId
+    }
+    $started=[DateTime]::UtcNow
+    $code=Invoke-RSStreamingProcess -FilePath $executable -Arguments @('--group=noninteractive',$caseName) -WorkingDirectory (Split-Path $executable) -LogPath $log -ErrorLogPath $errorLog -AdditionalEnvironment $environment -TimeoutMilliseconds 240000
+    $gates=@(Select-String -LiteralPath $log -Pattern '^\[PASS\] Export worker reaches its owned deterministic lifetime gate$').Count
+    $closeChecks=@(Select-String -LiteralPath $log -Pattern '^\[PASS\] Close returns while the export writer is held and module unload stays blocked$').Count
+    $passed=$code -eq 0 -and $gates -eq 1 -and $closeChecks -eq 1
+    $metricsPaths=if (Test-Path -LiteralPath $metricsPath) { @($metricsPath) } else { @() }
+    $records.Add([pscustomobject]@{attempt=$attempt;case=$caseName;label=$Label;runId=$context.RunId;source=$ExpectedHead;configuration=$Configuration;executableSha256=$exeHash;pluginSha256=$pluginHash;exitCode=$code;passed=$passed;gatePasses=$gates;closePasses=$closeChecks;startedUtc=$started.ToString('o');finishedUtc=[DateTime]::UtcNow.ToString('o');log=$log;errorLog=$errorLog;metricsPaths=$metricsPaths;captureMetrics=[bool]$CaptureMetrics})
+    $records | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $PSScriptRoot ('viewer-space-export-'+$Label+'.json'))
+    Assert-FrozenSource
+    if ((Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash -ne $exeHash -or (Get-FileHash -LiteralPath $plugin -Algorithm SHA256).Hash -ne $pluginHash) { throw 'Export probe artifact changed.' }
+    if (-not $passed -and $StopAfterFailure) { exit 1 }
+  }
+}
+if (@($records | Where-Object { -not $_.passed }).Count) { exit 1 }
+exit 0

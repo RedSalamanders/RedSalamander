@@ -1,0 +1,94 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-09T19:50:26.7924433Z",
+  "run_ended_utc": "2026-10-09T19:50:44.3169543Z",
+  "duration_ms": 17525,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T195007Z-29512-fd2830b98aa34a8787a044fd55288da5\\artifacts\\selftest\\last_run",
+  "test_root": "D:\\RedSalamander.Perf",
+  "run_id": "20261009T195007Z-29512-fd2830b98aa34a8787a044fd55288da5",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_viewer_space_same_instance_reopen",
+  "exit_code": 0,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "total": 1,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 3,
+    "test_root": "D:\\RedSalamander.Perf",
+    "run_id": "20261009T195007Z-29512-fd2830b98aa34a8787a044fd55288da5",
+    "allowed_run_ids": [
+      "20261009T195007Z-29512-fd2830b98aa34a8787a044fd55288da5"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\archive-skip-check-7756799779d4",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\dxui-ci-first-37835055279",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\dxui-ci-retry-37835055279-attempt2",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 6800,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_viewer_space_same_instance_reopen",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 991,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

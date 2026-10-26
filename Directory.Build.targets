@@ -32,11 +32,19 @@
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
   </ItemDefinitionGroup>
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSBuildCompilerDebugInformation)'=='Embedded'">
+    <_RSEmbeddedSearchTextPath>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)Common\SearchTextHelpers.cpp'))</_RSEmbeddedSearchTextPath>
+  </PropertyGroup>
   <ItemGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSBuildCompilerDebugInformation)'=='Embedded'">
+    <!-- Existing items can already carry explicit ASan metadata. Updating only
+         defaults leaves those items on /Zi despite the requested /Z7 policy. -->
+    <ClCompile Update="@(ClCompile)">
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
     <!-- MSVC 14.51 can ICE in mre.cpp when this template-heavy shared TU is
          compiled with /Z7 under /MP. Isolate only this TU; project and solution
          parallelism remain available to the rest of the validation build. -->
-    <ClCompile Update="..\Common\SearchTextHelpers.cpp;..\..\Common\SearchTextHelpers.cpp">
+    <ClCompile Update="@(ClCompile->WithMetadataValue('FullPath', '$(_RSEmbeddedSearchTextPath)'))">
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
     </ClCompile>
   </ItemGroup>
@@ -118,6 +126,31 @@
     </ItemGroup>
   </Target>
 
+  <!-- Visual C++ also runs CoreCppClean, outside the common FileWrites cleanup
+       hooks above. Its native task must not delete DLLs shared with another
+       project after that project has staged them in this output directory. -->
+  <Target Name="RSProtectSharedRuntimeCppClean"
+          BeforeTargets="CoreCppClean"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(OutDir)'!='' and '$(TargetPath)'!='' and '$(IntDir)'!=''">
+    <PropertyGroup>
+      <_RSNativeCleanTargetPath>$([MSBuild]::NormalizePath('$(TargetPath)'))</_RSNativeCleanTargetPath>
+    </PropertyGroup>
+    <ItemGroup>
+      <_RSNativeCleanOutputDll Include="$(OutDir)*.dll" />
+    </ItemGroup>
+    <FindUnderPath Path="$(IntDir)" Files="@(_RSNativeCleanOutputDll)" UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_RSNativeCleanPrivateDll" />
+    </FindUnderPath>
+    <ItemGroup>
+      <_RSSharedNativeCleanDll Include="@(_RSNativeCleanOutputDll)"
+        Condition="'%(FullPath)'!='$(_RSNativeCleanTargetPath)'" />
+      <_RSSharedNativeCleanDll Remove="@(_RSNativeCleanPrivateDll)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <CoreCppClean Update="@(CoreCppClean)">
+        <FilesExcludedFromClean>%(CoreCppClean.FilesExcludedFromClean);@(_RSSharedNativeCleanDll->'%(FullPath)')</FilesExcludedFromClean>
+      </CoreCppClean>
+    </ItemGroup>
+  </Target>
+
   <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'=='' and '$(RSIsFirstPartyProject)'=='true' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">true</RSVersioningEnabled>
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'==''">false</RSVersioningEnabled>
@@ -135,7 +168,6 @@
     <RSVersionOfficialReleaseArg Condition="'$(RSVersionOfficialRelease)'=='true'">-OfficialRelease</RSVersionOfficialReleaseArg>
 
     <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamander'">RedSalamander, File Manager</RSVersionFileDescription>
-    <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamanderMonitor'">RedSalamander Monitor</RSVersionFileDescription>
     <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamanderSearchService'">RedSalamander Search Service</RSVersionFileDescription>
     <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='Common'">RedSalamander Common Runtime</RSVersionFileDescription>
 
@@ -281,4 +313,21 @@
                       Overwrite="true"
                       Encoding="UTF-8" />
   </Target>
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='Release' and '$(IsLanguageResourceProject)'!='true'">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='Release' and '$(IsLanguageResourceProject)'!='true'">
+    <ClCompile><FunctionLevelLinking>true</FunctionLevelLinking><WholeProgramOptimization>true</WholeProgramOptimization></ClCompile>
+    <Link><OptimizeReferences>true</OptimizeReferences><LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration></Link>
+    <Lib><LinkTimeCodeGeneration>true</LinkTimeCodeGeneration></Lib>
+  </ItemDefinitionGroup>
+  <Target Name="ValidateMsvcToolsVersion" BeforeTargets="PrepareForBuild" Condition="'$(RSIsFirstPartyProject)'=='true'">
+    <Error Condition="!$([System.String]::Copy('$(VCToolsVersion)').StartsWith('$(RequiredMsvcToolsVersion).'))" Text="RedSalamander requires MSVC build tools $(RequiredMsvcToolsVersion).x; selected $(VCToolsVersion). Install and select the required default C++ toolset." />
+  </Target>
+  <Target Name="RSVerifyRedMonitorClient" BeforeTargets="PrepareForBuild" Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '@(ClCompile)'!=''">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Tools\Verify-RedMonitorClient.ps1&quot;" />
+  </Target>
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
+    <ClCompile><AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)ThirdParty\RedMonitor\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+  </ItemDefinitionGroup>
 </Project>

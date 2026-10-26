@@ -1,0 +1,5 @@
+Spec inventory: D:\RedSalamander\.build\SpecInventory\spec-inventory.json
+Normative consistency: D:\RedSalamander\.build\SpecInventory\normative-consistency.json
+Markdown report: D:\RedSalamander\.build\SpecInventory\spec-inventory.md
+Test inventory: D:\RedSalamander\.build\SpecInventory\test-inventory.json
+Blocking findings: 0

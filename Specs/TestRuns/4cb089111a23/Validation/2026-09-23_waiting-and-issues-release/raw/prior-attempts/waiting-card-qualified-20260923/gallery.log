@@ -1,0 +1,76 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt 7777ee1be59e779a60a9b380ec17062004f5f3528eb40ceff4c59e831baadd0c).
+Validation plan: 940b1db2e557bfbcc4a04a22029b501697afd761f6ced826f626857979585a9d
+Entry fingerprints: 0e3d9e74e25a6d1ee2e31566c3e30ef7e98d6190e4a31e03fc74e2857dd7ddce (124 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Release\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOps_VisualGallery
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL] 
+FileOperations
+  (2m 13,4s)
+         Passed: 0
+  Failed: 1
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 1
+  Passed: 0
+  Failed: 1
+  Skipped: 0
+  Wall time: 2m 29,1s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=1
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- FAILURE DETAILS (1 failing case) ---
+
+  FAIL 
+[FileOperations] 
+FileOps_VisualGallery
+       Reason: 
+Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics.
+       Duration: 2m 12,3s
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260923T143829Z-89640-22d5df683ed846a6bb02ef28c5c1f6c9
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260923T143829Z-89640-22d5df683ed846a6bb02ef28c5c1f6c9\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: E:\RedSalamander.Perf\runs\20260923T143829Z-89640-22d5df683ed846a6bb02ef28c5c1f6c9\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     C:\RsI26Final\.build\x64\Release\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+

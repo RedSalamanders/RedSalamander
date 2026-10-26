@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scenario": "observatory_track2_imap_identity_delete_safety",
+  "status": "passed",
+  "machineHash": "4cb089111a23",
+  "workingTreeBase": "f4e0c8c3bed8",
+  "configuration": "Release",
+  "platform": "x64",
+  "correctness": {
+    "fileSystemCurlTests": "passed",
+    "sourceContractsPassed": 131,
+    "sourceContractsFailed": 0,
+    "sourceContractsSkipped": 0,
+    "debugTestBuildWarnings": 0,
+    "debugTestBuildErrors": 0,
+    "debugPluginBuildWarnings": 0,
+    "debugPluginBuildErrors": 0,
+    "releaseTestBuildWarnings": 0,
+    "releaseTestBuildErrors": 0
+  },
+  "releaseMetrics": {
+    "parserIterations": 500000,
+    "parserElapsedUs": 10933,
+    "builderIterations": 500000,
+    "builderElapsedUs": 125722,
+    "statusParserIterations": 500000,
+    "statusParserElapsedUs": 34004,
+    "subjectDecoderIterations": 100000,
+    "subjectDecoderElapsedUs": 39282,
+    "summaryRepairBatches": 3
+  },
+  "securityCommandCount": {
+    "listingStatus": 1,
+    "fetchStatus": 1,
+    "deleteStatus": 1,
+    "deleteCapability": 1,
+    "scalesWithMailboxMessages": false
+  },
+  "liveNetworkMetricsCaptured": false,
+  "liveNetworkMetricsBlocker": "No deterministic network-capable IMAP fixture or credentials are available in this workspace."
+}

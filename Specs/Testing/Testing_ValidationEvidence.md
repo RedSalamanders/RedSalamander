@@ -1,7 +1,7 @@
 # Trusted Validation Evidence
 
 Status: normative active contract
-Last reviewed: 2026-08-28
+Last reviewed: 2026-10-04
 
 ## Authority and activation
 
@@ -172,6 +172,71 @@ creates a new run and references the original promoted execution
 directly; provenance chains and cycles are forbidden. Pruning retains referenced origins
 or first materializes an independently complete promoted copy.
 
+### Local runtime-run retention
+
+The transient `runs/<runId>` tree is archived on the same marked volume under
+`evidence/completed-runs/<runId>` by the lifecycle in `Testing_SelfTests.md`.
+Its separate create-only `evidence/run-archive-records/<runId>` intent/completion
+records support crash recovery and preserve the original execution-path mapping.
+It neither moves nor rewrites canonical Startrail run records or promotions.
+The runner finalizes and independently copies terminal result artifacts before this
+rename, then publishes its aggregate with final navigation paths. Runner, sandbox,
+common owner-parser and summary changes remain in recursive runner dependency digests;
+old fingerprints cannot qualify the new workflow. Retention never changes a run verdict
+or confers exact Resume authority.
+
+### External whole-run archives with reparse entries
+
+A whole-run archive containing reparse entries MUST declare its closure representation.
+`i27.v3-whole-run-no-follow-reparse.v1` uses `archive-manifest-v3.json`, an ordinary
+non-reparse `whole-run` tree, a separate `no-follow-reparse-catalog.json`, and regular
+raw blobs under `reparse-data`. Its complete claim is ordinary file bytes plus exact
+no-follow raw reparse metadata. It is not a literal source-tree clone; it recreates no
+links and reads neither resolved link targets nor their payload. Completion and scope
+flags must be actual JSON booleans. Archive closure does not change the original test
+verdict or authorize qualification by itself. This external transport format does not
+change canonical Startrail records, promotion or Resume authority.
+
+Admission MUST bind the exact marked archive authority, marked source authority,
+original source run path and archive destination. Source and archive authorities may
+differ; a D source archived under C does not confer authority over another D path.
+Inventory treats supported junctions and symbolic links as leaves, never traversal
+roots. All archive outputs and their ancestors remain ordinary non-reparse paths.
+Unsafe paths, replacement drift, unsupported tags, malformed or truncated metadata,
+duplicate mapping paths, missing or extra members, and changed ordinary bytes fail closed.
+
+The closed controller records the exact archive manifest path, SHA-256 and successful
+independent reader validation in its original invocation receipt. Later retention and
+curation MUST match that original receipt, rerun archive validation and require unchanged
+manifest/catalog hashes across validation. A rewritten, internally consistent manifest
+is insufficient provenance.
+
+Capture MUST compare source inventories before and after copying. Ordinary files retain
+no-follow source identity, attributes, size and byte hashes before/after capture, and
+matching destination size/hash. Each reparse leaf retains its source volume/file
+identity, attributes, tag, exact raw buffer bytes, size and SHA-256 at the pre-copy,
+post-copy and final source boundaries; those values must agree. The source reparse-path
+set, manifest catalog, separate catalog and blob set MUST form a bijection. Every blob
+must match its catalog size/hash and supported raw header; no missing, duplicate or
+extra blob is admitted. An empty source requires an empty ordinary inventory, catalog
+and blob set; an ordinary-only run has an empty catalog and blob set.
+
+Readers MUST bound each external UTF-8 manifest/catalog to 256 MiB before parsing,
+inventory/catalog sets to 200,000 entries, and each raw blob to 16 KiB. These are
+independent ceilings: the effective capacity is whichever bound is reached first, and
+overflow is an explicit failed/incomplete archive. These limits do not raise canonical
+record, per-entry, materialized-evidence or repository-publication quotas. Capped
+selected-record publication remains governed by `Testing_PerformanceValidation.md` and
+`Specs/TestRuns/README.md`; its map binds actual external manifest, catalog and blob
+sizes/hashes, with explicit scope and external-retention references.
+
+An incomplete original archive and failed original run remain failed historical evidence.
+Later capture establishes only the later capture boundary. It cannot retroactively
+establish an omitted link's original raw buffer, resolved target or target payload,
+replace the original manifest, or convert the old run into a pass. Canonical entry,
+plan, terminal-result, receipt, artifact-epoch and promotion checks remain required
+independently.
+
 ### Fresh checkpoint publication (Phase 5A active)
 
 Full and CI Fresh runs create a unique `X:/RedSalamander.Perf/evidence/runs/<run-id>/`
@@ -223,12 +288,14 @@ The Full `ToolsPesterBuildToolchain` deployment proof is an explicit first entry
 isolated environment supplies the selected platform and configuration, and the test may
 delete/rebuild only `.build/<platform>/<configuration>`; it must never fall back to x64
 Debug. After it runs, the runner rebuilds/re-attests that same full profile and
-byte-verifies the resulting receipt. It then durably publishes a new create-only
+byte-verifies the resulting receipt. It refreshes the cached receipt binding digest
+from that verified receipt before recomputing downstream entry fingerprints and the
+impact decision; an entry's receipt ID and build-artifact component must describe
+the same receipt. It then durably publishes a new create-only
 content-addressed decision and switches decision digest, snapshot, receipt, epoch, and
 `mutation_state=stable` in one run-state replacement before any artifact reader starts.
 A crash before that switch leaves the old decision intact and the epoch unreadable; a
-crash after it leaves one reconstructible new state. The runner then recomputes all
-downstream entry fingerprints. Rebuild-generated PE/PDB identity is not
+crash after it leaves one reconstructible new state. Rebuild-generated PE/PDB identity is not
 required to equal the pre-entry receipt. The re-attestation build is executed under the
 same suite-owned build environment as the initial build. In particular, Full preserves
 `RSBuildEnableTests=true` and embedded compiler debug information across the writer
@@ -346,3 +413,29 @@ publication: `0` `PASSED`, `1` `FAILED`, `2` `NOT_EVALUATED`, `3` invalid CLI or
 therefore return 2 even when their selected work is green; CI and release policy must not
 treat 2 as a completed repository gate. Host or parameter-binding failures before the
 runner owns control are not remapped.
+
+## Scoped iteration and PR coverage
+
+Active native test sources, helpers, fixtures and seams MUST use `Scope.Tests.Something.h/.cpp`. `Tests/native-test-files.json` owns active membership. Historical archived harnesses and sealed reproduction inputs keep their original identity; they do not define new source naming. Rename project entries, includes, current inventories and callers together. DxUi historical source/test origins retain their original identities and map to current paths separately.
+
+`Test-Changes.ps1` is the ordinary iteration entrypoint. Its default is affected coverage, including committed changes since a local merge base and independent staged, unstaged, deletion, rename-side and untracked discovery. No ref is fetched. Unknown executable inputs widen coverage; prose alone does not require native tests. Explanations name paths, consumers and fallback reasons. Explicit selectors reject unknown scopes. Affected, filtered and environment-reduced coverage MUST NOT be reported as a full repository pass.
+
+Exact local continuation uses the existing explicit Full Resume and its promoted artifact/epoch contracts. Commands families and timing/network-dependent entries retain their declared non-cacheable policies. Affected never consumes reusable evidence.
+
+`-Mode Full` selects the full local obligation. `-Mode PrePush` accounts for full coverage across local execution and the forthcoming PR gate. Delegation requires a clean committed candidate, the enabled GitHub workflow, matching candidate workflow bytes and their reviewed manifest digest, and a matching native profile. Staged, unstaged and untracked inputs retain obligations locally; a dirty tree or changed HEAD during the coverage lookup also rejects delegation. Nightly and weekly jobs are not PR coverage. Workflow/API uncertainty keeps obligations local. A delegated run reports `CI_PENDING`, never repository `PASSED`; the PR must pass its required checks. Main/release acceptance remains separate because its merge tree, configuration matrix or requirements can differ.
+
+RedSalamander defers only entries whose complete portable entry contracts equal the PR plan, retaining writers, in-product cases and extra scenarios locally. Its `-NonInteractive` option omits entries that require desktop-global state and records incomplete coverage; it cannot alter an exact Resume. When every selected entry is omitted (for example FileOps admission coverage with shared foreground invariants) the run executes nothing, lists the omitted entries as `PENDING_INTERACTIVE`, writes no pass claim and ends repository `NOT_EVALUATED` with exit 2. Only `-Suite FileOps` with one exact, case-sensitive filter from `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`, `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal` or `FileOps_SelectionShapeSmb`, and no flaky/order proof injection, is admitted without that desktop lease. These owned callback, storage and progress witnesses retain `--selftest-no-activate`; application captures use the canonical owned HWND WGC path; broad suites, families, prefixes, wildcards, multiple-case filters, casing near-misses and unknown filters remain leased. The plan module stays in the recursive runner dependency digest, invalidating prior entry identity after a classification change. Focused successes still report filtered coverage and repository `NOT_EVALUATED`. DxUi foreground suites remain explicit `test.ps1 -Interactive` work after agreement to the time. Noninteractive iteration and CI do not claim those manual gates; no desktop automation is introduced.
+
+`Tests/test-scopes.json` owns the standalone scope and verified PR-profile mapping; RedSalamander's `Tools/validation-impact.json` and canonical plan continue to own its affected execution. Specific standalone test-source rules use their semantic entry tags, while common support and unknown paths retain conservative fan-out. New source/build/runtime/runner dependencies must extend the relevant manifest and focused regression coverage.
+
+CI invokes explicit full gates rather than the affected default. The forthcoming PR executes its candidate workflow; a reviewed local workflow digest and the enabled GitHub workflow gate delegation. Workflow edits invalidate that digest until the scope contract is reviewed and updated. RedXe's independent Windows tooling/skill tests execute once in its tooling job. DxUi's tooling has one Windows host qualification and one Linux portability qualification; its MSBuild-only staging fixture executes once on Windows; native runner/watchdog checks stay profile-specific. RedSalamander source-monitor schedules skip unchanged commits only after the latest completed matching workflow attempt succeeded; manual dispatch and unreadable/failed/cancelled history execute. Scheduled source skips do not establish new environment qualification. Hosted timing investigations still use paired, fixture-matched resource evidence; cached historical observations are not new measurements.
+
+PR delegation MUST account for conditional workflow jobs. DxUi uses the existing NativeScope contract to keep native obligations local when a documentation-only PR skips native CI; always-running Windows/Linux tooling remains covered. Native success identities exclude validator prose while tooling identities include it.
+
+## Reviewed PR workflow execution closure (2026-10-16)
+
+`Get-ScopedPrWorkflowDigest` binds PR delegation to repository-owned execution logic, including reusable workflows and local action contents, tooling, build/dependency configuration, executable script extensions throughout the checkout, test-scope/native inventories and Testing/Build JSON contracts. It deliberately hashes a conservative superset instead of inferring PowerShell imports or shell control flow. Every local `uses` reference must resolve; missing inputs, path escapes, unresolved expressions and reparse inputs fail closed. Local action directories include arbitrary assets such as Dockerfiles. Product C++ edits remain ordinary candidate inputs and do not by themselves change which gate is reviewed.
+
+Text digests normalize CRLF. `Tests/test-scopes.json` participates with only its own `prWorkflowDigest` property removed, avoiding a self-reference while binding coverage declarations. Any change to these execution inputs requires recomputing and reviewing the manifest digest. A mismatch retains local obligations; an enabled forthcoming workflow is still pending acceptance, never already-passed evidence. Clean committed candidate checks before and after GitHub lookup continue to apply.
+
+The scoped wrapper defaults its local comparison to origin/HEAD, the recorded remote default branch. A repository migration updates that symbolic ref with git remote set-head origin -a; the wrapper never fetches or guesses a branch. Tests/test-scopes.json identifies RedSalamanders/RedSalamander and main for matching hosted PR coverage. An unavailable or nonmatching hosted gate retains the local obligation.

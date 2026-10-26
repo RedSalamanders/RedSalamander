@@ -1,0 +1,6510 @@
+{
+  "schema": "viewer-space.memory-run-evidence.v2",
+  "runId": "20261009T233326Z-14316-277f9baea9c644eeb2e01902b38f63e4",
+  "side": "candidate",
+  "mode": "RetainedReference",
+  "case": "cmd_viewer_space_memory_heavy_four_root_retained_reference_optin",
+  "caseStatus": "passed",
+  "buildReceiptId": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd",
+  "buildSourceSnapshotId": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "buildReceiptSha256": "d20692190256c647089fab52005638563b019d59ece317bb14f9ed2ded3a0cc6",
+  "workspaceSnapshotId": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "workspaceSnapshotSha256": "dcbc28781b5ff094ca834504937ddc99fb354a8504e0ca1e818c65aaed0b6334",
+  "sealedBuildLog": {
+    "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\logs\\msbuild-20261009_234710_900-pid43264-027778f3.log",
+    "source_bytes": 42095,
+    "source_sha256": "c1beccada832c6f251be4916eb603923e0fc8a7c95728f00e19c97c250c17572",
+    "chunks": [
+      {
+        "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\build-inputs\\candidate\\msbuild.log",
+        "bytes": 42095,
+        "sha256": "c1beccada832c6f251be4916eb603923e0fc8a7c95728f00e19c97c250c17572"
+      }
+    ]
+  },
+  "runnerStdout": {
+    "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\runner-logs\\20261009T231508122Z-399289c9-b1-p3-candidate.stdout.txt",
+    "bytes": 1931,
+    "sha256": "6d56ba1d3cef236b40747f6c5fb4ac7425ce9d9f530e5d809329452fb826011f",
+    "shards": [
+      "runner-stdout.log"
+    ]
+  },
+  "runnerStderr": {
+    "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\runner-logs\\20261009T231508122Z-399289c9-b1-p3-candidate.stderr.txt",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "shards": []
+  },
+  "rawMetricsOriginalSourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T233326Z-14316-277f9baea9c644eeb2e01902b38f63e4\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "rawMetricsPreservedSourcePath": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\raw-sources\\20261009T231508122Z-399289c9-b1-p3-candidate\\perf_metrics.jsonl",
+  "rawMetricsSourceIndex": {
+    "original_path": "D:\\RedSalamander.Perf\\runs\\20261009T233326Z-14316-277f9baea9c644eeb2e01902b38f63e4\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-retainedreference-20261009T231508122Z-399289c9\\raw-sources\\20261009T231508122Z-399289c9-b1-p3-candidate\\perf_metrics.jsonl",
+    "bytes": 13608840,
+    "sha256": "489ceb67bbbee5ae1256554018f33199506941e1174288512bfd5cd6a447e141"
+  },
+  "rawMetricsSha256": "489ceb67bbbee5ae1256554018f33199506941e1174288512bfd5cd6a447e141",
+  "rawMetricsBytes": 13608840,
+  "rawMetricRowCount": 32428,
+  "metrics": {
+    "schema": "viewer-space.raw-metric-replay-map.v1",
+    "preservation": "curated-with-source-replay-map",
+    "sourceSha256": "489ceb67bbbee5ae1256554018f33199506941e1174288512bfd5cd6a447e141",
+    "sourceBytes": 13608840,
+    "sourceRows": 32428,
+    "retainedSha256": "78b557a65ceb64a6def9fbb78626940d3c510ac720d57c57662392e2aadb3c9d",
+    "retainedBytes": 564892,
+    "retainedRows": 1502,
+    "retainedSourceLineNumbers": [
+      243,
+      244,
+      245,
+      246,
+      266,
+      1567,
+      1580,
+      1667,
+      1742,
+      1752,
+      1826,
+      1827,
+      2040,
+      2047,
+      2051,
+      2502,
+      3592,
+      3593,
+      3594,
+      3595,
+      3597,
+      3598,
+      3599,
+      3600,
+      3601,
+      3604,
+      3606,
+      3607,
+      3608,
+      3609,
+      3610,
+      3611,
+      3612,
+      3613,
+      3614,
+      3615,
+      3616,
+      3617,
+      3618,
+      3687,
+      3747,
+      3748,
+      3749,
+      3750,
+      3947,
+      3948,
+      3949,
+      3950,
+      3951,
+      3952,
+      3953,
+      3954,
+      3956,
+      3957,
+      3958,
+      3959,
+      3960,
+      3961,
+      3962,
+      3963,
+      3964,
+      3965,
+      3966,
+      3967,
+      3968,
+      3969,
+      3970,
+      3971,
+      3972,
+      3973,
+      3974,
+      3975,
+      3976,
+      3977,
+      3984,
+      3985,
+      3986,
+      3987,
+      3988,
+      3989,
+      3996,
+      3997,
+      4007,
+      4008,
+      4009,
+      4029,
+      4030,
+      4031,
+      4032,
+      4034,
+      4035,
+      4036,
+      4037,
+      4038,
+      4041,
+      4043,
+      4044,
+      4045,
+      4046,
+      4047,
+      4048,
+      4049,
+      4050,
+      4051,
+      4052,
+      4053,
+      4054,
+      4067,
+      4068,
+      4069,
+      4079,
+      4080,
+      4081,
+      4086,
+      4087,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095,
+      4098,
+      4100,
+      4101,
+      4102,
+      4103,
+      4104,
+      4105,
+      4106,
+      4107,
+      4108,
+      4109,
+      4110,
+      4111,
+      4112,
+      4113,
+      4120,
+      4121,
+      4122,
+      4123,
+      4124,
+      4131,
+      4154,
+      4155,
+      4156,
+      4157,
+      4159,
+      4160,
+      4161,
+      4162,
+      4163,
+      4166,
+      4168,
+      4169,
+      4170,
+      4171,
+      4172,
+      4173,
+      4174,
+      4175,
+      4176,
+      4177,
+      4448,
+      5492,
+      5493,
+      5577,
+      5643,
+      5659,
+      5724,
+      5725,
+      5903,
+      5904,
+      5908,
+      7486,
+      7511,
+      7512,
+      7513,
+      7514,
+      7516,
+      7517,
+      7518,
+      7519,
+      7520,
+      7523,
+      7525,
+      7526,
+      7527,
+      7528,
+      7529,
+      7530,
+      7531,
+      7532,
+      7533,
+      7534,
+      7535,
+      7536,
+      7537,
+      7538,
+      7539,
+      7635,
+      7636,
+      7637,
+      7638,
+      7639,
+      7655,
+      7656,
+      7879,
+      7880,
+      7881,
+      7882,
+      7883,
+      7884,
+      7885,
+      7886,
+      7888,
+      7889,
+      7890,
+      7891,
+      7892,
+      7893,
+      7894,
+      7895,
+      7896,
+      7897,
+      7898,
+      7899,
+      7900,
+      7901,
+      7902,
+      7903,
+      7904,
+      7905,
+      7906,
+      7907,
+      7908,
+      7909,
+      7910,
+      7911,
+      7912,
+      7913,
+      7923,
+      7924,
+      7925,
+      7926,
+      7927,
+      7937,
+      7938,
+      7939,
+      7940,
+      7941,
+      7961,
+      7962,
+      7963,
+      7964,
+      7966,
+      7967,
+      7968,
+      7969,
+      7970,
+      7973,
+      7975,
+      7976,
+      7977,
+      7978,
+      7979,
+      7980,
+      7981,
+      7982,
+      7983,
+      7984,
+      7985,
+      7986,
+      7987,
+      7988,
+      8004,
+      8005,
+      8006,
+      8013,
+      8014,
+      8015,
+      8020,
+      8021,
+      8022,
+      8023,
+      8025,
+      8026,
+      8027,
+      8028,
+      8029,
+      8032,
+      8034,
+      8035,
+      8036,
+      8037,
+      8038,
+      8039,
+      8040,
+      8041,
+      8042,
+      8043,
+      8044,
+      8045,
+      8046,
+      8047,
+      8057,
+      8058,
+      8059,
+      8060,
+      8061,
+      8068,
+      8073,
+      8074,
+      8075,
+      8076,
+      8078,
+      8079,
+      8080,
+      8081,
+      8082,
+      8085,
+      8087,
+      8088,
+      8089,
+      8090,
+      8091,
+      8110,
+      8111,
+      8112,
+      8113,
+      8114,
+      8310,
+      9427,
+      9428,
+      9508,
+      9587,
+      9590,
+      9650,
+      9651,
+      9832,
+      9836,
+      9840,
+      11435,
+      11460,
+      11461,
+      11462,
+      11463,
+      11465,
+      11466,
+      11467,
+      11468,
+      11469,
+      11472,
+      11474,
+      11475,
+      11476,
+      11477,
+      11478,
+      11479,
+      11480,
+      11481,
+      11482,
+      11483,
+      11484,
+      11485,
+      11486,
+      11487,
+      11488,
+      11561,
+      11562,
+      11615,
+      11616,
+      11617,
+      11618,
+      11619,
+      11816,
+      11817,
+      11818,
+      11819,
+      11820,
+      11821,
+      11822,
+      11823,
+      11825,
+      11826,
+      11827,
+      11828,
+      11829,
+      11830,
+      11831,
+      11832,
+      11833,
+      11834,
+      11835,
+      11836,
+      11837,
+      11838,
+      11839,
+      11840,
+      11841,
+      11842,
+      11843,
+      11844,
+      11845,
+      11846,
+      11847,
+      11854,
+      11855,
+      11856,
+      11857,
+      11858,
+      11865,
+      11866,
+      11873,
+      11874,
+      11875,
+      11885,
+      11886,
+      11887,
+      11901,
+      11902,
+      11903,
+      11904,
+      11906,
+      11907,
+      11908,
+      11909,
+      11910,
+      11913,
+      11915,
+      11916,
+      11917,
+      11918,
+      11919,
+      11920,
+      11921,
+      11922,
+      11923,
+      11924,
+      11925,
+      11926,
+      11927,
+      11928,
+      11944,
+      11945,
+      11946,
+      11951,
+      11952,
+      11953,
+      11954,
+      11956,
+      11957,
+      11958,
+      11959,
+      11960,
+      11963,
+      11965,
+      11966,
+      11967,
+      11968,
+      11969,
+      11970,
+      11971,
+      11972,
+      11973,
+      11974,
+      11975,
+      11976,
+      11977,
+      11978,
+      11985,
+      11986,
+      11987,
+      11988,
+      11989,
+      11996,
+      12001,
+      12002,
+      12003,
+      12004,
+      12006,
+      12007,
+      12008,
+      12009,
+      12010,
+      12013,
+      12015,
+      12016,
+      12017,
+      12018,
+      12019,
+      12038,
+      12039,
+      12040,
+      12041,
+      12042,
+      12234,
+      13395,
+      13396,
+      13476,
+      13559,
+      13567,
+      13630,
+      13631,
+      13820,
+      13821,
+      13825,
+      15347,
+      15372,
+      15373,
+      15374,
+      15375,
+      15377,
+      15378,
+      15379,
+      15380,
+      15381,
+      15384,
+      15386,
+      15387,
+      15388,
+      15389,
+      15390,
+      15391,
+      15392,
+      15393,
+      15394,
+      15395,
+      15396,
+      15397,
+      15398,
+      15399,
+      15400,
+      15500,
+      15501,
+      15526,
+      15527,
+      15528,
+      15529,
+      15530,
+      15732,
+      15733,
+      15755,
+      15756,
+      15757,
+      15758,
+      15759,
+      15760,
+      15761,
+      15762,
+      15764,
+      15765,
+      15766,
+      15767,
+      15768,
+      15769,
+      15770,
+      15771,
+      15772,
+      15773,
+      15774,
+      15775,
+      15776,
+      15777,
+      15778,
+      15779,
+      15780,
+      15781,
+      15782,
+      15783,
+      15784,
+      15785,
+      15786,
+      15787,
+      15788,
+      15789,
+      15799,
+      15800,
+      15810,
+      15811,
+      15812,
+      15826,
+      15827,
+      15828,
+      15829,
+      15831,
+      15832,
+      15833,
+      15834,
+      15835,
+      15838,
+      15840,
+      15841,
+      15842,
+      15843,
+      15844,
+      15845,
+      15846,
+      15847,
+      15848,
+      15849,
+      15850,
+      15851,
+      15852,
+      15853,
+      15869,
+      15870,
+      15871,
+      15881,
+      15882,
+      15883,
+      15890,
+      15891,
+      15892,
+      15897,
+      15898,
+      15899,
+      15900,
+      15902,
+      15903,
+      15904,
+      15905,
+      15906,
+      15909,
+      15911,
+      15912,
+      15913,
+      15914,
+      15915,
+      15916,
+      15917,
+      15918,
+      15919,
+      15920,
+      15921,
+      15922,
+      15923,
+      15924,
+      15934,
+      15935,
+      15936,
+      15946,
+      15947,
+      15948,
+      15949,
+      15950,
+      15957,
+      15962,
+      15963,
+      15964,
+      15965,
+      15967,
+      15968,
+      15969,
+      15970,
+      15971,
+      15974,
+      15976,
+      15977,
+      15978,
+      15979,
+      15980,
+      15999,
+      16000,
+      16001,
+      16002,
+      16003,
+      16004,
+      16005,
+      16006,
+      16007,
+      16008,
+      16009,
+      16010,
+      16011,
+      16012,
+      16013,
+      16017,
+      16018,
+      16019,
+      16020,
+      16021,
+      16042,
+      16043,
+      16044,
+      16045,
+      16052,
+      16062,
+      16063,
+      16064,
+      16065,
+      16075,
+      16082,
+      16083,
+      16084,
+      16085,
+      16095,
+      16105,
+      16106,
+      16107,
+      16108,
+      16109,
+      16122,
+      16123,
+      16124,
+      16125,
+      16135,
+      16145,
+      16146,
+      16147,
+      16148,
+      16161,
+      16162,
+      16163,
+      16164,
+      16165,
+      16175,
+      16185,
+      16186,
+      16187,
+      16188,
+      16192,
+      16202,
+      16203,
+      16204,
+      16205,
+      16215,
+      16216,
+      16217,
+      16218,
+      16219,
+      16220,
+      16221,
+      16222,
+      16223,
+      16224,
+      16225,
+      16226,
+      16227,
+      16228,
+      16229,
+      16230,
+      16231,
+      16232,
+      16233,
+      16234,
+      16238,
+      16244,
+      16248,
+      16249,
+      16406,
+      16407,
+      16447,
+      16603,
+      16604,
+      16605,
+      16606,
+      16608,
+      16609,
+      16610,
+      16611,
+      16612,
+      16615,
+      16631,
+      16862,
+      16863,
+      19542,
+      19736,
+      19737,
+      19912,
+      19913,
+      19914,
+      19915,
+      19916,
+      19917,
+      19918,
+      19919,
+      19921,
+      19922,
+      19923,
+      19924,
+      19925,
+      19926,
+      19927,
+      19928,
+      19929,
+      19930,
+      19931,
+      19932,
+      19933,
+      19934,
+      19935,
+      19936,
+      19937,
+      19938,
+      19939,
+      19940,
+      19941,
+      19945,
+      19946,
+      19947,
+      19960,
+      19961,
+      19962,
+      19979,
+      19980,
+      19981,
+      19982,
+      19984,
+      19985,
+      19986,
+      19987,
+      19988,
+      19991,
+      19993,
+      19994,
+      19995,
+      20002,
+      20003,
+      20004,
+      20005,
+      20006,
+      20007,
+      20008,
+      20009,
+      20010,
+      20011,
+      20012,
+      20013,
+      20014,
+      20015,
+      20016,
+      20017,
+      20018,
+      20019,
+      20020,
+      20021,
+      20022,
+      20026,
+      20033,
+      20034,
+      20035,
+      20036,
+      20038,
+      20039,
+      20040,
+      20041,
+      20042,
+      20045,
+      20047,
+      20048,
+      20052,
+      20057,
+      20058,
+      20059,
+      20060,
+      20062,
+      20063,
+      20064,
+      20065,
+      20066,
+      20069,
+      20071,
+      20072,
+      20073,
+      20074,
+      20075,
+      20094,
+      20095,
+      20096,
+      20097,
+      20098,
+      20099,
+      20100,
+      20101,
+      20102,
+      20103,
+      20104,
+      20105,
+      20106,
+      20107,
+      20108,
+      20112,
+      20113,
+      20114,
+      20115,
+      20116,
+      20137,
+      20138,
+      20139,
+      20140,
+      20147,
+      20154,
+      20155,
+      20156,
+      20157,
+      20167,
+      20174,
+      20175,
+      20176,
+      20177,
+      20187,
+      20188,
+      20189,
+      20190,
+      20197,
+      20204,
+      20205,
+      20206,
+      20207,
+      20208,
+      20218,
+      20228,
+      20229,
+      20230,
+      20231,
+      20244,
+      20245,
+      20246,
+      20247,
+      20248,
+      20255,
+      20256,
+      20266,
+      20267,
+      20268,
+      20269,
+      20270,
+      20271,
+      20272,
+      20273,
+      20274,
+      20275,
+      20276,
+      20277,
+      20278,
+      20279,
+      20280,
+      20281,
+      20282,
+      20283,
+      20284,
+      20285,
+      20289,
+      20295,
+      20303,
+      20306,
+      20476,
+      20477,
+      20481,
+      20563,
+      20564,
+      20565,
+      20585,
+      20587,
+      20588,
+      20589,
+      20590,
+      20591,
+      20594,
+      20602,
+      20904,
+      20905,
+      23025,
+      23141,
+      23146,
+      23749,
+      23750,
+      23751,
+      23975,
+      23976,
+      23977,
+      23978,
+      23979,
+      23980,
+      23981,
+      23982,
+      23984,
+      23985,
+      23986,
+      23987,
+      23988,
+      23989,
+      23990,
+      23991,
+      23992,
+      23993,
+      23994,
+      23995,
+      23996,
+      23997,
+      23998,
+      23999,
+      24000,
+      24001,
+      24002,
+      24003,
+      24004,
+      24008,
+      24009,
+      24010,
+      24020,
+      24021,
+      24022,
+      24033,
+      24034,
+      24035,
+      24036,
+      24038,
+      24039,
+      24040,
+      24041,
+      24042,
+      24045,
+      24056,
+      24057,
+      24058,
+      24068,
+      24069,
+      24070,
+      24089,
+      24090,
+      24091,
+      24092,
+      24093,
+      24094,
+      24095,
+      24096,
+      24097,
+      24098,
+      24099,
+      24100,
+      24101,
+      24102,
+      24103,
+      24104,
+      24105,
+      24106,
+      24107,
+      24108,
+      24109,
+      24113,
+      24123,
+      24124,
+      24125,
+      24126,
+      24128,
+      24129,
+      24130,
+      24131,
+      24132,
+      24135,
+      24137,
+      24138,
+      24139,
+      24140,
+      24141,
+      24148,
+      24153,
+      24154,
+      24155,
+      24156,
+      24158,
+      24159,
+      24160,
+      24161,
+      24162,
+      24165,
+      24167,
+      24168,
+      24169,
+      24170,
+      24171,
+      24190,
+      24191,
+      24192,
+      24193,
+      24194,
+      24195,
+      24196,
+      24197,
+      24198,
+      24199,
+      24200,
+      24201,
+      24202,
+      24203,
+      24204,
+      24208,
+      24209,
+      24210,
+      24211,
+      24212,
+      24233,
+      24234,
+      24235,
+      24236,
+      24243,
+      24247,
+      24248,
+      24249,
+      24250,
+      24257,
+      24267,
+      24268,
+      24269,
+      24270,
+      24280,
+      24287,
+      24288,
+      24289,
+      24290,
+      24291,
+      24298,
+      24305,
+      24306,
+      24307,
+      24308,
+      24321,
+      24322,
+      24323,
+      24324,
+      24325,
+      24338,
+      24339,
+      24340,
+      24341,
+      24354,
+      24355,
+      24356,
+      24357,
+      24367,
+      24377,
+      24378,
+      24379,
+      24380,
+      24381,
+      24382,
+      24383,
+      24384,
+      24385,
+      24386,
+      24387,
+      24388,
+      24389,
+      24390,
+      24391,
+      24392,
+      24393,
+      24394,
+      24395,
+      24396,
+      24403,
+      24407,
+      24408,
+      24615,
+      24616,
+      24620,
+      24725,
+      24752,
+      24753,
+      24754,
+      24755,
+      24757,
+      24773,
+      24788,
+      24789,
+      24790,
+      24793,
+      25755,
+      25939,
+      25940,
+      26865,
+      27040,
+      27041,
+      28065,
+      28066,
+      28067,
+      28068,
+      28069,
+      28070,
+      28071,
+      28072,
+      28074,
+      28075,
+      28076,
+      28077,
+      28078,
+      28079,
+      28080,
+      28081,
+      28082,
+      28083,
+      28084,
+      28085,
+      28086,
+      28087,
+      28088,
+      28089,
+      28090,
+      28091,
+      28092,
+      28093,
+      28094,
+      28101,
+      28102,
+      28103,
+      28119,
+      28120,
+      28121,
+      28128,
+      28129,
+      28130,
+      28144,
+      28145,
+      28146,
+      28147,
+      28149,
+      28150,
+      28151,
+      28152,
+      28153,
+      28156,
+      28158,
+      28159,
+      28160,
+      28173,
+      28174,
+      28175,
+      28182,
+      28183,
+      28184,
+      28185,
+      28186,
+      28187,
+      28188,
+      28189,
+      28190,
+      28191,
+      28192,
+      28193,
+      28194,
+      28195,
+      28196,
+      28197,
+      28198,
+      28199,
+      28200,
+      28201,
+      28202,
+      28206,
+      28213,
+      28214,
+      28215,
+      28216,
+      28218,
+      28219,
+      28220,
+      28221,
+      28222,
+      28225,
+      28227,
+      28228,
+      28229,
+      28230,
+      28231,
+      28238,
+      28243,
+      28244,
+      28245,
+      28246,
+      28248,
+      28249,
+      28250,
+      28251,
+      28252,
+      28255,
+      28257,
+      28258,
+      28259,
+      28260,
+      28261,
+      28280,
+      28281,
+      28282,
+      28283,
+      28284,
+      28285,
+      28286,
+      28287,
+      28288,
+      28289,
+      28290,
+      28291,
+      28292,
+      28293,
+      28294,
+      28298,
+      28299,
+      28300,
+      28301,
+      28302,
+      28323,
+      28324,
+      28325,
+      28326,
+      28330,
+      28334,
+      28344,
+      28345,
+      28346,
+      28347,
+      28357,
+      28367,
+      28368,
+      28369,
+      28370,
+      28371,
+      28381,
+      28391,
+      28392,
+      28393,
+      28394,
+      28407,
+      28408,
+      28409,
+      28410,
+      28420,
+      28421,
+      28431,
+      28432,
+      28433,
+      28434,
+      28444,
+      28445,
+      28446,
+      28447,
+      28460,
+      28461,
+      28462,
+      28463,
+      28473,
+      28483,
+      28484,
+      28485,
+      28486,
+      28499,
+      28500,
+      28501,
+      28502,
+      28512,
+      28513,
+      28514,
+      28515,
+      28516,
+      28517,
+      28518,
+      28519,
+      28520,
+      28521,
+      28522,
+      28523,
+      28524,
+      28525,
+      28526,
+      28527,
+      28528,
+      28529,
+      28530,
+      28531,
+      28535,
+      28541,
+      28545,
+      28548,
+      28727,
+      28728,
+      28732,
+      28787,
+      28788,
+      28789,
+      28790,
+      28792,
+      28793,
+      28794,
+      28795,
+      28796,
+      28799,
+      28806,
+      28982,
+      28983,
+      32000,
+      32001,
+      32002,
+      32212,
+      32213,
+      32214,
+      32215,
+      32216,
+      32217,
+      32218,
+      32219,
+      32221,
+      32222,
+      32223,
+      32224,
+      32225,
+      32226,
+      32227,
+      32228,
+      32229,
+      32230,
+      32231,
+      32232,
+      32233,
+      32234,
+      32235,
+      32236,
+      32237,
+      32238,
+      32239,
+      32240,
+      32241,
+      32245,
+      32246,
+      32247,
+      32257,
+      32258,
+      32259,
+      32269,
+      32270,
+      32271,
+      32282,
+      32283,
+      32284,
+      32285,
+      32287,
+      32288,
+      32289,
+      32290,
+      32291,
+      32294,
+      32302,
+      32303,
+      32304,
+      32317,
+      32318,
+      32319,
+      32326,
+      32327,
+      32328,
+      32329,
+      32330,
+      32331,
+      32332,
+      32333,
+      32334,
+      32335,
+      32336,
+      32337,
+      32338,
+      32339,
+      32340,
+      32341,
+      32342,
+      32343,
+      32344,
+      32345,
+      32346,
+      32350,
+      32360,
+      32361,
+      32362,
+      32363,
+      32365,
+      32366,
+      32367,
+      32368,
+      32369,
+      32372,
+      32374,
+      32375,
+      32376,
+      32377,
+      32378,
+      32385,
+      32390,
+      32391,
+      32392,
+      32393,
+      32395,
+      32396,
+      32397,
+      32398,
+      32399,
+      32402,
+      32404,
+      32405,
+      32406,
+      32407,
+      32408,
+      32427,
+      32428
+    ],
+    "retentionPolicy": "all claim-bearing ViewerSpace rows; high-frequency diagnostic counters omitted by named family policy",
+    "metricCounts": {
+      "App.Startup.CoInitializeEx": 1,
+      "App.Startup.LoadThemeDefinitions": 1,
+      "App.Startup.LoadSettings": 1,
+      "App.Startup.QueueNavigationViewWarmup": 1,
+      "App.Startup.Shortcuts.Initialize": 1,
+      "NavigationView.WarmSharedDeviceResources": 1,
+      "App.Startup.Plugins.Initialize.FileSystems": 1,
+      "App.Startup.Plugins.Initialize.Viewers": 1,
+      "App.Startup.DirectoryInfoCache.ApplySettings": 1,
+      "App.Startup.InitInstance.RegisterClassExW": 1,
+      "App.Startup.MainWindow.Menus": 1,
+      "FolderWindow.OnCreate.GetDpiForWindow": 1,
+      "fileops.move_breadcrumb.load.us": 1,
+      "FolderWindow.OnCreate.EnsureFileOperations": 1,
+      "FolderWindow.OnCreate.CalculateLayout": 1,
+      "NavigationView.Create.RegisterWndClass": 2,
+      "NavigationView.OnCreate.GetDpiForWindow": 2,
+      "NavigationView.OnCreate.SetTheme": 2,
+      "NavigationView.OnCreate": 2,
+      "NavigationView.Create.CreateWindowExW": 2,
+      "NavigationView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.NavigationView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost": 2,
+      "folder.layout.setup_us": 14,
+      "render.layout_items_us": 14,
+      "FolderWindow.OnCreate.CreatePane.FolderView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW": 2,
+      "FolderWindow.OnCreate.CreatePane.StatusBar.Initialize": 2,
+      "FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost": 2,
+      "FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost": 2,
+      "FolderWindow.OnCreate.CreatePane.SetFileSystem": 2,
+      "FolderWindow.OnCreate.CreatePane.SetCallbacks": 2,
+      "FolderWindow.OnCreate.CreatePane.StartSelectionSizeWorker": 2,
+      "FolderWindow.OnCreate.CreatePane": 2,
+      "FolderWindow.OnCreate.FunctionBar.Create": 1,
+      "FolderWindow.OnCreate.FunctionBar.Initialize": 1,
+      "FolderWindow.OnCreate.UpdatePaneUI": 1,
+      "FolderWindow.OnCreate.EnsurePaneFileSystems": 1,
+      "FolderWindow.OnCreate.NetworkChangeSubscription": 1,
+      "FolderWindow.OnCreate.ApplyTheme": 1,
+      "App.Startup.FolderWindow.Create": 1,
+      "App.Startup.ApplyAppTheme": 1,
+      "App.Startup.ApplyPane.Left.SetFileExtensionsVisible": 1,
+      "App.Startup.ApplyPane.Left.SetNavigationBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetFilterBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetStatusBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetSort": 1,
+      "App.Startup.ApplyPane.Left.SetThumbnailSize": 1,
+      "App.Startup.ApplyPane.Left.SetDisplayMode": 1,
+      "App.Startup.ApplyPane.Left.SetFolderPath": 1,
+      "App.Startup.ApplyPane.Left": 1,
+      "App.Startup.ApplyPane.Right.SetFileExtensionsVisible": 1,
+      "App.Startup.ApplyPane.Right.SetNavigationBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetFilterBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetStatusBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetSort": 1,
+      "App.Startup.ApplyPane.Right.SetThumbnailSize": 1,
+      "App.Startup.ApplyPane.Right.SetDisplayMode": 1,
+      "App.Startup.ApplyPane.Right.SetFolderPath": 1,
+      "App.Startup.ApplyPane.Right": 1,
+      "App.Startup.MainWindow.WM_CREATE": 1,
+      "App.Startup.InitInstance.CreateWindowW": 1,
+      "App.Startup.Metric.TimeToFirstWindow": 1,
+      "App.Startup.InitInstance.RestoreWindowPlacement": 1,
+      "App.Startup.InitInstance.ShowUpdateWindow": 1,
+      "App.Startup.InitInstance.QueueIconCacheWarm": 1,
+      "App.Startup.InitInstance": 1,
+      "App.Startup.LoadAccelerators": 1,
+      "App.Startup.Metric.TimeToFirstPaint": 1,
+      "iconcache.shgetfileinfo_us": 48,
+      "App.Startup.Metric.TimeToInputReady": 1,
+      "iconcache.lock_hold_slow_us": 1,
+      "NavigationView.DeferredInit": 2,
+      "FolderView.DeferredInit": 2,
+      "render.begin_to_enddraw_us": 20,
+      "render.dirty_rect_area_px": 20,
+      "render.items_considered": 20,
+      "render.items_drawn": 20,
+      "render.empty_state_layout_creates": 20,
+      "render.item_has_icon": 20,
+      "render.item_placeholder_icon": 20,
+      "render.item_textlayout_label": 20,
+      "render.item_textlayout_details": 20,
+      "render.item_textlayout_metadata": 20,
+      "render.incremental_search_effect_updates": 20,
+      "render.present_us": 20,
+      "folder.frame.total_us": 20,
+      "folder.frame.present_us": 20,
+      "folder.frame.visible_work_count": 20,
+      "folder.frame.dirty_rect_area_px": 20,
+      "dwrite.text_layout.frame_create_count": 20,
+      "render.frame_us": 20,
+      "IconCache.WarmCommonExtensions": 1,
+      "render.status_bar.paint_us": 2,
+      "render.function_bar.paint_us": 1,
+      "viewer.space.open.setup_us": 8,
+      "viewer.space.refresh.dispose_us": 20,
+      "viewer.space.refresh.dispose_completed": 20,
+      "viewer.space.scan.cache_miss": 4,
+      "viewer.space.scan.active_workers": 8024,
+      "viewer.space.scan.frontier_depth": 4816,
+      "FileSystem.DirectoryOps.Enumerate": 4008,
+      "FileSystem.DirectoryOps.TrimBuffer": 4008,
+      "viewer.space.scan.enumerate_us": 4008,
+      "viewer.space.scan.frontier_lock_wait_us": 4008,
+      "viewer.space.render.factories_us": 8,
+      "viewer.space.render.d3d_device_us": 8,
+      "viewer.space.render.dxgi_factory_us": 8,
+      "viewer.space.render.d2d_context_us": 8,
+      "viewer.space.render.swapchain_create_us": 8,
+      "viewer.space.render.target_bitmap_us": 8,
+      "viewer.space.render.resources_us": 8,
+      "viewer.space.render.prepare_us": 118,
+      "viewer.space.render.present_us": 118,
+      "viewer.space.render.paint_us": 118,
+      "viewer.space.render.tile_draw_count": 118,
+      "viewer.space.render.text_draw_count": 118,
+      "viewer.space.layout.visible_tiles": 118,
+      "viewer.space.open_to_first_paint_us": 12,
+      "viewer.space.dxui.paint_us": 16,
+      "dxui.frame.dirty_rect_count": 16,
+      "dxui.frame.dirty_rect_area_px": 16,
+      "viewer.space.queue.posted_count": 32,
+      "viewer.space.queue.coalesced_count": 32,
+      "viewer.space.queue.pending_bytes": 32,
+      "viewer.space.queue.pending_peak_bytes": 32,
+      "viewer.space.queue.posted_bytes": 32,
+      "viewer.space.queue.lock_hold_count": 32,
+      "viewer.space.queue.lock_hold_total_us": 32,
+      "viewer.space.queue.lock_hold_max_us": 32,
+      "viewer.space.queue.lock_hold_us": 32,
+      "viewer.space.queue.drained_count": 32,
+      "viewer.space.queue.drain_count": 32,
+      "viewer.space.queue.drain_total_us": 32,
+      "viewer.space.queue.drain_max_us": 32,
+      "viewer.space.queue.drain_us": 32,
+      "viewer.space.scan.summary_stage_bytes": 32,
+      "viewer.space.scan.summary_committed_count": 32,
+      "viewer.space.scan.summary_rejected_count": 32,
+      "viewer.space.scan.summary_chunk_max_bytes": 32,
+      "viewer.space.layout.draw_items": 20,
+      "viewer.space.layout.nested_directory_tiles": 20,
+      "viewer.space.layout.nested_file_tiles": 20,
+      "viewer.space.layout.expandable_unexpanded_folders": 20,
+      "viewer.space.layout.publish_us": 20,
+      "viewer.space.layout.turn_us": 20,
+      "viewer.space.layout.dispose_us": 20,
+      "viewer.space.layout.dispose_completed": 20,
+      "viewer.space.layout.rebuild_us": 20,
+      "viewer.space.open_to_first_meaningful_paint_us": 8,
+      "viewer.space.model.directory_count": 294,
+      "viewer.space.model.file_candidate_count": 294,
+      "viewer.space.model.synthetic_count": 294,
+      "viewer.space.projection.backlog_deferred_count": 36,
+      "viewer.space.scan.frontier_depth_peak": 8,
+      "viewer.space.scan.idle_worker_waits": 8,
+      "viewer.space.scan.total_us": 8,
+      "viewer.space.scan.files": 8,
+      "viewer.space.scan.folders": 8,
+      "viewer.space.scan.bytes": 8,
+      "viewer.space.scan.cpu_priority": 8,
+      "viewer.space.scan.first_preview_priority_jobs": 8,
+      "viewer.space.scan.provider_buffer_peak_bytes": 8,
+      "viewer.space.scan.validation_scratch_peak_bytes": 8,
+      "viewer.space.scan.worker_staging_peak_bytes": 8,
+      "viewer.space.scan.worker_staging_preflight_us": 8,
+      "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": 8,
+      "viewer.space.scan.worker_staging_preflight_record_total": 8,
+      "viewer.space.scan.worker_staging_rejected_count": 8,
+      "viewer.space.scan.bookkeeping_peak_bytes": 8,
+      "viewer.space.scan.validation_scratch_rejected_count": 8,
+      "viewer.space.scan.active_path_peak_bytes": 8,
+      "viewer.space.scan.active_path_rejected_count": 8,
+      "viewer.space.model.accepted_entries": 8,
+      "viewer.space.model.rejected_entries": 8,
+      "viewer.space.model.capped_directories": 8,
+      "viewer.space.model.capped_files": 8,
+      "viewer.space.model.retained_directories": 8,
+      "viewer.space.model.retained_files": 8,
+      "viewer.space.model.child_references": 8,
+      "viewer.space.model.retained_name_bytes": 8,
+      "viewer.space.model.traversed_directories": 8,
+      "viewer.space.scan.worker_completed": 8,
+      "viewer.space.analysis.retained_rows": 19,
+      "viewer.space.analysis.turn_us": 19,
+      "viewer.space.model.child_arena_slots": 8,
+      "viewer.space.model.child_arena_free_slots": 8,
+      "viewer.space.model.aggregate_bytes": 8,
+      "viewer.space.model.cache_snapshot_bytes": 8,
+      "viewer.space.model.cache_resident_bytes": 12,
+      "viewer.space.memory.process_phase": 25,
+      "viewer.space.refresh.dispose_submit_us": 8,
+      "viewer.space.refresh.dispose_submit_bytes_total": 8,
+      "viewer.space.refresh.dispose_submit_owner_peak": 8,
+      "viewer.space.model.cache_restore_turn_us": 69,
+      "viewer.space.model.cache_restore_continuation_posted": 4,
+      "viewer.space.model.cache_restore_continuation_dispatched": 4,
+      "viewer.space.model.cache_restore_batched_turn": 8,
+      "viewer.space.scan.cache_hit": 4,
+      "viewer.space.model.cache_restore_bytes": 4,
+      "viewer.space.model.cache_restore_us": 4,
+      "viewer.space.refresh.adoption_turn_us": 4,
+      "viewer.space.refresh.adoption_turn_max_us": 4
+    },
+    "metricSummary": {
+      "App.Startup.ApplyAppTheme": {
+        "durationUs": {
+          "n": 1,
+          "min": 635,
+          "p50": 635,
+          "p95": 635,
+          "max": 635
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left": {
+        "durationUs": {
+          "n": 1,
+          "min": 4634,
+          "p50": 4634,
+          "p95": 4634,
+          "max": 4634
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetDisplayMode": {
+        "durationUs": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFileExtensionsVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFilterBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFolderPath": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetNavigationBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetSort": {
+        "durationUs": {
+          "n": 1,
+          "min": 19,
+          "p50": 19,
+          "p95": 19,
+          "max": 19
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetStatusBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetThumbnailSize": {
+        "durationUs": {
+          "n": 1,
+          "min": 3,
+          "p50": 3,
+          "p95": 3,
+          "max": 3
+        },
+        "value0": {
+          "n": 1,
+          "min": 64,
+          "p50": 64,
+          "p95": 64,
+          "max": 64
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right": {
+        "durationUs": {
+          "n": 1,
+          "min": 3922,
+          "p50": 3922,
+          "p95": 3922,
+          "max": 3922
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetDisplayMode": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFileExtensionsVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFilterBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFolderPath": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetNavigationBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetSort": {
+        "durationUs": {
+          "n": 1,
+          "min": 31,
+          "p50": 31,
+          "p95": 31,
+          "max": 31
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetStatusBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetThumbnailSize": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 64,
+          "p50": 64,
+          "p95": 64,
+          "max": 64
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.CoInitializeEx": {
+        "durationUs": {
+          "n": 1,
+          "min": 1247,
+          "p50": 1247,
+          "p95": 1247,
+          "max": 1247
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.DirectoryInfoCache.ApplySettings": {
+        "durationUs": {
+          "n": 1,
+          "min": 17,
+          "p50": 17,
+          "p95": 17,
+          "max": 17
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.FolderWindow.Create": {
+        "durationUs": {
+          "n": 1,
+          "min": 131080,
+          "p50": 131080,
+          "p95": 131080,
+          "max": 131080
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance": {
+        "durationUs": {
+          "n": 1,
+          "min": 337338,
+          "p50": 337338,
+          "p95": 337338,
+          "max": 337338
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.CreateWindowW": {
+        "durationUs": {
+          "n": 1,
+          "min": 268335,
+          "p50": 268335,
+          "p95": 268335,
+          "max": 268335
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.QueueIconCacheWarm": {
+        "durationUs": {
+          "n": 1,
+          "min": 10,
+          "p50": 10,
+          "p95": 10,
+          "max": 10
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.RegisterClassExW": {
+        "durationUs": {
+          "n": 1,
+          "min": 28,
+          "p50": 28,
+          "p95": 28,
+          "max": 28
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.RestoreWindowPlacement": {
+        "durationUs": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.ShowUpdateWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 54647,
+          "p50": 54647,
+          "p95": 54647,
+          "max": 54647
+        },
+        "value0": {
+          "n": 1,
+          "min": 10,
+          "p50": 10,
+          "p95": 10,
+          "max": 10
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadAccelerators": {
+        "durationUs": {
+          "n": 1,
+          "min": 70,
+          "p50": 70,
+          "p95": 70,
+          "max": 70
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadSettings": {
+        "durationUs": {
+          "n": 1,
+          "min": 1231,
+          "p50": 1231,
+          "p95": 1231,
+          "max": 1231
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadThemeDefinitions": {
+        "durationUs": {
+          "n": 1,
+          "min": 4463,
+          "p50": 4463,
+          "p95": 4463,
+          "max": 4463
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.MainWindow.Menus": {
+        "durationUs": {
+          "n": 1,
+          "min": 1731,
+          "p50": 1731,
+          "p95": 1731,
+          "max": 1731
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.MainWindow.WM_CREATE": {
+        "durationUs": {
+          "n": 1,
+          "min": 267314,
+          "p50": 267314,
+          "p95": 267314,
+          "max": 267314
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToFirstPaint": {
+        "durationUs": {
+          "n": 1,
+          "min": 4329542,
+          "p50": 4329542,
+          "p95": 4329542,
+          "max": 4329542
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToFirstWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 4245228,
+          "p50": 4245228,
+          "p95": 4245228,
+          "max": 4245228
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToInputReady": {
+        "durationUs": {
+          "n": 1,
+          "min": 4411735,
+          "p50": 4411735,
+          "p95": 4411735,
+          "max": 4411735
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Plugins.Initialize.FileSystems": {
+        "durationUs": {
+          "n": 1,
+          "min": 878144,
+          "p50": 878144,
+          "p95": 878144,
+          "max": 878144
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Plugins.Initialize.Viewers": {
+        "durationUs": {
+          "n": 1,
+          "min": 64852,
+          "p50": 64852,
+          "p95": 64852,
+          "max": 64852
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.QueueNavigationViewWarmup": {
+        "durationUs": {
+          "n": 1,
+          "min": 217,
+          "p50": 217,
+          "p95": 217,
+          "max": 217
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Shortcuts.Initialize": {
+        "durationUs": {
+          "n": 1,
+          "min": 306,
+          "p50": 306,
+          "p95": 306,
+          "max": 306
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FileSystem.DirectoryOps.Enumerate": {
+        "durationUs": {
+          "n": 4008,
+          "min": 78,
+          "p50": 249,
+          "p95": 500,
+          "max": 3319
+        },
+        "value0": {
+          "n": 4008,
+          "min": 524288,
+          "p50": 524288,
+          "p95": 524288,
+          "max": 524288
+        },
+        "value1": {
+          "n": 4008,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FileSystem.DirectoryOps.TrimBuffer": {
+        "durationUs": {
+          "n": 4008,
+          "min": 0,
+          "p50": 1,
+          "p95": 6,
+          "max": 403
+        },
+        "value0": {
+          "n": 4008,
+          "min": 524288,
+          "p50": 524288,
+          "p95": 524288,
+          "max": 524288
+        },
+        "value1": {
+          "n": 4008,
+          "min": 500288,
+          "p50": 500288,
+          "p95": 523936,
+          "max": 523936
+        }
+      },
+      "FolderView.DeferredInit": {
+        "durationUs": {
+          "n": 2,
+          "min": 38711,
+          "p50": 38711,
+          "p95": 52934,
+          "max": 52934
+        },
+        "value0": {
+          "n": 2,
+          "min": 14,
+          "p50": 14,
+          "p95": 14,
+          "max": 14
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.ApplyTheme": {
+        "durationUs": {
+          "n": 1,
+          "min": 294,
+          "p50": 294,
+          "p95": 294,
+          "max": 294
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CalculateLayout": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane": {
+        "durationUs": {
+          "n": 2,
+          "min": 3292,
+          "p50": 3292,
+          "p95": 120246,
+          "max": 120246
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 182,
+          "p50": 182,
+          "p95": 211,
+          "max": 211
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.FolderView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 1363,
+          "p50": 1363,
+          "p95": 117608,
+          "max": 117608
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.NavigationView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 576,
+          "p50": 576,
+          "p95": 651,
+          "max": 651
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 165,
+          "p50": 165,
+          "p95": 170,
+          "max": 170
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 157,
+          "p50": 157,
+          "p95": 205,
+          "max": 205
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.SetCallbacks": {
+        "durationUs": {
+          "n": 2,
+          "min": 5,
+          "p50": 5,
+          "p95": 13,
+          "max": 13
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.SetFileSystem": {
+        "durationUs": {
+          "n": 2,
+          "min": 67,
+          "p50": 67,
+          "p95": 98,
+          "max": 98
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StartSelectionSizeWorker": {
+        "durationUs": {
+          "n": 2,
+          "min": 162,
+          "p50": 162,
+          "p95": 190,
+          "max": 190
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW": {
+        "durationUs": {
+          "n": 2,
+          "min": 236,
+          "p50": 236,
+          "p95": 374,
+          "max": 374
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StatusBar.Initialize": {
+        "durationUs": {
+          "n": 2,
+          "min": 12,
+          "p50": 12,
+          "p95": 19,
+          "max": 19
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.EnsureFileOperations": {
+        "durationUs": {
+          "n": 1,
+          "min": 772,
+          "p50": 772,
+          "p95": 772,
+          "max": 772
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.EnsurePaneFileSystems": {
+        "durationUs": {
+          "n": 1,
+          "min": 625,
+          "p50": 625,
+          "p95": 625,
+          "max": 625
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.FunctionBar.Create": {
+        "durationUs": {
+          "n": 1,
+          "min": 278,
+          "p50": 278,
+          "p95": 278,
+          "max": 278
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.FunctionBar.Initialize": {
+        "durationUs": {
+          "n": 1,
+          "min": 6,
+          "p50": 6,
+          "p95": 6,
+          "max": 6
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.GetDpiForWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.NetworkChangeSubscription": {
+        "durationUs": {
+          "n": 1,
+          "min": 3794,
+          "p50": 3794,
+          "p95": 3794,
+          "max": 3794
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.UpdatePaneUI": {
+        "durationUs": {
+          "n": 1,
+          "min": 45,
+          "p50": 45,
+          "p95": 45,
+          "max": 45
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "IconCache.WarmCommonExtensions": {
+        "durationUs": {
+          "n": 1,
+          "min": 367594,
+          "p50": 367594,
+          "p95": 367594,
+          "max": 367594
+        },
+        "value0": {
+          "n": 1,
+          "min": 48,
+          "p50": 48,
+          "p95": 48,
+          "max": 48
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 562,
+          "p50": 562,
+          "p95": 629,
+          "max": 629
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create.CreateWindowExW": {
+        "durationUs": {
+          "n": 2,
+          "min": 535,
+          "p50": 535,
+          "p95": 586,
+          "max": 586
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create.RegisterWndClass": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 10,
+          "max": 10
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.DeferredInit": {
+        "durationUs": {
+          "n": 2,
+          "min": 1715,
+          "p50": 1715,
+          "p95": 188067,
+          "max": 188067
+        },
+        "value0": {
+          "n": 2,
+          "min": 1001,
+          "p50": 1001,
+          "p95": 1003,
+          "max": 1003
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate": {
+        "durationUs": {
+          "n": 2,
+          "min": 219,
+          "p50": 219,
+          "p95": 236,
+          "max": 236
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate.GetDpiForWindow": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate.SetTheme": {
+        "durationUs": {
+          "n": 2,
+          "min": 185,
+          "p50": 185,
+          "p95": 192,
+          "max": 192
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.WarmSharedDeviceResources": {
+        "durationUs": {
+          "n": 1,
+          "min": 151373,
+          "p50": 151373,
+          "p95": 151373,
+          "max": 151373
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dwrite.text_layout.frame_create_count": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dxui.frame.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dxui.frame.dirty_rect_count": {
+        "durationUs": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "fileops.move_breadcrumb.load.us": {
+        "durationUs": {
+          "n": 1,
+          "min": 714,
+          "p50": 714,
+          "p95": 714,
+          "max": 714
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.present_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 93,
+          "p50": 240,
+          "p95": 1128,
+          "max": 1233
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.total_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 268,
+          "p50": 567,
+          "p95": 1440,
+          "max": 1583
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.visible_work_count": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.layout.setup_us": {
+        "durationUs": {
+          "n": 14,
+          "min": 1,
+          "p50": 1,
+          "p95": 103456,
+          "max": 103456
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "iconcache.lock_hold_slow_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 185827,
+          "p50": 185827,
+          "p95": 185827,
+          "max": 185827
+        },
+        "value0": {
+          "n": 1,
+          "min": 250,
+          "p50": 250,
+          "p95": 250,
+          "max": 250
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "iconcache.shgetfileinfo_us": {
+        "durationUs": {
+          "n": 48,
+          "min": 322,
+          "p50": 2482,
+          "p95": 7190,
+          "max": 30866
+        },
+        "value0": {
+          "n": 48,
+          "min": 16,
+          "p50": 128,
+          "p95": 128,
+          "max": 128
+        },
+        "value1": {
+          "n": 48,
+          "min": 16400,
+          "p50": 16400,
+          "p95": 16400,
+          "max": 16400
+        }
+      },
+      "render.begin_to_enddraw_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 34,
+          "p50": 67,
+          "p95": 97,
+          "max": 102
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.empty_state_layout_creates": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.frame_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 352,
+          "p50": 635,
+          "p95": 1509,
+          "max": 1648
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.function_bar.paint_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 36528,
+          "p50": 36528,
+          "p95": 36528,
+          "max": 36528
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.incremental_search_effect_updates": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_has_icon": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_placeholder_icon": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_details": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_label": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_metadata": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.items_considered": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.items_drawn": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.layout_items_us": {
+        "durationUs": {
+          "n": 14,
+          "min": 14,
+          "p50": 23,
+          "p95": 103539,
+          "max": 103539
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.present_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 94,
+          "p50": 240,
+          "p95": 1129,
+          "max": 1234
+        },
+        "value0": {
+          "n": 20,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.status_bar.paint_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 6532,
+          "p50": 6532,
+          "p95": 9858,
+          "max": 9858
+        },
+        "value0": {
+          "n": 2,
+          "min": 704,
+          "p50": 704,
+          "p95": 705,
+          "max": 705
+        },
+        "value1": {
+          "n": 2,
+          "min": 1005,
+          "p50": 1005,
+          "p95": 1006,
+          "max": 1006
+        }
+      },
+      "viewer.space.analysis.retained_rows": {
+        "durationUs": {
+          "n": 19,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 19,
+          "min": 100,
+          "p50": 100,
+          "p95": 100,
+          "max": 100
+        },
+        "value1": {
+          "n": 19,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.analysis.turn_us": {
+        "durationUs": {
+          "n": 19,
+          "min": 102,
+          "p50": 171,
+          "p95": 346,
+          "max": 346
+        },
+        "value0": {
+          "n": 19,
+          "min": 1613,
+          "p50": 1613,
+          "p95": 1613,
+          "max": 1613
+        },
+        "value1": {
+          "n": 19,
+          "min": 100,
+          "p50": 100,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "viewer.space.dxui.paint_us": {
+        "durationUs": {
+          "n": 16,
+          "min": 342,
+          "p50": 608,
+          "p95": 3829,
+          "max": 3829
+        },
+        "value0": {
+          "n": 16,
+          "min": 978,
+          "p50": 978,
+          "p95": 978,
+          "max": 978
+        },
+        "value1": {
+          "n": 16,
+          "min": 54,
+          "p50": 54,
+          "p95": 54,
+          "max": 54
+        }
+      },
+      "viewer.space.layout.dispose_completed": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.dispose_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 5,
+          "p50": 13,
+          "p95": 86,
+          "max": 104
+        },
+        "value0": {
+          "n": 20,
+          "min": 99896,
+          "p50": 104648,
+          "p95": 310704,
+          "max": 310704
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.draw_items": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 224,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.expandable_unexpanded_folders": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.nested_directory_tiles": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 5,
+          "p50": 124,
+          "p95": 288,
+          "max": 328
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.nested_file_tiles": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 1500,
+          "max": 1500
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.publish_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 51,
+          "p50": 73,
+          "p95": 161,
+          "max": 250
+        },
+        "value0": {
+          "n": 20,
+          "min": 224,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 20,
+          "min": 1,
+          "p50": 7,
+          "p95": 18,
+          "max": 19
+        }
+      },
+      "viewer.space.layout.rebuild_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 134,
+          "p50": 315,
+          "p95": 471,
+          "max": 471
+        },
+        "value0": {
+          "n": 20,
+          "min": 224,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.turn_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 134,
+          "p50": 315,
+          "p95": 471,
+          "max": 471
+        },
+        "value0": {
+          "n": 20,
+          "min": 2463,
+          "p50": 2819,
+          "p95": 22247,
+          "max": 22247
+        },
+        "value1": {
+          "n": 20,
+          "min": 224,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        }
+      },
+      "viewer.space.layout.visible_tiles": {
+        "durationUs": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.memory.process_phase": {
+        "durationUs": {
+          "n": 25,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 25,
+          "min": 295477248,
+          "p50": 336420864,
+          "p95": 354697216,
+          "max": 361750528
+        },
+        "value1": {
+          "n": 25,
+          "min": 266481664,
+          "p50": 304693248,
+          "p95": 328380416,
+          "max": 330895360
+        }
+      },
+      "viewer.space.model.accepted_entries": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100500,
+          "p50": 100500,
+          "p95": 100500,
+          "max": 100500
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.aggregate_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_resident_bytes": {
+        "durationUs": {
+          "n": 12,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 12,
+          "min": 5254654,
+          "p50": 21017848,
+          "p95": 21017848,
+          "max": 21017848
+        },
+        "value1": {
+          "n": 12,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_batched_turn": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 2,
+          "p50": 2,
+          "p95": 4,
+          "max": 4
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_bytes": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 6057918,
+          "p50": 6057918,
+          "p95": 6057918,
+          "max": 6057918
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_continuation_dispatched": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_continuation_posted": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_turn_us": {
+        "durationUs": {
+          "n": 69,
+          "min": 1200,
+          "p50": 1200,
+          "p95": 2609,
+          "max": 4060
+        },
+        "value0": {
+          "n": 69,
+          "min": 0,
+          "p50": 0,
+          "p95": 4,
+          "max": 4
+        },
+        "value1": {
+          "n": 69,
+          "min": 0,
+          "p50": 4,
+          "p95": 10,
+          "max": 10
+        }
+      },
+      "viewer.space.model.cache_restore_us": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 562298,
+          "p50": 581252,
+          "p95": 742240,
+          "max": 742240
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_snapshot_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 5254046,
+          "p50": 5254046,
+          "p95": 5254046,
+          "max": 5254046
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.capped_directories": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.capped_files": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_arena_free_slots": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_arena_slots": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100528,
+          "p50": 100528,
+          "p95": 100528,
+          "max": 100528
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_references": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100500,
+          "p50": 100500,
+          "p95": 100500,
+          "max": 100500
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.directory_count": {
+        "durationUs": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 294,
+          "min": 0,
+          "p50": 501,
+          "p95": 501,
+          "max": 501
+        },
+        "value1": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.file_candidate_count": {
+        "durationUs": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 294,
+          "min": 0,
+          "p50": 59250,
+          "p95": 100000,
+          "max": 100000
+        },
+        "value1": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.rejected_entries": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_directories": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 501,
+          "p50": 501,
+          "p95": 501,
+          "max": 501
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_files": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100000,
+          "p50": 100000,
+          "p95": 100000,
+          "max": 100000
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_name_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 2407936,
+          "p50": 2407936,
+          "p95": 2407936,
+          "max": 2407936
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.synthetic_count": {
+        "durationUs": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 294,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.traversed_directories": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 501,
+          "p50": 501,
+          "p95": 501,
+          "max": 501
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.open.setup_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 14315,
+          "p50": 17142,
+          "p95": 105847,
+          "max": 105847
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.open_to_first_meaningful_paint_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 187360,
+          "p50": 245014,
+          "p95": 763880,
+          "max": 763880
+        },
+        "value0": {
+          "n": 8,
+          "min": 224,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.open_to_first_paint_us": {
+        "durationUs": {
+          "n": 12,
+          "min": 7535,
+          "p50": 40135,
+          "p95": 57862,
+          "max": 57862
+        },
+        "value0": {
+          "n": 12,
+          "min": 0,
+          "p50": 0,
+          "p95": 224,
+          "max": 224
+        },
+        "value1": {
+          "n": 12,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.projection.backlog_deferred_count": {
+        "durationUs": {
+          "n": 36,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 36,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 36,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.coalesced_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 34,
+          "p50": 1280,
+          "p95": 1288,
+          "max": 1288
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 1,
+          "p50": 10,
+          "p95": 12,
+          "max": 12
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_max_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 242,
+          "p50": 2056,
+          "p95": 3279,
+          "max": 3279
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_total_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 242,
+          "p50": 12415,
+          "p95": 16180,
+          "max": 16180
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 242,
+          "p50": 2056,
+          "p95": 3279,
+          "max": 3279
+        },
+        "value0": {
+          "n": 32,
+          "min": 1,
+          "p50": 10,
+          "p95": 12,
+          "max": 12
+        },
+        "value1": {
+          "n": 32,
+          "min": 242,
+          "p50": 12415,
+          "p95": 16180,
+          "max": 16180
+        }
+      },
+      "viewer.space.queue.drained_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 336,
+          "p50": 4993,
+          "p95": 5341,
+          "max": 5341
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 388,
+          "p50": 6642,
+          "p95": 6710,
+          "max": 6710
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_max_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 1,
+          "p50": 59,
+          "p95": 175,
+          "max": 175
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_total_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 7,
+          "p50": 460,
+          "p95": 838,
+          "max": 838
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_us": {
+        "durationUs": {
+          "n": 32,
+          "min": 1,
+          "p50": 59,
+          "p95": 175,
+          "max": 175
+        },
+        "value0": {
+          "n": 32,
+          "min": 388,
+          "p50": 6642,
+          "p95": 6710,
+          "max": 6710
+        },
+        "value1": {
+          "n": 32,
+          "min": 7,
+          "p50": 460,
+          "p95": 838,
+          "max": 838
+        }
+      },
+      "viewer.space.queue.pending_bytes": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 8149464,
+          "max": 8149512
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.pending_peak_bytes": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 164232,
+          "p50": 8388496,
+          "p95": 8388600,
+          "max": 8388600
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.posted_bytes": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 185056,
+          "p50": 9879968,
+          "p95": 9879968,
+          "max": 9879968
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.posted_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 388,
+          "p50": 6612,
+          "p95": 6612,
+          "max": 6612
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.adoption_turn_max_us": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 2901,
+          "p50": 2901,
+          "p95": 2901,
+          "max": 2901
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.adoption_turn_us": {
+        "durationUs": {
+          "n": 4,
+          "min": 1840,
+          "p50": 2070,
+          "p95": 2901,
+          "max": 2901
+        },
+        "value0": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.refresh.dispose_completed": {
+        "durationUs": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 20,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_bytes_total": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 9638562,
+          "p50": 9689322,
+          "p95": 16834008,
+          "max": 16834008
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_owner_peak": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 9,
+          "p50": 11,
+          "p95": 22,
+          "max": 22
+        },
+        "value0": {
+          "n": 8,
+          "min": 5,
+          "p50": 5,
+          "p95": 5,
+          "max": 5
+        },
+        "value1": {
+          "n": 8,
+          "min": 34,
+          "p50": 41,
+          "p95": 54,
+          "max": 54
+        }
+      },
+      "viewer.space.refresh.dispose_us": {
+        "durationUs": {
+          "n": 20,
+          "min": 7,
+          "p50": 28,
+          "p95": 47,
+          "max": 51
+        },
+        "value0": {
+          "n": 20,
+          "min": 940,
+          "p50": 7518418,
+          "p95": 9114858,
+          "max": 9114858
+        },
+        "value1": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.d2d_context_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 1275,
+          "p50": 1501,
+          "p95": 2395,
+          "max": 2395
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.d3d_device_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 24937,
+          "p50": 27718,
+          "p95": 34493,
+          "max": 34493
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.dxgi_factory_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 1,
+          "p50": 2,
+          "p95": 3,
+          "max": 3
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.factories_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 39,
+          "p50": 43,
+          "p95": 47,
+          "max": 47
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.paint_us": {
+        "durationUs": {
+          "n": 118,
+          "min": 637,
+          "p50": 3870,
+          "p95": 35559,
+          "max": 48464
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.render.prepare_us": {
+        "durationUs": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 29021,
+          "max": 42065
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.present_us": {
+        "durationUs": {
+          "n": 118,
+          "min": 150,
+          "p50": 1046,
+          "p95": 2883,
+          "max": 4359
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        }
+      },
+      "viewer.space.render.resources_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 932,
+          "p50": 1157,
+          "p95": 1721,
+          "max": 1721
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.swapchain_create_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 1222,
+          "p50": 1366,
+          "p95": 2429,
+          "max": 2429
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.target_bitmap_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 19,
+          "p50": 32,
+          "p95": 46,
+          "max": 46
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.text_draw_count": {
+        "durationUs": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 12,
+          "p95": 100,
+          "max": 100
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        }
+      },
+      "viewer.space.render.tile_draw_count": {
+        "durationUs": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 118,
+          "min": 0,
+          "p50": 224,
+          "p95": 1512,
+          "max": 1512
+        },
+        "value1": {
+          "n": 118,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.active_path_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 151644,
+          "p50": 152412,
+          "p95": 154278,
+          "max": 154278
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.active_path_rejected_count": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.active_workers": {
+        "durationUs": {
+          "n": 8024,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8024,
+          "min": 0,
+          "p50": 7,
+          "p95": 8,
+          "max": 8
+        },
+        "value1": {
+          "n": 8024,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.bookkeeping_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 143888,
+          "p50": 144288,
+          "p95": 144368,
+          "max": 144368
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 3001292,
+          "p50": 3001292,
+          "p95": 3001292,
+          "max": 3001292
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cache_hit": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cache_miss": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cpu_priority": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 8,
+          "p50": 8,
+          "p95": 8,
+          "max": 8
+        },
+        "value1": {
+          "n": 8,
+          "min": 8,
+          "p50": 8,
+          "p95": 8,
+          "max": 8
+        }
+      },
+      "viewer.space.scan.enumerate_us": {
+        "durationUs": {
+          "n": 4008,
+          "min": 117,
+          "p50": 613,
+          "p95": 1379,
+          "max": 81253
+        },
+        "value0": {
+          "n": 4008,
+          "min": 4,
+          "p50": 250,
+          "p95": 250,
+          "max": 250
+        },
+        "value1": {
+          "n": 4008,
+          "min": 0,
+          "p50": 4,
+          "p95": 7,
+          "max": 7
+        }
+      },
+      "viewer.space.scan.files": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100000,
+          "p50": 100000,
+          "p95": 100000,
+          "max": 100000
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.first_preview_priority_jobs": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 4,
+          "p50": 6,
+          "p95": 7,
+          "max": 7
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.folders": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 500,
+          "p50": 500,
+          "p95": 500,
+          "max": 500
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_depth": {
+        "durationUs": {
+          "n": 4816,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4816,
+          "min": 0,
+          "p50": 208,
+          "p95": 371,
+          "max": 391
+        },
+        "value1": {
+          "n": 4816,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_depth_peak": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 385,
+          "p50": 389,
+          "p95": 391,
+          "max": 391
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_lock_wait_us": {
+        "durationUs": {
+          "n": 4008,
+          "min": 0,
+          "p50": 0,
+          "p95": 37,
+          "max": 1177
+        },
+        "value0": {
+          "n": 4008,
+          "min": 0,
+          "p50": 0,
+          "p95": 4,
+          "max": 100
+        },
+        "value1": {
+          "n": 4008,
+          "min": 0,
+          "p50": 4,
+          "p95": 7,
+          "max": 7
+        }
+      },
+      "viewer.space.scan.idle_worker_waits": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 9,
+          "p50": 13,
+          "p95": 23,
+          "max": 23
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.provider_buffer_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 48000,
+          "p50": 72000,
+          "p95": 96000,
+          "max": 96000
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_chunk_max_bytes": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 5384,
+          "p50": 5384,
+          "p95": 5384,
+          "max": 5384
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_committed_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 24,
+          "p50": 469,
+          "p95": 501,
+          "max": 501
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_rejected_count": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_stage_bytes": {
+        "durationUs": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 15128,
+          "max": 15128
+        },
+        "value1": {
+          "n": 32,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.total_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 94338,
+          "p50": 156830,
+          "p95": 290332,
+          "max": 290332
+        },
+        "value0": {
+          "n": 8,
+          "min": 100000,
+          "p50": 100000,
+          "p95": 100000,
+          "max": 100000
+        },
+        "value1": {
+          "n": 8,
+          "min": 500,
+          "p50": 500,
+          "p95": 500,
+          "max": 500
+        }
+      },
+      "viewer.space.scan.validation_scratch_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 163072,
+          "p50": 244608,
+          "p95": 326144,
+          "max": 326144
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.validation_scratch_rejected_count": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_completed": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 1661312,
+          "p50": 1661312,
+          "p95": 1661312,
+          "max": 1661312
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_record_total": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 100500,
+          "p50": 100500,
+          "p95": 100500,
+          "max": 100500
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 207664,
+          "p50": 207664,
+          "p95": 207664,
+          "max": 207664
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 1,
+          "max": 1
+        },
+        "value0": {
+          "n": 8,
+          "min": 501,
+          "p50": 501,
+          "p95": 501,
+          "max": 501
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.scan.worker_staging_rejected_count": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      }
+    }
+  },
+  "artifactSha256": "329d8a742d76b8b2a474d7d1ee836e814eeed088c49223d791ad60306908bef1",
+  "artifactBytes": 5209,
+  "fixtureDigests": [
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B",
+    "55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B"
+  ],
+  "fixtureFiles": 100000,
+  "fixtureDirectories": 501,
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 96947,
+      "sha256": "d20692190256c647089fab52005638563b019d59ece317bb14f9ed2ded3a0cc6"
+    },
+    {
+      "path": "build-log-index.json",
+      "bytes": 583,
+      "sha256": "5e59f4346afdf160382047a1860acc30b71b8e9fa1782324f79b245698555302"
+    },
+    {
+      "path": "runner-stdout.log",
+      "bytes": 1931,
+      "sha256": "6d56ba1d3cef236b40747f6c5fb4ac7425ce9d9f530e5d809329452fb826011f"
+    },
+    {
+      "path": "run-all-tests-results.json",
+      "bytes": 3168,
+      "sha256": "6b984676a8ce7b8976a7351bcfe315fc1e943347dfed55929e9e9de22b6b54ca"
+    },
+    {
+      "path": "workspace-final.json",
+      "bytes": 4832,
+      "sha256": "dcbc28781b5ff094ca834504937ddc99fb354a8504e0ca1e818c65aaed0b6334"
+    },
+    {
+      "path": "results.json",
+      "bytes": 608,
+      "sha256": "ad0582955c4a3baff46aaab2591965c9d0108685f62e9297a89dde9898694c31"
+    },
+    {
+      "path": "viewer_space_memory_heavy_four_root_retained_reference_metrics.json",
+      "bytes": 5209,
+      "sha256": "329d8a742d76b8b2a474d7d1ee836e814eeed088c49223d791ad60306908bef1"
+    },
+    {
+      "path": "raw-metrics-source-index.json",
+      "bytes": 477,
+      "sha256": "d61956a2db4a644798a78ffd2c248197f6c4c003d49d20a683efc4921cff375a"
+    },
+    {
+      "path": "perf-metrics-curated.jsonl",
+      "bytes": 564892,
+      "sha256": "78b557a65ceb64a6def9fbb78626940d3c510ac720d57c57662392e2aadb3c9d"
+    },
+    {
+      "path": "metric-replay-map.json",
+      "bytes": 59177,
+      "sha256": "b6436ed745c2d60ec03a804149d3803094573965d507150961ba4cdf640a7c95"
+    }
+  ],
+  "qualificationStatus": "qualified",
+  "qualificationErrors": [],
+  "limits": {
+    "fileBytes": 2097152,
+    "runBytes": 5242880
+  },
+  "fullRawMetricsPreserved": false
+}

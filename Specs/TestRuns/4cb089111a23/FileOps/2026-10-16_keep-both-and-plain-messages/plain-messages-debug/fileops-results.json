@@ -1,0 +1,192 @@
+{
+    "run_started_utc": "2026-10-16T22:15:20.644Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\plain-messages-debug-20261016T221447Z-ad52c2ef3dff4c3e89a4b5941fe162e8\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 104984,
+    "passed": 6,
+    "failed": 3,
+    "skipped": 15,
+    "failureMessage": "File Operations safety contracts failed; see individual witnesses in the trace.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1234,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_SafetyRemediationContracts",
+            "status": "failed",
+            "duration_ms": 34047,
+            "repeat_index": 1,
+            "reason": "File Operations safety contracts failed; see individual witnesses in the trace."
+        },
+        {
+            "name": "FileOps_ConflictMessageText",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_ReviewRemediationContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_RepeatDecisionContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_SkipCountingPresentation",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_PermanentDeleteCompletionProgress",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 2
+        },
+        {
+            "name": "FileOps_SafetyRemediationContracts",
+            "status": "failed",
+            "duration_ms": 34531,
+            "repeat_index": 2,
+            "reason": "File Operations safety contracts failed; see individual witnesses in the trace."
+        },
+        {
+            "name": "FileOps_ConflictMessageText",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_ReviewRemediationContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_RepeatDecisionContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_SkipCountingPresentation",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_PermanentDeleteCompletionProgress",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 2
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 3
+        },
+        {
+            "name": "FileOps_SafetyRemediationContracts",
+            "status": "failed",
+            "duration_ms": 34906,
+            "repeat_index": 3,
+            "reason": "File Operations safety contracts failed; see individual witnesses in the trace."
+        },
+        {
+            "name": "FileOps_ConflictMessageText",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_ReviewRemediationContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_RepeatDecisionContracts",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_SkipCountingPresentation",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "FileOps_PermanentDeleteCompletionProgress",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

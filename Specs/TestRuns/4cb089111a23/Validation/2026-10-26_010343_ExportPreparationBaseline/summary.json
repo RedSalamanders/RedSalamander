@@ -1,0 +1,32 @@
+{
+  "schema": "viewer-space-preparation-baseline-v1",
+  "source": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+  "qualification": false,
+  "sets": [
+    {
+      "set": "asan-captured",
+      "cases": 16,
+      "passed": 16,
+      "failed": 0,
+      "gateMinimumUs": 4520675.0,
+      "gateMaximumUs": 4862488.0
+    },
+    {
+      "set": "asan-uncaptured",
+      "cases": 16,
+      "passed": 16,
+      "failed": 0,
+      "gateMinimumUs": 4483983.0,
+      "gateMaximumUs": 5013981.0
+    },
+    {
+      "set": "release",
+      "cases": 4,
+      "passed": 4,
+      "failed": 0,
+      "gateMinimumUs": 243883.0,
+      "gateMaximumUs": 288795.0
+    }
+  ],
+  "traceSelection": "One complete representative desktop trace per captured profile; all native outputs and per-run metric digests/segment summaries are retained."
+}

@@ -1,0 +1,172 @@
+[
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\run-focused.ps1",
+    "archive": "run-focused.ps1",
+    "sha256": "8311FBA9913E1EB6F542947C2CF990C977C9C684252DFA24CEA445B9122D2645"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\timing-comparison.json",
+    "archive": "timing-comparison.json",
+    "sha256": "7C88B337DE36CEDF818D251F219E369834C6CFD33A611E12B7B550432277F92A"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\tested-code.json",
+    "archive": "tested-code.json",
+    "sha256": "3DA5F45431139780B2FEA85A36476708B91C958332A9731CA5126B9322F1957C"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-source.patch",
+    "archive": "candidate-source.patch",
+    "sha256": "6D82BF22ABF1D9F9D153A0B98DB968C38719292CF7F0CFFBFFF90D378B96DB63"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\release-blocked-observation.txt",
+    "archive": "release-blocked-observation.txt",
+    "sha256": "F17A81B6067457AF6831E0A8A8514369CF053B83C4CD7501BCFD8C4469D44B7D"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\scope-explanation.json",
+    "archive": "scope-explanation.json",
+    "sha256": "0BC0558E9285F13ED74D0EDAF894CA67A557A25DC9BA6E28E5A37648D57FD624"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\source-contracts.json",
+    "archive": "source-contracts.json",
+    "sha256": "1B7480F2E11BC8EFAD7B07D8491EDFF42D7506415D8FBAB43E1507F28F90F109"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\archive-inventory.txt",
+    "archive": "archive-inventory.txt",
+    "sha256": "52F79875CC92D10CBECE4F0AD854E5A5CC5D60E842EB48140840D88031F3C985"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\build-receipt.json",
+    "archive": "baseline/build-receipt.json",
+    "sha256": "C0D2DEB6C7EB800EEB60BDA2AA9BBD13E1955B9ADC450AA22B6FDE03468520FA"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\build.log",
+    "archive": "baseline/build.log",
+    "sha256": "D053211244319C0E644D7F42731AB9ECBCC36BEE9B610F1E66C98BF8472347DE"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\plugin-origin-receipt.json",
+    "archive": "baseline/plugin-origin-receipt.json",
+    "sha256": "2D897BF3BB903C2919FDA1550D05E16CC513C579213821203AA069096E7BAEA4"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\result.json",
+    "archive": "baseline/result.json",
+    "sha256": "397DBC73AB1E013D2F4519ADB0ACD812751C695AC61C2F2AC2A6F2FE48BE0CDD"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\stderr.txt",
+    "archive": "baseline/stderr.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\baseline\\trace.txt",
+    "archive": "baseline/trace.txt",
+    "sha256": "07763C4DD51D72ADE3CE5704D328D148DF8504A348041DD5C7C65114080E45E0"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug\\build-receipt.json",
+    "archive": "candidate-debug/build-receipt.json",
+    "sha256": "FCACE12A952EC7ED5592286B9D18441B6F0526E6BE58947EB77E5AF64A457255"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug\\build.log",
+    "archive": "candidate-debug/build.log",
+    "sha256": "0E85ABB0CB25C0848873B909B070CB02C54A821EFC804B2F3582F871D6823E62"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug\\result.json",
+    "archive": "candidate-debug/result.json",
+    "sha256": "DF4575059802EA9A9CEF878722B195158CB574472C9F49F6A115668A4B39AFA5"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug\\stderr.txt",
+    "archive": "candidate-debug/stderr.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug\\trace.txt",
+    "archive": "candidate-debug/trace.txt",
+    "sha256": "BD5F289A31378B47109AB767E5E70737A5FB010120F3813E48328DBEC0568FF7"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug-ambient\\build-receipt.json",
+    "archive": "candidate-debug-ambient/build-receipt.json",
+    "sha256": "FCACE12A952EC7ED5592286B9D18441B6F0526E6BE58947EB77E5AF64A457255"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug-ambient\\result.json",
+    "archive": "candidate-debug-ambient/result.json",
+    "sha256": "9A0F75B5E4F2247C589AD11A000D3300D3463E39146BD2C84D4F0AF5FA040B7E"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug-ambient\\stderr.txt",
+    "archive": "candidate-debug-ambient/stderr.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-debug-ambient\\trace.txt",
+    "archive": "candidate-debug-ambient/trace.txt",
+    "sha256": "64CAB0177F1A0A2056230E04D0337FF758646DF34AFA83D39C9C287CE3277E1A"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\build-receipt.json",
+    "archive": "candidate-release/build-receipt.json",
+    "sha256": "1BB17AF08B0B2B6B7CADF892FA6C5146AFB737A194F8800C9BDC0274D5E79B28"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\plugin-build-receipt.json",
+    "archive": "candidate-release/plugin-build-receipt.json",
+    "sha256": "C8419614C3C9F7EA4C2D6A97D60FEE93AC97AA77C33F8E74BDB514FD9A9F6198"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\plugin-build.log",
+    "archive": "candidate-release/plugin-build.log",
+    "sha256": "948B742F7C5D597AB4CF1B9329F7F3E8380CECCBE20F267379ABFF89963E6ECC"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\result.json",
+    "archive": "candidate-release/result.json",
+    "sha256": "BAA9F6947C0EB703144B4BE9E794FD533C0AC00D96C93104AA01C5F0562EDA86"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\stderr.txt",
+    "archive": "candidate-release/stderr.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\test-build.log",
+    "archive": "candidate-release/test-build.log",
+    "sha256": "94A246C665E91AE5DEBCDED105A48DE38534CFAAEA6F408F369ED94CB1F36942"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release\\trace.txt",
+    "archive": "candidate-release/trace.txt",
+    "sha256": "6D01DB44202A6781FA6E0CD518A44D4324A2DF988034B3E645F968E1039C13C7"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release-ambient\\build-receipt.json",
+    "archive": "candidate-release-ambient/build-receipt.json",
+    "sha256": "1BB17AF08B0B2B6B7CADF892FA6C5146AFB737A194F8800C9BDC0274D5E79B28"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release-ambient\\result.json",
+    "archive": "candidate-release-ambient/result.json",
+    "sha256": "0311E35522DA671316B6867F31B11AED777BA4635403357F84C2076D162DECC9"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release-ambient\\stderr.txt",
+    "archive": "candidate-release-ambient/stderr.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewerspace-natural-sorting-2026-10-17\\candidate-release-ambient\\trace.txt",
+    "archive": "candidate-release-ambient/trace.txt",
+    "sha256": "08729B9A17218BF815253859DA0DA21BFBE857D518928036DFFBDEB704DA6F46"
+  }
+]

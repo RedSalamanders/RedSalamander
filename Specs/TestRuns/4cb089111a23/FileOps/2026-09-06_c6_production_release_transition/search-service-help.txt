@@ -1,0 +1,48 @@
+RedSalamanderSearchService
+
+Usage:
+  RedSalamanderSearchService.exe [options]
+
+Options:
+  -h, --help, /?                 Show this help.
+  --run-foreground               Run in the current terminal instead of the SCM.
+  --compact                      Run offline SQLite checkpoint/vacuum maintenance and exit.
+  --request-compact              Ask the running service to compact its live SQLite store.
+  --register                     Register this executable as the Windows service 'RedSalamanderSearchService'.
+  --unregister                   Unregister the Windows service 'RedSalamanderSearchService'.
+  --pipe-name=NAME               Override the pipe name for foreground mode or --request-compact.
+  --storage-root=PATH            Override the persistent-store root for foreground mode or --compact.
+  --store-backend=KIND           Select the persistent store backend for foreground mode or --compact: snapshot or sqlite.
+  --sqlite-path=PATH             Override the SQLite database path for foreground mode or --compact.
+  --protocol-version=N           Override the protocol version for foreground mode.
+  --max-requests=N               Exit after N handled requests in foreground mode (0 = unlimited).
+  --disconnect-after-batches=N   Disconnect after N candidate batches in foreground mode (0 = never).
+
+Defaults for this build:
+  Service name: RedSalamanderSearchService
+  Pipe name:    \\.\pipe\RedSalamander.SearchService.v3
+  Store:        sqlite-v2
+
+Notes:
+  --register and --unregister typically require an elevated terminal.
+  Only one active writer may own a given SearchService store at a time; independent stores may run concurrently.
+  --run-foreground prints a startup banner with PID/build/mode details, shows a full-screen interactive dashboard
+                   with live status and history pages on a VT-capable console, and emits readable log lines when
+                   output is redirected.
+  --compact targets the SQLite store, acquires store writer ownership, truncates WAL, runs VACUUM,
+            and records the last checkpoint/compaction timestamps.
+  --request-compact talks to the running service over the named pipe, runs live maintenance in-process,
+                    and prints the refreshed store state after the request completes.
+  ANSI colors are enabled automatically when the active terminal supports virtual terminal sequences.
+  Use 1/2 to switch pages, F to follow the latest event, arrows to browse history, and Ctrl+C to stop.
+
+Examples:
+  RedSalamanderSearchService.exe --help
+  RedSalamanderSearchService.exe --run-foreground
+  RedSalamanderSearchService.exe --run-foreground --storage-root=C:\Temp\RedSalamander\SearchIndex
+  RedSalamanderSearchService.exe --run-foreground --store-backend=snapshot
+  RedSalamanderSearchService.exe --compact
+  RedSalamanderSearchService.exe --compact --sqlite-path=C:\Temp\RedSalamander\SearchIndex\index-v2.sqlite3
+  RedSalamanderSearchService.exe --request-compact
+  RedSalamanderSearchService.exe --register
+  RedSalamanderSearchService.exe --unregister

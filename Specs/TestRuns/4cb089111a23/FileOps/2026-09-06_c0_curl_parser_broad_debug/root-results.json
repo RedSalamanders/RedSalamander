@@ -1,0 +1,129 @@
+{
+    "run_started_utc": "2026-09-05T23:44:08.654Z",
+    "duration_ms": 258134,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-broad-debug-20260906-r1\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 257265,
+            "passed": 17,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1265,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "passed",
+                    "duration_ms": 500,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "passed",
+                    "duration_ms": 359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "passed",
+                    "duration_ms": 125,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteGuards",
+                    "status": "passed",
+                    "duration_ms": 1422,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCommittedMutationResponseLost",
+                    "status": "passed",
+                    "duration_ms": 1078,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 1328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteLateListing",
+                    "status": "passed",
+                    "duration_ms": 1844,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlDeleteTraversalBounds",
+                    "status": "passed",
+                    "duration_ms": 9937,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlDirectorySizeTruth",
+                    "status": "passed",
+                    "duration_ms": 3953,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlMovePreflightTruth",
+                    "status": "passed",
+                    "duration_ms": 16953,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCopyTraversalTruth",
+                    "status": "passed",
+                    "duration_ms": 191500,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlEntryLookupTruth",
+                    "status": "passed",
+                    "duration_ms": 26094,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 31,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0
+}

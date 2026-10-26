@@ -1,0 +1,8 @@
+CrashHandlingTests.exe
+DxUiTests.exe
+FileSystemCurlTests.exe
+LocalizationTests.exe
+PluginContractTests.exe
+SettingsSchemaTests.exe
+ViewerPETests.exe
+ViewerSqliteTests.exe

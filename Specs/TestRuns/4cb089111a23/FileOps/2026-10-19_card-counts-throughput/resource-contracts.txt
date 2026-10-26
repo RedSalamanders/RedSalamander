@@ -1,0 +1,51 @@
+**********************
+PowerShell transcript start
+Start time: 20261019094224
+Username: SINON\eric
+RunAs User: SINON\eric
+Configuration Name: 
+Machine: SINON (Microsoft Windows NT 10.0.26300.0)
+Host Application: C:\Users\eric\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.dll -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+Import-Module ./Tools/Modules/Testing/TestSandbox.psm1 -Force
+$taskContext = New-RSTestRunContext -RepoRoot (Get-Location).Path -TestRootOverride D:\RedSalamander.Perf -RunId 'fileops-card-20261019-resources'
+$env:REDSALAMANDER_TEST_ROOT = $taskContext.TestRoot
+$env:REDSALAMANDER_TEST_RUN_ID = $taskContext.RunId
+$taskTemp = New-RSTestSandboxScratchDirectory -RepoRoot (Get-Location).Path -Harness Pester -Case resources
+$env:TEMP = $taskTemp
+$env:TMP = $taskTemp
+$taskArtifacts = Join-Path $taskContext.RunRoot 'artifacts'
+New-Item -ItemType Directory -Path $taskArtifacts -Force | Out-Null
+Start-Transcript -Path (Join-Path $taskArtifacts 'resource-contracts.txt') | Out-Null
+$taskResult = Invoke-Pester -Script ./Tools/Tests/ResourceLocalizationContracts.Tests.ps1 -PassThru
+$taskResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $taskArtifacts 'resource-contracts.json') -Encoding utf8
+Stop-Transcript | Out-Null
+if ($taskResult.FailedCount -gt 0) { exit 1 }
+Process ID: 89132
+PSVersion: 7.6.5
+PSEdition: Core
+GitCommitId: 7.6.5
+OS: Microsoft Windows 10.0.26300
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+
+Describing Resource localization contracts
+ [+] requires every top-level RC resource root to be explicitly allowlisted 10.75s
+ [+] keeps resource format placeholders positional and translation-safe 6.52s
+ [+] keeps documented language-neutral string ids embedded-only in their owning resource module 440ms
+ [+] loads documented language-neutral string ids through embedded helpers only 1.69s
+ [+] keeps satellite string ids complete except documented embedded-only ids 1.22s
+ [+] keeps file-operations count summaries count-neutral and removes the retired combined format 335ms
+ [+] passes file-operations diagnostic resource text typed instead of pre-rendered 134ms
+ [+] keeps base and satellite MENU structures identical 745ms
+ [+] keeps the reviewed context, viewer, and monitor command placement exact 156ms
+ [+] keeps actionable static sibling menu access keys present and unique 700ms
+Tests completed in 22.69s
+Passed: 10 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+**********************
+PowerShell transcript end
+End time: 20261019094248
+**********************

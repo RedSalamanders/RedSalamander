@@ -1,0 +1,27 @@
+{
+  "canonical_runner_sha256": "8a3af95821fc2f1cd20afdeff709120f2aeb09c69bb26b47c03ae864dc61821d",
+  "post_run_attestation_error": null,
+  "receipt_sha256": "f9f78276a216360ac4df14e1d49b0758f816b358831c7d0670532febd3a16e3a",
+  "executable_sha256": "8bf4c29c2643fe89a1dca5e975de1baa1c606e5730497a69ba3788b0046baa76",
+  "build_source_snapshot_id": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "launcher_sha256": "da49223b6da12044a24c7107bd3b1f3e9bf54aea601d32e8c1425bbdf2eff2fc",
+  "results": [
+    {
+      "group": "interactive",
+      "exit_code": 0,
+      "output_log_bytes": 7657,
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T223523Z-45208-85e484e24c8249f78bb3e3a7221599bb\\artifacts\\selftest\\last_run\\TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log",
+      "output_log_sha256": "254634ac0fa1261b4d626322fa62e14dd282ad60b594e3258c6cd98dec720c52",
+      "desktop_lease": true,
+      "case": "TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses"
+    }
+  ],
+  "scope": "focused-diagnostic",
+  "build_receipt_id": "f721d4c3644b36016e3b81900978cc335f1a530d9eadc094f585683bc7f3638b",
+  "platform": "x64",
+  "canonical_lease_definition_sha256": "e3538fbf1c77ad9831521a484cbd072dc838b3edc0940c1d3459d3629545ab79",
+  "post_run_attestation_intact": true,
+  "repository_verdict": "NOT_EVALUATED",
+  "run_id": "20261009T223523Z-45208-85e484e24c8249f78bb3e3a7221599bb",
+  "configuration": "Debug"
+}

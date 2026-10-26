@@ -94,11 +94,11 @@ public:
 
         ModalLoopContext context{&done, &result};
         DxUi::ModalLoopOptions loopOptions;
-        loopOptions.diagnosticName                 = diagnosticName;
-        loopOptions.shouldContinue                 = ContinueModalLoop;
-        loopOptions.context                        = &context;
-        loopOptions.onQuit                         = OnModalLoopQuit;
-        const DxUi::ModalLoopResult loopResult = DxUi::RunDxUiModalLoop(hwnd, loopOptions);
+        loopOptions.diagnosticName             = diagnosticName;
+        loopOptions.shouldContinue             = ContinueModalLoop;
+        loopOptions.context                    = &context;
+        loopOptions.onQuit                     = OnModalLoopQuit;
+        const DxUi::ModalLoopResult loopResult = DxUi::RunModalLoop(hwnd, loopOptions);
         if (loopResult == DxUi::ModalLoopResult::GetMessageFailed)
         {
             return HRESULT_FROM_WIN32(GetLastError());

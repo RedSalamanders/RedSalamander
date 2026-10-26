@@ -19,13 +19,26 @@
     Removes the exact resolved run directory. Without this switch the command only
     reports the target.
 
+    Apply refuses a parseable run whose owner is still live, using the same
+    PID-reuse checks as the runner. Review manually named runs and preserve useful
+    results before applying cleanup; an unparseable name is not ownership proof.
+
 .OUTPUTS
     One PSCustomObject target record when the selected run exists.
 
 .NOTES
     Prerequisites: an initialized root with a valid ownership marker. Side effects:
     -Apply recursively removes only the exact selected run below the marked root and
-    honors ShouldProcess. It never cleans legacy paths outside X:\RedSalamander.Perf.
+    honors ShouldProcess. Before any walk it looks for test-owned VHDX receipts under
+    runs\<RunId>\artifacts\test-owned-vhdx: elevated, it unmounts, detaches and deletes each
+    recorded disk; not elevated, it deletes a VHDX whose receipt is 'detached' (kept after a
+    failed FileOps suite) and otherwise refuses the whole run (Status Failed) and reports the
+    receipt path with the exact recovery commands. The removal never follows reparse points:
+    junctions and directory symlinks are unlinked, and a run containing a volume mount point
+    is refused whole (Status Failed). It never cleans legacy paths outside X:\RedSalamander.Perf.
+    Exit code is 0 for preview, WhatIf, an absent target, or successful removal;
+    invalid invocation/path authority and failed removal return a nonzero exit.
+    A failed removal also emits its structured Status Failed record and warning.
 
 .EXAMPLE
     .\Tools\Clean-TestSandbox.ps1 -RunId 20260830T120000Z-1234-abcdef
@@ -64,7 +77,7 @@ $runRoot = Assert-RSTestSandboxContainedPath `
     -RequireDescendant
 
 if (-not (Test-Path -LiteralPath $runRoot -PathType Container)) {
-    return
+    exit 0
 }
 
 $result = [pscustomobject]@{
@@ -76,18 +89,30 @@ $result = [pscustomobject]@{
 }
 
 if (-not $Apply) {
+    foreach ($receiptPath in @(Get-RSTestOwnedVirtualDiskReceiptPaths -RunRoot $runRoot)) {
+        Write-Warning "The run records a test-owned VHDX ($receiptPath); -Apply deletes a detached one and tears down any other only from an elevated prompt."
+    }
     Write-Host 'Dry run: pass -Apply to remove this exact test run directory.' -ForegroundColor Yellow
     $result
-    return
+    exit 0
 }
 
 if (-not $PSCmdlet.ShouldProcess($runRoot, 'Remove exact RedSalamander test run')) {
     $result.Status = 'Skipped'
     $result
-    return
+    exit 0
 }
 
 try {
+    # Reuse the runner's live-owner/PID-reuse policy rather than reinterpreting a PID.
+    $runInfo = ConvertFrom-RSTestRunId -RunId $context.RunId
+    if ($null -ne $runInfo) {
+        $inactiveTarget = @(Resolve-RSTestSandboxStaleRunTargets -TestRoot $context.TestRoot |
+                Where-Object { [string]::Equals($_.RunId, $context.RunId, [StringComparison]::OrdinalIgnoreCase) })
+        if ($inactiveTarget.Count -ne 1) {
+            throw "Refusing to remove TestSandbox run '$runRoot': live owner $($runInfo.ProcessId) remains protected."
+        }
+    }
     Remove-RSTestSandboxExactRunDirectory -TestRoot $context.TestRoot -RunId $context.RunId
     $result.Status = 'Removed'
 } catch {
@@ -97,3 +122,5 @@ try {
 }
 
 $result
+if ($result.Status -eq 'Failed') { exit 1 }
+exit 0

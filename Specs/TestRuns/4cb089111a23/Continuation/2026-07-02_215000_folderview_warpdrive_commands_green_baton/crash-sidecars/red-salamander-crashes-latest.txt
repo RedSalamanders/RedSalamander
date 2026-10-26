@@ -1,0 +1,16 @@
+
+FullName                                                                                   LastWriteTime         Length
+--------                                                                                   -------------         ------
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.dmp 02/07/2026 12:58:18 10187894
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.txt 02/07/2026 12:58:17     7660
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.dmp 02/07/2026 10:00:20 10798291
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.txt 02/07/2026 10:00:19     3796
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.dmp 01/07/2026 11:43:35  8737016
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.txt 01/07/2026 11:43:34     8284
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.dmp 01/07/2026 11:21:04  4297551
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.txt 01/07/2026 11:21:04     2350
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.dmp 01/07/2026 08:16:23  4533506
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.txt 01/07/2026 08:16:22     1128
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260630-165229-p96776.dmp 30/06/2026 16:52:30 10048505
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260630-165229-p96776.txt 30/06/2026 16:52:29     3798
+

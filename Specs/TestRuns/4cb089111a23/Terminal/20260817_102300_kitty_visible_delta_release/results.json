@@ -1,0 +1,197 @@
+{
+  "schema": "red-salamander.terminal-kitty-visible-delta-result.v1",
+  "status": "passed",
+  "scenario": "Terminal bounded Kitty visible-delta cache and placement accounting",
+  "build": "Release x64 ENABLE_TESTS",
+  "platform": "x64",
+  "machineHash": "4cb089111a23",
+  "runId": "20260817_102300_kitty_visible_delta_release",
+  "command": ".build\\x64\\Release\\PluginContractTests.exe --terminal-selftests",
+  "processCount": 5,
+  "assertionsPerProcess": {
+    "passed": 69,
+    "failed": 0,
+    "exitCode": 0,
+    "stderrBytes": 0,
+    "moduleUnloadQuietPoint": true,
+    "visibleDeltaReveal": true,
+    "resizeReflowReuse": true,
+    "deletePurgesStaleKeys": true,
+    "cacheReuseSubmittedWork": false,
+    "frameUploadCountWithoutRenderTarget": 0
+  },
+  "runtimeShape": {
+    "placementLimit": 4096,
+    "placementBytesLimit": 1048576,
+    "retainedPlacements": 4096,
+    "retainedPlacementBytes": 598040,
+    "offscreenPlacements": 1024,
+    "virtualPlacements": 1024,
+    "visibleDistinctImagePlacements": 1024,
+    "visibleRepeatedImagePlacements": 1024,
+    "visiblePlacements": 2048,
+    "visibleImageKeys": 1025,
+    "rejectedPlusOnePlacements": 1,
+    "sourceBytes": 3075,
+    "cachedBytesAfterReuse": 4100,
+    "pinnedBytesAfterReuse": 4100,
+    "missingKeysAfterReuse": 0,
+    "deferredKeysAfterReuse": 0,
+    "rejectedKeysAfterReuse": 0
+  },
+  "repeats": [
+    {
+      "runId": "20260817_102300_terminal_package_e_r01",
+      "rows": 89,
+      "processElapsedMs": 198,
+      "captureLockUs": 414,
+      "cacheReuseCaptureLockUs": 219,
+      "legacyCaptureComparisons": 529915,
+      "legacyDrawComparisons": 530940,
+      "legacyDrawLookupUs": 203,
+      "keyedDrawLookups": 2048,
+      "keyedDrawLookupUs": 27,
+      "maximumConversionUs": 29098,
+      "maximumResidentBytes": 134217728
+    },
+    {
+      "runId": "20260817_102300_terminal_package_e_r02",
+      "rows": 89,
+      "processElapsedMs": 239,
+      "captureLockUs": 594,
+      "cacheReuseCaptureLockUs": 216,
+      "legacyCaptureComparisons": 529915,
+      "legacyDrawComparisons": 530940,
+      "legacyDrawLookupUs": 117,
+      "keyedDrawLookups": 2048,
+      "keyedDrawLookupUs": 24,
+      "maximumConversionUs": 28950,
+      "maximumResidentBytes": 134217728
+    },
+    {
+      "runId": "20260817_102300_terminal_package_e_r03",
+      "rows": 89,
+      "processElapsedMs": 222,
+      "captureLockUs": 498,
+      "cacheReuseCaptureLockUs": 230,
+      "legacyCaptureComparisons": 529915,
+      "legacyDrawComparisons": 530940,
+      "legacyDrawLookupUs": 206,
+      "keyedDrawLookups": 2048,
+      "keyedDrawLookupUs": 21,
+      "maximumConversionUs": 30375,
+      "maximumResidentBytes": 134217728
+    },
+    {
+      "runId": "20260817_102300_terminal_package_e_r04",
+      "rows": 89,
+      "processElapsedMs": 196,
+      "captureLockUs": 418,
+      "cacheReuseCaptureLockUs": 205,
+      "legacyCaptureComparisons": 529915,
+      "legacyDrawComparisons": 530940,
+      "legacyDrawLookupUs": 117,
+      "keyedDrawLookups": 2048,
+      "keyedDrawLookupUs": 26,
+      "maximumConversionUs": 29372,
+      "maximumResidentBytes": 134217728
+    },
+    {
+      "runId": "20260817_102300_terminal_package_e_r05",
+      "rows": 89,
+      "processElapsedMs": 169,
+      "captureLockUs": 454,
+      "cacheReuseCaptureLockUs": 219,
+      "legacyCaptureComparisons": 529915,
+      "legacyDrawComparisons": 530940,
+      "legacyDrawLookupUs": 116,
+      "keyedDrawLookups": 2048,
+      "keyedDrawLookupUs": 23,
+      "maximumConversionUs": 29055,
+      "maximumResidentBytes": 134217728
+    }
+  ],
+  "summary": {
+    "captureLockUs": {
+      "minimum": 414,
+      "median": 454,
+      "maximum": 594
+    },
+    "cacheReuseCaptureLockUs": {
+      "minimum": 205,
+      "median": 219,
+      "maximum": 230
+    },
+    "legacyDrawLookupUs": {
+      "minimum": 116,
+      "median": 117,
+      "maximum": 206
+    },
+    "keyedDrawLookupUs": {
+      "minimum": 21,
+      "median": 24,
+      "maximum": 27
+    },
+    "maximumConversionUs": {
+      "minimum": 28950,
+      "median": 29098,
+      "maximum": 30375
+    },
+    "maximumResidentBytes": 134217728
+  },
+  "comparison": {
+    "method": "paired test-only legacy vector model and production exact-key lookup over the same real-runtime iterator order",
+    "sameMachine": true,
+    "sameProcesses": true,
+    "legacyDrawComparisons": 530940,
+    "keyedDrawLookups": 2048,
+    "comparisonCountReductionPercent": 99.614,
+    "comparisonRatio": 259.248,
+    "legacyMedianDrawLookupUs": 117,
+    "keyedMedianDrawLookupUs": 24,
+    "medianLookupTimeReductionPercent": 79.5,
+    "medianLookupSpeedup": 4.88,
+    "historicalMaximumFixtureRun": "Specs/TestRuns/4cb089111a23/Terminal/2026-08-09_165700",
+    "historicalMaximumConversionUs": 28834,
+    "candidateMedianMaximumConversionUs": 29098,
+    "candidateDeltaUs": 264,
+    "candidateDeltaPercent": 0.9,
+    "caveat": "The paired legacy algorithm is executable test-only comparison code, not an old product binary. The surviving historical maximum-size archive contains one process, so its conversion comparison is directional. The focused fixture has no D2D render target and makes no upload-latency claim."
+  },
+  "identities": {
+    "head": "e9c76e59aa2b2993170ea1e6c88e7d15362954c7",
+    "terminalSourceSha256": "e5e32dcd01d56fba0a1315ec3bc85f3f6e03989e8a3c5b896e7ccdc2e4c5cdce",
+    "terminalDllSha256": "e39e7bd6f2fa38d039cf81478e10537f931bb61e773b48007ccb497d585feca8",
+    "pluginContractTestsExeSha256": "80540b893c8340eeef787cf9ba03b8da642c8306b56ce3fb741ec474be7b9da0",
+    "ghosttyRuntimeSha256": "5b18a0b2f3775baac7ec6a1beab98a331855d2bfa00ed60c0a2dd3450fd16e8d",
+    "stdoutSha256": "9a25fa4722d2b090726603f43bd09b94e953578ca1f2ff191643a9692f10b158",
+    "perfJsonlSha256": "b89a35e4b44a8d019efae590ea27cce8d4b92430cd6b73f1985db6bc1a8aff61"
+  },
+  "buildEvidence": [
+    {
+      "project": "Terminal",
+      "configuration": "Debug x64",
+      "log": ".build/logs/msbuild-20260817_101910_425-pid69920-db1b32e5.log",
+      "receipt": "4bb3ae276c273677621e578e5cdb088c7c7f7e0f0a1a1606c77a9cc2ecccddeea",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "project": "Terminal",
+      "configuration": "Release x64 ENABLE_TESTS",
+      "log": ".build/logs/msbuild-20260817_102054_210-pid77792-364b88e7.log",
+      "receipt": "4d6f3e62c66f9d64981f3a9f71a9aaad439f6095fd0c716a4a448bb9f1e244d18",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "project": "PluginContractTests",
+      "configuration": "Release x64 ENABLE_TESTS",
+      "log": ".build/logs/msbuild-20260817_100345_409-pid16900-3b1751e4.log",
+      "receipt": "f1d472bfcee4c265a29fa238d78c4ac72dc6218ee865336c7521d11a3ad548129",
+      "warnings": 0,
+      "errors": 0
+    }
+  ],
+  "contentFree": true
+}

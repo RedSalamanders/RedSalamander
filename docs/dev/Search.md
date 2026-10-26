@@ -19,7 +19,7 @@ Search is a host-owned feature: one Find experience for every `IFileSystem` plug
 
 ## Find window and the session controller
 
-`cmd/pane/find` (default shortcuts `Alt+F7` and `Ctrl+F`) calls `ShowFindFilesWindow(owner, settings, theme, context)` (`RedSalamander/FindFilesWindow.h`). The `FindFilesPaneContext` snapshots the target pane's `IFileSystem`, `pluginId`, `pluginShortId`, `instanceContext`, and `rootPluginPath`. Each invocation creates an independent modeless `FindFilesWindow` (a DxUI host control implementing `IDxGridDelegate`); multiple Find windows can be open at once, each with its own result set.
+`cmd/pane/find` (default shortcuts `Alt+F7` and `Ctrl+F`) calls `ShowFindFilesWindow(owner, settings, theme, context)` (`RedSalamander/FindFilesWindow.h`). The `FindFilesPaneContext` snapshots the target pane's `IFileSystem`, `pluginId`, `pluginShortId`, `instanceContext`, and `rootPluginPath`. Each invocation creates an independent modeless `FindFilesWindow` (a DxUI host control implementing `IGridDelegate`); multiple Find windows can be open at once, each with its own result set.
 
 `BeginSearch(operation, textOverride)` builds a `SearchRequest` from the combos and checkboxes (root path, name/content patterns and modes, flags, `maxResults`, content limits) and calls `SearchSessionController::Start(owner, request)`. The controller owns:
 
@@ -67,6 +67,7 @@ For the built-in local `file` plugin the precedence is `service` → `local-inde
 - `FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE` — the service transport was unavailable and the host switched backends.
 - `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` — the backend stayed healthy but answered from the live filesystem (index/DB not ready or not current).
 - `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT`, `FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED`, `FILESYSTEM_SEARCH_WARNING_OVERFLOW`, `FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED`.
+- `FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE` — an accepted regex hit the engine's complexity/stack limit on some names or contents; those items are missing from the results (the bound is kept, never retried with a costlier engine).
 
 While a `service` or `local-index` search is active, the Find window shows a second backend-status line built from `LocalSearchIndexCore` runtime state: `StoreState`, `SyncPhase`, `QueryExecutionMode`, and `FallbackReason`.
 
@@ -167,4 +168,4 @@ Key functions: `EnsureBootstrap`, `InspectStore`, `InspectVolume`, `LoadVolume`,
 
 ## Diagnostics
 
-Search work prefers the existing `find.ui.*` / `find.session.*` perf metrics. Relevant self-tests live under `RedSalamander/SelfTest/Commands/Commands.SelfTest.Search.cpp` (e.g. `search_local_plugin_invalid_regex_reports_single_completion`, `search_local_plugin_parallel_cancel_fanin`) and the search/index compare cases under `RedSalamander/SelfTest/CompareDirectories/`. See `Specs/Core/Core_Search.md` for the full performance-validation and verification contract.
+Search work prefers the existing `find.ui.*` / `find.session.*` perf metrics. Relevant self-tests live under `RedSalamander/SelfTest/Commands/Commands.Tests.Search.cpp` (e.g. `search_local_plugin_invalid_regex_reports_single_completion`, `search_local_plugin_parallel_cancel_fanin`) and the search/index compare cases under `RedSalamander/SelfTest/CompareDirectories/`. See `Specs/Core/Core_Search.md` for the full performance-validation and verification contract.

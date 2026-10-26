@@ -1,0 +1,158 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index 448e1b3d0..aaa108624 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -12654,6 +12654,16 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                     result.taskSpeedLimitShowsCurrentValue =
+                         i < _hostedButtons.size() && _hostedButtons[i] && taskIt != taskSnapshot.end() &&
+                         _hostedButtons[i]->GetText() == FormatSpeedLimitSelectorText(taskIt->desiredSpeedLimitBytesPerSecond);
++                    if (i < _hostedButtons.size() && _hostedButtons[i])
++                    {
++                        const auto* control = _hostedButtons[i];
++                        const auto chrome   = DxUi::ComputeButtonChromeLayout(control->GetBounds(), control->GetVariant());
++                        const float labelWidthDip =
++                            MeasureTextWidth(_dwriteFactory.get(), _controlsHost.GetTextFormat(DxUi::FontRole::Body), control->GetText(), 4096.0f, 128.0f);
++                        result.taskSpeedLimitLabelWidthPx = DipsToPixels(labelWidthDip, _dpi);
++                        result.taskSpeedLimitTextWidthPx  = DipsToPixels(std::max(0.0f, chrome.textRect.right - chrome.textRect.left), _dpi);
++                        result.taskSpeedLimitLabelFits    = labelWidthDip > 0.0f && result.taskSpeedLimitLabelWidthPx <= result.taskSpeedLimitTextWidthPx;
++                    }
+                 }
+                 break;
+             case PopupHitTest::Kind::TaskConflictInspectSource:
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index 52074fac5..76fc749b6 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -323,6 +323,9 @@ struct PopupLayoutDebugSnapshot
+     bool taskSpeedLimitVisible                     = false;
+     bool taskSpeedLimitUsesSelectorChrome          = false;
+     bool taskSpeedLimitShowsCurrentValue           = false;
++    float taskSpeedLimitLabelWidthPx               = 0.0f;
++    float taskSpeedLimitTextWidthPx                = 0.0f;
++    bool taskSpeedLimitLabelFits                   = false;
+     bool taskPauseHitTargetActive                  = false;
+     bool taskCancelHitTargetActive                 = false;
+     bool taskSkipHitTargetActive                   = false;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+index d34f8d941..5ac87edba 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -1,4 +1,4 @@
+-﻿#include "FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp"
++#include "FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp"
+ 
+ // Included by the FileOperations selftest dispatcher. These are presentation fixtures,
+ // not simulated I/O successes: the real popup, engine action policy and renderer are used.
+@@ -584,6 +584,18 @@ struct FileOpsVisualScenario final
+         stream.lastUpdateTick = GetTickCount64();
+     }
+     add(L"122-waiting-retained-rows", task);
++    auto limitedWaiting                                          = result[3];
++    limitedWaiting.name                                          = L"133-speed-limit-waiting";
++    limitedWaiting.tasks.front().desiredSpeedLimitBytesPerSecond = 999ull * 1024ull * 1024ull * 1024ull;
++    result.push_back(limitedWaiting);
++    auto limitedDiscovery                                          = result[5];
++    limitedDiscovery.name                                          = L"134-speed-limit-discovery";
++    limitedDiscovery.tasks.front().desiredSpeedLimitBytesPerSecond = limitedWaiting.tasks.front().desiredSpeedLimitBytesPerSecond;
++    result.push_back(std::move(limitedDiscovery));
++    limitedWaiting.name                               = L"135-speed-limit-discovery-waiting";
++    limitedWaiting.tasks.front().discoveryAheadActive = true;
++    limitedWaiting.tasks.front().discoveryClosed      = false;
++    result.push_back(std::move(limitedWaiting));
+     return result;
+ }
+ 
+@@ -842,6 +854,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     bool abbreviatedPathsFit      = true;
+     bool waitingCardsFit          = true;
+     bool waitingTransitionsFit    = true;
++    bool speedLimitLabelsFit      = true;
+     for (size_t display = 0u; display < monitors.size(); ++display)
+     {
+         const auto& monitor = monitors[display];
+@@ -870,7 +883,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                 });
+                 for (const int widthDip : {480, 760})
+                 {
+-                    if (widthDip == 760 && ! waitingLayoutScenario && scenario.name != L"09-copy-single-stream" && scenario.name != L"14-paused" &&
++                    if (widthDip == 760 && scenario.name.find(L"speed-limit") == std::wstring::npos && ! waitingLayoutScenario &&
++                        scenario.name != L"09-copy-single-stream" && scenario.name != L"14-paused" &&
+                         scenario.name.find(L"queue-paused") == std::wstring::npos && sceneIndex != 9u && sceneIndex != 12u && sceneIndex != 16u &&
+                         sceneIndex != 26u && sceneIndex != 29u && sceneIndex != 32u && scenario.name != L"108-decision-long-french-paths" &&
+                         scenario.name != L"116-footer-wrapped-summary" && scenario.name != L"117-expanded-wrapped-summary" &&
+@@ -917,6 +931,62 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                     // A second paint reflects the stable auto-size and retained-control rectangles.
+                     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                    for (const auto& task : scenario.tasks)
++                    {
++                        PopupLayoutDebugSnapshot measured{};
++                        measured.taskId = task.taskId;
++                        const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), measured);
++                        if (! read || ! measured.taskSpeedLimitVisible)
++                        {
++                            if (scenario.name.find(L"speed-limit") != std::wstring::npos)
++                                speedLimitLabelsFit = false;
++                            continue;
++                        }
++                        const bool fits     = measured.taskSpeedLimitUsesSelectorChrome && measured.taskSpeedLimitShowsCurrentValue &&
++                                              measured.taskSpeedLimitLabelFits && ! measured.taskHasVisibleButtonOverlap;
++                        speedLimitLabelsFit = speedLimitLabelsFit && fits;
++                        AppendLog(std::format(L"SpeedLimitLabelFit: {} task={} dpi={} width={} labelPx={:.3f} availablePx={:.3f} fit={}",
++                                              scenario.name,
++                                              task.taskId,
++                                              dpi,
++                                              widthDip,
++                                              measured.taskSpeedLimitLabelWidthPx,
++                                              measured.taskSpeedLimitTextWidthPx,
++                                              fits));
++                    }
++                    if (scenario.name == L"11-speed-limited")
++                    {
++                        // Change the value in the same HWND without clearing renderer caches.
++                        // Unlimited -> custom -> original must each size from the current caption.
++                        const uint64_t originalLimit = popupState->debugVisualScenario.value().front().desiredSpeedLimitBytesPerSecond;
++                        for (const uint64_t limit : {uint64_t{0}, uint64_t{999ull * 1024ull * 1024ull * 1024ull}, originalLimit})
++                        {
++                            popupState->debugVisualScenario.value().front().desiredSpeedLimitBytesPerSecond = limit;
++                            for (unsigned int frame = 0u; frame < 2u; ++frame)
++                                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                            PopupLayoutDebugSnapshot changed{};
++                            changed.taskId      = scenario.tasks.front().taskId;
++                            const bool fits     = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), changed) && changed.taskSpeedLimitVisible &&
++                                                  changed.taskSpeedLimitShowsCurrentValue && changed.taskSpeedLimitLabelFits &&
++                                                  ! changed.taskHasVisibleButtonOverlap;
++                            speedLimitLabelsFit = speedLimitLabelsFit && fits;
++                            AppendLog(std::format(L"SpeedLimitValueChange: dpi={} width={} limit={} labelPx={:.3f} availablePx={:.3f} fit={}",
++                                                  dpi,
++                                                  widthDip,
++                                                  limit,
++                                                  changed.taskSpeedLimitLabelWidthPx,
++                                                  changed.taskSpeedLimitTextWidthPx,
++                                                  fits));
++                        }
++                        for (unsigned int round = 0u; round < 5u; ++round)
++                        {
++                            const auto started = std::chrono::steady_clock::now();
++                            for (unsigned int frame = 0u; frame < 8u; ++frame)
++                                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
++                            AppendLog(std::format(L"SpeedLimitRedraw: dpi={} width={} round={} frames=8 elapsedUs={}", dpi, widthDip, round, elapsed));
++                        }
++                    }
+                     if (waitingLayoutScenario)
+                     {
+                         for (const auto& task : scenario.tasks)
+@@ -1224,8 +1294,10 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+         Fail(L"The compact destination menu must show its chevron, retain its localized UIA name and tooltip, and expose an active hit target.");
+     if (! abbreviatedPathsFit)
+         Fail(L"Long French/Unicode filenames must fit their painted path rows, retain the extension and expose the complete accessible path.");
++    if (! speedLimitLabelsFit)
++        Fail(L"The full French speed-limit label must fit the actual Selector text lane, including both chevron-balancing margins.");
+     if (! waitingCardsFit || ! waitingTransitionsFit)
+         Fail(L"Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics.");
+-    return waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits && footerSummariesFit &&
+-           destinationMenusFit && abbreviatedPathsFit;
++    return speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
++           footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }

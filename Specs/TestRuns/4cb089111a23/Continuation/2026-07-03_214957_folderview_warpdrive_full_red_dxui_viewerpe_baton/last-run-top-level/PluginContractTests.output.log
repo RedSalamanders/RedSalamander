@@ -1,0 +1,388 @@
+[ RUN      ] Step2: EnumerateAndSchema - filesystem plugins
+[       OK ] Plugins\FileSystem.dll: DLL loads
+[       OK ] Plugins\FileSystem.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystem.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystem.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystem.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystem.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystem.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystem.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystem.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystem.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystem.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystem.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystem.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystem7z.dll: DLL loads
+[       OK ] Plugins\FileSystem7z.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystem7z.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystem7z.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystem7z.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystem7z.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystem7z.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystem7z.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystem7z.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystem7z.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystem7z.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystem7z.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystem7z.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: DLL loads
+[       OK ] Plugins\FileSystemCurl.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystemCurl.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystemCurl.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystemCurl.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystemCurl.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystemCurl.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[1].id is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[1].name is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[2].id is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[2].name is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[3].id is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: metaData[3].name is non-empty
+[       OK ] Plugins\FileSystemCurl.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystemCurl.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[1] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[1] JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[2] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[2] JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[3] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemCurl.dll: GetConfigurationSchema[3] JSON parses successfully
+[       OK ] Plugins\FileSystemDummy.dll: DLL loads
+[       OK ] Plugins\FileSystemDummy.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystemDummy.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystemDummy.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystemDummy.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystemDummy.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystemDummy.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystemDummy.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystemDummy.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystemDummy.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystemDummy.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystemDummy.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemDummy.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemGoogleDrive.dll: DLL loads
+[       OK ] Plugins\FileSystemGoogleDrive.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystemGoogleDrive.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystemGoogleDrive.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystemGoogleDrive.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystemGoogleDrive.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystemGoogleDrive.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystemGoogleDrive.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystemGoogleDrive.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystemGoogleDrive.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystemGoogleDrive.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: DLL loads
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[1].id is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[1].name is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[2].id is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: metaData[2].name is non-empty
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[1] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[1] JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[2] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetConfigurationSchema[2] JSON parses successfully
+[       OK ] Plugins\FileSystemS3.dll: DLL loads
+[       OK ] Plugins\FileSystemS3.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\FileSystemS3.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\FileSystemS3.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\FileSystemS3.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\FileSystemS3.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\FileSystemS3.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\FileSystemS3.dll: metaData[0].id is non-empty
+[       OK ] Plugins\FileSystemS3.dll: metaData[0].name is non-empty
+[       OK ] Plugins\FileSystemS3.dll: metaData[1].id is non-empty
+[       OK ] Plugins\FileSystemS3.dll: metaData[1].name is non-empty
+[       OK ] Plugins\FileSystemS3.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\FileSystemS3.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\FileSystemS3.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemS3.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\FileSystemS3.dll: GetConfigurationSchema[1] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\FileSystemS3.dll: GetConfigurationSchema[1] JSON parses successfully
+[ RUN      ] Step2: EnumerateAndSchema - viewer plugins
+[       OK ] Plugins\ViewerText.dll: DLL loads
+[       OK ] Plugins\ViewerText.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerText.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerText.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerText.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerText.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerText.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerText.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerText.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerText.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerText.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerText.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerText.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerSqlite.dll: DLL loads
+[       OK ] Plugins\ViewerSqlite.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerSqlite.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerSqlite.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerSqlite.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerSqlite.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerSqlite.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerSqlite.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerSqlite.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerSqlite.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerSqlite.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerSqlite.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerSqlite.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerSpace.dll: DLL loads
+[       OK ] Plugins\ViewerSpace.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerSpace.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerSpace.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerSpace.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerSpace.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerSpace.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerSpace.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerSpace.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerSpace.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerSpace.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerSpace.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerSpace.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerImgRaw.dll: DLL loads
+[       OK ] Plugins\ViewerImgRaw.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerImgRaw.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerImgRaw.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerImgRaw.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerImgRaw.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerImgRaw.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerImgRaw.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerImgRaw.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerImgRaw.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerImgRaw.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerImgRaw.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerImgRaw.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerVLC.dll: DLL loads
+[       OK ] Plugins\ViewerVLC.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerVLC.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerVLC.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerVLC.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerVLC.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerVLC.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerVLC.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerVLC.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerVLC.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerVLC.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerVLC.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerVLC.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerPE.dll: DLL loads
+[       OK ] Plugins\ViewerPE.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerPE.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerPE.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerPE.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerPE.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerPE.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerPE.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerPE.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerPE.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerPE.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerPE.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerPE.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerWeb.dll: DLL loads
+[       OK ] Plugins\ViewerWeb.dll: RedSalamanderEnumeratePlugins export resolves
+[       OK ] Plugins\ViewerWeb.dll: RedSalamanderCreate export resolves
+[       OK ] Plugins\ViewerWeb.dll: RedSalamanderGetConfigurationSchema export resolves
+[       OK ] Plugins\ViewerWeb.dll: EnumeratePlugins(correct IID) returns S_OK
+[       OK ] Plugins\ViewerWeb.dll: EnumeratePlugins returns count >= 1
+[       OK ] Plugins\ViewerWeb.dll: EnumeratePlugins returns non-null metaData
+[       OK ] Plugins\ViewerWeb.dll: metaData[0].id is non-empty
+[       OK ] Plugins\ViewerWeb.dll: metaData[0].name is non-empty
+[       OK ] Plugins\ViewerWeb.dll: metaData[1].id is non-empty
+[       OK ] Plugins\ViewerWeb.dll: metaData[1].name is non-empty
+[       OK ] Plugins\ViewerWeb.dll: metaData[2].id is non-empty
+[       OK ] Plugins\ViewerWeb.dll: metaData[2].name is non-empty
+[       OK ] Plugins\ViewerWeb.dll: EnumeratePlugins(wrong IID) returns E_NOINTERFACE
+[       OK ] Plugins\ViewerWeb.dll: EnumeratePlugins(wrong IID) returns count == 0
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[0] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[0] JSON parses successfully
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[1] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[1] JSON parses successfully
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[2] returns S_OK or ERROR_NOT_FOUND
+[       OK ] Plugins\ViewerWeb.dll: GetConfigurationSchema[2] JSON parses successfully
+[ RUN      ] Step3: GetCapabilities - filesystem plugins
+[       OK ] Plugins\FileSystem.dll: Create(pluginId=builtin/file-system) returns S_OK
+[       OK ] Plugins\FileSystem.dll: Create(pluginId=builtin/file-system) returns non-null instance
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) returns S_OK
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) returns non-empty JSON
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) JSON parses successfully
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) root is object
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) has "version": 1
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) has "operations" object
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) has "concurrency" object
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) has "crossFileSystem" object
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) has "pathIdentity" object
+[       OK ] Plugins\FileSystem.dll: GetCapabilities(pluginId=builtin/file-system) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystem7z.dll: Create(pluginId=builtin/file-system-7z) returns S_OK
+[       OK ] Plugins\FileSystem7z.dll: Create(pluginId=builtin/file-system-7z) returns non-null instance
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) returns S_OK
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) returns non-empty JSON
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) JSON parses successfully
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) root is object
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) has "version": 1
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) has "operations" object
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) has "concurrency" object
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) has "crossFileSystem" object
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) has "pathIdentity" object
+[       OK ] Plugins\FileSystem7z.dll: GetCapabilities(pluginId=builtin/file-system-7z) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-ftp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-ftp) returns non-null instance
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) returns non-empty JSON
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) root is object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) has "version": 1
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) has "operations" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) has "concurrency" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) has "pathIdentity" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-ftp) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-sftp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-sftp) returns non-null instance
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) returns non-empty JSON
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) root is object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) has "version": 1
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) has "operations" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) has "concurrency" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) has "pathIdentity" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-sftp) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-scp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-scp) returns non-null instance
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) returns non-empty JSON
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) root is object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) has "version": 1
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) has "operations" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) has "concurrency" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) has "pathIdentity" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-scp) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-imap) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: Create(pluginId=builtin/file-system-imap) returns non-null instance
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) returns S_OK
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) returns non-empty JSON
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) JSON parses successfully
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) root is object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) has "version": 1
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) has "operations" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) has "concurrency" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) has "pathIdentity" object
+[       OK ] Plugins\FileSystemCurl.dll: GetCapabilities(pluginId=builtin/file-system-imap) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemDummy.dll: Create(pluginId=builtin/file-system-dummy) returns S_OK
+[       OK ] Plugins\FileSystemDummy.dll: Create(pluginId=builtin/file-system-dummy) returns non-null instance
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) returns S_OK
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) returns non-empty JSON
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) JSON parses successfully
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) root is object
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) has "version": 1
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) has "operations" object
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) has "concurrency" object
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) has "pathIdentity" object
+[       OK ] Plugins\FileSystemDummy.dll: GetCapabilities(pluginId=builtin/file-system-dummy) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemGoogleDrive.dll: Create(pluginId=builtin/file-system-gdrive) returns S_OK
+[       OK ] Plugins\FileSystemGoogleDrive.dll: Create(pluginId=builtin/file-system-gdrive) returns non-null instance
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) returns S_OK
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) returns non-empty JSON
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) JSON parses successfully
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) root is object
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) has "version": 1
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) has "operations" object
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) has "concurrency" object
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) has "pathIdentity" object
+[       OK ] Plugins\FileSystemGoogleDrive.dll: GetCapabilities(pluginId=builtin/file-system-gdrive) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-onedrive-personal) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-onedrive-personal) returns non-null instance
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) returns non-empty JSON
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) root is object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) has "version": 1
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) has "operations" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) has "concurrency" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) has "pathIdentity" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-personal) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-onedrive-business) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-onedrive-business) returns non-null instance
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) returns non-empty JSON
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) root is object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) has "version": 1
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) has "operations" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) has "concurrency" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) has "pathIdentity" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-onedrive-business) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-sharepoint) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: Create(pluginId=builtin/file-system-sharepoint) returns non-null instance
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) returns S_OK
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) returns non-empty JSON
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) JSON parses successfully
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) root is object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) has "version": 1
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) has "operations" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) has "concurrency" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) has "pathIdentity" object
+[       OK ] Plugins\FileSystemMicrosoftDrive.dll: GetCapabilities(pluginId=builtin/file-system-sharepoint) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemS3.dll: Create(pluginId=builtin/file-system-s3) returns S_OK
+[       OK ] Plugins\FileSystemS3.dll: Create(pluginId=builtin/file-system-s3) returns non-null instance
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) returns S_OK
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) returns non-empty JSON
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) JSON parses successfully
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) root is object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) has "version": 1
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) has "operations" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) has "concurrency" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) has "pathIdentity" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3) pathIdentity parses under the host contract
+[       OK ] Plugins\FileSystemS3.dll: Create(pluginId=builtin/file-system-s3table) returns S_OK
+[       OK ] Plugins\FileSystemS3.dll: Create(pluginId=builtin/file-system-s3table) returns non-null instance
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) returns S_OK
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) returns non-empty JSON
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) JSON parses successfully
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) root is object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) has "version": 1
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) has "operations" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) has "concurrency" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) has "crossFileSystem" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) has "pathIdentity" object
+[       OK ] Plugins\FileSystemS3.dll: GetCapabilities(pluginId=builtin/file-system-s3table) pathIdentity parses under the host contract
+[ RUN      ] Step4: Negative bogus plugin id
+[       OK ] FileSystemDummy.dll: loads for negative-id test
+[       OK ] FileSystemDummy.dll: RedSalamanderCreate resolves for negative-id test
+[       OK ] FileSystemDummy.dll: Create(bogus-id) returns HRESULT_FROM_WIN32(ERROR_NOT_FOUND)
+[       OK ] FileSystemDummy.dll: Create(bogus-id) returns null result pointer
+[ RUN      ] Step5: Optional plugin debug selftests
+[       OK ] FileSystem.dll: loads for debug selftests
+[       OK ] FileSystem.dll: debug selftests pass (passed=39, failed=0, hr=0x00000000)
+[       OK ] FileSystemMicrosoftDrive.dll: loads for debug selftests
+[       OK ] FileSystemMicrosoftDrive.dll: debug selftests pass (passed=55, failed=0, hr=0x00000000)
+[       OK ] FileSystemS3.dll: loads for debug selftests
+[       OK ] FileSystemS3.dll: debug selftests pass (passed=115, failed=0, hr=0x00000000)
+[       OK ] FileSystemCurl.dll: loads for debug selftests
+[       OK ] FileSystemCurl.dll: debug selftests pass (passed=68, failed=0, hr=0x00000000)
+PluginContractTests passed.

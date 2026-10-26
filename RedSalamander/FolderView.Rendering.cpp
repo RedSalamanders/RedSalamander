@@ -6,7 +6,7 @@
 #include <DxUi/FrameRuntime.h>
 #include <DxUi/Typography.h>
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
 #endif
 
 #include <cmath>
@@ -2004,6 +2004,12 @@ void FolderView::Render(const RECT& invalidRect)
         folderPresentUs        = frameClock.ElapsedUs(folderPresentStartedAt, frameClock.Now());
         folderPresentAttempted = true;
         folderFrameHr          = hrPresent;
+#ifdef ENABLE_TESTS
+        if (hrPresent == S_OK)
+        {
+            ++_debugSuccessfulPresentCount;
+        }
+#endif
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
         if (FAILED(hrPresent))
         {
@@ -2044,6 +2050,12 @@ void FolderView::Render(const RECT& invalidRect)
         folderPresentUs        = frameClock.ElapsedUs(folderPresentStartedAt, frameClock.Now());
         folderPresentAttempted = true;
         folderFrameHr          = hrPresent;
+#ifdef ENABLE_TESTS
+        if (hrPresent == S_OK)
+        {
+            ++_debugSuccessfulPresentCount;
+        }
+#endif
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
         if (FAILED(hrPresent))
         {

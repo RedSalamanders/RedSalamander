@@ -1,0 +1,2 @@
+# Preserve exact output logs, focused records and capture provenance bytes bound by manifest.txt.
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

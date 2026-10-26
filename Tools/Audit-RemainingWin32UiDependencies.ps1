@@ -105,7 +105,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'HDC text/selection bridge'
-        Path          = 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         LinePattern   = 'GetDC\(hwnd\)'
         Visibility    = 'test-only'
         Owner         = 'Commands self-tests'
@@ -114,7 +114,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'GDI font creation'
-        Path          = 'Tests\TestSupport\DirectedSelfTestInputWarning.h'
+        Path          = 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
         LinePattern   = 'CreateFontW\('
         Visibility    = 'test-only operator warning'
         Owner         = 'Shared foreground-input selftests'
@@ -123,7 +123,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'Native font message'
-        Path          = 'Tests\TestSupport\DirectedSelfTestInputWarning.h'
+        Path          = 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
         LinePattern   = 'WM_SETFONT'
         Visibility    = 'test-only operator warning'
         Owner         = 'Shared foreground-input selftests'
@@ -150,7 +150,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'Native visible control creation'
-        Path          = 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
         LinePattern   = 'host-service-stale-target'
         Visibility    = 'test-only destroyed target'
         Owner         = 'Commands host-services self-tests'
@@ -159,7 +159,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'Native visible control creation'
-        Path          = 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         LinePattern   = 'CreateWindowExW\(0, L"STATIC", L"", WS_(POPUP|CHILD)'
         Visibility    = 'test-only hidden queue probe'
         Owner         = 'Find dialog command self-tests'
@@ -168,7 +168,7 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'HFONT handle'
-        Path          = 'Tests\ViewerPETests\ViewerPETests.cpp'
+        Path          = 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
         LinePattern   = 'legacyVisibleHfontSurfaceCount|HFONT text surfaces'
         Visibility    = 'test-only assertion text'
         Owner         = 'ViewerPETests'

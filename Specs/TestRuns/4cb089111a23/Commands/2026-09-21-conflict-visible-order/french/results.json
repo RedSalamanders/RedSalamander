@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-09-21T16:44:49.626Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260921T164423Z-84648-756f6c5e580740c3ac86da78c372adfe\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 7384,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 6782,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

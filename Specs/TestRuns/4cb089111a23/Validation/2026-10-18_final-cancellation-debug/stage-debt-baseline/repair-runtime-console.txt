@@ -1,0 +1,92 @@
+AFFECTED FileOps FileOps_SmbManagedMoveLeavesNoStage 20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49
+Stale TestSandbox run cleanup: 1 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+Skipping build (verified receipt abe7c168d6a55ecf0c29a60747ba6f99138eb2d4fc7ee6e17bdc03793e0f2b97).
+Validation plan: f73621b0cf1fc3c694aba1b584ffa378bdb5fdcafe6b04d283413060999b26cc
+Entry fingerprints: 34a677b98cd7de751e7d7d8f2d2bc3ace945cf0d2ac1c0dd43c4721693d4c0c9 (104 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOps_SmbManagedMoveLeavesNoStage --selftest-repeat=3
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL] 
+FileOperations
+  (3m 47,9s)
+         Passed: 6
+  Failed: 3
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 9
+  Passed: 6
+  Failed: 3
+  Skipped: 0
+  Wall time: 4m 7,9s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=1
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- FAILURE DETAILS (3 failing cases) ---
+
+  FAIL 
+[FileOperations] 
+FileOps_SmbManagedMoveLeavesNoStage
+       Reason: 
+A Move to the share cancelled in one of its phases left a stage or a partial file: finalizing-3-fresh: unexplained retained stage without completed-card Unknown debt: \\rubygloom\RedSalamander-SelfTest\selftest\managed-move-78524-228563484\finalizing-3-fresh\payload\nested\deeper.rs_tmp_0B0A1DB876028DDC3F765F037169742C_0 (publication=3 stage=4).
+       Duration: 1m 25,6s
+
+  FAIL 
+[FileOperations] 
+FileOps_SmbManagedMoveLeavesNoStage
+       Reason: 
+A Move to the share cancelled in one of its phases left a stage or a partial file: finalizing-1-fresh: unexplained retained stage without completed-card Unknown debt: \\rubygloom\RedSalamander-SelfTest\selftest\managed-move-78524-228649468\finalizing-1-fresh\payload\nested.rs_tmp_8801EBB937DCC82E2A5516A7C82523F7_0 (publication=3 stage=3).
+       Duration: 49,7s
+
+  FAIL 
+[FileOperations] 
+FileOps_SmbManagedMoveLeavesNoStage
+       Reason: 
+A Move to the share cancelled in one of its phases left a stage or a partial file: finalizing-3-fresh: unexplained retained stage without completed-card Unknown debt: \\rubygloom\RedSalamander-SelfTest\selftest\managed-move-78524-228699218\finalizing-3-fresh\payload\nested\deeper.rs_tmp_6C70680565670B2473364771619BB20F_0 (publication=3 stage=4).
+       Duration: 1m 29,8s
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49
+  Disk audit issues: 41
+  Last run: Z:\RedSalamander.Perf\runs\20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: Z:\RedSalamander.Perf\runs\20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+
+{"commit":"a4b506d53b92d716a923199ba436463f95a6e375","source_snapshot_id":"60fbb93dbe7a3cf5cc87c56af0b6210211729eb929a19b5de39cf88c8efeee21","receipt_id":"abe7c168d6a55ecf0c29a60747ba6f99138eb2d4fc7ee6e17bdc03793e0f2b97","configuration":"Debug","platform":"x64","suite":"FileOps","repeat_count":3,"filter":"FileOps_SmbManagedMoveLeavesNoStage","run_id":"20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49","exit_code":1,"passed":6,"failed":3,"skipped":0,"raw_archive":"Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\20261018T213633Z-54416-63f3a81c5cac4fb8b496ad0c98fbda49"}

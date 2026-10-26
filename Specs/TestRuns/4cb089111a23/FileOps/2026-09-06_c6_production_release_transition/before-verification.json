@@ -1,0 +1,8 @@
+{
+  "start_head": "0ffe4e18419ad10a8db43c58afa626760b5e0852",
+  "receipt_id": "a6fece6675db82bf539822d2caf671a416ad4918b27e0c406522c637dff2576d",
+  "tests_enabled": true,
+  "artifacts_verified": 177,
+  "source_snapshot_id": "3754f54aea44516549094354eff5053a2588e68eb2fc6d939f6fec34518b7335",
+  "snapshot_note": "Prior committed runtime baseline; diagnostic-only commit follows it."
+}

@@ -1,0 +1,118 @@
+{
+  "formatter": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/Llvm/x64/bin/clang-format.exe",
+  "files": [
+    {
+      "file": "Plugins/ViewerText/ViewerText.cpp",
+      "changedLines": [
+        4195,
+        5788,
+        5981,
+        6013,
+        7148,
+        7614,
+        7653,
+        8892
+      ],
+      "scopedExitCode": 0,
+      "baselineWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "candidateWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "baselineSha256": "851c8bd5f32bb6d937117caee7e05a3d61cc1f74db7074a4fb1d0d1829d05cba",
+      "candidateSha256": "fca8d33ffc1914545fe8ead1e651e246a697ddd80c7f234e1a364e4eb27100a2"
+    },
+    {
+      "file": "Plugins/ViewerText/ViewerText.h",
+      "changedLines": [
+        322,
+        890
+      ],
+      "scopedExitCode": 0,
+      "baselineWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "candidateWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "baselineSha256": "ac968fee15bac67694b23e2ae650b6bfa0407f1e923f4c6ca3d8a56fb92e21e8",
+      "candidateSha256": "9cfebf5818a36ff21448f8959cc20175c562fb4106116f59488cdcc829ee4267"
+    },
+    {
+      "file": "Plugins/ViewerText/ViewerText.Text.cpp",
+      "changedLines": [
+        849,
+        856,
+        1221,
+        1335,
+        1426,
+        1693,
+        1790,
+        2141,
+        4662,
+        4671,
+        4683,
+        4723,
+        4741,
+        4901,
+        4909,
+        4927,
+        4938,
+        4971,
+        4984,
+        4991
+      ],
+      "scopedExitCode": 0,
+      "baselineWholeFile": {
+        "exitCode": 1,
+        "violations": 468
+      },
+      "candidateWholeFile": {
+        "exitCode": 1,
+        "violations": 468
+      },
+      "baselineSha256": "b6026788bf42d72fdaf0c84453cae4c421597a60bb35d974c4f428cf4bf4c674",
+      "candidateSha256": "16de40f3e345c7750b77ffd03a7037f6030451191467523577fb008653ff8262"
+    },
+    {
+      "file": "Plugins/ViewerText/ViewerText.Hex.cpp",
+      "changedLines": [
+        573,
+        1124
+      ],
+      "scopedExitCode": 0,
+      "baselineWholeFile": {
+        "exitCode": 1,
+        "violations": 21
+      },
+      "candidateWholeFile": {
+        "exitCode": 1,
+        "violations": 21
+      },
+      "baselineSha256": "411f20a36b85818f93e0f57a9c97bb97bd7025b0e91025565f65728c8192c768",
+      "candidateSha256": "4bf2f0c6ada90f6073d7db970e8a3b192713cc183033a078a399f9949c24a7ce"
+    },
+    {
+      "file": "RedSalamander/FolderWindow.FileSystem.Commands.cpp",
+      "changedLines": [
+        11281
+      ],
+      "scopedExitCode": 0,
+      "baselineWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "candidateWholeFile": {
+        "exitCode": 0,
+        "violations": 0
+      },
+      "baselineSha256": "c0c7a691568fe4abba1b2fe9aa6564d7b0ddeebe6ac059cbdd7b61f838a1402d",
+      "candidateSha256": "71a89ae617d37786c15b67bf6d4c1dd9a8a88a856555aa86bbe65176225c472f"
+    }
+  ]
+}

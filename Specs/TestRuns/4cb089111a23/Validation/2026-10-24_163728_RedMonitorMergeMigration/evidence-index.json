@@ -1,0 +1,61 @@
+{
+  "scope": "paired x64 Debug component evidence",
+  "fixtureBlob": "a96d83fecca970a557db0d24f91fcea4620906a8",
+  "repositoryQualification": false,
+  "artifacts": [
+    {
+      "kind": "byte-preserved-case-payload",
+      "runId": "20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230",
+      "head": "b1264efba9bf31998d0384f8e8b5fc6c4c8e8216",
+      "file": "baseline-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "bytes": 787,
+      "sha256": "52842590385aaaee36e24a513a1305ef94f4facca9282f22aaa373236bb3a0ae"
+    },
+    {
+      "kind": "byte-preserved-case-payload",
+      "runId": "20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230",
+      "head": "b1264efba9bf31998d0384f8e8b5fc6c4c8e8216",
+      "file": "baseline-trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+      "bytes": 2240,
+      "sha256": "7889f2f2e6868e449f3b24c2426af9dcd820535f6c307b3b3ea9d8dd8fac3bb1"
+    },
+    {
+      "kind": "external-raw-metrics",
+      "runId": "20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230",
+      "head": "b1264efba9bf31998d0384f8e8b5fc6c4c8e8216",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T162715Z-98188-c4ad6348d6384111a7557e3d018d3230\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "bytes": 5933983,
+      "rows": 16552,
+      "sha256": "cfbb2e74c9bb1d2c5eefde2d34ecbab3a000af7b989286f0bda069bca4429b73"
+    },
+    {
+      "kind": "byte-preserved-case-payload",
+      "runId": "20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755",
+      "head": "20c564af6ee26bcd226758f6cbc183b7d0b04c5d",
+      "file": "candidate-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "bytes": 597,
+      "sha256": "de5725deabf21aa32e9662e9e48613ea48ff3859ced65653d33a86ae09e21758"
+    },
+    {
+      "kind": "byte-preserved-case-payload",
+      "runId": "20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755",
+      "head": "20c564af6ee26bcd226758f6cbc183b7d0b04c5d",
+      "file": "candidate-trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+      "bytes": 1794,
+      "sha256": "1742e80f9dc885ca03f096c11b556776bc1313cbc587037eee2344deca0f886e"
+    },
+    {
+      "kind": "external-raw-metrics",
+      "runId": "20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755",
+      "head": "20c564af6ee26bcd226758f6cbc183b7d0b04c5d",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261024T163728Z-24504-051f94a8ab7946608e5eb1d7f417f755\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "bytes": 20963,
+      "rows": 58,
+      "sha256": "9de28f8e4982e5d385399bfaa8ad1be39e9a2a89568e01a2fb683ea085044bc5"
+    }
+  ]
+}

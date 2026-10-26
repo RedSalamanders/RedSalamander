@@ -1,0 +1,5 @@
+{
+  "tested_source_sha256": "e363e5f36d29313739a85cf06195cb2ce5133e72d7d4ed191eceab9d2ed54e0f",
+  "final_source_sha256": "0018771e140a1d9d8973e14ef17c622d1054e51c6aa8e49dab329f7f3ddb4167",
+  "change": "Explicit double braces for std::array initializer remove C5246. Production popup source/header unchanged. The subsequent resource-only run validates the warning-free build; it does not rerun French assertions."
+}

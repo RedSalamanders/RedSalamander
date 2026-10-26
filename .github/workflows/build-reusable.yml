@@ -57,6 +57,12 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed\${{ inputs.platform == 'ARM64' && 'arm64' || 'x64' }}
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
+      # A test-enabled (ENABLE_TESTS) build is never distributable; build.ps1 refuses it too.
+      - name: Refuse a test-enabled official release
+        if: ${{ inputs.official_release && (inputs.run_full_tests || inputs.configuration != 'Release') }}
+        shell: pwsh
+        run: throw 'official_release requires configuration Release and run_full_tests=false so the build uses RSBuildEnableTests=false.'
+
       - name: Enable long Windows checkout paths
         shell: pwsh
         run: git config --global core.longpaths true
@@ -68,6 +74,10 @@ jobs:
 
       # ── Setup toolchain ──────────────────────────────────────────────
 
+      - name: Prepare required MSVC 14.52 tools
+        uses: ./.github/actions/setup-msvc
+        with:
+          platform: ${{ inputs.platform }}
       - name: Install VS 2026 Build Tools + VC++ workload
         if: ${{ inputs.native_runner == 'windows-latest' }}
         shell: pwsh
@@ -349,6 +359,20 @@ jobs:
             throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."
           }
 
+          # The two pins diverge, so the ports and version database come from a registry checkout of the baseline,
+          # passed to vcpkg install through --vcpkg-root (Build_Toolchain.md): the tool commit's own version database
+          # lacks entries the manifest requires, and vcpkg then fails with "no version database entry".
+          $registryRoot = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-registry'
+          if (Test-Path -LiteralPath $registryRoot) { Remove-Item -LiteralPath $registryRoot -Recurse -Force }
+          git worktree prune
+          git worktree add --detach $registryRoot $baseline
+          if ($LASTEXITCODE -ne 0) { throw "Unable to materialize pinned vcpkg ports baseline '$baseline'." }
+          $actualBaseline = (git -C $registryRoot rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actualBaseline -ne $baseline) {
+            throw "vcpkg ports identity mismatch: expected '$baseline', found '$actualBaseline'."
+          }
+          "VCPKG_REGISTRY_ROOT=$registryRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
           Pop-Location
 
           & $bootstrap
@@ -357,7 +381,11 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
+          # The executable stays at vcpkg-tool.json's commit; the baseline's registry checkout supplies ports and versions.
+          # Downloads stay beneath the tool checkout, where the vcpkg cache keeps them.
+          $downloadsRoot = Join-Path $env:VCPKG_ROOT 'downloads'
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "--vcpkg-root=$env:VCPKG_REGISTRY_ROOT" "--downloads-root=$downloadsRoot" --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed with exit code $LASTEXITCODE." }
 
       - name: Normalize vcpkg install root
         shell: pwsh
@@ -486,7 +514,8 @@ jobs:
           & $buildScript @buildArgs
           if ($LASTEXITCODE -ne 0) { throw "Solution build failed with exit code $LASTEXITCODE." }
           $pin = Get-Content Dependencies/DxUi.lock.json -Raw | ConvertFrom-Json
-          python ".build/dependencies/DxUi/source/$($pin.commit)/Tools/validate_build_matrix.py" --root .
+          # DxUi API revision 3 replaced its Python build-matrix validator with this script of its consumer interface.
+          & pwsh -NoProfile -NonInteractive -File ".build/dependencies/DxUi/source/$($pin.commit)/validate-build-matrix.ps1" -Root .
           if ($LASTEXITCODE -ne 0) { throw 'First-party six-profile matrix validation failed.' }
 
       - name: Save pinned Terminal runtime cache
@@ -595,18 +624,21 @@ jobs:
 
       - name: Upload native qualification evidence
         if: ${{ always() && inputs.run_full_tests && steps.test_root.outputs.path != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-validation-${{ inputs.platform }}-${{ inputs.configuration }}
+          include-hidden-files: true
           path: |
             ${{ steps.test_root.outputs.path }}/evidence/
             ${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/
             !${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/**/work/**
+            !${{ steps.test_root.outputs.path }}/evidence/completed-runs/*/scratch/**
+            !${{ steps.test_root.outputs.path }}/evidence/completed-runs/*/artifacts/selftest/**/work/**
           retention-days: 14
 
       - name: Upload native build diagnostics
         if: ${{ always() && inputs.run_full_tests }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-build-${{ inputs.platform }}-${{ inputs.configuration }}
           include-hidden-files: true
@@ -618,7 +650,7 @@ jobs:
 
       - name: Upload build output
         if: ${{ inputs.upload_build_output }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-output-${{ inputs.platform }}
           path: ${{ steps.portable_attestation.outputs.payload_path }}/

@@ -1,0 +1,8 @@
+{
+  "case": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+  "metrics": {
+    "paneViewOptions.previewToggleUs": 88784,
+    "paneViewOptions.previewSwitchTabUs": 26001,
+    "preview.bytes": 0
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "machineHash": "4cb089111a23",
+  "configuration": "x64 Debug",
+  "scenario": "viewersqlite-fs22-snapshot-bounds",
+  "runId": "2026-07-11_viewersqlite_fs22",
+  "tests": [
+    "TestSnapshotConnectionBoundsCancellationAndSanitization",
+    "TestLocalWalSnapshotVirtualLimitsAndStaleScavenging"
+  ],
+  "assertionsPassed": 52,
+  "assertionsFailed": 0,
+  "metrics": {
+    "viewer.sqlite.snapshot_us": {
+      "count": 10,
+      "minimumUs": 147,
+      "maximumUs": 11180
+    },
+    "viewer.sqlite.page_us": {
+      "count": 9,
+      "minimumUs": 98,
+      "maximumUs": 1689
+    }
+  },
+  "buildEvidence": [
+    ".build/logs/msbuild-20260711_171554_837.log",
+    ".build/logs/msbuild-20260711_173834_962.log"
+  ]
+}

@@ -1,0 +1,1229 @@
+{
+  "reviewer": "root",
+  "status": "PRESERVED_REJECTED_CURATION",
+  "campaignId": "20261009T224729245Z-4221bb43",
+  "reason": "The v1 raw byte shards were named complete JSONL files; v2 corrected naming and replay maps without altering benchmark sources.",
+  "folders": [
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-overview",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-overview",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "analysis.json",
+          "bytes": 139280,
+          "sha256": "bbafe3e7cc37f82408fd9e1b767673c2c37541eb90ab4875825101c4036fb7be"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 18834,
+          "sha256": "da1fde0f961460f42eb56658dd9858e6ce5c614009724a2c74cf62b3537b5832"
+        },
+        {
+          "path": "campaign-manifest.json",
+          "bytes": 59142,
+          "sha256": "5e16e6a0e8ca43d226e516cfa4df4c8a636e2b52b3465173e6d0cbc68adb5eba"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3042,
+          "sha256": "bf91d3ebf3cb7d60d5dbf3fe6c0efeeca0b1d11b9238e2bea854c4ecf94e7256"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3042,
+          "sha256": "bf91d3ebf3cb7d60d5dbf3fe6c0efeeca0b1d11b9238e2bea854c4ecf94e7256"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2536,
+          "sha256": "bd32784df47b4d610c69351baecca0626d3c2b8b746e4400fad32817fc90aced"
+        },
+        {
+          "path": "reproduction\\analyze-viewer-space-ordinary-current-qualification.py",
+          "bytes": 50152,
+          "sha256": "4f5ee4782da9913cbd69b95dd40c1a1523e4f4ab95a0587f0e04436037721abd"
+        },
+        {
+          "path": "reproduction\\curate-viewer-space-ordinary-current-evidence.py",
+          "bytes": 12110,
+          "sha256": "c3c82d1baba3e776bce773b8ad7167a2b21623ca4159dd70de15f94cbce02d70"
+        },
+        {
+          "path": "reproduction\\run-viewer-space-ordinary-current-qualification.ps1",
+          "bytes": 29352,
+          "sha256": "4c561a8b03d3955617c9b8049f9a41494c0051feabde14b44cbccda47f049356"
+        },
+        {
+          "path": "build-inputs\\dxui\\baseline.DxUi.json",
+          "bytes": 1595,
+          "sha256": "c64aed13a0fab167c849b3970fd8511f57b5fccd88da29fbdfc22f7316d9e3cc"
+        },
+        {
+          "path": "build-inputs\\dxui\\candidate.DxUi.json",
+          "bytes": 1595,
+          "sha256": "7254e921ea8d1084fe5018ef1704e179dda298fd85c0be0f7cd401e512f852e2"
+        },
+        {
+          "path": "build-inputs\\candidate\\build-receipt.json",
+          "bytes": 96947,
+          "sha256": "d20692190256c647089fab52005638563b019d59ece317bb14f9ed2ded3a0cc6"
+        },
+        {
+          "path": "build-inputs\\candidate\\msbuild.log",
+          "bytes": 42095,
+          "sha256": "c1beccada832c6f251be4916eb603923e0fc8a7c95728f00e19c97c250c17572"
+        },
+        {
+          "path": "build-inputs\\baseline\\build-receipt.json",
+          "bytes": 95417,
+          "sha256": "a66f8102fe37d5c7ff56dac4fc764a2ce23aeb9f778fa274a877af9eb3cd1423"
+        },
+        {
+          "path": "build-inputs\\baseline\\msbuild.log",
+          "bytes": 37000,
+          "sha256": "aeb94db5578c840a4061518ffd39eeae52f43a1d0ed5c8a3d834522cb44cb0eb"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-warmup-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-warmup-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3049,
+          "sha256": "002e5414de67f7458884686112a044ec98e5d045abe07e50b8b35e82986da420"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2960,
+          "sha256": "56f66a335667430163d76ea11b71bc5cbd4ce44382542ea96d472e8aa7e0ee96"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3148,
+          "sha256": "33e596c852de977cea5b3e35820b59d7e3c3635ea4c48e11f920e945ef2777b9"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3148,
+          "sha256": "33e596c852de977cea5b3e35820b59d7e3c3635ea4c48e11f920e945ef2777b9"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3388,
+          "sha256": "8f177f5ff407de390886cb9b864dcbceafb5fa5df8ac9cfdb6e00e1ab93afb5b"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "90c1e72c3cedcd95d33137ce526248f76a3d5f9b2a9c889f6a4ce18214968d8f"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "65bc03c53cb48215864ae4fa9de57f5e8a2a7d1f2b90aa7eb7bc52a25dc6c4f3"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "98a470fdd4fb8ac4c548c9ba63be34624f08e99b15196caaec5274be0ce792d7"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1934,
+          "sha256": "5107f5776ed3035cd87dfd46c1255eca53d7e0fb97d298fea00499af31752e35"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1929,
+          "sha256": "d7ad05130b77ecba7eb76692713b20926048e412b485d06829203830a896e696"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 351044,
+          "sha256": "dac2f1eaa9cb1c7029ec066e16d4e08cbe567a963d425b08f8cdda53934fe5b3"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "f9d1ec94952d48a50093b0e9cd217f6765656bbfbd9d46250ab2c1f2d6797860"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "9f69f9d38a884fcd03b5df698c78dad3c93f3430b762885a0b61dfbe0629a6d2"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "a31d671fc626b2ed7fb35e5970a1f7bde667520b65cdda42fa59ab1b86059e1e"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-warmup-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-warmup-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3054,
+          "sha256": "7fc9abae854fe565eaf18c216646336dd310eb3486061cdbe8696913e481b82b"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2974,
+          "sha256": "3e95f72d84420192566ba89e4664dc26dec4d1263a4f68fcfd07045202be727f"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3162,
+          "sha256": "22b30bbb94d5cd0144bb1c3e1d33b153489a5864ff3f4f956820829ce5e0a57c"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3162,
+          "sha256": "22b30bbb94d5cd0144bb1c3e1d33b153489a5864ff3f4f956820829ce5e0a57c"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3411,
+          "sha256": "cbf2c384a484918d10025c81c8cf68c53cb4c90129e8c43aa31966ea372ce412"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "7d2a475cee1b6186b3742561fa260a0f0113bb5ca274f3a35c4ee0d824a0018c"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3277,
+          "sha256": "f30f30fe749d8ad92bbe54cef324c9ac9a0b8a9e1c89717f29c0dfcacc87a70a"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "73cef35efb0809b99a70aa6e2940e23a36d5df7f23852afebd750825351852e3"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2127,
+          "sha256": "b581e64b1a0d3ec9129da13eaddbc0593f970bb11f69864ec6a7b4764b1c24b0"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "32b1c59ecdb5e59475833cf460901dbd97632e8422284d93b52636606a78533d"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 156072,
+          "sha256": "645e852e119e41353b10bbec2fd72fd9f4d8ab0b6e2a3ba7deb47320194a35e1"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "63e9bdbf9aa7e8cd5b73084a9465f436651f7ed31977e73679e4fe28a972aa2d"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "0f857742a09e264cdbead79cfe8564422bfaf4e3aea2c18a52de10d2192494f5"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "823c82ee9bfa3717e01b43a7aa13babb3d6d41728685ce9ff92e021525e83536"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b01-p01-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b01-p01-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3035,
+          "sha256": "e1948d26fc9b50b3f99b2eedcec9cc7e17f3c196132f47f74b291b114545a62c"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "8d0c9f35149eac9146ac2bfb4250871189b94bc19955e1c06167b64845b44ae9"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "79e7aa9399590309047857943cbc48538b82bb7a33f88ad18b40d27bcadd86b4"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "79e7aa9399590309047857943cbc48538b82bb7a33f88ad18b40d27bcadd86b4"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "6cf02f660ac3613bbd41d0ea110089de0b8a720861f83641837b5a0a7523df5b"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "e28a01b6b561bcd62d845f40ea4b9e89fcc17e263772a622a5710880b55f35db"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "b3c5bef377003158d2c8c83243d2d16a8c5ec1a14a96b880f2466602bfac166f"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "015e899b72783767c86c8e22178355a2f35a7ee94d0ad584cde70e53c27377ce"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1933,
+          "sha256": "fe19b90a6173e57fea2a7f0535e30968153ce23e5beb8fb9ca47952218fd55d0"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1929,
+          "sha256": "94edd4b8c16c50ec85f92f37bf6da91ae4582bbb2357fd2c0baa646958a624d5"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 351184,
+          "sha256": "08ea929a7c2987a0d80e670eca8355c5f9d18c4898e8e11ad66078dea5a7bb1b"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "47027f5b3ce305f4affb68b9e8352807d1e4f3ddd3327a7a9bc38e67582efbd6"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "26b6227990301e7fe9cccade6a86cba8eea524016687df74abfa148454d19f8a"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "87c05202fe8b650a781d4f3a3cebfe9145f349d7d82df7fa548c9e37a1a8331f"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b01-p02-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b01-p02-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3037,
+          "sha256": "661db105638015c24cd98610217d270d94484cd186e13d8a0a8c227ff91d317f"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2893,
+          "sha256": "2c7e5e2a4d91ba774db4ad3f4e5371e54eaeb8d7e68d53c602e13654b1e7b11d"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3082,
+          "sha256": "aa1b00de29fae4f16bc445ade5f013ca92f24e3de0aa8e2e463a3734a343d484"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3082,
+          "sha256": "aa1b00de29fae4f16bc445ade5f013ca92f24e3de0aa8e2e463a3734a343d484"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3332,
+          "sha256": "ec318ee949a2841d80d62981ec7939602c01686b3189dcb684fdf45b61f846bb"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "d6e94e5d6237953d5001467e525030b8ae2843dc7ae6c4be81148099f6422693"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3273,
+          "sha256": "3be2006a33083f99ab869f19163a7c4a852b7d941f69167545bf577ea5fefe44"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "c05e3c79e435c2048c4e54513878da2ae083a6da7191d56edb960c050f622c03"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2127,
+          "sha256": "60f8db34aa701724e0bb3d9bcc651aa44a18c4b41454d12bb94be19770e234d3"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "d31c9b5d345b51860647a9b512f6b1d29c499bae6d72294f5d9d7aac1ba754c2"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 160691,
+          "sha256": "0aceddd3a6871539976a960cff9e9ef9f6282d83bc2d46f1911ed6becc836e2f"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "231e6162ed59459d619cda1eec2aa40f9fffc03f547bb1ca3a9f056239b40927"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 882,
+          "sha256": "8a5abb2ee7402b25b9f569ee029c534d1686b5c9621b4548c479685934e1e467"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 745,
+          "sha256": "66debef24a9f5ff2037f59b4f908b8fbcf8986de16b66d61f31e73bae73f1905"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b01-p03-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b01-p03-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3038,
+          "sha256": "c7e238cd59074975afb8fbeab7d6b246dee671ad4d314e1db40b46f5d7ee4e80"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2897,
+          "sha256": "904ab5966be8f6d6323a857fb22d2c9f5a3929287085ab4642a819321f81f6b9"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3085,
+          "sha256": "638390d0a59e1103cbe78b4e31ad50d026df21cb764a5365d3e892d3c826cf22"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3085,
+          "sha256": "638390d0a59e1103cbe78b4e31ad50d026df21cb764a5365d3e892d3c826cf22"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3334,
+          "sha256": "abe091a40e3152df492ec7cc0182944fb02e183053e0c53e044110f762f75688"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "93b3e094fddaffbf5226ede87f6d3c3657ce58c7e9a51efa6d81d0348b45c992"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3277,
+          "sha256": "e37da3a76e95c5df5672229d8bc13e6cf2357c52bcddfb573a5af6aeb380c293"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "7d429e2c3e1f7ecd40a528d761f577557da6bba94a2e3f452764018e2b98e46d"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2128,
+          "sha256": "10bfe033e00cfa7561105afe8d1e31b50e580c899bbbf7f05b88c9e0ba954535"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2129,
+          "sha256": "0e5259fe4a67e1f1161a754ffed19cc470552c81d36197d978abac0c645a1983"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 153975,
+          "sha256": "db162c50b04014ab926f9d95f032c1fb4a3880dfb2b4789e7398e69efd5c977a"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "82473e5dd1f9ca1decfb464d3126684c60fb58833293fc56c5ce18832a5abca2"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "9d9f92a5265489d7e111c689feaff35478c516bca8dcd74290dd0397deca8a84"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "eebbe29b3b27e7bb3825c6b7b903604e5f07e0d5f4305cb6ceb1650659011fd1"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b01-p04-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b01-p04-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3035,
+          "sha256": "827d3f8738c6764e991d0bcaa3f432117ef452b76abcf351348b77c4af60a340"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "7153e23e57b138b314008a8e8b2cdf4621299252055c0928a008dfaec025cf83"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "910afec02bb5ed064adc00cbf35e962b60811fe9d0378c0c71a072d4cfdcac7d"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "910afec02bb5ed064adc00cbf35e962b60811fe9d0378c0c71a072d4cfdcac7d"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "a84362728eadd0afaee67c3905922d9f30cccb3f5f3b94438590d23866fccc9f"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "7948cc619e2dbf2e74f4010c5fd1229559a1a79f22a2e55e232ce2de2201c037"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "7aecc857689403be39d750da0f5c884e969a68639321022b618466dfe7041ea9"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "8dd81dc5d036dd40c4b26aedf84a585a60d386d4e9f1545e2f76de385a952560"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1932,
+          "sha256": "ff40c9053a97fcb5bc9f8f36b1d909fa23ef883c6f6139918f7c9d3cd038af0b"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1929,
+          "sha256": "db8735434ddd7e10ee9679c0b3017aa25fa1f44e317a29165ca6dfa46609a9b0"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 246516,
+          "sha256": "f7e9c5fd91d45d5af1aa33e6ecdcfcfb95186b51c6c1906f0c7da20704e96a37"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "2ac44667c4887d6387675605e4c543d12d3f3727dd06a6fe8ec10c6bb9f3fe02"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "362249036b3f96c3f364ae4beb1597228d3a55e571d95108dbdd445962192c2f"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "395df4e8aac5181ba67707c96aa2191ba7a53cd35ec2a9b16ff13291584eb7d3"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b02-p01-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b02-p01-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3035,
+          "sha256": "8cd92af4413236435bb833ff9b342100015b57919acdd93e9b97d50f256c8cda"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "f51b31f066670c692f00eebd82623fdbd7e4a6264729e5fc90363148665d3f28"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "411dd33892b9090d08634126e29bf3d9000f3eeb9a872f505a79a8e7c7d4c24e"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "411dd33892b9090d08634126e29bf3d9000f3eeb9a872f505a79a8e7c7d4c24e"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "ffc32eb4ca113ef160b93ef5b86dabfef70330dace3e43daaff0a187f540e91d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "211f07be31fddbe79ae125f0e6b2ed024798b8dfc7749dfc13dfce517bea2df0"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "7f2e6bd2858c99163214cf23db8ead2d1e14ad820fa4d5657f92b6110aa4eb77"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "703ff1b8dc709e43f56ab7fe4d6aa37af559e1596a553756ec32a28be1354cbb"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1933,
+          "sha256": "1d1898fb96075e79e5f90d01e11408ba994efe9fe47e158f23a35794b708de78"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1929,
+          "sha256": "ab5f667215627de03b5b18eca09a5e535a5fe0b1f165ecf0e594aed9ec73ffa7"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 364772,
+          "sha256": "90f87690a46499bdd2b8e5ece4bb1d6345e1d7feb4bc662f325f813c32fce4b0"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "5445251f37057ca02d9f65a09f41fd707a35fedf1a4e704899f501ebc6227412"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "83edeedac0388a84bde1ce1fbf386f6c8d86bf1e8364c41f5b60178270c06165"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "288a3a3cde0e579b2e38b15f93aa525cef217a75b9d901e657c459491b5642d7"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b02-p02-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b02-p02-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3038,
+          "sha256": "8612696f5dfee5fb1049462797903b1ba47e7f48483ce5808f5234b52140b2ec"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2897,
+          "sha256": "b7287722495130ac91ddb8dc5d9b8c55b4daf40af0f9366fb33fc17739203686"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3085,
+          "sha256": "3b9208a0bddc41c684ea07cb26595782225b8ffb0ea3edfe1198d879beeaf798"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3085,
+          "sha256": "3b9208a0bddc41c684ea07cb26595782225b8ffb0ea3edfe1198d879beeaf798"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3334,
+          "sha256": "f59f67d213153daeee6696a9d65224aa8cafc7a279f3c22c8c14bafaf3afd035"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "c038a8dc6dacb1ab73cbba709efead488bfc8f7c2d03135dab8386a8ac5ac27c"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3277,
+          "sha256": "4fa79bea698f72d5b774485ae3917eac7239a06130c98062ed85c9ab0188ff77"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "016c92ba323e0f9528513f7cf1af387f60cebc01897a13d08245e63f99f5f078"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2127,
+          "sha256": "09d37e691f8e53a4a7f780ea10798d213bab0c96cfde88d402a38e7b4a595544"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "40da5589285a8f21a084b3cc4e181d82779939d45d628f290056e6bea1e751c3"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 151033,
+          "sha256": "745d6cce2a225e4baf75c109b8c36cb30c8c6ebca7f47750f35926bfdd9d48ff"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "fca588ff67a48b1c80783dc603c87528e13c7288378fe038bb284d64919b7684"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "3c820ad831749d942d956bbe7e0bb72d9a9c8a81c24e1f2615b92e7418c0e908"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "9cf3d95aa54c5ea5cc1e4506fca01283ae50ad11b090cd5e45e07370c1ba6e0a"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b02-p03-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b02-p03-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3037,
+          "sha256": "fb523bc1704298ebfcc14f5b57edc325ab8bf11c24ac8c2aab71e3a49d3ff66d"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2893,
+          "sha256": "6204c60840626971c32cf2ad644d0a9182857d6eec410f33f47f934ac9dabcc7"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3082,
+          "sha256": "028e9366c1b9d2abbeb9d7d3a36d9220930d3ce08a55386434cd1747a5e496c6"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3082,
+          "sha256": "028e9366c1b9d2abbeb9d7d3a36d9220930d3ce08a55386434cd1747a5e496c6"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3332,
+          "sha256": "5d6da365143141f64852dab70a5daf3f3e6a3d7b1075c7435d798293aff9f900"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "c32241b519027276acb34d9d4182df11113bf7304675a63991ddeaa0d86651a5"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3273,
+          "sha256": "d3b0cbb19fcc660e77befc08ebb4fb6268cbe2d9f3593de1847d67755ea012f0"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "9c4ace595c817ee08ff34e1fd876d7edd5b3d9d4b891b191a9dd2abb7d0a4078"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2128,
+          "sha256": "512cd4c1ac34efefe442fb9239bb07d4fac1a12f1530da59ade6d5ceeb4097ee"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "0b9049e3682e29d0aba86ec5182ab7880ce9553ea179373b8e313fc1cbe39400"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 159331,
+          "sha256": "06a938eacdba5c7ba140d29ed9a0417398a4e24b12727e5e953e630b252d1666"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "ac2a3a39f58bdaed0f715cb384eaa891ac1bcdd68d67194686926efaf019c571"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 882,
+          "sha256": "50144635f43fcf38256b5e204f899f26887d2858bb8fbb92f81a05ea36d33a2f"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 745,
+          "sha256": "5ee1a66beba967e94c2df708a0a9d8af3bd1bbe3ab191b7d9eada10a8c168233"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b02-p04-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b02-p04-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3035,
+          "sha256": "4036191b6196ea8d4395db5afe314f22636ec654d7536533ab8d00d6b62c69da"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "f7183c14d2e080fa7c4c2ff32d3247fca8aa5713c8ccc7ec5f0a396dd91a75c6"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "81478422c5d147e9b7180744e9bb4461ce51df9cf29dd094ffc1dbd1ba6d2362"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "81478422c5d147e9b7180744e9bb4461ce51df9cf29dd094ffc1dbd1ba6d2362"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "66e0b4c2836b516ffb0b083a8c7072f993da1a1411c365c72621a306f0022f8d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "1bb1c8a594487d1b1691766eb45e109bd541b3b2aded3b3e133924476588e532"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "b072e9ecefb987211ae2bc944b4ddd7681e7ca6b5a21bbee39a0af992951c2df"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "9186853bb35e69f9bb7db5656c2f43b89ed9cf278ddd3e7fc27d014f577bd8c1"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1933,
+          "sha256": "250aef51dfa85433315db7f8c12771ee9f138c3e3d465a15f9a1453b1aad9f38"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1930,
+          "sha256": "cd9a8cd58eb71267d31018f61762e210abb4738532d48c01196e3e01e65927fa"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 358056,
+          "sha256": "c0d1392428d3e7bf311db84baf566663c91f86033818ef6ae32333ad271f8f55"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "76bae692c91e37967aa0e065de9d2b673952bcfad6e55bfb4476b9dbd370ac14"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "4bf63b99bb4cb11e31c29a45cf68d4ba09f0a9d32574fac3a09bf9e3a97ecbfc"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "ce93ede64a5fb3c72f6e745d88abd00488ecf0f5a84222353d186a5146549acd"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b03-p01-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b03-p01-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3036,
+          "sha256": "a37708302420014269aec128c602e875db2555eeeaeda9f8b7cd0d5126af206f"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "fd508acaddc24ae9b7f6229696c2726c1543080b5cf08e17f919a68e58cbcc8b"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "4b8febb38e354331d2ba4b6f00e47eeaa5a5014df27956b6d664aacebc89fa76"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "4b8febb38e354331d2ba4b6f00e47eeaa5a5014df27956b6d664aacebc89fa76"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "194d2ab66e81ed8bb6b9cd8f3700ad05cfeb4095792f549515f735db050116e0"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "b81f787eef38c43378c7e5e29b0fbee6e3dcfbe63fd9ce21fb9310153adc56c4"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "faf94c6b43c264754dfd689b1751937e9b3cbc2ffd6cde1a5ace3dfa88498c79"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "8f2c69119cc464fa77682dd1dbac27ffdcd354e5aa276f9398ce310403109877"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1934,
+          "sha256": "92db2b8fef653de19caaa55bd2ffb578a5a70f82b4121a5dda1cc910bcaa86e1"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1930,
+          "sha256": "4808fb72a82f100cd19d03975fc32cb9fbff46466ff16d8992b7b214793cda69"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 370514,
+          "sha256": "b2f1d0d881c7ca9155bdd74e84100bf4c6ef3cd8866cf33d147fc0c7e8f5b126"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "978a5a4f6b993dd297acdfd3fbe589637a97c6ae6cbad936593ae7485bb027c5"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "f8c2791d6ba4349c31b94273160f3b6792169fe2db9f2e1e42fad43238420b75"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "8d795cd05284de4503928722972577bee5af5619e9692d7e216a64128758c1ad"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b03-p02-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b03-p02-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3037,
+          "sha256": "4ae054e4cda45bfd9e14c7977ed8e83b12ead19ad6f5577ad2b97b1e81e8a8f2"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2889,
+          "sha256": "72d15fbf3cc5672629c41ea447487baef9c2d0846d06ca8d4d7fb096c9415d48"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3079,
+          "sha256": "a69b585ceaf4a833b1621f7ce77966fcbd866273e94e3d158aae816aed013231"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3079,
+          "sha256": "a69b585ceaf4a833b1621f7ce77966fcbd866273e94e3d158aae816aed013231"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3330,
+          "sha256": "3e27b07ea434a0b67ea9cc8bef44747798add50f93490c34d85ea8e9e0fd0f1f"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "89bab8c187ff1c0a9924aaef21456f45ceb0a32ad1782d53c7729c29dbe856ef"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "1cb5166ce34d963ca5d72156076c2a90d0d7d0b53f8150a1ba8c105b1e95ba0f"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "82aabf7e13a0c6e512a01987b796155e50ed09b214664dbca5a0022c0a747bcc"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2127,
+          "sha256": "949a0614989e80f2324eda6f02d9c34e8f2f28669ff8283c5d6f3bc24fc0cebf"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "2f9279a84a874184762782ae3119d8b7f38da26d7845d4c004cd6f3f5d977417"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 149064,
+          "sha256": "5ca2ef63019f05252c50ed84c7773dd4e8a4c65e0348e9859e211fed9091a6f9"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "df03e96ada5d69717a471e901b14eae5a5fb0da07a4648a9835ec859b350fbfe"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 878,
+          "sha256": "505a1d747aac2458161b1555cff6a4ce8888822ec141dd566fcb6268df100848"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 744,
+          "sha256": "7be1f3b6341ecd07a8898b1f2954a422930dd882ee2ff8319e4effed3c066496"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b03-p03-candidate",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b03-p03-candidate",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3039,
+          "sha256": "09ab741bd833798651b78623a218a606d8d61799cd624e103221b1af7561a335"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2897,
+          "sha256": "11c84519ba4311955a11d3c1b8a5bace90412a59e499a8052b24ef02ffcadc5c"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3085,
+          "sha256": "1841f066bf415832edffde57abd237caf0595d2bc7780a871243dc7da139aaec"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3085,
+          "sha256": "1841f066bf415832edffde57abd237caf0595d2bc7780a871243dc7da139aaec"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3334,
+          "sha256": "48f8a2e2f9a3c359b12667d257e1e2671946295da0136299830246d7e7cf5724"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "053949b58bf7184b265f08ef83c7f2064b9dc44647b4b4ed85b815385dc64e40"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3277,
+          "sha256": "8fceafeb92db2aa8e641aaae645818a43a7423bd57938549fe97bc8b93d0f99d"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 4832,
+          "sha256": "af213ca06d2a2732707c79a75b902bc1312216f5d8a26f61677a43805e902fa7"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 2127,
+          "sha256": "23a5c5f5546ca5f9e8ba5427743b92ecddc3e988be5ccf9a36bf798c67c9ab96"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 2130,
+          "sha256": "e1b53e6e19f14106d8e543bec2d8ebd872b867ef6263c11182deed92c1837010"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 150152,
+          "sha256": "195c9922f9a2235c0921c3a0d43a6cfec4a9931730221408b4b9b05e1269fba7"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "b4eed4cd1900d945d774b53e0bc6e89d2058ffd39601e998e69977c382d08bd1"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "d94e14ae790fa567a87a1258702f459e8c3ac66e66c8df54d297c5ce02f714e7"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "9ba131d159658ccb07c5c6ca7eaab6350ee2d9275ea768dd9ce0f667525b2de2"
+        }
+      ]
+    },
+    {
+      "source": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\ordinary-current-224729245z-4221bb43-b03-p04-baseline",
+      "destination": "D:\\RedSalamander.Perf\\evidence\\viewer-space-finish-all-20261009\\rejected-ordinary-v1-curation\\ordinary-current-224729245z-4221bb43-b03-p04-baseline",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 29,
+          "sha256": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d"
+        },
+        {
+          "path": "archive-index.json",
+          "bytes": 3036,
+          "sha256": "bd95b8147a5bbd771eccc09b26c79c15beeb0a00bd36c4e72d69c08846b35d4b"
+        },
+        {
+          "path": "evidence.json",
+          "bytes": 2890,
+          "sha256": "b35b9864759931a9429239afab81e64b1e357e720801bcda4da03e2d9b9584ce"
+        },
+        {
+          "path": "manifest.tsv",
+          "bytes": 3078,
+          "sha256": "59b692ff6a63c71e4eb9e4a09044a966dffaee15b07f53f49666482de7f4b9a6"
+        },
+        {
+          "path": "manifest.txt",
+          "bytes": 3078,
+          "sha256": "59b692ff6a63c71e4eb9e4a09044a966dffaee15b07f53f49666482de7f4b9a6"
+        },
+        {
+          "path": "provenance.json",
+          "bytes": 3318,
+          "sha256": "ac7eb24586213988b859b36bb83163bd5deca6eb5dc1826282c034c48b32e9c9"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2354,
+          "sha256": "935fe5d84cd1203199ca1ae0b2ca0db115f44239e691d53c86fc6584487988ef"
+        },
+        {
+          "path": "run-all-tests-results.json",
+          "bytes": 3269,
+          "sha256": "09a3f08051a049a7f736f93b1c6124508b7790b749a93ed018084aad379f3bdf"
+        },
+        {
+          "path": "workspace-final.json",
+          "bytes": 2761,
+          "sha256": "cbd95f526d4a29954644898c7b1893c2569ee9235777c80f924e89ef4543b537"
+        },
+        {
+          "path": "perf\\viewer_space_perf_large_optin_metrics.json",
+          "bytes": 1933,
+          "sha256": "f5e9c1f000a125042d01a17ebce8be1c7df274d31b20194c70a1bb092325e2a8"
+        },
+        {
+          "path": "perf\\viewer_space_perf_small_progressive_metrics.json",
+          "bytes": 1925,
+          "sha256": "e2560c878b238a55fd8ed4ab528f62ad72dec7d01e3e0bb6215faa24734293a2"
+        },
+        {
+          "path": "metrics\\perf_metrics-part2.jsonl",
+          "bytes": 349463,
+          "sha256": "69bf171836e590626a53d71be5a076eb11e4f831c11390daae1b595342ddbbc2"
+        },
+        {
+          "path": "metrics\\perf_metrics.jsonl",
+          "bytes": 2097152,
+          "sha256": "f42db868c3ebd42e1b5d17d7c74fa6e4516ffa8136d0c6c43724d464b7dc83b4"
+        },
+        {
+          "path": "metrics\\source-index.json",
+          "bytes": 886,
+          "sha256": "ab28f5c214b7751d4e506ffd6aeee2c0444e7ab11f68d247220bdcde110500ae"
+        },
+        {
+          "path": "commands\\results.json",
+          "bytes": 746,
+          "sha256": "cd3969e3fd533edad22ccfc88fb89d1916bee7216980505599b0a7775f3c1f3f"
+        }
+      ]
+    }
+  ],
+  "mismatches": 0
+}

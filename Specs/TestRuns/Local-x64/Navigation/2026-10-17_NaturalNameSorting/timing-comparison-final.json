@@ -1,0 +1,72 @@
+[
+  {
+    "sort": "name",
+    "direction": "ascending",
+    "baseline_debug_us": 29118,
+    "candidate_debug_us": 34334,
+    "candidate_release_us": 22691
+  },
+  {
+    "sort": "extension",
+    "direction": "ascending",
+    "baseline_debug_us": 102450,
+    "candidate_debug_us": 162400,
+    "candidate_release_us": 50937
+  },
+  {
+    "sort": "time",
+    "direction": "descending",
+    "baseline_debug_us": 114835,
+    "candidate_debug_us": 109861,
+    "candidate_release_us": 57360
+  },
+  {
+    "sort": "size",
+    "direction": "descending",
+    "baseline_debug_us": 116181,
+    "candidate_debug_us": 125574,
+    "candidate_release_us": 67053
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_debug_us": 96867,
+    "candidate_debug_us": 97580,
+    "candidate_release_us": 58713
+  },
+  {
+    "sort": "name",
+    "direction": "descending",
+    "baseline_debug_us": 75244,
+    "candidate_debug_us": 113817,
+    "candidate_release_us": 66190
+  },
+  {
+    "sort": "extension",
+    "direction": "descending",
+    "baseline_debug_us": 84484,
+    "candidate_debug_us": 157236,
+    "candidate_release_us": 65243
+  },
+  {
+    "sort": "time",
+    "direction": "ascending",
+    "baseline_debug_us": 87136,
+    "candidate_debug_us": 87813,
+    "candidate_release_us": 59100
+  },
+  {
+    "sort": "size",
+    "direction": "ascending",
+    "baseline_debug_us": 87953,
+    "candidate_debug_us": 100838,
+    "candidate_release_us": 65457
+  },
+  {
+    "sort": "none",
+    "direction": "ascending",
+    "baseline_debug_us": 79580,
+    "candidate_debug_us": 79148,
+    "candidate_release_us": 57970
+  }
+]

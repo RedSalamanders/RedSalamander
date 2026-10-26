@@ -1,0 +1,51 @@
+{
+  "variant": "throughput-save-candidate-v3",
+  "passed": 0,
+  "failed": 3,
+  "skipped": 0,
+  "source_snapshot": "6a42bebc6fcf32bdf64bf27bc7963a422a66518b40083d5fa1a53e02ee4a79e9",
+  "metrics": {
+    "FileOps.Popup.Throughput.ExpandedRedrawBatchUs": {
+      "samples_us": [
+        54066,
+        66463,
+        72985,
+        60407,
+        78846,
+        56823,
+        66638,
+        67679,
+        65586,
+        66436,
+        54454,
+        69221,
+        63418,
+        78298,
+        54932
+      ],
+      "median_us": 66436,
+      "p95_us": 78846
+    },
+    "FileOps.Popup.Throughput.CollapsedRedrawBatchUs": {
+      "samples_us": [
+        62137,
+        66895,
+        66353,
+        66822,
+        66388,
+        64962,
+        76173,
+        57073,
+        66612,
+        66624,
+        66432,
+        66832,
+        67760,
+        66192,
+        65771
+      ],
+      "median_us": 66432,
+      "p95_us": 76173
+    }
+  }
+}

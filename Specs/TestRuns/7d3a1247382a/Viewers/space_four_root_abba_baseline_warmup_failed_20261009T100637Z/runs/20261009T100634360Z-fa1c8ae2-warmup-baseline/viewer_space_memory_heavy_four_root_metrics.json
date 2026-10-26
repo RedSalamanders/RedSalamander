@@ -1,0 +1,23 @@
+{
+  "scenario":"viewer_space_memory_heavy_four_root_cache_refresh",
+  "rootSetupUs":189551492,"rootSetupPerRootUs":[48269106, 45169675, 49308697, 46803980],"lifecycleUs":12229505,"rootCount":4,"directoriesPerRoot":501,"filesPerRoot":100000,
+  "configuration":"topK512_threads8_volume1_cacheTTL600_entries4",
+  "effectiveScanThreads":8,
+  "relativeRoots":["root_00","root_01","root_02","root_03"],
+  "fixtureDigestAlgorithm":"BLAKE3(relative UTF-8 path, NUL, payload, FF)",
+  "rootFixtureDigests":["55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B","55EB54080C36C593FCB0AD2454A67F322D4B848995A986A19DDBC3F78FC5D13B"],
+  "rootTotalBytes":3001292,"cacheHitCount":0,
+  "processBefore":{"workingSetBytes":227868672,"privateBytes":232636416},
+  "processPeak":{"workingSetBytes":314765312,"privateBytes":413073408},
+  "processAfter":{"workingSetBytes":290385920,"privateBytes":317214720},
+  "phases":[
+    {"root":1,"phase":"seed-complete","phaseUs":2275170,"privateBytes":394035200,"workingSetBytes":300277760,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":1,"phase":"seed-closed","phaseUs":544911,"privateBytes":267083776,"workingSetBytes":245399552,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":2,"phase":"seed-complete","phaseUs":2330556,"privateBytes":404672512,"workingSetBytes":312328192,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":2,"phase":"seed-closed","phaseUs":539608,"privateBytes":323227648,"workingSetBytes":298967040,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":3,"phase":"seed-complete","phaseUs":2308815,"privateBytes":404267008,"workingSetBytes":310763520,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":3,"phase":"seed-closed","phaseUs":553296,"privateBytes":327929856,"workingSetBytes":298795008,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":4,"phase":"seed-complete","phaseUs":2365391,"privateBytes":408297472,"workingSetBytes":310050816,"rootBytes":3001292,"firstMeaningfulPaintUs":0},
+    {"root":4,"phase":"seed-closed","phaseUs":544439,"privateBytes":326918144,"workingSetBytes":296755200,"rootBytes":3001292,"firstMeaningfulPaintUs":0}
+  ]
+}

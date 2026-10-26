@@ -1,0 +1,8 @@
+{
+  "runId": "fileops-ui-review-fixes-20261019-source-contracts",
+  "total": 204,
+  "passed": 204,
+  "failed": 0,
+  "skipped": 0,
+  "note": "Counts extracted from original Invoke-Pester -PassThru transcript; initial wrapper redirected the result object with the log."
+}

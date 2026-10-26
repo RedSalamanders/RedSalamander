@@ -1,0 +1,15 @@
+{
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "executableSha256": "3558EF875F7A91ACA4DBFF5AC2D6A1EF3D7375A1012ABB3F9D4A7901EC999DB8",
+  "startedUtc": "2026-09-09T16:44:58.8008769Z",
+  "completedUtc": "2026-09-09T16:44:59.7601349Z",
+  "exitCode": 0,
+  "fixture": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\mtp-isolation-mtp-baseline-clean",
+  "clean": true,
+  "before": null,
+  "after": null,
+  "callerJournalUnchanged": true,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0
+}

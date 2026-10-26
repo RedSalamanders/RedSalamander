@@ -1,0 +1,14 @@
+{
+  "schema": "i26-v64-baseline-scope-root-review.v1",
+  "reviewUtc": "2026-10-01T08:49:52.9090345+00:00",
+  "rootReviewed": true,
+  "decision": "Preserve A78 product revision and pin78. No focus-fix product synchronization into baseline.",
+  "correctionToV64Checkpoint": "The forecast to refresh A78 with the same application correction was overbroad. Equal-feature means identical asserted workload and measurement fixtures across retained before/after product revisions, not whole-product source parity.",
+  "contract": "Specs/Testing/Testing_PerformanceValidation.md:1694",
+  "fixtureSha256": "90f7301cc91e96d50985bf61451d6dcb1799254a5de6212928978137757ce740",
+  "helperSha256": "d55d551da67e043a06b660b488e2216520eb2a82e27a8b483cb7b7a2130050b5",
+  "actualBaselineAndCandidateFixturesMatch": true,
+  "focusCorrectionInvokedByPerfFixture": false,
+  "attribution": "Same-fixture before/after consumer plus library revision; cannot isolate DxUi costs or prove whole-product equivalence.",
+  "next": "Keep A78 current supplemental receipt b9781f0d... and manifest ca58d25...; recapture resolved dependencies and compare serial runs only after final candidate Full. Correct final documentation; preserve frozen checkpoint as historical source."
+}

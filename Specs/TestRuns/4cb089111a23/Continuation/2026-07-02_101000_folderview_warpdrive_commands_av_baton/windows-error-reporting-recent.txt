@@ -1,0 +1,737 @@
+
+TimeCreated  : 02/07/2026 09:41:01
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket 1572457371514413483, type 5
+               Event Name: RADAR_PRE_LEAK_64
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: JDownloader2.exe
+               P2: 2.0.0.2
+               P3: 10.0.26200.2.0.0
+               P4: 
+               P5: 
+               P6: 
+               P7: 
+               P8: 
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\Users\eric\AppData\Local\Temp\RDRFAFF.tmp\empty.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.89275af1-de19-4725-b467-9bfa8534c045.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b83cd861-de91-4baf-a4c2-97a11fa34117.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8f1a2e88-3a53-4074-a0f6-2d9da6d63841.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.a533c6e7-59c5-41ce-8df5-35249958f9f8.tmp.xml
+               
+               These files may be available here:
+               NULL
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: b955d3f2-8b93-4f9a-861c-18dd290c19c1
+               Report Status: 268435456
+               Hashed bucket: 35596461c40fd2ba15d27da5ed8fa1ab
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:10:40
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket 1852035951594888751, type 4
+               Event Name: APPCRASH
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: RedSalamander.exe
+               P2: 7.0.1.0
+               P3: 6a457787
+               P4: textinputframework.dll
+               P5: 10.0.26100.8521
+               P6: cd3c8a25
+               P7: c0000005
+               P8: 000000000006a419
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.5321e493-4b17-4821-8caa-0a44eb351937.tmp.dmp
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.e642e7c1-4d21-403b-9b38-a8e086532617.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.194f117f-0bfe-45d9-bfbc-316e6c3ff50f.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.7c4d9973-cf62-479e-9272-363554d3a599.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8dc3aabb-e192-4a23-8073-017bc4f93d01.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_RedSalamander.ex_30e56b42385e20e7ee87989965bd2e32b766a154_78d81a95_9e63d8a5-9d86-441c-9f88-41c1aecc1e86
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 69d1f4ea-437a-4d4a-9c38-241f7e6fbb07
+               Report Status: 268435456
+               Hashed bucket: ca61589dcc4dce4f59b3c0e2ae10de2f
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:10:37
+ProviderName : Application Error
+Id           : 1000
+Message      : Faulting application name: RedSalamander.exe, version: 7.0.1.0, time stamp: 0x6a457787
+               Faulting module name: textinputframework.dll, version: 10.0.26100.8521, time stamp: 0xcd3c8a25
+               Exception code: 0xc0000005
+               Fault offset: 0x000000000006a419
+               Faulting process id: 0x11EB0
+               Faulting application start time: 0x1DD09E97781EC78
+               Faulting application path: Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+               Faulting module path: C:\WINDOWS\SYSTEM32\textinputframework.dll
+               Report Id: 69d1f4ea-437a-4d4a-9c38-241f7e6fbb07
+               Faulting package full name: 
+               Faulting package-relative application ID: 
+
+TimeCreated  : 02/07/2026 08:04:17
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffffa98b0b40f190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260607-1518.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-108742218-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.2ebf7931-0658-479d-a048-feccd8b66978.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8041e912-fed7-4648-93a8-e63a9999fff4.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d4bafc53-d452-425a-8f3f-3552eea50110.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.25800e8a-1c7e-4184-b0d4-ac915857297a.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_c980282e60ee594d87e79446c9e56ce7829cbadf_00000000_3e4801d0-1320-4936-9859-29bb6d872c6c
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 3e4801d0-1320-4936-9859-29bb6d872c6c
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:17
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 141
+               P2: ffff98861c9f4460
+               P3: fffff804a7392090
+               P4: 0
+               P5: ffff988629cab080
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260513-1305.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-17027484-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8ffdbf50-d248-4208-8e80-5a34b4c80be7.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b7978840-811a-47c0-97dc-3a417612f6f6.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8939af99-af07-43bf-bd70-b31ce89ca885.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4a4fb738-faea-4564-a1be-3d06e12ca86e.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_141_f1e08476ef37f46b3f582aacfa743524d559fc62_00000000_43bd0051-1b7b-46af-8654-296d20746dcd
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 43bd0051-1b7b-46af-8654-296d20746dcd
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:17
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: fffff88a5f147190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260508-1217.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-10718109-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.51804f32-4673-4e15-a93b-5c1cf7cec356.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.21999ebb-e27f-498d-a31f-638ee88a7ffa.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.50ce6cd5-93d9-4471-bb3f-79b6a4c299e4.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.93da7bae-82cd-4db8-bb15-374707f9ca63.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_466a7abd313831ef86d0fecf5e5943514c0b77c_00000000_531b8bda-8aef-4637-a4f4-b4e04c3a5c15
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 531b8bda-8aef-4637-a4f4-b4e04c3a5c15
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffffdc0550a5f190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260502-1021.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-3502515-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d7be0fbd-e1fc-48ea-946e-f84270604c10.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.f4eccab6-1d44-4760-848f-c53534fb65cf.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.daa51b16-4e8e-4e83-b8b2-570ba96a37ea.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.97f22ac9-fb17-43cf-b04d-3893bec9549e.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_9ec56d718f22ae76c4bc553125a74aa31c19322a_00000000_9e0bc5b9-da57-41f6-9804-a21c6330564e
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 9e0bc5b9-da57-41f6-9804-a21c6330564e
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffffda0c83a7e190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260424-0942.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-6050343-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.2c8c79be-0550-46b8-ad38-fe8a78a86fb8.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.39bcadbd-3c21-4f5a-93df-86d805541ce3.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.9293ed09-fd2a-425f-879c-b314ae4a3f0b.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8ddbcad5-5f00-4cca-b69c-ce4de809fa4b.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_86bf93da852aaf83adfd392c2a6f2351efa1a_00000000_29c30ba9-100c-4881-a83c-6e829b959a18
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 29c30ba9-100c-4881-a83c-6e829b959a18
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffffec0ae74bf190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260419-1846.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-27754609-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4e791878-c7b1-4fd9-ba81-ca7bbe563b9d.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.a87c9135-55ff-4c7c-822f-4ecdb1d25605.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d44acb4d-e3c4-4ec7-8c77-b016160a0c34.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.f4c46e52-33d3-47c1-b90b-084fe59ffa32.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_292126380a378f0a830aa1fdea646dc49ef4d89_00000000_42a75905-b7a5-42fe-859d-aa821c057e51
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 42a75905-b7a5-42fe-859d-aa821c057e51
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffffa80c42113190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260405-1218.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-6823328-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.c3e1f16c-9218-408f-a372-5c1577e4b2ef.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.f2ab88fb-658f-42d9-85bf-7761186ca0d3.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.c7f8d6bb-a9cf-413b-8b61-04c93931490c.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.5ce5c4d0-aaf2-45f3-9de5-b5cbffee9edd.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_f48d3e37d770bce429d9e78049536f4ad66654_00000000_6fcecd26-030d-4989-a572-c61a60db580c
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 6fcecd26-030d-4989-a572-c61a60db580c
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffff938b8612f190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260401-0851.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-3236703-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.30ae429b-eaa8-472c-acdf-e2e8b97bceb8.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b96e96b0-36f1-4662-95ef-1cedca75b04c.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d03bb7c8-a3f5-4826-915a-7e4e50eadd2d.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.2ba60ab7-07f7-4a98-ae72-c8b4757ff8db.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_94c9861b1cd255976cc1ff8df21e7e49f78d16f_00000000_be1b70f8-f614-47b7-8d44-4b4d8b4f4884
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: be1b70f8-f614-47b7-8d44-4b4d8b4f4884
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 100a
+               P3: ffff938d5be87190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260322-1946.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-36830562-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d643222a-2dcc-4e8c-aa9b-b1b42d1dc88f.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ad29db61-aede-412f-9d23-10517a724d70.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.84f2cf19-e77c-46ea-a686-c7bee5167742.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.92c34d64-6429-4269-99f4-7ba3f21583b2.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_fcc02f5e06e2d22eef65f807b877d5ef47c7319_00000000_348aed08-3dce-4970-8b1e-f0647d8e5c88
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 348aed08-3dce-4970-8b1e-f0647d8e5c88
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffff828e9d7fe010
+               P3: fffff80272942090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1530.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-6560375-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.61792578-e8ad-4100-9789-b805a1844c3d.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.27663d42-574a-4bfc-b656-30b8edc56ab2.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.47050897-2d30-4f78-8fad-ad3c23958e7d.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.45ec04b4-9a77-4c39-b5f6-22af356b7a84.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_68d5e51b77af3c8128e3fac84dbbfd0e0add7_00000000_078c2b22-1696-49a9-a072-f961896e8a68
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 078c2b22-1696-49a9-a072-f961896e8a68
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffff828e1aac2460
+               P3: fffff80272942090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1515.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-5658593-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.2c5065bb-ad15-463f-ab80-507bf6df23ce.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b5cdab79-0c99-4cea-b3cb-7d613f1b80a0.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.6a4682be-5e59-4426-b043-9e67325d6e4b.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.a971fe2c-97be-42d7-bda6-19d503d9ef9e.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_eaba91ecd6c021baa6edb33845b8d9f425267bc_00000000_34f4209d-500b-4fe2-93e6-4a831f8ebfe8
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 34f4209d-500b-4fe2-93e6-4a831f8ebfe8
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffff828e62002050
+               P3: fffff80272942090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1442.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-3702546-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.e4a87348-bf0e-4951-8864-8d9317f567c2.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.7888e38c-bf8a-4be4-8ef9-959ccf3910b2.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ecb34e7f-2cb7-49b1-ad12-86d60f7c089f.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ef7dfbc2-9fe8-4c2b-bd94-d503fc724266.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_c0f2b9c1fb339a5d9f2615e64e40d95ce77db6_00000000_903ab88b-fe81-4bb7-b367-0f7edb088a86
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 903ab88b-fe81-4bb7-b367-0f7edb088a86
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffff828e51263010
+               P3: fffff80272940090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1357.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-974390-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.fcedf815-646f-4195-8b80-b9def72e5044.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.c760fa05-6d8b-488e-ac21-b9c45ed24198.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8ca13cfa-585d-419c-9615-33e6168844b9.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.7c9736dc-7ca9-4b1f-ab97-8729be53fc86.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_186c6de72a271198d381a33065fe387467cebf_00000000_9e85131c-dde7-435d-be00-31f7480bd47e
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 9e85131c-dde7-435d-be00-31f7480bd47e
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffffe60da154a010
+               P3: fffff8066f470090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1300.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-1910703-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.724d0bfa-9b96-434c-a7a6-8640b0c846cb.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.001dc4e1-548f-49a5-9cd8-3dd51a0a5f58.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.1153f4f3-341e-4f80-a8ab-fe93725cd433.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4bb74792-2f2d-48c1-ba64-8e2b5aea0b3a.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_eadc1c1b6f18a50adede4b02ce1f993647fe9e4_00000000_00839e7f-13e7-4cbb-a4d1-4e90c5fa2834
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 00839e7f-13e7-4cbb-a4d1-4e90c5fa2834
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 117
+               P2: ffffe60da1c332d0
+               P3: fffff8066f470090
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260316-1259.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-1882812-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.616e7071-bf2b-4fa2-bb6b-fdfbf521f10f.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.7dcd1c81-61a9-4dfa-baba-3ef3cc0b9b3d.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b1a72f08-ea99-4051-a281-01266677f882.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.3efb272d-b7f3-49c8-b8ee-0a0fe7d1ee52.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_117_8d7426833677b1e921fb1db5f92da3795942c_00000000_8da15c57-fd23-4412-988e-9218f9738841
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 8da15c57-fd23-4412-988e-9218f9738841
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: LiveKernelEvent
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 144
+               P2: 1023
+               P3: ffffd407c86bf190
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\LiveKernelReports\USBXHCI\USBXHCI-20260307-2008.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-38412656-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ff8570e9-364f-40f7-b765-fb2bc7a3de8f.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.efae0a57-823e-433b-95c9-bf97b222145f.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4880db82-94a0-4a4a-9e52-3a8c65c58c4b.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.e36df26d-76c8-45bf-b67e-7bf9e6672a37.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_144_99173f351b3af6c13d4dca1c7cd0a2b8d6e85_00000000_e63506c2-8296-41e2-a1ee-d4b358e912b8
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: e63506c2-8296-41e2-a1ee-d4b358e912b8
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+TimeCreated  : 02/07/2026 08:04:16
+ProviderName : Windows Error Reporting
+Id           : 1001
+Message      : Fault bucket , type 0
+               Event Name: BlueScreen
+               Response: Not available
+               Cab Id: 0
+               
+               Problem signature:
+               P1: 10e
+               P2: 37
+               P3: 0
+               P4: 0
+               P5: 0
+               P6: 10_0_26200
+               P7: 0_0
+               P8: 256_1
+               P9: 
+               P10: 
+               
+               Attached files:
+               \\?\C:\WINDOWS\Minidump\030626-16656-01.dmp
+               \\?\C:\WINDOWS\SystemTemp\WER-17203-0.sysdata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.f2d239a9-2c46-49a6-88b8-22c271d4e06e.tmp.WERInternalMetadata.xml
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.212403b6-28da-40e5-9de4-9720840ac42c.tmp.csv
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ff4eaed9-04ac-4224-8ed5-6d5266ed15b3.tmp.txt
+               \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.9418ddec-9648-442c-831d-9eb7359b5e48.tmp.xml
+               
+               These files may be available here:
+               \\?\C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_10e_56b335d1f8691973d999e1265d971020b8afc6aa_00000000_9ba5cefc-93ab-40e7-a45a-99fef07c6746
+               
+               Analysis symbol: 
+               Rechecking for solution: 0
+               Report Id: 15ff253a-decf-4742-b493-3c43a3b23095
+               Report Status: 2049
+               Hashed bucket: 
+               Cab Guid: 0
+
+

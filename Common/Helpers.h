@@ -7,11 +7,11 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <condition_variable>
 #include <concepts>
+#include <condition_variable>
 #include <cstdint>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <cwctype>
 #include <exception>
 #include <filesystem>
@@ -33,7 +33,6 @@
 
 #include "Win32CallbackHelpers.h"
 
-
 #include <bcrypt.h>
 #include <evntrace.h>
 
@@ -43,6 +42,7 @@
 // WIL and TraceLogging: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted),
 // C5027 (move assign deleted), C4820 (padding)
 #pragma warning(disable : 4625 4626 5026 5027 4820 28182)
+#include <RedMonitor/Client.h>
 #include <TraceLoggingProvider.h>
 #include <wil/resource.h>
 
@@ -103,9 +103,7 @@ namespace Common::Colors
 // Drops the packed ARGB alpha channel and converts the remaining RGB bytes to Win32 COLORREF order.
 [[nodiscard]] inline COLORREF ColorRefFromArgb(uint32_t argb) noexcept
 {
-    return RGB(static_cast<BYTE>((argb >> 16u) & 0xFFu),
-               static_cast<BYTE>((argb >> 8u) & 0xFFu),
-               static_cast<BYTE>(argb & 0xFFu));
+    return RGB(static_cast<BYTE>((argb >> 16u) & 0xFFu), static_cast<BYTE>((argb >> 8u) & 0xFFu), static_cast<BYTE>(argb & 0xFFu));
 }
 
 // Interpolates COLORREF channels with an explicit integer denominator. Invalid denominators preserve
@@ -117,16 +115,12 @@ namespace Common::Colors
         return base;
     }
 
-    overlayWeight       = std::clamp(overlayWeight, 0, denominator);
+    overlayWeight        = std::clamp(overlayWeight, 0, denominator);
     const int baseWeight = denominator - overlayWeight;
-    const auto channel = [baseWeight, overlayWeight, denominator](BYTE baseChannel, BYTE overlayChannel) noexcept
-    {
-        return static_cast<BYTE>((static_cast<int>(baseChannel) * baseWeight + static_cast<int>(overlayChannel) * overlayWeight) / denominator);
-    };
+    const auto channel   = [baseWeight, overlayWeight, denominator](BYTE baseChannel, BYTE overlayChannel) noexcept
+    { return static_cast<BYTE>((static_cast<int>(baseChannel) * baseWeight + static_cast<int>(overlayChannel) * overlayWeight) / denominator); };
 
-    return RGB(channel(GetRValue(base), GetRValue(overlay)),
-               channel(GetGValue(base), GetGValue(overlay)),
-               channel(GetBValue(base), GetBValue(overlay)));
+    return RGB(channel(GetRValue(base), GetRValue(overlay)), channel(GetGValue(base), GetGValue(overlay)), channel(GetBValue(base), GetBValue(overlay)));
 }
 
 // Convenience form for the repeated 8-bit overlay-alpha policy.
@@ -161,39 +155,36 @@ namespace Detail
     float blue  = 0.0f;
     if (hueDegrees < 60.0f)
     {
-        red = chroma;
+        red   = chroma;
         green = x;
     }
     else if (hueDegrees < 120.0f)
     {
-        red = x;
+        red   = x;
         green = chroma;
     }
     else if (hueDegrees < 180.0f)
     {
         green = chroma;
-        blue = x;
+        blue  = x;
     }
     else if (hueDegrees < 240.0f)
     {
         green = x;
-        blue = chroma;
+        blue  = chroma;
     }
     else if (hueDegrees < 300.0f)
     {
-        red = x;
+        red  = x;
         blue = chroma;
     }
     else
     {
-        red = chroma;
+        red  = chroma;
         blue = x;
     }
 
-    const auto toByte = [](float channel) noexcept
-    {
-        return static_cast<BYTE>(std::lround(std::clamp(channel * 255.0f, 0.0f, 255.0f)));
-    };
+    const auto toByte = [](float channel) noexcept { return static_cast<BYTE>(std::lround(std::clamp(channel * 255.0f, 0.0f, 255.0f))); };
     return RGB(toByte(red + m), toByte(green + m), toByte(blue + m));
 }
 } // namespace Detail
@@ -226,9 +217,8 @@ namespace Detail
 
 [[nodiscard]] inline double RelativeLuminanceFromArgb(uint32_t argb) noexcept
 {
-    return RelativeLuminanceFromSrgb(static_cast<double>((argb >> 16u) & 0xFFu) / 255.0,
-                                     static_cast<double>((argb >> 8u) & 0xFFu) / 255.0,
-                                     static_cast<double>(argb & 0xFFu) / 255.0);
+    return RelativeLuminanceFromSrgb(
+        static_cast<double>((argb >> 16u) & 0xFFu) / 255.0, static_cast<double>((argb >> 8u) & 0xFFu) / 255.0, static_cast<double>(argb & 0xFFu) / 255.0);
 }
 
 [[nodiscard]] inline uint32_t CompositeArgbOverOpaqueBackground(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept
@@ -246,9 +236,8 @@ namespace Detail
 
 [[nodiscard]] inline double RelativeLuminanceFromColorRef(COLORREF color) noexcept
 {
-    return RelativeLuminanceFromSrgb(static_cast<double>(GetRValue(color)) / 255.0,
-                                     static_cast<double>(GetGValue(color)) / 255.0,
-                                     static_cast<double>(GetBValue(color)) / 255.0);
+    return RelativeLuminanceFromSrgb(
+        static_cast<double>(GetRValue(color)) / 255.0, static_cast<double>(GetGValue(color)) / 255.0, static_cast<double>(GetBValue(color)) / 255.0);
 }
 
 // Some product policies intentionally apply their threshold to encoded sRGB channels without linearizing.
@@ -277,13 +266,11 @@ namespace Common::Crypto
         return E_INVALIDARG;
     }
 
-    const NTSTATUS status = BCryptGenRandom(
-        nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
 }
 
-template<typename CharT>
-inline void AppendHexToken(std::basic_string<CharT>& value, std::span<const std::byte> bytes)
+template <typename CharT> inline void AppendHexToken(std::basic_string<CharT>& value, std::span<const std::byte> bytes)
 {
     constexpr std::basic_string_view<CharT> hex = []
     {
@@ -314,11 +301,8 @@ namespace Common::Paths
 // device-namespace, relative, and bare executable names.
 [[nodiscard]] inline bool IsExplicitAbsoluteExecutablePath(std::wstring_view path) noexcept
 {
-    const auto isSeparator = [](const wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
-    const auto isDriveLetter = [](const wchar_t ch) noexcept
-    {
-        return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z');
-    };
+    const auto isSeparator   = [](const wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
+    const auto isDriveLetter = [](const wchar_t ch) noexcept { return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z'); };
 
     if (path.size() >= 3u && isDriveLetter(path[0]) && path[1] == L':' && isSeparator(path[2]))
     {
@@ -349,8 +333,8 @@ namespace Common::Paths
             const wchar_t folded = (lhs >= L'a' && lhs <= L'z') ? static_cast<wchar_t>(lhs - (L'a' - L'A')) : lhs;
             return folded == rhs;
         };
-        if (path.size() <= 8u || ! equalsAsciiNoCase(path[4], L'U') || ! equalsAsciiNoCase(path[5], L'N') ||
-            ! equalsAsciiNoCase(path[6], L'C') || ! isSeparator(path[7]))
+        if (path.size() <= 8u || ! equalsAsciiNoCase(path[4], L'U') || ! equalsAsciiNoCase(path[5], L'N') || ! equalsAsciiNoCase(path[6], L'C') ||
+            ! isSeparator(path[7]))
         {
             return false;
         }
@@ -369,7 +353,7 @@ namespace Common::Paths
 
 // Builds `<readable-prefix><marker><128-bit-hex><suffix>`, truncating only the readable prefix
 // when a provider imposes a leaf-length cap. The marker/token/suffix identity is always preserved.
-template<typename CharT>
+template <typename CharT>
 [[nodiscard]] inline HRESULT BuildUniqueSiblingName(std::basic_string_view<CharT> readablePrefix,
                                                     std::basic_string_view<CharT> marker,
                                                     std::basic_string_view<CharT> suffix,
@@ -1727,24 +1711,14 @@ inline bool EmitEtwEvent(const InfoParam& info, std::wstring_view message) noexc
         return false;
     }
 
-    ULARGE_INTEGER fileTime{};
-    fileTime.LowPart  = info.time.dwLowDateTime;
-    fileTime.HighPart = info.time.dwHighDateTime;
-    USHORT length     = static_cast<USHORT>(std::min<size_t>(message.size(), std::numeric_limits<USHORT>::max()));
-
-    // TraceLoggingWrite is a macro that doesn't return a value we can easily capture.
-    // Once registration succeeds, write failures are extremely rare (only if provider disabled).
-    // We count successful writes; failures would show as missing events in consumer.
-    TraceLoggingWrite(g_RedSalamanderProvider,
-                      "DebugMessage",
-                      TraceLoggingLevel(TRACE_LEVEL_INFORMATION),
-                      TraceLoggingKeyword(kDebugKeyword),
-                      TraceLoggingUInt32(static_cast<UINT32>(info.type), "Type"),
-                      TraceLoggingUInt32(info.processID, "ProcessId"),
-                      TraceLoggingUInt32(info.threadID, "ThreadId"),
-                      TraceLoggingUInt64(fileTime.QuadPart, "FileTime"),
-                      TraceLoggingCountedWideString(message.data(), length, "Message"));
-
+    static_assert(static_cast<uint32_t>(InfoParam::Type::Warning) == static_cast<uint32_t>(RedMonitor::Severity::Warning));
+    const ULONG status = RedMonitor::WriteNormalizedEvent(
+        g_RedSalamanderProvider, L"RedSalamander", static_cast<RedMonitor::Severity>(info.type), message, info.processID, info.threadID, info.time);
+    if (status != ERROR_SUCCESS)
+    {
+        g_etwFailed.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
     g_etwWritten.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
@@ -2307,13 +2281,13 @@ template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallback(st
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<T> owned(static_cast<T*>(context));
+        if (owned)
         {
-            std::unique_ptr<T> owned(static_cast<T*>(context));
-            if (owned)
-            {
-                owned->Execute();
-            }
-        },
+            owned->Execute();
+        }
+    },
         payload.get(),
         nullptr);
     if (queued == 0)
@@ -2334,13 +2308,13 @@ template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallbackWit
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+    {
+        std::unique_ptr<T> owned(static_cast<T*>(context));
+        if (owned)
         {
-            std::unique_ptr<T> owned(static_cast<T*>(context));
-            if (owned)
-            {
-                owned->Execute(instance);
-            }
-        },
+            owned->Execute(instance);
+        }
+    },
         payload.get(),
         nullptr);
     if (queued == 0)
@@ -2406,7 +2380,7 @@ inline void TransferModulePinToCallbackReturn(PTP_CALLBACK_INSTANCE instance, wi
 //     if (!PostMessagePayload(hwnd, WM_MYMSG, 0, std::move(payload))) { /* handle error */ }
 //
 //   Receiver (WndProc):
-//     auto payload = TakeMessagePayload<MyPayload>(lParam);
+//     auto payload = TakeMessagePayload<MyPayload>(hwnd, message, lParam);
 //     // NOTE: A nonzero LPARAM is an opaque registry token, never a payload pointer. Receiver MUST use
 //     // TakeMessagePayload<T>, check for null, and ignore stale/drained/type-mismatched nonzero tokens.
 //     // LPARAM zero is reserved for an explicitly posted payload-less fallback when that message defines one.
@@ -2425,12 +2399,17 @@ namespace detail
 {
 using MessagePayloadDeleter = void (*)(void*) noexcept;
 
+// Writable per-type storage supplies identity even when /OPT:ICF folds identical
+// deleter functions. Never use executable addresses as payload type tags.
+template <typename T> inline unsigned char PostedMessagePayloadTypeTag = 0u;
+
 struct PostedMessagePayloadEntry final
 {
     void* payload             = nullptr;
     HWND hwnd                 = nullptr;
     UINT msg                  = 0;
     MessagePayloadDeleter del = nullptr;
+    const void* typeTag       = nullptr;
 };
 
 struct PostedMessagePayloadRegistry final
@@ -2445,7 +2424,6 @@ struct PostedMessagePayloadRegistry final
     std::unordered_map<LPARAM, PostedMessagePayloadEntry> entriesByToken;
     std::unordered_map<HWND, std::unordered_set<LPARAM>> tokensByHwnd;
     std::unordered_set<HWND> closedHwnds;
-    LPARAM nextToken = 1;
 };
 
 [[nodiscard]] inline PostedMessagePayloadRegistry& GetPostedMessagePayloadRegistry() noexcept
@@ -2472,17 +2450,21 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
     delete static_cast<T*>(payload);
 }
 
-[[nodiscard]] inline LPARAM AllocatePostedMessagePayloadTokenLocked(PostedMessagePayloadRegistry& registry) noexcept
+// Live-unique, unpredictable positive tokens. No counter or address fallback is permitted;
+// entropy failure or repeated collision rejects registration and the post reclaims its payload.
+[[nodiscard]] inline LPARAM AllocatePostedMessagePayloadTokenLocked(
+    PostedMessagePayloadRegistry& registry, HRESULT (*entropy)(std::span<std::byte>) noexcept = &Common::Crypto::GenerateRandomBytes) noexcept
 {
-    const size_t maxAttempts = registry.entriesByToken.size() + 1u;
-    for (size_t attempt = 0u; attempt < maxAttempts; ++attempt)
+    constexpr size_t kMaximumAttempts = 32u;
+    for (size_t attempt = 0u; attempt < kMaximumAttempts; ++attempt)
     {
-        const LPARAM token = registry.nextToken;
-        registry.nextToken = token >= std::numeric_limits<LPARAM>::max() ? 1 : token + 1;
+        uintptr_t bits = 0u;
+        if (FAILED(entropy(std::as_writable_bytes(std::span(&bits, 1u)))))
+            return 0;
+        bits &= static_cast<uintptr_t>((std::numeric_limits<LPARAM>::max)());
+        const LPARAM token = static_cast<LPARAM>(bits);
         if (token != 0 && ! registry.entriesByToken.contains(token))
-        {
             return token;
-        }
     }
     return 0;
 }
@@ -2492,7 +2474,8 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
                                                                HWND expectedHwnd,
                                                                UINT expectedMessage,
                                                                bool validateDestination,
-                                                               PostedMessagePayloadEntry& removed) noexcept
+                                                               PostedMessagePayloadEntry& removed,
+                                                               const void* expectedTypeTag = nullptr) noexcept
 {
     const auto it = registry.entriesByToken.find(token);
     if (it == registry.entriesByToken.end())
@@ -2503,6 +2486,9 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
     {
         return false;
     }
+
+    if (expectedTypeTag != nullptr && it->second.typeTag != expectedTypeTag)
+        return false;
 
     removed         = it->second;
     const HWND hwnd = removed.hwnd;
@@ -2524,7 +2510,8 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
                                                              HWND expectedHwnd,
                                                              UINT expectedMessage,
                                                              bool validateDestination,
-                                                             PostedMessagePayloadEntry& removed) noexcept
+                                                             PostedMessagePayloadEntry& removed,
+                                                             const void* expectedTypeTag = nullptr) noexcept
 {
     if (token == 0)
     {
@@ -2533,7 +2520,7 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
 
     auto& registry = GetPostedMessagePayloadRegistry();
     std::lock_guard lock(registry.mutex);
-    return ErasePostedMessagePayloadEntryLocked(registry, token, expectedHwnd, expectedMessage, validateDestination, removed);
+    return ErasePostedMessagePayloadEntryLocked(registry, token, expectedHwnd, expectedMessage, validateDestination, removed, expectedTypeTag);
 }
 } // namespace detail
 
@@ -2587,7 +2574,7 @@ inline void InitPostedPayloadWindow(HWND hwnd) noexcept
     return toDelete.size();
 }
 
-/// Posts a message with a unique_ptr payload behind an opaque, process-unique LPARAM token. If PostMessageW
+/// Posts a message with a unique_ptr payload behind an opaque, unpredictable live-unique LPARAM token. If PostMessageW
 /// fails, the payload is automatically deleted. Returns true on success, false on failure.
 template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UINT msg, WPARAM wParam, std::unique_ptr<T> payload) noexcept
 {
@@ -2618,7 +2605,8 @@ template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UI
     }
 
     static_cast<void>(registry.entriesByToken.emplace(
-        token, detail::PostedMessagePayloadEntry{.payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter}));
+        token,
+        detail::PostedMessagePayloadEntry{.payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter, .typeTag = &detail::PostedMessagePayloadTypeTag<T>}));
     static_cast<void>(registry.tokensByHwnd[hwnd].insert(token));
 
     if (! PostMessageW(hwnd, msg, wParam, token))
@@ -2634,30 +2622,71 @@ template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UI
     return true;
 }
 
-/// Takes ownership of a registered message payload identified by the opaque LPARAM token.
-/// Returns null for a zero LPARAM or a stale, drained, unregistered, or differently typed token.
-template <typename T> [[nodiscard]] inline std::unique_ptr<T> TakeMessagePayload(LPARAM lParam) noexcept
+/// Sends a message synchronously with a unique_ptr payload behind the same opaque, unpredictable live-unique LPARAM token
+/// PostMessagePayload uses; the receiver adopts it with TakeMessagePayload<T> exactly as a posted payload. The
+/// registry lock is not held across SendMessageW. A payload the receiver did not take (a failed send, an ignored
+/// message, or a window drained meanwhile) is reclaimed and deleted before this returns. Returns SendMessageW's
+/// result, or 0 when the payload could not be registered (null or drained HWND, or no free token).
+template <typename T> [[nodiscard]] inline LRESULT SendMessagePayload(HWND hwnd, UINT msg, WPARAM wParam, std::unique_ptr<T> payload) noexcept
 {
-    detail::PostedMessagePayloadEntry entry{};
-    if (! detail::TakeRegisteredPostedMessagePayload(lParam, nullptr, 0, false, entry))
+    T* raw = payload.release();
+    if (raw == nullptr)
     {
-        return {};
+        return SendMessageW(hwnd, msg, wParam, 0);
     }
 
-    constexpr detail::MessagePayloadDeleter expectedDeleter = &detail::DeletePostedMessagePayload<T>;
-    if (entry.del != expectedDeleter)
+    constexpr detail::MessagePayloadDeleter deleter = &detail::DeletePostedMessagePayload<T>;
+
+    LPARAM token = 0;
     {
-        entry.del(entry.payload);
-        return {};
+        auto& registry = detail::GetPostedMessagePayloadRegistry();
+        std::lock_guard lock(registry.mutex);
+        if (hwnd && ! registry.closedHwnds.contains(hwnd))
+        {
+            token = detail::AllocatePostedMessagePayloadTokenLocked(registry);
+            if (token != 0)
+            {
+                static_cast<void>(registry.entriesByToken.emplace(
+                    token,
+                    detail::PostedMessagePayloadEntry{
+                        .payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter, .typeTag = &detail::PostedMessagePayloadTypeTag<T>}));
+                static_cast<void>(registry.tokensByHwnd[hwnd].insert(token));
+            }
+        }
     }
+    if (token == 0)
+    {
+        deleter(raw);
+        return 0;
+    }
+
+    const LRESULT result = SendMessageW(hwnd, msg, wParam, token);
+
+    detail::PostedMessagePayloadEntry unclaimed{};
+    if (detail::TakeRegisteredPostedMessagePayload(token, hwnd, msg, true, unclaimed))
+    {
+        unclaimed.del(unclaimed.payload);
+    }
+    return result;
+}
+
+/// Adopts only a token for this receiving HWND, message, and payload type. Invalid claims
+/// leave the entry owned by the registry so its rightful receiver or teardown can reclaim it.
+/// Zero, forged, consumed and drained tokens return null without touching other storage.
+template <typename T> [[nodiscard]] inline std::unique_ptr<T> TakeMessagePayload(HWND hwnd, UINT message, LPARAM lParam) noexcept
+{
+    const void* const expectedTypeTag = &detail::PostedMessagePayloadTypeTag<T>;
+    detail::PostedMessagePayloadEntry entry{};
+    if (! hwnd || ! detail::TakeRegisteredPostedMessagePayload(lParam, hwnd, message, true, entry, expectedTypeTag))
+        return {};
     return std::unique_ptr<T>(static_cast<T*>(entry.payload));
 }
 
 template <typename T> struct ContiguousPostedPayloadDrainResult final
 {
-    ContiguousPostedPayloadDrainResult()                                                        = default;
-    ContiguousPostedPayloadDrainResult(const ContiguousPostedPayloadDrainResult&)               = delete;
-    ContiguousPostedPayloadDrainResult& operator=(const ContiguousPostedPayloadDrainResult&)    = delete;
+    ContiguousPostedPayloadDrainResult()                                                         = default;
+    ContiguousPostedPayloadDrainResult(const ContiguousPostedPayloadDrainResult&)                = delete;
+    ContiguousPostedPayloadDrainResult& operator=(const ContiguousPostedPayloadDrainResult&)     = delete;
     ContiguousPostedPayloadDrainResult(ContiguousPostedPayloadDrainResult&&) noexcept            = default;
     ContiguousPostedPayloadDrainResult& operator=(ContiguousPostedPayloadDrainResult&&) noexcept = default;
 
@@ -2674,15 +2703,11 @@ template <typename T> struct ContiguousPostedPayloadDrainResult final
 /// enforce cancellation or caller-specific budgets. `reduce` owns the payload merge/replacement policy. Both
 /// callbacks must be noexcept.
 template <typename T, typename CanDrain, typename Reducer>
-[[nodiscard]] inline ContiguousPostedPayloadDrainResult<T> TakeAndCoalesceContiguousPostedPayloads(HWND hwnd,
-                                                                                                   UINT message,
-                                                                                                   WPARAM operationKey,
-                                                                                                   LPARAM currentLParam,
-                                                                                                   CanDrain&& canDrain,
-                                                                                                   Reducer&& reduce) noexcept
+[[nodiscard]] inline ContiguousPostedPayloadDrainResult<T> TakeAndCoalesceContiguousPostedPayloads(
+    HWND hwnd, UINT message, WPARAM operationKey, LPARAM currentLParam, CanDrain&& canDrain, Reducer&& reduce) noexcept
 {
     ContiguousPostedPayloadDrainResult<T> result;
-    result.payload = TakeMessagePayload<T>(currentLParam);
+    result.payload = TakeMessagePayload<T>(hwnd, message, currentLParam);
     if (! result.payload || ! hwnd)
     {
         return result;
@@ -2709,7 +2734,7 @@ template <typename T, typename CanDrain, typename Reducer>
             break;
         }
 
-        std::unique_ptr<T> newerPayload = TakeMessagePayload<T>(queuedMessage.lParam);
+        std::unique_ptr<T> newerPayload = TakeMessagePayload<T>(queuedMessage.hwnd, queuedMessage.message, queuedMessage.lParam);
         if (! newerPayload)
         {
             continue;

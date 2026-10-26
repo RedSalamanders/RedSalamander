@@ -86,6 +86,21 @@ The optional module-level quiet-point exports from `Common/PlugInterfaces/Factor
 
 `FileSystemPluginManager` MUST unload existing plugin entries through its centralized quiet-point helper before rediscovery clears the plugin list. During process shutdown, the same helper honors `RedSalamanderPluginRetainModuleUntilProcessExit()` after normal COM instance release and `RedSalamanderPluginShutdown()`.
 
+Unload ownership is per module reference, but exclusion from rediscovery is per DLL path. While any
+owner for a multi-plugin DLL remains unload-deferred, the host MUST retain an unload-deferred
+placeholder for every known logical alias of that path, including aliases whose own references
+were released successfully. Placeholders copy owned identity/presentation metadata and MUST NOT
+retain additional COM objects, module pins or pointers into the DLL. Repeated refreshes and partial
+sweeps MUST preserve those identities without duplicates; once the final owner unloads, the deferred
+metadata is removed and ordinary discovery or on-demand loading may resume.
+
+Before rebuilding the file-system catalog, rediscovery MUST perform one bounded
+deferred-unload sweep after releasing all manager-owned entries. A shared DLL's
+earlier aliases may have deferred only because later aliases still owned instances;
+quiescent aliases MUST remain available in that same refresh. The retry MUST honor
+the module's unload veto for genuine external owners or outstanding workers, without
+polling, forcing unload or dropping alias metadata.
+
 Runtime settings refresh MUST release pane-owned file-system references first: close live viewers, clear FolderView/NavigationView file-system references and navigation callbacks, then rediscover file-system plugins, rediscover viewer plugins, and reload pane file-system instances. The effective quiet-point sequence is: stop host producers, clear registration callbacks such as `INavigationMenu::SetCallback(nullptr, nullptr)`, cancel/drain watches or provider-owned async work, release COM instances, invoke optional module shutdown, unregister resources, then release the module unless process-shutdown retention is explicitly requested.
 
 Independently unloadable DLLs that use libcurl MUST coordinate through
@@ -900,6 +915,7 @@ pre-existing file's read-only attribute in order to retry the same non-overwrite
   destination mutation unless it maintains an equivalent complete rollback
   transaction.
 - Archive providers MUST normalize archive entry keys to relative provider paths before indexing. Absolute/UNC/device-style keys, drive-qualified keys, empty path components, `.`/`..` components, NUL components, and stream/ADS-like colon components remain invalid archive data. Duplicate normalized keys and file/directory hierarchy collisions MUST resolve deterministically without exposing two objects at one path. FileSystem7z keeps the first indexed entry, warns and drops later duplicates, and drops a descendant when a first-indexed ancestor is a file; unaffected root entries remain browsable instead of rejecting the entire archive.
+- FileSystem7z's typed route and diagnostic name contracts MUST both advertise `/` and `\` as accepted separators, matching `NormalizeInternalPath`; `/` remains preferred and component comparison remains case-sensitive. This includes mixed paths produced by Windows FolderView joins (`/folder\file.ext`). Parent, leaf, relative-path and collision-key derivation MUST agree with reader lookup. Accepting either separator in a provider path does not allow either separator inside one proposed child name, nor relax archive-entry safety rules. Export to a local or UNC folder validates only the selected source leaf against the destination provider's child-name contract before joining or writing.
 - Providers whose current paths are not stable item identities (`pathTextStableIdentity = false`) MUST keep same-provider destructive or overwrite-capable mutations fail-closed unless the operation API carries and revalidates stable provider IDs.
 
 ### 4a. IFileWriter Interface (optional)
@@ -1149,6 +1165,13 @@ provider roots. A single-root configured instance MAY return one stable provider
 value is admission qualification, not object mutation authority; exact source/destination identity
 still comes from binding and boundary revalidation.
 
+Local's brief route cache may reuse a retained volume GUID only after observing the
+requested existing path's followed endpoint anew and revalidating the cached mount
+GUID. Lexical prefix matching is only an optimization filter. A known endpoint or
+mount GUID change forbids the old same-root cache hit; an unavailable observation
+uses the original system resolver. Observation handles stay query-local and do not
+replace no-follow mutation bindings or the operation-specific typed query.
+
 #### ABI-v2 operation control and object binding
 
 `FileSystemOptions` includes `FileSystemLinkPolicy::{Preserve, Skip}` (consumed by Copy; a Move
@@ -1231,7 +1254,7 @@ What each provider already holds before it mutates, and therefore reports on its
 
 | Provider | Copy, Move and Delete discovery record |
 |---|---|
-| Local | Its own aggregator (`FileSystem.FileOps.cpp`), with the two deliberate silences above. |
+| Local | Its own aggregator (`FileSystem.FileOps.cpp`), with the two deliberate silences above. A recursive Copy's walker closes the root when its producer's listing ends, one worker included, never after the last byte (I35 S2). |
 | Dummy | The node, before mutating: a leaf's exact size; a directory Copy or Delete the generated subtree, where an ungenerated child count is unknown rather than zero and discovery never forces generation; a single-item Move one directory; a bulk walk one discovery per node it visits. |
 | Curl | Each listing entry on the single-threaded enumeration: a leaf's exact size where the dialect reports one and an unknown-size file where it does not; a server-side rename the object and nothing beneath it; a bulk entry point each selected root on its pre-pass, then the walk's descendants. |
 | S3 | The complete transfer plan, classified before any object work: a key ending in `/` is a directory, any other key a file, and a listed prefix is one directory even when the bucket keeps no marker. A singular call closes on that total up front; a bulk call publishes every root from its existing estimate pre-pass and closes before the first transfer; a delete reports the object, or the first listing of the prefix it clears. S3 always knows a size. |
@@ -1284,6 +1307,15 @@ provider without object binding name the object at a path with a stable identity
 including its per-item receipt, but deletes only while the live identity still equals the one
 resolved earlier and returns `ERROR_REVISION_MISMATCH` with nothing deleted otherwise. S3 and Google
 Drive implement it; the host pins every Permanent Delete root through it while the task prepares.
+A provider with object binding may implement it only for the objects its binding reports as
+unsupported (an object it opens but cannot identify): it then resolves corroboration facts (kind,
+attributes, size and last-write time for a file, creation time, and the 64-bit index with the volume
+serial as corroboration only; for a folder, the digest of its whole no-follow listing, its pinned
+tree), returns `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` from `ResolveDeleteIdentity` for an object it
+can bind, so a delete by name never replaces exact authority, compares the facts again on the no-follow
+handle that performs the delete, and deletes only the entries of the pinned tree, each after comparing
+its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
+for identity-less locations (I35 R7.3, D-7.3).
 
 Optional `IFileSystemObjectBinding`
 (`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
@@ -1306,9 +1338,15 @@ mask and logical/allocated-size facts from the retained no-follow handle. A feat
 provider failed to inspect is an inspection failure returned from the call, never a class reported
 as unsupported: the host treats an unsupported class as absent and would prove nothing about it. `TransferMetadataTo`
 accepts only another exact bound object: `PREPARE_CONTENT` applies allocation/encryption features
-before bytes are written; `FINALIZE` transfers named-stream/EA/basic metadata and reports inherited
-or changed security. The returned attempted/preserved/lost/changed masks are authoritative for the
-item. Capability JSON is a path-profile summary and MUST NOT be treated as proof that a particular
+before bytes are written; `FINALIZE` transfers named-stream/EA/basic metadata and classifies
+security. The returned attempted/preserved/lost/changed/informational masks are authoritative for the
+item: `changedFeatures` is a difference the user may act on (a protected source DACL, `SE_DACL_PROTECTED`,
+replaced by the destination's inheritance), `lostFeatures` a class not preserved or, for security, not
+verifiable because a descriptor could not be read (with `firstFailure`), and `informationalFeatures`
+a difference that is the destination's expected behavior (inherited or absent explicit ACEs, owner,
+primary group). `informationalFeatures` is a sizeBytes-guarded suffix: a caller that passes
+`FILESYSTEM_METADATA_TRANSFER_RESULT_LEGACY_SIZE` receives those differences, and an unverifiable
+descriptor, in `changedFeatures` as before, and the provider never writes past the caller's size. Capability JSON is a path-profile summary and MUST NOT be treated as proof that a particular
 object's metadata was preserved. A provider MUST NOT reopen either pathname inside this interface.
 Success with invalid structure sizes, an unowned destination, or unavailable exact authority is a
 contract failure, not permission for a pathname fallback.
@@ -1419,7 +1457,8 @@ Local bound regular objects also expose `IFileSystemBoundMetadata`. The provider
 non-default ADS, and NT backup EA records from the retained source handle to the exact owned stage,
 applies sparse and EFS controls before content (compression inherits from the destination folder
 as in File Explorer), restores basic metadata after named-stream
-writes, and reports destination-inherited security as changed. The host re-applies basic metadata
+writes, and reports destination-inherited security as informational (a replaced protected DACL as
+changed, an unreadable descriptor as lost). The host re-applies basic metadata
 through the exact published authority after stage promotion because promotion clears staging-only
 Hidden/Temporary state. Any failed feature is returned in the exact loss mask; it is never silently
 claimed from the JSON profile.
@@ -1497,14 +1536,14 @@ Current typed route/namespace declarations:
 | Local SMB `local-win32-smb` | bounded (R0f-SMB: the shared synchronous-I/O cancel watch aborts a stuck call with `CancelSynchronousIo`) | real container | Same executable mutations as `local-win32`: Copy/Move/native Move/Delete/Recycle/Rename/Create Directory plus exact binding/publication/link facts |
 | 7-Zip `7z-archive` | bounded | provider virtual folder | read/properties/export Copy only |
 | Curl FTP/SFTP/SCP | provider watchdog (R0f-Curl: every transfer and control command polls the host's operation control) | provider virtual folder | Copy, native Move, Delete, Rename, Create Directory, read and write through the central routes |
-| Curl IMAP | uncontained | provider virtual folder | read/export Copy only; mutation admission rejects the uncontained route |
+| Curl IMAP | uncontained | provider virtual folder | read/open/properties only; admission refuses the uncontained route as either transfer endpoint (I35 XP-08) |
 | Dummy `dummy-local` | bounded | real container | deterministic Copy/Move/native Move/Create Directory test route |
 | Google Drive (writable profile) | provider watchdog (R0f-GDrive) | provider virtual folder | Copy, native Move, Delete, Rename, Recycle, Create Directory, read and write; names are unique per folder (`pathTextStableIdentity: true`, duplicates carry the `[id:...]` decoration) |
 | Google Drive read-only connection profile (same `google-drive` profile id) | provider watchdog (R0f-GDrive) | provider virtual folder | read/export Copy only; the connection profile keeps its route read-only |
 | Microsoft Drive `microsoft-drive-graph` | provider watchdog (R0f-Graph) | provider virtual folder | Copy, native Move, Rename, Recycle (`operations.recycle: true`, `operations.delete: false`; the Graph permanent-delete endpoint stays unavailable), Create Directory, read and write |
 | MTP `mtp-device-storage` | provider watchdog, 30 s | provider virtual folder | read/write/Copy/Move/Create Directory depend on current device state; positive concurrency bounds do not grant a false operation bit; overwrite replaces only the occupant decided on (C9) |
 | S3 `s3-flat-prefix` | provider watchdog (R0f-S3: the CRT continue handler polls the operation control on every request plus bounded connect, stall-monitor, and retry policy) | provider virtual folder | Copy, Move, native Move, Delete, Create Directory, read and write; Rename and Recycle false; mutations act on the object key resolved at commit |
-| S3 Tables `s3-table-read-only` | uncontained | provider virtual folder | read/properties/export Copy only |
+| S3 Tables `s3-table-read-only` | uncontained | provider virtual folder | read/properties only; admission refuses the uncontained route as either transfer endpoint (I35 XP-08) |
 
 Providers advertising `caseOnlyRename: "supported"` MUST execute a requested case-only leaf rename rather than collapse it as a self/no-op. Microsoft Drive treats a same-item-id request with different leaf casing as a Graph name PATCH; only an exact textual source/destination match is a no-op. Curl FTP/SFTP/SCP advertise `notApplicable` while their Rename capability is disabled.
 
@@ -1921,6 +1960,8 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211"))
   Providers sort and populate metadata before/through that owner; those policies are not shared.
 - Local `FilesInformation` remains a resumable streaming/native-enumeration buffer, and FileSystemDummy retains
   its prebuilt fixture-buffer model. They are intentionally not adapters over `PackedFileInfoBuffer`.
+  Dummy still aligns every entry to `alignof(FileInfo)` and delegates indexed traversal to the canonical
+  checked locator. Mixed-length filename fixtures must pass both indexed and streamed traversal.
 - Packed builders MUST reject arithmetic overflow before allocation or offset conversion. Indexed traversal MUST
   reject odd UTF-16 byte counts, short/unaligned offsets, and offsets beyond the committed buffer with
   `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`.
@@ -2085,6 +2126,12 @@ typedef struct FileSystemOptions
     uint64_t deadlineTickCount64;
     IFileSystemOperationControl* operationControl;
     void* operationControlCookie;
+
+    // I35 S6: FileSystemTransferTuning flags for engine A/B measurement (0 = the engine's defaults).
+    // A provider honors the flags it implements and ignores the others.
+    uint32_t transferTuning;
+    IFileSystemFileWorkCallback* fileWorkCallback;
+    void* fileWorkCookie;
 } FileSystemOptions;
 
 typedef struct FileSystemRenamePair
@@ -2115,11 +2162,15 @@ typedef struct FileSystemArena
 - `totalItems`/`totalBytes` may be `0` when unknown.
 - Pointer parameters passed to callbacks are only valid for the duration of the callback call.
 - For any struct that includes `sizeBytes`, the creator MUST set `sizeBytes = sizeof(StructName)` before passing it across the host↔plugin boundary, and the consumer MUST validate it before reading other fields.
+- `transferTuning` carries `FileSystemTransferTuning` flags (`FileSystem.h`). The Local provider honors `NO_TEMPORARY_REMOTE`, `NO_TEMPORARY_LOCAL`, `PREALLOCATE`, `SKIP_ABSENT_BACKUP_STREAMS` and `WRITE_THROUGH_REMOTE`; `DESTINATION_CONCURRENCY` is host-only. They change how bytes reach storage, never a correctness or safety contract, and the host sets the adopted ones per route (`WRITE_THROUGH_REMOTE` on the host bridge's calls; see `FileSystem_FileOperations.md`, "Transfer phases, stalls and throughput tuning").
 - Any plugin entry point that accepts `FileSystemOptions*` MUST validate `options->sizeBytes == sizeof(FileSystemOptions)` before reading any later option field. `CopyItem`, `MoveItem`, `CopyItems`, `MoveItems`, `DeleteItem`, `DeleteItems`, `RenameItem`, and `RenameItems` MUST all fail malformed options with `E_INVALIDARG` when `options != nullptr`.
 - For this in-repo ABI sweep, `sizeBytes != sizeof(StructName)` is treated as a contract violation and implementations SHOULD fail the call with `E_INVALIDARG`.
 - For `[out]` structs (e.g. `FileSystemDirectorySizeResult* result`), the caller MUST initialize `result->sizeBytes` before calling into the plugin.
 - `FileSystemOptions::bandwidthLimitBytesPerSecond` applies to data-transfer operations (copy/move) and MAY be ignored for rename/delete.
 - `FileSystemOptions::copyMoveMaxConcurrency` applies to copy/move operations and clamps provider-side fan-out, including recursive internal work for a single top-level host item. `0` means plugin/default concurrency.
+  For the Local provider in Auto mode, a nonzero host-resolved value is the effective recursive
+  budget; the inactive Manual numeric value cannot reduce it. In Manual mode the smaller configured
+  and requested limit wins. Null options or a zero value retain plugin/default behavior.
 - `FileSystemOptions::moveMode == FILESYSTEM_MOVE_NATIVE_ONLY` is valid only for Move and forbids generic/unqualified fallback. A provider-native conditional server-side strategy may still delete as part of its qualified route; a provider that cannot honor the constraint fails before mutation.
 - Every profile advertising `operations.nativeMove: true` MUST accept `FILESYSTEM_MOVE_NATIVE_ONLY`
   in both `MoveItem` and `MoveItems`, reject every unknown `moveMode` with `E_INVALIDARG` before
@@ -2204,6 +2255,14 @@ struct FileSystemItemMutationResult
     BOOL mutationCommitted;
     BOOL originalStillPresent;
     FileSystemOwnedStageDisposition ownedStageDisposition;
+    // V3 suffix: metadata the provider itself transferred while producing this item (a
+    // provider-native Copy). FileSystemMetadataFeature masks OR-ed over every object under the
+    // item, with the FileSystemMetadataTransferResult meanings; all zero when it transferred none.
+    uint32_t metadataLostFeatures;
+    uint32_t metadataChangedFeatures;
+    uint32_t metadataInformationalFeatures;
+    uint32_t metadataInformationalObjectCount;
+    HRESULT metadataFirstFailure;
 };
 
 interface __declspec(novtable) IFileSystemCallback
@@ -2260,8 +2319,12 @@ interface __declspec(novtable) IFileSystemCallback
 };
 ```
 
-The original prefix ending before `ownedStageDisposition` remains an accepted v1 record; the full
-size advertises the appended stage axis. `sizeBytes` is validated against one of those explicit
+The original prefix ending before `ownedStageDisposition` remains an accepted v1 record, and the
+prefix ending before the metadata suffix (`FILESYSTEM_ITEM_MUTATION_RESULT_V2_SIZE`) an accepted v2
+record; the full size advertises the appended metadata suffix (I35 S1b). A provider-native Copy reports
+through that suffix every metadata class it transferred itself, so the host classifies native and
+bridge transfers alike (`FileSystem_FileOperations.md` "Metadata consequences"); a provider that
+transferred nothing leaves it zero. `sizeBytes` is validated against one of those explicit
 versions before any result field is read. Boolean fields must be canonical `TRUE` or
 `FALSE`; malformed records are contract violations. Consumers retain receipts through
 `FileSystemRouteContract::SnapshotItemMutationResult`, which validates the prefix and
@@ -2452,11 +2515,15 @@ enum FileSystemSearchMatchSource : uint32_t
 
 enum FileSystemSearchWarningFlags : uint32_t
 {
-    FILESYSTEM_SEARCH_WARNING_NONE                   = 0,
+    FILESYSTEM_SEARCH_WARNING_NONE                  = 0,
     FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX     = 0x1,
     FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT   = 0x2,
     FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED = 0x4,
     FILESYSTEM_SEARCH_WARNING_OVERFLOW              = 0x8,
+    FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE   = 0x10,
+    FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED        = 0x20,
+    FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED = 0x40,
+    FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE      = 0x80,
 };
 
 enum FileSystemSearchPhase : uint32_t
@@ -2537,6 +2604,7 @@ struct FileSystemSearchProgress
 - `maxSnippetCharacters` of `0` means the plugin default. The current built-in `file` plugin default is `160` UTF-16 code units.
 - `FILESYSTEM_SEARCH_WANT_SNIPPETS` is a hint, not a guarantee.
 - `FILESYSTEM_SEARCH_PREFER_INDEX` is a hint. Implementations may fall back to scan and should report `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` when they do.
+- An implementation whose regex engine gives up on a name or content at its complexity/stack limit MUST report `FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE` in progress and final stats rather than treat the item as a silent non-match. The item stays out of the results, the search status stays successful, and the item MUST NOT be retried with a more expensive engine. `Specs/Core/Core_Search.md` defines the full warning-flag semantics.
 - `FILESYSTEM_SEARCH_FORCE_SCAN` is a host override for multi-backend implementations. It takes precedence over `FILESYSTEM_SEARCH_PREFER_INDEX` and backend auto-selection and should route to live scan without service/index lookup when scan is supported.
 - Recursive implementations MUST traverse child directories when `FILESYSTEM_SEARCH_RECURSIVE` is set even if the child directory's own name does not match `namePattern`; name matching controls result emission, not whether descendants are reachable.
 - `fullPathSize`, `relativePathSize`, `displayNameSize`, `previewTextSize`, and `currentPathSize` are in bytes (not characters).
@@ -2807,7 +2875,7 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 | FTP | `builtin/file-system-ftp` / `ftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | SFTP | `builtin/file-system-sftp` / `sftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | SCP | `builtin/file-system-scp` / `scp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
-| IMAP | `builtin/file-system-imap` / `imap` | Read/export Copy only (typed facts keep IMAP read-only; its mutation route is `uncontained` and admission rejects it) | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| IMAP | `builtin/file-system-imap` / `imap` | Read only (typed facts keep IMAP read-only; its route is `uncontained` and admission rejects it as either transfer endpoint, I35 XP-08) | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | MTP/PTP portable devices | `builtin/file-system-mtp` / `mtp` | Device-dependent read/write via a delete-on-close staged file and bounded WPD streaming; no random writes | No direct watch interface in v1 | Manual refresh/poll; hot-plug invalidates device/session state | WPD device/session identity; no local backing dependency | `mtp.*` deterministic fake-backend memory/watchdog coverage plus gated scratch-folder live smoke |
 | S3 | `builtin/file-system-s3` / `s3` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure`; live sandbox phase remains configuration-gated |
 
@@ -2969,3 +3037,65 @@ This specification follows RedSalamander development guidelines:
 - **Unicode UTF-16**: All strings are wchar_t*
 - **Thread Safety**: Document thread-safety guarantees per interface
 - **Performance**: Optimize for common case (local file system, <10K files)
+
+## File and completed-object observation
+
+`FileSystemOptions` optionally borrows `IFileSystemFileWorkCallback` and its cookie. This raw,
+non-COM observer is synchronous, serialized within the public operation, and has no cancellation
+or pause authority. Providers ignore its HRESULT. The host retains the observer and cookie until
+the primary call and borrowed I/O are quiet; UTF-16 report paths are borrowed only until callback
+return. Current options and `FileSystemFileWorkProgress` require their exact current `sizeof`.
+The host and all tree-built consumers must be rebuilt together; no historical options prefix is
+accepted. Existing interface slots and unrelated size-prefix contracts remain unchanged.
+
+A `ScopeSupported` report promises complete logical-leaf reporting for that public call, including
+all roots/workers in `CopyItems`. It does not certify byte totals. The separate `scopeBytesKnown`
+flag certifies every enumerated payload size, including known zero; otherwise the host needs the
+independently summed known sizes of every discovered file-shaped leaf before exposing a complete
+byte denominator. Unsupported or incomplete sizes remain unavailable rather than becoming zero.
+
+Each leaf has a nonzero ID unique within the public call. `Begin` may reset attempt bytes on retry,
+while the leaf ID and publication fact survive retry and Keep Both retargeting. `Published` means
+actual destination publication and is emitted once at that mutation, before subsequent metadata,
+proof or cleanup can fail. `Terminal` ends the outer logical-leaf retry scope with Completed,
+Skipped, Failed or Canceled disposition; it never reverses a previous publication. Transferring,
+Finalizing, Publishing and Verifying describe active work separately from byte completion. A
+whole-scope replay that cannot preserve previous leaf identity emits `CountsUnavailable`; copied
+count certainty cannot recover during that task. Root results remain the separate item-result API.
+
+Regular files, including hard-linked files, contribute their payload bytes. Preserved file-shaped
+semantic links contribute one discovered/published file and zero transferred payload bytes;
+directory-shaped links contribute directory discovery only. Producer-only link events use
+`FILESYSTEM_PRODUCER_PROGRESS_STREAM_ID` and never occupy a regular worker meter slot. Observers
+are suppressed on host-owned stage, promote, source-cleanup and abandoned-stage cleanup calls.
+The Native Copy provider and host bridge implement this contract; other providers retain truthful
+legacy byte observations without invented copied-child counts.
+
+Malformed unsuppressed Copy observer reports (including invalid headers/enums/BOOLs or a kind
+change for the same logical leaf) return `E_INVALIDARG` and permanently withdraw copied-count
+and independently accumulated leaf-size certainty. This does not cancel I/O or erase actual
+published facts. A valid independent Native enumeration-size certificate remains available;
+malformed leaf information cannot mutate that certified raw total. Suppressed nested observation
+never affects primary certainty. A logical leaf's kind is immutable; Keep Both may change only
+its destination presentation.
+
+The same optional observer also supports aggregate completed-object observations without changing
+the options/progress structure layout or existing interface slots. `ObjectCompleted` with Directory
+kind reports a Copy directory only after its traversal/publication completes; Delete reports each
+object only after its successful no-follow removal, with its actual removed payload bytes. A
+scope must independently certify complete reporting; unsupported/replayed scopes withdraw count
+certainty rather than invent zeros or retain duplicate directory completions. Copy's existing
+logical-file publication count remains independent of directory completion.
+
+These events do not create regular per-file meters or change discovery totals. The host maintains
+actual completed files, folders and bytes through partial deletion, cancellation and retirement.
+Owned-stage cleanup, source cleanup and other suppressed nested calls never inflate the selected
+operation's user-visible counts. Mutation authority and operation-control pause/cancel remain
+separate from these observational events.
+
+`ReadOnlyDeleteBlocked` is an observation of an actual read-only refusal from an opened item;
+it reports no successful work and authorizes no attribute change. An exact retained host Delete
+scope may use it to ask for explicit read-only deletion consent, including after a known partial
+subtree deletion. Without that consent, read-only data remains. A generic access-denied status
+cannot substitute for this evidence. Providers restore cleared attributes if deletion fails and
+continue to honor exact-identity/no-follow checks and cancellation.

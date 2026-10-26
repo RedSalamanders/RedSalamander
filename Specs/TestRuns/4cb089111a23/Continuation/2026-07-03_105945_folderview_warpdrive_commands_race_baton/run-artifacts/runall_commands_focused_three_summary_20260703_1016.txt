@@ -1,0 +1,8 @@
+
+Case                                                                                                                      Exit Passed Failed Skipped Failure Log
+----                                                                                                                      ---- ------ ------ ------- ------- ---
+cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun    0      1      0       0         .build\codex-runs\runall_commands_cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and…
+cmd_pane_navigation_menu_keeps_navigation_shell_stable                                                                       0      1      0       0         .build\codex-runs\runall_commands_cmd_pane_navigation_menu_keeps_navigation_shell_stable_focused_20260703_1016.log
+cmd_app_menuBar_persistent_mouseleave_clears_hover_without_live_cursor_switch                                                0      1      0       0         .build\codex-runs\runall_commands_cmd_app_menuBar_persistent_mouseleave_clears_hover_without_live_cursor_switch_focused_20260703_1016.log
+
+

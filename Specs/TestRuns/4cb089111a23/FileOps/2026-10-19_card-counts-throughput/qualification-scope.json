@@ -1,0 +1,7 @@
+{
+  "affectedPlan": "explain-plan",
+  "prePushDelegation": "PR equivalence unavailable; no CI obligations counted as passed",
+  "interactive": "Commands, broad FileOperations, ViewerPE interactive, ViewerSqlite interactive, Monitor ETW latency pending",
+  "scope": "Focused no-activation card and live-folder tests plus resource/source contracts; no Full repository verdict",
+  "runtimeResults": "ReviewRemediationContracts: 3/3 runner cases, 100 captures; DiscoveryScope_FolderLiveProgress: 3/3 runner cases, 64 live assertions. Both builds: zero warnings/errors. Source/resource contracts: 214/214. Full and interactive entries not executed."
+}

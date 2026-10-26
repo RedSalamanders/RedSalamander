@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-10-03T23:19:39.851Z",
+    "duration_ms": 33648,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_VisualGalleryInteraction",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 32875,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_VisualGalleryInteraction",
+            "cases": [
+                {
+                    "name": "FileOps_VisualGalleryInteraction",
+                    "status": "passed",
+                    "duration_ms": 32875,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

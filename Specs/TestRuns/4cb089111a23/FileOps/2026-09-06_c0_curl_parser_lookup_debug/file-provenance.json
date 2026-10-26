@@ -1,0 +1,51 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 861,
+    "sha256": "90edfba07a7297fb0a09090e7d2922e5d19ef08a81621f27f689eeedbe33ac71",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5404,
+    "sha256": "7610f99448a1a583e02de897e456effa83817e825b17c7d374a17c83ff15aa6b",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1386,
+    "sha256": "ebf45cf0c8c0e7771c66aceba593832712537e5960d9427dc1354aea165608de",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19894,
+    "sha256": "9050fad173e6290f1b3b7ec5f7866850401c81cf3800bf0b2380f45fd5848003",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 46515,
+    "sha256": "94c2ec3b8d2a0ba5fcbebdcd1c35a82fbe4443bcdb30331e67f7bbe456269cdc",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-lookup-debug-20260906\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1694,
+    "sha256": "6c6dd1e0eb344956371095176f54ec959ffaed9ae6f0b9e74988a867ba92ec05",
+    "transform": "none"
+  },
+  {
+    "name": "source-resource-contracts.xml",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-policy-20260906\\scratch\\policy\\source-resources\\source-resource-contracts.xml",
+    "bytes": 62207,
+    "sha256": "cbca72c7b00b9837062fe627900a87534d25d70beef459a33c38ae41fa5109dd",
+    "transform": "none"
+  }
+]

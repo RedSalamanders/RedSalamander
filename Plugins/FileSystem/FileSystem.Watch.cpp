@@ -1,3 +1,4 @@
+#include "DirectoryRecordCursor.h"
 #include "FileSystem.Internal.h"
 #include "FileSystemResources.h"
 #include "LocalSearchIndexCore.h"
@@ -510,32 +511,22 @@ private:
             return;
         }
 
-        const std::byte* bufferEnd = bufferBegin + bytesTransferred;
-
         constexpr size_t kMaxChanges = 128u;
         std::array<FileSystemDirectoryChange, kMaxChanges> changes{};
         unsigned long changeCount = 0;
         BOOL overflow             = FALSE;
 
-        const FILE_NOTIFY_INFORMATION* entry = reinterpret_cast<const FILE_NOTIFY_INFORMATION*>(bufferBegin);
+        size_t offset = 0u;
         while (true)
         {
-            const std::byte* entryBytes  = reinterpret_cast<const std::byte*>(entry);
-            const std::byte* entryMinEnd = (entryBytes >= bufferBegin) ? (entryBytes + offsetof(FILE_NOTIFY_INFORMATION, FileName)) : bufferEnd;
-            if (entryBytes < bufferBegin || entryMinEnd > bufferEnd)
+            Common::DirectoryRecords::RecordView<FILE_NOTIFY_INFORMATION> record{};
+            if (FAILED(Common::DirectoryRecords::Read<FILE_NOTIFY_INFORMATION>(
+                    std::span<const std::byte>(bufferBegin, bytesTransferred), offset, record, Common::DirectoryRecords::NameKind::RelativePath)))
             {
                 overflow = TRUE;
                 break;
             }
-
-            const std::byte* fileNameBytes = reinterpret_cast<const std::byte*>(entry->FileName);
-            const std::byte* fileNameEnd   = fileNameBytes + entry->FileNameLength;
-            if (fileNameEnd > bufferEnd)
-            {
-                overflow = TRUE;
-                break;
-            }
-
+            const auto* entry = record.information;
             if (changeCount < static_cast<unsigned long>(changes.size()))
             {
                 FileSystemDirectoryChange change{};
@@ -551,19 +542,9 @@ private:
                 break;
             }
 
-            if (entry->NextEntryOffset == 0)
-            {
+            if (record.nextOffset == 0u)
                 break;
-            }
-
-            const std::byte* nextBytes = entryBytes + entry->NextEntryOffset;
-            if (nextBytes <= entryBytes || nextBytes > bufferEnd)
-            {
-                overflow = TRUE;
-                break;
-            }
-
-            entry = reinterpret_cast<const FILE_NOTIFY_INFORMATION*>(nextBytes);
+            offset = record.nextOffset;
         }
 
         FileSystemDirectoryChangeNotification notification{};

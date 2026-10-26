@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-07-09T16:10:52.751Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260709T161052Z-54228-c3c424a8c6904a0486872fe27be1b6c8\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 58,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "settings_file_operations_precalc_roundtrip",
+            "status": "passed",
+            "duration_ms": 33,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

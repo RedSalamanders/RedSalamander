@@ -29,7 +29,7 @@ struct ViewerSqliteGridModel;
 
 [[nodiscard]] const char* GetViewerSqliteStaticConfigurationSchema() noexcept;
 
-class ViewerSqlite final : public EmbeddedViewerBase<ViewerSqlite>, public IInformations, public DxUi::IDxGridDelegate
+class ViewerSqlite final : public EmbeddedViewerBase<ViewerSqlite>, public IInformations, public DxUi::IGridDelegate
 {
 public:
     ViewerSqlite();

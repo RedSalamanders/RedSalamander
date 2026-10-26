@@ -105,6 +105,12 @@ void StartSplashDrag(HWND hwnd) noexcept;
 class SplashRootControl final : public Panel
 {
 public:
+    SplashRootControl()                                    = default;
+    SplashRootControl(const SplashRootControl&)            = delete;
+    SplashRootControl(SplashRootControl&&)                 = delete;
+    SplashRootControl& operator=(const SplashRootControl&) = delete;
+    SplashRootControl& operator=(SplashRootControl&&)      = delete;
+
     bool Tick(WindowHost& host, uint64_t nowTickMs) override
     {
         static_cast<void>(Panel::Tick(host, nowTickMs));

@@ -1,0 +1,22 @@
+{
+  "captures": [
+    {
+      "file": "repeat-1-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-projection-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-1\\typed-conflicts.png",
+      "sha256": "12842bd20562bf95708fa1a90c1d56d518411b3e386e794569a97d4bdea12a54"
+    },
+    {
+      "file": "repeat-2-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-projection-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-2\\typed-conflicts.png",
+      "sha256": "c71ad2415c8a096cb02b63877e968fbd75ad67d7339f299860ec950ef64f6cdb"
+    },
+    {
+      "file": "repeat-3-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-projection-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-3\\typed-conflicts.png",
+      "sha256": "c71ad2415c8a096cb02b63877e968fbd75ad67d7339f299860ec950ef64f6cdb"
+    }
+  ],
+  "scenario": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+  "source_snapshot": "8c8e838638b19429966054f7af9ade328b969bdc11d13645b2b8dd16ab2d4e6e",
+  "capture_method": "SaveWindowScreenshot, private HWND with ScopedWindowActivationBlocker"
+}

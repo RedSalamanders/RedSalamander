@@ -1,0 +1,64 @@
+{
+  "schema": "i26-v58-root-source-review.v1",
+  "reviewer": "root",
+  "manifestSha256": "bab0169a74f116109f5d4434e9e9ec2319403a1dc9831252e55af3ab651e784c",
+  "inventorySha256": "1f492c1c0d5a9508be29f4e980198c3e821a5c3466b7759b2543b586b2495344",
+  "logicalInputs": 85,
+  "physicalInputs": 84,
+  "primary": "Z:/src/RedSalamander",
+  "candidate": "C:/RsI26Adopt",
+  "frozen": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v58-20261001",
+  "threeRootsVerified": true,
+  "frozenV57Verified": true,
+  "logicalChanges": 8,
+  "physicalChanges": 8,
+  "changes": [
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp",
+      "previous": "72ad7f9d73320ebfc878645296a2067dcd9813c3ae597bdd690ce6f6244a9c5c",
+      "current": "a2eef35462baeca89d85eef6f33067687e729209e3ef6f6ef295a899d068c19f"
+    },
+    {
+      "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+      "previous": "c535414c7b09b7791fb2f272833ed53d2955ba28d0725a6d5e08dacef4bb6ff5",
+      "current": "b85128b8d67cbe500ee7617e64707f67a3de53fd0d97314f93571fb8abdc291f"
+    },
+    {
+      "path": "Specs/Testing/Testing_SelfTests.md",
+      "previous": "683efdbe226313aa9c4317dc6a9ee1a8eae56e177d53726fe9cf99ded7578913",
+      "current": "f45ab8869c5975b697c57a5ea803c86539b89b5f65ea5a6a5be805f814e09d52"
+    },
+    {
+      "path": "Specs/Testing/Testing_TestCoverage.md",
+      "previous": "36a6498ef4be298a50e0acdc135adcbd342d0826bfe08bd606a509cf024bdd26",
+      "current": "4c2ec4a0dc23e8e57292cc134a7f1872b7db62768e48014b2bf50c165e706a0c"
+    },
+    {
+      "path": "Specs/UI/UI_FileOperationsPopup.md",
+      "previous": "ab47f5eb337bf356c3cd95a4fc17cf8041cc10d131c97117d3f01347d7c0dcad",
+      "current": "7d701c48f8c2029cd39123c2cbae307062710c1fba7622d62cfc9997142b2f77"
+    },
+    {
+      "path": "Tools/README.md",
+      "previous": "c31f590f20bff096b2df09cd30c0c1929769084298dfcf7f9408f87c37212d74",
+      "current": "7c19f023fd6256381553d94d88b8c4425afa78e9d9e0516770fa7b2be419d7c6"
+    },
+    {
+      "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+      "previous": "b23607253d6512e649b9af2f4af4ff95e27634bc1965663b586a8fd10ac95829",
+      "current": "d745d67a7efb4e197427f67b62cdc12419c339ff45e7a9380edb0f24a840a627"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "previous": "ff71e65ddb00e9f28584a70cb41c5e6e591c7224f66a858d2f3879337d46fede",
+      "current": "0466fc5de8616746a23d6307128f4b8cfad270b6d2910ccd1c4866ba2a5cda7e"
+    }
+  ],
+  "v57EquivalencePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v57-20261001/root-source-review.json",
+  "v57EquivalenceSha256": "ea7e0c722158b649207ada412a0f0f86d271f3def23c0984a361c23b247e2e83",
+  "sourceGuardReviewPath": "C:/RedSalamander.Perf/evidence/i26-ui/final-gates-drivers-20260930/v58-source-guard-root-review.json",
+  "sourceGuardReviewSha256": "7448fdf0f703cefd77456e11cc2490be711872c111cd1af990f20d66ff5c90e0",
+  "pesterGuardReviewPath": "C:/RedSalamander.Perf/evidence/i26-ui/final-gates-drivers-20260930/v58-pester-guard-root-review.json",
+  "pesterGuardReviewSha256": "c770d03f9002d44973eaa9f2858c8b4facec30ed34b305d8c0aeced64befcf00",
+  "acceptanceEffect": "Source freeze verified only; final builds, native source guards, Full/Fresh and paired resources remain required"
+}

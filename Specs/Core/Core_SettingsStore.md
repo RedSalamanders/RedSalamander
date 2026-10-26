@@ -48,12 +48,15 @@ To avoid cross-process contention and keep settings scoped correctly, each execu
 - Release builds: `<AppId>-<Major>.<Minor>.settings.json` (from `Common/Version.h`: `VERSINFO_MAJOR` and `VERSINFO_MINOR`)
 - Legacy name (pre-versioning, supported for migration): `<AppId>.settings.json`
 - Schema file pattern (always unversioned): `<AppId>.settings.schema.json`
+- RedSalamander's monitor Preferences adapter always selects `RedSalamanderMonitor-7.0.settings.json`,
+  including Debug/ASan consumers, to match the independently installed production Release helper.
+  It does not select a standalone development viewer's debug profile.
 - `AppId` examples:
   - `RedSalamander`
   - `RedSalamanderMonitor`
 
 Debug-load note:
-- In Debug builds, if `<AppId>-debug.settings.json` does not exist, settings load falls back to the versioned file (and then the legacy file) so developers can reuse existing settings without copying/renaming files.
+- In Debug builds, if `<AppId>-debug.settings.json` does not exist, settings load falls back to the versioned file (and then the legacy file) so developers can reuse existing settings without copying/renaming files. The monitor adapter's fixed Release profile is the exception above.
 
 Example (Release):
 - `C:\\Users\\<User>\\AppData\\Local\\RedSalamander\\Settings\\RedSalamander-7.0.settings.json`
@@ -615,6 +618,14 @@ Window IDs are strings (examples):
 ### Save policy
 
 - Persist placement through the owning window's current accepted save/close path and on application shutdown.
+- The shared capture helper converts `GetWindowPlacement` normal bounds from workspace to screen
+  coordinates for ordinary top-level windows, using the monitor work-area origin offset. Child and
+  tool-window bounds are already in screen coordinates and receive no offset. If the required monitor
+  information is unavailable, preserve the last valid record instead of saving unconverted bounds.
+  File Operations and Issues use this same helper, including normal bounds while maximized.
+- Existing records have no coordinate-space version marker. Restore continues to interpret them as
+  screen coordinates and apply the visibility clamp; do not guess an offset or rewrite all old records.
+  A subsequent valid capture records the current window's corrected screen bounds.
 - Continuous or debounced move/resize persistence is not part of the current contract; changing that behavior is routed to `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
 
 ### Restore policy
@@ -871,14 +882,64 @@ Host-owned File Operations settings live under:
 
 These keys are the global defaults edited by `Preferences -> File Operations`. Plugin-specific knobs such as concurrency, recycle-bin batching, and search walkers are not stored here; they remain in each plugin's own configuration payload.
 
+An idle File Operations state that has admitted no settings snapshot does not flush the
+process-wide save coordinator during shutdown. It must not acquire an unrelated save's
+five-second wait merely because the state was created. Once that state successfully admits
+its own preference or placement snapshot, it retains the existing conservative bounded
+flush; admission history stays set even after an explicit test flush. Failed/no-op
+submissions do not set that history. The global coordinator and explicit test flush keep
+their existing contracts, and timed-out copied snapshots remain worker-owned.
+
 ### Stored data
 
 - `fileOperations.autoDismissSuccess`: whether completed successful/cancelled task cards auto-dismiss from the File Operations popup (bool, default: `false`).
+- `fileOperations.showInformationalNotes`: whether File Operations task cards and the Issues pane show Information notes (questions the user answered, skips the user chose, permissions inherited from the destination, skipped links) (bool, default: `false`). Display only: notes are always recorded in the task reservoir, the log and exports, never count as warnings and never block auto-dismiss; this key is independent of `diagnosticsInfoEnabled`, which controls log verbosity (I35 R5.3).
+- `fileOperations.mirrorDecisionsInPane`: whether a pending File Operations decision is also shown as a modeless overlay over the pane that shows the folder it is about (the decision mirror) (bool, default: `true`; Preferences > File Operations). Presentation only: the question always stays on the task card and the pane status bars' pending-decision segment is shown either way. Read at every presentation pass, so a change applies without restart. Written only when `false`; the field is in the parser, the canonical writer, non-default detection, `MaybeResetWorkingFileOperationsSettingsIfEmpty` and both Preferences dirty/merge projections (I35 R8.11).
 - `fileOperations.popupFooterOnly`: whether the File Operations popup presents only its aggregate footer instead of task cards (bool, default: `false`; owned by the popup, not edited in Preferences).
 - `fileOperations.popupCompactDensity`: whether the File Operations popup uses compact task-card density (bool, default: `false`; owned by the popup, not edited in Preferences).
+- `fileOperations.popupThroughputExpanded`: default disclosure state for throughput graphs on new or recreated eligible task cards (bool, default: `true`; owned by the popup, not edited in Preferences). Existing live cards keep their current disclosure state.
 - `fileOperations.verifyAfterCopy`: default for verifying copied regular-file content after publication (bool, default: `false`). Confirmation snapshots the value; a running task does not reread it.
 - `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
 - `fileOperations.defaultBandwidthLimitBytesPerSecond`: default speed limit applied to newly created copy/move tasks when the caller did not already specify one (integer, `>= 0`, default: `0`; `0` means unlimited).
+
+### Throughput disclosure setting
+
+`fileOperations.popupThroughputExpanded` is a popup-owned boolean with default `true`. It remembers
+the last explicit throughput disclosure choice, like other popup view state. New task cards and a
+recreated popup use that value; other existing cards keep their current session choice. Per-task IDs
+are never serialized. Footer-only/compact mode, phase eligibility and DPI changes do not rewrite it.
+Hide/show preserves live choices; process restart restores the saved default. Window rectangles keep
+their existing placement keys and are not overwritten by graph collapse.
+
+The field, schema, parser, canonical writer, non-default detection and settings merge/hot reload
+share this contract. An absent field means expanded. `false` MUST survive save/load when it is the only
+non-default File Operations setting. Invalid types follow the existing boolean parser policy.
+Use the existing deferred/coalesced save path; no synchronous disk I/O in paint or disclosure layout.
+An accepted external settings reload updates the remembered default without invoking a disclosure
+callback or resetting existing cards. Save failure preserves the live choice and existing failure
+reporting; the UI must not promise that an unsuccessful save survived restart.
+
+The typed field, machine schema, parser, canonical writer and non-default pruning are implemented.
+The popup disclosure and per-card choices now pass focused Debug/Release checks for real queued
+save/file reload, new and recreated cards, multiple cards, compact/footer-only suppression and
+unchanged outer geometry. Explicit external hot reload, failed-save/recovery, process restart and
+both placement-key interactions are covered by the retained state acceptance receipts in
+[I26](../Plans/Done/UI_FileOperationsReview_2026-09-16.md). The [original V55 gallery](../Plans/WIP/FileOperationsUiReview_2026-09-16/implementation/2026-10-01-v55-final/README.md)
+retains reviewed French presentation and native 96/144-DPI interaction. Current V65 integrated
+status and the independent pair review's stated scope are recorded in the [V65 packet](../TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/README.md).
+These bounded captures do not establish every display or external-AT combination; native 192-DPI,
+consumer ARM64/ASan, I19 and H4 remain separate. Rejected earlier images remain historical evidence.
+
+### Popup Options save failure
+
+The live `autoDismissSuccess` and `popupCompactDensity` choices use the same deferred settings save
+contract. If atomic replacement fails, the chosen in-memory state and resulting popup layout remain
+coherent, the save worker settles, and the prior durable settings bytes remain unchanged. Do not
+present a failed save as restart persistence. Subsequent actions remain available; after the failure
+is removed, a later successful save persists the current selected values. The protected Options
+journey tests denied replacement followed by a distinct successful save and checks both live layout
+and exact disk contents. This does not make an already retained success card disappear merely because
+the user changed the default auto-dismiss preference.
 
 ### Diagnostics retention
 

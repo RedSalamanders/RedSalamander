@@ -1,0 +1,5 @@
+# Debug ViewerSpace noninteractive child evidence
+
+Run `20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f`. Seven named ViewerSpace children passed and each owned child job became quiet. This is the promoted noninteractive ViewerPE entry, not an interactive or repository pass. The exact checkpoint log, provisional evidence, promotion and terminal result are preserved byte-exact. The original last_run log is unavailable after governed cleanup; this manifest identifies the surviving checkpoint source. The existing failure-report archive contains the immutable plan with `requires_interactive_desktop: false` and `--group=noninteractive`.
+
+[Exact Debug receipt](../../Build/space_candidate_debug_prepush_reattest_20261009T202815Z/build-receipt.json). [Plan and full failed run](../space_prepush_debug_failure_reports_20261009T201507Z/README.md). Receipt `f721d4c3644b36016e3b81900978cc335f1a530d9eadc094f585683bc7f3638b`; build source `9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554`, x64 Debug, tests enabled.

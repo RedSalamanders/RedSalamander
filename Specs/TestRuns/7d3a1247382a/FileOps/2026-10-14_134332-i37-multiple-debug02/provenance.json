@@ -1,0 +1,42 @@
+{
+  "runId": "20261014T134332Z-17232-a7db8ad3ccef4125b44ed0dae89fcc92",
+  "receipt": "c3f92d825d54ae3c40158ee7a74c78b5ade241e5bd493838231a699dc79d8f7e",
+  "sourceSnapshotId": "6670eda9ae8237ec5188352a3464cdb3f059128cdaeab7fbd668a4a8862f13a2",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-multiple-debug-20261014-02",
+  "nativeVerdict": "PASSED",
+  "runnerVerdict": "PASSED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, left untouched; these findings do not themselves fail the selected runner verdict.",
+  "note": "Required regular PerItem and direct Native CopyItems I/O pass exact counts/content/both roots. Named Native semantic-link subcases skip explicitly with privilege1314; no Native link I/O claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 93727,
+      "sha256": "6C931B93460A35FD727C1A0C531F238061123674801510E1567CC9586CEDF2F4"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 2038,
+      "sha256": "630BEF9A423A3852D98693E1B9273E3E123E6FBC5FB3A7BF73EBA75B2C82FACA"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 21933,
+      "sha256": "9A77D5DA6EF88A96A30BC7CABFF73F5B5E023961449B9CA984A9875458241F59"
+    },
+    {
+      "path": "results.json",
+      "bytes": 897,
+      "sha256": "DBF1173B1D19CF780F033E33DDC72DB5D0304ACB18E168E2E890A039F7BEF057"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3457,
+      "sha256": "D8CEEF40652F298304FF5CE0DF9B4A9447983D7FD20D53715AB8AF3053816CBC"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 7470,
+      "sha256": "66EDC27649E3C99A7C8A6D1CEAE40B4EAF3D9391FA09FE2A2FCDD7EF6CA9ED3C"
+    }
+  ]
+}

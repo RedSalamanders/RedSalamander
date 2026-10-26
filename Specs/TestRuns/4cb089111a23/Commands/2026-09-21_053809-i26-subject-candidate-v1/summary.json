@@ -1,0 +1,107 @@
+{
+  "variant": "subject-candidate-v1",
+  "passed": 69,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "9956426bb99be74baa7e114faaa6db0587ae143b03814d6a949f38312bf39a55",
+  "caption_probes": [
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    }
+  ],
+  "metrics": {
+    "FileOps.Issues.TypedProjection.RefreshUs": {
+      "samples_us": [
+        8824,
+        3218,
+        2893,
+        2928,
+        5727,
+        2795,
+        3099,
+        3055,
+        9970,
+        2702,
+        3341,
+        2475
+      ],
+      "median_us": 3077.0,
+      "p95_us": 9970
+    },
+    "FileOps.Issues.DetailCapture.CaptionPixels": {
+      "samples_us": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "median_us": 0,
+      "p95_us": 0
+    },
+    "FileOps.Issues.TypedProjection.UnchangedRefreshUs": {
+      "samples_us": [
+        415,
+        427,
+        399,
+        524,
+        426,
+        389,
+        433,
+        484,
+        840,
+        579,
+        388,
+        624
+      ],
+      "median_us": 430.0,
+      "p95_us": 840
+    }
+  }
+}

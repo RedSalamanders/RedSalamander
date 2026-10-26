@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-05T23:22:51.405Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-crud-debug-20260906\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 2516,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1344,
+            "repeat_index": 1
+        },
+        {
+            "name": "R0fCurl_FakeFtpReadWriteCreateDelete",
+            "status": "passed",
+            "duration_ms": 1047,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

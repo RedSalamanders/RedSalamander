@@ -1,5 +1,150 @@
 # Performance Validation Specification
 
+## Search progress counters
+
+Use local_index_core_progress_counters_are_batched for the same 4,096-file owned
+traversal fixture before and after producer changes. Retain success, callback rejection,
+early cancellation and null-callback results; inspect the existing sink's bounded appended
+span with typed JSON parsing. For each scenario, emitted-call totals equal actual callback
+records plus suppressed totals. Each count metric has at most one row per callback and
+one terminal flush; null callbacks remain silent. Query results and HRESULTs stay exact.
+
+This batches count deltas rather than individual timestamps. Compare sums of value0 and
+retained callback-duration rows, not count-metric row totals. It changes neither the shared
+JSONL writer's schema/concurrency/immediate-readability guarantees nor the progress throttle.
+Report bytes/rows and callback counts alongside elapsed time. A diagnostic-volume reduction
+does not by itself establish production search throughput or paired Release non-regression.
+
+## Natural name sorting
+
+Warm-render preparation MUST drain queued UI work after each polling delay and
+observe queue state before sampling render counters. A bounded pump that leaves
+messages pending cannot establish a quiet interval. Preserve the existing stable
+interval and timeout; do not compensate by allowing extra no-op paints or moving
+synthetic preparation into a measured product request. The native
+`folder_view_warm_quiescence_drains_pending_paint` control schedules a real pane
+paint through a window-owned timer, rejects a quiet return with that timer still
+queued, and dispatches its positive control while borrowed state remains alive.
+This control is separate from the unchanged scroll measurement. A passing replay
+does not identify the cause of an earlier failed repaint observation.
+
+Use `folderView_perf_sort_toggle_stress` with `-SelfTestRepeat 5` for the
+`product_paint_v2` protocol: the existing 5,000-file corpus and all ten requests
+per repetition. Prepare and settle rendering outside the measured requests. A
+changed request times SetSort through its successful product paint; an already
+warm no-op requires no new paint. The observer MUST NOT inject an invalidation,
+resize, deferred initialization or synthetic warm-render call inside that span.
+Only Present returning `S_OK` qualifies; attempted, failed and occluded frames do
+not. Retain every `folder.sort_product_paint_us` sample, direction/request sequence,
+`FolderView.ApplyCurrentSort`, enumeration `SortMerge` and `NaturalSortRanks` timings.
+Report per-request medians and ranges, plus initial enumeration/preparation cost.
+The per-case JSON is overwritten by repeats; preserve the complete JSONL to retain
+all repetitions. The fixture is a structural guard and metric recorder, not a fixed
+wall-clock CI threshold. Correctness must independently compare cached and uncached
+Windows ordering, both directions, logical/ordinal/stable ties and resolver probes.
+
+`folderView_perf_sort_toggle_legacy_warm_control` preserves the previous
+`legacy_warm_v1` operation sequence and emits `folder.sort_toggle_us`: it includes
+the forced invalidation, resize/deferred initialization, message draining, icon
+processing and synthetic warm renders. Keep this control separate from product
+paint latency. Its existing metric name retains its historical meaning. Both
+artifacts identify `measurementProtocol` and retain render calls, successful
+presents, synthetic warm calls and whether each sort changed. The zero-duration
+`folder.sort_product_warm_calls` / `folder.sort_legacy_warm_calls` records put warm
+calls in `value0` and successful presents in `value1`.
+
+When correcting the measurement protocol, collect legacy controls and product-paint
+measurements in both profiles. An optimization with the v2 protocol held fixed
+requires matched baseline/candidate v2 blocks; it need not repeat the superseded
+v1 control. A protocol correction is not a product speedup: compare historical v1 samples only
+with the unchanged v1 control, and compare production ordering/layout separately.
+Do not replace the historical I43 results or attribute compositor wait variation
+to the Windows filename comparator without measured stage evidence.
+`Show-PerfRuns.ps1 -FolderViewPreset` reports both duration metrics separately.
+
+For Debug/Release CPU attribution, retain `folder.sort_jsonl_write_us` beside
+every request. It records this UI thread's inclusive synchronous JSONL writer
+time and call count from test-only cumulative observations, with identical hooks
+in the baseline and candidate and no timer-boundary change. Keep all original
+draw/layout/order/presentation rows. Rendering scopes include recorder work:
+per-item duration emission occurs inside the enclosing frame, and per-layout
+phase emission occurs inside the layout scope. Do not interpret those scopes as
+pure Direct2D or comparison CPU cost. The Debug application enables JSONL capture
+by default; faster synchronous recording can improve that captured/default-Debug
+path but does not establish the same gain with capture disabled. Preserve Debug
+checked iterators, graphics validation, every metric row, immediate readability
+and the existing synchronous append behavior when optimizing recording cost.
+Observation reads must use thread-local values and lock-free published counters;
+they must not wait for a writer outside the timer and thereby hide contention.
+The writer's schema/concurrency/resource guard is
+`folderView_perf_jsonl_writer_contracts`; its implementation contract belongs to
+`Core_RedSalamanderMonitor.md`.
+
+The [2026-10-20 writer study, Debug](../TestRuns/Local-x64/Navigation/2026-10-20_DebugSortWriter-Debug/README.md)
+and [Release](../TestRuns/Local-x64/Navigation/2026-10-20_DebugSortWriter-Release/README.md)
+retain eight counterbalanced, first-eligible blocks and 400 requests on the same
+marked S: fixture/capture volume. Extension Ascending medians are 34.701 to
+19.810 ms in Debug (counted synchronous writer spans 17.312 to 2.479 ms), and
+8.984 to 8.591 ms in Release (1.591 to 0.883 ms writer spans). This reduces
+captured/default-Debug diagnostic overhead while preserving ordering and Debug
+checks. It does not qualify capture-disabled latency or a uniform Release gain:
+Release ranges overlap and two request medians are slightly higher. The large
+Release Time Ascending difference includes a 17.407 to 2.497 ms Present span;
+do not assign that entire difference to the recorder or comparator. Full original
+streams, all request/counter samples, exact receipts/source identities, compressed
+complete process observations, and rejected/interrupted attempts remain bound in
+the packets. A read-only inspection falsely matched the conservative driver
+filter; its attempt remains excluded without rewriting the observation. These
+fresh S: pairs do not directly rebaseline historical Z: absolute timings.
+
+The [2026-10-20 Release report](../TestRuns/Local-x64/Navigation/2026-10-20_ReleaseSortPaintLatency-Release/README.md)
+and [Debug report](../TestRuns/Local-x64/Navigation/2026-10-20_ReleaseSortPaintLatency-Debug/README.md)
+record same-executable counterbalanced legacy/product blocks. The Release
+Extension Ascending product-paint median is 9.268 ms, with one successful frame;
+the legacy control median is 32.575 ms, with four frames. These are different
+measurement protocols, not a production speedup. Every original sample, the
+rejected attempt and the initial baselines' narrower observer scope remain
+explicit. The successful-Present counter is test-only; rendering policy and the
+Windows ordering implementation are unchanged.
+
+Record `FolderView.ApplyCurrentSort.OrderItems` separately from the enclosing
+sort/current-repair scope and total rendered-settling latency. Retain all
+`RowMoves` and `ScratchBytes` counters under that prefix; assert linear whole-row
+movement and scratch bounds independently of wall-clock measurements. Time/Size
+requests remain in the fixture because they share row reordering and natural name
+ties, while their primary keys remain timestamps and byte counts.
+
+For a requested build-free comparison, collect a fresh baseline and candidate on
+the same machine, fixture, profile, dependency/toolchain identity and observer
+protocol. Finish builds before each measurement window, wait for a qualifying
+quiet interval, and record process observations throughout. Retain rejected
+attempts without selecting by latency. Report sampling gaps, unknown launchers,
+observer CPU cost and any other residual host load. Snapshot observation proves
+no observed overlap, not a lossless process-start audit or a completely idle host.
+Earlier contended measurements remain directional history; they cannot establish
+a new build-free A/B or uniform improvement. Pure ordering gains do not by
+themselves prove total render/settling improvement.
+
+The [2026-10-20 row-movement comparison](../TestRuns/Local-x64/Navigation/2026-10-20_DebugSortingRowMoves/README.md)
+records fresh five-repeat Debug/Release pairs with no observed background builds.
+Core ordering improves in both profiles and all ten Debug request medians improve.
+Release total-request medians are mixed, including a higher Extension Ascending
+median; this record does not establish Release rendered-latency non-regression.
+Its exact sample ranges, observer limits and unresolved sandbox-audit findings
+remain part of the evidence, alongside successful native correctness checks.
+
+## Nonactivating UIA desktop-observer evidence
+
+The protected ViewerSpace scenario is grid/filter, panel/inspector resize/collapse
+and detached-provider UIA coverage while the person continues using the desktop.
+Record whole-case elapsed time, desktop sample/change counts, owned foreground-event
+count and event-drain microseconds alongside exact fixture, binary and source inputs.
+The callback drain remains capped at 250 ms without extending the native case deadline.
+Read-only synthetic observations provide ambient-interference and owned-activation
+negative controls; they are never evidence of physical-input qualification. Preserve
+the original failure and separate repeated results. Candidate durations alone establish
+no speedup, and an isolated pass never replaces a failed broader-run record.
+
 ## I19 accepted static-library adoption costs
 
 On 2026-09-13 the user explicitly accepted the measured `.lib` adoption trade-off
@@ -29,6 +174,59 @@ CPU, GPU or frame latency and does not authorize future growth.
 
 
 ## File Operations residual and UI focus regression witnesses
+
+- I35 S6 throughput (`FileOps_SmbCopyThroughputVariance`, `FileOps_LocalCopyThroughput`): one
+  incompressible corpus (`smoke` 64 MiB + 16 x 4 MiB by default;
+  `REDSALAMANDER_FILEOPS_THROUGHPUT_CORPUS=full` for the R10.5 1 GiB + 64 x 16 MiB, `large` for one
+  4 GiB file + 16 x 16 MiB, several times the client cache's dirty-page threshold so a cached writer
+  is held in the middle of a file; a flat set of
+  files copied as top-level items, because the registered NAS exposes no file identity and cannot
+  publish a nested directory's stage) copied with
+  Verify off by the Local provider's own route, or through the host bridge (the writer of a Managed
+  Move; the same provider instance named as the destination) with
+  `REDSALAMANDER_FILEOPS_THROUGHPUT_ROUTE=bridge`, to the registered SMB self-test root (a unique
+  per-run child), to the loopback administrative-share alias when none is registered or
+  `REDSALAMANDER_FILEOPS_THROUGHPUT_SMB_TARGET=loopback`, and within the local test root as the
+  regression reference. `REDSALAMANDER_FILEOPS_THROUGHPUT_VARIANTS` lists the transfer-tuning
+  variants run back to back in one process (`adopted` by default; `base`, `e`, `el`, `ea`, `b`, `d`,
+  `c`, `ebd`, `w`). Each run emits `FileOps.SelfTest.Throughput.Copy` (`value0` wall microseconds,
+  `value1` bytes, `value2` the 1 s-bucket coefficient of variation in permille; `detail` carries
+  target, route, variant, MB/s, budget, gap percentiles, stalls and silences by phase, seconds and cv). The
+  cases assert engine facts only, never the display, whose rules have the deterministic
+  `FileOps_RateWindowDisplay` gates: a measured cadence; no silence over 600 ms after a report that
+  named no phase (a report without item bytes is Unknown, `FileOps_ProgressPhaseAccounting` proves the
+  attribution); and the phase-boundary witness: with every Local commit slowed to 150 ms
+  (`REDSALAMANDER_FILEOPS_SLOW_COMMIT_MS`) each of three witness files repeats its Finalizing report
+  at least twice (the post-commit boundary and its closing report), and with the boundary reports
+  suppressed (`REDSALAMANDER_FILEOPS_SUPPRESS_PHASE_BOUNDARIES=1`, a negative control run in the same
+  case) fewer than that, so deleting the boundary reports fails the case. A/B comparisons interleave
+  baseline and candidate runs and compare medians; a root shared with concurrent builds and the
+  loopback alias are directional evidence only. The adoption gate is in
+  `Specs/FileSystem/FileSystem_FileOperations.md` ("Transfer phases, stalls and throughput tuning").
+  Each runner invocation removes the previous runs under the test root, so promote a run's compact
+  archive before starting the next one.
+- Same-provider bridge destination (`FileOps_SameProviderBridgeDestinationStorage`, Throughput
+  family, needs `-AllowAlternateVolumeTestRoot`): a Move from the case root to the loopback alias of
+  the authorized alternate volume runs as a Managed Move through the host bridge with no destination
+  provider admitted; with per-path storage overrides (source NVMe 6, destination network share 2) it
+  must budget 2, record the destination's storage kind and name a stall after the destination. It
+  is skipped without an authorized alternate volume.
+- I35 S6 small-file cost (`FileOps_SmallFileCopyCost`, family `FileOpsFamily_SmallFileCost`): a flat
+  folder of `REDSALAMANDER_FILEOPS_SMALLFILE_COUNT` (default 2,000) files of 1 KiB copied from the
+  test root on the Local provider's own route and through the host bridge (to the Dummy provider,
+  its simulated latency zero for the case), `REDSALAMANDER_FILEOPS_SMALLFILE_REPEATS` times per route.
+  Each copy emits `FileOps.SelfTest.SmallFileCopy` (`value0` wall microseconds, `value1` files,
+  `value2` bridge admissions; `detail` route, files, repeat, `REDSALAMANDER_FILEOPS_SMALLFILE_TAG`)
+  next to the host's `FileOps.Progress.CallbackUs` (callback microseconds and count). It measures the
+  per-file cost of the progress reports; builds are compared with interleaved runs on one machine.
+
+- `Phase10_DeferredConsentAndRecycleEscalation` checks the conflict policy across every declared
+  conflict class and all 64 combinations of retry, Keep Both, scope, replacement, concurrent-run and
+  live-output-invalidation eligibility. It preserves exact typed default/Escape and action membership
+  while primary placement changes. `FileOps.ConflictPolicy.MatrixBatchUs` measures five batches of
+  16 complete matrix passes after one full warm-up; `value0` is the zero-based round and `value1`
+  is the observed placement/default checksum plus the warm-up checksum. Use identical fixtures and
+  profiles for comparison. This is policy-construction cost, not UI rendering or end-to-end latency.
 
 - `Beeline_CopySkipLinksKeepsPlaceholders` requires a real non-name-surrogate placeholder on NTFS.
   If the primary filesystem is not NTFS, reuse only the explicitly authorized,
@@ -69,6 +267,26 @@ CPU, GPU or frame latency and does not authorize future growth.
 - Retain controlled failing evidence and repeated repaired witnesses. Original
   Keyboard/popup cases must also pass in predecessor context and canonical Commands;
   isolated passes do not replace final Fresh Full.
+- Hosted task-action fixtures must wait for both the eligible live task state and
+  the exact visible, enabled retained control before invoking it. A started worker
+  may still be discovering items, and a fresh model snapshot does not establish
+  that the current UI has published Pause or Resume. Poll readiness within the
+  existing bound, release providers before another message pump, and invoke each
+  toggle once. Preserve exact task/action identity, transition/result assertions,
+  and the interactive ownership guard; report state and provider/Invoke failures
+  separately. Validate a repaired witness with its predecessor sequence in process.
+
+## Sandbox containment measurement boundary
+
+The [I27](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md) [containment record](../TestRuns/4cb089111a23/Validation/2026-10-04_114600-containment/README.md)
+retains counterbalanced baseline/candidate/candidate/baseline private-helper capture
+and independent-reader measurements on the same unchanged ordinary/reparse fixture.
+Fresh component queries preserve marker, lexical and ADS authority without caching.
+Compare actual file identity/content inventories and raw reparse proofs as well as
+timing; retain failed diagnostics and explicitly restored fault-injection controls.
+Small-fixture tooling measurements do not establish large-archive speed, native
+latency, peak resources, atomic mutation exclusion or Full qualification. Later
+failed-run capture must retain its separate boundary and original failed verdict.
 
 ## Overview
 
@@ -731,6 +949,12 @@ Typed task admission records `fileops.artifact.touch.capture.us`; worker revalid
 external case proves ordinary paths remain prompt-free, artifact Cancel is the safe default, and an
 accepted exact identity is reloaded/rebound/revalidated before launch. These are warning-path
 latency and boundedness baselines, not copy, launch, or search throughput claims.
+A blocked touch (no usable current identity) emits one `fileops.artifact.touch.blocked` per blocked
+item: `detail` is the leaf name, `value0` the open HRESULT, `value1` the identity-query HRESULT
+(`S_FALSE` when the open failed first), and `hr` the status the prompt shows. Open location in File
+Explorer records the scheduling cost as `fileops.artifact.open_location.us` (`hr=S_FALSE` when the
+self-test recorder answered) and the shell call itself, on its own single-threaded apartment
+thread-pool callback, as `fileops.artifact.open_location.shell.us`; neither is a throughput claim.
 
 Direct-admission prompt teardown evidence uses the test-enabled Release Commands case
 `cmd_fileops_start_operation_artifact_prompt_shutdown_during_nested_pump`. It emits
@@ -761,17 +985,59 @@ totals were already final; closure is one-way, so every scenario requires exactl
 `DiscoveryScope_` family carries the paired witnesses: with the leaf, nested-cleanup and
 provisional-rename rules disabled it reads 5 and 6 on the managed-directory and rename-merge
 scenarios and the leaf checkpoint is never reached, and it reads 0 with them in place.
+Since I35 S2 a directory root closes at its listing's end: for Copy/Move directory fixtures whose bytes
+dwarf their listing time, `BytesCompletedWhileOpen < discoveredTotalBytes` is a hard gate
+(`DiscoveryScope_FolderClosesBeforeLastFile` requires less than half of the bytes on the Local
+parallel and serial walkers and the bridge parallel and sequential walkers;
+`DiscoveryScope_WideFolderClosesWithinQueueLead` requires at least 32 of 600 throttled files still
+waiting at closure, `DiscoveryScope_TenThousandSmallFilesCloseAfterListing` requires a 10,000-file
+folder to close with fewer than 1,000 files copied, the Local count-ahead of D-6.2, and
+`DiscoveryScope_HeldFolderFailureStillCloses` requires a held subfolder whose listing fails and is
+skipped to close the scope before a quarter of the bytes are copied). The Delete gate is unchanged and `OpenUs` ratios remain observations. The
+wide-tree overlap witness exceeds the discovery-ahead target (the R4-A19 Local Copy control copies 512
+files of 256 KiB, four times the queue, and still requires bytes and mutations completed while open).
+`FileOps.CopyRecursiveParallel.ActiveWorkersMax` and `ParkedDirectoriesMax` (Local) and
+`FileOps.Bridge.ActiveWorkersMax` and `ParkedDirectoriesMax` (bridge) record the worker high-water and
+the directories that waited for their children after their listing ended.
+`FileOps.CopyRecursiveParallel.ProducerInlineSteps` counts the items a Local walk's producer copied
+itself, on a scheduler worker, because none of the walk's items was in flight (a pool whose workers all
+wait as producers); it stays 0 for walks whose producer runs on the caller's thread.
+`FileOps.CopyRecursiveParallel.IdleDispatches` counts a walk's scheduler dispatches whose step found nothing
+to run (`value0` at the walk's active limit while its listing runs ahead, `value1` with an empty queue;
+`durationUs` is the walk's wall time), and `FileOps.CopyRecursiveParallel.ProcessCpuUs` records the process
+CPU time the walk took (`value0`, microseconds) against the same wall time. With parking (FileSystem_FileOperations.md,
+"Shared scheduler dispatch") a walk's empty dispatches are bounded by its own wakes (its queued and finished
+items and listing events), not by time or by other walks.
+The Local walker's restore of a folder it created (I35 NAS nested Copy) emits one row per folder:
+`fileops.local.created_directory.restored` or `fileops.local.created_directory.restore_refused`
+(`durationUs` covers the reopen by path, the identity check and the basic-information write; the detail
+is `proof=file-id`, `proof=file-index` or `proof=none`; `hr` is the result), and
+`fileops.local.created_directory.identity_unavailable` when publication could not record the folder's
+identity. `FileOps.SelfTest.LocalManyDirectoriesCopy` records the wall time of each of the three copies
+of the 1,885-folder tree of `R4T4_LocalManyDirectoriesCopy` (`value0` folders, `value1` the copy's
+index), and `FileOps.SelfTest.SmbNestedTreeCopy` the SMB witness's task time (`value0` folders,
+`value1` files).
+The host bridge's restores of folders it created are counted per task in `FileOps.Bridge.DirectoryRestoreUs`
+(`durationUs` the total of the binds of the paths, identity comparisons and basic-information writes,
+`value0` the folders restored); a refused restore emits `fileops.bridge.created_directory.restore_refused`
+(`hr` the refusal or the write's result) and a destination that cannot bind a folder again emits
+`fileops.bridge.created_directory.restore_unsupported` once per item. `FileOps.SelfTest.BridgeManyDirectoriesCopy`
+records the task time of each of the two bridge copies of `R4T9_BridgeManyDirectoriesCopy` (`value0`
+folders the bridge ensured, `value1` the copy's index), and `FileOps.SelfTest.SmbBridgeTreeTransfer` the
+task time of the SMB bridge Copy and Managed Move witnesses (`value0` source folders the bridge listed,
+`value1` files).
 `Phase5_DiscoveryCancelLatencyLocal` records bounded cancellation while traversal and transfer are
-both live; `Phase5_DiscoverySkipContinues` and
+both live (a subfolder after its 512 throttled files is listed only once the queue has taken them); `Phase5_DiscoverySkipContinues` and
 `Phase5_SwitchParallelToWaitDuringDiscovery` prove the one-way Skip state and its separation from
 global Queue admission. The popup source contract proves that totals/ETA stay indeterminate until
 closure. These are scheduler/correctness baselines, not throughput-improvement claims.
 
 `R4A19_DiscoveryMeasurementFacts` is the deterministic Local measurement fixture: Copy uses
-128 files of 256 KiB at configured concurrency 4; permanent Delete uses 1,024 files of 1 KiB at
+512 files of 256 KiB in 64 folders at configured concurrency 4 (four times the discovery-ahead
+queue, so the listing still overlaps the copy after I35 S2); permanent Delete uses 1,024 files of 1 KiB at
 configured concurrency 8. Both must complete below 30 seconds, close discovery, retain at most 256
 ready records, and prove the first completion before closure and within 1 second. Copy must report
-nonzero open-discovery bytes/mutations and exact 32 MiB/128-file output. Delete must remove the exact
+nonzero open-discovery bytes/mutations and exact 128 MiB/512-file output. Delete must remove the exact
 selected tree, report exact 1 MiB/1,024-file discovery, exactly 1 MiB and one selected-root mutation
 while open, and zero provider progress callbacks. Release qualification uses five independent
 test-enabled x64 processes per side. Candidate total-duration p95 must be at most
@@ -783,19 +1049,24 @@ The same `FileOpsFamily_R4A19DiscoveryBaseline` process also owns the unchanged-
 and independent-volume qualification. The deterministic Dummy control copies 8 directories with
 8 files of 8 KiB through `latencyMs=5`, `streamChunkLatencyMs=2`, and a 1-MiB/s virtual limit. The
 test-only fake-MTP control copies 8 ordinary-name files of 64 KiB through one serialized session
-with a 25-ms backend delay, then cancels a second task while discovery and mutation are both live.
+with a 25-ms backend delay, then cancels a second task once its transfer is live (since I35 S2 its
+one-listing folder has closed discovery by then).
 The fixed-volume control copies four 4-MiB files independently on marker-authorized C and D roots at
 16 MiB/s, then repeats both concurrently. It emits
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
-The fake-MTP fixture, whose route the host bridge traverses, requires first mutation before discovery
-closure and within 1 second, nonzero open-discovery byte/mutation facts, zero discovery starvation,
-and exact bytes/items. The Dummy fixture runs on the provider's direct route, where Dummy already
+The fake-MTP fixture, whose route the host bridge traverses, lists its one source folder at once, so
+since I35 S2 its scope closes when that folder is listed: it requires closure before the last byte
+(open-discovery bytes below the total), zero growth after closure, zero discovery starvation, and
+exact bytes/items. The Dummy fixture runs on the provider's direct route, where Dummy already
 holds its subtree before it mutates and therefore closes its record on the exact total before the
 first byte moves; it requires that closed record (512 KiB, 64 files, 9 directories), zero
 open-discovery bytes/mutations, zero growth after closure, zero discovery starvation, and exact
 bytes. Fake MTP requires maximum backend concurrency exactly 1 and cancellation within 500 ms. Concurrent C/D
 wall time must be at most 1.35 times the slower isolated control and both tasks must have overlapping
-progress. Ready queue, bridge admission queue, retained entries, queued path bytes, metadata, and
+progress. Each isolated and concurrent sample starts immediately before its first task admission,
+after fixture creation, previous-result verification and destination cleanup; it ends at the last
+task's recorded completion. Do not include unequal fixture maintenance in these compared intervals.
+Ready queue, bridge admission queue, retained entries, queued path bytes, metadata, and
 limit-hit gates remain 256, 256, 4,096, 16 MiB, 8 MiB, and zero. Qualification is five independent
 test-enabled x64 Release processes. When an evidence-only card produces no scheduler candidate, it
 must report the absolute/p95 characterization and keep the relative candidate/JIT throughput gate
@@ -853,6 +1124,14 @@ exact 4,096 parse/decision counts, exactly one rejected witness, zero provider c
 retained state. Debug correctness runs use a wider five-second diagnostic ceiling and are not
 production performance qualification. This is admission/containment evidence, not live-network,
 SMB, provider-watchdog, or shutdown-throughput evidence.
+
+For attribution, `FileOps.SelfTest.R0e.{CapabilityParseWorkUs,AdmissionWorkUs,RejectionChecksUs}`
+separates the accumulated parse/admission durations and the subsequent rejection checks.
+These are inclusive elapsed intervals with clock/counter overhead, not isolated CPU costs;
+`RejectionChecksUs` covers the entire post-loop invalid-JSON, typed-route and rejection tail.
+The interleaved workload and total timer remain unchanged, including diagnostic clock overhead;
+these phase metrics must never replace the total-time gate or be subtracted from it.
+Any before/after optimization comparison must retain this same instrumented fixture on both sides.
 
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
@@ -956,14 +1235,17 @@ request-shape/resource evidence, not a live endpoint latency claim.
 
 FBP-10 bridge-pipeline evidence uses the deterministic
 `Phase11_BridgePipelineDummyToDummyPerf` File Operations case in test-enabled Release. It runs the
-same four 32-MiB Dummy inputs first with the reader/writer pipeline disabled and then enabled, with
+same single 128-MiB Dummy input first with the reader/writer pipeline disabled and then enabled, with
 30-ms provider chunk latency, a 4-MiB configured buffer, and the expected 8-MiB endpoint-resolved
 buffer. The run emits `FileOps.SelfTest.BridgePipelineBaseline`,
 `FileOps.SelfTest.BridgePipelineCandidate`, and `FileOps.SelfTest.BridgePipelineImprovement` and
-requires the candidate to take at most 80 percent of the baseline duration. The accepted
-2026-08-27 same-machine run measured 130.484 seconds versus 0.250 seconds and is archived under
-`Specs/TestRuns/4cb089111a23/FileOps/2026-08-27_011215/`. This closes the measure-first decision by
-retaining the current bounded pipeline; it does not authorize more than 16 admitted pumps, more
+requires the candidate to take at most 80 percent of the baseline duration. Fixture seeding must
+finish before either copy timer starts; setup has its own metric. The historical four-file
+2026-08-27 run measured 130.484 seconds versus 0.250 seconds and remains archived under
+`Specs/TestRuns/4cb089111a23/FileOps/2026-08-27_011215/`. Its baseline included fixture seeding and
+is unqualified for an improvement claim. Preserve its original evidence without comparing its
+different corpus with the corrected single-file pair. The bounded pipeline retains its existing
+limits; the measurement does not authorize more than 16 admitted pumps, more
 than 256 MiB of aggregate host pump buffers, or another thread/buffer ownership layer.
 
 Local permanent recursive Delete additionally emits `FileOps.DeleteTraversal.MaxDepth`,
@@ -1111,10 +1393,78 @@ baseline is 8,704 probes and 2,689 microseconds in
 Cartesian predicate as a fallback for conservative, legacy, or unkeyable scopes; an optimization may
 not convert incomplete identity into path authority.
 
+`FileOps.Interlock.PrepareLookupChecks` and `FileOps.Interlock.PrepareIndexStorage` additionally
+record temporary preparation-index behavior once per task. The first row's numeric values are
+scope and ancestor predicate evaluations; the second row's values are retained key capacity bytes
+(including terminators) and indexed entry count. They are not a full allocator or process-peak
+measurement. The worker-local index is limited to 256 qualified-contract buckets, 32,768 entries and 16 MiB of keys and MUST
+preserve the canonical pairwise predicate for differing contracts, unsafe keys and budget overflow.
+Differential controls compare actual indexed selection with that predicate, including earliest
+authority, vector reallocation, Unicode/separators and qualified endpoint separation. Actual
+`FileOps_AdmissionBaseline` n=1/128/4096 receipts retain preparation time, real bind counts,
+UI ingress cost and post-preparation canceled byte/hash inventories. An accepted ingress or a
+timeout log alone is not a prepared/no-write qualification. Preserve original failed scaling
+measurements and compare the same optimized profile; never lengthen the readiness deadline to
+hide preparation cost.
+
+Admission probe buffer metrics count heap-backed output storage, including a
+materialized short root when its string exceeds inline capacity. Requested payload
+bytes exclude the terminator; capacity bytes include it. A long-root retry counts
+the actual second volume-path API call and its bounded heap buffer. The GUID stack
+buffer contributes zero to GUID heap-buffer metrics, but input and returned strings
+can still allocate. These cumulative counters are neither peak RSS nor total
+allocator counts. Compare the unchanged Local/alternate-volume/UNC/mounted matrix
+before and after the buffer change, retaining all actual route skips and expired
+warm requests. Debug hook controls cover short and long mounted roots, one-short
+successful output, persistent failure, GUID failure and the previous output bound;
+they do not replace an available mounted-volume route, which is only the test-owned
+VHDX volume an elevated harness provisions inside the run; tests never mount a real
+user volume (`Testing_SelfTests.md`).
+
+The `ENABLE_TESTS` F6 fixture can additionally compare the current source with idle suspension
+on and off in the same Release binary. `REDSALAMANDER_SELFTEST_F6_IDLE_MODE` accepts only
+`suspension-on` or `suspension-off` and requires explicit `FileOps_SafetyRemediationContracts`
+selection; absent means production scheduling, and malformed or broad-run use fails. This is
+a scoped per-popup counterfactual, not the historical pre-policy implementation or a product
+preference. Both modes settle actual visible motion and their required cadence outside the
+unchanged 650 ms intervals. Off must show real 100 ms idle ticks/snapshots/taskbar attempts;
+on must show zero idle work, while hidden active progress remains live. Interleave three fresh
+processes per mode, bind the same receipt and fixture, preserve all eighteen states and failures,
+and retain CPU quantization/background-load limits. The mode resets before popup teardown;
+failed worker drains retain owned scratch, never remove files while a worker may still write.
+
 Explicit same-host concurrent admission and live-output protection use
-`FileOps.Overlap.RunConcurrent`, `FileOps.LiveOutput.IndexHighWater`,
+`FileOps.Overlap.RunConcurrent`, `FileOps.Overlap.DontStart` (the user's own answer only),
+`FileOps.Overlap.CanceledWhilePending` (a cancel while the question waited), `FileOps.LiveOutput.IndexHighWater`,
 `FileOps.LiveOutput.IndexOverflow`, `FileOps.LiveOutput.GateCount`, and
 `FileOps.LiveOutput.WaitUs`. Values are numeric only and contain no provider path or identity text.
+Immutable interlock ownership emits `FileOps.Interlock.OwnerObjectsCreated` with construction
+count in `value0` and logical object bytes in `value1`: three shared object constructions when
+freezing a scope vector (vector owner, interlock, selected view), two when revising a decision
+(interlock and selected view). The vector backing storage is moved.
+`OwnerLogicalRetainedBytes` reports steady owner-object bytes and bytes during the local revision;
+these exclude allocator/control-block overhead, path storage and independently retained observers,
+so they are neither measured heap bytes nor a process peak. `OwnerFreezeUs` and `OwnerDecisionUs`
+measure the corresponding construction/publication interval before these metric emissions.
+Compare the same overlap, 4,096-root readiness and 256-by-256 scope fixtures before and after an
+ownership change; verify retained authority/bind counts separately and keep all timing outliers.
+`FileOps.Admission.ViewLayoutBytes`, `PointerLayoutBytes` and `TaskLayoutBytes` report actual
+compiler object sizes. `ViewObjectsCreated` counts initial destination/receipt/plan/facts owner
+constructions; it does not measure allocator calls or backing storage. Initial input publication
+shares a complete destination owner across later small view revisions. Per-item reads acquire
+ownership without allocating another view. Compare end-to-end preparation as well as the scope
+timer, which excludes earlier initial-input publication.
+Queued replacement reports `FileOps.Retarget.OwnerObjectsCreated` separately for the captured
+request (one), completed private candidate (six, plus an artifact receipt when present), and
+immutable decision revision (two). These count shared objects and their `sizeof` bytes, not
+allocator calls, string/vector backing storage, authority handles or process peaks. A refused
+request may still report its allocated request object. `SourcesRetained` counts copied source
+scopes and shared anchor references; it does not count them as newly bound authority nodes.
+`Interlock.BindCount` includes source revalidation binds. `Retarget.PrepareAndCommitUs` includes
+any consent wait, while `DurableCommitUs` covers durable replacement and queue settlement.
+Entry's event-driven replacement loop records wait segments with a `reprepare` label. A segment
+that waited in Queue mode is attributed to Queue even if the mode later changes; compare total
+queue plus interlock time when assessing that mixed-mode fixture.
 The deterministic `R4A02_RunConcurrentSameDestinationStaysSafe` case proves that one disclosed
 identity-bound relation admits both tasks without an interlock wait while a third undisclosed task
 still asks independently. `R4A02_LiveOutputGuardChoices` pauses a Local publisher immediately after
@@ -1602,7 +1952,7 @@ Expected-failure smoke checks SHOULD use a local scratch budget with an
 impossible maximum and MUST NOT commit that scratch file.
 
 Selftest-only latency injection points MUST be implemented through
-`RedSalamander/SelfTest/Common/SelfTestLatencyHooks.h/.cpp` and compiled as
+`RedSalamander/SelfTest/Common/Common.Tests.LatencyHooks.h/.cpp` and compiled as
 no-ops outside `ENABLE_TESTS`.
 These hooks exist to make slow shell/provider/file-system behavior deterministic;
 they must not become production delays or runtime configuration.
@@ -1625,6 +1975,332 @@ When a WIP plan is finished:
 
 ## Completion Criteria
 
+`FileOps_CommonPresentationPerf` is an opt-in nonactivating FileOps fixture for the original I26
+P0/current comparison; it is not part of the broad FileOps phase order. Run with the same fixture
+bytes on both revisions. P0 needs only the test-only accessor for its existing hosted render count.
+It uses French, dark theme, reduced motion, default density, eight synthetic running cards and
+exactly 128 ordinary warning rows. It rejects prior retained history, verifies selected task identity,
+tests hidden message-pump intervals without hosted renders, removes its diagnostics, restores settings
+and requires host/attachment counts to return after destruction.
+
+`FileOps.CommonPresentation.*` reports 13 named resource stages, bounded synchronous redraw/churn
+samples, actual client geometry/DPI and a semantic workload digest. Compare deltas within stages;
+reject unequal workload, fixture bytes, dimensions or DPI. Redraw wall time is neither presented FPS
+nor a frame interval. Surface allocation, newer selected-detail/graph-disclosure behavior and the
+full consumer resource gate require separate evidence. The first [runtime smoke](../TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery/README.md)
+passes but does not establish paired non-regression; retain original P0 and equal-feature baselines.
+The [original-P0/current comparison](../TestRuns/4cb089111a23/Validation/2026-09-27_common-p0-current/README.md)
+retains five fresh processes per revision, all ten passing at matching 144 DPI, dimensions and
+workload. Synchronous redraw medians are effectively level and process-memory/CPU observations
+are lower for this common workload. The packet preserves individual samples and process scatter;
+it creates no new hard budget and does not qualify newer feature parity or the final combined pin.
+
+`FileOps_IntegratedPresentationPerf` supplements the frozen common P0 fixture with an equal-feature
+comparison before and after explicit adoption of the combined DxUi grid/menu revision. Install
+identical fixture bytes on both current-product revisions; it remains opt-in and nonactivating.
+Use French, dark theme, reduced motion and default density. Eight running cards exercise the first
+card's throughput disclosure and all-card progress churn. Collapsing that card must retain its
+summary and active Cancel target while removing its graph; the other seven cards retain their own
+disclosure state. Pending settings writes settle outside the timed batches.
+
+The Issues workload contains 127 ordinary warnings plus one task with an explicit problem,
+accepted replacement and published Copy result (source retained, verification not requested).
+All dates are fixed. Require 128 projected rows, exact selected task, separate typed detail facts
+and nonempty copy text. Hide/show intervals retain selection, prohibit hidden renders and return
+host/attachment counters after destruction. Remove only fixture diagnostics and restore settings.
+
+`FileOps.IntegratedPresentation.*` retains five eight-redraw samples each for open/collapsed graph
+and selected detail, 32 eight-update churn samples, process/UI CPU totals, private/working-set
+memory, handles and GDI/USER counts. Actual settled client dimensions/DPI and semantic workload
+digest must match across paired fresh processes. Preserve every repetition and process scatter;
+wall times are synchronous redraw diagnostics, not FPS. Test-only synchronous host snapshots also
+record the observed BGRA8 target's pixel dimensions and logical bytes, brush/text-format entry
+counts and render/resize counts outside timed batches. Forty steady redraws and the bounded churn
+must preserve target extent and cache counts; hidden intervals must preserve these resources
+without rendering. Missing target observations fail the fixture rather than becoming zero bytes.
+These are current-target logical observations, not a driver allocation, residency or transient peak.
+The explicit `SurfaceCounters` `E_NOTIMPL` result preserves that limitation; attachment teardown
+alone cannot prove GPU memory release. The original October 1 eight-process ProgramDatabase A78/B19 comparison is accepted
+for the measured I26 presentation workload; the [I26 checkpoint](../Plans/Done/UI_FileOperationsReview_2026-09-16.md)
+records its independent root review and evidence. Fixture bytes, asserted content/features and
+144-DPI client/target geometry match. Redraw-series median differences remain within 0.2%, with
+all samples, outliers and positive CPU median differences retained. These descriptive observations
+do not establish causal timing changes, whole-product equivalence, DxUi-only attribution, FPS or
+GPU allocation/peak memory. Separate lifetime, correctness, input and DPI gates still apply.
+A second, independently reviewed eight-process comparison uses Embedded compiler debug information
+on both sides and the unchanged final Full binary. Final I26 resource acceptance uses that matched
+profile; the earlier ProgramDatabase comparison remains separate historical evidence. The completed
+I26 checkpoint links both raw comparisons, exact receipts and the final root interpretation.
+
+The appended scan-status workload exercises Compare Directories, Change Case, Change Attributes
+and Make File List separately, using one informational card, French Unicode paths and a 480-DIP
+client width. It leaves the original workload/digest unchanged. `ScanStatusCleanRedraw8Us`
+measures five batches of eight synchronous redraws with unchanged content; `ScanStatusChangingRedraw8Us`
+measures five batches including synthetic model refresh, changing path/counters and redraw.
+Here "clean" means unchanged content, not an uninvalidated composition frame. Retain the separate
+`ScanStatusWorkloadFNV64`, each kind's `ScanStatusClientPixels`, before/after/closed process samples
+and bounded target/cache observations. The digest includes actual settled geometry and DPI.
+Install identical fixture bytes on both product revisions before measuring scan-row changes;
+the earlier Copy/Move/Issues measurements alone cannot qualify informational-row performance.
+Report configuration and ordering limits explicitly; Debug redraw samples do not establish Release
+FPS or driver-memory peaks. The October 1 eight-process comparison includes all four synthetic
+scan-status kinds and accepts this bounded presentation workload with the same stated limits.
+It does not measure live filesystem scanning throughput or qualify every scan scenario.
+
+The initial [I27](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md) safety comparison reused the historical `FileOps_IntegratedPresentationPerf`
+fixture. Its reported graph timing difference remains retained and unaccepted: exact-render-count
+guards subsequently exposed queued auto-sizing and cold changing-path caches in that fixture.
+The follow-up v2 fixture pins only its synthetic popup to 760 x 480 DIP, and each informational
+popup to 480 x 720 DIP, after the nonactivating show/message settlement. It prewarms the entire
+40-update scan path range outside measurement. Every timed batch must observe exactly eight
+host frames; informational batches must also observe exactly eight scan-row frames. It retains
+strict target/cache/resize stability checks. Ordinary popup layout, DPI transitions and auto-sizing
+are unchanged and require their separate native acceptance. Install identical v2 fixture bytes
+on both product revisions for a new five-independent-process Release comparison per variant;
+v1 and v2 timing values are different workloads and must not be merged or silently rebaselined.
+Baseline and candidate MUST use the same
+test-enabled Embedded compiler-debug-information profile, machine, DxUi pin, workload digests, DPI
+and settled client geometry. Report medians of per-capture timing medians and all capture/resource
+observations; retained JSONL rows remain in original order and are bound to the original raw digest,
+byte count and row count. Synchronous redraw batches do not establish monitor-presented FPS, and
+labelled memory maxima do not establish continuous allocation peaks. UI/process CPU observations
+retain their OS sampling granularity. The longer hidden/minimized Issues timer regression uses a
+separate pumped lifecycle fixture rather than extending the presentation performance workload.
+The later [I27](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md) follow-up retains separate bounded [F6 and v2 assessment](../TestRuns/4cb089111a23/FileOps/20261003T211512Z-80796-0cb73e59c3c741f9bcae95a38bb43929/review/ROOT-F6-V2-BOUNDED-ASSESSMENT.md)
+and [F7 available-route assessment](../TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/review/ROOT-F7-ASSESSMENT.md).
+Their sampled resource and timing directions, dependency difference, capability-bound mount skips,
+and unmeasured lifetime/driver boundaries remain part of those accepted scopes. They do not
+replace fresh Full, protected interaction, gallery, visual review or archive governance.
+The final follow-up comparison uses a separately labelled, fresh Git-normalized
+reconstruction of the I26 baseline, with 12739 source paths, 24 explicit normalized-content
+checks, 687 retained native source bindings before the overlay, and the three identical
+v2 fixture overlay hashes. Its original 24 raw newline mismatches remain retained.
+This source reconstruction does not attest the historical raw checkout or executable.
+The older F6 and v2 comparison also had different non-DxUi dependency outputs; retain
+that whole-product comparison limit. Neither comparison isolates I27 changes from
+dependency differences or replaces the unchanged v2 workload and five-process criteria.
+The [I27 qualification report](../TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation/ReviewRemediation.md)
+binds implementation, paired measurement, Full results and their remaining platform limits.
+
+The File Operations case `cmd_pane_fileops_popup_resource_lifetime` measures five warm-up and
+twenty subsequent lifetimes per repetition on one synthetic running-copy card. Each lifetime has
+32 synchronous redraws, a hidden real-message-pump interval of at least 350 ms, 32 redraws after
+showing, and destruction. Require no hidden hosted frames and return of host/device attachment
+counters after every destruction. Record actual settled geometry: the initial 760 x 480-DIP
+request can be resized by the production layout; the initial fixture settles at 760 x 384 DIP
+(1140 x 576 physical pixels at 144 DPI). Compare identical fixture bodies, runner selection,
+configuration, device, DPI and repetitions; preserve every A/B run, including timing outliers.
+
+`FileOps.Popup.Resources.Memory` records private bytes / working set; `GuiHandles` records
+GDI / USER counts; `HandlesAndHosts` records process handles / attached hosts; `CpuTotals`
+records cumulative UI-thread / process CPU microseconds in value0 / value1. `FixtureDpi`
+records DPI in value0, and `Redraw32Us` records the duration of each 32-redraw batch. Phase
+details distinguish cold, warm-up, visible, hidden, destroyed and settled samples. Derive CPU
+deltas only within the same repetition. Quantized OS CPU totals do not establish zero wakeups
+or zero work; bounded lifetimes do not replace allocation/GPU/long-soak or Release qualification.
+
+The throughput-disclosure case also checks measured rate/ETA rectangles above the plot at
+480/640/760 DIP and synthetic long French labels stacked at 480 DIP. Require pixels in each
+exact text rectangle and full UIA name/help/ID values. `FileOps.Popup.Capture.GraphLabelPixels`
+stores rate / ETA pixel populations and the capture HRESULT. `FileOps.Popup.GraphLabels.MeasureUs`
+records layout cache misses, not per-frame measurement. `GraphLabels.WrappedBounds` records
+visible and trailing-whitespace overhang separately: DirectWrite formatted `width` plus its
+left/top offsets establishes visible fit; invisible trailing wrap spaces must not create a false
+clipping failure. Preserve the whitespace diagnostic and require a positive, separate plot.
+
+The File Operations presentation case
+`cmd_pane_fileops_popup_presentation_settings_and_taskbar` emits
+`FileOps.Popup.ScopeCheckbox.RedrawBatchUs`: five eight-redraw batches after four warm-up
+redraws, with `value0` the zero-based round and `value1` the redraw count. Compare identical
+configuration, prompt, geometry and renderer inputs before and after the hosted repeat-scope
+Checkbox change. This synchronous redraw diagnostic is not presented-frame pacing or a
+substitute for the Release resource/idle qualification.
+
+The File Operations case `cmd_pane_fileops_popup_throughput_disclosure` emits
+`FileOps.Popup.Throughput.ExpandedRedrawBatchUs` and
+`FileOps.Popup.Throughput.CollapsedRedrawBatchUs`, each with five ordered eight-redraw batches
+after three warm-up paints on one deterministic running-copy card. Compare unchanged measured
+fixture sections in the same configuration, theme, DPI and host. Disclosure removes the retained
+graph control while retaining bounded rate history. These synchronous redraw samples are diagnostic;
+they do not establish presented FPS, allocation/idle budgets or Release non-regression without a
+matched Release baseline. Always inspect captures: successful state assertions and EndDraw HRESULTs
+do not prove that all application text/background and hosted controls are visible.
+`FileOps.Popup.Capture.LegacyContentPixels` records the screenshot witness result: `value0` is
+the matching foreground population, `value1` the background population and `hr` the capture/probe
+verdict. It is a correctness counter, not a timing or rendered-frame-rate claim. The absent-color
+negative control must reject its image even after the bounded repaint attempts.
+
+The same fixture captures behind an owned, disabled, non-activating sibling inside the popup's
+footprint, then after destroying that cover. `FileOps.Popup.Capture.CoveredContentPixels` uses the
+same foreground/background/result fields and labels the covered/uncovered state. Synthetic
+zero-client WM_SIZE suspension/restoration is also checked; it does not establish native minimize
+or monitor-DPI acceptance. Every application image still comes from the shared WGC harness.
+
+The fixture also forces three consecutive device recreations through the pinned host's diagnostic
+hook, without clearing the consumer's old resources in the hook. It checks rejection of the old
+frame, replacement of the retained context, French capture pixels, and disclosure actions after
+each recreation. `FileOps.Popup.DeviceRecovery.RedrawUs` measures three synchronous recovery
+redraws; `ContentPixels` retains the foreground/background populations and capture HRESULT.
+Three hide/show cycles pump real messages for at least 350 ms each. `HiddenFrames` records that
+interval in microseconds and hosted render counts before/after in `value0`/`value1`; equal counts
+are required, followed by an increased count and readable capture after showing without activation.
+The existing taskbar timer remains enabled. These short observations neither measure private/GPU
+memory retention nor qualify hardware removal, idle CPU/wake-ups, or native monitor transitions.
+
+`FileOps.Popup.Render.PreparedBackground` reports command-list readiness (`value0`), matching host
+context (`value1`) and preparation HRESULT. `FileOps.Popup.HostedPaintUs` measures host paint-message
+dispatch, with update-region presence and handled status in its two values. Its S_OK marker does
+not expose the host's internal EndDraw/Present result. Inspect actual capture witnesses as well.
+Historical diagnostic baselines additionally retain pre/post `CheckWindowState`, target/client
+sizes and draw/dispatch timing; the state-query cache can change, so instrumentation alone is not
+a repair. Compare rendered work, preserve rejected runs, and keep device-loss/hidden/idle resources
+and matched Release performance as separate required gates.
+
+The same case emits `FileOps.Popup.DiscoveryActions.RedrawBatchUs` on its open-discovery French
+card: five ordered eight-redraw batches at each width, in the order 480/640/760/480 DIP. Preserve
+all 20 rows and the identical fixture hash across the pair. `FileOps.Popup.DiscoveryActions.MeasureUs`
+records a production discovery-label cache miss (`value0=1`), separately from test-only geometry
+probes. One live Body text format and one label are retained per popup; resizing or repainting
+unchanged text must reuse its logical width. These Debug synchronous redraw diagnostics do not
+establish presented FPS, Release performance, idle budgets or native mixed-DPI acceptance.
+
+The same open-discovery redraw batches also emit `FileOps.Popup.FooterActions.RedrawBatchUs`.
+`FileOps.Popup.FooterActions.MeasureUs` counts cache fills for the fixed Pause/Resume/Cancel
+vocabulary (`value0=3`); retain all events and their ordering relative to the 20 redraw batches.
+Cache fills caused by fixture setup or typography/locale changes are distinct from unchanged-paint
+work. Compare identical test source, window sequence and configuration, and retain the same Debug
+diagnostic limitations as the discovery-action metric.
+
+The same batches emit `FileOps.Popup.PathAccess.RedrawBatchUs` (20 ordered samples per repetition).
+The fixture additionally checks full French/Unicode path names/help, row IDs and visible raw UIA
+screen bounds, then changes in-flight rows and terminal/delete paths without retaining old providers.
+Keep the fixture identical across variants. A capture-content failure makes that repetition
+unsuitable for a visual non-regression conclusion even when legacy EndDraw reports S_OK; preserve
+its timings and rejected image as diagnostics. Digest-bound metric compaction must retain every
+PathAccess batch and capture-probe row in order, plus relevant paint-result rows, with original
+byte/row counts, hash and selected line numbers. Retain every repetition and timing flag; do not
+pool a failed-capture process with readable runs or treat this as Release/resource acceptance.
+
+The subsequent directed path phase uses the existing warning and desktop lease, activates only
+the owned popup, and restores prior foreground/cursor. Before exercising Ctrl+C, the fixture
+materializes advertised clipboard formats in an owned data object, bounded to 256 formats;
+incomplete enumeration/materialization fails before mutation. Restoration reacquires the flushed
+data object and verifies every retained byte value; set/flush success alone does not establish
+preservation. This preserves admitted contents, not arbitrary clipboard-provider behavior.
+The File Operations fixture uses `RetainFileOperationsClipboardFormats`: materialize HGLOBAL and
+IStream content with a 64 MiB aggregate bound; reject unsupported carriers, target-device descriptors
+and indexed/non-content formats before any mutation. IStream input is read from byte zero through
+an independent cursor and published as owned HGLOBAL, because the measured Shell stream-only OLE
+flush/readback path becomes unreadable. Preserve the format ID and exact bytes; stream-provider behavior
+is not preserved. Bind FORMATETC to the actual stored `STGMEDIUM.tymed` before SetData.
+Verify every expected byte value in the retained object before replacing the clipboard; Shell
+coalescing must not silently lose an entry. An enumerated mask describes
+acceptable request media, not multiple payloads in the returned medium. Carrying that mask into
+the retained Shell data object can advertise a stream while returning a global handle. Preserve
+every enumerated entry; one format can have several storage entries. No unreadable format is
+silently omitted. The owned-data `cmd_pane_fileops_clipboard_snapshot_medium_contract` case checks
+exact rich-format bytes after source release and media-type coherence over three snapshots, source
+cursor preservation, and deliberate byte-corruption rejection.
+The directed popup fixture repeats three rich-format OLE flush/readback cycles after saving all
+original formats and installing its restoration guard, before testing the normal Ctrl+C path.
+The standalone case never touches the system clipboard; live cycles require the existing scope.
+Native raw UIA focus and exact Unicode copy are checked alongside Tab/Shift+Tab, detail dismissal,
+value replacement and focused-row removal. `FileOps.Popup.Capture.PathFocusPixels` records the
+contrasting focus-outline population in `value0` and capture HRESULT in `hr`; the probe excludes
+path glyphs. Preserve failed visual/clipboard attempts. A tooltip witness does not qualify a
+general selectable/scrollable full-detail surface.
+
+The conflict-comparison fixture temporarily connects the pinned DxUi `FrameMetricSink` on its UI
+thread, forwarding `dxui.frame.total_us`, `update_us`, `render_us` and `present_us` to the existing
+perf stream. It verifies all four stages were observed and removes the borrowed sink at scope exit.
+Keep stages and redraw batches from the same thread/time interval: a swap-chain presentation stall
+must not be attributed to comparison layout, and passing geometry does not waive timing regressions.
+The application currently installs no competing frame sink on that UI thread. Comparison PNGs live
+in `conflict-comparison/repeat-N` so later repetitions cannot overwrite a failing witness. Keyboard
+captures retain before/after modality, focused ID, foreground and geometry alongside pixel probes.
+
+`cmd_pane_fileops_conflict_comparison_rows` records `FileOps.Popup.ConflictRows.RedrawBatchUs`:
+five ordered eight-redraw batches after four warm-ups at each of 480, 640 and 760 DIP (15 samples
+per repetition). Compare identical fixture bytes, configuration and width order; preserve all
+samples/p95 and failed baselines. Actual card height can change with layout, so this does not
+compare equal pixel areas or establish Release/FPS/resource acceptance. The harness saves the
+initial image before assertions, then validates complete metadata-only UIA names, stable role IDs,
+full-width bounds, incoming-before-existing order and visible foreground pixels on each exact row.
+`FileOps.Popup.Capture.ConflictMetadataPixels` stores the role index (0 incoming, 1 existing) in
+`durationUs` (not a time), matched pixels in `value0`, requested width DIP in `value1` and capture
+HRESULT in `hr`. Retain those rows and prepared-background evidence with raw hash/line provenance.
+The real seed supplies timestamps and scratch paths; do not claim frozen pixels across runs.
+The conflict comparison fixture verifies that the real admitted task publishes name/parent facts
+before synthetic path decoration. Provider-profile checks include multiple child plans with different
+source/destination separators, a literal backslash in a slash-only filename, nested paths, missing
+profiles/indexes and namespace roots. Preserve exact provider text in copied detail and fallback.
+The earlier 33/33 receipt checks per-role filename providers; that presentation is superseded by the
+2026-09-20 intended hierarchy. Its required extension MUST assert one visible/semantic common-name
+heading, parent-only role values, source above destination, and one pending-state presentation. Count
+actual hosted/painted output and UIA reading-order entries, not a model flag. Different qualified
+leaf spellings remain visible; unqualified fixtures exercise labelled exact-path fallback separately.
+Do not keep hidden duplicate providers to satisfy the old test. Keep before/candidate timings and
+source/build bindings; changed visible content is not an equal-work optimization or a substitute
+for final Release/resource qualification.
+The same conflict fixture also rejects ordinary transfer-path providers above the decision while
+retaining complete metadata semantics/pixels. Preserve that failing pre-change baseline. A policy
+flag reporting no progress is insufficient when legacy painting can still draw a mini-progress
+bar; inspect actual output. Removing transfer content intentionally changes the painted workload
+and measured card height; do not present these timings as equal-work rendering optimization.
+
+### File Operations complete interaction acceptance (I26, revised 2026-09-20)
+
+Maintain a finite inventory of every popup action kind, menu command, adjacent dialog and keyboard/
+window route. The current [M01–M32 review](../Plans/WIP/FileOperationsUiReview_2026-09-16/interaction-review-2026-09-20/README.md)
+is the baseline; reconcile it with source when actions change. Each required journey records initial
+state, actual input, visible result, engine/provider effect, failure/cancel path and restored ownership.
+A menu screenshot, nonzero button bounds or successful Invoke return does not establish that journey.
+Runtime assertions must establish each revised contract before its implementation is qualified.
+
+- Test long French actions, status indicators, scope/disabled text, queue destination and group-clear
+  labels at 480/640/760 DIP and short height. Compare measured text plus icons/padding against actual
+  painted control bounds, and inspect retained captures. Test several cards sharing a fixed global
+  footer; action paint/hit/UIA rectangles cannot overlap it. Verify focused-control visibility after
+  scrolling, resize, removed actions and native 144→96→144 moves.
+- Extend broad gallery seeds to consume admitted production name/parent facts for normal item
+  conflicts. Keep unqualified exact-path fixtures explicit. Synthetic display-only coverage never
+  proves file execution, metadata admission or actual decision acceptance. Record source/build,
+  fixture identity, real locale/DPI/work area and whether each image was directly reviewed.
+- Pending-conflict inspection uses marked sandbox items and deterministic provider fixtures. Cover
+  left/right last-active pane, task started in the other pane, direct qualified navigation without an
+  intermediate root, settled enumeration and exact selected/focused identity. Assert no mutation
+  calls or decision/scope change. Then return to the same pending card/control. Include missing,
+  renamed, filtered, disconnected/refused targets; newer prompt/pane navigation; intervening user
+  focus; repeated inspection; multiple tasks and teardown. Never select a neighboring item on failure.
+- Measure the interval from inspection invocation to settled exact selection and restored popup
+  context, retaining raw repetitions, success/failure classification and bounded pending-work counts.
+  Compare equivalent existing navigation workloads before/after where applicable. Do not infer
+  throughput or latency improvement from static capture duration.
+- Decision validation retains every typed class, allowed/default/Escape policy, scoped acceptance,
+  stale generation and result correlation. Inspection does not grant consent. Check provider effects
+  in owned fixtures and expose missing historical facts honestly in Issues. Selected detail, copy,
+  export, sorting and recovery must agree on stable record identity.
+- Broad capture refreshes and HTML proposal checks are review evidence only. Fresh Full, required
+  Debug/Release, native DPI/UIA/assistive-technology and paired performance/resource gates still apply.
+  The two September 20 gallery cases passing 1/1 do not qualify all 32 journeys or the redesign.
+
+Presentation-settings animation checks MUST establish notified owned foreground before waiting
+for paint-driven settling. Preserve the 2000-ms scaled deadline and record
+`FileOps.Popup.LayoutSettleUs`: elapsed microseconds, hosted frames in `value0`, settled samples in
+`value1`, and success/failure in `hr`. Failure diagnostics include visibility/iconic state; absence
+of paint alone does not establish an OS occlusion cause. Keep predecessor context and all failed
+repetitions when validating a fixture prerequisite repair.
+
+`cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface` emits `FileOps.SpeedDialog.RedrawBatchUs`:
+five eight-redraw batches for each of initial, constrained, validation and corrected states, in
+that order (20 samples per repetition). Preserve input fixture hashes, all repetitions and all
+timing flags. The constrained request is 300x142 DIP; adaptive layout may increase actual height,
+so this compares the same user scenario rather than equal rendered pixel areas. The unchanged
+baseline fails the geometry witness and therefore does not reach the later shutdown check; do not
+compare whole-case duration as equal work. These foreground synchronous Debug samples are not
+presented FPS, Release or idle/allocation qualification. Repeated timing evidence supplements the
+initial pair; it must not silently replace an unfavorable sample or establish native mixed DPI.
+
 A feature or optimization is performance-complete when:
 
 1. the scenario is named,
@@ -1632,3 +2308,213 @@ A feature or optimization is performance-complete when:
 3. deterministic coverage exists,
 4. archived evidence exists or the block is documented,
 5. the owning authoritative spec notes the lasting result when the change establishes or updates a baseline, and any finished WIP plan has been moved to `Specs/Plans/Done/`.
+
+### I26 common filename/state regression evidence (2026-09-20)
+
+`cmd_pane_fileops_conflict_comparison_rows` now exercises identical and differing admitted leaves at
+480/640/760 DIP. For identical leaves, inspect the actual hosted UIA tree: exactly one filename mention
+with `.Conflict.Name` identity, exactly one waiting message, ordered full-width parent folders and
+visible metadata pixels. Reject old question/full-path duplicate providers. Preserve different leaves,
+slash-provider literal backslashes and unknown-profile exact-path fallback. Paired redraw timing
+surrounds the same workload before and after implementation; semantic traversals occur outside it.
+
+[Retained evidence](../Plans/WIP/FileOperationsUiReview_2026-09-16/implementation/2026-09-20-common-name/README.md):
+0/3 baseline, 3/3 candidate, **34/36 final** (zero skips); the PNG clipboard snapshot failure in
+throughput repetitions 2/3 blocked that run; the later repair is recorded below. The independent static gallery passes 1/1 and retains
+300 French PNGs at native 144/96 DPI. Capture success is not input/AT/Release/Full/resource acceptance.
+
+The owned clipboard medium contract also requires exact opaque PNG-format stream bytes to survive
+invalidation of original backing. A passing direct data-object check does not establish OLE
+flush/readback. The [persistence repair](../TestRuns/4cb089111a23/Commands/2026-09-20_133432-i26-clipboard-ole-final/README.md)
+is recorded in the I26 execution checkpoint with 0/3 baseline, 0/1 diagnostic, 6/6 candidate and
+36/36 broader Debug results. `FileOps.Clipboard.StreamSnapshot` records the format ID, byte size
+and cursor position; `FileOps.Clipboard.RestoreReadback` records expected/restored format counts
+and verdict, never contents; a failed restoration reports zero fully verified formats.
+The final preflight hardening also passes six affected checks on its own source/receipt after the
+36-case matrix. This is focused evidence, not Fresh Full or Release closeout.
+
+
+The accepted-decision producer fixture `cmd_pane_fileops_accepted_decision_records` records
+`FileOps.DecisionFixture.AcceptToFinishUs` with action enum in value0, cached-scope scenario in value1 and completion HRESULT.
+It uses real local collisions, unchanged payload checks and disabled Info logging. Before the
+producer is implemented, the retained negative baseline must fail on the missing typed record;
+passing a pending-prompt assertion alone does not prove accepted-decision recording. Later result
+correlation requires explicit typed references, not joining selected-root indexes or path strings.
+
+Final producer [receipt](../TestRuns/4cb089111a23/Commands/2026-09-21_030040-i26-decision-candidate-v4/README.md):
+6/6 repeated checks across eight real action/cancellation/cache scenarios, 24 parsed exported decisions,
+and 199/199 source/localization checks. The existing conflict family separately passes 33/33.
+Only first explicit Replace acceptance-to-finish samples are paired with the pre-producer baseline;
+other actions and renderer measurements remain separate evidence, not a final resource qualification.
+
+The original-problem reference extension reuses that native fixture with a bounded wait for diagnostic
+publication before the measured action. The baseline has 24 original problems with no typed reference;
+[the candidate](../TestRuns/4cb089111a23/Commands/2026-09-21_031620-i26-problem-reference-v1/README.md)
+passes 6/6 and retains 18 explicit pairs, 6 cached applications and 6 unchosen problems. First Replace
+median/p95: preceding producer 31853/59478 us; reference candidate 30686/65037 us, three samples each.
+These retain the existing completion-wait quantization and do not establish final resource acceptance.
+
+## Folder Copy live-progress qualification
+
+`DiscoveryScope_FolderLiveProgress` pairs the five ordinary real-copy routes with identical tree,
+16-MiB/s throttle, 8-MiB bridge buffer and Native slow-commit settings. Additional count-ink captures
+and bounded later-child sampling attempts are disclosed capture workload. Open traversal uses a
+separate sequential open-discovery route (32 nonempty sibling folders, 32 files/33 folders/64 MiB
+at 2 MiB/s, beyond the four-directory listing lookahead). Compare matched per-route
+operation/progress callback and paint samples. These new observation routes bound their harness
+message batch to eight rather than the default
+1,024, while retaining 100-ms sampling, the 650-ms finalization witness and 1,500-ms native delay.
+This harness workload change and additional phase diagnostics are disclosed in the comparison.
+A deliberate speed limit/commit delay or corrected byte accounting does not prove throughput gain.
+
+The bridge's former 32-MiB reported saturation against independently copied 96-MiB content is an
+accounting defect, so the candidate's 96-MiB metric is correctness rather than a threefold speedup.
+
+The lifecycle observer adds boundary events, not duplicate chunk events. Retain cumulative
+`FileOps.FileWork.CallbackUs`, `CallbackCount`, `LockWaitUs`, and `LockHoldUs` together with existing
+progress callback totals and counts. Recompute weighted microseconds per callback, matched paint
+median/p95 and sample counts from raw rows. Bounded curated excerpts preserve raw SHA256/path,
+original line indexes/order, run/source/receipt identities, exact assertion verdicts and captured
+pixels. Preserve an ordinary failing reproduction, correction-specific baseline and fixture misses
+separately. Focused native case results and unrelated runner sandbox-audit failures are separate
+verdicts; no affected/no-activation pass stands in for Fresh Full or foreground/platform coverage.
+
+Automatic-progress qualification additionally reads actual WM_PAINT generations before capture,
+with no forced redraw on the Local serial route and no repeated show hook. A capture's observed
+last generation is excluded from the next advancing sample. The other renderer/phase witnesses
+retain synchronous redraw and are labeled separately; they do not prove normal automatic updates.
+Named semantic-link subcases explicitly retain ERROR_PRIVILEGE_NOT_HELD prerequisite skips while
+regular two-root and Native Bulk copy obligations still execute. Do not count those skips as Native
+link I/O coverage or change Windows policy to obtain a pass.
+
+### Skip-counting work summaries and repeated decisions
+
+`FileOps_SkipCountingPresentation` is a no-activation owned-window scenario. It checks English and
+French at 480/760 DIP for one semantic completed-work summary, no discovery/header `0/?` duplicate,
+unknown-count fallbacks, indeterminate-to-closed progress, nonoverlapping text/bar/actions, direct
+disk-full choices, capacity/unqualified-root explanation and read-only subtree consent. Captures
+must come from the existing harness and include scenario/build/DPI provenance; actual summary ink
+must be observed, not merely requested from a formatter. `FileOps.SelfTest.SkipCountingPresentationUs`
+records bounded scene/capture work; it is not input latency or an end-to-end throughput claim.
+
+`FileOps_RepeatDecisionContracts` runs the action/capacity matrix independently of the broader
+Safety case, mixed file/folder AccessDenied Skip callbacks with missing-metadata controls,
+plus actual nested Keep Both and two-selected-root bridge consent fixtures. Checked Skip must
+require one same-scope prompt across shapes, while unchecked choices and a different error,
+source/destination profile or root still prompt. `FileOps.SelfTest.AccessDeniedSkipScope` records
+these prompt/cache counts; it is a bounded correctness witness, not a throughput measurement.
+`FileOps.SelfTest.KeepBothDescendantRepeat` and `FileOps.SelfTest.MetadataConsentSelectedRoots`
+record prompt/cache work counts, including checked/unchecked consent controls; their zero durations
+are not timings. Existing selected-root-to-descendant Keep Both qualification remains required.
+
+`FileOps_PermanentDeleteCompletionProgress` uses actual sandboxed bound Delete, a normal child
+followed by a read-only child, failed attribute-restoration and cancellation controls, an actual
+host confirmation/resume, and parallel/sequential bridge Copy completed-folder checks. Deleted
+files/folders/bytes must represent committed removals even before a selected root completes.
+`FileOps.SelfTest.PermanentDeleteCompletionProgressUs` records bounded candidate work. Retain raw
+metrics/results and harness captures under the governed archive limits; report any missing baseline
+or blocked profile rather than inferring a speedup or full qualification from these focused runs.
+
+## Completed-card collapse after telemetry stops (2026-10-18)
+
+`FileOps_ReviewRemediationContracts` includes a private, no-activation production popup whose live
+card becomes terminal after telemetry stops. It preserves the height history and unset collapse
+choice, publishes fixture text immediately, disables window auto-sizing to prevent accidental repaint, and observes only normal message
+pumping after the first terminal frame. The explicit test-only height-retaining counterfactual must
+paint a compact header inside its previous expanded-height rectangle on that first frame. Default
+completion must already paint 44-DIP compact geometry, then return to zero idle timers within the
+bounded observation. Success, indeterminate result and reduced-motion
+controls preserve their original outcome labels. `FileOps.Popup.AutoCollapse.ObservationUs` records
+the observation window, initial timer interval and final height, not an inferred exact animation
+latency. Archive same-binary counterfactual/candidate facts and profile-bound runner receipts.
+
+## Copy/Move selection convergence (I42, 2026-10-18)
+
+`FileOps_SmbManagedMoveLeavesNoStage` also cancels a direct Local file and directory publication
+at its second operation-control check on the registered SMB target. Both must refuse the final
+rename with known non-commit truth, preserve the staged object and absent final name, then remove
+the exact stage with the existing bounded cleanup control. `FileOps.SelfTest.PublicationCancelCheckpoint`
+records both controls. Retain the original Release finalizing-cancellation failure beside the repair;
+passing repeats do not prove that an already attempted network mutation can never be uncertain.
+
+The historical case ID `FileOps_SmbManagedMoveLeavesNoStage` requires no leftover for known
+non-commit cancellation. An interrupted in-flight rename on a share without persistent object
+identity can instead require an unknown publication and a retained stage. Such a trial must prove
+the task's cancellation result, the selected root's Unknown publication and retained source, visible
+unknown-stage debt on the completed card, exact surviving source/destination content, and Possible
+artifact classification with no recovery authority. An unexplained stage or failed listing still
+fails the case. Direct real-share file/directory controls also force a committed rename to report
+failure with retained-handle identity: both must remain Unknown, with the final object preserved.
+The committed-failure injection runs after either `FileRenameInfoEx` or its legacy `FileRenameInfo`
+fallback succeeds, so a server requiring the fallback cannot bypass the control.
+`FileOps.SelfTest.ManagedMoveCancellationTruth` records each cancellation's retained-stage and
+unknown-publication counts; `FileOps.SelfTest.PublicationAttemptedUnknown` records the direct controls.
+Retain the three original Debug failures: their error 995 diagnoses cancellation of an already
+attempted rename, not a missed cooperative pre-rename checkpoint. Zero unknown outcomes is not a
+valid reliability gate for this scenario.
+
+The Debug finalizing-3 regression also requires the retained stage's Unknown disposition to survive
+a sibling's successful publication. Preserve the failing run whose root still had Unknown publication
+but whose last worker overwrote stage debt with Published; the repair accumulates unresolved stage
+debt across the selected root instead of accepting the last worker's state.
+`FileOps.SelfTest.StageDebtAggregation` additionally checks twelve debt/sibling lifecycle combinations,
+two stronger-debt transitions, and a same-binary last-worker-wins counterfactual. This deterministic
+witness is required even when a repeat's NAS timings produce no uncertain cancellation.
+
+`DiscoveryScope_FolderLiveProgress` retains its 650 ms active-finalization meter/known-size
+assertions. Its optional test-only nonempty-commit lease holds the real phase until screenshot
+completion, honors operation cancellation, and expires after 30 seconds. Empty commits never block
+the serial route before the sampled file starts. The original 1,500 ms slow-commit setting alone
+does not guarantee that a delayed screenshot still observes finalization; preserve the failed
+local-overwrite capture rather than treating a passing repeat as a repair. The holder is restored
+per route, and `FileOps.SelfTest.FinalizationCaptureLease` records the observation and bound. This
+additional capture workload is not a matched throughput comparison with earlier fixture receipts.
+
+Profile qualification must rerun the selected cases against that profile's test-enabled solution
+receipt. Observations from either Debug or Release do not qualify the other profile's artifacts.
+Each profile repeats the local and actual
+registered-SMB folder/selected-file matrix, managed Move cleanup controls, fresh metadata convergence,
+discovery/focus/card contracts and affected shared-sort consumers. Keep original failures and exact
+source/artifact identities in the profile's packet. The original Debug packet,
+`Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-local/`, predates the late
+publication-cancellation repair and does not qualify that repair. Its Debug qualification belongs
+in `Specs/TestRuns/4cb089111a23/Validation/2026-10-18_final-cancellation-debug/`. The earlier
+`Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-release/` packet predates the
+stage-debt aggregation and finalization-capture repairs. Their Release qualification belongs in
+`Specs/TestRuns/4cb089111a23/Validation/2026-10-19_final-cancellation-release/` and must repeat the
+same selected cases, including the three managed-Move cancellation repetitions and their deterministic
+debt/publication controls. Record the shared-scheduler case's explicit Debug-only export skip in
+Release; it is not a passing Release scenario. Keep its existing Debug proof separate.
+
+`Phase11_BridgePipelineDummyToDummyPerf` isolates within-file read/write overlap with one 128 MiB
+Dummy file, 30 ms per measured stream chunk, the existing 4 MiB configured/8 MiB resolved bridge
+buffers and the unchanged candidate-at-most-80-percent-of-baseline admission threshold. Parallel
+folder worker coverage remains in the separate single/multiple-folder cases. Seed with zero stream
+latency before either copy timer starts, restore the same measured latency for both treatments,
+and record setup separately as `FileOps.SelfTest.BridgePipelineSetupUs`. Start both copy clocks
+immediately before admission and require the exact completed payload bytes in each treatment.
+A baseline that includes fixture seeding is unqualified for a pipeline improvement claim even if
+the native assertion passed; retain it and its original corpus details beside the corrected pair.
+
+The `DiscoveryScope_LeafCopy`, `DiscoveryScope_LeafMove` and zero-byte/verification controls
+must observe the real popup's painted primary progress amount at the held pre-payload checkpoint.
+Nonzero leaves show their fixed byte denominator, and a known empty Copy shows its exact file
+denominator. Their heading must stay identical when the same subject's discovery state changes.
+Do not infer denominator publication from a changing operation/subject heading.
+
+Exact no-activation `FileOps_SelectionShapeLocal` and `FileOps_SelectionShapeSmb` cases use raw selected paths, fresh independent fixtures and independently checked destination bytes. The matrix compares one folder with its nine selected files (eight distinct 4 MiB payloads and one empty file). Local Copy covers Manual four, Auto with an inactive Manual one, and Manual one. Real disk-to-SMB covers native Copy, host-bridge Copy and managed Move at four. Record `FileOps.SelfTest.SelectionShape`: actual admitted file overlap, resolved budget, discovery duration, payload bytes completed while counting, final counts/bytes, frozen-total growth, content/source preservation and terminal result. Selected-file popup snapshots must reach determinate, closed discovery with the exact total during the transfer. Bridge overlap uses I/O-permit ownership through publication/source cleanup, excluding queued Opening rows; native overlap observes active payload/finalization/publication work. Neither is selected-root thread count.
+
+`FileOps.Discovery.SelectedFiles` measures the fresh selected-file metadata phase and the number counted. `FileOps.SelfTest.SelectedFilesConvergence` exercises 4,097 selected local files (4,096 empty and one 8 MiB payload): exact totals must close within two seconds on the qualified machine, before any payload bytes. Duplicate-report and changed-size protocol controls must respectively preserve the frozen denominator and withdraw byte certainty without reopening discovery. Cancellation must preserve every source and leave no staging debris. These controls do not stand in for an actual source mutation.
+
+`FileOps.SelfTest.ParallelMoveSafety` covers four parallel managed files on real SMB with a new unselected source child, cancellation before source cleanup, one known cleanup failure followed by Retry or Skip, and unknown cleanup outcome without replay. Require exact contents, retained/unknown source truth, no source loss and clean destinations. All four file publications must reach the counted source-cleanup pause before injecting these outcomes; one entered pause and four I/O permits are insufficient. The same case also runs a bounded nested SMB Move with thirteen files and six directories, including empty directories, exact contents, restored timestamps or the explicit unsupported-metadata note, and post-order source removal. The legacy 350-file/two-root SMB cost case retains its separate gate. `FileOps.Bridge.ActiveFilesMax` records the task's admitted transaction peak. Preserve failing baseline runs and fixture limitations; only matching scenarios support before/after timing claims. A focused x64 pass is not Full, ARM64, ASan or foreground-input qualification.
+
+## Directory/payload safety scenarios (2026-10-16)
+
+The checked directory decoder and random destination-bound payload adoption protect hot paths. ProductUiTests reports directory-contract duration and message-only post/adopt timings with operation counts; retain raw process output and exact build/source identity. File Operations retains provider/bridge small-file wall timings with post-timing exact output validation and `FileOps.SelfTest.DeleteParentPin` case timings across concurrency, bound-root and cancellation variants. Reported max traversal depth exposes retained parent-handle growth. Archive measurements as treatment observations unless a matching baseline was actually run; no cross-machine or stale receipt comparison establishes a performance improvement. Nonactivating runs do not close interactive qualification.
+
+
+## ViewerSpace current workspace
+
+Protect the existing 2000-direct-file analysis cohort and synthetic lifecycle captures when changing workspace actions. Preserve all 32 natural sibling-query samples per fresh process, identify the exact binary/receipt and compare only that unchanged query span with its baseline; added scenario work is not a whole-case speed comparison. Record viewer.space.exclusions.bind_us, viewer.space.workspace.facts_us, viewer.space.export.prepare_us and existing layout/render/input timings. Exclusion/facts/export preparation targets 1.2-ms cooperative turns; publication, shared recorder overhead and overruns remain in the evidence rather than being trimmed. Record owned projection/export reservation bytes separately from process working set. These focused fixtures do not close the large-drive/provider/platform or 150/310-ms end-to-end targets.
+
+The native export integration runs the production snapshot and atomic writer without showing a Save dialog, through a test-only marked-sandbox gateway. Its publication fault must preserve an existing destination. The close-during-writer gate duplicates owned events, has a bounded worker timeout, proves Close returns without joining, and keeps plugin unload blocked until the pinned callback completes. Lifecycle captures assert the renderer's DPI agrees with its window after live theme updates and wait for both table and map publication before capturing review/exclusion states.

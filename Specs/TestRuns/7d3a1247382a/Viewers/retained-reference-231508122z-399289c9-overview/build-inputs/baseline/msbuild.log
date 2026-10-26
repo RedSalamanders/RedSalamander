@@ -1,0 +1,492 @@
+
+  Retrying operation on file "C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\Intermediate\x64\Release\Plugins\Terminal\Lang\fr-FR\Terminal-fr-FR.tlog\Terminal-fr-FR.lastbuildstate" (attempt 2 of 3). Reason: Access to the path is denied.
+  SettingsStore.cpp
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\Terminal-fr-FR.dll
+  RedSalamander-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamander-ja-JP.dll
+  RedSalamander-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamander-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerText-fr-FR.dll
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Generating code
+  3 of 1126 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-ja-JP.dll
+  DxUi.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\x64\Release\DxUi.lib
+  RedLauncher.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedLauncher.exe
+  FileSystem-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystem7z.cpp
+  FileSystemGoogleDrive.Tests.FakeDrive.cpp
+  FileSystemDummy.cpp
+  FileSystemMtp-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerWeb-fr-FR.dll
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Common.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Common.exp
+  Generating code
+  FileSystem7z-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-ja-JP.dll
+  4 of 10256 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    30 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  Common.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Common.dll
+  FileSystemGoogleDrive.cpp
+  FileSystemMtp-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-ja-JP.dll
+  Factory.cpp
+  Factory.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.exp
+  FileSystemS3-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemS3-ja-JP.dll
+  Generating code
+  5 of 3679 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    6 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.exp
+  Generating code
+  FileSystem7z.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  5 of 3745 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemDummy.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  Factory.cpp
+  Factory.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  Factory.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemMtp.Core.cpp
+  FilesInformationGoogleDrive.cpp
+  ViewerVLC.cpp
+  ViewerSqlite.Engine.cpp
+  ViewerWeb.cpp
+  FileSystem.FileOps.cpp
+  FileSystemMtp.Device.cpp
+  Factory.cpp
+  ViewerSqlite.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  2 of 4212 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    9 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerVLC.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.dll
+  FileSystem.Menu.cpp
+  ViewerPE.cpp
+  FileSystemMtp.Tests.FakeBackend.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.exp
+  Generating code
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  Factory.cpp
+  3 of 5985 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    33 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemGoogleDrive.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.dll
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.exp
+  Generating code
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  FileSystem.Path.cpp
+  6 of 4566 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  7 of 5104 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    13 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FilesInformationMtp.cpp
+  ViewerSqlite.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.dll
+  ViewerWeb.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.dll
+  Factory.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  ViewerSpace.cpp
+  Factory.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerPE.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerPE.exp
+  Generating code
+  4 of 4468 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    6 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerPE.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerPE.dll
+  FileSystem.Search.cpp
+  Factory.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  ViewerImgRaw.Decode.cpp
+  5 of 7054 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    12 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemMtp.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.dll
+  FileSystemS3.Configuration.cpp
+  FileSystemCurl.CopyMove.cpp
+  FileSystem.Watch.cpp
+  Generating code
+  Factory.cpp
+  7 of 7775 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    33 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  RedSalamanderSearchService.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedSalamanderSearchService.exe
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  ViewerImgRaw.Export.cpp
+  FileSystem.cpp
+  6 of 7495 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    20 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemCurl.DirectoryOps.cpp
+  FileSystemMicrosoftDrive.Tests.FakeGraph.cpp
+  ViewerSpace.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.dll
+  FileSystemS3.Core.cpp
+  ViewerImgRaw-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerPE-ja-JP.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  ViewerImgRaw.cpp
+  Factory.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystemMicrosoftDrive.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem.exp
+  Generating code
+  FileSystemS3.Directory.cpp
+  6 of 11644 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    46 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerText.Encoding.cpp
+  FileSystem.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystem.dll
+  FileSystemCurl.Shared.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  ViewerSpace-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSpace-ja-JP.dll
+  FilesInformationMicrosoftDrive.cpp
+  RedSalamanderMonitor.cpp
+  6 of 5541 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    22 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerImgRaw.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.dll
+  ls4.cpp
+  ViewerText.Hex.cpp
+  FileSystemCurl.Tests.Ftp.cpp
+  FileSystemS3.DirectoryOps.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  ViewerSqlite-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-ja-JP.dll
+  4 of 6723 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    56 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerText.MenuTheme.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  FileSystemMicrosoftDrive.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.dll
+  ViewerText-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerText-ja-JP.dll
+  Generating code
+  4 of 1319 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    5 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ls4.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ls4.exe
+  ViewerVLC-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerVLC-ja-JP.dll
+  Generating code
+  ViewerWeb-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerWeb-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-sk-SK.dll
+  3 of 9928 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    21 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  FileSystemS3.DriveInfo.cpp
+  RedConfigure-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedConfigure-ja-JP.dll
+  ViewerText.Text.cpp
+  RedSalamanderMonitor.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedSalamanderMonitor.exe
+  Generating code
+  0 of 236 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ls1.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ls1.exe
+  Generating code
+  Generating code
+  0 of 234 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  ls2.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ls2.exe
+  0 of 301 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ls3.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ls3.exe
+  5 of 10156 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    13 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  4 of 1219 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    6 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FlipSequentialDiscard.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\FlipSequentialDiscard.exe
+  Generating code
+  RedConfigure.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedConfigure.exe
+  ViewerSqlite.Engine.cpp
+  4 of 3500 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    9 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  MonitorTest.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\MonitorTest.exe
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  ViewerPE.Tests.Runner.cpp
+  ViewerText.cpp
+  Generating code
+  FileSystemS3.IO.cpp
+  3 of 4509 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    8 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ProductUiTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ProductUiTests.exe
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  ViewerSqlite.Tests.Runner.cpp
+  LocalizationTests-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\LocalizationTests-fr-FR.dll
+  PluginContract.Tests.Runner.cpp
+  Factory.cpp
+  Terminal.Tests.VtUpgrade.cpp
+  Generating code
+  FileSystemS3.Menu.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerText.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerText.exp
+  Generating code
+  3 of 6241 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    17 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  ViewerPETests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ViewerPETests.exe
+  4 of 7822 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    39 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  8 of 10835 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    54 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  ViewerText.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\ViewerText.dll
+  4 of 4681 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    9 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  4 of 3780 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    12 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemCurl.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.dll
+  SettingsSchemaTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\SettingsSchemaTests.exe
+  Generating code
+  ViewerSqliteTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\ViewerSqliteTests.exe
+  2 of 2395 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  LocalizationTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\LocalizationTests.exe
+  Generating code
+  3 of 2821 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    5 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  CrashHandlingTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\CrashHandlingTests.exe
+  6 of 3847 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    15 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemPluginManager.cpp
+  Generating code
+  Terminal.cpp
+  5 of 1380 functions ( 0.4%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    7 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  PluginContractTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\PluginContractTests.exe
+  FileSystemCurlTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\FileSystemCurlTests.exe
+  FileSystem-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem-cs-CZ.dll
+  FileSystemS3.S3.cpp
+  FileSystem-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem7z-cs-CZ.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  FileSystem7z-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  Generating code
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  ViewerPluginManager.cpp
+  FileSystemS3-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\FileSystemS3-sk-SK.dll
+  4 of 11823 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    25 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  TerminalInternal.cpp
+  ViewerPE-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerPE-cs-CZ.dll
+  RedConfigureTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedConfigureTests.exe
+  ViewerPE-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-sk-SK.dll
+  FileSystemS3.S3Table.cpp
+  ViewerText-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamander-sk-SK.dll
+  Performance.Tests.FolderView.Enumeration.Access.cpp
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-cs-CZ.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\LocalizationTests-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Lang\RedConfigure-sk-SK.dll
+  TerminalSecurity.cpp
+  FileSystemS3.Shared.cpp
+  TerminalSession.cpp
+  Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp
+  FileSystemS3.Tests.FakeS3.cpp
+  Performance.Tests.Runner.cpp
+  TerminalVt.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\PerformanceTests2.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\PerformanceTests2.exp
+  Generating code
+  5 of 9971 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    17 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  PerformanceTests2.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\PerformanceTests2.dll
+  FilesInformationS3.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\Terminal.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\Terminal.exp
+  Generating code
+  6 of 7379 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    22 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Terminal.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\Terminal.dll
+  dllmain.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  3 of 10182 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    24 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemS3.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  ChangeCase.cpp
+  CompareDirectoriesEngine.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  CompareDirectoriesWindow.cpp
+  ConnectionManagerWindow.cpp
+  DirectoryInfoCache.cpp
+  FileOperationsConflictBroker.cpp
+  FileSystemPluginManager.cpp
+  FindFilesWindow.cpp
+  FloatingTerminalWindow.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderView.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.IssuesProjection.cpp
+  FolderWindow.FileOperations.Popup.PathDetail.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.State.Conflict.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.Tests.OwnedShutdown.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWindow.cpp
+  ManagePluginsDialog.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  NavigationView.cpp
+  Preferences.FileActions.cpp
+  Preferences.Internal.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Plugins.cpp
+  RedSalamander.cpp
+  Commands.Tests.Runner.cpp
+  Common.Tests.Runner.cpp
+  CompareDirectoriesEngine.Tests.Runner.cpp
+  FolderWindow.FileOperations.Tests.Runner.cpp
+  SettingsSchemaExport.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  Generating code
+  8 of 155257 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    3436 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  RedSalamander.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedSalamander.exe

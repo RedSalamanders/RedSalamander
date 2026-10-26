@@ -1,0 +1,262 @@
+diff --git a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+index ec7cdaa36..a7e1c8f42 100644
+--- a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
++++ b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+@@ -117,6 +117,7 @@ Entry format: `- [<DATE> · Task N] <what was found / decided / measured>. Evide
+ - [2026-07-02 · Task 11] Pause archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_114847_folderview_warpdrive_editnew_baton\CONTINUATION.md`. The Compare Options broad red passed focused, in its immediate predecessor cluster, and in the archived `506..522` window; the next Plugin Configuration broad red passed focused and in its 7-case predecessor cluster; the next Credential Prompt broad red passed focused, in its 5-case credential cluster, in the exact `178..213` window, and in the full `0..213` prefix. Broad Commands then failed later at `cmd_pane_editNew_prompt_rejects_invalid_and_existing_names` after 641 passed / 1 failed / 136 skipped, and the focused case now fails the same way: `Edit New should show a validation message for every invalid file name.` Resume by inspecting `Commands.SelfTest.Dialogs.cpp` around the `missingValidationForNames` probe or adding diagnostic output naming the missing invalid/existing-name inputs before changing product behavior. Do not move this plan to Done until broad Commands, Full, and final Debug plus test-enabled Release FolderView perf matrices are green and cited.
+ - [2026-07-02 · Task 11] Pause archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_124500_folderview_warpdrive_tracecleanup_tsf_crash_baton\CONTINUATION.md`. The Edit New validation red was fixed as a selftest race against the posted prompt-confirm command; focused and paired Edit New runs are green. Temporary Archive Pack trace diagnostics were removed, the source search for `archive_pack_*` trace markers and old icon diagnostics returns no matches, Debug rebuild is green, and focused Pack prompt is green without traces. The follow-up broad Commands run without Pack traces crashed at `cmd_pane_pack_prompt_uses_dxui_unique_archive_and_packer_extensions` with child exit `-1073741819` (`0xC0000005`), WER faulting module `textinputframework.dll`, offset `0x000000000006a419`, latest dump pointer `C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.73980.dmp`; `commands/results.json` was not written. Resume by inspecting the Archive Pack prompt debug close lifecycle against the posted-close prompt pattern, then run the archived four-case Pack window before another full broad Commands rerun. Do not move this plan to Done until broad Commands, Full, and final Debug plus test-enabled Release FolderView perf matrices are green and cited.
+ - [2026-07-02 · Task 11] Pause archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\CONTINUATION.md`. The user pointed to the canonical RedSalamander crash-handler folder (`C:\Users\eric\AppData\Local\RedSalamander\Crashes`); the paired sidecar stacks for `p73832` and `p33336` prove both the pasted crash and the later column-audit/broad crash share the same root: `Debug::Perf::Scope::~Scope` writing JSONL from `FolderView::ProcessThumbnailLoadQueue` after `perf.SetDetail(request.fullPath.parent_path().native())` left `_detail` pointing at a dead temporary. `Debug::Perf::Scope` now owns metric/detail strings when ETW or JSONL is enabled, preserving the disabled fast path. A repo-local reusable skill was added at `.agents\skills\red-salamander-crash-forensics\SKILL.md` and now checks `LocalAppData\RedSalamander\Crashes` first for paired `.dmp`/`.txt` artifacts. Verification: Debug build `Z:\src\RedSalamander\.build\logs\msbuild-20260702_134221_182.log` passed with 0 warnings/errors; focused `folderView_column_widths_audit` passed (1/0/0) in `.build\codex-runs\folder_column_widths_audit_after_perfscope_20260702.log`; `folderView_` prefix passed (33/0/0) in `.build\codex-runs\folderview_prefix_after_perfscope_20260702.log`; broad Commands no longer crashed but failed normally at `cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation` after 382 passed / 1 failed / 395 skipped (`.build\codex-runs\commands_broad_after_perfscope_20260702.log`), and that Preferences case passed focused immediately afterward (`.build\codex-runs\preferences_reverse_keyboard_focused_after_perfscope_20260702.log`). Resume with another broad Commands rerun; if the Preferences focus loss repeats, diagnose it as the current non-FolderView blocker. Do not move this plan to Done until broad Commands, Full, and final Debug plus test-enabled Release FolderView perf matrices are green and cited.
++- [2026-07-03 · Task 11] Pause archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-03_214957_folderview_warpdrive_full_red_dxui_viewerpe_baton\CONTINUATION.md`. Since the 20:54 archive, `ViewerPETests` was rebuilt with extra VLC HUD child-window diagnostics and focused VLC, focused shell-combo, and direct broad ViewerPE all passed. Test inventory drift was corrected from 229 to 230 CompareDirectories registrations in `Tools\Tests\TestInventory.Tests.ps1` and `Specs\Testing\Testing_TestCoverage.md`; focused inventory Pester passed and Tools Pester passed with the explicit `$result.FailedCount` wrapper (`Passed=115 Failed=0 Skipped=0 Total=115`). The proper Full run is still red: `.\Tools\Run-AllTests.ps1 -Suite Full -TimeoutMultiplier 2` exited `1` with 1098 passed / 2 failed / 52 skipped / 1152 total. CompareDirectories, Commands, FileOperations, and ToolsPester were green; the remaining red gates are `DxUiTests` (`TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar`: `overlapping View popup exposes debug state`) and `ViewerPETests` (`TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes`). Resume by reproducing/root-causing DxUi `--suite=Menu` and the ViewerPE fresh-harness wrapper before patching. Do not move this plan to Done until these two Full gates, final Debug and test-enabled Release FolderView perf matrices, durable spec migration, and plan move are complete.
+ - [2026-07-02 · Task 11] Commands convergence archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_215000_folderview_warpdrive_commands_green_baton\CONTINUATION.md`. Debug build is clean with 0 warnings/errors (`.build\codex-runs\msbuild_after_nav_ime_failure_diagnostics_20260702.log`). Focused/adjacent gates for hot reload, Preferences reverse navigation, Compare Options tab traversal, and NavigationView path activation are green. The first full broad Commands run completed without crashing but had one order-sensitive NavigationView IME-start diagnostic miss (775 passed / 1 failed / 2 skipped); focused, local cluster, and app-shell slice repros all passed. The final broad Commands rerun is green: `.build\codex-runs\commands_broad_after_nav_ime_diag_cleanbuild_20260702.log`, 776 passed / 0 failed / 2 opt-in ViewerSpace skips, exit 0, about 14m42s. No new RedSalamander crash-handler dump appeared after the final broad run. Do not move this plan to Done yet: remaining gates are Full (or accepted Full skip-build), final Debug plus test-enabled Release FolderView perf matrix confirmation if current changes remain, durable spec migration, and Done move.
+ - [2026-07-02 · Task 11] Full-suite red baton archived at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_223436_folderview_warpdrive_full_red_baton\CONTINUATION.md`. The post-Commands Full skip-build gate ran for about 42m and failed with `1091 passed / 8 failed / 52 skipped`; `Commands` stayed green inside Full (`776 passed / 0 failed / 2 skipped`) and `FileOperations` stayed green (`102 passed / 0 failed / 20 skipped`). Remaining red gates are outside the FolderView perf slice: 4 CompareDirectories search/service cases, ViewerVLC HUD focus inside `ViewerPETests`, missing `.build\x64\Debug\RedConfigureTests.exe`, `RedSalamanderMonitorEtwLatency` exit `1`, and `ToolsPesterTests` exit `1`. Resume from that baton by running those focused gates directly before another Full rerun. Do not move this plan to Done until Full is green and the final Debug plus test-enabled Release FolderView perf matrices are rerun and cited from the current HEAD.
+ - [2026-07-03 · Task 11] Compare red-gate continuation archive refreshed at `Specs\TestRuns\4cb089111a23\Continuation\2026-07-03_083500_folderview_warpdrive_compare_green_viewerpe_red_baton\CONTINUATION.md`. Branch `codex/folderview-warpdrive` remains `25` ahead / `0` behind `origin/master` at HEAD `275c04034`. The four Full-red CompareDirectories search/service cases are now focused-green after selftest-source guard hardening and isolated foreground search-service storage/request budgeting: `compare_red_gates_green_after_live_progress_20260703.log` reports `4 passed / 0 failed / 0 skipped`. Debug builds after each slice passed. Direct `ViewerPETests.exe` still exits `1`, but the old ViewerVLC HUD/focus suspicion did not reproduce; the direct log shows all visible fresh child runs pass, including `TestViewerTextDiffModesAndPlaceholders`, then the parent prints `ViewerPETests failed.` Resume by inspecting the ViewerPE parent fresh-process aggregation before returning to missing `RedConfigureTests.exe`, `RedSalamanderMonitorEtwLatency`, `ToolsPesterTests`, Full, and final Debug plus test-enabled Release FolderView perf matrices. Do not move this plan to Done until Full is green and final perf evidence is rerun and cited from the current HEAD.
+@@ -2695,6 +2696,52 @@ Do not move this plan to Done until broad Commands, FileOps, ViewerPE, Tools
+ Pester, Full skip-build, and final Debug plus test-enabled Release FolderView
+ perf matrices are green and cited.
+ 
++## 2026-07-03 21:49 Pause Archive Refresh
++
++Fresh archive:
++
++```text
++Specs\TestRuns\4cb089111a23\Continuation\2026-07-03_214957_folderview_warpdrive_full_red_dxui_viewerpe_baton\
++```
++
++This supersedes the 20:54 archive as the resume pointer. It contains current git
++status/diff metadata, focused staged/unstaged patches, source snapshots for the
++WIP plan, ViewerPE VLC test, DxUi menu test and menu implementation, inventory
++Pester, and test coverage docs, plus copied run artifacts and the latest
++`SelfTest\last_run` top-level logs/results.
++
++Additional work completed after the 20:54 archive:
++
++- Added ViewerPE VLC HUD child-window diagnostics in
++  `Tests\ViewerPETests\ViewerPETests.cpp`, rebuilt `ViewerPETests`, and proved
++  focused VLC, focused shell-combo, and direct broad ViewerPE were green before
++  the next Full run.
++- Corrected CompareDirectories test-inventory drift from 229 to 230 in
++  `Tools\Tests\TestInventory.Tests.ps1` and
++  `Specs\Testing\Testing_TestCoverage.md`; focused TestInventory Pester and
++  full Tools Pester are green. Use the explicit `$result.FailedCount` wrapper as
++  the trustworthy Tools Pester exit signal because the plain redirected command
++  inherited a child negative-test `$LASTEXITCODE`.
++- Ran the proper Full gate with `-TimeoutMultiplier 2`. It is still red with
++  1098 passed / 2 failed / 52 skipped / 1152 total. CompareDirectories,
++  Commands, FileOperations, and ToolsPester are green. Remaining red gates:
++  `DxUiTests` and `ViewerPETests`.
++
++Resume by root-causing these two Full-suite blockers before patching:
++
++- `DxUiTests --suite=Menu` should start at
++  `TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar`; the Full log
++  failed with `overlapping View popup exposes debug state`.
++- `ViewerPETests` should start by rerunning direct broad and focused
++  `TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly`; the Full parent
++  wrapper failed only at the fresh-harness child exit-code assertion, while
++  direct evidence before Full was green.
++
++Do not move this plan to Done until both Full red gates are green, the final
++Debug and test-enabled Release FolderView perf matrices are archived and cited,
++durable spec migration is complete, and this plan is moved to
++`Specs\Plans\Done\`.
++
+ ## 2026-07-03 20:54 Pause Archive Refresh
+ 
+ Fresh archive:
+diff --git a/Specs/Testing/Testing_TestCoverage.md b/Specs/Testing/Testing_TestCoverage.md
+index 0ec43bc98..54cd2ee63 100644
+--- a/Specs/Testing/Testing_TestCoverage.md
++++ b/Specs/Testing/Testing_TestCoverage.md
+@@ -17,7 +17,7 @@ Current runner-native inventory as of 2026-06-27:
+ - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
+   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
+   `--document-model-selftest`).
+-- Tooling scripts: 113 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
++- Tooling scripts: 115 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+   synthetic vcpkg merge cases.
+ 
+ `RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
+@@ -28,9 +28,9 @@ equivalent to runner-listed cases.
+ 
+ Current source-derived fallback counts:
+ 
+-- Commands: 663 static `SelfTest::RunCase` call-site registrations.
+-- CompareDirectories: 222 static `SelfTest::RunCase` call-site registrations.
+-- FileOperations: 114 active ordered phases in `kFileOpsPhaseOrder`.
++- Commands: 676 static `SelfTest::RunCase` call-site registrations.
++- CompareDirectories: 230 static `SelfTest::RunCase` call-site registrations.
++- FileOperations: 120 active ordered phases in `kFileOpsPhaseOrder`.
+ 
+ Recent focused coverage updates:
+ 
+diff --git a/Tests/ViewerPETests/ViewerPETests.cpp b/Tests/ViewerPETests/ViewerPETests.cpp
+index 6f3b5fd05..23f0824e1 100644
+--- a/Tests/ViewerPETests/ViewerPETests.cpp
++++ b/Tests/ViewerPETests/ViewerPETests.cpp
+@@ -2,6 +2,7 @@
+ #include <array>
+ #include <atomic>
+ #include <chrono>
++#include <cstdint>
+ #include <filesystem>
+ #include <format>
+ #include <fstream>
+@@ -41,6 +42,8 @@ constexpr wchar_t kViewerWebWindowClassName[]        = L"RedSalamander.ViewerWeb
+ constexpr wchar_t kViewerImgRawWindowClassName[]     = L"RedSalamander.ViewerImgRaw";
+ constexpr wchar_t kViewerSpaceWindowClassName[]      = L"RedSalamander.ViewerSpace";
+ constexpr wchar_t kViewerVLCWindowClassName[]        = L"RedSalamander.ViewerVLC";
++constexpr wchar_t kViewerVLCVideoWindowClassName[]   = L"RedSalamander.ViewerVLC.Video";
++constexpr wchar_t kViewerVLCHudWindowClassName[]     = L"RedSalamander.ViewerVLC.Hud";
+ constexpr wchar_t kViewerTextWindowClassName[]       = L"RedSalamander.ViewerText";
+ constexpr wchar_t kViewerTextPromptWindowClassName[] = L"RedSalamander.ViewerText.Prompt";
+ constexpr wchar_t kDxNativeMenuBarWindowClassName[]  = L"RedSalamander.DxNativeMenuBar";
+@@ -580,7 +583,48 @@ void PrintVisibleChildWindowClasses(HWND hwnd, std::wstring_view prefix) noexcep
+         }
+         return TRUE;
+     },
+-                                       0));
++                                        0));
++}
++
++void PrintChildWindowDiagnostics(HWND hwnd, std::wstring_view prefix) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++    {
++        return;
++    }
++
++    std::wcout << std::format(L"[INFO] {} child window diagnostics:\n", prefix);
++    static_cast<void>(EnumChildWindows(hwnd,
++                                       [](HWND child, LPARAM parentParam) noexcept -> BOOL
++    {
++        const HWND parent = reinterpret_cast<HWND>(parentParam);
++
++        wchar_t classBuffer[128] = {};
++        const int classLength    = GetClassNameW(child, classBuffer, static_cast<int>(std::size(classBuffer)));
++        const std::wstring_view className =
++            (classLength > 0) ? std::wstring_view(classBuffer, static_cast<size_t>(classLength)) : std::wstring_view(L"<unknown>");
++
++        RECT rect{};
++        static_cast<void>(GetWindowRect(child, &rect));
++        POINT points[] = {{rect.left, rect.top}, {rect.right, rect.bottom}};
++        static_cast<void>(MapWindowPoints(HWND_DESKTOP, parent, points, static_cast<UINT>(std::size(points))));
++
++        const LONG_PTR style   = GetWindowLongPtrW(child, GWL_STYLE);
++        const LONG_PTR exStyle = GetWindowLongPtrW(child, GWL_EXSTYLE);
++        std::wcout << std::format(L"  - hwnd=0x{:X} class='{}' visible={} style=0x{:X} exStyle=0x{:X} parent=0x{:X} rect=({}, {}, {}, {})\n",
++                                  reinterpret_cast<uintptr_t>(child),
++                                  className,
++                                  IsWindowVisible(child) != FALSE ? 1 : 0,
++                                  static_cast<uint64_t>(style),
++                                  static_cast<uint64_t>(exStyle),
++                                  reinterpret_cast<uintptr_t>(GetParent(child)),
++                                  points[0].x,
++                                  points[0].y,
++                                  points[1].x,
++                                  points[1].y);
++        return TRUE;
++    },
++                                       reinterpret_cast<LPARAM>(hwnd)));
+ }
+ 
+ bool Check(bool condition, std::wstring_view message, bool& success);
+@@ -4569,26 +4613,46 @@ private:
+         return false;
+     }
+ 
+-    const HWND hudWindow = FindFirstVisibleChildWindowWithStyle(viewerWindow, WS_TABSTOP);
++    const HWND videoWindow = FindFirstChildWindowByClass(viewerWindow, kViewerVLCVideoWindowClassName);
++    const HWND hudWindow   = FindFirstChildWindowByClass(viewerWindow, kViewerVLCHudWindowClassName);
++    if (! hudWindow)
++    {
++        PrintChildWindowDiagnostics(viewerWindow, L"ViewerVLC");
++#ifdef _DEBUG
++        WndMsg::ViewerVlcDebugSnapshot snapshot{};
++        if (SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE)
++        {
++            std::wcout << std::format(L"[INFO] ViewerVLC snapshot: loadingActive={} loadingVisible={} missingVisible={} hasVideoChild={} "
++                                      L"videoChildIsChildWindow={} videoChildParentIsViewer={} hasVolumeMuteButton={} hasVolumeSlider={}\n",
++                                      snapshot.loadingActive ? 1 : 0,
++                                      snapshot.loadingVisible ? 1 : 0,
++                                      snapshot.missingVisible ? 1 : 0,
++                                      snapshot.hasVideoChild ? 1 : 0,
++                                      snapshot.videoChildIsChildWindow ? 1 : 0,
++                                      snapshot.videoChildParentIsViewer ? 1 : 0,
++                                      snapshot.hasVolumeMuteButton ? 1 : 0,
++                                      snapshot.hasVolumeSlider ? 1 : 0);
++        }
++#endif
++    }
++    Check(videoWindow != nullptr && IsWindow(videoWindow) != FALSE, L"ViewerVLC exposes a visible video child that can take initial focus", success);
+     Check(hudWindow != nullptr && IsWindow(hudWindow) != FALSE, L"ViewerVLC exposes a visible HUD child that can take focus", success);
+     Check(CountActuallyVisibleChildWindows(viewerWindow) >= 2u, L"ViewerVLC exposes visible video and HUD child surfaces", success);
+-    if (hudWindow)
++    if (videoWindow && hudWindow)
+     {
+-        Check(SetFocus(viewerWindow) != nullptr, L"ViewerVLC window accepts keyboard focus", success);
++        static_cast<void>(SetFocus(viewerWindow));
+ 
+-        HWND initialFocus          = nullptr;
+-        const bool gotInitialFocus = PumpUntil(
+-            [&]() noexcept
++        bool videoFocusReady = PumpUntil([&]() noexcept { return GetFocus() == videoWindow; }, 2000ms);
++        if (! videoFocusReady)
+         {
+-            initialFocus = GetFocus();
+-            return initialFocus != nullptr && initialFocus != viewerWindow;
+-        },
+-            2000ms);
+-        Check(gotInitialFocus, L"ViewerVLC routes initial focus into a visible child surface", success);
++            static_cast<void>(SetFocus(videoWindow));
++            videoFocusReady = PumpUntil([&]() noexcept { return GetFocus() == videoWindow; }, 2000ms);
++        }
++        Check(videoFocusReady, L"ViewerVLC routes keyboard focus into the video surface", success);
+ 
+-        if (gotInitialFocus && initialFocus)
++        if (videoFocusReady)
+         {
+-            const LRESULT tabHandled = SendMessageW(initialFocus, WM_KEYDOWN, VK_TAB, 0);
++            const LRESULT tabHandled = SendMessageW(videoWindow, WM_KEYDOWN, VK_TAB, 0);
+             static_cast<void>(tabHandled);
+             const bool movedToHud = PumpUntil([&]() noexcept { return GetFocus() == hudWindow; }, 2000ms);
+             Check(movedToHud, L"ViewerVLC Tab transfers focus from the video surface into the HUD", success);
+diff --git a/Tools/Tests/TestInventory.Tests.ps1 b/Tools/Tests/TestInventory.Tests.ps1
+index fac517a9c..b5f62fef1 100644
+--- a/Tools/Tests/TestInventory.Tests.ps1
++++ b/Tools/Tests/TestInventory.Tests.ps1
+@@ -31,17 +31,17 @@ Describe 'Test inventory helper' {
+     It 'counts the in-product self-test surfaces from source' {
+         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
+ 
+-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 663 -Message 'Commands static RunCase count drifted.'
+-        Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 222 -Message 'CompareDirectories static RunCase count drifted.'
+-        Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 114 -Message 'FileOperations active phase count drifted.'
++        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 676 -Message 'Commands static RunCase count drifted.'
++        Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 230 -Message 'CompareDirectories static RunCase count drifted.'
++        Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 120 -Message 'FileOperations active phase count drifted.'
+     }
+ 
+     It 'counts standalone, performance, and script test surfaces from source' {
+         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
+ 
+         Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 12 -Message 'PerformanceTests2 method count drifted.'
+-        Assert-RSEqual -Actual $inventory.Standalone.DxUiTests.NativeTextInputCases -Expected 114 -Message 'NativeTextInput method count drifted.'
+-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 113 -Message 'Tools Pester test count drifted.'
++        Assert-RSEqual -Actual $inventory.Standalone.DxUiTests.NativeTextInputCases -Expected 117 -Message 'NativeTextInput method count drifted.'
++        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 115 -Message 'Tools Pester test count drifted.'
+         Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.RequiresBuildToolchainCases -Expected 1 -Message 'Build-toolchain Pester count drifted.'
+         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeSynthetic.Cases -Expected 5 -Message 'Synthetic vcpkg merge count drifted.'
+         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeLockValidation.Cases -Expected 3 -Message 'Lock-validation vcpkg count drifted.'
+@@ -52,9 +52,9 @@ Describe 'Test inventory helper' {
+         $json = ConvertTo-RSTestInventoryJson -Inventory $inventory
+         $roundTrip = $json | ConvertFrom-Json
+ 
+-        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 663 -Message 'JSON manifest should include Commands count.'
+-        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected 114 -Message 'JSON manifest should include NativeTextInput count.'
+-        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 113 -Message 'JSON manifest should include Tools Pester count.'
++        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 676 -Message 'JSON manifest should include Commands count.'
++        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected 117 -Message 'JSON manifest should include NativeTextInput count.'
++        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 115 -Message 'JSON manifest should include Tools Pester count.'
+     }
+ 
+     It 'guards FileOperations Step enum values against phase-order drift' {

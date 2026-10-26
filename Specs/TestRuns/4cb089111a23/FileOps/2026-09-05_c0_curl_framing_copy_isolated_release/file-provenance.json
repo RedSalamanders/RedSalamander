@@ -1,0 +1,52 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 874,
+    "sha256": "50510ce6c4bf4917d82bf6cdadc7398e974ddb953d1251810eddaa4e878692c6",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5456,
+    "sha256": "69bc08abd8ac96d2396d63b8b4880b65cd69f505244ac02e7c76945387ec3140",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1403,
+    "sha256": "3d5269235be3686459d0d13cd46d71e8cfa56fe2613bfc8861c84dea65f1e089",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 20006,
+    "sha256": "f3cb49993a8c693de5add07537d6ae7b209c0820744115a059e78fd6f3aa776e",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 31413,
+    "sha256": "56905cb89c2f493d0858fbfe812a48a14e0f5be1e5259a3185ac205be8d50bcb",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "1825e27e5ebd3c94c5cd6d4e929962598fd1d337778b344a36fc198cd663d38c",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-copy-isolated-release-20260905\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "bytes": 371799,
+    "rows": 970,
+    "sha256": "07b2375444941e6776b8190fa8bb86428e077d53a1ec31b15040fb291c69fba9",
+    "transform": "none"
+  }
+]

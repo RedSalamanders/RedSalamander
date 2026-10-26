@@ -128,7 +128,13 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ViewerPETests.cpp" />
+    <ClCompile Include="ViewerPE.Tests.Runner.cpp" />
+    <ClCompile Include="ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp" />
+    <ClCompile Include="ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp" />
+    <ClCompile Include="..\TestSupport\TestSupport.Tests.WindowScreenshot.cpp" />
+    <ClInclude Include="ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h" />
+    <ClInclude Include="..\TestSupport\TestSupport.Tests.DesktopObservation.h" />
+    <ClInclude Include="ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

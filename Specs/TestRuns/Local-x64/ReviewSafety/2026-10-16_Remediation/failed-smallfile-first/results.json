@@ -1,0 +1,47 @@
+{
+    "run_started_utc": "2026-10-16T09:59:50.253Z",
+    "duration_ms": 6088,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_SmallFileCopyCost",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261016T095911Z-82588-63a693cc24334ac3b2ea6e1794578985\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 5407,
+            "passed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_SmallFileCopyCost",
+            "failureMessage": "The small-file Copy cost could not be measured: bridge copy 0: hr=0x00000000, 0 of 2000 files, bridge admissions 2000.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1344,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_SmallFileCopyCost",
+                    "status": "failed",
+                    "duration_ms": 4016,
+                    "repeat_index": 1,
+                    "reason": "The small-file Copy cost could not be measured: bridge copy 0: hr=0x00000000, 0 of 2000 files, bridge admissions 2000."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+}

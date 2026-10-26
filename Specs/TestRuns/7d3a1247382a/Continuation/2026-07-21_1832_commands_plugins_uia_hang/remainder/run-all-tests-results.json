@@ -1,0 +1,229 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-21T16:35:24.6412993Z",
+  "run_ended_utc": "2026-07-21T16:44:51.4329397Z",
+  "duration_ms": 566792,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "D:\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T163522Z-59632-0a920729ad834f36a4301a88b88306ff\\artifacts\\selftest\\last_run",
+  "test_root": "D:\\RedSalamander\\.build\\TestSandbox",
+  "run_id": "20260721T163522Z-59632-0a920729ad834f36a4301a88b88306ff",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_preferences_dialog_plugins_tab_traversal_live_dx_interaction,cmd_preferences_dialog_plugins_empty_custom_paths_placeholder,cmd_preferences_dialog_plugins_custom_paths_remove_live_dx_interaction,cmd_preferences_dialog_plugins_custom_paths_add_live_dx_interaction,cmd_preferences_dialog_plugins_configure_live_dx_interaction,cmd_preferences_dialog_plugins_test_live_dx_interaction,cmd_preferences_dialog_plugins_test_all_live_dx_interaction,cmd_preferences_dialog_themes_search_action_updates_dxui_surface,cmd_preferences_dialog_themes_live_search_dx_interaction,cmd_preferences_dialog_themes_reset_live_dx_interaction,cmd_preferences_dialog_themes_duplicate_live_dx_interaction,cmd_preferences_dialog_themes_clear_live_dx_interaction,cmd_preferences_dialog_themes_set_live_dx_interaction,cmd_preferences_dialog_themes_apply_temporarily_live_dx_interaction,cmd_preferences_dialog_themes_save_theme_live_dx_interaction,cmd_preferences_dialog_themes_load_from_file_live_dx_interaction,cmd_preferences_dialog_advanced_page_uses_dxui_statics_and_toggles,cmd_preferences_dialog_advanced_live_dx_interaction,cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction,cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file,cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file,cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction,cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface,cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics,cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes,cmd_preferences_dialog_file_operations_page_uses_dxui_controls,cmd_preferences_dialog_file_operations_live_dx_interaction,cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction,cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction,cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface,cmd_preferences_dialog_compare_directories_page_uses_dxui_statics,cmd_preferences_dialog_compare_directories_live_dx_interaction,cmd_preferences_dialog_compare_directories_content_workers_ignore_files_live_dx_interaction,cmd_preferences_dialog_compare_directories_tail_toggles_live_dx_interaction,cmd_preferences_dialog_compare_directories_tab_traversal_live_dx_interaction,cmd_preferences_dialog_compare_directories_roundtrip_restores_dxui_surface,cmd_preferences_dialog_compare_directories_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_category_tree_keyboard_navigation_updates_category,cmd_preferences_dialog_editors_mouse_live_dx_notes,cmd_preferences_dialog_editors_mouse_tab_skips_note_surface,cmd_preferences_dialog_viewers_editors_file_action_settings_apply,cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation,cmd_preferences_dialog_category_tree_page_navigation_stays_on_dx_tree_path,cmd_preferences_dialog_category_tree_accepts_wheel_scrolling_without_selection_churn,cmd_preferences_dialog_category_tree_keyboard_expand_collapse_and_child_entry,cmd_preferences_dialog_category_tree_boundary_navigation_from_scrolled_state,cmd_preferences_dialog_category_switches_do_not_churn_tree_host,cmd_preferences_dialog_scroll_host_preserves_retained_page_state,cmd_preferences_dialog_rapid_switches_keep_page_specific_uia_subtrees,search_local_plugin_invalid_regex_reports_single_completion,search_local_plugin_parallel_cancel_fanin,filesystem_local_watch_unwatch_drains_inflight_callback,search_local_index_stream_stop_after_first,search_local_provider_reselect_after_index_stream_stays_responsive,cmd_pane_find_dialog_search_ops,cmd_pane_find_dialog_active_close_does_not_join_ui,cmd_pane_find_dialog_drops_stale_search_epoch_payloads,cmd_pane_find_dialog_result_drains_respect_child_input_queue_order,cmd_pane_find_dialog_partial_completion_removes_only_known_sources,cmd_pane_quickSearch_integrated_navigation,cmd_pane_quickSearch_uses_visual_names_when_extensions_hidden,cmd_pane_find_dialog_local_root_overrides_stale_context,cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances,cmd_pane_find_dialog_recursive_local_search_and_index_availability,cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing,cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions,cmd_pane_find_dialog_large_local_search_uses_incremental_updates,cmd_pane_find_dialog_running_status_shows_phase_and_path,cmd_pane_find_dialog_service_status_shows_backend_diagnostics,cmd_pane_find_dialog_service_unavailable_warning_is_distinct,cmd_pane_find_dialog_failure_status_is_readable,cmd_pane_find_dialog_uses_dxui_host_without_visible_child_controls,cmd_pane_find_dialog_exposes_live_uia_selection_and_inputs,cmd_pane_find_dialog_long_run_scrolling_stays_bounded,cmd_pane_find_dialog_long_run_open_close_stays_stable,cmd_pane_find_dialog_directory_activation_navigates_into_selection,cmd_pane_find_dialog_open_parent_keeps_directory_focused_in_parent,cmd_pane_find_dialog_enter_from_checkbox_invokes_default_search,cmd_pane_find_dialog_pointer_click_toggles_recursive_checkbox,cmd_pane_find_dialog_escape_closes_popup_before_cancel,cmd_pane_find_dialog_escape_from_dx_control_closes_cancel,cmd_pane_find_dialog_access_keys_focus_expected_fields,cmd_pane_find_dialog_grid_enter_activates_selection,cmd_pane_find_dialog_grid_doubleClick_activates_selection,cmd_pane_find_dialog_tab_traversal_matches_expected_order,cmd_pane_find_dialog_editable_combo_keyboard_editing_keys,cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies,cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states,cmd_pane_find_dialog_action_buttons_activate_expected_commands,cmd_pane_find_dialog_restores_persisted_grid_layout,cmd_pane_find_dialog_header_drag_reorders_columns_without_sort,cmd_pane_find_dialog_copy_follows_reordered_columns,cmd_pane_find_dialog_reordered_columns_survive_sort_cycles,cmd_pane_find_dialog_header_resize_changes_visible_width,cmd_pane_find_dialog_reordered_columns_survive_search_rerun,cmd_pane_find_dialog_resized_columns_survive_search_rerun,cmd_pane_find_dialog_reordered_resized_columns_survive_search_rerun,cmd_pane_find_dialog_reordered_resized_columns_survive_sort_cycles,cmd_pane_find_dialog_resized_columns_survive_sort_cycles,cmd_pane_find_dialog_header_click_sorts_results,cmd_pane_find_dialog_restores_resized_grid_layout,cmd_pane_find_dialog_restores_reordered_grid_layout,cmd_pane_find_dialog_restored_reordered_layout_copy_follows_visible_columns,cmd_pane_find_dialog_restores_persisted_sort_order,cmd_pane_find_dialog_restores_reordered_sorted_grid_layout,cmd_pane_find_dialog_restores_combined_view_state,cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns,cmd_pane_find_dialog_restored_combined_view_state_survives_search_rerun,cmd_pane_find_dialog_restored_combined_view_state_survives_sort_cycles,cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_sort_cycles,cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_search_rerun,cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection,cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection,cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection_after_sort_cycles_and_search_rerun,cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun,cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection,cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles,cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles_and_search_rerun,cmd_pane_find_dialog_theme_cycle_keeps_grid_legible,cmd_pane_find_dialog_compact_mode_shrinks_results_grid_metrics,cmd_pane_openSecurity_routes_focused_item_security_page,cmd_pane_contextMenuCurrentDirectory_routes_current_folder,cmd_pane_changeAttributes_applies_attributes_removes_streams_and_reports,cmd_pane_changeAttributes_recurse_applies_datetime_with_progress,cmd_pane_goToShortcutOrLinkTarget_url_navigates_to_local_target,cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_file_target,cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_directory_target,cmd_pane_goToShortcutOrLinkTarget_broken_lnk_reports_alert,cmd_pane_goToShortcutOrLinkTarget_web_url_reports_unsupported,cmd_pane_goToShortcutOrLinkTarget_junction_navigates_to_target,cmd_pane_executeOpen_junction_navigates_without_crash,cmd_pane_itemProperties_show_shortcut_and_reparse_targets,cmd_pane_newFromShellTemplate_creates_null_data_and_filename_templates,cmd_pane_newFromShellTemplate_menu_and_missing_template_feedback,cmd_pane_clipboardCut_sets_move_drop_effect,cmd_pane_clipboardPaste_uses_preferred_move_effect,cmd_pane_clipboardPaste_path_change_clears_stale_overlay,cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit,Commands_FileOpsClipboardPasteUsesHostQueue,Commands_FileOpsFolderPickerMoveUsesHostQueue,Commands_FileOpsMissingCallbackRejectsDirectFallback,Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback,folderView_drop_integrity_guards,folderView_drop_rejects_malformed_payloads,folderView_pointer_targets_and_stale_hover_are_safe,cmd_pane_clipboardPasteShortcut_creates_unique_links,cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links,cmd_pane_clipboardPasteShortcut_returns_before_worker_complete,cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker,cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert,cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths,cmd_app_shortcuts_uses_dxui_surface,cmd_app_shortcuts_theme_cycle_keeps_grid_legible,cmd_app_shortcuts_long_run_open_close_stays_stable,cmd_app_shortcuts_tab_traversal_matches_expected_order,cmd_app_shortcuts_live_dx_search_interaction,cmd_app_shortcuts_long_run_scrolling_stays_bounded,cmd_app_shortcuts_search_preserves_selection_and_group_semantics,cmd_app_shortcuts_group_collapse_persists_through_search,cmd_app_shortcuts_group_collapse_persists_through_sort,cmd_app_shortcuts_key_column_uses_natural_key_order,cmd_app_shortcuts_left_right_collapse_expand_group,cmd_app_shortcuts_escape_closes_from_search_and_grid,cmd_app_shortcuts_grid_enter_activates_selected_command,cmd_app_shortcuts_grid_doubleClick_activates_selected_command,cmd_app_shortcuts_row_tooltip_tracks_hovered_cell,cmd_app_shortcuts_header_drag_reorders_columns_without_sort,cmd_app_shortcuts_copy_follows_reordered_columns,cmd_app_shortcuts_header_resize_changes_visible_width,cmd_app_shortcuts_header_resize_survives_search_roundtrip,cmd_app_shortcuts_restores_persisted_grid_layout,cmd_app_shortcuts_restores_collapsed_group_state,cmd_app_shortcuts_restores_persisted_sort_order,cmd_app_shortcuts_restores_reordered_sorted_grid_layout,cmd_app_shortcuts_restores_combined_view_state,cmd_app_shortcuts_column_reorder_survives_search_roundtrip,cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_search_roundtrip,cmd_app_shortcuts_column_reorder_survives_sort_cycles,cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles,cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles,cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip,cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip",
+  "exit_code": 1,
+  "passed": 12,
+  "failed": 1,
+  "skipped": 0,
+  "total": 13,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 13,
+    "test_root": "D:\\RedSalamander\\.build\\TestSandbox",
+    "run_id": "20260721T163522Z-59632-0a920729ad834f36a4301a88b88306ff",
+    "allowed_run_ids": [
+      "20260721T163522Z-59632-0a920729ad834f36a4301a88b88306ff"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T103500Z-msdrive-merge-red",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104000Z-msdrive-merge-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104200Z-msdrive-merge-adversarial",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T104400Z-msdrive-merge-adversarial-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T110300Z-s3-directory-probe-red",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T111000Z-s3-directory-probe-green",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T111500Z-s3-directory-probe-repeat5",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131000Z-msdrive-merge-release-check",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131302Z-msdrive-merge-sample-02",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131303Z-msdrive-merge-sample-03",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131304Z-msdrive-merge-sample-04",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T131305Z-msdrive-merge-sample-05",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T132300Z-msdrive-merge-debug-check",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 566361,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 12,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_preferences_dialog_plugins_tab_traversal_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1419,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_empty_custom_paths_placeholder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 221,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_remove_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 28543,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_add_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 37720,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_configure_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 14359,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_test_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 29128,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_test_all_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 29122,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_search_action_updates_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 459,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_live_search_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10218,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reset_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 27906,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_duplicate_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 29095,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_clear_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 29028,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "missing: cmd_app_shortcuts_column_reorder_survives_search_roundtrip, cmd_app_shortcuts_column_reorder_survives_sort_cycles, cmd_app_shortcuts_copy_follows_reordered_columns, cmd_app_shortcuts_escape_closes_from_search_and_grid, cmd_app_shortcuts_grid_doubleClick_activates_selected_command, cmd_app_shortcuts_grid_enter_activates_selected_command, cmd_app_shortcuts_group_collapse_persists_through_search, cmd_app_shortcuts_group_collapse_persists_through_sort, cmd_app_shortcuts_header_drag_reorders_columns_without_sort, cmd_app_shortcuts_header_resize_changes_visible_width, cmd_app_shortcuts_header_resize_survives_search_roundtrip, cmd_app_shortcuts_key_column_uses_natural_key_order, cmd_app_shortcuts_left_right_collapse_expand_group, cmd_app_shortcuts_live_dx_search_interaction, cmd_app_shortcuts_long_run_open_close_stays_stable, cmd_app_shortcuts_long_run_scrolling_stays_bounded, cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles, cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip, cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_search_roundtrip, cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles, cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip, cmd_app_shortcuts_restores_collapsed_group_state, cmd_app_shortcuts_restores_combined_view_state, cmd_app_shortcuts_restores_persisted_grid_layout, cmd_app_shortcuts_restores_persisted_sort_order, cmd_app_shortcuts_restores_reordered_sorted_grid_layout, cmd_app_shortcuts_row_tooltip_tracks_hovered_cell, cmd_app_shortcuts_search_preserves_selection_and_group_semantics, cmd_app_shortcuts_tab_traversal_matches_expected_order, cmd_app_shortcuts_theme_cycle_keeps_grid_legible, cmd_app_shortcuts_uses_dxui_surface, cmd_pane_changeAttributes_applies_attributes_removes_streams_and_reports, cmd_pane_changeAttributes_recurse_applies_datetime_with_progress, cmd_pane_clipboardCut_sets_move_drop_effect, cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit, cmd_pane_clipboardPaste_path_change_clears_stale_overlay, cmd_pane_clipboardPaste_uses_preferred_move_effect, cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker, cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links, cmd_pane_clipboardPasteShortcut_creates_unique_links, cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert, cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths, cmd_pane_clipboardPasteShortcut_returns_before_worker_complete, cmd_pane_contextMenuCurrentDirectory_routes_current_folder, cmd_pane_executeOpen_junction_navigates_without_crash, cmd_pane_find_dialog_access_keys_focus_expected_fields, cmd_pane_find_dialog_action_buttons_activate_expected_commands, cmd_pane_find_dialog_active_close_does_not_join_ui, cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states, cmd_pane_find_dialog_compact_mode_shrinks_results_grid_metrics, cmd_pane_find_dialog_copy_follows_reordered_columns, cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing, cmd_pane_find_dialog_directory_activation_navigates_into_selection, cmd_pane_find_dialog_drops_stale_search_epoch_payloads, cmd_pane_find_dialog_editable_combo_keyboard_editing_keys, cmd_pane_find_dialog_enter_from_checkbox_invokes_default_search, cmd_pane_find_dialog_escape_closes_popup_before_cancel, cmd_pane_find_dialog_escape_from_dx_control_closes_cancel, cmd_pane_find_dialog_exposes_live_uia_selection_and_inputs, cmd_pane_find_dialog_failure_status_is_readable, cmd_pane_find_dialog_grid_doubleClick_activates_selection, cmd_pane_find_dialog_grid_enter_activates_selection, cmd_pane_find_dialog_header_click_sorts_results, cmd_pane_find_dialog_header_drag_reorders_columns_without_sort, cmd_pane_find_dialog_header_resize_changes_visible_width, cmd_pane_find_dialog_large_local_search_uses_incremental_updates, cmd_pane_find_dialog_local_root_overrides_stale_context, cmd_pane_find_dialog_long_run_open_close_stays_stable, cmd_pane_find_dialog_long_run_scrolling_stays_bounded, cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies, cmd_pane_find_dialog_open_parent_keeps_directory_focused_in_parent, cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances, cmd_pane_find_dialog_partial_completion_removes_only_known_sources, cmd_pane_find_dialog_pointer_click_toggles_recursive_checkbox, cmd_pane_find_dialog_recursive_local_search_and_index_availability, cmd_pane_find_dialog_reordered_columns_survive_search_rerun, cmd_pane_find_dialog_reordered_columns_survive_sort_cycles, cmd_pane_find_dialog_reordered_resized_columns_survive_search_rerun, cmd_pane_find_dialog_reordered_resized_columns_survive_sort_cycles, cmd_pane_find_dialog_resized_columns_survive_search_rerun, cmd_pane_find_dialog_resized_columns_survive_sort_cycles, cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection, cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles, cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles_and_search_rerun, cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns, cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_search_rerun, cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_sort_cycles, cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection, cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun, cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection, cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection_after_sort_cycles_and_search_rerun, cmd_pane_find_dialog_restored_combined_view_state_survives_search_rerun, cmd_pane_find_dialog_restored_combined_view_state_survives_sort_cycles, cmd_pane_find_dialog_restored_reordered_layout_copy_follows_visible_columns, cmd_pane_find_dialog_restores_combined_view_state, cmd_pane_find_dialog_restores_persisted_grid_layout, cmd_pane_find_dialog_restores_persisted_sort_order, cmd_pane_find_dialog_restores_reordered_grid_layout, cmd_pane_find_dialog_restores_reordered_sorted_grid_layout, cmd_pane_find_dialog_restores_resized_grid_layout, cmd_pane_find_dialog_result_drains_respect_child_input_queue_order, cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions, cmd_pane_find_dialog_running_status_shows_phase_and_path, cmd_pane_find_dialog_search_ops, cmd_pane_find_dialog_service_status_shows_backend_diagnostics, cmd_pane_find_dialog_service_unavailable_warning_is_distinct, cmd_pane_find_dialog_tab_traversal_matches_expected_order, cmd_pane_find_dialog_theme_cycle_keeps_grid_legible, cmd_pane_find_dialog_uses_dxui_host_without_visible_child_controls, cmd_pane_goToShortcutOrLinkTarget_broken_lnk_reports_alert, cmd_pane_goToShortcutOrLinkTarget_junction_navigates_to_target, cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_directory_target, cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_file_target, cmd_pane_goToShortcutOrLinkTarget_url_navigates_to_local_target, cmd_pane_goToShortcutOrLinkTarget_web_url_reports_unsupported, cmd_pane_itemProperties_show_shortcut_and_reparse_targets, cmd_pane_newFromShellTemplate_creates_null_data_and_filename_templates, cmd_pane_newFromShellTemplate_menu_and_missing_template_feedback, cmd_pane_openSecurity_routes_focused_item_security_page, cmd_pane_quickSearch_integrated_navigation, cmd_pane_quickSearch_uses_visual_names_when_extensions_hidden, cmd_preferences_dialog_advanced_live_dx_interaction, cmd_preferences_dialog_advanced_page_uses_dxui_statics_and_toggles, cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface, cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file, cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction, cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible, cmd_preferences_dialog_category_switches_do_not_churn_tree_host, cmd_preferences_dialog_category_tree_accepts_wheel_scrolling_without_selection_churn, cmd_preferences_dialog_category_tree_boundary_navigation_from_scrolled_state, cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation, cmd_preferences_dialog_category_tree_keyboard_expand_collapse_and_child_entry, cmd_preferences_dialog_category_tree_keyboard_navigation_updates_category, cmd_preferences_dialog_category_tree_page_navigation_stays_on_dx_tree_path, cmd_preferences_dialog_compare_directories_content_workers_ignore_files_live_dx_interaction, cmd_preferences_dialog_compare_directories_live_dx_interaction, cmd_preferences_dialog_compare_directories_page_uses_dxui_statics, cmd_preferences_dialog_compare_directories_roundtrip_restores_dxui_surface, cmd_preferences_dialog_compare_directories_tab_traversal_live_dx_interaction, cmd_preferences_dialog_compare_directories_tail_toggles_live_dx_interaction, cmd_preferences_dialog_compare_directories_theme_cycle_keeps_surface_legible, cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics, cmd_preferences_dialog_editors_mouse_live_dx_notes, cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes, cmd_preferences_dialog_editors_mouse_tab_skips_note_surface, cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction, cmd_preferences_dialog_file_operations_live_dx_interaction, cmd_preferences_dialog_file_operations_page_uses_dxui_controls, cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface, cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction, cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible, cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction, cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file, cmd_preferences_dialog_rapid_switches_keep_page_specific_uia_subtrees, cmd_preferences_dialog_scroll_host_preserves_retained_page_state, cmd_preferences_dialog_themes_apply_temporarily_live_dx_interaction, cmd_preferences_dialog_themes_load_from_file_live_dx_interaction, cmd_preferences_dialog_themes_save_theme_live_dx_interaction, cmd_preferences_dialog_themes_set_live_dx_interaction, cmd_preferences_dialog_viewers_editors_file_action_settings_apply, Commands_FileOpsClipboardPasteUsesHostQueue, Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback, Commands_FileOpsFolderPickerMoveUsesHostQueue, Commands_FileOpsMissingCallbackRejectsDirectFallback, filesystem_local_watch_unwatch_drains_inflight_callback, folderView_drop_integrity_guards, folderView_drop_rejects_malformed_payloads, folderView_pointer_targets_and_stale_hover_are_safe, search_local_index_stream_stop_after_first, search_local_plugin_invalid_regex_reports_single_completion, search_local_plugin_parallel_cancel_fanin, search_local_provider_reselect_after_index_stream_stays_responsive",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

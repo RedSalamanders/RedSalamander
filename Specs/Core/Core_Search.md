@@ -87,6 +87,7 @@ The Find window is an independent top-level, theme-aware tool window. It must:
 - `FILESYSTEM_SEARCH_FORCE_SCAN` is a host override for implementations that support multiple local backends. It takes precedence over `FILESYSTEM_SEARCH_PREFER_INDEX` and backend `auto` policy and must route the request to live scan when scan is supported.
 - Name and content regex patterns MUST be validated through the shared `SearchTextHelpers::ValidateRegexPatternSafety(...)` policy before traversal or content reads begin, on both native and host-fallback paths. Syntax errors and safety rejects (for example nested unbounded repetition, overlapping top-level alternatives such as `(a|a)*`/`(a|ab)*x`, or excessive nesting/length) MUST fail with `E_INVALIDARG`, emit no matches, and report exactly one forced `FILESYSTEM_SEARCH_PHASE_COMPLETED` progress payload with `FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED` and `statusHint == E_INVALIDARG`. Provably bounded quantifiers such as `{n}` and `{n,m}` MUST NOT be rejected merely because they are quantified.
 - Regex evaluation is cooperatively cancellable before and after each candidate evaluation; no code path may promise interruption inside a single `std::regex_search` call.
+- An accepted name or content regex that hits the regex engine's implementation-defined complexity/stack limit on an item (MSVC `std::regex` throws `regex_error` at match time) MUST NOT become a silent non-match. The item stays out of the results, the search continues, and every matcher (index core, built-in local plugin scan and worker paths, shared text helper, host fallback) MUST report `FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE` through progress and final stats; the search service forwards it unchanged. The engine's bound is part of the service's LocalSystem cost limit: no matcher may retry the item with a more expensive engine or a raised limit.
 - Decoded regex-content inputs larger than `SearchTextHelpers::kMaxRegexContentCharacters` MUST NOT become silent clean misses. Implementations may either match a documented capped prefix and report `FILESYSTEM_SEARCH_WARNING_OVERFLOW`, or skip the match and report `FILESYSTEM_SEARCH_WARNING_OVERFLOW`.
 - A rejected regex search MUST leave no active worker/search state behind. For `IFileSystemSearch::Search(...)`, callbacks remain per-call and MUST NOT be invoked after the method returns.
 
@@ -230,7 +231,7 @@ because a marker substring occurs inside a normal name.
 Search result materialization asks the shared File Operations artifact classifier for an orthogonal
 `Ordinary` / `Possible` presentation value. The search index may retain a cached
 classification hint for performance, but it is neither provenance nor mutation authority and MUST NOT filter candidates.
-Find/Search always return matching artifacts, with `Possible interrupted-operation artifact`
+Find/Search always return matching artifacts, with `Possibly incomplete file (left by an interrupted copy or move)`
 badge/status metadata for recognized name shapes. Any action that uses
 the result follows the touch guard in `Specs/FileSystem/FileSystem_FileOperations.md` and rechecks
 classification/identity at action time.
@@ -282,12 +283,14 @@ Service rules:
 - persist indexed filesystem metadata, root journal state, and maintenance timestamps, but not file contents, query history, snippets, or transient in-memory synchronization/query-progress state,
 - treat the SQLite store as the authoritative persisted current state plus journal cursor for service-managed roots,
 - accept status and query requests before startup warm-up, rebuild, repair, or SQLite mirroring completes,
+- keep optional in-memory status enrichment nonblocking: if a volume mutex is busy, discard the entire optional snapshot and use the coherent on-disk inspection plus independent warm-up state; never publish partial aggregate counts or wait for the seeding worker,
 - derive query cutover readiness from every persisted volume state: only `Ready` volumes are query-ready. `ImportedLegacySnapshot` remains the separate legacy-migration counter, while `CurrentnessUnproven` blocks query cutover without being reported as legacy-import work,
 - inspect the requested volume before making its direct-query decision. The store-wide readiness summary informs status but cannot replace requested-volume classification: currentness-unproven roots report `StoreStale`, and an unrelated unready volume does not suppress a safe ready-volume query,
 - choose the fastest no-wait query path per request:
   - direct SQLite only when the configured store is valid and current for the requested root,
   - live filesystem scan fallback otherwise,
 - never block the request thread on `EnsureReady`, rebuild, repair, or SQLite mirroring,
+- SQLite-authoritative requests must not acquire the optional in-memory volume or its warmup-owned mutex. Legacy no-wait requests may use a current in-memory index only after a nonblocking lock attempt; a busy cache immediately selects live fallback with the original query/result contract,
 - keep service request-thread routing strictly two-path in sqlite-authoritative mode:
   - direct SQLite only when currentness is provably up to date for the requested root,
   - live filesystem scan fallback otherwise while background warm-up or repair continues,
@@ -324,6 +327,17 @@ Service trust-boundary and pipe protocol rules:
 - service request handling MUST use one consistent overlapped pipe I/O model. Server reads/writes must be bounded by per-frame deadlines and the service stop event, must cancel outstanding I/O with `CancelIoEx` on timeout/shutdown, and must treat zero-byte transfers, short frames, oversized frames, bad message types, and protocol-version mismatches as protocol failures,
 - explicit protocol shutdown is enabled only for foreground-mode servers whose owning harness/process selected its unique pipe. SCM-hosted service instances MUST reject that request; their lifetime remains owned by the Service Control Manager,
 - a malformed, unauthorized, disconnected, or slow client MUST be disconnected after the failed request while the foreground/service process continues accepting later clients. Only non-recoverable server failures may stop the service process.
+
+For name-regex requests, the broker must apply the shared regex safety policy and compile the
+expression once per request with the requested case sensitivity. The index plan borrows that
+expression only for synchronous enumeration. Rejection must produce no candidates, exactly one
+completed progress payload with `REGEX_REJECTED` and `E_INVALIDARG`, and matching final stats;
+the next valid client request must remain usable. Candidate-batch flushing must not append an
+unqualified progress frame after real enumeration progress. Any fallback progress it supplies
+must preserve the request's current execution mode, fallback reason, warning flags and root.
+Unready persisted roots must be rejected before streaming SQLite candidates, including imported
+legacy rows. Live fallback must finish with an unthrottled enumeration update whose unique
+candidate count agrees with final query stats; progress must not count a candidate twice.
 
 Service executable CLI:
 - `RedSalamanderSearchService.exe --help` prints the supported command-line options.
@@ -365,10 +379,11 @@ Search backends must report visible degradation through `FileSystemSearchProgres
 - `FILESYSTEM_SEARCH_WARNING_OVERFLOW`
 - `FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED`
 - `FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED`
+- `FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE`
 
-`FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE` means the service transport is unavailable and the host had to switch backends. `FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED` means the service transport remained healthy but rejected this request's root and the host used another backend without arming the transport cooldown. `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` means the backend stayed healthy but answered from the live filesystem because the index or database was not ready or not current. `FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED` covers skipped traversal/candidate paths, including accepted service queries where a later per-candidate impersonation or access check cannot prove client visibility, or where a transient directory authorization open fails without a durable access-denied/path-missing answer. `FILESYSTEM_SEARCH_WARNING_OVERFLOW` also covers intentionally skipped corrupt or malformed directory/search entries when continuing with the rest of the result set is safer than failing the whole search.
+`FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE` means the service transport is unavailable and the host had to switch backends. `FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED` means the service transport remained healthy but rejected this request's root and the host used another backend without arming the transport cooldown. `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` means the backend stayed healthy but answered from the live filesystem because the index or database was not ready or not current. `FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED` covers skipped traversal/candidate paths, including accepted service queries where a later per-candidate impersonation or access check cannot prove client visibility, or where a transient directory authorization open fails without a durable access-denied/path-missing answer. `FILESYSTEM_SEARCH_WARNING_OVERFLOW` also covers intentionally skipped corrupt or malformed directory/search entries when continuing with the rest of the result set is safer than failing the whole search. `FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE` means an accepted regex completed, but the regex engine gave up on at least one name or content at its complexity/stack limit, so those items are missing from the results; unlike `REGEX_REJECTED` the search status stays successful.
 
-The Find window must surface these warnings in status text rather than silently hiding them; rejected regex searches must show a localized rejected-regex reason rather than only the raw `E_INVALIDARG` hint. While a `service` or `local-index` search is active it must also show a second backend-status line for database readiness and synchronization progress. Host-extension service-status snapshots must apply the same database-state inference as broker-polled status so the first visible active-search status never regresses to a placeholder `search unknown` state. A ready, watching SQLite store reports no fallback before a query. Query/progress status reports the request-specific fallback reason: an unmirrored root is `StoreMissing`, a present-but-not-current root is stale/cutover-blocked, and an invalid or failed SQLite store reports the corresponding degraded reason while the request falls back to live scan.
+The Find window must surface these warnings in status text rather than silently hiding them; rejected regex searches must show a localized rejected-regex reason rather than only the raw `E_INVALIDARG` hint, and `REGEX_INCOMPLETE` must show a localized notice that some items could not be evaluated with this pattern. While a `service` or `local-index` search is active it must also show a second backend-status line for database readiness and synchronization progress. Host-extension service-status snapshots must apply the same database-state inference as broker-polled status so the first visible active-search status never regresses to a placeholder `search unknown` state. A ready, watching SQLite store reports no fallback before a query. Query/progress status reports the request-specific fallback reason: an unmirrored root is `StoreMissing`, a present-but-not-current root is stale/cutover-blocked, and an invalid or failed SQLite store reports the corresponding degraded reason while the request falls back to live scan.
 
 ## Persistence and Configuration
 
@@ -412,6 +427,50 @@ Allowed `searchBackendPreference` values:
 
 ## Diagnostics and Verification
 
+Captured `search.ntfs.seed_mft_stages_us` separates native MFT enumeration,
+tracked-root projection and temporary-graph retirement. The total is sampled
+after the temporary graph has been destroyed; entry and parent counts describe
+the last completed enumeration batch. `complete=false`/`S_FALSE` identifies a
+path that did not complete native MFT seeding, rather than a successful warmup.
+This observation does not change seeding policy, service query routing or any
+native readiness watchdog.
+
+Native NTFS seed construction confines small temporary map-node/name storage to
+the seed thread. Its private scratch resource packs requests of at most 256 bytes
+and ordinary alignment into owned 64 KiB chunks. Larger or over-aligned requests
+retain ordinary upstream allocation and immediate deallocation. Child lists use
+ordinary ownership so their growing buffers are returned promptly. The tracked
+root's retained entries copy names into independent ownership before scratch
+destruction. No scratch pointer escapes the seed operation.
+
+The shared USN bounds/version parser supports ordinary journal strings, scratch
+strings and a synchronous borrowed input view. Native MFT enumeration copies the
+view into owned graph storage before reusing its input buffer. Parser reset clears
+all fields without constructing a replacement string or changing its allocator.
+Selection, duplicate-ID/hardlink detection, journal currentness and readiness
+watchdogs remain unchanged. Tests cover corrupt bounds, failure reset, long UTF-16
+V2/V3 names, 128-bit IDs, alignment, chunk rollover, large deallocation and copied
+name lifetime. Paired Release and ASan timing/memory admission remains required;
+the resource choice alone is not evidence of non-regression.
+ASan builds poison unused chunk storage, preserve a trailing red zone for each
+small allocation, unpoison only its requested extent and poison ended lifetimes.
+Storage tests verify both boundary and deallocation visibility to the sanitizer;
+chunking must not hide small-object bounds or use-after-deallocation errors.
+The temporary entry map uses a maximum load factor of 1.25 to reduce large
+bucket-array overhead at live-volume growth boundaries; the retained index and
+parent/child map keep their existing policies. `search.ntfs.seed_mft.buckets`
+reports final entry/parent bucket counts in value0/value1, alongside the existing
+record counts and stage times. Resource admission must retain corpus-size changes
+and rejected comparisons rather than silently changing the baseline or limits.
+
+Repository progress diagnostics accumulate search.progress.emit_calls and
+search.progress.emit_suppressed as frame-local counters. Publish their value0 deltas
+at actual progress callback boundaries and flush any remainder when the frame exits,
+including rejection and cancellation. A suppressed call does no recorder I/O. Preserve
+the existing 2,048-item/200-ms throttle, forced callbacks, callback duration records and
+HRESULT propagation. Null progress callbacks emit none of these progress counters.
+Consumers sum value0; a JSONL row count is not the operation count.
+
 Search changes must be validated through:
 - Commands self-tests for the Find window, command routing, persistence, and modeless ownership,
 - Commands self-tests that explicitly verify the Find window backend diagnostics line for active `service` searches, distinguish `DEGRADED_NO_INDEX` from `SERVICE_UNAVAILABLE`, and confirm the first active-search snapshot normalizes degraded backend diagnostics instead of falling back to placeholder text,
@@ -436,9 +495,10 @@ Search changes must be validated through:
 - Compare self-tests `search_service_missing_pipe_retry_is_cancellable`, `local_search_service_root_rejection_does_not_arm_transport_cooldown`, and `search_service_transient_parent_failure_is_cached_and_warns_batch_and_completion`, which verify cancellable absent-service retries, request-scoped root rejection without global transport cooldown, per-query transient-parent suppression, and warning parity between streamed batches and completion,
 - Compare self-tests `local_search_sqlite_generation_probe_skips_steady_state_and_detects_bump`, `local_search_junction_alias_hydration_indexes_alias_only_descendant_once`, and `sqlite_maintenance_busy_checkpoint_and_callback_skip_observability`, which verify zero steady-state generation-probe opens after warm-up with next-query rotation detection, coverage-only alias hydration without duplicate emission, and truthful checkpoint/emitted-row observability,
 - Compare self-tests for regex rejection MUST cover both name and content regex routes, including known unsafe alternation patterns plus configured pattern-length and group-depth limits,
+- Compare self-tests `local_index_core_regex_complexity_limit_warns` and `local_search_regex_complexity_limit_warns`, plus the service query in `search_service_sqlite_prefilter_roundtrip`, which use a safety-accepted pattern (`.*.*.*!`) that matches short subjects and exhausts the engine budget only on long ones, and verify the index core, the SQLite service round trip, the shared text helper, the built-in local scan (parallel name walk, sequential name and content, and the content chunk workers that a directory of at least 500 entries uses), local-index and host-fallback routes all keep the evaluable matches and report `REGEX_INCOMPLETE` without `REGEX_REJECTED`,
 - Compare self-test `search_source_allocation_and_folding_guard`, which verifies QueryBatch count preflight before reserve, no-callback broker buffering ceilings before accumulation, corrupt snapshot entry-count preflight before reserve, invariant search-fold callsites, pre-folded prefix queries for in-pane incremental search, absence of broad `catch (...)`, and fatal `std::bad_alloc` handling on search paths,
 - Compare and Commands adversarial fault-injection coverage MUST include stalled broker queries, malformed `QueryBatch` direct decode and fallback, corrupt snapshot rebuild, journal replay invalidation rebuild, native and fallback symlink-loop traversal bounds, and invalid-regex or cancelled Intersect preservation,
-- Compare self-test `search_low_hardening_smoke`, which verifies snippet boundaries preserve UTF-16 surrogate pairs, `FILE_FULL_DIR_INFO` name bounds are checked before reads, followed-symlink visit keys roll back on physical-identity duplicate rejection and identity-probe failure, malformed parallel entries are skipped with warnings instead of failing the directory walk or abandoning the chunk, rejected-regex warnings are surfaced in Find status, empty plugin-factory spans are guarded, ViewerWeb internal HTML head/CSP literals stay hoisted, snapshot saves use flushed atomic sibling replacement, SQLite bootstrap does not run full `VACUUM` inline, SQLite maintenance runs `quick_check` before full `VACUUM`, automatic SQLite maintenance owns legacy auto-vacuum rewrites, hardlink alias non-exhaustiveness is reported through query stats, and `ReplaceVolume` performs one metadata update for an existing volume,
+- Compare self-test `search_low_hardening_smoke`, which verifies snippet boundaries preserve UTF-16 surrogate pairs, `FILE_FULL_DIR_INFO` name bounds are checked before reads, followed-symlink visit keys roll back on physical-identity duplicate rejection and identity-probe failure, malformed parallel entries are skipped with warnings instead of failing the directory walk or abandoning the chunk, rejected-regex and incomplete-regex warnings are surfaced in Find status, empty plugin-factory spans are guarded, ViewerWeb internal HTML head/CSP literals stay hoisted, snapshot saves use flushed atomic sibling replacement, SQLite bootstrap does not run full `VACUUM` inline, SQLite maintenance runs `quick_check` before full `VACUUM`, automatic SQLite maintenance owns legacy auto-vacuum rewrites, hardlink alias non-exhaustiveness is reported through query stats, and `ReplaceVolume` performs one metadata update for an existing volume,
 - Compare self-tests `search_service_rejects_device_root_and_continues` and `search_service_slow_partial_client_does_not_block_next_client`, which verify service-side root rejection for device namespaces, client-scoped failure without service termination, bounded server frame reads, and slow/partial-client disconnect-and-continue behavior,
 - Compare self-test `search_service_rebuild_deleted_root_purges_index`, which verifies that `RequestRebuild(root)` succeeds after an indexed root directory is deleted and purges stale indexed candidates before a later query of the recreated root,
 - Compare self-test `search_service_sqlite_legacy_auto_vacuum_queues_idle_maintenance`, which verifies a legacy non-incremental SQLite store queues idle maintenance and rewrites to incremental auto-vacuum without requiring WAL or freelist pressure; its first exact-pipe status response establishes both foreground-service readiness and the queued-maintenance state, and completion polling tolerates the bounded pipe-unavailable interval while synchronous maintenance owns the service loop,
@@ -482,6 +542,7 @@ Machine-dependent coverage remains part of the suite and must skip with a reason
 - Indexed backends return names, paths, and metadata; content matching remains client-side in v1.
 - Regex syntax errors and shared safety rejects must complete with one `REGEX_REJECTED` progress payload, no matches, and `E_INVALIDARG`; oversized decoded regex content must surface `WARNING_OVERFLOW` instead of looking like a clean no-match.
 - The Find window must render `REGEX_REJECTED` as a localized status warning instead of leaving users with only the raw `E_INVALIDARG` code.
+- A regex that hits the engine's complexity/stack limit on some items must report `REGEX_INCOMPLETE` (rendered as a localized Find status notice) instead of silently returning fewer results; the engine bound stays and no matcher retries with a costlier engine.
 - Built-in local name-only scan searches may parallelize recursive traversal through `searchMaxDirectoryWalkers`, bounded to `1..8`.
 - Unchecked Find indexed-backend preference forces built-in local searches to the scan backend instead of allowing service/local-index selection through `auto`.
 - Parallel search fan-in and indexed/broker result streams must poll cancellation during match emission or between service batches, serialize callbacks, and reach a worker quiet point before returning cancellation/failure.

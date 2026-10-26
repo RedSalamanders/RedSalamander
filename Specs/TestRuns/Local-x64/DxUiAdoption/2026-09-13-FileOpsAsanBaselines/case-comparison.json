@@ -1,0 +1,93 @@
+[
+  {
+    "label": "master0dd-capabilities",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T073328Z-77560-c28dcc179a634f42b5fe4a07e699a76a",
+    "case": {
+      "name": "FileOps_ProviderCapabilityMatrix",
+      "status": "failed",
+      "duration_ms": 2734,
+      "repeat_index": 1,
+      "reason": "R0d capability/admission/receipt classification metric must remain valid and below two seconds."
+    }
+  },
+  {
+    "label": "master0dd-mtp",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T073402Z-99900-4576056512fd4e8294410301bac0660b",
+    "case": {
+      "name": "R4A19_DiscoveryProviderControls",
+      "status": "failed",
+      "duration_ms": 2469,
+      "repeat_index": 1,
+      "reason": "R4-A19 failed to create the ordinary-name fake-MTP source directory: 0x800700B7."
+    }
+  },
+  {
+    "label": "master0dd-queue-after",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T073436Z-94968-4a2b79cacbe44b519e2234b7689b0fe1",
+    "case": {
+      "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+      "status": "passed",
+      "duration_ms": 1656,
+      "repeat_index": 1
+    }
+  },
+  {
+    "label": "master0dd-bandwidth",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T073509Z-90500-df01ab383e0146c193d8a2704df91787",
+    "case": {
+      "name": "Phase6_LocalBandwidthThrottle",
+      "status": "passed",
+      "duration_ms": 4891,
+      "repeat_index": 1
+    }
+  },
+  {
+    "label": "master0dd-curl-wide",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T073546Z-101708-620921fff1db4a3d9cbc5acb000d71b9",
+    "case": {
+      "name": "C0_CurlCopyTraversalTruth",
+      "status": "failed",
+      "duration_ms": 307828,
+      "repeat_index": 1,
+      "reason": "C0 Curl native safety test failed: 141 of 142 checks passed, 1 failed, hr=0x80004005. See FileOps.Curl metrics for the exact route."
+    }
+  },
+  {
+    "label": "master0dd-mtp-isolated",
+    "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+    "runId": "20260913T074251Z-91080-d810c62a880b433ea27c6b1dd81c9a50",
+    "case": {
+      "name": "R4A19_DiscoveryProviderControls",
+      "status": "passed",
+      "duration_ms": 3828,
+      "repeat_index": 1
+    }
+  },
+  {
+    "label": "a20f6680-mtp-isolated",
+    "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+    "runId": "20260913T074450Z-103340-00cfeaaf87784eb98912a90da6d80180",
+    "case": {
+      "name": "R4A19_DiscoveryProviderControls",
+      "status": "passed",
+      "duration_ms": 3797,
+      "repeat_index": 1
+    }
+  },
+  {
+    "label": "a20f6680-queue-after",
+    "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+    "runId": "20260913T074526Z-94400-d5a44679dcf0407790a2eaf8440f9669",
+    "case": {
+      "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+      "status": "passed",
+      "duration_ms": 1719,
+      "repeat_index": 1
+    }
+  }
+]

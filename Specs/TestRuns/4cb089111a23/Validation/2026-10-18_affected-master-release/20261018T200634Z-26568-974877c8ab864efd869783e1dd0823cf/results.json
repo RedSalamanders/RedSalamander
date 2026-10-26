@@ -1,0 +1,80 @@
+{
+    "run_started_utc": "2026-10-18T20:07:14.305Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261018T200634Z-26568-974877c8ab864efd869783e1dd0823cf\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 12656,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1656,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoverySingleTraversal",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoveryCancelReleasesSlot",
+            "status": "passed",
+            "duration_ms": 1453,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_CleanupDrainsOutstandingTasks",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoveryCancelLatencyLocal",
+            "status": "passed",
+            "duration_ms": 266,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoverySkipContinues",
+            "status": "passed",
+            "duration_ms": 734,
+            "repeat_index": 1
+        },
+        {
+            "name": "BR3_CancelQueuePausedTransfer",
+            "status": "passed",
+            "duration_ms": 6438,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_CancelQueuedTask",
+            "status": "passed",
+            "duration_ms": 390,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+            "status": "passed",
+            "duration_ms": 672,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_SwitchWaitToParallelResume",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 531,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

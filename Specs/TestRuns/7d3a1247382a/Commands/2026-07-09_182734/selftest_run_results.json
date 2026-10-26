@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-07-09T16:27:30.657Z",
+    "duration_ms": 3470,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_fileops_conflict_prompt_compacts_actions",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260709T162730Z-48396-23bb2f9ef91148bea7e4ac2dc7c73e01\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 2183,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_fileops_conflict_prompt_compacts_actions",
+            "cases": [
+                {
+                    "name": "cmd_pane_fileops_conflict_prompt_compacts_actions",
+                    "status": "passed",
+                    "duration_ms": 2168,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

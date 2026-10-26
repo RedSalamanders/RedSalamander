@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "FloatingTerminalWindow.h"
 
@@ -344,7 +345,7 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
         case WM_ACTIVATE: ApplyWindowChromeTheme(hwnd, _theme, WindowBackdropTarget::Primary, LOWORD(wParam) != WA_INACTIVE); return 0;
         case WndMsg::kTerminalSessionExited:
         {
-            std::unique_ptr<FloatingTerminalEventPayload> payload = TakeMessagePayload<FloatingTerminalEventPayload>(lParam);
+            std::unique_ptr<FloatingTerminalEventPayload> payload = TakeMessagePayload<FloatingTerminalEventPayload>(hwnd, message, lParam);
             if (_pendingExitPayloadCount.load(std::memory_order_acquire) != 0u)
             {
                 _pendingExitPayloadCount.fetch_sub(1u, std::memory_order_acq_rel);
@@ -1077,7 +1078,7 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
                           windowBounds.top + MulDiv(12, static_cast<int>(GetDpiForWindow(_window.get())), USER_DEFAULT_SCREEN_DPI)};
             }
         }
-        SetForegroundWindow(_window.get());
+        Common::RequestForegroundWindow(_window.get());
         const UINT selected = static_cast<UINT>(
             TrackPopupMenuEx(menu.get(), TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, anchor.x, anchor.y, _window.get(), nullptr));
         if (selected < kFirstCommand || selected >= kFirstCommand + actionIds.size())
@@ -1299,7 +1300,7 @@ HRESULT ShowFloatingTerminalWindow(HWND activationSource,
         if (SUCCEEDED(addHr))
         {
             ShowWindow(g_floatingTerminal->GetHwnd(), SW_RESTORE);
-            SetForegroundWindow(g_floatingTerminal->GetHwnd());
+            Common::RequestForegroundWindow(g_floatingTerminal->GetHwnd());
         }
         return addHr;
     }
@@ -1316,7 +1317,7 @@ HRESULT ShowFloatingTerminalWindow(HWND activationSource,
         DropDestroyedSingleton();
         return restoreHr;
     }
-    SetForegroundWindow(g_floatingTerminal->GetHwnd());
+    Common::RequestForegroundWindow(g_floatingTerminal->GetHwnd());
     Debug::Perf::EmitDurationUs(
         L"terminal.floating.window_open_to_visible_us", Debug::Perf::ElapsedUs(startedAt), g_floatingTerminal ? 1u : 0u, g_floatingTerminal ? 1u : 0u);
     return S_OK;

@@ -1,0 +1,40 @@
+{
+  "schema": "red-salamander.perf-compaction-summary.v1",
+  "case": "File Operations P1.4 closeout",
+  "machineHash": "4cb089111a23",
+  "build": "Debug",
+  "testEnabled": true,
+  "governedRunId": "20260822T230027Z-79788-952f58990c5e42d797b4f4d3674c55a5",
+  "metricRunId": "2026-08-22_230044",
+  "buildAttestation": "962f2fd6b8a33c37187e7e8edc438a560344f69950e79aa9791ced10a51bb1b1",
+  "headCommit": "0653aaf25acf51d95c44de12cab129a7a3423a30",
+  "compaction": {
+    "originalRunBytes": 134662850,
+    "originalSourceBytes": 134294886,
+    "originalSourceSha256": "bbcc3b960d0546e0552e976c31da6e8bd64130658af21a191a83ef185d3ad06d",
+    "originalRowCount": 361850,
+    "originalMetricCount": 429,
+    "originalFirstTimestamp": "2026-08-22T23:00:44.652Z",
+    "originalLastTimestamp": "2026-08-22T23:16:12.276Z",
+    "retainedSourceBytes": 5952,
+    "retainedSourceSha256": "e3227edcd2b2c03235ed365a13b7a800d0416bef1d329b4bcc3e8696b1f44451",
+    "retainedRowCount": 12,
+    "retainedRowsInOriginalOrder": true,
+    "retainedSource": "perf_metrics_claims.jsonl",
+    "retainedSourceRows": [27736, 27878, 28154, 28470, 28637, 28784, 28825, 28847, 228691, 228692, 228693, 233726],
+    "retainedMetricPredicate": "P1.4 exact-publication, staged-overwrite, and CopyOnly source-retention claims; plus active Recycle batching regression metrics"
+  },
+  "behavioralResult": {
+    "passed": 111,
+    "failed": 0,
+    "skipped": 27,
+    "durationMs": 921970
+  },
+  "claims": {
+    "exactConcurrentReplacementPublication": "passed",
+    "identityOwnedStagedOverwrite": "passed",
+    "copyOnlySourceRetention": "passed",
+    "copyOnlyCleanupUnreachable": "passed",
+    "throughputImprovementClaimed": false
+  }
+}

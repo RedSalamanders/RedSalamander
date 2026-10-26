@@ -71,7 +71,7 @@ void PostToUIThread(UiWorkItem item)
 // In WndProc
 case WM_APP_WORK: 
 {
-    auto payload = TakeMessagePayload<UiWorkItem>(lParam);
+    auto payload = TakeMessagePayload<UiWorkItem>(hwnd, message, lParam);
     if (! payload)
     {
         return 0;
@@ -90,10 +90,10 @@ The registry owns the payload until a receiver takes it or teardown drains it:
 - Call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`).
 - Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; it fences new posts, invalidates all tokens for the
   window, and deletes their storage exactly once.
-- Always receive with `TakeMessagePayload<T>(lParam)` (not a cast or manual `unique_ptr` wrap). A null result from a
+- Always receive with `TakeMessagePayload<T>(hwnd, message, lParam)` (not a cast or manual `unique_ptr` wrap). A null result from a
   nonzero token means stale, drained, unregistered, or type-mismatched input and must be ignored before
   message-specific work.
-- A stale queued token may survive numeric `HWND` reuse, but it can never reacquire or delete payload storage.
+- Tokens use cryptographic entropy and live-entry collision rejection, with bounded retries and no predictable fallback. Validate the actual receiving HWND, message and type before removal; mismatches preserve registry ownership. A drained entry is invalidated; random token reuse has negligible collision probability, not a mathematical never-reuse guarantee.
 - Reserve `lParam == 0` only for a payload-less fallback explicitly defined by that message.
 
 ### UI-host cross-thread checklist
@@ -101,7 +101,7 @@ The registry owns the payload until a receiver takes it or teardown drains it:
 For every UI-host change that posts work across threads, review and cover:
 
 - Payload ownership: every heap payload is posted with `PostMessagePayload(...)`, received with
-  `TakeMessagePayload<T>(lParam)`, and ignored when a nonzero token no longer resolves.
+  `TakeMessagePayload<T>(hwnd, message, lParam)`, and ignored when a nonzero token no longer resolves.
 - UI-thread boundary: UI state is mutated only from the owning UI thread or explicitly marshaled there.
 - Cancellation path: producers stop or observe cancellation before teardown begins.
 - Teardown drain: receiving windows initialize/drain the posted-payload registry.
@@ -161,7 +161,7 @@ void RequestIconAsync(int idx)
 // In WndProc
 case WM_APP_ICON_READY:
 {
-    auto payload = TakeMessagePayload<IconReadyPayload>(lParam);
+    auto payload = TakeMessagePayload<IconReadyPayload>(hwnd, message, lParam);
     if (! payload)
     {
         return 0;

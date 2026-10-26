@@ -30,7 +30,7 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE "This file is not available as a local file path."
     IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE "libVLC is not available."
     IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED "Failed to convert the file path to UTF-8."
-    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "libvlc_media_new_path failed."
+    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "VLC could not open the media file."
     IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media failed."
     IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play failed (code {0})."
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snapshot failed (code {0})."
@@ -40,4 +40,7 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "The VLC loader could not be queued. Try opening the file again."
     IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "The VLC loader result could not be delivered. Try opening the file again."
     IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "Failed to load '{0}' (Win32: {1})."
+    IDS_VIEWERVLC_ERROR_TITLE "Unable to play this file."
+    IDS_VIEWERVLC_DETAILS_FILE_ACCESS_FAILED_FMT "Cannot access the file:\r\n{0}\r\nWin32 error: {1}."
+    IDS_VIEWERVLC_DETAILS_NOT_REGULAR_FILE_FMT "The selected path is not a file:\r\n{0}"
 END

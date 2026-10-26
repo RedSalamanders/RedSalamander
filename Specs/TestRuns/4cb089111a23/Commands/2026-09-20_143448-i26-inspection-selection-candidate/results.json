@@ -1,0 +1,90 @@
+{
+    "run_started_utc": "2026-09-20T12:34:52.042Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T123128Z-80544-6b2049fcf7584a51b43bab5f71dabec8\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 19794,
+    "passed": 9,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Pane inspection selection must leave the same prompt pending and destination contents unchanged.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4215,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 307,
+            "repeat_index": 1,
+            "reason": "Pane inspection selection must leave the same prompt pending and destination contents unchanged."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1054,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4114,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 294,
+            "repeat_index": 2,
+            "reason": "Pane inspection selection must leave the same prompt pending and destination contents unchanged."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 995,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4089,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 294,
+            "repeat_index": 3,
+            "reason": "Pane inspection selection must leave the same prompt pending and destination contents unchanged."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1050,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

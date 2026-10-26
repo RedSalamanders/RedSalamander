@@ -30,7 +30,7 @@ Describe 'Modal window shell contracts' {
     }
 
     It 'keeps quit propagation and owner restoration inside the narrow shell' {
-        $shellSource | Should Match 'DxUi::RunDxUiModalLoop\(hwnd, loopOptions\)'
+        $shellSource | Should Match 'DxUi::RunModalLoop\(hwnd, loopOptions\)'
         $shellSource | Should Not Match 'GetMessageW\(|PostQuitMessage\('
         $shellSource | Should Match 'EnableWindow\(_ownerWindow, FALSE\)'
         $shellSource | Should Match 'EnableWindow\(_ownerWindow, TRUE\)'

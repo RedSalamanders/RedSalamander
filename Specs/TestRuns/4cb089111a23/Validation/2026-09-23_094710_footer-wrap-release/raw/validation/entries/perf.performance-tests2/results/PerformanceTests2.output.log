@@ -1,0 +1,23 @@
+VSTest version 18.11.0 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+  Passed LargeFolderIconEnumeration_DuplicatePaths [2 s]
+  Passed LargeFolderIconEnumeration_MixedItems [8 s]
+  Passed SortPolicy_ParallelPathStartsAtLargeFolderThreshold [< 1 ms]
+  Passed ScrollStops_FirstLeftRestoresInitialLeftGap [< 1 ms]
+  Passed ScrollStops_FirstRightSkipsInitialLeftGap [< 1 ms]
+  Passed VisibleColumnWidths_DetailedAndMetadataLinesStayColumnLocal [< 1 ms]
+  Passed VisibleColumnWidths_DifferentColumnsDoNotShareGlobalMax [< 1 ms]
+  Passed FolderViewCompactMode_SetAppThemeCollapsesRowGapAndUpdatesHitTest [< 1 ms]
+  Passed FolderViewRefresh_PluginDuplicatePaths [5 s]
+  Passed PluginModuleLifecycleRetainsBusyFakeViewerAtProcessShutdown [< 1 ms]
+  Passed PluginModuleLifecycleDefersAndHealsFakeViewer [< 1 ms]
+  Passed ViewerPluginManagerInitializeFailsWhenNoPluginsAreDiscovered [< 1 ms]
+  Passed FileSystemPluginManagerInitializeFailsWhenNoPluginsAreDiscovered [< 1 ms]
+  Passed SplashScreenCloseGuardTriggersWhenCloseEventWasSignaled [< 1 ms]
+
+Test Run Successful.
+Total tests: 14
+     Passed: 14
+ Total time: 19,5940 Seconds

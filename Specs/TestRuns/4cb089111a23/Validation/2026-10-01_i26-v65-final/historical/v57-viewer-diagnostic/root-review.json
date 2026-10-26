@@ -1,0 +1,14 @@
+{
+  "schema": "i26-v57-viewer-exact-root-review.v1",
+  "reviewer": "root",
+  "resultSha256": "7dd807f9cf80daa6883bd71c4ac0b87b061ca09af2cfcb068e570041e431134a",
+  "runId": "20261001T053040Z-99884-f514c443f7524f4389c25b4c73bf12ee",
+  "exitCode": 0,
+  "passedAssertions": 16,
+  "sandboxClean": true,
+  "originalForegroundReturned": true,
+  "cursorUnchanged": true,
+  "candidateUnchanged": true,
+  "originalFailureCause": "Unproven",
+  "acceptanceEffect": "Bounded diagnostic only; original failed Full retained; next corrected candidate Full/Fresh remains required"
+}

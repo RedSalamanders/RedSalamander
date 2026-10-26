@@ -1,0 +1,13 @@
+{
+  "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+  "run_id": "20261018T205243Z-93672-95002351ed654198ab78dca29e270abf",
+  "exit_code": 0,
+  "configuration": "Release",
+  "platform": "x64",
+  "activation": "native-no-activate",
+  "scope": "Three affected ViewerSpace cases only",
+  "receipt_id": "02497e7e05d551155e4162728c24127e76c9b1246ca5988afe43fa56949bf928",
+  "source_snapshot_id": "8ebb9a33a6cd0384e9077f80f1edbbd872d7c1ae6ce6bea0473a2aed0352ff1b",
+  "source_stable": true,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\affected-master-release-2026-10-18\\viewers\\20261018T205243Z-93672-95002351ed654198ab78dca29e270abf"
+}

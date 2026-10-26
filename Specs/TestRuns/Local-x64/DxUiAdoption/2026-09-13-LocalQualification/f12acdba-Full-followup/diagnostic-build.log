@@ -1,0 +1,61 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19Closeout\RedSalamander.sln
+  Target:        ViewerPETests
+  Configuration: Debug
+  Platform:      x64
+  Build workers: 2
+  Version:       7.0.100 beta Debug (x64)
+  Build number:  100
+  Version state: Z:\RsI19Closeout\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Installing DxUi dependencies (x64-windows)
+warning: The vcpkg Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\vcpkg-tool\vcpkg.exe is using detected vcpkg root Z:\RsI19Closeout\.build\dependencies\DxUi\db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa\vcpkg-tool and ignoring mismatched VCPKG_ROOT environment value Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115. To suppress this message, unset the environment variable or use the --vcpkg-root command line switch.
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 133 us
+vcpkg dependencies are ready.
+DxUi update check unavailable; the exact pinned dependency remains selected. (Checked 2026-09-12 23:57:45Z)
+DxUi restored at 13788e95f1c9a16210a87988d742d9dfc6f66eef for x64; output identity db6dd72040ef2d513c4c62d5a1847f25ec361ee7e763b1798b510d34cfbccbaa.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  ViewerPETests.cpp
+  ViewerPETests.vcxproj -> Z:\RsI19Closeout\.build\x64\Debug\ViewerPETests.exe
+Captured log: Z:\RsI19Closeout\.build\logs\msbuild-20260913_015754_644-pid100604-e2784949.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: 75e2f5176af32ecb0308d0154ea575a29d1affd05570cbc3395b9745a12ab408
+
+========================================
+Build completed successfully!
+Configuration: Debug | Platform: x64
+Build time: 00:09
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "Z:\RsI19Closeout\.build\x64\Debug\ViewerPETests.exe" # 4.36 MiB

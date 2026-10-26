@@ -1,0 +1,446 @@
+{
+    "run_started_utc": "2026-09-21T03:57:54.161Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-primary-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 38957,
+    "passed": 72,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+            "status": "passed",
+            "duration_ms": 713,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+            "status": "passed",
+            "duration_ms": 342,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 816,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_qualified_subject",
+            "status": "passed",
+            "duration_ms": 573,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_different_subject",
+            "status": "passed",
+            "duration_ms": 539,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 547,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 172,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 58,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+            "status": "passed",
+            "duration_ms": 104,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+            "status": "passed",
+            "duration_ms": 85,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+            "status": "passed",
+            "duration_ms": 434,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 116,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 372,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 98,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 113,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 363,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+            "status": "passed",
+            "duration_ms": 452,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+            "status": "passed",
+            "duration_ms": 161,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+            "status": "passed",
+            "duration_ms": 186,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+            "status": "passed",
+            "duration_ms": 403,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 131,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 750,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+            "status": "passed",
+            "duration_ms": 192,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+            "status": "passed",
+            "duration_ms": 162,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+            "status": "passed",
+            "duration_ms": 226,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 596,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_qualified_subject",
+            "status": "passed",
+            "duration_ms": 533,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_different_subject",
+            "status": "passed",
+            "duration_ms": 564,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 519,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 168,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+            "status": "passed",
+            "duration_ms": 70,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+            "status": "passed",
+            "duration_ms": 466,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 87,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 366,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 105,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 363,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+            "status": "passed",
+            "duration_ms": 474,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+            "status": "passed",
+            "duration_ms": 159,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+            "status": "passed",
+            "duration_ms": 202,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+            "status": "passed",
+            "duration_ms": 374,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 763,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+            "status": "passed",
+            "duration_ms": 219,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+            "status": "passed",
+            "duration_ms": 164,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+            "status": "passed",
+            "duration_ms": 254,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 600,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_qualified_subject",
+            "status": "passed",
+            "duration_ms": 605,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_different_subject",
+            "status": "passed",
+            "duration_ms": 562,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 567,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 193,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 74,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+            "status": "passed",
+            "duration_ms": 101,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+            "status": "passed",
+            "duration_ms": 88,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+            "status": "passed",
+            "duration_ms": 97,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+            "status": "passed",
+            "duration_ms": 356,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 123,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 485,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 103,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+            "status": "passed",
+            "duration_ms": 349,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+            "status": "passed",
+            "duration_ms": 475,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+            "status": "passed",
+            "duration_ms": 183,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+            "status": "passed",
+            "duration_ms": 196,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+            "status": "passed",
+            "duration_ms": 370,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 118,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 757,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+            "status": "passed",
+            "duration_ms": 183,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

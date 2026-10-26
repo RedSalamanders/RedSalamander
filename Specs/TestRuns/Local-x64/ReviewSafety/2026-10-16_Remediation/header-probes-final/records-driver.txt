@@ -1,0 +1,3 @@
+#include <cstdio>
+#include "ProductUi.Scope.Tests.DirectoryRecords.h"
+int main() { const bool ok=TestCheckedDirectoryRecords(); std::puts(ok ? "PASS directory-record regression layouts" : "FAIL directory-record regression layouts"); return ok ? 0 : 1; }

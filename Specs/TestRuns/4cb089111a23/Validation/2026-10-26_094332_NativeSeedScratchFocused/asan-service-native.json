@@ -1,0 +1,56 @@
+{
+    "run_started_utc": "2026-10-26T09:50:26.076Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 34172,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "search_service_sqlite_cold_start_stale_root_refreshes_before_query",
+            "status": "passed",
+            "duration_ms": 30210,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_index_status_snapshot_does_not_wait_for_warmup",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_index_nowait_query_does_not_wait_for_warmup",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_index_opportunistic_query_does_not_wait_for_warmup",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "search_service_sqlite_default_store_uses_build_specific_programdata_root",
+            "status": "passed",
+            "duration_ms": 272,
+            "repeat_index": 1
+        },
+        {
+            "name": "search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root",
+            "status": "passed",
+            "duration_ms": 306,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_service_single_request_uses_query",
+            "status": "passed",
+            "duration_ms": 3297,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

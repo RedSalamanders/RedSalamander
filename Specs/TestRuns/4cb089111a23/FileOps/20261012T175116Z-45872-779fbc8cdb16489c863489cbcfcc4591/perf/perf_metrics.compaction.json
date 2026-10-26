@@ -1,0 +1,64 @@
+{
+  "schema": "red-salamander.i35-nas-nested.perf-compaction.v2",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the rows of the I35 NAS nested Copy claims (self-test rows with the many-folders Copy wall times, refused and unsupported restores, the walkers' walk stats, discovery and operation rows) are kept in their original order; the one-per-folder restore rows and the one-per-file FileOps.Bridge.Copy rows are replaced by their deterministic summaries; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.SelfTest.",
+      "fileops.local.created_directory.restore_refused",
+      "fileops.local.created_directory.identity_unavailable",
+      "fileops.bridge.created_directory.restore_refused",
+      "fileops.bridge.created_directory.restore_unsupported",
+      "FileOps.CopyRecursiveParallel.",
+      "FileOps.Bridge.",
+      "FileOps.Discovery.",
+      "FileOps.Operation"
+    ],
+    "summarizedMetrics": [
+      "fileops.local.created_directory.restored",
+      "fileops.bridge.created_directory.restored",
+      "FileOps.Bridge.Copy"
+    ]
+  },
+  "source": {
+    "bytes": 13157653,
+    "rows": 33618,
+    "sha256": "d9a1614d89b8fa422ed09fff8e65e7fb18fc23af7a79115306d76dd94afa86ff"
+  },
+  "kept": {
+    "bytes": 29668,
+    "rows": 80,
+    "sha256": "966c4e87cdee5f4e6da383c0da725a8afb7ad902d46d7fe4d40a69b599130027"
+  },
+  "summaries": [
+    {
+      "metric": "fileops.local.created_directory.restored",
+      "rows": 0
+    },
+    {
+      "metric": "fileops.bridge.created_directory.restored",
+      "rows": 3770,
+      "detailCounts": {
+        "": 3770
+      },
+      "durationUs": {
+        "sum": 1098859,
+        "mean": 291.5,
+        "median": 213.0,
+        "p95NearestRank": 344,
+        "max": 31664
+      }
+    },
+    {
+      "metric": "FileOps.Bridge.Copy",
+      "rows": 288,
+      "distinctDetails": 288,
+      "durationUs": {
+        "sum": 33014,
+        "mean": 114.6,
+        "median": 110.0,
+        "p95NearestRank": 154,
+        "max": 201
+      }
+    }
+  ]
+}

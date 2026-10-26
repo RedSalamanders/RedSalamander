@@ -1,0 +1,19 @@
+{
+  "receipt_id": "2b2adacb8a58d3313c4722645f5c09a568baac2b7f0e3ef05d4c0fb106b5a9ad",
+  "source_snapshot_id": "2afb2008ab09ed5d40e950d4c6020f36f04e328c52663586e86e56c3ce70e428",
+  "git_head": "4a42e3cbba30bedbf0426296f0a0b20a97b19b11",
+  "target": "solution",
+  "tests_enabled": true,
+  "configuration": "Debug",
+  "platform": "x64",
+  "exit_code": 0,
+  "duration_ms": 191029,
+  "log": {
+    "source": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\logs\\msbuild-20260905_223126_434-pid133832-54f98f5e.log",
+    "rawBytes": 36748,
+    "rawSha256": "45ee448ead027c2543182e67f2ea98b908f9d6ae4ee1a435b856597a4c2060e0",
+    "archivedBytes": 36748,
+    "archivedSha256": "45ee448ead027c2543182e67f2ea98b908f9d6ae4ee1a435b856597a4c2060e0",
+    "transform": "Trim horizontal whitespace at line ends and encode UTF-8 without BOM; preserve line endings; raw log retained."
+  }
+}

@@ -81,13 +81,6 @@
           Target="[INSTALLFOLDER]RedSalamander.exe"
           WorkingDirectory="INSTALLFOLDER" />
 
-        <Shortcut
-          Id="StartMenuMonitorShortcut"
-          Name="RedSalamander Monitor"
-          Description="RedSalamander monitor"
-          Target="[INSTALLFOLDER]RedSalamanderMonitor.exe"
-          WorkingDirectory="INSTALLFOLDER" />
-
         <!-- Windows "Installed apps" uses DisplayIcon from the Uninstall key (not always ARPPRODUCTICON). -->
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\[ProductCode]" Name="DisplayIcon" Type="string"
           Value="[INSTALLFOLDER]RedSalamander.exe" />

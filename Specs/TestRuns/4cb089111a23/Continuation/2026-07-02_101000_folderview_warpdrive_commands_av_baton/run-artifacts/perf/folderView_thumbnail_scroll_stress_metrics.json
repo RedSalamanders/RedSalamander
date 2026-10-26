@@ -1,0 +1,12 @@
+{
+  "case": "folderView_thumbnail_scroll_stress",
+  "itemCount": 640,
+  "metrics": {
+    "thumbnailScrollStress.elapsedUs": 106980,
+    "thumbnails.queued": 0,
+    "thumbnails.completed": 0,
+    "thumbnails.fallback": 0,
+    "thumbnails.pending": 0,
+    "thumbnails.staleDrops": 0
+  }
+}

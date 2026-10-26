@@ -1,0 +1,97 @@
+{
+  "schema": "red-salamander.viewer-space-documentation-captures.v2",
+  "purpose": "Current synthetic native workspace/lifecycle captures from the registered no-activation harness; owned embedded client frames omit application window chrome. Earlier published images and provenance are preserved in the marked-sandbox maintenance archive.",
+  "captures": [
+    {
+      "name": "viewer-space-scanning",
+      "group": "space",
+      "sha256": "86e7aba7d791eb087e75b655a73319e15c41ae26831298fad727284a72a28009",
+      "scenario": "TestViewerSpaceLifecycleCaptures/01-scanning-before-data",
+      "provenance": "docs/res/viewer-space-scanning.provenance.json"
+    },
+    {
+      "name": "viewer-space-inflight",
+      "group": "space",
+      "sha256": "092743368ae6283dc6f578664e7a64f73b898ee0f82e04d1f06713e510fb3f56",
+      "scenario": "TestViewerSpaceLifecycleCaptures/02-partial-scan-observed-totals-inflight",
+      "provenance": "docs/res/viewer-space-inflight.provenance.json"
+    },
+    {
+      "name": "viewer-space-analyst",
+      "group": "space",
+      "sha256": "c62dd14636f0b68ac09cdb7d7c697d8dac5bea0293a46f26714ed0ed5ef35f02",
+      "scenario": "TestViewerSpaceLifecycleCaptures/03-done",
+      "provenance": "docs/res/viewer-space-analyst.provenance.json"
+    },
+    {
+      "name": "viewer-space-refreshing",
+      "group": "space",
+      "sha256": "a5ba8314f0344f79a3857aa54e690e30764d8a6cdf7047d50d49789f85f6683c",
+      "scenario": "TestViewerSpaceLifecycleCaptures/04-refresh-pending-retained-display",
+      "provenance": "docs/res/viewer-space-refreshing.provenance.json"
+    },
+    {
+      "name": "viewer-space-refresh-canceled",
+      "group": "space",
+      "sha256": "c62dd14636f0b68ac09cdb7d7c697d8dac5bea0293a46f26714ed0ed5ef35f02",
+      "scenario": "TestViewerSpaceLifecycleCaptures/05-refresh-canceled-retained-display",
+      "provenance": "docs/res/viewer-space-refresh-canceled.provenance.json"
+    },
+    {
+      "name": "viewer-space-refresh-refused",
+      "group": "space",
+      "sha256": "0878437a4eaf172c6ee9a7839f6a52e841dd8c4d20dcb27eceaebfc1d96735ba",
+      "scenario": "TestViewerSpaceLifecycleCaptures/06-refresh-refused-retained-display",
+      "provenance": "docs/res/viewer-space-refresh-refused.provenance.json"
+    },
+    {
+      "name": "viewer-space-empty",
+      "group": "space",
+      "sha256": "5179563a66775559a7cd1a7d66d8a2e127b5f582fab8d72a01f49698c5f3c2e1",
+      "scenario": "TestViewerSpaceLifecycleCaptures/07-empty",
+      "provenance": "docs/res/viewer-space-empty.provenance.json"
+    },
+    {
+      "name": "viewer-space-error",
+      "group": "space",
+      "sha256": "7dd32416121e43d204228a74125c6fb15d242d5a60bbb553c91faccb634c357e",
+      "scenario": "TestViewerSpaceLifecycleCaptures/08-provider-error",
+      "provenance": "docs/res/viewer-space-error.provenance.json"
+    },
+    {
+      "name": "viewer-space-explorer",
+      "group": "space",
+      "sha256": "34df486354156855910037a1b8d9da9fd60ccd1cb19751f4be14d1d8842111ea",
+      "scenario": "TestViewerSpaceLifecycleCaptures/09-explorer-right-panel",
+      "provenance": "docs/res/viewer-space-explorer.provenance.json"
+    },
+    {
+      "name": "viewer-space-bottom-panel",
+      "group": "space",
+      "sha256": "3efcc34a2325c059d4ec442da0ed92669034f16e9f3ff73f304da4216041f33f",
+      "scenario": "TestViewerSpaceLifecycleCaptures/10-bottom-panel-inspector-collapsed",
+      "provenance": "docs/res/viewer-space-bottom-panel.provenance.json"
+    },
+    {
+      "name": "viewer-space-map-only",
+      "group": "space",
+      "sha256": "c54b4aff5c8a1e51c9511abcee8a0cd6697fa7c97e4a5c727cbfeda7e9d084cc",
+      "scenario": "TestViewerSpaceLifecycleCaptures/11-analysis-collapsed",
+      "provenance": "docs/res/viewer-space-map-only.provenance.json"
+    },
+    {
+      "name": "viewer-space-excluded",
+      "group": "space",
+      "sha256": "9ae5f5d65636ed9835293f6dd250f83158f6acd01e6edd76fa035ab86ce3b9a3",
+      "scenario": "TestViewerSpaceLifecycleCaptures/12-excluded-real-item",
+      "provenance": "docs/res/viewer-space-excluded.provenance.json"
+    },
+    {
+      "name": "viewer-space-cleanup-review",
+      "group": "space",
+      "sha256": "db0974e05d2a821ebaad3dad000445e32b0fc724a5cf2304798ffa9b9b95d7fb",
+      "scenario": "TestViewerSpaceLifecycleCaptures/13-cleanup-review",
+      "provenance": "docs/res/viewer-space-cleanup-review.provenance.json"
+    }
+  ]
+}

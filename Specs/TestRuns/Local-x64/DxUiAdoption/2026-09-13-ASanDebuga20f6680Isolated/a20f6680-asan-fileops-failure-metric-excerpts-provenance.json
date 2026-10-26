@@ -1,0 +1,8 @@
+{
+  "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a20f6680-isolated-x64-ASan-Debug-Full\\archive\\4cb089111a23\\FileOps\\2026-09-13_091420\\perf\\perf_metrics.jsonl",
+  "sourceBytes": 112918004,
+  "sourceSha256": "5e3efeffe419b8260c4ce40cdb99532f52b7c01276ba807badb5f95218bf3e10",
+  "selection": "All FileOps.SelfTest.R0d rows, plus failed NativeCopy TruthFixture/EndpointPassiveListeners/PassiveListeners rows; original JSONL bytes in source order.",
+  "retainedRows": 8,
+  "excerptsSha256": "30ada28957b03f319b49d55ad66d0b63c99c0f16081b7e90b445ce3a31c7d1d6"
+}

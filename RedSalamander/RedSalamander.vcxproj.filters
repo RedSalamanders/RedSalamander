@@ -22,6 +22,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RedSalamander.h" />
+    <ClInclude Include="FolderWindow.FileOperations.Tests.OwnedShutdown.h" />
     <ClInclude Include="CrashHandler.h" />
     <ClInclude Include="FolderView.h" />
     <ClInclude Include="FolderViewEmptyStateLayout.h" />
@@ -34,9 +35,13 @@
     <ClInclude Include="FolderViewThumbnailGeometry.h" />
     <ClInclude Include="FolderWindow.h" />
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
+    <ClInclude Include="FileOperationsConflictBroker.h" />
+    <ClInclude Include="FileOperationItemResultReducer.h" />
+    <ClInclude Include="FolderWindow.FileOperations.IssuesProjection.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />
     <ClInclude Include="FolderWindow.FileOperations.Popup.h" />
-    <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.h" />
+    <ClInclude Include="FolderWindow.FileOperations.PromptText.h" />
+    <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.h" />
     <ClInclude Include="FolderWindowInternal.h" />
     <ClInclude Include="DirectoryInfoCache.h" />
     <ClInclude Include="MaskSyntax.h" />
@@ -49,6 +54,7 @@
     <ClInclude Include="IconCache.h" />
     <ClInclude Include="Ui\\AlertOverlay.h" />
     <ClInclude Include="Ui\\AlertOverlayWindow.h" />
+    <ClInclude Include="Ui\\AlertOverlayTheme.h" />
     <ClInclude Include="Ui\\ThemeCycleOverlayWindow.h" />
     <ClInclude Include="Ui\\AnimationDispatcher.h" />
     <ClInclude Include="NavigationView.h" />
@@ -86,21 +92,21 @@
       <ClInclude Include="FileOperationDurableStore.h" />
       <ClInclude Include="BatchRenameMenus.h" />
       <ClInclude Include="BatchRenameWindow.h" />
-      <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
+      <ClInclude Include="SelfTest\Commands\Commands.Tests.Runner.h" />
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="CommandRuntimeState.h" />
-    <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
+    <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
     <ClInclude Include="FindFilesWindow.h" />
     <ClInclude Include="SearchFallbackEngine.h" />
     <ClInclude Include="CompareDirectoriesWindow.h" />
     <ClInclude Include="ShortcutDefaults.h" />
     <ClInclude Include="ShortcutManager.h" />
-    <ClInclude Include="SelfTest\Common\SelfTestCommon.h">
+    <ClInclude Include="SelfTest\Common\Common.Tests.Runner.h">
       <Filter>SelfTest\Common</Filter>
     </ClInclude>
     <ClInclude Include="ShortcutText.h" />
-    <ClInclude Include="SelfTest\Common\SelfTestLatencyHooks.h">
+    <ClInclude Include="SelfTest\Common\Common.Tests.LatencyHooks.h">
       <Filter>SelfTest\Common</Filter>
     </ClInclude>
     <ClInclude Include="ShortcutsWindow.h" />
@@ -134,7 +140,7 @@
       <ClCompile Include="FileOperationMoveBreadcrumb.cpp" />
       <ClCompile Include="BatchRenameMenus.cpp" />
       <ClCompile Include="BatchRenameWindow.cpp" />
-      <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
+      <ClCompile Include="SelfTest\Commands\Commands.Tests.Runner.cpp" />
     <ClCompile Include="RedSalamander.cpp" />
     <ClCompile Include="FolderView.cpp" />
     <ClCompile Include="FolderView.DragDrop.cpp" />
@@ -153,11 +159,19 @@
     <ClCompile Include="FolderWindow.FileOperations.Dialog.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.IssuesPane.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.Popup.cpp" />
-    <ClCompile Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.Popup.PathDetail.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.State.Conflict.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.DecisionMirror.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.PromptText.cpp" />
+    <ClCompile Include="FileOperationsConflictBroker.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.IssuesProjection.cpp" />
+    <ClCompile Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.State.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.Tests.OwnedShutdown.cpp" />
     <ClCompile Include="FolderWindow.FileSystem.cpp" />
     <ClCompile Include="FolderWindow.Interaction.cpp" />
     <ClCompile Include="FolderWindow.Layout.cpp" />
+    <ClCompile Include="FolderWindow.LeftoverCleanup.cpp" />
     <ClCompile Include="FolderWindow.SelectionSize.cpp" />
     <ClCompile Include="FolderWindow.StatusBar.cpp" />
     <ClCompile Include="FolderWindow.Viewers.cpp" />
@@ -208,17 +222,17 @@
     <ClCompile Include="ManagePluginsDialog.cpp" />
     <ClCompile Include="MaskSyntax.cpp" />
     <ClCompile Include="CommandRegistry.cpp" />
-    <ClCompile Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
     <ClCompile Include="FindFilesWindow.cpp" />
     <ClCompile Include="SearchFallbackEngine.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.cpp" />
     <ClCompile Include="ShortcutDefaults.cpp" />
     <ClCompile Include="ShortcutManager.cpp" />
-    <ClCompile Include="SelfTest\Common\SelfTestCommon.cpp">
+    <ClCompile Include="SelfTest\Common\Common.Tests.Runner.cpp">
       <Filter>SelfTest\Common</Filter>
     </ClCompile>
-    <ClCompile Include="SelfTest\Common\SelfTestLatencyHooks.cpp">
+    <ClCompile Include="SelfTest\Common\Common.Tests.LatencyHooks.cpp">
       <Filter>SelfTest\Common</Filter>
     </ClCompile>
     <ClCompile Include="ShortcutText.cpp" />
@@ -254,36 +268,62 @@
     <Image Include="res\wsl_linux_black.png" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.BatchRename.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Dialogs.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.FileOps.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Navigation.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Search.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Settings.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.ThemeOverlay.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp" />
-    <None Include="SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp" />
-    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp" />
-    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp" />
-    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp" />
-    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.DiscoveryProviders.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp" />
-    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.CompareOptions.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.BatchRename.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Connections.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Dialogs.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.FileOps.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Navigation.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.PluginConfig.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.ThemesGeneralPanes.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.PluginsThemesAdvanced.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Preferences.Dispatch.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Search.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.ShellCommands.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Settings.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.ThemeOverlay.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.Shortcuts.cpp" />
+    <None Include="SelfTest\Commands\Commands.Tests.ViewCommands.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.CoreDiffs.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.RuntimeAndRemote.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.Mtp.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.DiscoveryProviders.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.ConflictBroker.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.DecisionMirror.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.OwnedShutdown.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AclDeniedChild.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.BatchRenameExactResult.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.CaseOnlyStorage.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.CommonPresentationPerf.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.CancelAll.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.CrossProviderRoutes.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp" />
+    <None Include="SelfTest\FileOperations\FileOperations.Scope.Tests.DeleteProgress.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.IdentityLess.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.ManagedMovePartialWrite.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Notes.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.OverwritePreservation.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.RepeatedStorage.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.SameObject.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.SmallFileCost.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Throughput.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.ItemResultReducer.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.IssuesProjection.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.PathDetailFocus.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases07_09.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases10_13.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases14_16.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Fairstream.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.IntegratedPresentationPerf.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.QueuedAdmission.cpp" />
+    <ClInclude Include="SelfTest\FileOperations\FileOperations.Tests.FileOperationsSurfaceResources.h" />
   </ItemGroup>
 </Project>

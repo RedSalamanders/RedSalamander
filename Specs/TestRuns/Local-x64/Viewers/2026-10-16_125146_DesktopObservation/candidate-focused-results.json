@@ -1,0 +1,56 @@
+[
+  {
+    "case": "TestViewerSpaceDesktopObservationContracts",
+    "runId": "20261016T124340Z-77456-fffe2b74cdf14435871c900d3854428c",
+    "exitCode": 0,
+    "elapsedMs": 99,
+    "activation": "--group=noninteractive",
+    "receipt": "207b626a3c304933a1808af881c394531cfdf201a2c58c093ff57476f6333657",
+    "exeSha256": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9",
+    "pluginSha256": "04C185D078886429299DA0605EAB7DE0412AC4C6C35A9A26C47CE7D619CA41DD",
+    "desktopWitnesses": [],
+    "stdout": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-desktop-20261016\\candidate-TestViewerSpaceDesktopObservationContracts.txt"
+  },
+  {
+    "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+    "runId": "20261016T124340Z-77456-9e78934dca8b4d5e98eda16e499a710f",
+    "exitCode": 0,
+    "elapsedMs": 2196,
+    "activation": "--group=noninteractive",
+    "receipt": "207b626a3c304933a1808af881c394531cfdf201a2c58c093ff57476f6333657",
+    "exeSha256": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9",
+    "pluginSha256": "04C185D078886429299DA0605EAB7DE0412AC4C6C35A9A26C47CE7D619CA41DD",
+    "desktopWitnesses": [
+      "[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=10 foregroundChanges=10 inputChanges=10 ownedTransitions=0 barrierUs=127 failure=0"
+    ],
+    "stdout": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-desktop-20261016\\candidate-TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.txt"
+  },
+  {
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "runId": "20261016T124342Z-77456-f12444507f474b4992d5b5a8bf04ac44",
+    "exitCode": 0,
+    "elapsedMs": 2179,
+    "activation": "--group=noninteractive",
+    "receipt": "207b626a3c304933a1808af881c394531cfdf201a2c58c093ff57476f6333657",
+    "exeSha256": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9",
+    "pluginSha256": "04C185D078886429299DA0605EAB7DE0412AC4C6C35A9A26C47CE7D619CA41DD",
+    "desktopWitnesses": [
+      "[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=0 foregroundChanges=0 inputChanges=0 ownedTransitions=0 barrierUs=104 failure=0"
+    ],
+    "stdout": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-desktop-20261016\\candidate-TestViewerSpaceAnalysisHostVirtualGridAndLifetime.txt"
+  },
+  {
+    "case": "TestViewerSpaceLifecycleCaptures",
+    "runId": "20261016T124344Z-77456-94df323deef44111b1d417c385c0fa0d",
+    "exitCode": 0,
+    "elapsedMs": 4690,
+    "activation": "--group=noninteractive",
+    "receipt": "207b626a3c304933a1808af881c394531cfdf201a2c58c093ff57476f6333657",
+    "exeSha256": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9",
+    "pluginSha256": "04C185D078886429299DA0605EAB7DE0412AC4C6C35A9A26C47CE7D619CA41DD",
+    "desktopWitnesses": [
+      "[INFO] ViewerSpace lifecycle desktop witness: samples=31 cursorChanges=1 foregroundChanges=0 inputChanges=0 ownedTransitions=0 barrierUs=227"
+    ],
+    "stdout": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-desktop-20261016\\candidate-TestViewerSpaceLifecycleCaptures.txt"
+  }
+]

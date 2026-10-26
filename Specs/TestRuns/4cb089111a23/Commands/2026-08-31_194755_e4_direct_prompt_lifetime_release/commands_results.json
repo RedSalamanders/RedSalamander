@@ -1,0 +1,26 @@
+{
+    "run_started_utc": "2026-08-31T17:47:53.536Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\e4-prompt-lifetime-release-20260831a\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 975,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_fileops_start_operation_artifact_prompt_shutdown_during_nested_pump",
+            "status": "passed",
+            "duration_ms": 134,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_operations_phase0_typed_contract_source_guard",
+            "status": "passed",
+            "duration_ms": 45,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 1
+}

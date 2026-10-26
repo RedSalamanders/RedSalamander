@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-09-26T10:23:59.057Z",
+    "duration_ms": 3493,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_BatchRenameExactResultCarrier",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260926T102340Z-37620-c3820504fa5e4ee1a9f0579b5e81656e\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2984,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_BatchRenameExactResultCarrier",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1203,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_BatchRenameExactResultCarrier",
+                    "status": "passed",
+                    "duration_ms": 1687,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 78,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "asan-eight-failure-curated-evidence-v1",
+  "archive": "Specs/TestRuns/4cb089111a23/Validation/2026-10-25_140118_ASanFailures",
+  "source": "d195fe31b9b1948865fbfa06315d626a25f1a961",
+  "profile": "x64 ASan Debug",
+  "buildReceipt": "ce927559c79beb5e8a65d0be3709ce956c28042d4961f6fbb4a3d07151978872",
+  "candidateStatus": "pending; all failed receipts remain failed",
+  "scope": "Complete native broad verdicts plus unchanged-binary diagnostic pair and UI repeat verdicts. Passing seed controls or isolated repeats are not repairs or final qualification.",
+  "files": [
+    {
+      "file": "compare-full-results.json",
+      "sha256": "3E5D82A5B51E7AD70458319F4EF27158AE3B118F951C728FC9B6A949A0AAA1DC",
+      "bytes": 54778,
+      "sourceRun": "20261025T140118Z-34484-fb6cb3f2682c46128609df962f2ea7e2"
+    },
+    {
+      "file": "commands-full-results.json",
+      "sha256": "A78C21C2D50C1A660721FCC81C77512981FE82E6818C60E7FDF332F4491F726B",
+      "bytes": 190317,
+      "sourceRun": "20261025T140118Z-34484-fb6cb3f2682c46128609df962f2ea7e2"
+    },
+    {
+      "file": "fileops-full-results.json",
+      "sha256": "788A7B67558623B39322D6FF19B4A46B3E88896EDBCB6082D02F59BEE1A25FCD",
+      "bytes": 61582,
+      "sourceRun": "20261025T140118Z-34484-fb6cb3f2682c46128609df962f2ea7e2"
+    },
+    {
+      "file": "ui-unchanged-results.json",
+      "sha256": "DD000FC5F6CC9758E4177C033DBBB8E75E7806B667C775D5E0A85F1ACB1C0E59",
+      "bytes": 3498
+    },
+    {
+      "file": "sqlite-default-store-pair.json",
+      "sha256": "37D977B8D382C317637815F964B376629E61E7EF86A87DDCB5A6A51BB5D6A238",
+      "bytes": 1265
+    },
+    {
+      "file": "additional-baselines.json",
+      "sha256": "B60F885DEB99E2397270C521831403AC7D342EA60A6B0D68C12362C3FC890FB7",
+      "bytes": 2163
+    },
+    {
+      "file": "selection-unchanged-results.json",
+      "sha256": "2180C4620F7FF48863B005FE9450B0E1985F2063ABFBBDA2F641194D28898211",
+      "bytes": 6054
+    },
+    {
+      "file": "selection-observations.json",
+      "sha256": "3B3496627E09C43036EA1CDDE490295B460AC0AF46914133950DB6498929DE5E",
+      "bytes": 23217
+    }
+  ]
+}

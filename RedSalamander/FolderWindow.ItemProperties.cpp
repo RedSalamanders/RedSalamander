@@ -1,4 +1,5 @@
 #include "FolderWindow.h"
+#include "WindowActivation.h"
 
 #include "AppTheme.h"
 #include "DxUiThemePalette.h"
@@ -80,6 +81,7 @@ enum class ItemPropertiesArtifactObjectState : uint8_t
 struct ItemPropertiesArtifactExplanation
 {
     bool possibleNameShape                        = false;
+    bool mayHoldOriginal                          = false; // .rs_bak_/.rs_ren_: possibly the only complete copy
     ItemPropertiesArtifactObjectState objectState = ItemPropertiesArtifactObjectState::NotApplicable;
     uint32_t classifierQueryCount                 = 0u;
 };
@@ -856,7 +858,9 @@ void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc, const 
 
     append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION,
            L"Classification",
-           text(IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE, L"Possible interrupted-operation artifact"));
+           explanation.mayHoldOriginal
+               ? text(IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE, L"Possibly an original kept by an interrupted copy or move (check before deleting)")
+               : text(IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE, L"Possibly incomplete file (left by an interrupted copy or move)"));
     append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_REASON,
            L"Reason",
            text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON, L"Name matches a generated File Operations artifact pattern"));
@@ -1009,6 +1013,11 @@ void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc, const 
 class ItemPropertiesRootPanel final : public DxUi::Panel
 {
 public:
+    ItemPropertiesRootPanel(const ItemPropertiesRootPanel&)            = delete;
+    ItemPropertiesRootPanel(ItemPropertiesRootPanel&&)                 = delete;
+    ItemPropertiesRootPanel& operator=(const ItemPropertiesRootPanel&) = delete;
+    ItemPropertiesRootPanel& operator=(ItemPropertiesRootPanel&&)      = delete;
+
     explicit ItemPropertiesRootPanel(const std::wstring* contentText) noexcept : _contentText(contentText)
     {
         SetFocusable(true);
@@ -1160,7 +1169,7 @@ public:
 
         const int showCmd = _settings ? WindowPlacementPersistence::Restore(*_settings, kItemPropertiesWindowId, hwnd) : SW_SHOWNORMAL;
         ::ShowWindow(hwnd, showCmd);
-        ::SetForegroundWindow(hwnd);
+        ::Common::RequestForegroundWindow(hwnd);
         return S_OK;
     }
 
@@ -1948,6 +1957,7 @@ private:
             if (FileOperationArtifacts::HasPossibleArtifactName(workItem->itemPath.filename().native()))
             {
                 result->artifact.possibleNameShape    = true;
+                result->artifact.mayHoldOriginal      = FileOperationArtifacts::HasPossibleOriginalArtifactName(workItem->itemPath.filename().native());
                 result->artifact.classifierQueryCount = 1u;
                 FileOperationArtifacts::Candidate candidate{};
                 const HRESULT artifactHr = FileOperationArtifacts::CaptureProviderObjectCandidate(
@@ -2014,7 +2024,7 @@ private:
 
     [[nodiscard]] LRESULT OnLoadComplete(LPARAM lParam) noexcept
     {
-        auto result = TakeMessagePayload<ItemPropertiesLoadResult>(lParam);
+        auto result = TakeMessagePayload<ItemPropertiesLoadResult>(_hWnd.get(), WndMsg::kItemPropertiesLoadComplete, lParam);
         if (! result || result->generation != _loadGeneration)
         {
             return 0;

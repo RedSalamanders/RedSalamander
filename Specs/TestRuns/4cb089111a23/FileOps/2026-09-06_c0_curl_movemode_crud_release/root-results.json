@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-09-06T00:36:11.150Z",
+    "duration_ms": 3075,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "R0fCurl_FakeFtpReadWriteCreateDelete",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-movemode-crud-release-20260906\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2359,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "R0fCurl_FakeFtpReadWriteCreateDelete",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1281,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R0fCurl_FakeFtpReadWriteCreateDelete",
+                    "status": "passed",
+                    "duration_ms": 938,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 140,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

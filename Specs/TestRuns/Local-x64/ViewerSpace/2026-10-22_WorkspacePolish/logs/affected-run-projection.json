@@ -1,0 +1,527 @@
+{
+  "runId": "20261022T164835Z-53288-f0a45ee600ba4b96b45c2a404f9a00ed",
+  "runState": {
+    "artifact_epoch": 1,
+    "build_receipt_id": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+    "campaign_id": "20261022T164835Z-53288-f0a45ee600ba4b96b45c2a404f9a00ed",
+    "campaign_sequence": 1,
+    "canonicalization": "rs-canonical-json-v1",
+    "coverage_plan_digest": "1c7454e573fbba1e513bc5af7a9e0fceefbabd98f1905b1d12d214470a5f68c8",
+    "decision_digest": "81557af2838d2603a4b00c2a23efb0495305ff07b47e41b1e4671b9a08d09c14",
+    "entries": [
+      {
+        "decision": "execute",
+        "expected_fingerprint": "524f35b3109432e1bd4fa9bf39ace038509ad3bb3af486df0ea9c39d9daa3bd7",
+        "id": "tooling.pester-build-toolchain",
+        "ordinal": 0,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": null,
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "failed"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "7795b222c0197ede0b4ed6c52a2b3787af318b35f117079226ea8a143df429be",
+        "id": "selftest.compare-directories",
+        "ordinal": 1,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "4f01421d7ecadbe7b19ca57265af4536d9dd25252b2079ede625b46be86be7f2",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "0c0d79068cb2b121d52dc3cefe9ae2287bd45eb03f9986418f85bf7545415943",
+        "id": "standalone.product-ui",
+        "ordinal": 2,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "6b40143e0c386f0dec204fec9273ffc83d954fc2203cc105e5bc31c6943857bc",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "0e38d0591477630674f0edd365151338866033d232ec746680b5f8a12fb280a0",
+        "id": "viewer-pe.noninteractive",
+        "ordinal": 3,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "57a30af2599d2426c5b30f91892a9f28c424ddefe7f98643d699ed7f5ba399cf",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "c27a7631362fe8f5c1dd9c1be45245e3bf8565fb4c50673404f8c8f8a132e7a5",
+        "id": "viewer-sqlite.noninteractive",
+        "ordinal": 4,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "195974c298bb39f5080c381d9f66fde4e9c947c8c12e98a9dad20bb39653f4e0",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "9bd47d0dda4a454904fcac39e7a1928915583e178325036ae9be6dc3f6cbe392",
+        "id": "standalone.filesystem-curl",
+        "ordinal": 5,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "74953af73b11a0168b22bfdc6b8e86897557d25d94d86fc2afc8a85979657017",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "845fdd43b5b8711aa4e4b68b9dfd5d8e06f38b8442729464ae84e6e36446d21f",
+        "id": "standalone.monitor",
+        "ordinal": 6,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "840de5374d455aac199678792a43cc2c3d049d007b9e213d25197ff525dad1eb",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "9ef9aa92bc3e5150ff99355dc9a3b911f1a8717cde76ee9453f681e3ed60eb54",
+        "id": "standalone.localization",
+        "ordinal": 7,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "49e4f5cde95d337cb36884a6395977e71d6b53a0296d0fc3a689996cc543ce6a",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "ec55f150fcdad73fc30e984ab83af9cf70c8aac4a36f78b064dd6eafe6e93e49",
+        "id": "standalone.red-configure",
+        "ordinal": 8,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "5f6b8a03defcf9835b2158ea407f636d25ad1703e1a04d0c8e81779019c68fbf",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "006178b02eed452bf3ebdf0e5fea362dcbbfe73401ed8f7428e6798b6cd67c79",
+        "id": "standalone.plugin-contract",
+        "ordinal": 9,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": null,
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "failed"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "37414b0fe961d066ba1d47e2bafc75ef32fe01118ad666a23ede473745c1cc40",
+        "id": "standalone.settings-schema",
+        "ordinal": 10,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "9af5ad005101bd020ec2ee0a65a393285926bb4ef65445c2ff57f6de93c43f06",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "91804f1f816aeec8846375167c6136b4460eb40d76ba379e592bd3cbd857a91b",
+        "id": "standalone.crash-handling",
+        "ordinal": 11,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "f87e00c7c0ab71d87e326b899f80a4aea774abc4076cb045a51e8c3fe1667c76",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "4934d502529bb047751f5a34c859e0d50a78fe69649bfc56fdbe2e58387b5373",
+        "id": "perf.performance-tests2",
+        "ordinal": 12,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "9502fc81fc65e0c58d52bfb4fc44952e9bc24c89aeb764b55b44d7aad0785cf4",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "4bcc732b745b6b169abb2312cfd082512a276637d1f7d99310c5d6d2624468e6",
+        "id": "tooling.pester",
+        "ordinal": 13,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": null,
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "failed"
+      },
+      {
+        "decision": "execute",
+        "expected_fingerprint": "bf513a3ba69461aa6c873acca5b8765d4ba3e37a890894068cb3d6549c265390",
+        "id": "tooling.vcpkg-merge-synthetic",
+        "ordinal": 14,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "promotion_digest": "119dd765da1fe66f91ec8c60eb38237d1ad56626cc609884630eab524b204b4c",
+        "reason_codes": [
+          "SOURCE_INPUT_CHANGED"
+        ],
+        "status": "promoted"
+      }
+    ],
+    "mutation_state": "stable",
+    "parent_run_id": null,
+    "plan_digest": "95e7d963ce839033c1052333e03b351b84b89bb3d96d37651b1bdf5b252868bd",
+    "requested_suite": "Full",
+    "run_id": "20261022T164835Z-53288-f0a45ee600ba4b96b45c2a404f9a00ed",
+    "schema": "red-salamander.validation-run-state.v1",
+    "snapshot_id": "8c4c04904022f53b85b2fd951951acc5d7b0f77e3048c84ac68faca0f2b73847",
+    "status": "failed",
+    "validation_mode": "Affected"
+  },
+  "entryProjections": [
+    {
+      "entryId": "perf.performance-tests2",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 24708,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b",
+      "evidenceSource": "entries/perf.performance-tests2/evidence/0516ed6d36c04296ed49fa2edafc0e05f46ac1aaec8deeddcac480d16102afd7.json",
+      "evidenceSha256": "1f9427cd02eb69df0f359c5fc59bc2f10a2b9bfb291f2dbbfbffc3c4c4eeaceb",
+      "terminalSource": "entries/perf.performance-tests2/terminal-results/7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b.json",
+      "terminalSha256": "f61d292549a41ce8601a4da9bd878d3eb6fbd6884a2d3e77e507b00146def4fa"
+    },
+    {
+      "entryId": "selftest.compare-directories",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 248,
+        "skipped": 27,
+        "total": 275
+      },
+      "reasonCodes": [],
+      "durationMs": 165161,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "796614ed3a5d1e6dfb302407a323a58c56896b5f8e29e74cb2b1cb28966a9ccd",
+      "evidenceSource": "entries/selftest.compare-directories/evidence/c80be73a9c0ec8f1dc94536983d6f70db200e619a24a2e53e1202c9adc07cdf7.json",
+      "evidenceSha256": "3c43a0c5c70bebbcb7cae2086c04108804650c4939a124cd9674a1b4c03ccca6",
+      "terminalSource": "entries/selftest.compare-directories/terminal-results/796614ed3a5d1e6dfb302407a323a58c56896b5f8e29e74cb2b1cb28966a9ccd.json",
+      "terminalSha256": "b5c0bb96beafa210d05f55d7c1f1c4cf34d5d31f863e636e8c0d37863da99ce2"
+    },
+    {
+      "entryId": "standalone.crash-handling",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 5895,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d",
+      "evidenceSource": "entries/standalone.crash-handling/evidence/e5dfcd7268e0451600df23d11957e6de1d8653fe7688778237884d42f75c6614.json",
+      "evidenceSha256": "2a8963628f73012c393cc155f7fc479321e0ce317cd5657f33aa349c0c8073db",
+      "terminalSource": "entries/standalone.crash-handling/terminal-results/364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d.json",
+      "terminalSha256": "01659f621647996ea1cd05ef73237d24657f289626fdfc4d61f2fe3c350cc3c4"
+    },
+    {
+      "entryId": "standalone.filesystem-curl",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 6361,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa",
+      "evidenceSource": "entries/standalone.filesystem-curl/evidence/a0e793ffd7fb44ae5e55a1e74d50f1c16965f50584c630193110eec81a0d32a9.json",
+      "evidenceSha256": "0d0cf0b9b6514d723a9e796367c63293de46dd0778e5b01c98fd7ea0a208db42",
+      "terminalSource": "entries/standalone.filesystem-curl/terminal-results/a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa.json",
+      "terminalSha256": "f827c21165e2985d312eb931726cbcb28d561adcb339100506a563f1575257a5"
+    },
+    {
+      "entryId": "standalone.localization",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 5955,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7",
+      "evidenceSource": "entries/standalone.localization/evidence/09e9e443fda7e7ccc2b945c18e1fc4ebd547858d911fb20e2c727955ac7454d1.json",
+      "evidenceSha256": "48eb23404bef3c0b07284638ef383f1573829057358b92dc047a639e26f5b8c8",
+      "terminalSource": "entries/standalone.localization/terminal-results/48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7.json",
+      "terminalSha256": "3e557d13556f7737199fd2adcd5c8d5cd76d7724bde867d5b6f509599ce176ef"
+    },
+    {
+      "entryId": "standalone.monitor",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 11002,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "afde3253cbd7544990fe1964ec0e67f6d6dbdd1d8390c701565102f7e1960578",
+      "evidenceSource": "entries/standalone.monitor/evidence/8ba8c99cf8818907edc6b280aabbb3147bc6f69de7e11a1fa607fa1681e4dfb1.json",
+      "evidenceSha256": "6ecd0772fc49b000ea8d6b147a71218f6f92499871e8ba0cf62ae87ce784a71e",
+      "terminalSource": "entries/standalone.monitor/terminal-results/afde3253cbd7544990fe1964ec0e67f6d6dbdd1d8390c701565102f7e1960578.json",
+      "terminalSha256": "5fda2e9d9e0fa04928358c81d6be019150012f86d2d0632863ead0494ff6eab8"
+    },
+    {
+      "entryId": "standalone.plugin-contract",
+      "entryEvidenceStatus": "failed",
+      "entryOutcome": "FAILED",
+      "counts": {
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [
+        "FAILURE_CLASSIFICATION",
+        "NONZERO_EXIT"
+      ],
+      "durationMs": 258340,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "a92186103be3368b899cba76e2c223f9114416d35d7187fabb0af91b6eb0042e",
+      "evidenceSource": "entries/standalone.plugin-contract/evidence/84fb73fd2ce884dfd58ced91a1ea77bc738f9c2dd367dfcb860a2d9c11f2521b.json",
+      "evidenceSha256": "bc35d54a05574c500f68dcaa71200b90755685f17db56dfcad10e2f9218cb7a2",
+      "terminalSource": "entries/standalone.plugin-contract/terminal-results/a92186103be3368b899cba76e2c223f9114416d35d7187fabb0af91b6eb0042e.json",
+      "terminalSha256": "75e382dcc0432bf8a6a7f23ca367bdfdb1d5113d048cff507ea8086c85937873"
+    },
+    {
+      "entryId": "standalone.product-ui",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 5910,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e",
+      "evidenceSource": "entries/standalone.product-ui/evidence/221a32e952dfbfc04e1a2e415cb5d8c4a12faf15fb95f614aa86bc51c0af469e.json",
+      "evidenceSha256": "514b4f54b6c05bcd6a30ca1fd84fe57f564323ddb2eb5f8194e5c4950d2b159f",
+      "terminalSource": "entries/standalone.product-ui/terminal-results/f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e.json",
+      "terminalSha256": "cf0f00214dc4fac828f24973bf849ca09010537350c16bdc22fd4712f1954c87"
+    },
+    {
+      "entryId": "standalone.red-configure",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 6815,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa",
+      "evidenceSource": "entries/standalone.red-configure/evidence/e8fb12e203814d9b296fdf1425c20385d6c44530a3322348f8be166ac931fd58.json",
+      "evidenceSha256": "4140d0f3ea73e51ccade8910e9a29fb1f7863e067dc587574fa1bef1642852fe",
+      "terminalSource": "entries/standalone.red-configure/terminal-results/9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa.json",
+      "terminalSha256": "d57091610469726ce6c5fa92ec10f80f7b9b1d72452bfb9b698f75289f35567d"
+    },
+    {
+      "entryId": "standalone.settings-schema",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 6210,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb",
+      "evidenceSource": "entries/standalone.settings-schema/evidence/d3138aecbe3b50a653ce6cd4b010c839ecb18aa5ce67ce548383dc4d7f559857.json",
+      "evidenceSha256": "178b1606b1986edad612c728190922b1d3f3cc189f8eb42c36ce8bdd8c5474cc",
+      "terminalSource": "entries/standalone.settings-schema/terminal-results/fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb.json",
+      "terminalSha256": "52ea9b00bbc96d77b780e70541484dc796388187211967969eff164ba2569bbb"
+    },
+    {
+      "entryId": "tooling.pester",
+      "entryEvidenceStatus": "failed",
+      "entryOutcome": "FAILED",
+      "counts": {
+        "failed": 18,
+        "passed": 982,
+        "skipped": 1,
+        "total": 1001
+      },
+      "reasonCodes": [
+        "DECLARED_FAILURES",
+        "FAILURE_CLASSIFICATION",
+        "NONZERO_EXIT",
+        "UNALLOWED_SKIP"
+      ],
+      "durationMs": 521789,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "8d0a7f785bf302be799c6de2bf504bdb939c65415bc5b6112b8fec436fb65765",
+      "evidenceSource": "entries/tooling.pester/evidence/b9f8e5c6ea8c9209c400b700d1a22155ee5597df617ff9dd32eec8ce5141443c.json",
+      "evidenceSha256": "88a99f41cda5595f5a4c00eff24ddcdddc4b92f791616c52c54ad7b381bba54b",
+      "terminalSource": "entries/tooling.pester/terminal-results/8d0a7f785bf302be799c6de2bf504bdb939c65415bc5b6112b8fec436fb65765.json",
+      "terminalSha256": "490e1f7043c12dd4f94beeb4ddd5652e12bb5eea3567886c5b7b3bf6e475c14a"
+    },
+    {
+      "entryId": "tooling.pester-build-toolchain",
+      "entryEvidenceStatus": "failed",
+      "entryOutcome": "FAILED",
+      "counts": {
+        "failed": 1,
+        "passed": 12,
+        "skipped": 0,
+        "total": 13
+      },
+      "reasonCodes": [
+        "DECLARED_FAILURES",
+        "FAILURE_CLASSIFICATION",
+        "NONZERO_EXIT"
+      ],
+      "durationMs": 1409537,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "e2549f054f1d2f8086829c09ca35d3f85047eded804aa0d21ede487160cebde2",
+      "evidenceSource": "entries/tooling.pester-build-toolchain/evidence/d588d17ff208d8b63a38cc75626e65c222bd7f770f36c25f46b78663e58b2496.json",
+      "evidenceSha256": "97b17a245494c617eafe397f72904710067f824ebc46e65d07a912294bc5e646",
+      "terminalSource": "entries/tooling.pester-build-toolchain/terminal-results/e2549f054f1d2f8086829c09ca35d3f85047eded804aa0d21ede487160cebde2.json",
+      "terminalSha256": "212607cc191dcfba55134e4ae927ce56b071f089d9c7e51566787c2d2bdb52f1"
+    },
+    {
+      "entryId": "tooling.vcpkg-merge-synthetic",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 7066,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89",
+      "evidenceSource": "entries/tooling.vcpkg-merge-synthetic/evidence/2bc337bf25857be541a8d81a187a189c64647c86bfe2910abe4f0a251ef29448.json",
+      "evidenceSha256": "ade3ef32f19f475e20040c853947afae720a281abb13d640fcf75deaa608f42c",
+      "terminalSource": "entries/tooling.vcpkg-merge-synthetic/terminal-results/27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89.json",
+      "terminalSha256": "de2dbab562909a330fe99a978afac1d81a3f6b8bcfacd88edfa2d348dd7d46e3"
+    },
+    {
+      "entryId": "viewer-pe.noninteractive",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 232688,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "fc192dc0585e256a0fc3fbf2a35d5e9131ffa4299502e0b2bb8ec14fce9b3467",
+      "evidenceSource": "entries/viewer-pe.noninteractive/evidence/2975ec2ccc0fc4192d7355c60b44c2ac8c9fe36809f9c15835c9dea3304694cd.json",
+      "evidenceSha256": "545d2c52d3ed3a3ba5e08680bd45963393b1fd3424ad15015ee1046a1feb519c",
+      "terminalSource": "entries/viewer-pe.noninteractive/terminal-results/fc192dc0585e256a0fc3fbf2a35d5e9131ffa4299502e0b2bb8ec14fce9b3467.json",
+      "terminalSha256": "25ed9bdea64f5213712fe2b834a9f96b165881a420efd3272d5654eea2bd20ad"
+    },
+    {
+      "entryId": "viewer-sqlite.noninteractive",
+      "entryEvidenceStatus": "provisional-passed",
+      "entryOutcome": "PASSED",
+      "counts": {
+        "failed": 0,
+        "passed": 1,
+        "skipped": 0,
+        "total": 1
+      },
+      "reasonCodes": [],
+      "durationMs": 13790,
+      "buildReceiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+      "terminalResultDigest": "ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856",
+      "evidenceSource": "entries/viewer-sqlite.noninteractive/evidence/db8e701b79ae2e98fdc95709f956b38e320673df0f3192f9293afc321bcdd2bf.json",
+      "evidenceSha256": "b7c526795670bb3aca8a1fc4c91b255a6e63c0c330987ed9005331c36ed0fa96",
+      "terminalSource": "entries/viewer-sqlite.noninteractive/terminal-results/ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856.json",
+      "terminalSha256": "6037dbdb15e6a6fe9febdbd5dcb8dd0114696eb51ae97a93c98826d579093b3f"
+    }
+  ],
+  "projectionPolicy": "Exactly one row for each of all 15 selected entries, joining original entry evidence with its canonical terminal result. No failed entry omitted; promotions are not independent outcomes. All originals remain in the marked sandbox.",
+  "broaderInteractiveFamiliesPending": [
+    "Commands",
+    "FileOperations",
+    "ViewerPETests.Interactive",
+    "ViewerSqliteTests.Interactive",
+    "RedSalamanderMonitorEtwLatency"
+  ],
+  "runnerExitCode": 1,
+  "finalizationError": "Run archive retained an unsafe or mount-like reparse point at compare/work/local_search_junction_alias_hydration/z-alias. No containment guard was bypassed and no link was followed or removed."
+}

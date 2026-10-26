@@ -1,0 +1,807 @@
+{
+  "schema": "red-salamander.i35-s6.perf-compaction.v1",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the I35 S6 claim rows are kept in their original order; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.SelfTest.Throughput.",
+      "FileOps.Progress.Cadence.",
+      "FileOps.Popup.Rate.MaxCallbackSilenceMs"
+    ]
+  },
+  "source": {
+    "bytes": 16079416,
+    "rows": 45967,
+    "sha256": "cdedae0177ea81638614ef16997aaafd2ef43ebfbdad2d5213380faf18859e07"
+  },
+  "kept": {
+    "bytes": 270084,
+    "rows": 603,
+    "sha256": "01f13b94f6ca361ce025836037370b2012795b353bbb97e4e5cb8724dc6ab9af"
+  },
+  "localPhaseTotalsPerRun": [
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "1087",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 43581,
+          "maxUs": 8369
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 814118,
+          "maxUs": 231027
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 29988,
+          "maxUs": 8009
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "784",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 44395,
+          "maxUs": 1928
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 9155,
+          "maxUs": 737
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 604829,
+          "maxUs": 225074
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 21388,
+          "maxUs": 4362
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "823",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 35778,
+          "maxUs": 1267
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 8012,
+          "maxUs": 539
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 624512,
+          "maxUs": 257031
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 23091,
+          "maxUs": 2710
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "842",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 44225,
+          "maxUs": 4129
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 674886,
+          "maxUs": 241905
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 14582,
+          "maxUs": 472
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "791",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 39085,
+          "maxUs": 1115
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 681691,
+          "maxUs": 219086
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 49257,
+          "maxUs": 10919
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "789",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 47464,
+          "maxUs": 3767
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 7949,
+          "maxUs": 323
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 596178,
+          "maxUs": 202768
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 21558,
+          "maxUs": 3476
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "1826",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 355716,
+          "maxUs": 101332
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 5715,
+          "maxUs": 230
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 5139864,
+          "maxUs": 1288144
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 246672,
+          "maxUs": 86683
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "831",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 45866,
+          "maxUs": 3551
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 666365,
+          "maxUs": 223808
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 20405,
+          "maxUs": 3039
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "824",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 38488,
+          "maxUs": 1150
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 695918,
+          "maxUs": 237556
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 20564,
+          "maxUs": 524
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "833",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 38840,
+          "maxUs": 1116
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 19385,
+          "maxUs": 1589
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 672210,
+          "maxUs": 261671
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 15938,
+          "maxUs": 444
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "836",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 43688,
+          "maxUs": 1097
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 22854,
+          "maxUs": 9423
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 621951,
+          "maxUs": 246257
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 23258,
+          "maxUs": 1245
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "850",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 49568,
+          "maxUs": 8160
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 763175,
+          "maxUs": 264297
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 20673,
+          "maxUs": 3866
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "2403",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 39767,
+          "maxUs": 1276
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 5241926,
+          "maxUs": 1800800
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 64769,
+          "maxUs": 25391
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "793",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 38950,
+          "maxUs": 3067
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 16179,
+          "maxUs": 1249
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 648363,
+          "maxUs": 257121
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 17642,
+          "maxUs": 1188
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "2122",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 39515,
+          "maxUs": 2426
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 23633,
+          "maxUs": 1660
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 1975104,
+          "maxUs": 1583229
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 30133,
+          "maxUs": 4135
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "857",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 36427,
+          "maxUs": 868
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 746664,
+          "maxUs": 263198
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 26727,
+          "maxUs": 7204
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "814",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 47373,
+          "maxUs": 8287
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 760844,
+          "maxUs": 250657
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 22551,
+          "maxUs": 1459
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "6346",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 48856,
+          "maxUs": 7567
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 11970,
+          "maxUs": 464
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 12163602,
+          "maxUs": 5838676
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 40834,
+          "maxUs": 21061
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "781",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 36492,
+          "maxUs": 945
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 11790,
+          "maxUs": 648
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 600019,
+          "maxUs": 217382
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 23686,
+          "maxUs": 2202
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "782",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 40408,
+          "maxUs": 4699
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 700408,
+          "maxUs": 244672
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 15777,
+          "maxUs": 381
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "767",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 43612,
+          "maxUs": 3447
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 656002,
+          "maxUs": 212157
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 37296,
+          "maxUs": 9432
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "775",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 45035,
+          "maxUs": 3319
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 16968,
+          "maxUs": 1031
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 653762,
+          "maxUs": 215298
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 24310,
+          "maxUs": 4741
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "805",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 48594,
+          "maxUs": 1494
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 14988,
+          "maxUs": 1437
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 646909,
+          "maxUs": 243552
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 26368,
+          "maxUs": 892
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "3380",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 53529,
+          "maxUs": 1836
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 3278830,
+          "maxUs": 2779627
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 21294,
+          "maxUs": 784
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "777",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 42406,
+          "maxUs": 3266
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 653489,
+          "maxUs": 237265
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 28452,
+          "maxUs": 2917
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "8942",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 43388,
+          "maxUs": 3539
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 43219,
+          "maxUs": 25097
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 18646994,
+          "maxUs": 8446563
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 90921,
+          "maxUs": 26840
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "3863",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 33315,
+          "maxUs": 1358
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 10554,
+          "maxUs": 4553
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 11621674,
+          "maxUs": 3361231
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 57957,
+          "maxUs": 9777
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "781",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 47557,
+          "maxUs": 5049
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 649494,
+          "maxUs": 202791
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 25390,
+          "maxUs": 4683
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "base",
+      "wallMs": "769",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 47065,
+          "maxUs": 9181
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 626258,
+          "maxUs": 217925
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 28087,
+          "maxUs": 5948
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "ebd",
+      "wallMs": "1939",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 42664,
+          "maxUs": 3417
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 6944,
+          "maxUs": 302
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 1754324,
+          "maxUs": 1360918
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 16420,
+          "maxUs": 455
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "b",
+      "wallMs": "791",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 37427,
+          "maxUs": 1284
+        },
+        "FilePreallocateUs": {
+          "count": 65,
+          "sumUs": 7156,
+          "maxUs": 510
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 592290,
+          "maxUs": 217408
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 20897,
+          "maxUs": 603
+        }
+      }
+    },
+    {
+      "target": "local",
+      "variant": "d",
+      "wallMs": "798",
+      "phases": {
+        "FileOpenUs": {
+          "count": 65,
+          "sumUs": 37657,
+          "maxUs": 1126
+        },
+        "FileCommitUs": {
+          "count": 65,
+          "sumUs": 657673,
+          "maxUs": 233229
+        },
+        "FileFinalizeMetadataUs": {
+          "count": 65,
+          "sumUs": 16273,
+          "maxUs": 501
+        }
+      }
+    }
+  ]
+}

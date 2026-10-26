@@ -1,0 +1,34 @@
+[PASS] Analysis fixture executable path resolves
+[PASS] Analysis fixture loads ViewerSpace
+[PASS] Embedded UTF-8 queued caption decodes its Unicode ellipsis correctly
+[PASS] Analysis fixture factory resolves
+[PASS] Analysis fixture creates viewer
+[PASS] Analysis fixture configuration accepted
+[PASS] Analysis fixture opens
+[PASS] Analysis fixture publishes exact complete rows and geometry
+[PASS] Breadcrumb folder menu includes sorted sibling directories and excludes 2000 files
+[PASS] Breadcrumb folder-menu target navigates into the first folder
+[PASS] Ancestor breadcrumb can navigate directly from one child to its sibling
+[PASS] Sibling navigation changes the displayed root without a new scan
+[PASS] Breadcrumb rejects a folder menu from a stale display generation
+[PASS] Parent navigation restores the complete root analysis before UIA checks
+[INFO] ViewerSpace analysis test outer client: 984x661 px (984x661 DIP at 96 DPI), rows=2002, bounds=984x330 px.
+[INFO] ViewerSpace analysis host: available=true hwnd=true visible=true size=984x330 px root=true D2D=true render=3 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[INFO] ViewerSpace navigation host: available=true hwnd=true visible=true size=984x36 px root=true D2D=true render=2 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=10 foregroundChanges=10 inputChanges=10 ownedTransitions=0 barrierUs=127 failure=0
+[PASS] Analysis UIA contract
+[PASS] Analysis fixture actually detaches its host before retained provider access
+[PASS] Analysis detached provider contract
+ViewerPETests passed.
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges harness path resolves
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness process launches
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness process resumes
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness process exits before timeout
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness process reports an exit code
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges fresh harness run passes
+[PASS] TestViewerSpaceAnalysisAllowsAmbientDesktopChanges owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

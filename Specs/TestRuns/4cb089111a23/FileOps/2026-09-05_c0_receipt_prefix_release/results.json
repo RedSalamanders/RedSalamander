@@ -1,0 +1,63 @@
+{
+    "run_started_utc": "2026-09-05T08:38:00.521Z",
+    "duration_ms": 3048,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-enabled-release-20260905\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2453,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1421,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "passed",
+                    "duration_ms": 266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 203,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "passed",
+                    "duration_ms": 141,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+}

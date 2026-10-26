@@ -1,0 +1,152 @@
+{
+  "kind": "Actual application test-harness captures",
+  "runId": "20260921T164423Z-84648-756f6c5e580740c3ac86da78c372adfe",
+  "sourceIdentity": "Base commit plus runner-bound dirty snapshot in accompanying aggregate",
+  "note": "Before/after suffixes represent scrolling or keyboard movement within the same candidate build, not before/after implementation.",
+  "captures": [
+    {
+      "file": "bounded-body__480dip__fr-FR__144dpi__after.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\bounded-body__480dip__fr-FR__144dpi__after.png",
+      "sha256": "3698f5fe33c6fb335306e1f25733ef4e7a0ba7babec9bb70a75630307f2d3ee3",
+      "width": 724,
+      "height": 771,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "bounded-body__480dip__fr-FR__144dpi__before.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\bounded-body__480dip__fr-FR__144dpi__before.png",
+      "sha256": "1889748dfad717b6108a7e672c55621029f792070f96077ccbf1d48ac110ba82",
+      "width": 724,
+      "height": 771,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "bounded-body__480dip__fr-FR__144dpi__keyboard-before.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\bounded-body__480dip__fr-FR__144dpi__keyboard-before.png",
+      "sha256": "1d85b751c4919723c70ae20e1db6d06238fc86a061a450db43a9febf3da58d81",
+      "width": 724,
+      "height": 771,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "bounded-body__480dip__fr-FR__144dpi__keyboard.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\bounded-body__480dip__fr-FR__144dpi__keyboard.png",
+      "sha256": "30200a75f256b17523d0e988cf3c0498d0cd6b38db74824d66b6f0c7b764b61a",
+      "width": 724,
+      "height": 771,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "common-name__480dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\common-name__480dip__fr-FR__144dpi.png",
+      "sha256": "a853df1e771745b8cb665a116d5d59d6e637a744263405252a25b70bbb9a2565",
+      "width": 724,
+      "height": 835,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "common-name__640dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\common-name__640dip__fr-FR__144dpi.png",
+      "sha256": "63facb2d0a52136afc1233459bf85c7996a006861aedced0b5a81fd8c1e51fe0",
+      "width": 942,
+      "height": 835,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "common-name__760dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\common-name__760dip__fr-FR__144dpi.png",
+      "sha256": "3d1aebf47b063361bd5ba40adaf30b5c480c61ba571796767ff27d8dbaf7d656",
+      "width": 1122,
+      "height": 1251,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "conflict-comparison__480dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\conflict-comparison__480dip__fr-FR__144dpi.png",
+      "sha256": "06ffdb1de7b98a394891410ea6f2b0ac9f806c139bddd3bb1c025852936681ab",
+      "width": 724,
+      "height": 868,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "conflict-comparison__640dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\conflict-comparison__640dip__fr-FR__144dpi.png",
+      "sha256": "bd65ef8779e4fc9cdae23540c729f42f2b27d53c9fb49afede7b72b549c21191",
+      "width": 942,
+      "height": 868,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "conflict-comparison__760dip__fr-FR__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\conflict-comparison__760dip__fr-FR__144dpi.png",
+      "sha256": "86622b30754b8426d8d7a06855bb24a0dda037a22f70eb6402cb107cc75845d6",
+      "width": 1122,
+      "height": 1251,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "qualified-slash-provider.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\qualified-slash-provider.png",
+      "sha256": "1ba532c32e326afed18b4eee8a930457cffaa2a2487a793a28afabaeda81c534",
+      "width": 1122,
+      "height": 784,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    },
+    {
+      "file": "unqualified-exact-path.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-visible-order-french-captures-20260921\\captures\\unqualified-exact-path.png",
+      "sha256": "179875ba0baa6eb868b930b2a2f0f882ec3e71175941f03047d3115f899d2664",
+      "width": 1122,
+      "height": 751,
+      "culture": "fr-FR",
+      "dpi": 144,
+      "buildReceipt": "adde4b7fef9085c460c8ab3762b3a60886cfaa92d20fd8dc10d58d6a627dda41",
+      "scenario": "cmd_pane_fileops_conflict_comparison_rows",
+      "sourceBase": "843eef39"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: E:\RedSalamander.Perf\runs\20261026T183717Z-100860-d39337cb993049069cd32658980bf635\scratch\viewer-pe\webview2-99716-304009062
+[PASS] TestViewerSpaceLifecycleCaptures harness path resolves
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process launches
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process resumes
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process exits before timeout
+[PASS] TestViewerSpaceLifecycleCaptures fresh harness process reports an exit code
+[FAIL] TestViewerSpaceLifecycleCaptures fresh harness run passes
+[PASS] TestViewerSpaceLifecycleCaptures owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests failed.

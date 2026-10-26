@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-12T04:15:10.112Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T041258Z-68732-d3d14e16f7494006a7cc270626085e93\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 2453,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1719,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase7_CopyRecursiveParallelismMatrix",
+            "status": "passed",
+            "duration_ms": 593,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 141,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

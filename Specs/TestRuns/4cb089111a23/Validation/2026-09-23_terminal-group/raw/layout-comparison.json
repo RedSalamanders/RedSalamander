@@ -1,0 +1,3555 @@
+{
+  "baseline": {
+    "checks": {
+      "CompletedGroupLabelFit": {
+        "count": 28,
+        "failures": 28
+      },
+      "TerminalSummaryFit": {
+        "count": 56,
+        "failures": 56
+      },
+      "TerminalSummaryChange": {
+        "count": 12,
+        "failures": 12
+      },
+      "SpeedLimitLabelFit": {
+        "count": 140,
+        "failures": 0
+      }
+    },
+    "samples": {
+      "31-completed-group-expanded__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 6683.75,
+          "privateBytes": 295354368,
+          "workingSetBytes": 216162304,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 7910.25,
+          "privateBytes": 295399424,
+          "workingSetBytes": 216207360,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8320.75,
+          "privateBytes": 295411712,
+          "workingSetBytes": 216219648,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7681.625,
+          "privateBytes": 295342080,
+          "workingSetBytes": 216158208,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 11018.125,
+          "privateBytes": 295358464,
+          "workingSetBytes": 216178688,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 9339.125,
+          "privateBytes": 291094528,
+          "workingSetBytes": 212164608,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8108.625,
+          "privateBytes": 291311616,
+          "workingSetBytes": 212381696,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 9662.625,
+          "privateBytes": 291487744,
+          "workingSetBytes": 212557824,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 6264.75,
+          "privateBytes": 291528704,
+          "workingSetBytes": 212598784,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8056.25,
+          "privateBytes": 291803136,
+          "workingSetBytes": 212873216,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "32-completed-group-collapsed__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 7752.875,
+          "privateBytes": 296570880,
+          "workingSetBytes": 216629248,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 7930.625,
+          "privateBytes": 296554496,
+          "workingSetBytes": 216612864,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8060.875,
+          "privateBytes": 296562688,
+          "workingSetBytes": 216621056,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7992.625,
+          "privateBytes": 296562688,
+          "workingSetBytes": 216621056,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8115.0,
+          "privateBytes": 289447936,
+          "workingSetBytes": 211378176,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "32-completed-group-collapsed__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8391.625,
+          "privateBytes": 294969344,
+          "workingSetBytes": 215650304,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 7930.75,
+          "privateBytes": 295026688,
+          "workingSetBytes": 215707648,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8036.625,
+          "privateBytes": 295030784,
+          "workingSetBytes": 215715840,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8060.875,
+          "privateBytes": 295055360,
+          "workingSetBytes": 215740416,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8107.625,
+          "privateBytes": 295059456,
+          "workingSetBytes": 215744512,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 6976.75,
+          "privateBytes": 299151360,
+          "workingSetBytes": 218673152,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8033.625,
+          "privateBytes": 299204608,
+          "workingSetBytes": 218730496,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8110.25,
+          "privateBytes": 299225088,
+          "workingSetBytes": 218750976,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8131.0,
+          "privateBytes": 299388928,
+          "workingSetBytes": 218914816,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 7963.625,
+          "privateBytes": 299421696,
+          "workingSetBytes": 218947584,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "69-all-items-skipped__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8340.75,
+          "privateBytes": 301223936,
+          "workingSetBytes": 220946432,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 7959.25,
+          "privateBytes": 301248512,
+          "workingSetBytes": 220971008,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8088.25,
+          "privateBytes": 301248512,
+          "workingSetBytes": 220971008,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8054.625,
+          "privateBytes": 290508800,
+          "workingSetBytes": 212275200,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8043.625,
+          "privateBytes": 290885632,
+          "workingSetBytes": 212652032,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__light__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8346.875,
+          "privateBytes": 329793536,
+          "workingSetBytes": 243032064,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8082.125,
+          "privateBytes": 329871360,
+          "workingSetBytes": 243118080,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8004.25,
+          "privateBytes": 329883648,
+          "workingSetBytes": 243130368,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8036.75,
+          "privateBytes": 319148032,
+          "workingSetBytes": 234733568,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8062.625,
+          "privateBytes": 319660032,
+          "workingSetBytes": 235245568,
+          "gdi": 65,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__light__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8074.5,
+          "privateBytes": 328892416,
+          "workingSetBytes": 240336896,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8074.5,
+          "privateBytes": 328957952,
+          "workingSetBytes": 240533504,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8026.375,
+          "privateBytes": 328986624,
+          "workingSetBytes": 240627712,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8072.125,
+          "privateBytes": 328986624,
+          "workingSetBytes": 240627712,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8027.25,
+          "privateBytes": 328986624,
+          "workingSetBytes": 240627712,
+          "gdi": 65,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__rainbow__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8279.25,
+          "privateBytes": 331915264,
+          "workingSetBytes": 243392512,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8057.0,
+          "privateBytes": 322592768,
+          "workingSetBytes": 236486656,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8079.25,
+          "privateBytes": 323014656,
+          "workingSetBytes": 236908544,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8028.5,
+          "privateBytes": 323059712,
+          "workingSetBytes": 236953600,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8044.5,
+          "privateBytes": 323063808,
+          "workingSetBytes": 236957696,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__rainbow__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8135.625,
+          "privateBytes": 330055680,
+          "workingSetBytes": 241168384,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8039.0,
+          "privateBytes": 330096640,
+          "workingSetBytes": 241209344,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8027.375,
+          "privateBytes": 330100736,
+          "workingSetBytes": 241475584,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8073.625,
+          "privateBytes": 330104832,
+          "workingSetBytes": 241479680,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8062.875,
+          "privateBytes": 330104832,
+          "workingSetBytes": 241479680,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8306.25,
+          "privateBytes": 324407296,
+          "workingSetBytes": 238403584,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8088.5,
+          "privateBytes": 324612096,
+          "workingSetBytes": 238637056,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8217.25,
+          "privateBytes": 324657152,
+          "workingSetBytes": 238682112,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7844.875,
+          "privateBytes": 324964352,
+          "workingSetBytes": 238989312,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8081.25,
+          "privateBytes": 324825088,
+          "workingSetBytes": 238989312,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 7706.375,
+          "privateBytes": 328900608,
+          "workingSetBytes": 242384896,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8093.875,
+          "privateBytes": 328929280,
+          "workingSetBytes": 242413568,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8108.625,
+          "privateBytes": 328933376,
+          "workingSetBytes": 242417664,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 7980.5,
+          "privateBytes": 328937472,
+          "workingSetBytes": 242421760,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8064.5,
+          "privateBytes": 328941568,
+          "workingSetBytes": 242425856,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 7092.375,
+          "privateBytes": 322441216,
+          "workingSetBytes": 239730688,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8074.75,
+          "privateBytes": 322449408,
+          "workingSetBytes": 239738880,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8874.625,
+          "privateBytes": 322449408,
+          "workingSetBytes": 239869952,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7111.5,
+          "privateBytes": 322482176,
+          "workingSetBytes": 239902720,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8055.25,
+          "privateBytes": 322486272,
+          "workingSetBytes": 239906816,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8323.75,
+          "privateBytes": 324747264,
+          "workingSetBytes": 241471488,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8035.5,
+          "privateBytes": 316944384,
+          "workingSetBytes": 235085824,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8503.25,
+          "privateBytes": 317366272,
+          "workingSetBytes": 235507712,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 7470.375,
+          "privateBytes": 317407232,
+          "workingSetBytes": 235548672,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8028.75,
+          "privateBytes": 317448192,
+          "workingSetBytes": 235589632,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "32-completed-group-collapsed__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8333.875,
+          "privateBytes": 324587520,
+          "workingSetBytes": 239857664,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 7996.125,
+          "privateBytes": 324612096,
+          "workingSetBytes": 239882240,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8069.125,
+          "privateBytes": 324653056,
+          "workingSetBytes": 239923200,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7985.25,
+          "privateBytes": 324669440,
+          "workingSetBytes": 239939584,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8146.375,
+          "privateBytes": 324669440,
+          "workingSetBytes": 239939584,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "32-completed-group-collapsed__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8338.875,
+          "privateBytes": 318341120,
+          "workingSetBytes": 235118592,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8003.5,
+          "privateBytes": 318558208,
+          "workingSetBytes": 235335680,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8066.375,
+          "privateBytes": 318574592,
+          "workingSetBytes": 235360256,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8069.375,
+          "privateBytes": 318578688,
+          "workingSetBytes": 235364352,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8029.0,
+          "privateBytes": 318590976,
+          "workingSetBytes": 235376640,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8274.625,
+          "privateBytes": 322945024,
+          "workingSetBytes": 237506560,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8039.25,
+          "privateBytes": 323096576,
+          "workingSetBytes": 237658112,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8065.875,
+          "privateBytes": 323522560,
+          "workingSetBytes": 238026752,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8026.875,
+          "privateBytes": 323571712,
+          "workingSetBytes": 238075904,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8453.125,
+          "privateBytes": 323596288,
+          "workingSetBytes": 238100480,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "69-all-items-skipped__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8313.75,
+          "privateBytes": 327266304,
+          "workingSetBytes": 241291264,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8463.5,
+          "privateBytes": 327294976,
+          "workingSetBytes": 241319936,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 7628.5,
+          "privateBytes": 327294976,
+          "workingSetBytes": 241319936,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8056.0,
+          "privateBytes": 327294976,
+          "workingSetBytes": 241319936,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8058.5,
+          "privateBytes": 315314176,
+          "workingSetBytes": 234065920,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__light__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8328.375,
+          "privateBytes": 332189696,
+          "workingSetBytes": 250437632,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8899.125,
+          "privateBytes": 332189696,
+          "workingSetBytes": 250437632,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7230.5,
+          "privateBytes": 332259328,
+          "workingSetBytes": 250507264,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8059.25,
+          "privateBytes": 332288000,
+          "workingSetBytes": 250667008,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8107.0,
+          "privateBytes": 332419072,
+          "workingSetBytes": 250798080,
+          "gdi": 67,
+          "user": 91
+        }
+      ],
+      "31-completed-group-expanded__light__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8102.75,
+          "privateBytes": 319868928,
+          "workingSetBytes": 243273728,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8088.5,
+          "privateBytes": 320438272,
+          "workingSetBytes": 243646464,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8013.875,
+          "privateBytes": 320479232,
+          "workingSetBytes": 243687424,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8033.75,
+          "privateBytes": 320495616,
+          "workingSetBytes": 243703808,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8396.5,
+          "privateBytes": 320655360,
+          "workingSetBytes": 243863552,
+          "gdi": 67,
+          "user": 91
+        }
+      ],
+      "31-completed-group-expanded__rainbow__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8357.625,
+          "privateBytes": 333729792,
+          "workingSetBytes": 250785792,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8053.625,
+          "privateBytes": 333737984,
+          "workingSetBytes": 250793984,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8054.625,
+          "privateBytes": 333770752,
+          "workingSetBytes": 250826752,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8040.5,
+          "privateBytes": 333774848,
+          "workingSetBytes": 251092992,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8046.875,
+          "privateBytes": 333774848,
+          "workingSetBytes": 251092992,
+          "gdi": 67,
+          "user": 91
+        }
+      ],
+      "31-completed-group-expanded__rainbow__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8347.0,
+          "privateBytes": 329134080,
+          "workingSetBytes": 248631296,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8006.75,
+          "privateBytes": 329273344,
+          "workingSetBytes": 248811520,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8086.375,
+          "privateBytes": 329277440,
+          "workingSetBytes": 248946688,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 10699.125,
+          "privateBytes": 329285632,
+          "workingSetBytes": 248954880,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 6456.0,
+          "privateBytes": 329289728,
+          "workingSetBytes": 248958976,
+          "gdi": 67,
+          "user": 91
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8258.5,
+          "privateBytes": 330416128,
+          "workingSetBytes": 251023360,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8069.5,
+          "privateBytes": 330416128,
+          "workingSetBytes": 251023360,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8070.25,
+          "privateBytes": 330473472,
+          "workingSetBytes": 251080704,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7682.75,
+          "privateBytes": 321015808,
+          "workingSetBytes": 244408320,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8060.625,
+          "privateBytes": 321130496,
+          "workingSetBytes": 244523008,
+          "gdi": 67,
+          "user": 91
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8341.375,
+          "privateBytes": 329723904,
+          "workingSetBytes": 249413632,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8925.125,
+          "privateBytes": 329793536,
+          "workingSetBytes": 249483264,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 7160.0,
+          "privateBytes": 329789440,
+          "workingSetBytes": 249741312,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8063.125,
+          "privateBytes": 329789440,
+          "workingSetBytes": 249741312,
+          "gdi": 67,
+          "user": 91
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8080.625,
+          "privateBytes": 329932800,
+          "workingSetBytes": 249884672,
+          "gdi": 67,
+          "user": 91
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "checks": {
+      "CompletedGroupLabelFit": {
+        "count": 28,
+        "failures": 0
+      },
+      "TerminalSummaryFit": {
+        "count": 56,
+        "failures": 0
+      },
+      "TerminalSummaryChange": {
+        "count": 12,
+        "failures": 0
+      },
+      "SpeedLimitLabelFit": {
+        "count": 140,
+        "failures": 0
+      }
+    },
+    "samples": {
+      "31-completed-group-expanded__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 5866.25,
+          "privateBytes": 304132096,
+          "workingSetBytes": 224403456,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8459.0,
+          "privateBytes": 304156672,
+          "workingSetBytes": 224428032,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7633.875,
+          "privateBytes": 304254976,
+          "workingSetBytes": 224526336,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8962.0,
+          "privateBytes": 304254976,
+          "workingSetBytes": 224526336,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 7220.5,
+          "privateBytes": 304320512,
+          "workingSetBytes": 224591872,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 7998.375,
+          "privateBytes": 298475520,
+          "workingSetBytes": 219643904,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8062.25,
+          "privateBytes": 299081728,
+          "workingSetBytes": 220250112,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 7982.375,
+          "privateBytes": 299175936,
+          "workingSetBytes": 220344320,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8113.75,
+          "privateBytes": 299212800,
+          "workingSetBytes": 220381184,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8130.75,
+          "privateBytes": 299253760,
+          "workingSetBytes": 220422144,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "32-completed-group-collapsed__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8333.375,
+          "privateBytes": 304312320,
+          "workingSetBytes": 224243712,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8631.625,
+          "privateBytes": 304332800,
+          "workingSetBytes": 224329728,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7431.0,
+          "privateBytes": 304340992,
+          "workingSetBytes": 224337920,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8092.375,
+          "privateBytes": 304357376,
+          "workingSetBytes": 224415744,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8065.75,
+          "privateBytes": 295284736,
+          "workingSetBytes": 218193920,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "32-completed-group-collapsed__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 12201.5,
+          "privateBytes": 303161344,
+          "workingSetBytes": 222973952,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 6908.875,
+          "privateBytes": 303300608,
+          "workingSetBytes": 223117312,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8583.0,
+          "privateBytes": 303407104,
+          "workingSetBytes": 223223808,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 11391.125,
+          "privateBytes": 303476736,
+          "workingSetBytes": 223293440,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 7959.75,
+          "privateBytes": 303415296,
+          "workingSetBytes": 223232000,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8335.5,
+          "privateBytes": 301084672,
+          "workingSetBytes": 222453760,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8570.125,
+          "privateBytes": 301604864,
+          "workingSetBytes": 222978048,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7557.875,
+          "privateBytes": 301936640,
+          "workingSetBytes": 223309824,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 9344.375,
+          "privateBytes": 302284800,
+          "workingSetBytes": 223571968,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 6721.875,
+          "privateBytes": 302309376,
+          "workingSetBytes": 223596544,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "69-all-items-skipped__dark__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 7859.0,
+          "privateBytes": 307314688,
+          "workingSetBytes": 227004416,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8057.75,
+          "privateBytes": 307343360,
+          "workingSetBytes": 227033088,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8086.75,
+          "privateBytes": 307343360,
+          "workingSetBytes": 227037184,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8067.25,
+          "privateBytes": 307343360,
+          "workingSetBytes": 227037184,
+          "gdi": 61,
+          "user": 81
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8189.0,
+          "privateBytes": 307343360,
+          "workingSetBytes": 227037184,
+          "gdi": 61,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__light__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8335.125,
+          "privateBytes": 328650752,
+          "workingSetBytes": 244060160,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8071.125,
+          "privateBytes": 328691712,
+          "workingSetBytes": 244101120,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8014.0,
+          "privateBytes": 328704000,
+          "workingSetBytes": 244113408,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8158.375,
+          "privateBytes": 328851456,
+          "workingSetBytes": 244260864,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 7954.25,
+          "privateBytes": 328847360,
+          "workingSetBytes": 244256768,
+          "gdi": 65,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__light__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 9424.0,
+          "privateBytes": 330047488,
+          "workingSetBytes": 245432320,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 6939.25,
+          "privateBytes": 330051584,
+          "workingSetBytes": 245436416,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8075.125,
+          "privateBytes": 330104832,
+          "workingSetBytes": 245514240,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8121.0,
+          "privateBytes": 330108928,
+          "workingSetBytes": 245518336,
+          "gdi": 65,
+          "user": 81
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8000.875,
+          "privateBytes": 316514304,
+          "workingSetBytes": 235810816,
+          "gdi": 65,
+          "user": 81
+        }
+      ],
+      "31-completed-group-expanded__rainbow__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8353.25,
+          "privateBytes": 330354688,
+          "workingSetBytes": 243339264,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8047.625,
+          "privateBytes": 330407936,
+          "workingSetBytes": 243392512,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8051.625,
+          "privateBytes": 330592256,
+          "workingSetBytes": 243576832,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8108.375,
+          "privateBytes": 330596352,
+          "workingSetBytes": 243580928,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8037.0,
+          "privateBytes": 330596352,
+          "workingSetBytes": 243580928,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__rainbow__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8033.5,
+          "privateBytes": 331366400,
+          "workingSetBytes": 244199424,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8085.75,
+          "privateBytes": 315453440,
+          "workingSetBytes": 235040768,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8110.125,
+          "privateBytes": 315637760,
+          "workingSetBytes": 235225088,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8062.25,
+          "privateBytes": 316100608,
+          "workingSetBytes": 235687936,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8257.375,
+          "privateBytes": 316137472,
+          "workingSetBytes": 235724800,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__480dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8388.375,
+          "privateBytes": 330686464,
+          "workingSetBytes": 243400704,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8845.625,
+          "privateBytes": 330219520,
+          "workingSetBytes": 243306496,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7145.75,
+          "privateBytes": 330285056,
+          "workingSetBytes": 243372032,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8613.0,
+          "privateBytes": 318742528,
+          "workingSetBytes": 236388352,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 7552.875,
+          "privateBytes": 318693376,
+          "workingSetBytes": 236339200,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__760dip__fr-FR__display1__144dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8121.625,
+          "privateBytes": 329302016,
+          "workingSetBytes": 241664000,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8079.25,
+          "privateBytes": 329375744,
+          "workingSetBytes": 241750016,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8071.0,
+          "privateBytes": 329408512,
+          "workingSetBytes": 241782784,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8045.0,
+          "privateBytes": 329437184,
+          "workingSetBytes": 241811456,
+          "gdi": 65,
+          "user": 83
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 144,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8165.75,
+          "privateBytes": 329445376,
+          "workingSetBytes": 241950720,
+          "gdi": 65,
+          "user": 83
+        }
+      ],
+      "31-completed-group-expanded__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 11645.75,
+          "privateBytes": 320471040,
+          "workingSetBytes": 235741184,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 6722.375,
+          "privateBytes": 320512000,
+          "workingSetBytes": 235782144,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7126.125,
+          "privateBytes": 320532480,
+          "workingSetBytes": 235802624,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8048.75,
+          "privateBytes": 320577536,
+          "workingSetBytes": 235847680,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8056.25,
+          "privateBytes": 320581632,
+          "workingSetBytes": 235851776,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8354.5,
+          "privateBytes": 309977088,
+          "workingSetBytes": 230109184,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 23384.0,
+          "privateBytes": 310157312,
+          "workingSetBytes": 230359040,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 7284.125,
+          "privateBytes": 310177792,
+          "workingSetBytes": 230420480,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 7949.375,
+          "privateBytes": 310218752,
+          "workingSetBytes": 230461440,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 7712.75,
+          "privateBytes": 310235136,
+          "workingSetBytes": 230477824,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "32-completed-group-collapsed__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8275.75,
+          "privateBytes": 320241664,
+          "workingSetBytes": 235429888,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8910.875,
+          "privateBytes": 320270336,
+          "workingSetBytes": 235458560,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 7199.75,
+          "privateBytes": 320274432,
+          "workingSetBytes": 235462656,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8050.0,
+          "privateBytes": 312426496,
+          "workingSetBytes": 229916672,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8037.375,
+          "privateBytes": 312582144,
+          "workingSetBytes": 230072320,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "32-completed-group-collapsed__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 7174.75,
+          "privateBytes": 320069632,
+          "workingSetBytes": 234762240,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 7987.875,
+          "privateBytes": 320090112,
+          "workingSetBytes": 234782720,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8083.0,
+          "privateBytes": 320118784,
+          "workingSetBytes": 234811392,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8087.375,
+          "privateBytes": 320131072,
+          "workingSetBytes": 234823680,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "32-completed-group-collapsed",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 7946.125,
+          "privateBytes": 320131072,
+          "workingSetBytes": 234823680,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 7298.875,
+          "privateBytes": 321167360,
+          "workingSetBytes": 231362560,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8051.125,
+          "privateBytes": 321671168,
+          "workingSetBytes": 231800832,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8073.75,
+          "privateBytes": 322048000,
+          "workingSetBytes": 232075264,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8082.5,
+          "privateBytes": 322383872,
+          "workingSetBytes": 232411136,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8455.5,
+          "privateBytes": 322473984,
+          "workingSetBytes": 232501248,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "69-all-items-skipped__dark__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 7567.125,
+          "privateBytes": 327487488,
+          "workingSetBytes": 235991040,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8207.0,
+          "privateBytes": 327536640,
+          "workingSetBytes": 236040192,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8598.5,
+          "privateBytes": 327618560,
+          "workingSetBytes": 236122112,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 7369.5,
+          "privateBytes": 314032128,
+          "workingSetBytes": 228827136,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "69-all-items-skipped",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8095.125,
+          "privateBytes": 314392576,
+          "workingSetBytes": 229187584,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__light__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8337.75,
+          "privateBytes": 331845632,
+          "workingSetBytes": 245321728,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8058.875,
+          "privateBytes": 331886592,
+          "workingSetBytes": 245362688,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8070.875,
+          "privateBytes": 331960320,
+          "workingSetBytes": 245436416,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8046.5,
+          "privateBytes": 331993088,
+          "workingSetBytes": 245481472,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8155.0,
+          "privateBytes": 319614976,
+          "workingSetBytes": 237195264,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__light__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8345.125,
+          "privateBytes": 328687616,
+          "workingSetBytes": 242487296,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8067.0,
+          "privateBytes": 328769536,
+          "workingSetBytes": 242634752,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8049.625,
+          "privateBytes": 328802304,
+          "workingSetBytes": 242667520,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8052.5,
+          "privateBytes": 328814592,
+          "workingSetBytes": 242679808,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8060.125,
+          "privateBytes": 328830976,
+          "workingSetBytes": 242696192,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__rainbow__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8252.125,
+          "privateBytes": 331362304,
+          "workingSetBytes": 245321728,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 8096.625,
+          "privateBytes": 317681664,
+          "workingSetBytes": 236478464,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8068.75,
+          "privateBytes": 317837312,
+          "workingSetBytes": 236634112,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 8273.375,
+          "privateBytes": 317968384,
+          "workingSetBytes": 236765184,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 7807.125,
+          "privateBytes": 318251008,
+          "workingSetBytes": 237047808,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__rainbow__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8179.125,
+          "privateBytes": 327131136,
+          "workingSetBytes": 241721344,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8030.5,
+          "privateBytes": 327196672,
+          "workingSetBytes": 241786880,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8066.0,
+          "privateBytes": 327196672,
+          "workingSetBytes": 241786880,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 8033.375,
+          "privateBytes": 327196672,
+          "workingSetBytes": 241786880,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8949.75,
+          "privateBytes": 327196672,
+          "workingSetBytes": 241786880,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__480dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 0,
+          "usPerRedraw": 8678.375,
+          "privateBytes": 331599872,
+          "workingSetBytes": 242327552,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 1,
+          "usPerRedraw": 7652.75,
+          "privateBytes": 331677696,
+          "workingSetBytes": 242405376,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 2,
+          "usPerRedraw": 8215.875,
+          "privateBytes": 331726848,
+          "workingSetBytes": 242454528,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 3,
+          "usPerRedraw": 7893.875,
+          "privateBytes": 331763712,
+          "workingSetBytes": 242753536,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 480,
+          "round": 4,
+          "usPerRedraw": 8085.0,
+          "privateBytes": 331788288,
+          "workingSetBytes": 242778112,
+          "gdi": 67,
+          "user": 90
+        }
+      ],
+      "31-completed-group-expanded__high-contrast__760dip__fr-FR__display2__96dpi.png": [
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 0,
+          "usPerRedraw": 8278.5,
+          "privateBytes": 333238272,
+          "workingSetBytes": 243937280,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 1,
+          "usPerRedraw": 8058.375,
+          "privateBytes": 333275136,
+          "workingSetBytes": 243974144,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 2,
+          "usPerRedraw": 8586.375,
+          "privateBytes": 333275136,
+          "workingSetBytes": 244105216,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 3,
+          "usPerRedraw": 7498.0,
+          "privateBytes": 312328192,
+          "workingSetBytes": 233877504,
+          "gdi": 67,
+          "user": 90
+        },
+        {
+          "scene": "31-completed-group-expanded",
+          "dpi": 96,
+          "width": 760,
+          "round": 4,
+          "usPerRedraw": 8839.375,
+          "privateBytes": 312459264,
+          "workingSetBytes": 234008576,
+          "gdi": 67,
+          "user": 90
+        }
+      ]
+    }
+  },
+  "pairedMedians": {
+    "31-completed-group-expanded__dark__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 7910.25,
+        "candidate": 7633.875,
+        "delta": -276.375,
+        "changePercent": -3.4938845169242394
+      },
+      "privateBytes": {
+        "baseline": 295358464,
+        "candidate": 304254976,
+        "delta": 8896512,
+        "changePercent": 3.012106671844017
+      },
+      "workingSetBytes": {
+        "baseline": 216178688,
+        "candidate": 224526336,
+        "delta": 8347648,
+        "changePercent": 3.861457425442416
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__dark__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8108.625,
+        "candidate": 8062.25,
+        "delta": -46.375,
+        "changePercent": -0.5719218733139075
+      },
+      "privateBytes": {
+        "baseline": 291487744,
+        "candidate": 299175936,
+        "delta": 7688192,
+        "changePercent": 2.637569557641495
+      },
+      "workingSetBytes": {
+        "baseline": 212557824,
+        "candidate": 220344320,
+        "delta": 7786496,
+        "changePercent": 3.6632365976798864
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "32-completed-group-collapsed__dark__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 7992.625,
+        "candidate": 8092.375,
+        "delta": 99.75,
+        "changePercent": 1.2480255235294946
+      },
+      "privateBytes": {
+        "baseline": 296562688,
+        "candidate": 304332800,
+        "delta": 7770112,
+        "changePercent": 2.6200571799511074
+      },
+      "workingSetBytes": {
+        "baseline": 216621056,
+        "candidate": 224329728,
+        "delta": 7708672,
+        "changePercent": 3.5585977385319323
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "32-completed-group-collapsed__dark__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8060.875,
+        "candidate": 8583.0,
+        "delta": 522.125,
+        "changePercent": 6.477274489431983
+      },
+      "privateBytes": {
+        "baseline": 295030784,
+        "candidate": 303407104,
+        "delta": 8376320,
+        "changePercent": 2.8391342375987394
+      },
+      "workingSetBytes": {
+        "baseline": 215715840,
+        "candidate": 223223808,
+        "delta": 7507968,
+        "changePercent": 3.480489888920535
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8033.625,
+        "candidate": 8335.5,
+        "delta": 301.875,
+        "changePercent": 3.757643654016718
+      },
+      "privateBytes": {
+        "baseline": 299225088,
+        "candidate": 301936640,
+        "delta": 2711552,
+        "changePercent": 0.9061913952883582
+      },
+      "workingSetBytes": {
+        "baseline": 218750976,
+        "candidate": 223309824,
+        "delta": 4558848,
+        "changePercent": 2.0840355016290335
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "69-all-items-skipped__dark__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8054.625,
+        "candidate": 8067.25,
+        "delta": 12.625,
+        "changePercent": 0.15674224436270645
+      },
+      "privateBytes": {
+        "baseline": 301223936,
+        "candidate": 307343360,
+        "delta": 6119424,
+        "changePercent": 2.0315198324744044
+      },
+      "workingSetBytes": {
+        "baseline": 220946432,
+        "candidate": 227037184,
+        "delta": 6090752,
+        "changePercent": 2.7566645656445843
+      },
+      "gdi": {
+        "baseline": 61,
+        "candidate": 61,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__light__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8062.625,
+        "candidate": 8071.125,
+        "delta": 8.5,
+        "changePercent": 0.10542472209733589
+      },
+      "privateBytes": {
+        "baseline": 329793536,
+        "candidate": 328704000,
+        "delta": -1089536,
+        "changePercent": -0.3303691191812841
+      },
+      "workingSetBytes": {
+        "baseline": 243032064,
+        "candidate": 244113408,
+        "delta": 1081344,
+        "changePercent": 0.4449388209121219
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__light__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8072.125,
+        "candidate": 8075.125,
+        "delta": 3.0,
+        "changePercent": 0.03716493488392647
+      },
+      "privateBytes": {
+        "baseline": 328986624,
+        "candidate": 330051584,
+        "delta": 1064960,
+        "changePercent": 0.3237092095270011
+      },
+      "workingSetBytes": {
+        "baseline": 240627712,
+        "candidate": 245436416,
+        "delta": 4808704,
+        "changePercent": 1.9983999182936918
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 81,
+        "candidate": 81,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__rainbow__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8057.0,
+        "candidate": 8051.625,
+        "delta": -5.375,
+        "changePercent": -0.0667121757477962
+      },
+      "privateBytes": {
+        "baseline": 323059712,
+        "candidate": 330592256,
+        "delta": 7532544,
+        "changePercent": 2.3316259255502514
+      },
+      "workingSetBytes": {
+        "baseline": 236953600,
+        "candidate": 243576832,
+        "delta": 6623232,
+        "changePercent": 2.7951598962834945
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 83,
+        "candidate": 83,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__rainbow__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8062.875,
+        "candidate": 8085.75,
+        "delta": 22.875,
+        "changePercent": 0.2837077345239747
+      },
+      "privateBytes": {
+        "baseline": 330100736,
+        "candidate": 316100608,
+        "delta": -14000128,
+        "changePercent": -4.241168368676407
+      },
+      "workingSetBytes": {
+        "baseline": 241475584,
+        "candidate": 235687936,
+        "delta": -5787648,
+        "changePercent": -2.3967839332360796
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 83,
+        "candidate": 83,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__high-contrast__480dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8088.5,
+        "candidate": 8388.375,
+        "delta": 299.875,
+        "changePercent": 3.707424120665137
+      },
+      "privateBytes": {
+        "baseline": 324657152,
+        "candidate": 330219520,
+        "delta": 5562368,
+        "changePercent": 1.7133052408468075
+      },
+      "workingSetBytes": {
+        "baseline": 238682112,
+        "candidate": 243306496,
+        "delta": 4624384,
+        "changePercent": 1.937465678198791
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 83,
+        "candidate": 83,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__high-contrast__760dip__fr-FR__display1__144dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8064.5,
+        "candidate": 8079.25,
+        "delta": 14.75,
+        "changePercent": 0.1829003658007311
+      },
+      "privateBytes": {
+        "baseline": 328933376,
+        "candidate": 329408512,
+        "delta": 475136,
+        "changePercent": 0.1444474883570246
+      },
+      "workingSetBytes": {
+        "baseline": 242417664,
+        "candidate": 241782784,
+        "delta": -634880,
+        "changePercent": -0.26189510678561456
+      },
+      "gdi": {
+        "baseline": 65,
+        "candidate": 65,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 83,
+        "candidate": 83,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__dark__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8055.25,
+        "candidate": 8048.75,
+        "delta": -6.5,
+        "changePercent": -0.08069271593060812
+      },
+      "privateBytes": {
+        "baseline": 322449408,
+        "candidate": 320532480,
+        "delta": -1916928,
+        "changePercent": -0.594489539270604
+      },
+      "workingSetBytes": {
+        "baseline": 239869952,
+        "candidate": 235802624,
+        "delta": -4067328,
+        "changePercent": -1.6956388101499242
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__dark__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8035.5,
+        "candidate": 7949.375,
+        "delta": -86.125,
+        "changePercent": -1.0718063592806915
+      },
+      "privateBytes": {
+        "baseline": 317407232,
+        "candidate": 310177792,
+        "delta": -7229440,
+        "changePercent": -2.2776544675579435
+      },
+      "workingSetBytes": {
+        "baseline": 235548672,
+        "candidate": 230420480,
+        "delta": -5128192,
+        "changePercent": -2.177126262889739
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "32-completed-group-collapsed__dark__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8069.125,
+        "candidate": 8050.0,
+        "delta": -19.125,
+        "changePercent": -0.23701454618685336
+      },
+      "privateBytes": {
+        "baseline": 324653056,
+        "candidate": 320241664,
+        "delta": -4411392,
+        "changePercent": -1.3588019328547474
+      },
+      "workingSetBytes": {
+        "baseline": 239923200,
+        "candidate": 235429888,
+        "delta": -4493312,
+        "changePercent": -1.8728126333760087
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "32-completed-group-collapsed__dark__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8066.375,
+        "candidate": 7987.875,
+        "delta": -78.5,
+        "changePercent": -0.9731756830050675
+      },
+      "privateBytes": {
+        "baseline": 318574592,
+        "candidate": 320118784,
+        "delta": 1544192,
+        "changePercent": 0.48471913290561996
+      },
+      "workingSetBytes": {
+        "baseline": 235360256,
+        "candidate": 234811392,
+        "delta": -548864,
+        "changePercent": -0.23320164981465163
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8065.875,
+        "candidate": 8073.75,
+        "delta": 7.875,
+        "changePercent": 0.09763354874703367
+      },
+      "privateBytes": {
+        "baseline": 323522560,
+        "candidate": 322048000,
+        "delta": -1474560,
+        "changePercent": -0.4557827435589079
+      },
+      "workingSetBytes": {
+        "baseline": 238026752,
+        "candidate": 232075264,
+        "delta": -5951488,
+        "changePercent": -2.5003441629955936
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "69-all-items-skipped__dark__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8058.5,
+        "candidate": 8095.125,
+        "delta": 36.625,
+        "changePercent": 0.45448904883043095
+      },
+      "privateBytes": {
+        "baseline": 327294976,
+        "candidate": 327487488,
+        "delta": 192512,
+        "changePercent": 0.05881911245713134
+      },
+      "workingSetBytes": {
+        "baseline": 241319936,
+        "candidate": 235991040,
+        "delta": -5328896,
+        "changePercent": -2.2082286645393467
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 90,
+        "candidate": 90,
+        "delta": 0,
+        "changePercent": 0.0
+      }
+    },
+    "31-completed-group-expanded__light__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8107.0,
+        "candidate": 8070.875,
+        "delta": -36.125,
+        "changePercent": -0.44560256568397794
+      },
+      "privateBytes": {
+        "baseline": 332259328,
+        "candidate": 331886592,
+        "delta": -372736,
+        "changePercent": -0.11218225301412588
+      },
+      "workingSetBytes": {
+        "baseline": 250507264,
+        "candidate": 245362688,
+        "delta": -5144576,
+        "changePercent": -2.053663401952288
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    },
+    "31-completed-group-expanded__light__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8088.5,
+        "candidate": 8060.125,
+        "delta": -28.375,
+        "changePercent": -0.3508067008716087
+      },
+      "privateBytes": {
+        "baseline": 320479232,
+        "candidate": 328802304,
+        "delta": 8323072,
+        "changePercent": 2.5970706270289634
+      },
+      "workingSetBytes": {
+        "baseline": 243687424,
+        "candidate": 242667520,
+        "delta": -1019904,
+        "changePercent": -0.4185295996234961
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    },
+    "31-completed-group-expanded__rainbow__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8053.625,
+        "candidate": 8096.625,
+        "delta": 43.0,
+        "changePercent": 0.5339210603920508
+      },
+      "privateBytes": {
+        "baseline": 333770752,
+        "candidate": 317968384,
+        "delta": -15802368,
+        "changePercent": -4.734497527212933
+      },
+      "workingSetBytes": {
+        "baseline": 250826752,
+        "candidate": 236765184,
+        "delta": -14061568,
+        "changePercent": -5.606087822721562
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    },
+    "31-completed-group-expanded__rainbow__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8086.375,
+        "candidate": 8066.0,
+        "delta": -20.375,
+        "changePercent": -0.25196704332905995
+      },
+      "privateBytes": {
+        "baseline": 329277440,
+        "candidate": 327196672,
+        "delta": -2080768,
+        "changePercent": -0.6319193929593236
+      },
+      "workingSetBytes": {
+        "baseline": 248946688,
+        "candidate": 241786880,
+        "delta": -7159808,
+        "changePercent": -2.8760406726118015
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    },
+    "31-completed-group-expanded__high-contrast__480dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8069.5,
+        "candidate": 8085.0,
+        "delta": 15.5,
+        "changePercent": 0.1920812937604488
+      },
+      "privateBytes": {
+        "baseline": 330416128,
+        "candidate": 331726848,
+        "delta": 1310720,
+        "changePercent": 0.3966876580552281
+      },
+      "workingSetBytes": {
+        "baseline": 251023360,
+        "candidate": 242454528,
+        "delta": -8568832,
+        "changePercent": -3.413559598596716
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    },
+    "31-completed-group-expanded__high-contrast__760dip__fr-FR__display2__96dpi.png": {
+      "usPerRedraw": {
+        "baseline": 8080.625,
+        "candidate": 8278.5,
+        "delta": 197.875,
+        "changePercent": 2.44875860468714
+      },
+      "privateBytes": {
+        "baseline": 329789440,
+        "candidate": 333238272,
+        "delta": 3448832,
+        "changePercent": 1.0457678693411188
+      },
+      "workingSetBytes": {
+        "baseline": 249741312,
+        "candidate": 243937280,
+        "delta": -5804032,
+        "changePercent": -2.3240175818408426
+      },
+      "gdi": {
+        "baseline": 67,
+        "candidate": 67,
+        "delta": 0,
+        "changePercent": 0.0
+      },
+      "user": {
+        "baseline": 91,
+        "candidate": 90,
+        "delta": -1,
+        "changePercent": -1.098901098901095
+      }
+    }
+  },
+  "scope": "Same-machine in-process synchronous redraw and process observations; not presented FPS, live heap attribution, GPU surface bytes or final P5 qualification.",
+  "captures": 494,
+  "changedImages": 88
+}

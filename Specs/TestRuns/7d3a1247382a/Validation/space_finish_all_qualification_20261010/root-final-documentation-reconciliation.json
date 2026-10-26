@@ -1,0 +1,27 @@
+{
+  "reviewer": "root",
+  "qualifiedCodeSource": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "scope": "Four targeted documentation updates; code remains frozen. No waiver or Done move.",
+  "files": [
+    {
+      "path": "Specs/Plans/WIP/ViewerSpace_ResponsiveTreemapAndAnalysis_2026-10-08.md",
+      "beforeSha256": "32b502acee85b35c8fa9e18cf74eefe7a156386206a8440b4ab818a8779388e2",
+      "afterSha256": "c4f30e8713edda50ec69e27c57ce3c62c4118d50427d1c529575db4093588b66"
+    },
+    {
+      "path": "Specs/Plans/WIP/README.md",
+      "beforeSha256": "df3b619d1ab31e9506fa0f0819123c77334a95c8aa4021656cc2db79e4ece43a",
+      "afterSha256": "4ead8c267de535809ec9b5012fc0173530717c5479ce057495effb825b0ad271"
+    },
+    {
+      "path": "Specs/Plugins/Plugins_ViewerSpace.md",
+      "beforeSha256": "685f22dbc300d30f3cc70661403901048898ec2249193159d12a861bf48b4829",
+      "afterSha256": "31a575ef833e6c774c9fde362f111f243d1827a3cba2caf15c81fb4dd1812062"
+    },
+    {
+      "path": "Specs/NormativeConsistency.json",
+      "beforeSha256": "bcd0bd8a05f695dc40506a77597ab368a5b345d2621d9326f77991ec6a2581fb",
+      "afterSha256": "61b38d1833ca4ad86e250e3a42da986cb06ae3a405d8283d8f1f4e751974fcd6"
+    }
+  ]
+}

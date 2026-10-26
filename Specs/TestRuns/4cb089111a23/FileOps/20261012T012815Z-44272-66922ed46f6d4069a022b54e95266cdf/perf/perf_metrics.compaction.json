@@ -1,0 +1,23 @@
+{
+  "schema": "red-salamander.i35-s2.perf-compaction.v1",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the I35 S2 claim rows are kept in their original order; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.Discovery.",
+      "FileOps.Operation",
+      "FileOps.CopyRecursiveParallel.",
+      "FileOps.Bridge.",
+      "FileOps.SelfTest."
+    ]
+  },
+  "source": {
+    "bytes": 39343930,
+    "rows": 105548,
+    "sha256": "a8f07818f36396aace5b2d3591ae5e2f9541f7046dd3ffacc082de20eaa1306f"
+  },
+  "kept": {
+    "bytes": 112767,
+    "rows": 238,
+    "sha256": "87b3abc6f529c6597492b318d6d740e0bc45ce895f022937299d8366d9739aef"
+  }
+}

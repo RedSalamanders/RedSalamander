@@ -5,12 +5,17 @@ Connection Manager is the recommended way to store and use remote connection pro
 - FTP / SFTP / SCP / IMAP
 - Google Drive / OneDrive / SharePoint
 - S3 / S3 Table
+- MTP/PTP portable devices
 
 It keeps non-secret fields in settings and stores secrets using Windows facilities (Credential Manager, with optional Windows Hello gating).
 
-![Connection Manager dialog](res/connections-manager.png)
+MTP profiles have no secret or login. Choose the device and storage using their
+pickers and leave Read-only on until you intend to change that device. See
+[Portable Devices](PortableDevices.md) for connection, transfer and disconnect steps.
 
 ## Open Connection Manager
+
+![Connection Manager with invented FTP, SFTP, cloud and device profiles](res/connections.png)
 
 - **Commands → Connections Manager…**
 - Type `nav:`, `nav://`, or `@conn:` in the address bar (empty name opens the dialog)
@@ -23,6 +28,9 @@ It keeps non-secret fields in settings and stores secrets using Windows faciliti
 3. Set the target (host/port/initial path) and authentication.
 4. Choose whether to **Save password**.
 5. Press **Connect**.
+
+For MTP, the device/storage pickers replace the host and authentication fields.
+The default Read-only setting blocks mutations even if the device supports them.
 
 Then you can navigate to it later by name:
 

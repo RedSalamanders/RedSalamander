@@ -1,0 +1,9 @@
+scenario=ViewerSpace blocked provider scan
+test=TestViewerSpaceDirectorySummaryProtocol
+scan_state=2
+dpi=96
+display_generation=1
+active_path_current_bytes=48
+validation_scratch_current_bytes=0
+build_profile=x64
+executable=ViewerPETests.exe

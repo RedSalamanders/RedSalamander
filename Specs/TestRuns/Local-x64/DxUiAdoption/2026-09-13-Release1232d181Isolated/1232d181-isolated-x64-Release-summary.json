@@ -1,0 +1,11 @@
+{
+  "source": "1232d181e74ae7118d3fce7974196811b3cd4398",
+  "configuration": "Release",
+  "platform": "x64",
+  "runId": "20260913T143644Z-39692-35d3bb90eb2f4f908ced437115524c37",
+  "startedUtc": "2026-09-13T14:36:44.1149192Z",
+  "completedUtc": "2026-09-13T15:33:32.9614320Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\1232d181-isolated-x64-Release-Full",
+  "noHostedCi": true
+}

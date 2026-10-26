@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-09-13T08:47:29.592Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T084710Z-87256-a995ccde176641659dc22c4cbbb8d693\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2683,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 21,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 21,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 21,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 21,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

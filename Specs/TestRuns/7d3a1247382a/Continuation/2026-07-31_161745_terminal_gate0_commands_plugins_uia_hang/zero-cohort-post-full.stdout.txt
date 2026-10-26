@@ -1,0 +1,21 @@
+
+[32;1mStatus                                  : [0mvalid-no-winner-product-blocked
+[32;1mUniverseSha256                          : [0m7621ab8562cb4b1d530d24355c67d90c905781a5d4f6bbc3364699ac059cb740
+[32;1mCandidateReviewSha256                   : [0mba2942c7abe8f94b6f50be22ddb78570eaade5f60a152a8b0cca48dcea91542d
+[32;1mCandidateAssessmentSha256               : [0madf5ae89c3c90fd6018652f9ebd88aa809048a849ba29f49b04a4fde6d20343e
+[32;1mCandidateSetSha256                      : [0mfb240d3ef838daea0740417fafd2d7d44b9536295f16c607e45fe57e64d11f4d
+[32;1mCandidateRecordCount                    : [0m6
+[32;1mCollectCandidateCount                   : [0m0
+[32;1mCollectExitCode                         : [0m21
+[32;1mCollectStandardOutputLength             : [0m0
+[32;1mProviderRejectedStaticCohort            : [0mTrue
+[32;1mEvidenceRootAbsentBefore                : [0mTrue
+[32;1mEvidenceRootAbsentAfter                 : [0mTrue
+[32;1mArchivedTerminalEngineRootsAbsentBefore : [0mTrue
+[32;1mArchivedTerminalEngineRootsAbsentAfter  : [0mTrue
+[32;1mWinnerLockAbsent                        : [0mTrue
+[32;1mProductTerminalDirectoryAbsent          : [0mTrue
+[32;1mProductTerminalAbiAbsent                : [0mTrue
+[32;1mWinnerBuildRootAbsent                   : [0mTrue
+[32;1mRuntimeDependencyManifestFrozen         : [0mTrue
+

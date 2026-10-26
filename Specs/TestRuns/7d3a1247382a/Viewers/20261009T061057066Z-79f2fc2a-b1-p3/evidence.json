@@ -1,0 +1,2430 @@
+{
+  "schema": "viewer-space.compact-evidence.v1",
+  "sourceRunId": "20261009T061718Z-27216-78361f2af8f6483e955dae885f1ec77a",
+  "machineHash": "7d3a1247382a",
+  "sourceSha256": "8ac5038b1b4cb3d1af2c389d578b8989fa9edd96a5d8d7b95c4f86d2984e183e",
+  "sourceBytes": 2223258,
+  "sourceRows": 5344,
+  "retainedRows": 255,
+  "retainedSourceLineNumbers": [
+    243,
+    244,
+    245,
+    1114,
+    1115,
+    1116,
+    1117,
+    1118,
+    1119,
+    1120,
+    1121,
+    1123,
+    1124,
+    1125,
+    1126,
+    1127,
+    1128,
+    1129,
+    1130,
+    1131,
+    1132,
+    1133,
+    1134,
+    1135,
+    1136,
+    1137,
+    1138,
+    1139,
+    1140,
+    1141,
+    1142,
+    1143,
+    1144,
+    1148,
+    1149,
+    1174,
+    1175,
+    1176,
+    1177,
+    1179,
+    1180,
+    1181,
+    1182,
+    1183,
+    1186,
+    1188,
+    1189,
+    1190,
+    1200,
+    1201,
+    1202,
+    1203,
+    1204,
+    1205,
+    1206,
+    1207,
+    1208,
+    1209,
+    1210,
+    1217,
+    1227,
+    1228,
+    1229,
+    1234,
+    1235,
+    1236,
+    1237,
+    1239,
+    1240,
+    1241,
+    1242,
+    1243,
+    1246,
+    1248,
+    1249,
+    1250,
+    1251,
+    1252,
+    1253,
+    1254,
+    1255,
+    1256,
+    1257,
+    1258,
+    1259,
+    1260,
+    1261,
+    1271,
+    1281,
+    1294,
+    1304,
+    1317,
+    1346,
+    1347,
+    1348,
+    1349,
+    1351,
+    1352,
+    1353,
+    1354,
+    1355,
+    1358,
+    1360,
+    1361,
+    1362,
+    1363,
+    1364,
+    1365,
+    1366,
+    1367,
+    1368,
+    1405,
+    1406,
+    1407,
+    2636,
+    2640,
+    3065,
+    4744,
+    4745,
+    4746,
+    4747,
+    4749,
+    4750,
+    4751,
+    4752,
+    4753,
+    4756,
+    4758,
+    4759,
+    4760,
+    4761,
+    4762,
+    4763,
+    4764,
+    4765,
+    4766,
+    4767,
+    4768,
+    4769,
+    4770,
+    4857,
+    4858,
+    4907,
+    4908,
+    4909,
+    5099,
+    5100,
+    5101,
+    5102,
+    5103,
+    5104,
+    5105,
+    5106,
+    5108,
+    5109,
+    5110,
+    5111,
+    5112,
+    5113,
+    5114,
+    5115,
+    5116,
+    5117,
+    5118,
+    5119,
+    5120,
+    5121,
+    5122,
+    5123,
+    5124,
+    5125,
+    5126,
+    5127,
+    5128,
+    5129,
+    5130,
+    5131,
+    5132,
+    5142,
+    5143,
+    5144,
+    5160,
+    5174,
+    5175,
+    5176,
+    5177,
+    5179,
+    5180,
+    5181,
+    5182,
+    5183,
+    5186,
+    5188,
+    5189,
+    5190,
+    5191,
+    5192,
+    5193,
+    5194,
+    5195,
+    5196,
+    5197,
+    5198,
+    5199,
+    5209,
+    5210,
+    5211,
+    5216,
+    5217,
+    5218,
+    5219,
+    5221,
+    5222,
+    5223,
+    5224,
+    5225,
+    5228,
+    5230,
+    5231,
+    5232,
+    5233,
+    5234,
+    5235,
+    5236,
+    5237,
+    5238,
+    5239,
+    5240,
+    5241,
+    5245,
+    5246,
+    5247,
+    5260,
+    5273,
+    5283,
+    5290,
+    5304,
+    5305,
+    5306,
+    5307,
+    5309,
+    5310,
+    5311,
+    5312,
+    5313,
+    5316,
+    5318,
+    5319,
+    5320,
+    5321,
+    5322,
+    5341,
+    5342,
+    5343,
+    5344
+  ],
+  "retainedSha256": "d8a8c2c307b589753fb1633d6d8b9e1042fe9adc2b8b754280ba49e49585b385",
+  "retainedSha256Kind": "ordered concatenation of retainedPayloadShards",
+  "retainedPayloadShards": [
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 96783,
+      "sha256": "d8a8c2c307b589753fb1633d6d8b9e1042fe9adc2b8b754280ba49e49585b385",
+      "rows": 255
+    }
+  ],
+  "retentionPolicy": "all selected rows",
+  "metricCounts": {
+    "App.Startup.CoInitializeEx": 1,
+    "App.Startup.LoadThemeDefinitions": 1,
+    "App.Startup.LoadSettings": 1,
+    "App.Startup.QueueNavigationViewWarmup": 1,
+    "App.Startup.Shortcuts.Initialize": 1,
+    "NavigationView.WarmSharedDeviceResources": 1,
+    "App.Startup.Plugins.Initialize.FileSystems": 1,
+    "App.Startup.Plugins.Initialize.Viewers": 1,
+    "App.Startup.DirectoryInfoCache.ApplySettings": 1,
+    "App.Startup.InitInstance.RegisterClassExW": 1,
+    "App.Startup.MainWindow.Menus": 1,
+    "FolderWindow.OnCreate.GetDpiForWindow": 1,
+    "fileops.move_breadcrumb.load.us": 1,
+    "FolderWindow.OnCreate.EnsureFileOperations": 1,
+    "FolderWindow.OnCreate.CalculateLayout": 1,
+    "NavigationView.Create.RegisterWndClass": 2,
+    "NavigationView.OnCreate.GetDpiForWindow": 2,
+    "NavigationView.OnCreate.SetTheme": 2,
+    "NavigationView.OnCreate": 2,
+    "NavigationView.Create.CreateWindowExW": 2,
+    "NavigationView.Create": 2,
+    "FolderWindow.OnCreate.CreatePane.NavigationView.Create": 2,
+    "FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost": 2,
+    "folder.layout.setup_us": 14,
+    "render.layout_items_us": 14,
+    "FolderWindow.OnCreate.CreatePane.FolderView.Create": 2,
+    "FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW": 2,
+    "FolderWindow.OnCreate.CreatePane.StatusBar.Initialize": 2,
+    "FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost": 2,
+    "FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost": 2,
+    "FolderWindow.OnCreate.CreatePane.SetFileSystem": 2,
+    "FolderWindow.OnCreate.CreatePane.SetCallbacks": 2,
+    "FolderWindow.OnCreate.CreatePane.StartSelectionSizeWorker": 2,
+    "FolderWindow.OnCreate.CreatePane": 2,
+    "FolderWindow.OnCreate.FunctionBar.Create": 1,
+    "FolderWindow.OnCreate.FunctionBar.Initialize": 1,
+    "FolderWindow.OnCreate.UpdatePaneUI": 1,
+    "FolderWindow.OnCreate.EnsurePaneFileSystems": 1,
+    "FolderWindow.OnCreate.NetworkChangeSubscription": 1,
+    "FolderWindow.OnCreate.ApplyTheme": 1,
+    "App.Startup.FolderWindow.Create": 1,
+    "App.Startup.ApplyAppTheme": 1,
+    "App.Startup.ApplyPane.Left.SetFileExtensionsVisible": 1,
+    "App.Startup.ApplyPane.Left.SetNavigationBarVisible": 1,
+    "App.Startup.ApplyPane.Left.SetFilterBarVisible": 1,
+    "App.Startup.ApplyPane.Left.SetStatusBarVisible": 1,
+    "App.Startup.ApplyPane.Left.SetSort": 1,
+    "App.Startup.ApplyPane.Left.SetThumbnailSize": 1,
+    "App.Startup.ApplyPane.Left.SetDisplayMode": 1,
+    "App.Startup.ApplyPane.Left.SetFolderPath": 1,
+    "App.Startup.ApplyPane.Left": 1,
+    "App.Startup.ApplyPane.Right.SetFileExtensionsVisible": 1,
+    "App.Startup.ApplyPane.Right.SetNavigationBarVisible": 1,
+    "App.Startup.ApplyPane.Right.SetFilterBarVisible": 1,
+    "App.Startup.ApplyPane.Right.SetStatusBarVisible": 1,
+    "App.Startup.ApplyPane.Right.SetSort": 1,
+    "App.Startup.ApplyPane.Right.SetThumbnailSize": 1,
+    "App.Startup.ApplyPane.Right.SetDisplayMode": 1,
+    "App.Startup.ApplyPane.Right.SetFolderPath": 1,
+    "App.Startup.ApplyPane.Right": 1,
+    "App.Startup.MainWindow.WM_CREATE": 1,
+    "App.Startup.InitInstance.CreateWindowW": 1,
+    "App.Startup.Metric.TimeToFirstWindow": 1,
+    "App.Startup.InitInstance.RestoreWindowPlacement": 1,
+    "App.Startup.InitInstance.ShowUpdateWindow": 1,
+    "App.Startup.InitInstance.QueueIconCacheWarm": 1,
+    "App.Startup.InitInstance": 1,
+    "App.Startup.LoadAccelerators": 1,
+    "App.Startup.Metric.TimeToFirstPaint": 1,
+    "iconcache.shgetfileinfo_us": 48,
+    "App.Startup.Metric.TimeToInputReady": 1,
+    "iconcache.lock_hold_slow_us": 1,
+    "NavigationView.DeferredInit": 2,
+    "FolderView.DeferredInit": 2,
+    "render.begin_to_enddraw_us": 10,
+    "render.dirty_rect_area_px": 10,
+    "render.items_considered": 10,
+    "render.items_drawn": 10,
+    "render.empty_state_layout_creates": 10,
+    "render.item_has_icon": 10,
+    "render.item_placeholder_icon": 10,
+    "render.item_textlayout_label": 10,
+    "render.item_textlayout_details": 10,
+    "render.item_textlayout_metadata": 10,
+    "render.incremental_search_effect_updates": 10,
+    "render.present_us": 10,
+    "folder.frame.total_us": 10,
+    "folder.frame.present_us": 10,
+    "folder.frame.visible_work_count": 10,
+    "folder.frame.dirty_rect_area_px": 10,
+    "dwrite.text_layout.frame_create_count": 10,
+    "render.frame_us": 10,
+    "render.status_bar.paint_us": 2,
+    "IconCache.WarmCommonExtensions": 1,
+    "render.function_bar.paint_us": 1,
+    "viewer.space.refresh.dispose_us": 4,
+    "viewer.space.refresh.dispose_completed": 4,
+    "viewer.space.scan.cache_miss": 2,
+    "viewer.space.scan.active_workers": 1246,
+    "viewer.space.scan.frontier_depth": 744,
+    "FileSystem.DirectoryOps.Enumerate": 622,
+    "FileSystem.DirectoryOps.TrimBuffer": 622,
+    "viewer.space.scan.enumerate_us": 622,
+    "viewer.space.scan.frontier_lock_wait_us": 622,
+    "viewer.space.scan.frontier_depth_peak": 2,
+    "viewer.space.scan.idle_worker_waits": 2,
+    "viewer.space.scan.total_us": 2,
+    "viewer.space.scan.files": 2,
+    "viewer.space.scan.folders": 2,
+    "viewer.space.scan.bytes": 2,
+    "viewer.space.scan.cpu_priority": 2,
+    "viewer.space.scan.first_preview_priority_jobs": 2,
+    "viewer.space.scan.provider_buffer_peak_bytes": 2,
+    "viewer.space.scan.validation_scratch_peak_bytes": 2,
+    "viewer.space.scan.worker_staging_peak_bytes": 2,
+    "viewer.space.scan.worker_staging_preflight_us": 2,
+    "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": 2,
+    "viewer.space.scan.worker_staging_preflight_record_total": 2,
+    "viewer.space.scan.worker_staging_rejected_count": 2,
+    "viewer.space.scan.bookkeeping_peak_bytes": 2,
+    "viewer.space.scan.validation_scratch_rejected_count": 2,
+    "viewer.space.scan.active_path_peak_bytes": 2,
+    "viewer.space.scan.active_path_rejected_count": 2,
+    "viewer.space.model.accepted_entries": 2,
+    "viewer.space.model.rejected_entries": 2,
+    "viewer.space.model.capped_directories": 2,
+    "viewer.space.model.capped_files": 2,
+    "viewer.space.model.retained_directories": 2,
+    "viewer.space.model.retained_files": 2,
+    "viewer.space.model.child_references": 2,
+    "viewer.space.model.retained_name_bytes": 2,
+    "viewer.space.model.traversed_directories": 2,
+    "viewer.space.scan.worker_completed": 2,
+    "viewer.space.render.paint_us": 22,
+    "viewer.space.render.tile_draw_count": 22,
+    "viewer.space.render.text_draw_count": 22,
+    "viewer.space.layout.visible_tiles": 22,
+    "viewer.space.open_to_first_paint_us": 2,
+    "viewer.space.dxui.paint_us": 2,
+    "dxui.frame.dirty_rect_count": 2,
+    "dxui.frame.dirty_rect_area_px": 2,
+    "viewer.space.queue.posted_count": 7,
+    "viewer.space.queue.coalesced_count": 7,
+    "viewer.space.queue.pending_bytes": 7,
+    "viewer.space.queue.pending_peak_bytes": 7,
+    "viewer.space.queue.posted_bytes": 7,
+    "viewer.space.queue.lock_hold_count": 7,
+    "viewer.space.queue.lock_hold_total_us": 7,
+    "viewer.space.queue.lock_hold_max_us": 7,
+    "viewer.space.queue.lock_hold_us": 7,
+    "viewer.space.queue.drained_count": 7,
+    "viewer.space.queue.drain_count": 7,
+    "viewer.space.queue.drain_total_us": 7,
+    "viewer.space.queue.drain_max_us": 7,
+    "viewer.space.queue.drain_us": 7,
+    "viewer.space.scan.summary_stage_bytes": 7,
+    "viewer.space.scan.summary_committed_count": 7,
+    "viewer.space.scan.summary_rejected_count": 7,
+    "viewer.space.scan.summary_chunk_max_bytes": 7,
+    "viewer.space.layout.turn_us": 6,
+    "viewer.space.layout.rebuild_us": 6,
+    "viewer.space.model.directory_count": 45,
+    "viewer.space.model.file_candidate_count": 45,
+    "viewer.space.model.synthetic_count": 45,
+    "viewer.space.layout.draw_items": 5,
+    "viewer.space.layout.nested_directory_tiles": 5,
+    "viewer.space.layout.nested_file_tiles": 5,
+    "viewer.space.layout.expandable_unexpanded_folders": 5,
+    "viewer.space.layout.publish_us": 5,
+    "viewer.space.layout.dispose_us": 5,
+    "viewer.space.layout.dispose_completed": 5,
+    "viewer.space.open_to_first_meaningful_paint_us": 2,
+    "viewer.space.model.child_arena_slots": 2,
+    "viewer.space.model.child_arena_free_slots": 2,
+    "viewer.space.model.aggregate_bytes": 2,
+    "viewer.space.analysis.retained_rows": 4,
+    "viewer.space.analysis.turn_us": 4,
+    "viewer.space.model.cache_snapshot_bytes": 2,
+    "viewer.space.model.cache_resident_bytes": 2,
+    "viewer.space.refresh.dispose_submit_us": 2,
+    "viewer.space.refresh.dispose_submit_bytes_total": 2,
+    "viewer.space.refresh.dispose_submit_owner_peak": 2,
+    "viewer.space.memory.process_phase": 8,
+    "viewer.space.projection.backlog_deferred_count": 10
+  },
+  "metricSummary": {
+    "viewer.space.analysis.retained_rows": {
+      "durationUs": {
+        "n": 4,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 4,
+        "min": 20,
+        "p50": 100,
+        "p95": 100,
+        "max": 100
+      },
+      "value1": {
+        "n": 4,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.analysis.turn_us": {
+      "durationUs": {
+        "n": 4,
+        "min": 105,
+        "p50": 114,
+        "p95": 283,
+        "max": 283
+      },
+      "value0": {
+        "n": 4,
+        "min": 249,
+        "p50": 1613,
+        "p95": 1613,
+        "max": 1613
+      },
+      "value1": {
+        "n": 4,
+        "min": 20,
+        "p50": 100,
+        "p95": 100,
+        "max": 100
+      }
+    },
+    "viewer.space.dxui.paint_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 2720,
+        "p50": 2720,
+        "p95": 3138,
+        "max": 3138
+      },
+      "value0": {
+        "n": 2,
+        "min": 978,
+        "p50": 978,
+        "p95": 978,
+        "max": 978
+      },
+      "value1": {
+        "n": 2,
+        "min": 54,
+        "p50": 54,
+        "p95": 54,
+        "max": 54
+      }
+    },
+    "viewer.space.layout.dispose_completed": {
+      "durationUs": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 5,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.dispose_us": {
+      "durationUs": {
+        "n": 5,
+        "min": 10,
+        "p50": 17,
+        "p95": 147,
+        "max": 147
+      },
+      "value0": {
+        "n": 5,
+        "min": 101752,
+        "p50": 157268,
+        "p95": 523876,
+        "max": 523876
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.draw_items": {
+      "durationUs": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 5,
+        "min": 224,
+        "p50": 338,
+        "p95": 2839,
+        "max": 2839
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.expandable_unexpanded_folders": {
+      "durationUs": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.nested_directory_tiles": {
+      "durationUs": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 5,
+        "min": 6,
+        "p50": 100,
+        "p95": 244,
+        "max": 244
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.nested_file_tiles": {
+      "durationUs": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 5,
+        "min": 0,
+        "p50": 200,
+        "p95": 2800,
+        "max": 2800
+      },
+      "value1": {
+        "n": 5,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.publish_us": {
+      "durationUs": {
+        "n": 5,
+        "min": 69,
+        "p50": 82,
+        "p95": 320,
+        "max": 320
+      },
+      "value0": {
+        "n": 5,
+        "min": 224,
+        "p50": 338,
+        "p95": 2839,
+        "max": 2839
+      },
+      "value1": {
+        "n": 5,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    "viewer.space.layout.rebuild_us": {
+      "durationUs": {
+        "n": 6,
+        "min": 242,
+        "p50": 442,
+        "p95": 579,
+        "max": 579
+      },
+      "value0": {
+        "n": 6,
+        "min": 0,
+        "p50": 320,
+        "p95": 2839,
+        "max": 2839
+      },
+      "value1": {
+        "n": 6,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.layout.turn_us": {
+      "durationUs": {
+        "n": 6,
+        "min": 242,
+        "p50": 442,
+        "p95": 579,
+        "max": 579
+      },
+      "value0": {
+        "n": 6,
+        "min": 2801,
+        "p50": 5877,
+        "p95": 32769,
+        "max": 32769
+      },
+      "value1": {
+        "n": 6,
+        "min": 0,
+        "p50": 320,
+        "p95": 2839,
+        "max": 2839
+      }
+    },
+    "viewer.space.layout.visible_tiles": {
+      "durationUs": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 22,
+        "min": 0,
+        "p50": 224,
+        "p95": 2809,
+        "max": 2809
+      },
+      "value1": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 132,
+        "max": 132
+      }
+    },
+    "viewer.space.memory.process_phase": {
+      "durationUs": {
+        "n": 8,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 8,
+        "min": 233373696,
+        "p50": 307671040,
+        "p95": 411676672,
+        "max": 411676672
+      },
+      "value1": {
+        "n": 8,
+        "min": 228495360,
+        "p50": 278441984,
+        "p95": 308490240,
+        "max": 308490240
+      }
+    },
+    "viewer.space.model.accepted_entries": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10120,
+        "p50": 10120,
+        "p95": 100500,
+        "max": 100500
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.aggregate_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.cache_resident_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 533992,
+        "p50": 533992,
+        "p95": 5254508,
+        "max": 5254508
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.cache_snapshot_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 533576,
+        "p50": 533576,
+        "p95": 5254108,
+        "max": 5254108
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.capped_directories": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.capped_files": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.child_arena_free_slots": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.child_arena_slots": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10192,
+        "p50": 10192,
+        "p95": 100528,
+        "max": 100528
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.child_references": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10120,
+        "p50": 10120,
+        "p95": 100500,
+        "max": 100500
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.directory_count": {
+      "durationUs": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 45,
+        "min": 121,
+        "p50": 501,
+        "p95": 501,
+        "max": 501
+      },
+      "value1": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.file_candidate_count": {
+      "durationUs": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 45,
+        "min": 1500,
+        "p50": 11750,
+        "p95": 100000,
+        "max": 100000
+      },
+      "value1": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.rejected_entries": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.retained_directories": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 121,
+        "p50": 121,
+        "p95": 501,
+        "max": 501
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.retained_files": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10000,
+        "p50": 10000,
+        "p95": 100000,
+        "max": 100000
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.retained_name_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 242178,
+        "p50": 242178,
+        "p95": 2407926,
+        "max": 2407926
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.synthetic_count": {
+      "durationUs": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 45,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.model.traversed_directories": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 121,
+        "p50": 121,
+        "p95": 501,
+        "max": 501
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.open_to_first_meaningful_paint_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 161693,
+        "p50": 161693,
+        "p95": 264329,
+        "max": 264329
+      },
+      "value0": {
+        "n": 2,
+        "min": 1512,
+        "p50": 1512,
+        "p95": 2839,
+        "max": 2839
+      },
+      "value1": {
+        "n": 2,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    "viewer.space.open_to_first_paint_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 44944,
+        "p50": 44944,
+        "p95": 51361,
+        "max": 51361
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    "viewer.space.projection.backlog_deferred_count": {
+      "durationUs": {
+        "n": 10,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 10,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 10,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.coalesced_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 317,
+        "p50": 1144,
+        "p95": 1290,
+        "max": 1290
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.drain_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 1,
+        "p50": 3,
+        "p95": 11,
+        "max": 11
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.drain_max_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 303,
+        "p50": 918,
+        "p95": 2078,
+        "max": 2078
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.drain_total_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 303,
+        "p50": 2039,
+        "p95": 13561,
+        "max": 13561
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.drain_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 303,
+        "p50": 918,
+        "p95": 2078,
+        "max": 2078
+      },
+      "value0": {
+        "n": 7,
+        "min": 1,
+        "p50": 3,
+        "p95": 11,
+        "max": 11
+      },
+      "value1": {
+        "n": 7,
+        "min": 303,
+        "p50": 2039,
+        "p95": 13561,
+        "max": 13561
+      }
+    },
+    "viewer.space.queue.drained_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 512,
+        "p50": 1095,
+        "p95": 5322,
+        "max": 5322
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.lock_hold_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 1412,
+        "p50": 5971,
+        "p95": 6660,
+        "max": 6660
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.lock_hold_max_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 11,
+        "p50": 48,
+        "p95": 48,
+        "max": 48
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.lock_hold_total_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 110,
+        "p50": 331,
+        "p95": 467,
+        "max": 467
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.lock_hold_us": {
+      "durationUs": {
+        "n": 7,
+        "min": 11,
+        "p50": 48,
+        "p95": 48,
+        "max": 48
+      },
+      "value0": {
+        "n": 7,
+        "min": 1412,
+        "p50": 5971,
+        "p95": 6660,
+        "max": 6660
+      },
+      "value1": {
+        "n": 7,
+        "min": 110,
+        "p50": 331,
+        "p95": 467,
+        "max": 467
+      }
+    },
+    "viewer.space.queue.pending_bytes": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 8129160,
+        "max": 8129160
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.pending_peak_bytes": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 1226776,
+        "p50": 8388520,
+        "p95": 8388520,
+        "max": 8388520
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.posted_bytes": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 1312128,
+        "p50": 8696024,
+        "p95": 9880096,
+        "max": 9880096
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.queue.posted_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 1412,
+        "p50": 5955,
+        "p95": 6612,
+        "max": 6612
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.refresh.dispose_completed": {
+      "durationUs": {
+        "n": 4,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 4,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 4,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.refresh.dispose_submit_bytes_total": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 5236058,
+        "p50": 5236058,
+        "p95": 71342218,
+        "max": 71342218
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.refresh.dispose_submit_owner_peak": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.refresh.dispose_submit_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 9,
+        "p50": 9,
+        "p95": 18,
+        "max": 18
+      },
+      "value0": {
+        "n": 2,
+        "min": 4,
+        "p50": 4,
+        "p95": 5,
+        "max": 5
+      },
+      "value1": {
+        "n": 2,
+        "min": 38,
+        "p50": 38,
+        "p95": 43,
+        "max": 43
+      }
+    },
+    "viewer.space.refresh.dispose_us": {
+      "durationUs": {
+        "n": 4,
+        "min": 7,
+        "p50": 9,
+        "p95": 779,
+        "max": 779
+      },
+      "value0": {
+        "n": 4,
+        "min": 940,
+        "p50": 940,
+        "p95": 70769234,
+        "max": 70769234
+      },
+      "value1": {
+        "n": 4,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.render.paint_us": {
+      "durationUs": {
+        "n": 22,
+        "min": 1050,
+        "p50": 4390,
+        "p95": 38378,
+        "max": 45533
+      },
+      "value0": {
+        "n": 22,
+        "min": 0,
+        "p50": 320,
+        "p95": 2839,
+        "max": 2839
+      },
+      "value1": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    "viewer.space.render.text_draw_count": {
+      "durationUs": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 22,
+        "min": 0,
+        "p50": 100,
+        "p95": 118,
+        "max": 118
+      },
+      "value1": {
+        "n": 22,
+        "min": 0,
+        "p50": 224,
+        "p95": 2809,
+        "max": 2809
+      }
+    },
+    "viewer.space.render.tile_draw_count": {
+      "durationUs": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 22,
+        "min": 0,
+        "p50": 224,
+        "p95": 2809,
+        "max": 2809
+      },
+      "value1": {
+        "n": 22,
+        "min": 0,
+        "p50": 0,
+        "p95": 132,
+        "max": 132
+      }
+    },
+    "viewer.space.scan.active_path_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 37002,
+        "p50": 37002,
+        "p95": 147284,
+        "max": 147284
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.active_path_rejected_count": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.active_workers": {
+      "durationUs": {
+        "n": 1246,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 1246,
+        "min": 0,
+        "p50": 7,
+        "p95": 8,
+        "max": 8
+      },
+      "value1": {
+        "n": 1246,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.bookkeeping_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 83056,
+        "p50": 83056,
+        "p95": 143408,
+        "max": 143408
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 302230,
+        "p50": 302230,
+        "p95": 3001292,
+        "max": 3001292
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.cache_miss": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.cpu_priority": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 8,
+        "p50": 8,
+        "p95": 8,
+        "max": 8
+      },
+      "value1": {
+        "n": 2,
+        "min": 8,
+        "p50": 8,
+        "p95": 8,
+        "max": 8
+      }
+    },
+    "viewer.space.scan.enumerate_us": {
+      "durationUs": {
+        "n": 622,
+        "min": 150,
+        "p50": 625,
+        "p95": 1301,
+        "max": 5586
+      },
+      "value0": {
+        "n": 622,
+        "min": 4,
+        "p50": 250,
+        "p95": 250,
+        "max": 250
+      },
+      "value1": {
+        "n": 622,
+        "min": 0,
+        "p50": 3,
+        "p95": 7,
+        "max": 7
+      }
+    },
+    "viewer.space.scan.files": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10000,
+        "p50": 10000,
+        "p95": 100000,
+        "max": 100000
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.first_preview_priority_jobs": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 7,
+        "p50": 7,
+        "p95": 8,
+        "max": 8
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.folders": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 120,
+        "p50": 120,
+        "p95": 500,
+        "max": 500
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.frontier_depth": {
+      "durationUs": {
+        "n": 744,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 744,
+        "min": 0,
+        "p50": 164,
+        "p95": 366,
+        "max": 386
+      },
+      "value1": {
+        "n": 744,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.frontier_depth_peak": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 86,
+        "p50": 86,
+        "p95": 386,
+        "max": 386
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.frontier_lock_wait_us": {
+      "durationUs": {
+        "n": 622,
+        "min": 0,
+        "p50": 0,
+        "p95": 27,
+        "max": 106
+      },
+      "value0": {
+        "n": 622,
+        "min": 0,
+        "p50": 0,
+        "p95": 4,
+        "max": 100
+      },
+      "value1": {
+        "n": 622,
+        "min": 0,
+        "p50": 3,
+        "p95": 7,
+        "max": 7
+      }
+    },
+    "viewer.space.scan.idle_worker_waits": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 13,
+        "p50": 13,
+        "p95": 14,
+        "max": 14
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.provider_buffer_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 19200,
+        "p50": 19200,
+        "p95": 72000,
+        "max": 72000
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.summary_chunk_max_bytes": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 5384,
+        "p50": 5384,
+        "p95": 5384,
+        "max": 5384
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.summary_committed_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 43,
+        "p50": 121,
+        "p95": 501,
+        "max": 501
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.summary_rejected_count": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.summary_stage_bytes": {
+      "durationUs": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 6128,
+        "max": 6128
+      },
+      "value1": {
+        "n": 7,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.total_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 36136,
+        "p50": 36136,
+        "p95": 195353,
+        "max": 195353
+      },
+      "value0": {
+        "n": 2,
+        "min": 10000,
+        "p50": 10000,
+        "p95": 100000,
+        "max": 100000
+      },
+      "value1": {
+        "n": 2,
+        "min": 120,
+        "p50": 120,
+        "p95": 500,
+        "max": 500
+      }
+    },
+    "viewer.space.scan.validation_scratch_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 143872,
+        "p50": 143872,
+        "p95": 244608,
+        "max": 244608
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.validation_scratch_rejected_count": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.worker_completed": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 1,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.worker_staging_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 861448,
+        "p50": 861448,
+        "p95": 1661312,
+        "max": 1661312
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.worker_staging_preflight_record_total": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 10120,
+        "p50": 10120,
+        "p95": 100500,
+        "max": 100500
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 123064,
+        "p50": 123064,
+        "p95": 207664,
+        "max": 207664
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    },
+    "viewer.space.scan.worker_staging_preflight_us": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "value0": {
+        "n": 2,
+        "min": 121,
+        "p50": 121,
+        "p95": 501,
+        "max": 501
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    "viewer.space.scan.worker_staging_rejected_count": {
+      "durationUs": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value0": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "value1": {
+        "n": 2,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      }
+    }
+  },
+  "scanTotalUs": [
+    36136,
+    195353
+  ],
+  "scope": "Selected ViewerSpace scenarios; no Full repository or whole-process memory claim.",
+  "caveats": [
+    "Original baseline processes share a machine with an independently opened Debug app.",
+    "See run-all-tests-results.json for sandbox-audit issues and exact verdict.",
+    "Last-repetition metrics JSON is a convenience; exact scan totals and source-wide distributions preserve all repetitions."
+  ]
+}

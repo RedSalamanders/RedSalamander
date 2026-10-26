@@ -5,7 +5,7 @@ Open Preferences from:
 - **View → Preferences…**
 - Tip: **Hot Paths** can also be opened directly with `Shift+F9`.
 
-![Preferences](res/preferences.png)
+![Preferences](res/preferences-general.png)
 
 ## How Preferences works
 
@@ -33,22 +33,26 @@ The left tree contains:
 - **Editors**: editor Actions and Associations for `F4`, `Ctrl+Shift+F4`, `Shift+F4`, and Edit With.
 - **User Menu**: external command entries shown by `F9` and the Commands -> User Menu popup.
 - **Keyboard**: Application, Function Bar, Folder View, and Terminal shortcut bindings.
-- **Mouse**: placeholder (not implemented yet).
+- **Mouse**: pointer focus and pane activation behavior.
 - **Themes**: theme selection, user-theme editing, and theme file management.
 - **Plugins**: enable/disable plugins, configure plugins, and run plugin tests.
-- **File Operations**: host-wide defaults for pre-calculation, default copy/move speed limit, and cross-filesystem bridge buffering.
+- **File Operations**: verification, default copy/move speed limit, notes, pane questions, auto-dismiss and cross-filesystem bridge buffering.
 - **Compare Directories**: default options used by the Compare Directories window.
 - **Hot Paths**: bookmark folder paths for quick access (`Ctrl+1`..`Ctrl+0`).
-- **Monitor**: RedSalamanderMonitor display and event-filter defaults.
+- **Monitor**: RedMonitor display and event-filter defaults.
 - **Advanced**: expert settings such as diagnostics and cache limits.
 
 Tip: Plugins also appear as child nodes under **Plugins** when a plugin exposes configurable fields.
+
+Some pages scroll vertically, and their grids can scroll horizontally. The images show the initial visible page; the option reference includes the remaining controls.
 
 ## Page option reference
 
 Use this section as the quick map for options that are easy to miss when scanning the dialog.
 
 ### General
+
+![Preferences general](res/preferences-general.png)
 
 - **Show menu bar** and **Show function bar** control the two main chrome strips. The same toggles are available from the **View** menu.
 - **Show splash screen** displays a startup splash only when launch takes longer than roughly `300ms`.
@@ -58,6 +62,8 @@ Use this section as the quick map for options that are easy to miss when scannin
 - **Window backdrop** chooses the DWM backdrop policy for supported windows: Default, None, Mica, Mica Alt, or Acrylic.
 
 ### Panes
+
+![Preferences panes](res/preferences-panes.png)
 
 Settings are split into **Left pane** and **Right pane** columns so each side can have different defaults.
 
@@ -71,6 +77,10 @@ The Panes page itself has no thumbnail-size control. When a pane is in **Thumbna
 
 ### Viewers and Editors
 
+![Preferences viewers](res/preferences-viewers.png)
+
+![Preferences editors](res/preferences-editors.png)
+
 Viewers and Editors have the same mental model:
 
 - **Associations** decide which action applies to `F3`, `Alt+F3`, `F4`, `Ctrl+Shift+F4`, `Shift+F4`, **View With**, and **Edit With**.
@@ -81,11 +91,15 @@ Viewers and Editors have the same mental model:
 
 ### User Menu
 
+![Preferences user menu](res/preferences-user-menu.png)
+
 - Entries appear in **Commands -> User Menu** and on `F9`.
 - Each entry can define executable, arguments, working directory, enabled state, extension filters, and computer-name filters.
 - Multi-selection entries can use the selected-paths file macro so long command lines do not overflow Windows command-line limits.
 
 ### Keyboard
+
+![Preferences keyboard](res/preferences-keyboard.png)
 
 - **Scope** filters the command list by Application, Function Bar, Folder View, or Terminal; **All** shows every known command. Terminal scope includes all 39 customizable Terminal-context command definitions and all factory aliases.
 - Columns show command name, shortcut, and scope.
@@ -97,9 +111,17 @@ Viewers and Editors have the same mental model:
 
 ### Mouse
 
-The page is present as a placeholder. Mouse behavior is currently the built-in folder-view and viewer behavior; there are no user-editable mouse bindings yet.
+![Preferences mouse](res/preferences-mouse.png)
+
+Use **Focus follows pointer** to focus a pane when the pointer moves into it.
+The separate Terminal-open option can enable that behavior only while a pane
+has an open Terminal. The options are independent and take effect in the running
+window. They do not define arbitrary per-button mouse bindings. See
+[Mouse settings](SettingsFile.md#mouse) for the two stored values.
 
 ### Themes
+
+![Preferences themes](res/preferences-themes.png)
 
 - Choose a built-in, file-based, or user theme from **Theme**.
 - User themes have **Name**, **Base**, a reusable palette, and authored semantic color sources.
@@ -111,6 +133,10 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ### Plugins
 
+![Plugins](res/plugins.png)
+
+![Preferences plugin mtp](res/preferences-plugin-mtp.png)
+
 - The root page lists plugin name, type, origin, and id.
 - Embedded, optional, and custom plugins can be enabled/disabled unless the active file-system plugin is currently in use.
 - **Custom plugin paths** load additional DLLs when **Apply** is clicked.
@@ -119,14 +145,25 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ### File Operations
 
-- **Enable pre-calculation scan** controls whether new copy/move tasks scan the tree first for totals and ETA.
-- **Pre-calculation workers** chooses `1` to `8` background workers for that scan.
+![Preferences file operations](res/preferences-file-operations.png)
+
+- **Verify copied files** enables a read-back verification pass when the transfer route supports it. Copy/Move with Options can override it for one task.
 - **Default speed limit** seeds new copy/move tasks with one of the presets Unlimited, `1`, `5`, `10`, `50`, `100`, or `500 MiB/s`, or **Custom**. There is no GiB/s preset; reach GiB-per-second rates through **Custom**.
 - **Custom limit** accepts values like `128KB`, `5MB`, or `1GB`.
 - **Auto-dismiss successful tasks** controls whether completed file-operation tasks that succeed or are canceled close automatically from the progress popup instead of remaining listed.
+- **Show informational notes from file operations** shows routine notes on cards and in Issues. It is off by default; logs and exported issues still retain the notes.
+- **Also show file-operation questions over the pane** mirrors relevant decisions over the affected pane. It is on by default; the task card retains the question too.
 - **Cross-FS bridge buffer (KB)** controls the per-buffer size used when copying between different file-system plugins. Two buffers are allocated per active transfer.
 
+Counting is automatic and shares the operation's traversal. **Skip counting** on
+a running card stops counting ahead and releases its reserved capacity; it does
+not skip checks or items. The old pre-calculation enable/worker controls are no
+longer on this page. These defaults apply to newly created tasks. See
+[File Operations](FileOperations.md) for counts, throughput and terminal results.
+
 ### Compare Directories
+
+![Preferences compare directories](res/preferences-compare-directories.png)
 
 - **Keep identical items** retains identical rows in memory so the compare window can later toggle **Show Identical Items**.
 - **Show Identical Items** makes identical rows visible by default and requires **Keep identical items**.
@@ -134,11 +171,15 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ### Hot Paths
 
+![Preferences hot paths](res/preferences-hot-paths.png)
+
 - Ten slots map to `Ctrl+1` through `Ctrl+0`.
 - Each slot has **Path**, **Label**, and **Show in Change Drive menu**.
 - **Open preferences page when assigning** controls whether assigning a hot path from the pane immediately opens Preferences for editing the label/menu flag.
 
 ### Advanced
+
+![Preferences advanced](res/preferences-advanced.png)
 
 - **Windows Hello for Connections** controls automation bypass, insecure TLS automation allowance, and the Hello reuse timeout.
 - **File Operations** controls diagnostics retention and Info/Debug verbosity.
@@ -147,10 +188,12 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ### Monitor
 
-- **Display** controls RedSalamanderMonitor toolbar, line numbers, always-on-top, ids, and auto-scroll defaults.
-- **Filter** appears as one card before the settings-file link and controls the RedSalamanderMonitor filter preset plus the Text, Error, Warning, Info, Perf, and Debug message-type toggles. There is no numeric mask field in Preferences; choose **Custom** and use the toggles for custom combinations.
+![Preferences monitor](res/preferences-monitor.png)
+
+- **Display** controls RedMonitor toolbar, line numbers, always-on-top, ids, and auto-scroll defaults.
+- **Filter** appears as one card before the settings-file link and controls the RedMonitor filter preset plus the Text, Error, Warning, Info, Perf, and Debug message-type toggles. There is no numeric mask field in Preferences; choose **Custom** and use the toggles for custom combinations.
 - **Open monitor settings file** is the final card and opens the current user's RedSalamanderMonitor JSON settings file with the default JSON editor.
-- Apply or OK saves Monitor page changes to the `RedSalamanderMonitor` settings file, not the main RedSalamander settings file.
+- Apply or OK saves Monitor page changes to RedSalamanderMonitor-7.0.settings.json in every configuration, including Debug/ASan, matching the independently installed Release helper. The main RedSalamander settings file is separate.
 
 ## Common workflows
 
@@ -201,8 +244,8 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ### File Operations
 
-- Turn the copy/move pre-calculation scan on or off.
-- Choose the pre-calculation worker budget (`1` to `8`) used before copy/move starts.
+- Choose whether new copies should be verified when the route supports it.
+- Choose whether routine notes and pane decision mirrors should be visible.
 - Set the default per-task speed limit for new copy/move operations using presets or a custom value.
 - Tune the cross-filesystem bridge buffer size used when the host copies between different file-system implementations.
 - Use **Plugins → File System** for plugin-owned concurrency, recycle-bin batching, and search-walker settings; those are not duplicated on the File Operations page.
@@ -210,70 +253,12 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 ### Hot Paths, Monitor, and Advanced
 
 - **Hot Paths** lets you edit the label, target path, and **Show in Change Drive menu** flag for each of the 10 slots.
-- **Monitor** exposes RedSalamanderMonitor display/filter defaults and a link to the monitor JSON settings file.
+- **Monitor** exposes RedMonitor display/filter defaults and a link to the monitor JSON settings file.
 - **Advanced** exposes file-operations diagnostics, cache-related settings, and a link to the current main JSON settings file.
 - Some rarely used settings still remain JSON-only; see [Settings File & Advanced Configuration](SettingsFile.md).
 
-## Screenshots (by page)
+## Theme illustration
 
-Captured from the running Release build against generated, non-sensitive demo content.
-
-### General
-
-![Preferences → General](res/preferences-general.png)
-
-### Panes
-
-![Preferences → Panes](res/preferences-panes.png)
-
-### Viewers
-
-![Preferences → Viewers](res/preferences-viewers.png)
-
-### Editors
-
-![Preferences → Editors](res/preferences-editors.png)
-
-### User Menu
-
-![Preferences → User Menu](res/preferences-user-menu.png)
-
-### Keyboard
-
-![Preferences → Keyboard](res/preferences-keyboard.png)
-
-### Mouse
-
-![Preferences → Mouse](res/preferences-mouse.png)
-
-### Themes
-
-![Preferences → Themes](res/preferences-themes.png)
-
-### Plugins
-
-![Preferences → Plugins](res/preferences-plugins.png)
-
-Each plugin that exposes settings appears as a child node with its own page (for example, 7-Zip):
-
-![Preferences → Plugins → 7-Zip](res/preferences-plugin-child.png)
-
-### File Operations
-
-![Preferences → File Operations](res/preferences-file-operations.png)
-
-### Compare Directories
-
-![Preferences → Compare Directories](res/preferences-compare-directories.png)
-
-### Hot Paths
-
-![Preferences → Hot Paths](res/preferences-hot-paths.png)
-
-### Monitor
-
-![Preferences → Monitor](res/preferences-monitor.png)
-
-### Advanced
-
-![Preferences → Advanced](res/preferences-advanced.png)
+This earlier static illustration contains product labels rather than personal
+configuration. It is not current-build qualification; new captures follow the
+[harness and privacy contract](dev/TestingAndScreenshots.md).

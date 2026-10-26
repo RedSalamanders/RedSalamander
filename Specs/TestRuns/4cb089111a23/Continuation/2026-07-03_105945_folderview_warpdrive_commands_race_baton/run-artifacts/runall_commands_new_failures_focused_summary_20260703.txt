@@ -1,0 +1,7 @@
+
+Case                                                                         Exit Total Passed Failed Skipped DurationMs Failure Log
+----                                                                         ---- ----- ------ ------ ------- ---------- ------- ---
+cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal    0     1      1      0       0       3150         .build\codex-runs\runall_commands_cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal_focused_after_broad_20260703.log
+cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup                 0     1      1      0       0       1328         .build\codex-runs\runall_commands_cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup_focused_after_broad_20260703.log
+
+

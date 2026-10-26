@@ -1,0 +1,16 @@
+{
+  "commit": "a4b506d53b92d716a923199ba436463f95a6e375",
+  "source_snapshot_id": "68c5f74eec47beef602716d18f47c70fe23c07c8a49fea44b419f503deaa3e8c",
+  "receipt_id": "9824a9476b20b0e07c2598ff8c0cdeb002e5dce1d1a0ec5e15aa240808b16f36",
+  "configuration": "Debug",
+  "platform": "x64",
+  "suite": "FileOps",
+  "repeat_count": 3,
+  "filter": "FileOps_SmbManagedMoveLeavesNoStage",
+  "run_id": "20261018T212938Z-16528-212482cf6f1844e9af95fbcafa7d1939",
+  "exit_code": 1,
+  "passed": 6,
+  "failed": 3,
+  "skipped": 0,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\20261018T212938Z-16528-212482cf6f1844e9af95fbcafa7d1939"
+}

@@ -1,0 +1,241 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-05T08:50:33.8297053Z",
+  "run_ended_utc": "2026-09-05T08:50:52.0127981Z",
+  "duration_ms": 18183,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-native-delete-red-20260905\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "c0-curl-native-delete-red-20260905",
+  "fail_fast": true,
+  "timeout_scale": 1.0,
+  "case_filter": "C0_CurlNativeDeleteGuards",
+  "exit_code": 1,
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "total": 3,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 28,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "c0-curl-native-delete-red-20260905",
+    "allowed_run_ids": [
+      "c0-curl-native-delete-red-20260905"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\a20-terminal-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-conflict-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-conflict-regression-repaired-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-candidate-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-family-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-gdrive-commit-loss-red-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-local-overwrite-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-candidate-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-native-receipt-matrix-verified-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-owned-publication-regression-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-debug-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-enabled-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\c0-receipt-prefix-release-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-contract-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-phase10-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-routine-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-streams-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-final-surface-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-phase10-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-streams-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-streams-isolated-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-surface-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-properties-surface-rerun-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-routine-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\r6-a09-source-contract-20260905",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\viewerimgraw-scheduler-triage-20260905b",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 11739,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1328,
+          "attempt": 1
+        },
+        {
+          "name": "C0_CurlNativeDeleteGuards",
+          "status": "failed",
+          "reason": "C0 Curl native Delete guards failed; see FileOps.Curl.NativeDelete metrics for the exact route.",
+          "duration_ms": 9547,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "C0_CurlNativeDeleteGuards",
+          "status": "failed",
+          "reason": "C0 Curl native Delete guards failed; see FileOps.Curl.NativeDelete metrics for the exact route.",
+          "duration_ms": 9547,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

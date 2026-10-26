@@ -1,0 +1,13 @@
+{
+  "source": "d404fc90bcaf7793da4289ffcbd23debd6ee73b2",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "runId": "20260913T082947Z-99000-54a50cf35b104c46ab5451e8ed5d4b44",
+  "caseFilter": "Phase6_LocalBandwidthThrottle",
+  "repeatCount": 10,
+  "startedUtc": "2026-09-13T08:29:47.1651358Z",
+  "completedUtc": "2026-09-13T08:31:16.1682230Z",
+  "exitCode": 1,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-bandwidth-clock",
+  "noHostedCi": true
+}

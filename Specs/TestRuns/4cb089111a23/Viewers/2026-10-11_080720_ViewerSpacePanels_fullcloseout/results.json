@@ -1,0 +1,311 @@
+{
+  "repositoryVerdict": "FAILED",
+  "runId": "20261011T053522Z-30852-a218b0a1e7c74f61a658ac29e58b2f37",
+  "entryCounts": {
+    "executed": 20,
+    "incomplete": 3,
+    "invalidated": 0,
+    "promoted": 17,
+    "provisional": 0,
+    "reused": 0
+  },
+  "failedSuites": [
+    {
+      "suite": "ToolsPesterTests",
+      "passed": 928,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "suite": "Commands",
+      "passed": 937,
+      "failed": 7,
+      "skipped": 6
+    },
+    {
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 2,
+      "skipped": 240
+    }
+  ],
+  "buildReceiptId": "521a2032717eb2e2f9f0bfc87cb30d0028e3c056d69b5cae7da7e84a32ac6440",
+  "status": "FAILED",
+  "sourceSnapshotId": "987c7d7419c3db4f57c39a7c38ad1c3a5a00397c3f8893059d67a782cbe5b5cd",
+  "viewerSpaceCommands": [
+    {
+      "name": "cmd_viewer_space_context_menu_uses_delivered_anchor",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 249,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_hover_uses_delivered_point",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 202,
+      "attempt": 1
+    },
+    {
+      "name": "viewer_space_perf_small_progressive",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1400,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_renderer_device_context_ready_resize_close",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 209,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 280,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_hover_does_not_rebuild_static_cache",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 74878,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 520,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 5173,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_adaptive_scan_budget_tracks_window_area",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 432,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_effective_threads_drive_spinners",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1396,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_large_sibling_folders_expose_nested_detail",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1143,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_hit_grid_matches_linear",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 955,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_unmoved_relayout_keeps_grid_hit_testing",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 922,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_parallel_scan_serial_golden",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1656,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cancel_teardown_stress",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 967,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_skips_or_caps_large_snapshot",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1387,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_hit_restores_header_counts",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1575,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 12993,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_configuration_preserves_four_roots",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1535,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_restore_is_sliced",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 2577,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_aggregate_byte_cap",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1562,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_offsets_reject_invalid_extent",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 2695,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1680,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1368,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1558,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1534,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1511,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_setting_change_refreshes_locale",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 210,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_idle_timer_stops",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1611,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_queue_storm_stays_bounded",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 1388,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample cached first-map benchmark.",
+      "duration_ms": 0,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_memory_heavy_four_root_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark.",
+      "duration_ms": 0,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_memory_heavy_four_root_retained_reference_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark.",
+      "duration_ms": 0,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_same_instance_reopen",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 711,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_memory_settles_after_close",
+      "status": "passed",
+      "reason": "",
+      "duration_ms": 14061,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_layout_20k_visible_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_20K_LAYOUT=1 to run the opt-in ViewerSpace 20k layout scenario.",
+      "duration_ms": 0,
+      "attempt": 1
+    },
+    {
+      "name": "cmd_viewer_space_layout_50k_visible_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_50K_LAYOUT=1 to run the opt-in ViewerSpace 50k visible-layout scenario.",
+      "duration_ms": 0,
+      "attempt": 1
+    },
+    {
+      "name": "viewer_space_perf_large_optin",
+      "status": "skipped",
+      "reason": "Set REDSALAMANDER_VIEWERSPACE_LARGE_PERF=1 to run the opt-in ViewerSpace large perf scenario.",
+      "duration_ms": 0,
+      "attempt": 1
+    }
+  ],
+  "qualification": "Focused ViewerSpace passes do not override a failed repository gate",
+  "scope": "Final-source Fresh Full x64 Release, all twenty entries",
+  "caseCounts": {
+    "failed": 10,
+    "passed": 2139,
+    "skipped": 276,
+    "total": 2425
+  }
+}

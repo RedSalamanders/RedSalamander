@@ -1,0 +1,14 @@
+{
+  "before": "d207a07fae17a201c04b87fccb587f382939ed9ed211f4dbe2dddd4a48eb5f0f",
+  "after": "8ebb9a33a6cd0384e9077f80f1edbbd872d7c1ae6ce6bea0473a2aed0352ff1b",
+  "changed_paths": [
+    "Plugins/FileSystem/FileSystem.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Throughput.cpp",
+    "Specs/FileSystem/FileSystem_FileOperations.md",
+    "Specs/Testing/Testing_PerformanceValidation.md"
+  ],
+  "production_cpp": [
+    "Plugins/FileSystem/FileSystem.cpp"
+  ],
+  "qualification": "Source delta between the archived failed Release binary and the final repair; separate receipts"
+}

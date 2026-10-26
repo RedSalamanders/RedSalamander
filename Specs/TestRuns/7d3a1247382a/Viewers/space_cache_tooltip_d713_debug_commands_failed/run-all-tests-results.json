@@ -1,0 +1,326 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-09T09:02:24.5508692Z",
+  "run_ended_utc": "2026-10-09T09:05:14.1443118Z",
+  "duration_ms": 169593,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T090204Z-13052-c39359d4a7204a038bac43bb0e83edd9\\artifacts\\selftest\\last_run",
+  "test_root": "D:\\RedSalamander.Perf",
+  "run_id": "20261009T090204Z-13052-c39359d4a7204a038bac43bb0e83edd9",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_viewer_space_",
+  "exit_code": 1,
+  "passed": 30,
+  "failed": 1,
+  "skipped": 2,
+  "total": 33,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 3,
+    "test_root": "D:\\RedSalamander.Perf",
+    "run_id": "20261009T090204Z-13052-c39359d4a7204a038bac43bb0e83edd9",
+    "allowed_run_ids": [
+      "20261009T090204Z-13052-c39359d4a7204a038bac43bb0e83edd9"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\archive-skip-check-7756799779d4",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\dxui-ci-first-37835055279",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "D:\\RedSalamander.Perf\\runs\\dxui-ci-retry-37835055279-attempt2",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 159304,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 30,
+      "failed": 1,
+      "skipped": 2,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_viewer_space_context_menu_uses_delivered_anchor",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 377,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_hover_uses_delivered_point",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 259,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_renderer_device_context_ready_resize_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 264,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 317,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_hover_does_not_rebuild_static_cache",
+          "status": "failed",
+          "reason": "Stable hover paints its tooltip before containment. sample=11, expected=1073741824, hover=1073741824, tooltip=0, paints=11, painted=false, cursor=(273,508) valid=true, pointerClass=RedSalamander.ViewerSpace, actualPointerOwnerIsViewer=true",
+          "duration_ms": 4296,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 598,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6140,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_adaptive_scan_budget_tracks_window_area",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 520,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_effective_threads_drive_spinners",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1606,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_large_sibling_folders_expose_nested_detail",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1346,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_hit_grid_matches_linear",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1139,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_unmoved_relayout_keeps_grid_hit_testing",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1080,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_parallel_scan_serial_golden",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2230,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cancel_teardown_stress",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5367,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_skips_or_caps_large_snapshot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1557,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_hit_restores_header_counts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1889,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 13451,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_restore_is_sliced",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2318,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_aggregate_byte_cap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1891,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_offsets_reject_invalid_extent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3526,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1755,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1561,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1689,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1907,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2023,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_setting_change_refreshes_locale",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 204,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_idle_timer_stops",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1661,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_queue_storm_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2019,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+          "status": "skipped",
+          "reason": "Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample cached first-map benchmark.",
+          "duration_ms": 0,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_memory_heavy_four_root_optin",
+          "status": "skipped",
+          "reason": "Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark.",
+          "duration_ms": 0,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_memory_settles_after_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 33421,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_layout_20k_visible_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 23056,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_viewer_space_layout_50k_visible_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 26540,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "cmd_viewer_space_hover_does_not_rebuild_static_cache",
+          "status": "failed",
+          "reason": "Stable hover paints its tooltip before containment. sample=11, expected=1073741824, hover=1073741824, tooltip=0, paints=11, painted=false, cursor=(273,508) valid=true, pointerClass=RedSalamander.ViewerSpace, actualPointerOwnerIsViewer=true",
+          "duration_ms": 4296,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

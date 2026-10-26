@@ -1,0 +1,35 @@
+[PASS] ViewerSpace test executable path resolves
+[PASS] ViewerSpace.dll is present for runtime validation
+[PASS] ViewerSpace.dll loads successfully
+[PASS] ViewerSpace factory export is available
+[PASS] ViewerSpace factory creates an IViewer instance
+[PASS] ViewerSpace fixture TestSandbox root is available
+[PASS] ViewerSpace window open succeeds
+[PASS] ViewerSpace window becomes visible
+[PASS] ViewerSpace detaches the native window menu after attaching the DxUi menu bar
+[PASS] ViewerSpace exposes a visible DxUi menu bar host child
+[PASS] ViewerSpace answers the hidden menu-model debug contract
+[PASS] ViewerSpace keeps a hidden HMENU model for DxUi menu conversion
+[PASS] ViewerSpace hidden HMENU model keeps zero owner-draw items after DxUi menu migration
+[PASS] ViewerSpace only exposes the DxUi menu bar child and no visible fallback child surface
+[PASS] ViewerSpace answers the tooltip-overlay debug contract
+[PASS] ViewerSpace has a Direct2D render target before tooltip overlay validation
+[PASS] ViewerSpace has a DirectWrite tooltip format before tooltip overlay validation
+[PASS] ViewerSpace tooltip overlay uses a 420 DIP maximum text width
+[PASS] ViewerSpace tooltip paint witness queues an adversarial hover dismissal
+[PASS] ViewerSpace debug hook shows the Direct2D tooltip overlay
+[PASS] ViewerSpace Direct2D tooltip overlay paints after it is shown
+[PASS] ViewerSpace tooltip overlay tracks a client DIP anchor
+[PASS] ViewerSpace tooltip overlay keeps the high-DPI-safe width cap
+[PASS] ViewerSpace tooltip overlay does not create a native tooltip window
+[PASS] ViewerSpace factory creates an embedded IViewer instance
+[PASS] ViewerSpace embedded host window is created
+[PASS] ViewerSpace embedded viewer open succeeds
+[PASS] ViewerSpace embedded child window becomes visible
+[PASS] ViewerSpace embedded viewer has no visible legacy ComboBox child
+[PASS] ViewerSpace embedded viewer has no top-level native menu
+[PASS] ViewerSpace embedded viewer close succeeds
+[PASS] ViewerSpace embedded child window closes cleanly
+[PASS] ViewerSpace window accepts keyboard focus
+[PASS] ViewerSpace Escape closes the window cleanly
+ViewerPETests passed.

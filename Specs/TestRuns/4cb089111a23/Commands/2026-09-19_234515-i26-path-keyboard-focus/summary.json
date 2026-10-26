@@ -1,0 +1,433 @@
+{
+  "variant": "path-keyboard-focus",
+  "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_234515-i26-path-keyboard-focus",
+  "passed": 23,
+  "failed": 1,
+  "skipped": 0,
+  "failure": "File-operations popup layout motion did not settle before minimum-width validation (autoResize=true, selectedTaskHeight=false, completedGroup=false).",
+  "source_snapshot": "72b95d5465227d75a00edf47eb9da1431b508ee87de12d81c5e3388070aa777c",
+  "build_receipt": "df7d60859b1108860b9ed1cdb3678438869f948cd4a106d16a9c6b1f9c6704a4",
+  "rounds": [
+    {
+      "repetition": 1,
+      "median_us": 66552.5,
+      "p95_us": 66592,
+      "samples_us": [
+        63708,
+        66496,
+        66559,
+        66592,
+        66536,
+        51603,
+        66245,
+        66481,
+        66572,
+        66593,
+        48151,
+        66570,
+        66572,
+        66551,
+        66574,
+        47002,
+        66552,
+        66563,
+        66553,
+        66587
+      ]
+    },
+    {
+      "repetition": 2,
+      "median_us": 66363.5,
+      "p95_us": 67162,
+      "samples_us": [
+        66485,
+        66145,
+        66399,
+        66405,
+        66367,
+        52635,
+        66360,
+        66593,
+        66332,
+        66360,
+        55369,
+        66129,
+        66441,
+        66407,
+        67162,
+        53066,
+        67210,
+        66212,
+        67044,
+        66291
+      ]
+    },
+    {
+      "repetition": 3,
+      "median_us": 66518.5,
+      "p95_us": 67304,
+      "samples_us": [
+        66823,
+        66584,
+        66294,
+        66475,
+        66407,
+        55130,
+        67271,
+        65349,
+        67304,
+        66020,
+        54655,
+        68230,
+        65087,
+        66631,
+        66579,
+        60235,
+        66638,
+        66502,
+        66535,
+        66619
+      ]
+    }
+  ],
+  "states": [],
+  "capture_results": [
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "covered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "uncovered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3415,
+      "value1": 546302,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__640dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3473,
+      "value1": 659604,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__760dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "value0": 979,
+      "value1": 1449,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.PathFocusPixels",
+      "detail": "path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "value0": 391,
+      "value1": 0,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "covered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "uncovered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3415,
+      "value1": 546302,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__640dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3473,
+      "value1": 659604,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__760dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "value0": 979,
+      "value1": 1449,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.PathFocusPixels",
+      "detail": "path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "value0": 391,
+      "value1": 0,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.LegacyContentPixels",
+      "detail": "throughput label foreground/background",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "covered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.CoveredContentPixels",
+      "detail": "uncovered",
+      "value0": 95,
+      "value1": 4906,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3415,
+      "value1": 546302,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__640dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3473,
+      "value1": 659604,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__760dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.DiscoveryProgressPixels",
+      "detail": "French discovery progress foreground/background",
+      "value0": 3366,
+      "value1": 396556,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "discovery-open__480dip__fr-FR__144dpi.png",
+      "value0": 272,
+      "value1": 474,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.GraphLabelPixels",
+      "detail": "graph-labels-stacked__480dip__fr-FR__144dpi.png",
+      "value0": 979,
+      "value1": 1449,
+      "hr": 0
+    },
+    {
+      "metric": "FileOps.Popup.Capture.PathFocusPixels",
+      "detail": "path-keyboard-focused__480dip__fr-FR__144dpi.png",
+      "value0": 391,
+      "value1": 0,
+      "hr": 0
+    }
+  ],
+  "note": "Intermediate native run: 23/24, with all three path-keyboard repetitions passing. One presentation-settings repetition could not settle automatic resizing; raw timestamps contain a 6.92-second paint gap. The next fixture explicitly establishes notified owned foreground before observing presentation motion."
+}

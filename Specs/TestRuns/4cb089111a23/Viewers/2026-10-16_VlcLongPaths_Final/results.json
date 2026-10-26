@@ -1,0 +1,20 @@
+[
+  {
+    "case": "TestViewerVlcLongPathsAndErrorMessages",
+    "exitCode": 0,
+    "trace": "TestViewerVlcLongPathsAndErrorMessages.txt",
+    "activation": "no-activate"
+  },
+  {
+    "case": "TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts",
+    "exitCode": 0,
+    "trace": "TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts.txt",
+    "activation": "no-activate"
+  },
+  {
+    "case": "TestViewerVlcConfigurationPersistsLastVolumeAndMute",
+    "exitCode": 0,
+    "trace": "TestViewerVlcConfigurationPersistsLastVolumeAndMute.txt",
+    "activation": "no-activate"
+  }
+]

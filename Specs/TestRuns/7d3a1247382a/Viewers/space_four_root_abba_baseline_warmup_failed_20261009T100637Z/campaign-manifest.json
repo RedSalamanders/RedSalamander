@@ -1,0 +1,92 @@
+{
+  "schema": "viewer-space.memory-qualification.v1",
+  "campaign_id": "20261009T100634360Z-fa1c8ae2",
+  "mode": "FourRootAbba",
+  "created_utc": "2026-10-09T10:06:34.4137957Z",
+  "test_root": "D:\\RedSalamander.Perf",
+  "platform": "x64",
+  "configuration": "Release",
+  "case_filter": "cmd_viewer_space_memory_heavy_four_root_optin",
+  "ordering": "baseline warmup, candidate warmup, then three serial ABBA blocks; each block has two mirrored adjacent baseline/candidate contrasts (six pairs total).",
+  "timeout_ms": 1200000,
+  "archive_limits": {
+    "per_file_bytes": 2097152,
+    "per_run_bytes": 5242880
+  },
+  "expected_receipts": {
+    "baseline": "00f27ed01f17807d007b323882effa5f8dc609b902cb2d69ecbf1c7c878af62b",
+    "candidate": "753df43abafc1939cd72afb70983f1b4bb043a2bc1dd5a6ef5e90948cf77b158"
+  },
+  "expected_build_source_snapshot_ids": {
+    "baseline": "0f5d6026de967540b3408d68a9ddce88b92c72f53d535f8e37c89b1e97a3b493",
+    "candidate": "cbe50bd6f5762ef8010ef769ab202a544ecfd86d99e4ff163e101699c4031cd5"
+  },
+  "expected_build_log_paths": {
+    "baseline": "C:/Users/PVB/.codex/worktrees/viewer-space-baseline/RedSalamander/.build/logs/msbuild-20261009_104730_014-pid46216-a8f6e118.log",
+    "candidate": "C:/Users/PVB/.codex/worktrees/viewer-space-explorer-analyst/RedSalamander/.build/logs/msbuild-20261009_115522_152-pid14180-2164f454.log"
+  },
+  "workspace_snapshots": "Capture each runner workspace-final.json snapshot_id independently; it is distinct from the build receipt source_snapshot_id.",
+  "raw_sources_root": "raw-sources",
+  "reproduction": {
+    "curate-viewer-space-memory-run.py": {
+      "sha256": "c6a1db35b5e219f87aa5d9f20f7fb8a9ba79b130070b622dde6973664579a4cd",
+      "path": "reproduction\\curate-viewer-space-memory-run.py",
+      "bytes": 22144
+    },
+    "analyze-viewer-space-memory-campaign.py": {
+      "sha256": "951adfc4eb7f3a663a4b161fef080271dc82a467dfcfc9760e262248dcc75fb3",
+      "path": "reproduction\\analyze-viewer-space-memory-campaign.py",
+      "bytes": 20839
+    },
+    "run-viewer-space-memory-qualification.ps1": {
+      "sha256": "9cfea9d0d67600ba60663c6a90456cfdc22da891df5141980127a33578d67098",
+      "path": "reproduction\\run-viewer-space-memory-qualification.ps1",
+      "bytes": 23578
+    }
+  },
+  "runs": [
+    {
+      "label": "20261009T100634360Z-fa1c8ae2-warmup-baseline",
+      "side": "baseline",
+      "role": "warmup",
+      "block": 0,
+      "position": 0,
+      "run_id": "20261009T100637Z-7604-e71fb121fdd14a71a2785a3cb0d29a3e",
+      "status": "FAILED",
+      "failure_phase": "qualification",
+      "error": "focused Commands case status is failed; canonical runner did not record exactly one passing focused case; four-root phase rows incomplete: got 8, expected 20 for baseline; four-root cache-hit count differs from four",
+      "started_utc": "2026-10-09T10:06:34.5328865Z",
+      "finished_utc": "2026-10-09T10:10:29.4302320Z",
+      "exit_code": 1,
+      "summary_exit_code": 1,
+      "case_status": "failed",
+      "receipt_id": "00f27ed01f17807d007b323882effa5f8dc609b902cb2d69ecbf1c7c878af62b",
+      "receipt_source_snapshot_id": "0f5d6026de967540b3408d68a9ddce88b92c72f53d535f8e37c89b1e97a3b493",
+      "receipt_sha256": "729249803a16314f876533a217bae307e33b39b2fce26d2f8f8021e36603d749",
+      "workspace_snapshot_id": "0f5d6026de967540b3408d68a9ddce88b92c72f53d535f8e37c89b1e97a3b493",
+      "receipt_ended_utc": "2026-10-09T08:56:47.0020984Z",
+      "expected_build_log_path": "C:/Users/PVB/.codex/worktrees/viewer-space-baseline/RedSalamander/.build/logs/msbuild-20261009_104730_014-pid46216-a8f6e118.log",
+      "build_log_source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\logs\\msbuild-20261009_104730_014-pid46216-a8f6e118.log",
+      "build_log_index_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-fourrootabba-20261009T100634360Z-fa1c8ae2\\build-inputs\\baseline\\msbuild-log-index.json",
+      "build_log_sha256": "80c9931e2744d8a372288bc7184e81a8f7e6806b67a9400b25f947f360cc0371",
+      "build_log_bytes": 40505,
+      "stdout_sha256": "e8079b7043b0ea02f96a42352f81608ea7b621846eb15c4462e7868b58c0a01a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 2820,
+      "stderr_bytes": 0,
+      "raw_metrics_original_path": "D:\\RedSalamander.Perf\\runs\\20261009T100637Z-7604-e71fb121fdd14a71a2785a3cb0d29a3e\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "raw_metrics_preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-fourrootabba-20261009T100634360Z-fa1c8ae2\\raw-sources\\20261009T100634360Z-fa1c8ae2-warmup-baseline\\perf_metrics.jsonl",
+      "raw_metrics_bytes": 9219245,
+      "raw_metrics_sha256": "19c3041c6018261221d96122c5be6986b160a85351744f2b279213cc1978c64f",
+      "archive_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-fourrootabba-20261009T100634360Z-fa1c8ae2\\runs\\20261009T100634360Z-fa1c8ae2-warmup-baseline",
+      "curation_status": "unqualified",
+      "curation_errors": [
+        "focused Commands case status is failed",
+        "canonical runner did not record exactly one passing focused case",
+        "four-root phase rows incomplete: got 8, expected 20 for baseline",
+        "four-root cache-hit count differs from four"
+      ]
+    }
+  ],
+  "measurements": []
+}

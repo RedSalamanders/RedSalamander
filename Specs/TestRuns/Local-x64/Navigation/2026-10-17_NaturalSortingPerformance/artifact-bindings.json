@@ -1,0 +1,649 @@
+{
+  "original_copies": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\bindings.json",
+      "archive": "baseline-debug/external-phase-bindings.json",
+      "sha256": "4E568A3652DABF91AECF2DAD5FF7A84C20CDD7945613AEE7B92CE2A7ACB00891"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\build-receipt.json",
+      "archive": "baseline-debug/build-receipt.json",
+      "sha256": "F2665F9AA80547B1FF6BF8318D6D0370B128D18D5A81BA31E7EA5093735F6D19"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\build.log",
+      "archive": "baseline-debug/build.log",
+      "sha256": "7FB06680D898293A708C9B0FA05DB04DABAB8708154A48139C6A02DC8721CC71"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\results.json",
+      "archive": "baseline-debug/results.json",
+      "sha256": "09B4B7EFACF6C4DF28D741CE46C4D71B42DFDEF544687E1BE09A333BEA04F5B2"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\run-all-tests-results.json",
+      "archive": "baseline-debug/run-all-tests-results.json",
+      "sha256": "166D465C0C4E804670BEDAEB5279F2A43A934516335C763607B2D2743F0F86AA"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\trace.txt",
+      "archive": "baseline-debug/trace.txt",
+      "sha256": "82A5AD5AF5DE843F33A9A737F3BF33272D4F86117446AF5B992C40FD422888A6"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\workspace-final.json",
+      "archive": "baseline-debug/workspace-final.json",
+      "sha256": "C73492A70B3765AC395E66FCCB177555A50AB7EE094CD7F29B187507C9D67862"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\commands\\results.json",
+      "archive": "baseline-debug/commands/results.json",
+      "sha256": "2F5E705EED5A74239067D485D4F7A52F0FCED07B5A427C4D5847CF9C9741497C"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\commands\\trace.txt",
+      "archive": "baseline-debug/commands/trace.txt",
+      "sha256": "45EE94321C82480B8B7787E0D76EB3BDE9FE55579FF04CD3F85B57F2CD2535A9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "baseline-debug/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "23D5DF9F7CF9AB137BB9ED126EE07E54ED106724ED9E691AD03D1D77C0EAF64A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\bindings.json",
+      "archive": "candidate-debug/external-phase-bindings.json",
+      "sha256": "50FF64F772B72811D31BB7E99BB01FDAB36C6A3A5BBD31FBC67CF3EC5DFFFBCB"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\build-receipt.json",
+      "archive": "candidate-debug/build-receipt.json",
+      "sha256": "E0429C3D4F0F47AB8EFE65F5404405436E5833BCF032C9E151D6878D36493F08"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\build.log",
+      "archive": "candidate-debug/build.log",
+      "sha256": "A88574174AB9F51A7383960969A69F9770C0865626CF8732487AA8B7442C9AD3"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\results.json",
+      "archive": "candidate-debug/results.json",
+      "sha256": "8884138C32ECDD6423535A95DB7247B0E5568514CD32147EA3FA5EC1A6BD5160"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\run-all-tests-results.json",
+      "archive": "candidate-debug/run-all-tests-results.json",
+      "sha256": "7F4E3EC9323896DC9870F754ADC87DE97E42AC4C7C014BB7180563976D5E5392"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\trace.txt",
+      "archive": "candidate-debug/trace.txt",
+      "sha256": "DE5F308071E7D73B401A821E4C709017E4CAE747094AAE1022A33324FDC5E595"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\workspace-final.json",
+      "archive": "candidate-debug/workspace-final.json",
+      "sha256": "E1D06857A5683F44432E8813833D28F7B9C5B1787C4D019EEC0922359DEA9703"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\commands\\results.json",
+      "archive": "candidate-debug/commands/results.json",
+      "sha256": "AE28905B1E8DE87B16558551FBE07E8FE495EC6A87C6E4684F35794F8A10633B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\commands\\trace.txt",
+      "archive": "candidate-debug/commands/trace.txt",
+      "sha256": "45EE94321C82480B8B7787E0D76EB3BDE9FE55579FF04CD3F85B57F2CD2535A9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-debug/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "6111EADBE5ED0F0DEB8FA72AE49A091AB3987068D91931DF35F0BFDC86225892"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\bindings.json",
+      "archive": "debug-rebuilt/external-phase-bindings.json",
+      "sha256": "557B81707A39721949CB49234638E18F3D41BD74C9C74134E305787BD83EA173"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\build-receipt.json",
+      "archive": "debug-rebuilt/build-receipt.json",
+      "sha256": "8A2B2DEDA7C42074335D7DED1C68F0042E59C58107B3304C67B18D6413B52047"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\build.log",
+      "archive": "debug-rebuilt/build.log",
+      "sha256": "3CAD4A14E4FDF664B982033282EE86F6880BB38868E5D8B638573DF5F85BED84"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\results.json",
+      "archive": "debug-rebuilt/results.json",
+      "sha256": "C2B1F5F6698238B73127171E5263F9EC2F7513970867C94F936C4D91431BF56E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\run-all-tests-results.json",
+      "archive": "debug-rebuilt/run-all-tests-results.json",
+      "sha256": "B09EEB349E279691710485EF32546E7768BD57C87E9037F31A03610FC9E156DE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\trace.txt",
+      "archive": "debug-rebuilt/trace.txt",
+      "sha256": "296190667ECCD1DAD7F92E4802DED7957EBB1E25F25D1909BCB336042144B420"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\workspace-final.json",
+      "archive": "debug-rebuilt/workspace-final.json",
+      "sha256": "8F327C06818182FC7CBEB5EC72861C2AE37FC54DA86962EFDF5E67F80CFE1715"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\commands\\results.json",
+      "archive": "debug-rebuilt/commands/results.json",
+      "sha256": "ACE1964F81A5303B34D4CAA65FBA00C996CAFA8F813FB08B5C35694F87311438"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\commands\\trace.txt",
+      "archive": "debug-rebuilt/commands/trace.txt",
+      "sha256": "45EE94321C82480B8B7787E0D76EB3BDE9FE55579FF04CD3F85B57F2CD2535A9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "debug-rebuilt/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "9D3E8D64379A9A544610EA110B27E6B8204C92CFCEA1804B43CF9EEA96B7DD24"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\bindings.json",
+      "archive": "debug-qualified/external-phase-bindings.json",
+      "sha256": "904EAF3D4D73FD53E9757181598FD7D5508A0EBCB181157278D14B78A908837E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\build-receipt.json",
+      "archive": "debug-qualified/build-receipt.json",
+      "sha256": "B84F901A114E82444298F36F349B508D24737E69EC9C124A3667ED18AB74D071"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\build.log",
+      "archive": "debug-qualified/build.log",
+      "sha256": "69C01970C86CFE1D8C2BEFAFEB11FF1FF75832B3A6C711EC94878D60D067B52B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\results.json",
+      "archive": "debug-qualified/results.json",
+      "sha256": "D1E02375B628A43DFE73555F45C1BA5C2D85B7A4AC9B673A3E176DF28D0E8B6A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\run-all-tests-results.json",
+      "archive": "debug-qualified/run-all-tests-results.json",
+      "sha256": "BEF17B791248B949E69A22F011CD58AF0BB178352246B64A013E25535D24ED7D"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\trace.txt",
+      "archive": "debug-qualified/trace.txt",
+      "sha256": "DA8C57AE18F805B26105A8E5E8E10C6FAB05C0CE599228EECC97791FBD018C71"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\workspace-final.json",
+      "archive": "debug-qualified/workspace-final.json",
+      "sha256": "5F0EE78B9D968BE499E089B6F20AEFAC500868C2F5839FCA31516048B374DF97"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\commands\\results.json",
+      "archive": "debug-qualified/commands/results.json",
+      "sha256": "8E9E110305D0F7327D032821FEF144DB1CB8313F6BE617ED8D7B976A37F3F8EC"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\commands\\trace.txt",
+      "archive": "debug-qualified/commands/trace.txt",
+      "sha256": "45EE94321C82480B8B7787E0D76EB3BDE9FE55579FF04CD3F85B57F2CD2535A9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "debug-qualified/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "82A24D7488EEDA88C8D1059AC4F6C4116086B2F333A42AA60DA5752F23A6D0E1"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\bindings.json",
+      "archive": "functional-debug/external-phase-bindings.json",
+      "sha256": "5E030FFBA43FCE3FBE35B32A69D93ABE7A4232F8D25D1FDECC2DD6C35571B5BB"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\build-receipt.json",
+      "archive": "functional-debug/build-receipt.json",
+      "sha256": "37E2714DF0C89704AB76002E234161432595A4010C3C9C99D0CD798CD29AF811"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\build.log",
+      "archive": "functional-debug/build.log",
+      "sha256": "C5A1BF7BF1F7B2F1F2F523017CDB568B5006DA5C812B5713E401A7091B3B2473"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\results.json",
+      "archive": "functional-debug/results.json",
+      "sha256": "EFB23DE227ED07EF2F7F800DA52CDB84DFBC24374F73A66BC5CB680BDEA5A4D1"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\run-all-tests-results.json",
+      "archive": "functional-debug/run-all-tests-results.json",
+      "sha256": "326F977BD3E2799F74A3BB10B69C48A55BBD5B07217B401BE3D619C24600A3C9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\trace.txt",
+      "archive": "functional-debug/trace.txt",
+      "sha256": "6E7998520A6EF5B04EF55C609637841C2FA437CDBE69A6EA2EA4BE0312A45B81"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\workspace-final.json",
+      "archive": "functional-debug/workspace-final.json",
+      "sha256": "E99276757819AC02870BBD85D90317AB081A2ABD2FF61BE0CD17AC915983814E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\commands\\results.json",
+      "archive": "functional-debug/commands/results.json",
+      "sha256": "0B5D4E398405E5974A775D0E7F09CDDB266AE4F0B244A038DFF380D2E22B3280"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\commands\\trace.txt",
+      "archive": "functional-debug/commands/trace.txt",
+      "sha256": "948B328CEFED2A51DD8D9F56283C8BE0CEAB2581F9DD39E268BA1B01C83D3839"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\bindings.json",
+      "archive": "functional-debug-qualified/external-phase-bindings.json",
+      "sha256": "7A63F09D87334E5D8D4FB487D885AB23EBAD3455EC82D7E942F2CB80B7B7C42F"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\build-receipt.json",
+      "archive": "functional-debug-qualified/build-receipt.json",
+      "sha256": "B84F901A114E82444298F36F349B508D24737E69EC9C124A3667ED18AB74D071"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\build.log",
+      "archive": "functional-debug-qualified/build.log",
+      "sha256": "69C01970C86CFE1D8C2BEFAFEB11FF1FF75832B3A6C711EC94878D60D067B52B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\results.json",
+      "archive": "functional-debug-qualified/results.json",
+      "sha256": "0611FA7D7358E7D632C71B8D03289AE4111A9A86B9A2619F1980534E6ACB002F"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\run-all-tests-results.json",
+      "archive": "functional-debug-qualified/run-all-tests-results.json",
+      "sha256": "9778074233C073289E041E7F066A46B2D3AE7B17DE87101470FA9E19AE801A2E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\trace.txt",
+      "archive": "functional-debug-qualified/trace.txt",
+      "sha256": "6264884D0472E36F1C0521184BB789C4D95AC96FAD5FD7A80090BD24B117F63A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\workspace-final.json",
+      "archive": "functional-debug-qualified/workspace-final.json",
+      "sha256": "4D2F1E3E0CAE4C822091A4306CEC857CC440A6B446A7B077B6BF9B5065E3CE3B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\commands\\results.json",
+      "archive": "functional-debug-qualified/commands/results.json",
+      "sha256": "8584333851F32EBA2763B1983825E9643F3EF74477DD83A001C9FF9BAC98B913"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\commands\\trace.txt",
+      "archive": "functional-debug-qualified/commands/trace.txt",
+      "sha256": "4F11C57754EB60A5485380C20AD9B758D6325CD57DC8AEF8CEB2FD28BB54C57D"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\bindings.json",
+      "archive": "candidate-release/external-phase-bindings.json",
+      "sha256": "EB545D226B4E18D27A469D16DA6A855FE981D300B2EB94338668BA8D1401146E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\build-receipt.json",
+      "archive": "candidate-release/build-receipt.json",
+      "sha256": "33B694B8827E0A9CE9B3C5E5FE2A8AC018B5B8B804FE7F5A702E1E194D52D4AE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\build.log",
+      "archive": "candidate-release/build.log",
+      "sha256": "07F2B60E0E2BD880548B538572117AD1C4168D68E786D55252AD4BA79BEA9882"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\results.json",
+      "archive": "candidate-release/results.json",
+      "sha256": "4F8E7E93C9104AB29336C3798FADEB41B0F691AF0A3B392D241160BE10715E4B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\run-all-tests-results.json",
+      "archive": "candidate-release/run-all-tests-results.json",
+      "sha256": "1A7399269BCCC5A94F2F24DF085AD4FD2FFED2253078AB34A6A7030FB466BB81"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\trace.txt",
+      "archive": "candidate-release/trace.txt",
+      "sha256": "DD254753DF0D63A824F1DF10A6F1F5AE31C4C58DFCBCB14EE4BDC0274A6E3CD0"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\workspace-final.json",
+      "archive": "candidate-release/workspace-final.json",
+      "sha256": "0F1BCFB1695834AC53072683D05E407843D577C2BC027FA0DD12134D824F4324"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\commands\\results.json",
+      "archive": "candidate-release/commands/results.json",
+      "sha256": "C3357BB5B679D545E9B3B88A516E58C25D977129661E4868FE2063B91E75A816"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\commands\\trace.txt",
+      "archive": "candidate-release/commands/trace.txt",
+      "sha256": "C170769968311EAE8076D226460EC5ECD62B4EA1F7E88970E9E790C3322D5B27"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-release/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "92053250AAA3E60AC725399DD678959DFDB11B6DDDA0E7B8CD1836A6650A286E"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\bindings.json",
+      "archive": "functional-release/external-phase-bindings.json",
+      "sha256": "177E539F1EBD5703C65FECD68131994353C0B0B3A1F0E66C2B7C5B8BDE01CDBE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\build-receipt.json",
+      "archive": "functional-release/build-receipt.json",
+      "sha256": "33B694B8827E0A9CE9B3C5E5FE2A8AC018B5B8B804FE7F5A702E1E194D52D4AE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\build.log",
+      "archive": "functional-release/build.log",
+      "sha256": "07F2B60E0E2BD880548B538572117AD1C4168D68E786D55252AD4BA79BEA9882"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\results.json",
+      "archive": "functional-release/results.json",
+      "sha256": "72152E9C8520E594FBE809FF14893CFDABD220E681DD05EEB16E07A3E9B9BF61"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\run-all-tests-results.json",
+      "archive": "functional-release/run-all-tests-results.json",
+      "sha256": "122224FB8CC1E6811B295657E9C62C7D7D97E6375F3D9921E5AA5D4D96C8BFF6"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\trace.txt",
+      "archive": "functional-release/trace.txt",
+      "sha256": "3E4588F1ECF560868B1E151A814CA57593F87FABFAB3083103ABE7AA41878928"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\workspace-final.json",
+      "archive": "functional-release/workspace-final.json",
+      "sha256": "4CD2FB764C142088D8FB9E939556374416110926897D550BC9A1623DF61349B0"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\commands\\results.json",
+      "archive": "functional-release/commands/results.json",
+      "sha256": "B7C010F3774B3DC3896AF5641311897526F9FE3391051B8096BCCB2DEE9B5F41"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\commands\\trace.txt",
+      "archive": "functional-release/commands/trace.txt",
+      "sha256": "AE95338EA499C8DEF8EFA17448021D5A22B6CC2D9D3B37073D55D8E057EA4740"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug\\build-receipt.json",
+      "archive": "viewer-debug/build-receipt.json",
+      "sha256": "B84F901A114E82444298F36F349B508D24737E69EC9C124A3667ED18AB74D071"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug\\result.json",
+      "archive": "viewer-debug/result.json",
+      "sha256": "B39988E5E3F5D781E007D7822A6E16260EDC97D8AD73E46B255D49B6024A2DFC"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug\\stderr.txt",
+      "archive": "viewer-debug/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug\\trace.txt",
+      "archive": "viewer-debug/trace.txt",
+      "sha256": "6CEC40569154259EA1660FF13C7E342C04480CCAC419FA5D11A9DAC16DD4BD25"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-ambient\\build-receipt.json",
+      "archive": "viewer-debug-ambient/build-receipt.json",
+      "sha256": "B84F901A114E82444298F36F349B508D24737E69EC9C124A3667ED18AB74D071"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-ambient\\result.json",
+      "archive": "viewer-debug-ambient/result.json",
+      "sha256": "B3F2873FEB14D922A2FFBB8E7F8C36AA602D4417CE30F1F81150CAB547A42CBC"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-ambient\\stderr.txt",
+      "archive": "viewer-debug-ambient/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-ambient\\trace.txt",
+      "archive": "viewer-debug-ambient/trace.txt",
+      "sha256": "03A4F85893FE47385798E59F981992EA8937037EDBB10C094AD62287086E7483"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-identity\\build-receipt.json",
+      "archive": "viewer-debug-identity/build-receipt.json",
+      "sha256": "B84F901A114E82444298F36F349B508D24737E69EC9C124A3667ED18AB74D071"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-identity\\result.json",
+      "archive": "viewer-debug-identity/result.json",
+      "sha256": "254E9894D418D8D3D4A2D4598EB768435D75EDEC9C50C7234D63B6567E116C1B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-identity\\stderr.txt",
+      "archive": "viewer-debug-identity/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-debug-identity\\trace.txt",
+      "archive": "viewer-debug-identity/trace.txt",
+      "sha256": "DEB1EB8498A4392546004DA8EB573F265F0E512F8525AFD612F5B9AF4A7D2C54"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release\\build-receipt.json",
+      "archive": "viewer-release/build-receipt.json",
+      "sha256": "33B694B8827E0A9CE9B3C5E5FE2A8AC018B5B8B804FE7F5A702E1E194D52D4AE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release\\result.json",
+      "archive": "viewer-release/result.json",
+      "sha256": "3C64486593263740A0DB592553D76A4AA0725B201310DE7F677551E78010F68A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release\\stderr.txt",
+      "archive": "viewer-release/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release\\trace.txt",
+      "archive": "viewer-release/trace.txt",
+      "sha256": "C94CF75DD68A60FD4698F93AA0B82DCCAFBDC9819D9BA03043A14BB46BDD7E17"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-ambient\\build-receipt.json",
+      "archive": "viewer-release-ambient/build-receipt.json",
+      "sha256": "33B694B8827E0A9CE9B3C5E5FE2A8AC018B5B8B804FE7F5A702E1E194D52D4AE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-ambient\\result.json",
+      "archive": "viewer-release-ambient/result.json",
+      "sha256": "C795B9DFEB97628357A13192416DCF4AA02128B20E1A052A5A18E0833D0C040A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-ambient\\stderr.txt",
+      "archive": "viewer-release-ambient/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-ambient\\trace.txt",
+      "archive": "viewer-release-ambient/trace.txt",
+      "sha256": "7FAD679F398D61D735877E73E14513F6496293B6233E0A96A39B95DB5663C7FC"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-identity\\build-receipt.json",
+      "archive": "viewer-release-identity/build-receipt.json",
+      "sha256": "33B694B8827E0A9CE9B3C5E5FE2A8AC018B5B8B804FE7F5A702E1E194D52D4AE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-identity\\result.json",
+      "archive": "viewer-release-identity/result.json",
+      "sha256": "6F05EDF220CB9DC687FC2AA7B79B4333116A9E1A84EB9AC4B7390333F8C10F67"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-identity\\stderr.txt",
+      "archive": "viewer-release-identity/stderr.txt",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\viewer-release-identity\\trace.txt",
+      "archive": "viewer-release-identity/trace.txt",
+      "sha256": "DEB1EB8498A4392546004DA8EB573F265F0E512F8525AFD612F5B9AF4A7D2C54"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\performance-comparison.json",
+      "archive": "performance-comparison.json",
+      "sha256": "6770ECD43E4BE062A738C0A51741555052D9EB6A55321DA12DCAFCC2FF0B14CD"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\source-contract-results.json",
+      "archive": "source-contract-results.json",
+      "sha256": "4DA8E05E88B08F2B2F0D5673551A2950E289EE16C0DADC6F30BB2BF87CE7492B"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\tested-code.json",
+      "archive": "tested-code.json",
+      "sha256": "EA8184D78B8593196BAE0B0A272ACE3100ABDA96665802FC557451538BAB0723"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\runtime-verification.json",
+      "archive": "runtime-verification.json",
+      "sha256": "1A5AA2C79685548CBE7A74C950363145A895B96345C9A785C167E2DE7962DA07"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\format-check.json",
+      "archive": "format-check.json",
+      "sha256": "D96F350841D9BCFDDB20D002849CDDB39AFAB51D1DD8F8F6BBE6B94812AC82AB"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\ambient-build-observation.json",
+      "archive": "ambient-build-observation.json",
+      "sha256": "5AB97AB4928375DA56E102D1392DB3CF594497D1A6A7A94051BF3A7BA93F8739"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuild-comparison.json",
+      "archive": "debug-rebuild-comparison.json",
+      "sha256": "2153433FA72F36542E2322600254A0280B44EE89461B06507DD56D2C9391B43A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-runner.log",
+      "archive": "functional-debug-runner.log",
+      "sha256": "EAB16640C3CC954D6530CABF2360A98EAB890E3F2BA5D76B5AB31A05DB58879A"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-retry-runner.log",
+      "archive": "functional-debug-retry-runner.log",
+      "sha256": "65B00963784518892B736E0D40C48D8D6E1587D0CE071992A934E38619375ACB"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-solution-build.log",
+      "archive": "debug-solution-build.log",
+      "sha256": "306E51CD47FA1DAACE5F73575EE4020E02835D1DEFC413A3D4123B1412F074F2"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\release-build.log",
+      "archive": "release-build.log",
+      "sha256": "444EE0F31FC1A1F04C55DD881F0B5EE09DAA49478B15665A22BB604B36978C05"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\affected-explain.log",
+      "archive": "affected-explain.log",
+      "sha256": "0434DC4D2ABA2C0D0876D5557EF2BD34C9C295285077F35CD9BCFBECF2CAE1E9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\probe-debug.csv",
+      "archive": "probe-debug.csv",
+      "sha256": "820C0A6C7E2CD0282474A4390537783D6A1A07B1E51C528E657011E68A1896E4"
+    }
+  ],
+  "derived_metric_extracts": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\baseline-debug\\perf\\perf_metrics.jsonl",
+      "source_sha256": "895E0A0B60AB8E1D21BF6E74BB8B4C3EA6357DF1EC238949DECB8B84E121B310",
+      "archive": "baseline-debug/perf/perf-selected.jsonl",
+      "archive_sha256": "0FCFF415162FEC671DA57DAC8D936C42011FA9D8641FD2680B3BAD2BDBE53EBF",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 129,
+      "all_sort_samples": 50
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-debug\\perf\\perf_metrics.jsonl",
+      "source_sha256": "6B7D58C2170FA4D1C9AA60DA3791BBADC3D9B5D80B55CA8F234D77B2EEF5C2F3",
+      "archive": "candidate-debug/perf/perf-selected.jsonl",
+      "archive_sha256": "745882D219B30A8EE7C2EC14EE870A884D16DBF4CFBC9911945773764CB89C38",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 137,
+      "all_sort_samples": 50
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-rebuilt\\perf\\perf_metrics.jsonl",
+      "source_sha256": "AB2E0FEF71CFF80823EF6741C931A3AD77A13D91E391FF9A2656A46B018FDF23",
+      "archive": "debug-rebuilt/perf/perf-selected.jsonl",
+      "archive_sha256": "A1100500F1A5073CFACCA5D95F4CE7B45DB86AD564B350B13141B4ED0B4B6940",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 138,
+      "all_sort_samples": 50
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\debug-qualified\\perf\\perf_metrics.jsonl",
+      "source_sha256": "7C52B3446A46C38FEB031A63D38D6681110B5980551A09C142ECCE52B48E5092",
+      "archive": "debug-qualified/perf/perf-selected.jsonl",
+      "archive_sha256": "BF68C6924EFEE2877895412CA7BA1826F659EB2E6313453C69EF0EF5FE5A5E73",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 138,
+      "all_sort_samples": 50
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug\\perf\\perf_metrics.jsonl",
+      "source_sha256": "9DF7BBB9797F19BFE35EB8BF6F4131BF5D6588DF5B5ECF011186D8892F0133B0",
+      "archive": "functional-debug/perf/perf-selected.jsonl",
+      "archive_sha256": "DDE803D0296634583285D1AC82886D1282E4E3FD5429246947506910FF9E9A9C",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 181,
+      "all_sort_samples": 0
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-debug-qualified\\perf\\perf_metrics.jsonl",
+      "source_sha256": "E8CA9D22BD745C8705C7A8C02A5CF7C8783683EAE8B197CA70BF03C932E1403F",
+      "archive": "functional-debug-qualified/perf/perf-selected.jsonl",
+      "archive_sha256": "EA1EA5FFAE302376679D71F36B0FA375E2AFA13979F8A2A33E20E644AEC44BB8",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 179,
+      "all_sort_samples": 0
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\candidate-release\\perf\\perf_metrics.jsonl",
+      "source_sha256": "FC3E99A3943796293BA6E6C84565CFF7EC8D825D213E33D0366402169297073C",
+      "archive": "candidate-release/perf/perf-selected.jsonl",
+      "archive_sha256": "517F9BE953577E0004B012ACF628CB71DC418962D5BDD6E4CE56873E2276880F",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 137,
+      "all_sort_samples": 50
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17\\functional-release\\perf\\perf_metrics.jsonl",
+      "source_sha256": "3D9F7004A12E6DCE9C7D73EBC02BA0C8966E79A56200BF55CA8B599F02422776",
+      "archive": "functional-release/perf/perf-selected.jsonl",
+      "archive_sha256": "EAA68DB5CAF0C793EB36D83D412664025C857ABF8E520C399F5D5EEE57D08E9B",
+      "selection": "folder\\.sort_toggle_us|FolderView\\.ApplyCurrentSort|FolderView\\.ExecuteEnumeration\\.(BuildItems|SortMerge|NaturalSortRanks)|find\\.ui\\.sort_results_ms|batchrename\\.preview\\.(recompute|visible_refresh)\\.us|batchrename\\.collect\\.",
+      "selected_rows": 185,
+      "all_sort_samples": 0
+    }
+  ],
+  "complete_bulk_metrics_preserved_at": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-optimization-2026-10-17"
+}

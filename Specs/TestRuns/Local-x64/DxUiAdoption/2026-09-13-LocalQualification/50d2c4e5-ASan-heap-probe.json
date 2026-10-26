@@ -1,0 +1,10 @@
+{
+  "source": "50d2c4e5a099f2a46c13db8af487db28d4ce256b",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "exitCode": 1,
+  "expectedDiagnostic": "AddressSanitizer: heap-buffer-overflow",
+  "executableSha256": "6BF0F3FE15FEF697681D937E33B47CCB903B9CBD9B628AEED79AAEBA138D80F6",
+  "log": "Z:/RedSalamander.Perf/evidence/I19-20260909/50d2c4e5-ASan-heap-probe.log",
+  "completedUtc": "2026-09-12T22:06:57.6667938Z"
+}

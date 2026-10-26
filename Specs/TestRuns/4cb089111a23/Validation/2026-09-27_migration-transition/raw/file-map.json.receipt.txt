@@ -1,0 +1,797 @@
+[
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_165002\\commands_results.json",
+    "path": "raw/4cafeb18f674990cb3b4fff6.receipt.txt",
+    "sha256": "4cafeb18f674990cb3b4fff69ba6cdf1857e27062f4c2b053c2582b7a4a11bf9"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_165002\\commands_trace.txt",
+    "path": "raw/f9b03a12a64279ca4000e75d.receipt.txt",
+    "sha256": "f9b03a12a64279ca4000e75d45a8509bc8f7498d8f7e8c377e92150bf9b78e16"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_165002\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_165002\\fileops_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_165002\\selftest_run_results.json",
+    "path": "raw/848379da7289cf427c1b087a.receipt.txt",
+    "sha256": "848379da7289cf427c1b087a0c6b55ebf2cb54c35a6fa231adfa91a80f338914"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\results.json",
+    "path": "raw/4cafeb18f674990cb3b4fff6.receipt.txt",
+    "sha256": "4cafeb18f674990cb3b4fff69ba6cdf1857e27062f4c2b053c2582b7a4a11bf9"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/0528c29f14c2d5d5d5bd100c.receipt.txt",
+    "sha256": "0528c29f14c2d5d5d5bd100c13edd57603e80a0094333dc2ec6a0743fa547ccd"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/848379da7289cf427c1b087a.receipt.txt",
+    "sha256": "848379da7289cf427c1b087a0c6b55ebf2cb54c35a6fa231adfa91a80f338914"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/3b0b16bded76b267128d54bf.receipt.txt",
+    "sha256": "3b0b16bded76b267128d54bf67daf32b48cf79416882f30e18e352c59b6775f6"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/a0cf795dc42aa24a34167c47.receipt.txt",
+    "sha256": "a0cf795dc42aa24a34167c47e2ea89b7a917f73b785da09eae43c19ef6b791d3"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\build-receipt.json",
+    "path": "raw/add65de234573e4d29b87afa.receipt.txt",
+    "sha256": "add65de234573e4d29b87afad8151edf4f99853a24073b5488dcd299a06b6718"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\candidate-inputs.json",
+    "path": "raw/281663048ea0d733f12ee0d1.receipt.txt",
+    "sha256": "281663048ea0d733f12ee0d1eb2ff7c7ec6e996195b1bb3d9ae3b3b5be780ce9"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-exit.txt",
+    "path": "raw/f1b2f662800122bed0ff2556.receipt.txt",
+    "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-plan.json",
+    "path": "raw/f2e243a69c05c2bbb39a34d8.receipt.txt",
+    "sha256": "f2e243a69c05c2bbb39a34d832b20f4b958459cca3a2919567c0e7f39a21fc49"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-copy-hashes.json",
+    "path": "raw/9f0c659adbdc7b3c0a0df613.receipt.txt",
+    "sha256": "9f0c659adbdc7b3c0a0df613f6bbeb31d83902b68b6026134c03a94744f3ae7d"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection.log",
+    "path": "raw/b3c459fdb7faffb222c7fa9d.receipt.txt",
+    "sha256": "b3c459fdb7faffb222c7fa9db073d0aaa3f0ca60a8a809c78cbf77474f3ebcb0"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\invocations.json",
+    "path": "raw/db3a4f319e461b064c860b07.receipt.txt",
+    "sha256": "db3a4f319e461b064c860b07b324be967f77b1784fa455236f10791443881f33"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/89fa748a9382d21af324fbd3.receipt.txt",
+    "sha256": "89fa748a9382d21af324fbd36563a690528c353e3345e15ca3e66f0137acb2d0"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/cf5abe4a47f8e1160c23fda3.receipt.txt",
+    "sha256": "cf5abe4a47f8e1160c23fda370a6fc0f9e3e625d18b1a73cfae405056c0a924b"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v10-release-20260927\\run.ps1",
+    "path": "raw/7264b82f663a5436cf84deed.receipt.txt",
+    "sha256": "7264b82f663a5436cf84deed955946186e899fa95b498f568858f18541ab8531"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_171451\\commands_results.json",
+    "path": "raw/cd490ac1f5856218dfdf168a.receipt.txt",
+    "sha256": "cd490ac1f5856218dfdf168ab7cbc04d440d3229dca129eb6a65004a7dfa6638"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_171451\\commands_trace.txt",
+    "path": "raw/452d9495cc8c5f7c2576e085.receipt.txt",
+    "sha256": "452d9495cc8c5f7c2576e085d890759aa2ce1c7178449261ed96e29c9e470fa3"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_171451\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_171451\\fileops_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-27_171451\\selftest_run_results.json",
+    "path": "raw/0ff4a7cfa5985759794c42a2.receipt.txt",
+    "sha256": "0ff4a7cfa5985759794c42a24c7eee716dc23eed9d32249c1333231f51d5de46"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\results.json",
+    "path": "raw/cd490ac1f5856218dfdf168a.receipt.txt",
+    "sha256": "cd490ac1f5856218dfdf168ab7cbc04d440d3229dca129eb6a65004a7dfa6638"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/88eba8ad64e9a1525e7f7234.receipt.txt",
+    "sha256": "88eba8ad64e9a1525e7f72344f158aa2ef9554a2aa6db414d039fbc6e80339a3"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/0ff4a7cfa5985759794c42a2.receipt.txt",
+    "sha256": "0ff4a7cfa5985759794c42a24c7eee716dc23eed9d32249c1333231f51d5de46"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/d4c02a8470a32aa467cc9cb9.receipt.txt",
+    "sha256": "d4c02a8470a32aa467cc9cb977cd70b8bfff4f5f0f036c835959dfdfbfc88a06"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/ec008df9592595e3a98ce6c7.receipt.txt",
+    "sha256": "ec008df9592595e3a98ce6c7b636643a96ad5db9ac96f375282e1fdc27f040fe"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\build-receipt.json",
+    "path": "raw/7fbeede4e597e8c31620d240.receipt.txt",
+    "sha256": "7fbeede4e597e8c31620d24043fd7ccc4d5cb98dd3320c1c0dc809f73381e7c1"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\candidate-inputs.json",
+    "path": "raw/d0a7dd3d7f78bbc523cc2436.receipt.txt",
+    "sha256": "d0a7dd3d7f78bbc523cc24363c6847f26e4a5754b4827a45a4b3dae17e1659aa"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-plan.json",
+    "path": "raw/f2e243a69c05c2bbb39a34d8.receipt.txt",
+    "sha256": "f2e243a69c05c2bbb39a34d832b20f4b958459cca3a2919567c0e7f39a21fc49"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-copy-hashes.json",
+    "path": "raw/d4f86c9ff4cd00240fbb7690.receipt.txt",
+    "sha256": "d4f86c9ff4cd00240fbb769040c8ee387dac8e9fd30db4d3430a4d883f1d474e"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection.log",
+    "path": "raw/b478ff9e591f5a55a4996552.receipt.txt",
+    "sha256": "b478ff9e591f5a55a4996552e2f6d2ad23942380806a40dae8d7388cb7a87d5f"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\invocations.json",
+    "path": "raw/113b163eb34b1522566fc16e.receipt.txt",
+    "sha256": "113b163eb34b1522566fc16e6cded2aeca31bbb4def0fc957a1ff8861817398a"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/0f4b56f6954ea444dcd51609.receipt.txt",
+    "sha256": "0f4b56f6954ea444dcd516091bb18eff85a9f90bd1a11f1081e6fef28e0149db"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\inspection-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/f7daa0d204b6ce7ef7e516de.receipt.txt",
+    "sha256": "f7daa0d204b6ce7ef7e516de57b0f2b59a23ca8fa7c2ca856b4046a14262d817"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-inspection-v13-debug-20260927\\run.ps1",
+    "path": "raw/fa6448c6d6df82cc52cbb806.receipt.txt",
+    "sha256": "fa6448c6d6df82cc52cbb806dbd35745db228f0bcce41cc7af70dae316acea2c"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\baseline-empty-selection.log",
+    "path": "raw/88bc01c4248d4203577c4756.receipt.txt",
+    "sha256": "88bc01c4248d4203577c47569771fd6d9bad368a31bdaa3fd6d2108fc8c3f54a"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\baseline-empty-selection.xml",
+    "path": "raw/0ee14940f225fbd301c45f7b.receipt.txt",
+    "sha256": "0ee14940f225fbd301c45f7bdbfc183443e21f4dcf6eb8d0524c846a8a6bfc0e"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\baseline.xml",
+    "path": "raw/cbbbfb212c1e2977d8ff0b49.receipt.txt",
+    "sha256": "cbbbfb212c1e2977d8ff0b495170ca957a79d5641ce9cb6cf2318d6c267e6dc5"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\candidate.log",
+    "path": "raw/9c81738cababdc493bd81e0b.receipt.txt",
+    "sha256": "9c81738cababdc493bd81e0bed0f328fe468b16c4f4ef70636b338edefc5d087"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\candidate.xml",
+    "path": "raw/aeefc58b9141925a3c3f0d97.receipt.txt",
+    "sha256": "aeefc58b9141925a3c3f0d972042f708612cb66753f14c884e71b7dc8847956a"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_163844\\commands_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_163844\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_163844\\fileops_results.json",
+    "path": "raw/ad2acae0e79c49e9e0327853.receipt.txt",
+    "sha256": "ad2acae0e79c49e9e03278532f9e993b116a3b544380c8acee89eabffa635158"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_163844\\fileops_trace.txt",
+    "path": "raw/4719f15aa236a8450ee0c739.receipt.txt",
+    "sha256": "4719f15aa236a8450ee0c7396db4b16528b8a76bf1422c6939d7ecdc48bc2f90"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_163844\\selftest_run_results.json",
+    "path": "raw/0bd4c69859ce7b75c641292f.receipt.txt",
+    "sha256": "0bd4c69859ce7b75c641292f771dfdd86147d086a3a77755dc96c481f9af9b7c"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/ad2acae0e79c49e9e0327853.receipt.txt",
+    "sha256": "ad2acae0e79c49e9e03278532f9e993b116a3b544380c8acee89eabffa635158"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/4719f15aa236a8450ee0c739.receipt.txt",
+    "sha256": "4719f15aa236a8450ee0c7396db4b16528b8a76bf1422c6939d7ecdc48bc2f90"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/0bd4c69859ce7b75c641292f.receipt.txt",
+    "sha256": "0bd4c69859ce7b75c641292f771dfdd86147d086a3a77755dc96c481f9af9b7c"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/94511d02ef33a1db81c6dff5.receipt.txt",
+    "sha256": "94511d02ef33a1db81c6dff5aaa45c758421fcb58305b5d2cde2e26b74be9eef"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/c7373716601f53aa0f054b60.receipt.txt",
+    "sha256": "c7373716601f53aa0f054b6073c150b5342eb59f6691cc54e9844e38a194e4cf"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\build-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\build-receipt.json",
+    "path": "raw/a90124dbcbb52acea5b6eabe.receipt.txt",
+    "sha256": "a90124dbcbb52acea5b6eabed43a9cfce1dd43adeaf9e6062b235051efc266ea"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\build.log",
+    "path": "raw/6320ab1e405176baa8d70b55.receipt.txt",
+    "sha256": "6320ab1e405176baa8d70b5525976c87bf7bcb27c80e438fdb732c1e0db93bd1"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\candidate-inputs.json",
+    "path": "raw/c1763ee6d62f2f59028109ad.receipt.txt",
+    "sha256": "c1763ee6d62f2f59028109ad0a58a1305f677bbd92f8b528b64d506452c39aec"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-exit.txt",
+    "path": "raw/f1b2f662800122bed0ff2556.receipt.txt",
+    "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-plan.json",
+    "path": "raw/4430917ea78da52e3e49dbad.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-copy-hashes.json",
+    "path": "raw/3f8eeadc8e13ac3b21125a61.receipt.txt",
+    "sha256": "3f8eeadc8e13ac3b21125a61253958fa875175c9a34c0cc332d42bf6e64b88de"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery.log",
+    "path": "raw/0a9a909727094303926b0fba.receipt.txt",
+    "sha256": "0a9a909727094303926b0fba7e1f2aa3602f46a5389594fab4c1c89450b54ec1"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\invocations.json",
+    "path": "raw/0c5f2994588450b958624643.receipt.txt",
+    "sha256": "0c5f2994588450b958624643b121d525dd036bc4046654b517cfb3b25385a61d"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/f1916036b9c83f931a0e4496.receipt.txt",
+    "sha256": "f1916036b9c83f931a0e4496ab71c5f0f9c22ce7b76575df28943a0a3dca50f5"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/6c1548c82ff9926badeae893.receipt.txt",
+    "sha256": "6c1548c82ff9926badeae893d7e266e6e3533c644d0401c1efa84bd2fe73c864"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\legacy-migration-v9-release-20260927\\run.ps1",
+    "path": "raw/bc7880e967ea2f9213b5d7af.receipt.txt",
+    "sha256": "bc7880e967ea2f9213b5d7af98a0ac5f94edaad7628804abaa773512463f0767"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_164846\\commands_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_164846\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_164846\\fileops_results.json",
+    "path": "raw/e6be90cc6fe7b8a357ffcbb4.receipt.txt",
+    "sha256": "e6be90cc6fe7b8a357ffcbb429d709cf8ca19c1a9eea47468e08865b0557ec30"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_164846\\fileops_trace.txt",
+    "path": "raw/62d4bf3f2acbf9c08a55ba85.receipt.txt",
+    "sha256": "62d4bf3f2acbf9c08a55ba859481b172d7a6fcda5b2fbe734effe3f53a8d7d90"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_164846\\selftest_run_results.json",
+    "path": "raw/c026dff4671aa89738cb71b2.receipt.txt",
+    "sha256": "c026dff4671aa89738cb71b2bb6033d34548af223ff3ebedcff6c643d6f76b21"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/e6be90cc6fe7b8a357ffcbb4.receipt.txt",
+    "sha256": "e6be90cc6fe7b8a357ffcbb429d709cf8ca19c1a9eea47468e08865b0557ec30"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/62d4bf3f2acbf9c08a55ba85.receipt.txt",
+    "sha256": "62d4bf3f2acbf9c08a55ba859481b172d7a6fcda5b2fbe734effe3f53a8d7d90"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/c026dff4671aa89738cb71b2.receipt.txt",
+    "sha256": "c026dff4671aa89738cb71b2bb6033d34548af223ff3ebedcff6c643d6f76b21"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/fbe377ed61d695b553feb0af.receipt.txt",
+    "sha256": "fbe377ed61d695b553feb0af85ac7e01d01df9a7cee47ee66f29142cf20d2bfb"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/563e344a850f6d0bc197086c.receipt.txt",
+    "sha256": "563e344a850f6d0bc197086cf46a9bfc2876d64b8ba3ab7f08947c30e558e3f8"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\build-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\build-receipt.json",
+    "path": "raw/add65de234573e4d29b87afa.receipt.txt",
+    "sha256": "add65de234573e4d29b87afad8151edf4f99853a24073b5488dcd299a06b6718"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\build.log",
+    "path": "raw/c21300e09c9363ae8ae9ba54.receipt.txt",
+    "sha256": "c21300e09c9363ae8ae9ba542e3aa3c108813b60aa767f54a9c79eadcea12eae"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\candidate-inputs.json",
+    "path": "raw/281663048ea0d733f12ee0d1.receipt.txt",
+    "sha256": "281663048ea0d733f12ee0d1eb2ff7c7ec6e996195b1bb3d9ae3b3b5be780ce9"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-plan.json",
+    "path": "raw/4430917ea78da52e3e49dbad.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-copy-hashes.json",
+    "path": "raw/ccfcc934668c7bfdbe3d104f.receipt.txt",
+    "sha256": "ccfcc934668c7bfdbe3d104f31bbee198aff91253060aa1676709f2a0ed1e49b"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery.log",
+    "path": "raw/2753e0c0f881ccb6eb72f6e5.receipt.txt",
+    "sha256": "2753e0c0f881ccb6eb72f6e55ba504298784821a666d84ba30e74214fe85d0c6"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\invocations.json",
+    "path": "raw/ed44326d479dc849fa2aa1e4.receipt.txt",
+    "sha256": "ed44326d479dc849fa2aa1e488e2062d32631c9d69c8a122e292c4f37152d5c7"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/f1916036b9c83f931a0e4496.receipt.txt",
+    "sha256": "f1916036b9c83f931a0e4496ab71c5f0f9c22ce7b76575df28943a0a3dca50f5"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/69cbf1b202e7705934c72a9c.receipt.txt",
+    "sha256": "69cbf1b202e7705934c72a9c80c83dbfffd500688643c8a4971552c00248b3e5"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\terminal-transition-v10-release-20260927\\run.ps1",
+    "path": "raw/7302537e8d9ff0c58eb46f6e.receipt.txt",
+    "sha256": "7302537e8d9ff0c58eb46f6ed2a5555d4d725c165416c5017e8204046d237929"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\FolderWindow.FileOperations.SelfTest.VisualGallery.cpp.source.txt",
+    "path": "raw/7262ea37807da67a5e6d7cc6.receipt.txt",
+    "sha256": "7262ea37807da67a5e6d7cc646dda341513340686f23f4076aa038c1e741528a"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_165950\\commands_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_165950\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_165950\\fileops_results.json",
+    "path": "raw/9a8befbcae21ce476c8d47f0.receipt.txt",
+    "sha256": "9a8befbcae21ce476c8d47f080da573440d5900b417c5fb6657f14144263d0d7"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_165950\\fileops_trace.txt",
+    "path": "raw/82ebe38b3077ba3cf208271b.receipt.txt",
+    "sha256": "82ebe38b3077ba3cf208271ba03863c55b53f7bb6dd2928f296d08702f2a8c73"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_165950\\selftest_run_results.json",
+    "path": "raw/662c5a9725239228ca1fd2e2.receipt.txt",
+    "sha256": "662c5a9725239228ca1fd2e27b00cd6cba0f929e923ac5aca511cbcb6113cf07"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/9a8befbcae21ce476c8d47f0.receipt.txt",
+    "sha256": "9a8befbcae21ce476c8d47f080da573440d5900b417c5fb6657f14144263d0d7"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/82ebe38b3077ba3cf208271b.receipt.txt",
+    "sha256": "82ebe38b3077ba3cf208271ba03863c55b53f7bb6dd2928f296d08702f2a8c73"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/662c5a9725239228ca1fd2e2.receipt.txt",
+    "sha256": "662c5a9725239228ca1fd2e27b00cd6cba0f929e923ac5aca511cbcb6113cf07"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/105894ced23a3b81278f554d.receipt.txt",
+    "sha256": "105894ced23a3b81278f554d719a912ff402454f568721202acc272e41b496aa"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/f482946aa329897616490bb2.receipt.txt",
+    "sha256": "f482946aa329897616490bb2415664fc8ce54a5befb0df77a1ac2ed4a8068549"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\build-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\build-receipt.json",
+    "path": "raw/abeb2b7c2a896ef18979a1f2.receipt.txt",
+    "sha256": "abeb2b7c2a896ef18979a1f269970c6ca84a6d158cb36817bd0376819e809c5d"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\build.log",
+    "path": "raw/8a1f5475cba51295ad7173e5.receipt.txt",
+    "sha256": "8a1f5475cba51295ad7173e5f1fd26d614a5addade7da9993a82f1606c069abd"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\candidate-inputs.json",
+    "path": "raw/35f3af89b4ce15a51f67e78c.receipt.txt",
+    "sha256": "35f3af89b4ce15a51f67e78c93b7ab9e312aae2939efd57375a86890000ab084"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-exit.txt",
+    "path": "raw/f1b2f662800122bed0ff2556.receipt.txt",
+    "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-plan.json",
+    "path": "raw/4430917ea78da52e3e49dbad.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-copy-hashes.json",
+    "path": "raw/fb605bc48efb627a06d35114.receipt.txt",
+    "sha256": "fb605bc48efb627a06d35114071733b7ea11553ede1eb42e4642918dd93bc150"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery.log",
+    "path": "raw/6dcccd13da35ba4cb92dbbe7.receipt.txt",
+    "sha256": "6dcccd13da35ba4cb92dbbe77065f805d7ca12e837addc6161455740db4fd734"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\invocations.json",
+    "path": "raw/b6c2d5b5b094e98b01864901.receipt.txt",
+    "sha256": "b6c2d5b5b094e98b018649013f160935fe1cbee9be1303800c5a03914f42de64"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/49671cd318019e09af7d5357.receipt.txt",
+    "sha256": "49671cd318019e09af7d53570d0dca781452b0d3ca5ebee84cd100dcb73794b0"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/a89d6080322e9f843a74de7d.receipt.txt",
+    "sha256": "a89d6080322e9f843a74de7da77eec075f1eddb67a783ea3818f6f251150000e"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v11-debug-20260927\\run.ps1",
+    "path": "raw/264fcb4a78eb9b3426f15e27.receipt.txt",
+    "sha256": "264fcb4a78eb9b3426f15e272685ab45dfd5e8d175e69eaedaac33682ad649fa"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\VisualGallery.cpp.source.txt",
+    "path": "raw/4240e2da861443bfaa2b1471.receipt.txt",
+    "sha256": "4240e2da861443bfaa2b1471c67ae09256634ff256d793dde4300228f26baad6"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\build-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\build-receipt.json",
+    "path": "raw/6d49e0888dca373fad82ace0.receipt.txt",
+    "sha256": "6d49e0888dca373fad82ace02372ff442ffcfd50f835244da3713f449017eea5"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\build.log",
+    "path": "raw/c9de285906cff8593c7a90d7.receipt.txt",
+    "sha256": "c9de285906cff8593c7a90d77bfb58a1026bc8b8d5d15564e5fb2732e82c2050"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\candidate-inputs.json",
+    "path": "raw/d0a7dd3d7f78bbc523cc2436.receipt.txt",
+    "sha256": "d0a7dd3d7f78bbc523cc24363c6847f26e4a5754b4827a45a4b3dae17e1659aa"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\gallery-exit.txt",
+    "path": "raw/7c468f5e59f2871b946e0514.receipt.txt",
+    "sha256": "7c468f5e59f2871b946e051445493bbcace531d597edbbcc9935e7d02d025114"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\gallery-plan.json",
+    "path": "raw/4430917ea78da52e3e49dbad.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\gallery.log",
+    "path": "raw/fae8bfeb4ea39b8401709c61.receipt.txt",
+    "sha256": "fae8bfeb4ea39b8401709c61ef072dd12ffb6bca743dac4fc5b8c960e51a488f"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\invocations.json",
+    "path": "raw/6f1765c00c4f01d46e409157.receipt.txt",
+    "sha256": "6f1765c00c4f01d46e4091570135eafce2974070dcbc34798f55df911831ff26"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v12-debug-20260927\\run.ps1",
+    "path": "raw/7fe67aa5a4eb529050c609bf.receipt.txt",
+    "sha256": "7fe67aa5a4eb529050c609bf8e349d36933ed6844cea63d6433b3c6e82eddc04"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\Commands.SelfTest.FileOps.cpp.source.txt",
+    "path": "raw/0c6976f96193cdf756a4d22c.receipt.txt",
+    "sha256": "0c6976f96193cdf756a4d22ceb02ad6bafaa088a161c43772e28faa020fb46a9"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\FolderWindow.FileOperations.SelfTest.VisualGallery.cpp.source.txt",
+    "path": "raw/4240e2da861443bfaa2b1471.receipt.txt",
+    "sha256": "4240e2da861443bfaa2b1471c67ae09256634ff256d793dde4300228f26baad6"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp.source.txt",
+    "path": "raw/ace572f97f3b41a82bc4aab5.receipt.txt",
+    "sha256": "ace572f97f3b41a82bc4aab5f1de0ba38940d3203813c82ec8e5ebf68eecdbb7"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_171400\\commands_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_171400\\compare_trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_171400\\fileops_results.json",
+    "path": "raw/a8075f5719cfbb59e1e9f160.receipt.txt",
+    "sha256": "a8075f5719cfbb59e1e9f160262cc536fb99d1525d9a2db45627d47a97a4d986"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_171400\\fileops_trace.txt",
+    "path": "raw/19ee32b0ad7538c3e3bff9be.receipt.txt",
+    "sha256": "19ee32b0ad7538c3e3bff9beb4509df5262c6bffddd8c51564b84f01003545e8"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-09-27_171400\\selftest_run_results.json",
+    "path": "raw/fec9e5d70f96eb38cd19a57e.receipt.txt",
+    "sha256": "fec9e5d70f96eb38cd19a57e30f3d6e061702bab48e0e736e8172ce9d0fd2317"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+    "path": "raw/b3d510ef04275ca8e698e5b3.receipt.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/a8075f5719cfbb59e1e9f160.receipt.txt",
+    "sha256": "a8075f5719cfbb59e1e9f160262cc536fb99d1525d9a2db45627d47a97a4d986"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/19ee32b0ad7538c3e3bff9be.receipt.txt",
+    "sha256": "19ee32b0ad7538c3e3bff9beb4509df5262c6bffddd8c51564b84f01003545e8"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/fec9e5d70f96eb38cd19a57e.receipt.txt",
+    "sha256": "fec9e5d70f96eb38cd19a57e30f3d6e061702bab48e0e736e8172ce9d0fd2317"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+    "path": "raw/d2babc72083aaf798455f87f.receipt.txt",
+    "sha256": "d2babc72083aaf798455f87fbcdf33cc7310cfcf57228fc518594e410b1aa6b1"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/4257d0e4485a69351dff1d57.receipt.txt",
+    "sha256": "4257d0e4485a69351dff1d57d82e1c83bb2ecbcd283c783e6dfe2c2d2da42f89"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\build-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\build-receipt.json",
+    "path": "raw/7fbeede4e597e8c31620d240.receipt.txt",
+    "sha256": "7fbeede4e597e8c31620d24043fd7ccc4d5cb98dd3320c1c0dc809f73381e7c1"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\build.log",
+    "path": "raw/fbdbeb689fba597839ccf195.receipt.txt",
+    "sha256": "fbdbeb689fba597839ccf195fdda7c79f52d27c8d28f0152296a0cc2f33803bd"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\candidate-inputs.json",
+    "path": "raw/d0a7dd3d7f78bbc523cc2436.receipt.txt",
+    "sha256": "d0a7dd3d7f78bbc523cc24363c6847f26e4a5754b4827a45a4b3dae17e1659aa"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-exit.txt",
+    "path": "raw/13bf7b3039c63bf5a50491fa.receipt.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-plan.json",
+    "path": "raw/4430917ea78da52e3e49dbad.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-copy-hashes.json",
+    "path": "raw/81301cdb16ba50d74ffb19e0.receipt.txt",
+    "sha256": "81301cdb16ba50d74ffb19e00d12d650ae6306db1d6cc0f5efade56176ba7b79"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery.log",
+    "path": "raw/a9e523f8f5cada351f4db5f8.receipt.txt",
+    "sha256": "a9e523f8f5cada351f4db5f89586965ef79ae969553dcea338e5777d95750e61"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\invocations.json",
+    "path": "raw/b3b88def92e06a38132f9b72.receipt.txt",
+    "sha256": "b3b88def92e06a38132f9b726a85162ade4a13da636f9196aea84318dd70cc63"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "path": "raw/49671cd318019e09af7d5357.receipt.txt",
+    "sha256": "49671cd318019e09af7d53570d0dca781452b0d3ca5ebee84cd100dcb73794b0"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\gallery-runner-artifacts\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "path": "raw/a2c3bf91ed39bd09b1d7dab9.receipt.txt",
+    "sha256": "a2c3bf91ed39bd09b1d7dab9b4650f7702c264336c70ed65bb94ef245d4e4b6e"
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\transition-guards-v13-debug-20260927\\run.ps1",
+    "path": "raw/a85bdf1ea348625d3cf79d9f.receipt.txt",
+    "sha256": "a85bdf1ea348625d3cf79d9f2ef4e8e5bda54cfef6c65aee3fe83e880628b69a"
+  }
+]

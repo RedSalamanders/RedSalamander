@@ -1,0 +1,12 @@
+{
+  "run_id": "c0-imap-attributes-helpers-release-20260906",
+  "configuration": "Release",
+  "receipt_id": "c38aa434016840c80c9f10fdc99067005f64010deb8e33b3883156bbf243e373",
+  "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+  "git_head": "f5858fbe0a56c99fd825958ae6434fda0e37e394",
+  "artifacts_verified": 177,
+  "exit_code": 0,
+  "pass_marker": true,
+  "test_functions": 12,
+  "duration_ms": 112.8822
+}

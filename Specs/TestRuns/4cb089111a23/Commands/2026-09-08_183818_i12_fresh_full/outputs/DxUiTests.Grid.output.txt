@@ -1,0 +1,6 @@
+[START] Grid
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+[DONE] Grid
+All DxUi tests passed.

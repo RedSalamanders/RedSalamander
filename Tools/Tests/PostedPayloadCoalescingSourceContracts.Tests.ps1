@@ -22,7 +22,7 @@ Describe 'Posted payload coalescing source contracts' {
         $source | Should Match 'queuedMessage\.hwnd\s*!=\s*hwnd'
         $source | Should Match 'queuedMessage\.message\s*!=\s*message'
         $source | Should Match 'queuedMessage\.wParam\s*!=\s*operationKey'
-        $source | Should Match 'TakeMessagePayload<T>\(queuedMessage\.lParam\)'
+        $source | Should Match 'TakeMessagePayload<T>\(queuedMessage\.hwnd,\s*queuedMessage\.message,\s*queuedMessage\.lParam\)'
     }
 
     It 'keeps Compare progress drains on the shared keyed helper' {

@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-19T11:49:17.711Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260919T114541Z-34560-c5b8877489894d7685c0844cab11410e\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3060,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Conflict repeat scope must expose Toggle, not an ordinary button.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "failed",
+            "duration_ms": 2508,
+            "repeat_index": 1,
+            "reason": "Conflict repeat scope must expose Toggle, not an ordinary button."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

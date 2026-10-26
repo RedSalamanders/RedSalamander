@@ -1,0 +1,88 @@
+Skipping build (verified receipt 40b382b7aaf6e72ddb0ea00518ee3a1e96be4dd7f4cc8d1aaebfbd9023531cae).
+Validation plan: 1dc9fcea992ee4aadc0a92a1401e7e532ff90fedfd2356bba167814cc1821282
+Entry fingerprints: 2e665ce0af653352e8dfe4e56438cdf27839a5e934dd9729e0aac47462a01655 (78 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-timeout-multiplier=3 --selftest-case=cmd_pane_fileops_issues_pane_header_resize_changes_visible_width,cmd_pane_fileops_issues_pane_exposes_live_uia_selection,cmd_pane_fileops_issues_pane_tab_keeps_grid_focus --selftest-repeat=3
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL]
+Commands
+  (1m 21,6s)
+         Passed: 6
+  Failed: 3
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall:
+FAILED
+  Total: 9
+  Passed: 6
+  Failed: 3
+  Skipped: 0
+  Wall time: 1m 30,7s
+  Classifications:
+flaky=0
+regression=0
+isolation_suspect=0
+unclassified_failure=1
+  Quarantine:
+active=0
+invalid=0
+repair_attempts=0
+repair_reproduced=0
+
+--- FAILURE DETAILS (3 failing cases) ---
+
+  FAIL
+[Commands]
+cmd_pane_fileops_issues_pane_tab_keeps_grid_focus
+       Reason:
+Issues traversal failed after reverse wrap to copy: grid=false detail=true technical=false copy=false nativeFocus=1549277276 pane=1549277276.
+       Duration: 37,2s
+
+  FAIL
+[Commands]
+cmd_pane_fileops_issues_pane_tab_keeps_grid_focus
+       Reason:
+Issues traversal failed after reverse wrap to copy: grid=false detail=true technical=false copy=false nativeFocus=1549342812 pane=1549342812.
+       Duration: 18,2s
+
+  FAIL
+[Commands]
+cmd_pane_fileops_issues_pane_tab_keeps_grid_focus
+       Reason:
+Issues traversal failed after reverse wrap to copy: grid=false detail=true technical=false copy=false nativeFocus=1549408348 pane=1549408348.
+       Duration: 18,2s
+
+--- ARTIFACTS ---
+  Test root: S:\RedSalamander.Perf
+  Run id:    i26-detail-candidate-v4-20260921
+  Disk audit issues: 0
+  Last run: S:\RedSalamander.Perf\runs\i26-detail-candidate-v4-20260921\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: S:\RedSalamander.Perf\runs\i26-detail-candidate-v4-20260921\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>

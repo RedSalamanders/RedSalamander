@@ -1,0 +1,4 @@
+[
+  {"name":"build-receipt.json","source":"C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\x64\\Debug\\receipts\\80d5eb554d77a2474d8476bc638688393786a0343a8f8428e3f1c074ee413e53.json","bytes":83883,"sha256":"5c82c6322603189de0db5f25ffb1ba4114308f1b482e854f0b27d509f2d5704f","transform":"none"},
+  {"name":"workspace-final.json","source":"C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-debug-20260906\\artifacts\\selftest\\last_run\\workspace-final.json","bytes":4029,"sha256":"6c70cb7f8d81f7c348afa946b49ce5a8fb9c4690a9a0e50c2137dd29d37b0bdc","transform":"none"}
+]

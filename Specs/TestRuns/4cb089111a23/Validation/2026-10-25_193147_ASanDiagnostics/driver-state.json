@@ -1,0 +1,37 @@
+{
+  "head": "b60d16c5a1cea3efc39cf04f85c5ac9a95be4fbc",
+  "ownerPid": 40124,
+  "phase": "complete",
+  "outcome": "diagnostics_complete_not_qualification",
+  "updatedUtc": "2026-10-25T19:44:54.4131666Z",
+  "entries": [
+    {
+      "name": "asan-diagnostics-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T19:27:04.7907215Z",
+      "finishedUtc": "2026-10-25T19:31:46.7671310Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-diagnostics-build.log"
+    },
+    {
+      "name": "asan-status-contention-controlled-red",
+      "exitCode": 1,
+      "startedUtc": "2026-10-25T19:31:46.9247616Z",
+      "finishedUtc": "2026-10-25T19:32:40.1825427Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-status-contention-controlled-red.log"
+    },
+    {
+      "name": "asan-ui-instrumented-predecessor-baseline",
+      "exitCode": 1,
+      "startedUtc": "2026-10-25T19:32:40.3075863Z",
+      "finishedUtc": "2026-10-25T19:35:28.9316619Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-ui-instrumented-predecessor-baseline.log"
+    },
+    {
+      "name": "asan-selection-instrumented-baseline",
+      "exitCode": 1,
+      "startedUtc": "2026-10-25T19:35:29.0361420Z",
+      "finishedUtc": "2026-10-25T19:44:54.4121901Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-selection-instrumented-baseline.log"
+    }
+  ]
+}

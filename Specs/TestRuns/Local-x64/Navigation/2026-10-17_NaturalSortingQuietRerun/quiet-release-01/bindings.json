@@ -1,0 +1,48 @@
+{
+  "phase": "quiet-release-01",
+  "configuration": "Release",
+  "run_id": "20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b",
+  "receipt_id": "c51d8e0fa6d5a53812f0b07ec7f1cadf8dd7d7ae20ca93f2f781e710ddaf059c",
+  "artifacts": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\results.json",
+      "archive": "results.json",
+      "sha256": "FDEB316420CA1847FBBFE95E70B3545FA6D0D010453054A32492F37EEBC16EA4"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "archive": "run-all-tests-results.json",
+      "sha256": "92F6A01835B14AAF4DE240CEA78162FD739B59A6FF20ECE8973687AE08A57DF3"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "archive": "workspace-final.json",
+      "sha256": "E3E2BD14AB088ACE4AFFF399175F98362E18C9E9CCED5861AC2BA4E30768D1BE"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\trace.txt",
+      "archive": "trace.txt",
+      "sha256": "2601453007C2F889A4E60A06194E0E4BF2C8BCC1A1273EBF9DBB05848AE2B914"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "archive": "commands/results.json",
+      "sha256": "7FA307DC42959DDDAA21D8FD8933DD3A63A59D30938E6916061FE03B6DAC9790"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "archive": "commands/trace.txt",
+      "sha256": "C170769968311EAE8076D226460EC5ECD62B4EA1F7E88970E9E790C3322D5B27"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "archive": "perf/perf_metrics.jsonl",
+      "sha256": "CDF06029F3D982FA7284F13DDB8E8A6164865E23476715D3D423303696A2B575"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261017T193526Z-102920-bfdbcddb33b64a2ab2b8cfef39e0849b\\artifacts\\selftest\\last_run\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "9D7F031AE47AFB419CF9D68F56C4481CEEDC913BE23728A0FF0DDEE69D0E42E8"
+    }
+  ]
+}

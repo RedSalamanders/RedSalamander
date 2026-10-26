@@ -1,0 +1,3 @@
+Release TestViewerSpaceAnalysisHostVirtualGridAndLifetime passed.
+Release TestViewerSpaceLifecycleCaptures passed.
+Release exact interaction passed with canonical lease.

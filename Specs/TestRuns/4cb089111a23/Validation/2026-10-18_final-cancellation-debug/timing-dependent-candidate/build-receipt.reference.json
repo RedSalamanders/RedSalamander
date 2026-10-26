@@ -1,0 +1,11 @@
+{
+  "schema": "red-salamander.validation.receipt-reference.v1",
+  "original_relative_path": "timing-dependent-candidate/build-receipt.json",
+  "receipt_file": "../receipts/91eb58e3000f2e62b7ac36d8d74bf6852a20eb0ba93ef985899cee1e436cc052.json",
+  "sha256": "91eb58e3000f2e62b7ac36d8d74bf6852a20eb0ba93ef985899cee1e436cc052",
+  "receipt_id": "55ed5991c792071f0abd3bc887ccad5563f4e51d6348b8b8daa53297632ae9f3",
+  "source_snapshot_id": "0e85c912ebb5b196b1ecee6caa3c2fc2de01b54df6aa20577f9c2be732e26eff",
+  "configuration": "Debug",
+  "platform": "x64",
+  "derivation": "Exact original receipt bytes stored once; raw per-run original remains in the persistent sandbox archive"
+}

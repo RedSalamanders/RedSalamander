@@ -1,0 +1,55 @@
+Stale TestSandbox run cleanup: 3 removed, 0 failed.
+Skipping build (verified receipt 61f905d91974d7c94a699f7ed01a3c909189dd991c776438abdd914fdbc3d881).
+Validation plan: 2055a859f46b81491433b6420125e3507677ab9c70c219871e9512e8d752153d
+Entry fingerprints: 4e081f40664e9ef40051ebdd46b81d0045e4de926d5c729cca9761acdb09e4c7 (71 ms)
+Shadow affected set: 0/1 entries; advisory-build=none. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\RsI19Closeout\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target,cmd_pane_navigation_switch_pane_focus_keeps_navigation_shell_stable,cmd_pane_navigation_refresh_keeps_navigation_shell_stable --selftest-repeat=10
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+Commands
+  (35,2s)
+         Passed: 40
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 40
+  Passed: 40
+  Failed: 0
+  Skipped: 0
+  Wall time: 41,4s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20260913T100953Z-39304-082c576a1fd641a3a3e3fcb7f14609e3
+  Disk audit issues: 30
+  Last run: Z:\RedSalamander.Perf\runs\20260913T100953Z-39304-082c576a1fd641a3a3e3fcb7f14609e3\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+

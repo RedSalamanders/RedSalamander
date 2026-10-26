@@ -1,0 +1,18 @@
+{
+  "status": "PARTIAL: two real-SMB selections remain unqualified",
+  "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+  "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+  "all_attested_artifacts_match": true,
+  "affected_source_files": 81,
+  "source_mismatches": [],
+  "native_selections": 10,
+  "native_passed": 81,
+  "native_failed": 0,
+  "native_skipped": 1,
+  "native_skip_reason": "Declared Debug-only scheduler export",
+  "unavailable_nas_attempt_skips": 3,
+  "viewer_cases_passed": 3,
+  "tooling_passed": 421,
+  "pending_real_smb_selections": 2,
+  "qualification": "Selected available Release evidence only; not completed requested SMB qualification, Fresh Full, ARM64 or ASan"
+}

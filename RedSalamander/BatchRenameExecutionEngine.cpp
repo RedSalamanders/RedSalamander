@@ -20,9 +20,7 @@ constexpr ULONGLONG kBatchRenameProgressThrottleMs = 100ull;
 class BatchRenameProgressSink final
 {
 public:
-    BatchRenameProgressSink(BatchRenameExecutionOptions options, const size_t overallTotal) noexcept
-        : _options(options),
-          _overallTotal(overallTotal)
+    BatchRenameProgressSink(BatchRenameExecutionOptions options, const size_t overallTotal) noexcept : _options(options), _overallTotal(overallTotal)
     {
     }
 
@@ -120,9 +118,7 @@ size_t PathDepthKey(const std::filesystem::path& path) noexcept
     return depth;
 }
 
-std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity,
-                                        const std::filesystem::path& folder,
-                                        const std::wstring_view leaf) noexcept
+std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity, const std::filesystem::path& folder, const std::wstring_view leaf) noexcept
 {
     return std::filesystem::path(JoinFileSystemPath(pathIdentity, folder.native(), leaf));
 }
@@ -137,8 +133,7 @@ std::filesystem::path ApplyExecutedDirectoryMoves(const FileSystemPathIdentity& 
         // whatever occupies that name now, not to the directory the move relocated.
         if (IsStrictDescendantPath(pathIdentity, move.sourcePath.native(), path.native()))
         {
-            path = std::filesystem::path(
-                ReplaceFileSystemPathPrefix(pathIdentity, path.native(), move.sourcePath.native(), move.targetPath.native()));
+            path = std::filesystem::path(ReplaceFileSystemPathPrefix(pathIdentity, path.native(), move.sourcePath.native(), move.targetPath.native()));
         }
     }
     return path;
@@ -148,10 +143,10 @@ HRESULT BuildBatchRenameExecutionSchedule(const FileSystemPathIdentity& /*pathId
                                           const std::span<const BatchRenameExecutionOp> operations,
                                           BatchRenameExecutionSchedule& out) noexcept
 {
-    const auto startedAt = std::chrono::steady_clock::now();
-    out                  = {};
+    const auto startedAt        = std::chrono::steady_clock::now();
+    out                         = {};
     uint64_t retainedIndexBytes = 0u;
-    const auto finish = [&](const HRESULT hr) noexcept
+    const auto finish           = [&](const HRESULT hr) noexcept
     {
         if (Debug::Perf::IsCaptureEnabled())
         {
@@ -174,8 +169,8 @@ HRESULT BuildBatchRenameExecutionSchedule(const FileSystemPathIdentity& /*pathId
     }
     for (const BatchRenameExecutionOp& operation : operations)
     {
-        if (operation.originalSource.empty() || operation.finalLeaf.empty() || operation.providerFinalPath.empty() ||
-            operation.providerParentKey.empty() || operation.providerSourceCollisionKey.empty() || operation.providerFinalCollisionKey.empty())
+        if (operation.originalSource.empty() || operation.finalLeaf.empty() || operation.providerFinalPath.empty() || operation.providerParentKey.empty() ||
+            operation.providerSourceCollisionKey.empty() || operation.providerFinalCollisionKey.empty())
         {
             return finish(E_INVALIDARG);
         }
@@ -183,7 +178,8 @@ HRESULT BuildBatchRenameExecutionSchedule(const FileSystemPathIdentity& /*pathId
 
     std::vector<size_t> orderedIndices(operations.size());
     std::iota(orderedIndices.begin(), orderedIndices.end(), 0u);
-    std::ranges::sort(orderedIndices, [&](const size_t left, const size_t right) noexcept
+    std::ranges::sort(orderedIndices,
+                      [&](const size_t left, const size_t right) noexcept
     {
         if (operations[left].depth != operations[right].depth)
         {
@@ -218,7 +214,7 @@ HRESULT BuildBatchRenameExecutionSchedule(const FileSystemPathIdentity& /*pathId
         for (size_t position = groupBegin; position < groupEnd; ++position)
         {
             const size_t index = orderedIndices[position];
-            std::wstring key = makeLocationKey(operations[index].providerParentKey, operations[index].providerSourceCollisionKey);
+            std::wstring key   = makeLocationKey(operations[index].providerParentKey, operations[index].providerSourceCollisionKey);
             retainedIndexBytes += static_cast<uint64_t>(key.capacity() + 1u) * sizeof(wchar_t) + sizeof(size_t);
             sourcesByKey[std::move(key)].push_back(index);
         }
@@ -231,8 +227,7 @@ HRESULT BuildBatchRenameExecutionSchedule(const FileSystemPathIdentity& /*pathId
                 continue;
             }
 
-            const std::wstring destinationKey =
-                makeLocationKey(operations[index].providerParentKey, operations[index].providerFinalCollisionKey);
+            const std::wstring destinationKey = makeLocationKey(operations[index].providerParentKey, operations[index].providerFinalCollisionKey);
             if (const auto candidates = sourcesByKey.find(destinationKey); candidates != sourcesByKey.end())
             {
                 for (const size_t candidate : candidates->second)
@@ -353,6 +348,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
             result.itemResults.push_back(BatchRenameExecutionItemResult{
                 .operationIndex = index,
                 .status         = op.status,
+                .attempted      = op.attempted,
                 .completed      = op.completed,
                 .skipped        = op.skipped,
             });
@@ -400,8 +396,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                 op.failed = true;
                 op.status = scheduleHr;
             }
-            return finish(scheduleHr,
-                          scheduleHr == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY) ? L"dependency_cycle" : L"invalid_schedule");
+            return finish(scheduleHr, scheduleHr == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY) ? L"dependency_cycle" : L"invalid_schedule");
         }
         schedule = &builtSchedule;
     }
@@ -451,6 +446,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
 
             const std::filesystem::path& targetPath = op.providerFinalPath;
             ++mutationCount;
+            op.attempted         = true;
             const HRESULT status = options.mutationCallback(options.mutationContext, opIndex, op.originalSource, targetPath);
             if (status == S_FALSE)
             {
@@ -514,16 +510,19 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
         {
             continue;
         }
+        // A row that never ran has no outcome of its own. It must not inherit the stopping
+        // row's status (for example ERROR_IO_INCOMPLETE or ERROR_ACCESS_DENIED); the task
+        // result still carries that status through report.firstFailure below.
         ++neverRan;
         op.failed = true;
-        op.status = FAILED(abortHr) ? abortHr : HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+        op.status = IsBatchRenameCancellationHRESULT(abortHr) ? abortHr : HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
     }
 
     report.completedRows = completedOps;
-    report.skippedRows   += skippedOps;
-    report.failedRows     = failedOps + neverRan;
-    report.firstFailure   = (SUCCEEDED(firstFailure) && FAILED(abortHr)) ? abortHr : firstFailure;
-    report.canceled       = IsBatchRenameCancellationHRESULT(report.firstFailure) || IsBatchRenameCancellationHRESULT(abortHr);
+    report.skippedRows += skippedOps;
+    report.failedRows   = failedOps + neverRan;
+    report.firstFailure = (SUCCEEDED(firstFailure) && FAILED(abortHr)) ? abortHr : firstFailure;
+    report.canceled     = IsBatchRenameCancellationHRESULT(report.firstFailure) || IsBatchRenameCancellationHRESULT(abortHr);
     FinalizeUndoEntryCurrentPaths(pathIdentity, report.undoEntries, directoryMoves);
     result.executedDirectoryMoves = std::move(directoryMoves);
 

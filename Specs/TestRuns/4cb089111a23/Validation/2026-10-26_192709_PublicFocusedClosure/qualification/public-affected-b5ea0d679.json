@@ -1,0 +1,34 @@
+{
+  "head": "b5ea0d679dd1fe7d4d418ee7e8d8cb49a7cb7d26",
+  "fullRuntimeRun": false,
+  "records": [
+    {
+      "phase": "native",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T19:22:08.8279751Z",
+      "finishedUtc": "2026-10-26T19:24:11.3529167Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-affected-b5ea0d679-native.log"
+    },
+    {
+      "phase": "commands",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T19:24:11.3684336Z",
+      "finishedUtc": "2026-10-26T19:26:03.5518692Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-affected-b5ea0d679-commands.log"
+    },
+    {
+      "phase": "search",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T19:26:03.5548774Z",
+      "finishedUtc": "2026-10-26T19:26:10.4021677Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-affected-b5ea0d679-search.log"
+    },
+    {
+      "phase": "selection",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T19:26:10.4035625Z",
+      "finishedUtc": "2026-10-26T19:27:09.8960118Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-affected-b5ea0d679-selection.log"
+    }
+  ]
+}

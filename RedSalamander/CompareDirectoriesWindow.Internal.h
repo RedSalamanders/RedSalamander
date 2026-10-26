@@ -113,6 +113,8 @@ private:
     friend LRESULT CALLBACK CompareDxChromeHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     bool OnCreate(HWND hwnd) noexcept;
+    // false keeps the window open: its engine's work runs on, or its accepted close waits for that work.
+    [[nodiscard]] bool OnClose() noexcept;
     void OnDestroy() noexcept;
     void OnNcDestroy() noexcept;
     [[nodiscard]] HWND ResolveRestoreFolderViewWindow() const noexcept;
@@ -675,6 +677,10 @@ public:
     [[nodiscard]] bool DebugGetRunSnapshot(::CompareDirectoriesRunDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugSetPanePath(bool leftPane, const std::filesystem::path& path) noexcept;
     [[nodiscard]] bool DebugSetRunPending(bool pending) noexcept;
+    [[nodiscard]] FolderWindow& DebugGetFolderWindow() noexcept
+    {
+        return _folderWindow;
+    }
     [[nodiscard]] bool DebugGetMenuBarItemLabel(size_t index, std::wstring& outText) const noexcept;
     [[nodiscard]] bool DebugGetMenuBarItemScreenRect(size_t index, RECT& outRect) const noexcept;
     [[nodiscard]] bool DebugFocusOptionsFirstControl() noexcept;

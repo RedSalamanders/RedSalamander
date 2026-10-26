@@ -8,20 +8,20 @@ function Get-RSCommandsSelfTestFamilies {
     param()
 
     return @(
-        [pscustomobject][ordered]@{ name = 'settings'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp' }
-        [pscustomobject][ordered]@{ name = 'theme-overlay'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.ThemeOverlay.cpp' }
-        [pscustomobject][ordered]@{ name = 'batch-rename'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.BatchRename.cpp' }
-        [pscustomobject][ordered]@{ name = 'plugin-config'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp' }
-        [pscustomobject][ordered]@{ name = 'connections'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Connections.cpp' }
-        [pscustomobject][ordered]@{ name = 'preferences'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp' }
-        [pscustomobject][ordered]@{ name = 'search'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Search.cpp' }
-        [pscustomobject][ordered]@{ name = 'shell-commands'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.ShellCommands.cpp' }
-        [pscustomobject][ordered]@{ name = 'shortcuts'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Shortcuts.cpp' }
-        [pscustomobject][ordered]@{ name = 'compare-options'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.CompareOptions.cpp' }
-        [pscustomobject][ordered]@{ name = 'file-operations'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp' }
-        [pscustomobject][ordered]@{ name = 'navigation'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Navigation.cpp' }
-        [pscustomobject][ordered]@{ name = 'dialogs'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp' }
-        [pscustomobject][ordered]@{ name = 'view-commands'; source = 'RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp' }
+        [pscustomobject][ordered]@{ name = 'settings'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp' }
+        [pscustomobject][ordered]@{ name = 'theme-overlay'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.ThemeOverlay.cpp' }
+        [pscustomobject][ordered]@{ name = 'batch-rename'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp' }
+        [pscustomobject][ordered]@{ name = 'plugin-config'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.PluginConfig.cpp' }
+        [pscustomobject][ordered]@{ name = 'connections'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Connections.cpp' }
+        [pscustomobject][ordered]@{ name = 'preferences'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Preferences.cpp' }
+        [pscustomobject][ordered]@{ name = 'search'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Search.cpp' }
+        [pscustomobject][ordered]@{ name = 'shell-commands'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.ShellCommands.cpp' }
+        [pscustomobject][ordered]@{ name = 'shortcuts'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Shortcuts.cpp' }
+        [pscustomobject][ordered]@{ name = 'compare-options'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.CompareOptions.cpp' }
+        [pscustomobject][ordered]@{ name = 'file-operations'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp' }
+        [pscustomobject][ordered]@{ name = 'navigation'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp' }
+        [pscustomobject][ordered]@{ name = 'dialogs'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.Dialogs.cpp' }
+        [pscustomobject][ordered]@{ name = 'view-commands'; source = 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp' }
     )
 }
 
@@ -135,13 +135,32 @@ function Get-RSTestRunPlan {
     }
 
     foreach ($selfTest in $selfTests) {
-        $requiresInteractiveDesktop = $selfTest.Name -eq 'Commands' -or ($selfTest.Name -eq 'FileOperations' -and $CaseFilter -eq 'FileOps_VisualGalleryInteraction')
+        # Broad FileOps selections share foreground and UIA assertions even when
+        # activation is blocked. Only reviewed exact FileOps-only progress and
+        # callback witnesses avoid desktop-global assertions and input.
+        # Keep this admission case-sensitive and closed to proof injections.
+        $ownedFolderProgressCase = $Suite -eq 'FileOps' -and
+            ($CaseFilter -ceq 'DiscoveryScope_FolderLiveProgress' -or
+             $CaseFilter -ceq 'DiscoveryScope_MultipleFoldersLiveProgress' -or
+             $CaseFilter -ceq 'FileOps_RepeatDecisionContracts' -or
+             $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or
+             $CaseFilter -ceq 'FileOps_CrossRootLocalCopy' -or
+             $CaseFilter -ceq 'FileOps_SmallFileCopyCost' -or
+             $CaseFilter -ceq 'FileOps_SelectionShapeLocal' -or
+             $CaseFilter -ceq 'FileOps_SelectionShapeSmb') -and
+            [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and
+            [string]::IsNullOrEmpty($SelfTestOrderProofCase)
+        $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and
+            [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
+        $allowsActivation = ($selfTest.Name -eq 'Commands' -and -not $ownedProductGallery) -or ($selfTest.Name -eq 'FileOperations' -and $CaseFilter -eq 'FileOps_VisualGalleryInteraction')
+        $requiresInteractiveDesktop = ($selfTest.Name -eq 'Commands' -and -not $ownedProductGallery) -or
+            ($selfTest.Name -eq 'FileOperations' -and -not $ownedFolderProgressCase)
         $plan += New-RSTestRunPlanEntry `
             -Id $selfTest.Id `
             -Name $selfTest.Name `
             -Kind 'SelfTest' `
             -Path $RedSalamanderExePath `
-            -Arguments (Get-RSSelfTestArguments -Flag $selfTest.Flag -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast -CaseFilter $CaseFilter -CommandsFamily $CommandsFamily -RepeatCount $RepeatCount -ShuffleSeed $ShuffleSeed -PerfBudgetPath $PerfBudgetPath -RequirePerfBudgets:$RequirePerfBudgets -NoActivate:(-not $requiresInteractiveDesktop) -SelfTestFlakyProofCase $SelfTestFlakyProofCase -SelfTestOrderProofCase $SelfTestOrderProofCase) `
+            -Arguments (Get-RSSelfTestArguments -Flag $selfTest.Flag -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast -CaseFilter $CaseFilter -CommandsFamily $CommandsFamily -RepeatCount $RepeatCount -ShuffleSeed $ShuffleSeed -PerfBudgetPath $PerfBudgetPath -RequirePerfBudgets:$RequirePerfBudgets -NoActivate:(-not $allowsActivation) -SelfTestFlakyProofCase $SelfTestFlakyProofCase -SelfTestOrderProofCase $SelfTestOrderProofCase) `
             -WorkingDirectory $RepoRoot `
             -JsonName $selfTest.JsonName `
             -RequiresInteractiveDesktop:$requiresInteractiveDesktop
@@ -189,7 +208,6 @@ function Get-RSTestRunPlan {
         }
 
         $ciExecutableIds = [ordered]@{
-            MonitorTest = 'standalone.monitor'
             LocalizationTests = 'standalone.localization'
             RedConfigureTests = 'standalone.red-configure'
             PluginContractTests = 'standalone.plugin-contract'
@@ -232,7 +250,7 @@ function Get-RSTestRunPlan {
     # without the three in-product self-test suites (26-100 minutes each on hosted runners)
     # and without interactive-desktop entries, so it finishes in well under fifteen minutes.
     # Suite CI is the push-to-main gate. Suite Full remains the broader local/closeout gate
-    # and additionally includes diagnostics such as RedSalamanderMonitorEtwLatency.
+    # and additionally includes local product/performance suites; viewer suites belong to RedMonitor.
     if ($Suite -eq 'PR') {
         $plan = @($plan | Where-Object { $_.Kind -ne 'SelfTest' -and -not $_.RequiresInteractiveDesktop })
     }
@@ -269,7 +287,6 @@ function Get-RSTestRunPlan {
 
         $fullExecutableIds = [ordered]@{
             FileSystemCurlTests = 'standalone.filesystem-curl'
-            MonitorTest = 'standalone.monitor'
             LocalizationTests = 'standalone.localization'
             RedConfigureTests = 'standalone.red-configure'
             PluginContractTests = 'standalone.plugin-contract'
@@ -285,21 +302,6 @@ function Get-RSTestRunPlan {
                 -WorkingDirectory $buildOutputDir
         }
 
-        $plan += New-RSTestRunPlanEntry `
-            -Id 'perf.monitor-etw-latency' `
-            -Name 'RedSalamanderMonitorEtwLatency' `
-            -Kind 'Executable' `
-            -Path (Join-Path $buildOutputDir 'RedSalamanderMonitor.exe') `
-            -Arguments @(
-                '--chrome-selftest',
-                '--wait-instance',
-                '--perf',
-                '--monitor-etw-burst-mode=latency',
-                '--monitor-etw-burst-count=60',
-                '--monitor-etw-burst-size=260'
-            ) `
-            -WorkingDirectory $RepoRoot `
-            -RequiresInteractiveDesktop
 
         $plan += New-RSTestRunPlanEntry `
             -Id 'perf.performance-tests2' `

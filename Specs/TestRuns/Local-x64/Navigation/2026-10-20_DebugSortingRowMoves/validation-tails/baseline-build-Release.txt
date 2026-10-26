@@ -1,0 +1,28 @@
+Visual Studio: C:\Program Files\Microsoft Visual Studio\18\Insiders
+MSVC toolset:  14.51.36231, the default MSBuild compiles with; vcpkg is pinned to 14.51
+Overlay triplet Z:\src\RedSalamander\.build\dependencies\DxUi\d80e62bd258a204d\vcpkg-triplets\x64\x64-windows.cmake unchanged
+Installing DxUi dependencies (x64-windows)
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 133 us
+vcpkg dependencies are ready.
+DxUi restored at f65e4a4b9311370b3e3070088e2a8abe29adcb27 for x64; output identity d80e62bd258a204d725686510c004e06438019e2cd69351107dc840f6be0c4ed.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+========================================
+Build Failed with Exception!
+========================================
+Error: Build canceled because an independently launched process is using an exact target output. It was not terminated because it is not proven to belong to this operation; close it and retry.
+  PID=88320; Path='Z:\src\RedSalamander\.build\x64\Release\RedSalamander.exe'; CommandLine='"Z:\src\RedSalamander\.build\x64\Release\RedSalamander.exe" '
+Build time: 00:00

@@ -1,0 +1,1 @@
+TestRuns archive contract passed in whole-inventory mode for 15843 file(s).

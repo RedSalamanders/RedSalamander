@@ -1,0 +1,126 @@
+{
+    "run_started_utc": "2026-09-20T15:10:08.877Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T150647Z-15856-2112fa98c85545428b523ef03a3353be\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 27606,
+    "passed": 15,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Inspection controls must never overwrite destination bytes.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4246,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 1067,
+            "repeat_index": 1,
+            "reason": "Inspection controls must never overwrite destination bytes."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1169,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1020,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 164,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4196,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 1070,
+            "repeat_index": 2,
+            "reason": "Inspection controls must never overwrite destination bytes."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1051,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 994,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 171,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4230,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 1087,
+            "repeat_index": 3,
+            "reason": "Inspection controls must never overwrite destination bytes."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1033,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1005,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 162,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

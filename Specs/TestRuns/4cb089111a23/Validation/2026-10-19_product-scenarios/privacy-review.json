@@ -1,0 +1,17 @@
+{
+  "images": 77,
+  "ocrComplete": true,
+  "expandedGalleryCompleteFrameReview": 45,
+  "reviewedIdenticalProductFrames": 23,
+  "reinspectedChangedProductFrames": 3,
+  "reinspectedViewerSpaceFrames": 19,
+  "newFramesUnedited": true,
+  "privateContentFound": false,
+  "flagDispositions": [
+    {
+      "image": "file-properties.png",
+      "result": "Accepted: invented Z:/Example/Reports/ExampleFolder in previously reviewed synthetic illustration."
+    }
+  ],
+  "privacyReviewBasis": "Whole native frame visual review plus OCR; earlier retained illustrations retain their historical qualification limits."
+}

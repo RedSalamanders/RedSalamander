@@ -1,0 +1,26 @@
+{
+  "profile": "x64 Release",
+  "target": "ViewerVLC",
+  "receipt": "a0622afb802fbf0f9a99c8a3456a89bf847c9f5bc3fbef8c3d175c88ae8048a2",
+  "files": [
+    {
+      "path": "Plugins/ViewerVLC/ViewerVLC.cpp",
+      "sha256": "39a7e79df7bb041eb336bc35756414b393c66df64a3545ba313400dc79dde63f"
+    },
+    {
+      "path": "Plugins/ViewerVLC/ViewerVLC.h",
+      "sha256": "0a1fde9c18648ac719317bdd15fbe1d941b7fc8803cbdfeb05f77914cb8d9831"
+    },
+    {
+      "path": ".build/x64/Release/Plugins/ViewerVLC.dll",
+      "sha256": "43c7d99d8b2bb7447971c04eead42ad97bfe065d0b552d7b7c94bd2c70650375"
+    },
+    {
+      "path": ".build/x64/Release/Common.dll",
+      "sha256": "e27293350f50f3447a309ee29a331f5e1aa9d51c13d02356e0188886504e4761"
+    }
+  ],
+  "warnings": 0,
+  "errors": 0,
+  "runtime": "Focused runtime proof uses Debug test hooks; Release compile/link/staging only"
+}

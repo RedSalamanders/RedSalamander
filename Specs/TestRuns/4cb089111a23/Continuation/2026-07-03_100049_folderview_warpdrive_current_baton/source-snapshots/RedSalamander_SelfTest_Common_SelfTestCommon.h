@@ -1,0 +1,341 @@
+#pragma once
+
+// SelfTestCommon - debug-only self-test infrastructure shared by all suites.
+//
+// Artifacts are written to:
+//   %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\   (current run)
+//   %LOCALAPPDATA%\RedSalamander\SelfTest\previous_run\  (previous run, kept for diffing)
+//
+// When running selftests from a developer checkout, the harness also attempts to archive the
+// key artifacts into the repo under:
+//   Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\
+// so runs can be compared over time without relying on external scripts.
+//
+// Everything in this header is compiled only when ENABLE_TESTS is defined. Release builds without
+// that define produce empty stub implementations so that call-sites do not need conditional compilation.
+
+#ifdef ENABLE_TESTS
+
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cwctype>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <wil/com.h>
+
+struct IFileSystem;
+
+namespace SelfTest
+{
+
+enum class SelfTestSuite
+{
+    CompareDirectories,
+    FileOperations,
+    Commands,
+};
+
+struct SelfTestOptions
+{
+    // Abort the run immediately after the first case failure.
+    bool failFast = false;
+    // Multiply every timeout by this bounded finite factor (use > 1.0 on slow CI machines).
+    double timeoutScale = 1.0;
+    // Write a results.json file to the suite artifact directory on completion.
+    bool writeJsonSummary = true;
+    // Enumerate declared cases without executing their bodies.
+    bool listCasesOnly = false;
+    // When set, run the exact matching case name (case-insensitive), every case with that
+    // case-insensitive prefix when the filter ends in '_', or an exact comma-separated case list.
+    std::wstring caseFilter;
+    // Optional JSON5 perf budget file used by focused performance selftests.
+    std::filesystem::path perfBudgetPath;
+};
+
+struct SelfTestCaseResult
+{
+    std::wstring name;
+    enum class Status
+    {
+        passed,
+        failed,
+        skipped,
+    } status;
+
+    uint64_t durationMs = 0;
+    std::wstring reason;
+};
+
+struct SelfTestSuiteResult
+{
+    SelfTestSuite suite{};
+    uint64_t durationMs = 0;
+    int passed          = 0;
+    int failed          = 0;
+    int skipped         = 0;
+    std::vector<SelfTestCaseResult> cases;
+    std::wstring failureMessage;
+};
+
+void AppendSelfTestTrace(std::wstring_view msg) noexcept;
+void AppendSuiteTrace(SelfTestSuite suite, std::wstring_view msg) noexcept;
+
+struct CaseState
+{
+    std::wstring failure;
+    std::wstring skipped;
+
+    bool Require(bool condition, std::wstring_view message) noexcept
+    {
+        if (condition)
+        {
+            return true;
+        }
+
+        if (failure.empty())
+        {
+            failure.assign(message);
+        }
+        return false;
+    }
+
+    bool Skip(std::wstring_view reason) noexcept
+    {
+        if (failure.empty() && skipped.empty())
+        {
+            skipped.assign(reason.empty() ? std::wstring_view(L"skipped") : reason);
+        }
+        return true;
+    }
+};
+
+[[nodiscard]] inline bool CaseFilterMatches(std::wstring_view filter, std::wstring_view name) noexcept
+{
+    if (filter.empty())
+    {
+        return true;
+    }
+
+    const auto trim = [](std::wstring_view value) noexcept
+    {
+        while (! value.empty() && std::iswspace(static_cast<wint_t>(value.front())) != 0)
+        {
+            value.remove_prefix(1u);
+        }
+        while (! value.empty() && std::iswspace(static_cast<wint_t>(value.back())) != 0)
+        {
+            value.remove_suffix(1u);
+        }
+        return value;
+    };
+
+    const auto equalNoCase = [](std::wstring_view lhs, std::wstring_view rhs) noexcept
+    {
+        if (lhs.size() != rhs.size())
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < lhs.size(); ++i)
+        {
+            if (std::towlower(lhs[i]) != std::towlower(rhs[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    if (filter.find(L',') != std::wstring_view::npos)
+    {
+        size_t start = 0u;
+        while (start <= filter.size())
+        {
+            const size_t comma           = filter.find(L',', start);
+            const std::wstring_view part = trim(filter.substr(start, comma == std::wstring_view::npos ? std::wstring_view::npos : comma - start));
+            if (! part.empty() && equalNoCase(part, name))
+            {
+                return true;
+            }
+            if (comma == std::wstring_view::npos)
+            {
+                break;
+            }
+            start = comma + 1u;
+        }
+        return false;
+    }
+
+    if (equalNoCase(filter, name))
+    {
+        return true;
+    }
+
+    if (filter.back() != L'_' || filter.size() > name.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < filter.size(); ++i)
+    {
+        if (std::towlower(filter[i]) != std::towlower(name[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noexcept;
+void AppendCaseResult(
+    SelfTestSuiteResult& suite, std::wstring_view name, SelfTestCaseResult::Status status, std::wstring_view reason, uint64_t durationMs) noexcept;
+
+template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
+{
+    if (! CaseFilterMatches(options.caseFilter, name))
+    {
+        return;
+    }
+
+    SelfTestCaseResult result{};
+    result.name = std::wstring(name);
+
+    if (options.listCasesOnly)
+    {
+        result.status = SelfTestCaseResult::Status::skipped;
+        result.reason = L"listed only";
+        AppendCaseResult(suite, std::move(result));
+        return;
+    }
+
+    if (options.failFast && suite.failed != 0)
+    {
+        result.status = SelfTestCaseResult::Status::skipped;
+        result.reason = L"not executed (fail-fast)";
+        AppendCaseResult(suite, std::move(result));
+        return;
+    }
+
+    std::wstring caseLine;
+    caseLine.reserve(6 + name.size());
+    caseLine.append(L"Case: ");
+    caseLine.append(name);
+    AppendSuiteTrace(suite.suite, caseLine);
+    AppendSelfTestTrace(caseLine);
+
+    const auto startedAt = std::chrono::steady_clock::now();
+    CaseState state{};
+    const bool ok      = std::forward<Func>(func)(state);
+    const auto endedAt = std::chrono::steady_clock::now();
+
+    AppendSuiteTrace(suite.suite,
+                     std::format(L"Case returned: {} ok={} failed={} skipped={}",
+                                 name,
+                                 ok ? L"yes" : L"no",
+                                 state.failure.empty() ? L"no" : L"yes",
+                                 state.skipped.empty() ? L"no" : L"yes"));
+    if (! state.failure.empty())
+    {
+        AppendSuiteTrace(suite.suite, std::format(L"Case failure: {} reason='{}'", name, state.failure));
+        AppendSelfTestTrace(std::format(L"Case failure: {} reason='{}'", name, state.failure));
+    }
+    else if (! state.skipped.empty())
+    {
+        AppendSuiteTrace(suite.suite, std::format(L"Case skipped: {} reason='{}'", name, state.skipped));
+        AppendSelfTestTrace(std::format(L"Case skipped: {} reason='{}'", name, state.skipped));
+    }
+
+    result.durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());
+
+    if (! ok || ! state.failure.empty())
+    {
+        result.status = SelfTestCaseResult::Status::failed;
+        result.reason = state.failure.empty() ? L"failed" : state.failure;
+        AppendCaseResult(suite, std::move(result));
+        return;
+    }
+
+    if (! state.skipped.empty())
+    {
+        result.status = SelfTestCaseResult::Status::skipped;
+        result.reason = state.skipped;
+        AppendCaseResult(suite, std::move(result));
+        return;
+    }
+
+    result.status = SelfTestCaseResult::Status::passed;
+    AppendCaseResult(suite, std::move(result));
+}
+
+struct SelfTestRunResult
+{
+    std::wstring startedUtcIso;
+    uint64_t durationMs = 0;
+    bool failFast       = false;
+    double timeoutScale = 1.0;
+    std::wstring caseFilter;
+    std::vector<SelfTestSuiteResult> suites;
+};
+
+SelfTestOptions& GetSelfTestOptions() noexcept;
+std::wstring_view GetSelfTestBuildFlavor() noexcept;
+std::wstring GetSelfTestMachineHash() noexcept;
+const std::filesystem::path& SelfTestRoot() noexcept;
+std::filesystem::path GetSuiteRoot(SelfTestSuite suite);
+std::filesystem::path GetSuiteArtifactPath(SelfTestSuite suite, std::wstring_view filename);
+std::filesystem::path GetPerfArtifactPath(std::wstring_view filename);
+wil::com_ptr<IFileSystem> GetFileSystem(std::wstring_view pluginId) noexcept;
+
+void RotateSelfTestRuns();
+void InitSelfTestRun(const SelfTestOptions& options);
+
+void SetRunStartedUtcIso(std::wstring_view startedUtcIso) noexcept;
+std::wstring_view GetRunStartedUtcIso() noexcept;
+
+bool EnsureDirectory(const std::filesystem::path& path) noexcept;
+[[nodiscard]] bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byte> bytes) noexcept;
+[[nodiscard]] bool WriteTextFile(const std::filesystem::path& path, std::wstring_view text);
+[[nodiscard]] bool WriteTextFile(const std::filesystem::path& path, std::string_view text);
+
+std::filesystem::path GetTempRoot(SelfTestSuite suite);
+bool PathExists(const std::filesystem::path& p);
+// Multiply baseMs by the current timeoutScale factor (see SelfTestOptions).
+// Use this whenever waiting for asynchronous work in a test case.
+uint64_t ScaleTimeout(uint64_t baseMs);
+
+inline std::chrono::milliseconds Scale(std::chrono::milliseconds base) noexcept
+{
+    if (base.count() <= 0)
+    {
+        return std::chrono::milliseconds{0};
+    }
+
+    const uint64_t scaled = ScaleTimeout(static_cast<uint64_t>(base.count()));
+    const uint64_t maxMs  = static_cast<uint64_t>(std::chrono::milliseconds::max().count());
+    return std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>((scaled > maxMs) ? maxMs : scaled)};
+}
+
+void WriteSuiteJson(const SelfTestSuiteResult& result, const std::filesystem::path& path);
+void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& path);
+
+// Copies the meaningful artifacts from %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\
+// into the repo under Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\.
+// Fresh run/suite JSON is written directly from the current in-memory result when available.
+// If the repo root cannot be found (e.g. installed build), this is a no-op.
+void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t durationMs, const SelfTestRunResult* runResult = nullptr) noexcept;
+
+} // namespace SelfTest
+
+#endif // ENABLE_TESTS

@@ -1,0 +1,472 @@
+
+  DxUi.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\DxUi.lib
+  SettingsStore.cpp
+  Factory.cpp
+  ViewerPETests.cpp
+  Factory.cpp
+  Generating code
+  Generating code
+  Factory.cpp
+  Generating code
+  0 of 234 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  0 of 301 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  2 of 1219 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  0 of 236 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  LocalizationTests-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-ja-JP.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-fr-FR.dll
+  ViewerText-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-fr-FR.dll
+  Terminal-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-cs-CZ.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-ja-JP.dll
+  FileSystemS3-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  RedSalamander-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-fr-FR.dll
+  RedConfigure-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-ja-JP.dll
+  5 of 1126 functions ( 0.4%) were compiled, the rest were copied from previous compilation.
+  Terminal-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-sk-SK.dll
+  FileSystemCurl-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-fr-FR.dll
+  FileSystem-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-fr-FR.dll
+    0 functions were new in current compilation
+  FileSystemMtp-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-fr-FR.dll
+    5 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ls3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls3.exe
+  ls2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls2.exe
+  ls1.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls1.exe
+  FlipSequentialDiscard.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\FlipSequentialDiscard.exe
+  RedLauncher.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedLauncher.exe
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  Generating code
+  ViewerSpace-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-fr-FR.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-sk-SK.dll
+  FileSystemCurl-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystem7z-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-ja-JP.dll
+  FileSystem-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-sk-SK.dll
+  ViewerSqlite-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-ja-JP.dll
+  FileSystem-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-cs-CZ.dll
+  FileSystemDummy-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-ja-JP.dll
+  FileSystem7z-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-sk-SK.dll
+  ViewerWeb-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-ja-JP.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-cs-CZ.dll
+  FileSystemCurl-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  2 of 1379 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemDummy-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemCurl-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-sk-SK.dll
+  ViewerPE-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-sk-SK.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-cs-CZ.dll
+  ViewerPE-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-cs-CZ.dll
+  FileSystemS3-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemCurlTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\FileSystemCurlTests.exe
+  ViewerVLC-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-sk-SK.dll
+  ViewerSqlite-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-sk-SK.dll
+  RedConfigure-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-cs-CZ.dll
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-sk-SK.dll
+  ViewerText-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-sk-SK.dll
+  FileSystemDummy.cpp
+  FileSystem7z.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  Generating code
+  5 of 5756 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    13 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerPETests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ViewerPETests.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.exp
+  Generating code
+  6 of 10231 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    32 functions had inline decision re-evaluated but remain unchanged
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.exp
+  Generating code
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.exp
+  Generating code
+  FileSystemGoogleDrive.cpp
+  4 of 3679 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    6 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  6 of 3709 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Common.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.dll
+  Factory.cpp
+  PluginContractTests.cpp
+  RedSalamanderMonitor.cpp
+  Factory.cpp
+  FileSystem7z.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.dll
+  ViewerSqlite.Engine.cpp
+  FileSystemPluginManager.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  FileSystemDummy.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.dll
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Generating code
+  Generating code
+  Generating code
+  Generating code
+  Generating code
+  7 of 2394 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    8 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  3 of 2820 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    5 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  4 of 4279 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    11 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  LocalizationTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\LocalizationTests.exe
+  5 of 3503 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  CrashHandlingTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\CrashHandlingTests.exe
+  SettingsSchemaTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\SettingsSchemaTests.exe
+  MonitorTest.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\MonitorTest.exe
+  1 of 7406 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    27 functions had inline decision re-evaluated but remain unchanged
+  Generating code
+  Generating code
+  Factory.cpp
+  Finished generating code
+  RedSalamanderSearchService.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamanderSearchService.exe
+  Generating code
+  Factory.cpp
+  FilesInformationGoogleDrive.cpp
+  ViewerVLC.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  FileSystem.DirectoryOps.cpp
+  ViewerSqliteTests.cpp
+  FileSystemCurl.CopyMove.cpp
+  FileSystemMtp.Core.cpp
+  4 of 18030 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    51 functions had inline decision re-evaluated but remain unchanged
+  ViewerWeb.cpp
+  ViewerImgRaw.Decode.cpp
+  Finished generating code
+  8 of 19941 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    64 functions had inline decision re-evaluated but remain unchanged
+  ViewerPluginManager.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  Finished generating code
+  Factory.cpp
+  Factory.cpp
+  FileSystemS3.Configuration.cpp
+  Generating code
+  ViewerSqlite.Engine.cpp
+  RedConfigure.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedConfigure.exe
+  7 of 25410 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    502 functions had inline decision re-evaluated but remain unchanged
+  RedConfigureTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedConfigureTests.exe
+  6 of 3711 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    14 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Finished generating code
+  Factory.cpp
+  PluginContractTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PluginContractTests.exe
+  ViewerSpace.cpp
+  FileSystem.FileOps.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.exp
+  Generating code
+  DxUiTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\DxUiTests.exe
+  FileSystemCurl.DirectoryOps.cpp
+  Generating code
+  FileSystemMicrosoftDrive.cpp
+  4 of 5956 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    32 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Generating code
+  FileSystemMtp.Device.cpp
+  FileSystemGoogleDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.dll
+  2 of 3727 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    11 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  Terminal.cpp
+  ViewerSqliteTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ViewerSqliteTests.exe
+  ViewerImgRaw.Export.cpp
+  3 of 4212 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerSqlite.cpp
+  FolderView.Enumeration.Access.cpp
+  ViewerText.Encoding.cpp
+  ViewerVLC.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.dll
+  3 of 16594 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    52 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerPE.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.exp
+  FileSystemS3.Core.cpp
+  Generating code
+  FileSystemCurl.Imap.cpp
+  FileSystem.Menu.cpp
+  RedSalamanderMonitor.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamanderMonitor.exe
+  FileSystemMtp.FakeBackend.cpp
+  FilesInformationMicrosoftDrive.cpp
+  7 of 12721 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    54 functions had inline decision re-evaluated but remain unchanged
+  ViewerText.Hex.cpp
+  Finished generating code
+  ViewerImgRaw.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  TerminalInternal.cpp
+  ViewerWeb.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  FileSystem.Path.cpp
+  3 of 15463 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    52 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemCurl.SelfTest.Ftp.cpp
+  9 of 12054 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    49 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.exp
+  Generating code
+  ViewerSpace.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.dll
+  FilesInformationMtp.cpp
+  FileSystemS3.Directory.cpp
+  ViewerSqlite.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  ViewerText.MenuTheme.cpp
+  5 of 6628 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    56 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystem.Search.cpp
+  TerminalSecurity.cpp
+  7 of 12038 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    47 functions had inline decision re-evaluated but remain unchanged
+  PerformanceTests2.cpp
+  Finished generating code
+  FileSystemMicrosoftDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  ViewerPE.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  12 of 13043 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    68 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  3 of 6940 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.exp
+  Generating code
+  FileSystemCurl.Shared.cpp
+  FileSystemMtp.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.dll
+  ViewerImgRaw.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.dll
+  ViewerText.Text.cpp
+  4 of 9749 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    17 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemS3.DirectoryOps.cpp
+  PerformanceTests2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.dll
+  FileSystem.Watch.cpp
+  TerminalSession.cpp
+  ViewerText.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+  FileSystem.cpp
+  5 of 9973 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    50 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemS3.DriveInfo.cpp
+  TerminalVt.cpp
+  FileSystemCurl.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.exp
+  Generating code
+  TerminalVtUpgradeTests.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.exp
+  Generating code
+  3 of 11632 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    40 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemS3.IO.cpp
+  FileSystem.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.dll
+  10 of 15244 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    88 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ViewerText.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.dll
+  ls4.cpp
+  Generating code
+  3 of 1319 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  ls4.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls4.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.exp
+  Generating code
+  FileSystemS3.Menu.cpp
+  6 of 14167 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    50 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Terminal.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.dll
+  FileSystemS3.S3.cpp
+  FileSystemS3.S3Table.cpp
+  FileSystemS3.SelfTest.FakeS3.cpp
+  FileSystemS3.Shared.cpp
+  FilesInformationS3.cpp
+  dllmain.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  6 of 10011 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    26 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  FileSystemS3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.dll
+  ChangeCase.cpp
+  CompareDirectoriesEngine.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  CompareDirectoriesWindow.cpp
+  ConnectionManagerWindow.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  FindFilesWindow.cpp
+  FloatingTerminalWindow.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderView.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWindow.cpp
+  ManagePluginsDialog.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  NavigationView.cpp
+  Preferences.FileActions.cpp
+  Preferences.Internal.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Plugins.cpp
+  RedSalamander.cpp
+  Commands.SelfTest.cpp
+  SelfTestCommon.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  SettingsSchemaExport.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  Generating code
+  9 of 143121 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    3331 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  RedSalamander.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamander.exe

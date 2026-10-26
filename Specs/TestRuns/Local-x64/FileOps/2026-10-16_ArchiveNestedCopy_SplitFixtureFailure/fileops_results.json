@@ -1,0 +1,42 @@
+{
+    "run_started_utc": "2026-10-16T14:11:40.358Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261016T141110Z-64812-f39edb4a236841c0a7bbc5ce804113b8\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1641,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 1,
+    "failureMessage": "canonical archive contents unavailable: archive=Tests-Split.7z.001 path=/Tests/README.txt observed=0 open=0x80070002 sizeHr=0x80004003 size=0 readHr=0x80004003 read=0",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1266,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_ArchiveNestedCopyLocal",
+            "status": "failed",
+            "duration_ms": 328,
+            "repeat_index": 1,
+            "reason": "canonical archive contents unavailable: archive=Tests-Split.7z.001 path=/Tests/README.txt observed=0 open=0x80070002 sizeHr=0x80004003 size=0 readHr=0x80004003 read=0"
+        },
+        {
+            "name": "FileOps_ArchiveNestedCopyUnc",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "not reached (aborted due to failure)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

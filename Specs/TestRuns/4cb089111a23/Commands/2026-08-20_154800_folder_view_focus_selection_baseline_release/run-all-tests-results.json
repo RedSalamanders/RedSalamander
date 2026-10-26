@@ -1,0 +1,78 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-08-20T13:48:00.0651124Z",
+  "run_ended_utc": "2026-08-20T13:48:08.2378950Z",
+  "duration_ms": 8173,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Release",
+  "executable": "Z:\\src\\RedSalamander-focus-baseline-20260820\\.build\\x64\\Release\\RedSalamander.exe",
+  "artifact_root": "Z:\\src\\RedSalamander-focus-baseline-20260820\\.build\\TestSandbox\\runs\\20260820T134407Z-101228-2c620b6b43944aac82c22e3ed0da606a\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\src\\RedSalamander-focus-baseline-20260820\\.build\\TestSandbox",
+  "run_id": "20260820T134407Z-101228-2c620b6b43944aac82c22e3ed0da606a",
+  "fail_fast": false,
+  "timeout_scale": 8.0,
+  "case_filter": "folderView_perf_focus_selection_state",
+  "exit_code": 0,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "total": 1,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "Z:\\src\\RedSalamander-focus-baseline-20260820\\.build\\TestSandbox",
+    "run_id": "20260820T134407Z-101228-2c620b6b43944aac82c22e3ed0da606a",
+    "allowed_run_ids": [
+      "20260820T134407Z-101228-2c620b6b43944aac82c22e3ed0da606a"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 3850,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "folderView_perf_focus_selection_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2629,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

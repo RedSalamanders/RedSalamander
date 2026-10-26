@@ -1,0 +1,27 @@
+{
+  "schema": "i27.f6-current-source-counterfactual.v1",
+  "order": [
+    "suspension-off",
+    "suspension-on",
+    "suspension-on",
+    "suspension-off",
+    "suspension-off",
+    "suspension-on"
+  ],
+  "fixture_sha256": "f348e82ed5a4b7cf7b5e2cc921642bfbd27ed02b3edf335b3ab4066fa99bbb03",
+  "receipt_id": "256d18be002b07877b2e00cd18181d35fc30a3f3a702e6c436b8f8fc1ff35de7",
+  "source_snapshot_id": "2ba4d8c2e89fc3fd4760f03251d8b69eb1cfc0d24338bf727a55964bc85d1fc0",
+  "test_root": "C:\\RedSalamander.Perf",
+  "alternate_root": "D:\\RedSalamander.Perf",
+  "repeat": 1,
+  "shuffle": false,
+  "interval_ms": 650,
+  "native_candidate_metric_commit_exception_requested": true,
+  "qualification": "Collection only: current one-binary suspension counterfactual; original failed historical Debug baseline remains separate. No automatic nonregression or I27 closure.",
+  "limitations": [
+    "650ms coarse Windows CPU counters; three fresh processes per mode",
+    "Boundary foreground guard only; no continuous history",
+    "No emitted DPI/client viewport or post-cleanup resource samples",
+    "Full Safety family/background worker CPU is part of this controlled one-source measurement"
+  ]
+}

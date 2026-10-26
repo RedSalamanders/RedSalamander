@@ -1,0 +1,133 @@
+{
+  "schema": "red-salamander.fileops-i27-typed-controls.v2",
+  "comparison_sha256": "4580f4d5324c898836231422bff3ddd12c0bea207956a6f466f27c241061c8f1",
+  "controls": [
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "surface": "compare",
+      "dpi": 144,
+      "width_pixels": 720,
+      "height_pixels": 480,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "surface": "change-case",
+      "dpi": 144,
+      "width_pixels": 720,
+      "height_pixels": 480,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "surface": "change-attributes",
+      "dpi": 144,
+      "width_pixels": 720,
+      "height_pixels": 480,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "surface": "file-list",
+      "dpi": 144,
+      "width_pixels": 720,
+      "height_pixels": 480,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusWorkloadFNV64",
+      "workload": "v1-four-informational-480dip-long-unicode",
+      "digest_u64": "522876664971784321",
+      "object_count": 4,
+      "row_or_operation_count": 40,
+      "raw_field_semantics": "durationUs is an opaque digest in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ClientPixels",
+      "surface": "popup",
+      "dpi": 144,
+      "width_pixels": 1114,
+      "height_pixels": 2032,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ClientPixels",
+      "surface": "issues",
+      "dpi": 144,
+      "width_pixels": 1140,
+      "height_pixels": 720,
+      "raw_field_semantics": "durationUs is DPI in this legacy fixture"
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.WorkloadFNV64",
+      "workload": "v1-eight-running-127-warnings-one-typed",
+      "digest_u64": "11213680259031909754",
+      "object_count": 8,
+      "row_or_operation_count": 128,
+      "raw_field_semantics": "durationUs is an opaque digest in this legacy fixture"
+    }
+  ],
+  "captures": [
+    {
+      "variant": "baseline",
+      "capture": 1,
+      "run_id": "20261002T145119Z-66648-9fe51f911e804e9ab40ac2a1de624046",
+      "raw_sha256": "5f1b80e1c068b08917e5cb666c94e3569a6364f9bb566ca1b846cbfef257ad2c"
+    },
+    {
+      "variant": "baseline",
+      "capture": 2,
+      "run_id": "20261002T145505Z-114104-55264b9ea56848a9836f9e694a7857e3",
+      "raw_sha256": "bff3cff81a5036a49484c6a55b05686e12d109412025c6c93c458e44709be19c"
+    },
+    {
+      "variant": "baseline",
+      "capture": 3,
+      "run_id": "20261002T145606Z-77072-92536ae694424a5fa365f1780c43d904",
+      "raw_sha256": "b88db31ef70899b70858506e50e86b02a61b0395c14e391f35ce38d4cf5e58c8"
+    },
+    {
+      "variant": "baseline",
+      "capture": 4,
+      "run_id": "20261002T145951Z-67724-189be82598584da5be565b1161a890be",
+      "raw_sha256": "8ddf000b9d3c0e8912539fa3137ad152a54441918451798489c6bfd8276a8529"
+    },
+    {
+      "variant": "baseline",
+      "capture": 5,
+      "run_id": "20261002T150057Z-7760-dfd41509a090475d9f03f7e3bbc26414",
+      "raw_sha256": "0af5775bb5bc510700260da63891e334cd23793701535d8eb346129023ce05dc"
+    },
+    {
+      "variant": "candidate",
+      "capture": 1,
+      "run_id": "20261002T145219Z-15832-c25d7d5c23614f06af96261e7e9a2fd4",
+      "raw_sha256": "cc13b4bde24607c66e46f339be70cdc5789670725c1d8b1e5781f1aac493be53"
+    },
+    {
+      "variant": "candidate",
+      "capture": 2,
+      "run_id": "20261002T145353Z-108796-fa7988f695704c4293db4361d2d5c258",
+      "raw_sha256": "0169cf56bb8c6325a4b7cb4be2700d1be88d946f7f5e5e3b05720e89249fa8cf"
+    },
+    {
+      "variant": "candidate",
+      "capture": 3,
+      "run_id": "20261002T145708Z-79848-1f5c1aea2dcc4435becc69bb3c37a218",
+      "raw_sha256": "b02b1106c1c71cd420b8b63c0cae576005c55e78010cdc17910c975b5c8dee15"
+    },
+    {
+      "variant": "candidate",
+      "capture": 4,
+      "run_id": "20261002T145817Z-112872-0e6c3e9ab8044a548e4eca480d40085d",
+      "raw_sha256": "2d0ef15058842733f105f4229cdfce8549a4ef986734da5e6542bdb44eab45c4"
+    },
+    {
+      "variant": "candidate",
+      "capture": 5,
+      "run_id": "20261002T150159Z-60664-51f0ff0a39f84097aee3da8cead32b49",
+      "raw_sha256": "76ad187f772eee4151f9c8221fe6cdff7163931ca3c3b15260e55c86aa9eceb3"
+    }
+  ],
+  "attachment_semantics": "GuiAndAttachments.durationUs is an attachment count, not elapsed time; all 29 labelled rows per capture are retained in claim-rows.jsonl."
+}

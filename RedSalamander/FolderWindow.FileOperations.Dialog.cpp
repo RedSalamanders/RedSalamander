@@ -1,4 +1,5 @@
 #include "FolderWindow.FileOperationsInternal.h"
+#include "WindowActivation.h"
 
 #include "FolderWindow.FileOperations.Popup.h"
 
@@ -253,9 +254,26 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
 
 void FolderWindow::FileOperationState::ShowPopup() noexcept
 {
+    // This entry is the explicit View command. Automatic task presentation still
+    // uses EnsurePopupVisible without activation. Do not override intervening input.
+    const std::weak_ptr<void> lifetime = _uiLifetime;
+    const HWND ownerWindow             = GetAncestor(_owner.GetHwnd(), GA_ROOT);
+    const HWND foreground              = GetForegroundWindow();
+    const HWND focus                   = GetFocus();
+    LASTINPUTINFO input{sizeof(LASTINPUTINFO)};
+    const bool inputKnown = GetLastInputInfo(&input) != FALSE;
     _actionablePromptPresentationPending.store(false, std::memory_order_release);
     RevealPendingTasksImmediately();
     EnsurePopupVisible();
+    if (lifetime.expired())
+        return;
+    const HWND popup = _popup.get();
+    LASTINPUTINFO currentInput{sizeof(LASTINPUTINFO)};
+    if (! popup || (foreground != ownerWindow && foreground != popup) || GetForegroundWindow() != foreground || GetFocus() != focus || ! inputKnown ||
+        ! GetLastInputInfo(&currentInput) || currentInput.dwTime != input.dwTime)
+        return;
+    if (Common::RequestForegroundWindow(popup) && ! lifetime.expired() && _popup.get() == popup && GetForegroundWindow() == popup)
+        SetFocus(popup);
 }
 
 void FolderWindow::FileOperationState::OnPopupHiddenByUser() noexcept

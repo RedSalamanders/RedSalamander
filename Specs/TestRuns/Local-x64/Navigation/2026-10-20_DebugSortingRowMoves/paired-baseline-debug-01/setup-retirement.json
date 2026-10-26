@@ -1,0 +1,4 @@
+{
+  "benchmark_started": false,
+  "reason": "Index-only validation caught CRLF transport in the saved Git patch. Normalize only the patch transport and fix controller success-stream capture before any paired measurement; the baseline code and build are unchanged."
+}

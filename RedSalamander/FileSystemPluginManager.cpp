@@ -26,11 +26,13 @@
 
 namespace
 {
-using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
-using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using BrowseConnectionTargetsExportFunc =
-    HRESULT(__stdcall*)(REFIID, const wchar_t*, const FactoryConnectionBrowseRequest*, FactoryConnectionBrowseResult*) noexcept;
+using CreateFactoryFunc                 = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using EnumeratePluginsFunc              = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using GetConfigurationSchemaExportFunc  = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using BrowseConnectionTargetsExportFunc = HRESULT(__stdcall*)(REFIID,
+                                                              const wchar_t*,
+                                                              const FactoryConnectionBrowseRequest*,
+                                                              FactoryConnectionBrowseResult*) noexcept;
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -287,9 +289,7 @@ struct EnumeratedPluginSet
     if (! IsValidEnumeratedPluginRange(metaData, count))
     {
         result.hr        = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
-                                       metaData != nullptr,
-                                       count);
+        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).", metaData != nullptr, count);
         return result;
     }
 
@@ -348,8 +348,7 @@ HRESULT FileSystemPluginManager::ConnectionBrowseWork::Execute(std::vector<Conne
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices)
-                                 : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
+    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices) : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
 }
 
 void FileSystemPluginManager::AssertUiThread() const noexcept
@@ -874,8 +873,7 @@ FileSystemPluginManager::ValidateConfiguration(std::wstring_view pluginId, std::
     options.debugLevel = DEBUG_LEVEL_NONE;
 
     wil::com_ptr<IFileSystem> fileSystem;
-    const HRESULT createHr =
-        createFactory(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), fileSystem.put_void());
+    const HRESULT createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), fileSystem.put_void());
     if (FAILED(createHr))
     {
         return createHr;
@@ -1101,6 +1099,10 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
 {
     SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
     UnloadAll(ModuleUnloadMode::FreeLibrary);
+    // Earlier aliases can defer while later aliases still own instances in the
+    // same DLL. All manager-owned instances are now released; retry once before
+    // rebuilding the catalog. External owners and workers still veto unload.
+    SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
     _plugins.clear();
 
     if (_exeDir.empty())

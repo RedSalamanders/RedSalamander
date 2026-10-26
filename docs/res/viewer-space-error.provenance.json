@@ -1,0 +1,52 @@
+{
+  "kind": "native-production-renderer-harness-capture",
+  "scenario": "TestViewerSpaceLifecycleCaptures/08-provider-error",
+  "sourceRunId": "20261022T164835Z-53288-f0a45ee600ba4b96b45c2a404f9a00ed",
+  "source": "Specs/TestRuns/Local-x64/UI/2026-10-22_ViewerSpaceNativeCaptures/captures/viewer-space-error.png",
+  "sha256": "7dd32416121e43d204228a74125c6fb15d242d5a60bbb553c91faccb634c357e",
+  "build": {
+    "configuration": "Debug",
+    "platform": "x64",
+    "testsEnabled": true,
+    "gitHead": "95f7114b892484414dd9daac7f3a89c1d1fd68ae",
+    "sourceSnapshotId": "8c4c04904022f53b85b2fd951951acc5d7b0f77e3048c84ac68faca0f2b73847",
+    "receiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8",
+    "executableSha256": "d380372ab64ca13f3dec5af5b899898686b385e4d4113f1693fc94592a2ba03d",
+    "viewerSpaceDllSha256": "8c52a00c0864aab5c81565d7dc198d6c78bb7f7fde97e84c52fd1d5823389faf"
+  },
+  "display": {
+    "dpi": 144,
+    "pixelWidth": 1800,
+    "pixelHeight": 1080,
+    "language": "en-US",
+    "numberFormat": "process locale",
+    "theme": "light"
+  },
+  "syntheticData": {
+    "roots": [
+      "Demo/Library",
+      "Demo/Media",
+      "Demo/Tools"
+    ],
+    "content": "Invented deterministic ViewerSpace lifecycle and workspace provider fixtures."
+  },
+  "privacy": {
+    "dataOrigin": "invented harness fixture",
+    "personalData": false,
+    "redactionLabels": false,
+    "realAccounts": false
+  },
+  "capture": {
+    "noActivation": true,
+    "desktopGlobalInput": false,
+    "wholeFrame": true,
+    "imageEdits": "none"
+  },
+  "review": {
+    "completeFrame": true,
+    "date": "2026-10-22",
+    "basis": "All thirteen unchanged native embedded client frames visually inspected; synthetic fixture content and readable current workspace states verified. Operating-system chrome and menus remain outside the capture scope."
+  },
+  "limits": "Owned embedded ViewerSpace client frame; operating-system chrome and main menus are outside this capture. Scoped x64 Debug presentation evidence from a failed broader affected run; no Full, Release, ARM64, live-provider or complete accessibility qualification.",
+  "nativeCaptureProvenance": "Specs/TestRuns/Local-x64/UI/2026-10-22_ViewerSpaceNativeCaptures/native-viewer-space-error.provenance.json"
+}

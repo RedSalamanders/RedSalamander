@@ -67,12 +67,14 @@
   <ItemGroup>
     <ClCompile Include="..\Common\LocalSearchIndexCore.cpp" />
     <ClCompile Include="..\Common\SearchServiceBroker.cpp" />
+    <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\LocalSearchIndexCore.h" />
     <ClInclude Include="..\Common\SearchServiceBroker.h" />
+    <ClInclude Include="..\Common\SearchTextHelpers.h" />
     <ClInclude Include="..\Common\SqliteIndexStore.h" />
   </ItemGroup>
   <ItemGroup>

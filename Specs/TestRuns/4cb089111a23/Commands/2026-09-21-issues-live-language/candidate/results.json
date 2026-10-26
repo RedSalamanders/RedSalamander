@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-21T14:22:22.338Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\i26-issues-live-locale-candidate-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 8290,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 2136,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 2762,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "passed",
+            "duration_ms": 1860,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

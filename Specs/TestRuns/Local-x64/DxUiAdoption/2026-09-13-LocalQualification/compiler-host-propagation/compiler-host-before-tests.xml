@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="2" errors="0" failures="2" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-09-13" time="02:09:20">
+  <environment nunit-version="2.5.8.0" os-version="10.0.26200" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" clr-version="" user="eric" cwd="Z:\src\DxUi" user-domain="SINON" machine-name="SINON" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Failure" success="False" time="1.3974" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="DxUi consumer profile evaluation" executed="True" result="Failure" success="False" time="1.3974" asserts="0" description="DxUi consumer profile evaluation">
+        <results>
+          <test-case description="uses the first-party host during restore and restores the caller environment after success or failure" name="DxUi consumer profile evaluation.uses the first-party host during restore and restores the caller environment after success or failure" time="1.1474" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>String lengths are both 3. Strings differ at index 1.
+Expected: {x64}
+But was:  {x86}
+------------^</message>
+              <stack-trace>at line: 182 in Z:\RsI19Closeout\Tools\Tests\DxUiDependency.Tests.ps1
+182:                         $resolved.Identity.preferredToolArchitecture | Should Be $expected</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="evaluates the six real consumer profiles with sanitizer settings and a 64-bit cross-compiler host" name="DxUi consumer profile evaluation.evaluates the six real consumer profiles with sanitizer settings and a 64-bit cross-compiler host" time="0.25" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {DxUiOutputRoot=fixture;Platform=x64;Configuration=Debug} to match the expression {;PreferredToolArchitecture=x64(;|$)}</message>
+              <stack-trace>at line: 220 in Z:\RsI19Closeout\Tools\Tests\DxUiDependency.Tests.ps1
+220:                     $dxuiReference[0].AdditionalProperties | Should Match (';PreferredToolArchitecture=' + $evaluated.Properties.PreferredToolArchitecture + '(;|$)')</stack-trace>
+            </failure>
+          </test-case>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

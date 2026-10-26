@@ -1,0 +1,46 @@
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+index b7ad234f1..6e345d58f 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -1945,8 +1945,13 @@ constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyTerminalFactsProjecti
+     SelfTestState::Step::FileOps_TerminalFactsProjection,
+ }};
+ 
++constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyBatchRenameExactResult{{
++    SelfTestState::Step::FileOps_BatchRenameExactResultCarrier,
++}};
++
+ constexpr auto kFileOpsFamilyDefinitions = std::to_array<FileOpsFamilyDefinition>({
+     FileOpsFamilyDefinition{L"FileOpsFamily_TerminalFactsProjection", {kFileOpsFamilyTerminalFactsProjection}},
++    FileOpsFamilyDefinition{L"FileOpsFamily_BatchRenameExactResult", {kFileOpsFamilyBatchRenameExactResult}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase01_DirectoryMerge", {kFileOpsFamilyClearflowPhase01}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase03_GraphFairness", {kFileOpsFamilyClearflowPhase03}},
+     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase04_Security", {kFileOpsFamilyClearflowPhase04}},
+@@ -1980,6 +1985,27 @@ constexpr auto kFileOpsFamilyDefinitions = std::to_array<FileOpsFamilyDefinition
+     FileOpsFamilyDefinition{L"FileOpsFamily_Phase16_Remote", {kFileOpsFamilyPhase16}},
+ });
+ 
++static_assert(
++    []
++{
++    // Broad runs dispatch child families, while reporting this default phase order.
++    // A phase registered in only one list would silently go unexecuted until the
++    // parent runner rejects its unexpected skip. Overlapping existing families are valid.
++    std::array<bool, static_cast<size_t>(SelfTestState::Step::Failed) + 1u> covered{};
++    for (const auto& family : kFileOpsFamilyDefinitions)
++    {
++        for (const SelfTestState::Step step : family.phases)
++            covered.at(static_cast<size_t>(step)) = true;
++    }
++    for (const SelfTestState::Step step : kFileOpsPhaseOrder)
++    {
++        if (step != SelfTestState::Step::Setup && step != SelfTestState::Step::Cleanup_RestorePluginConfig && ! covered.at(static_cast<size_t>(step)))
++            return false;
++    }
++    return true;
++}(),
++    "Every default FileOps phase must be dispatched by a child family.");
++
+ struct RunSelection
+ {
+     bool recognized = true;

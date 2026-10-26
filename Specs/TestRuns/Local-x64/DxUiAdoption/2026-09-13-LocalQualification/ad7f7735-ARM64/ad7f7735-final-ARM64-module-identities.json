@@ -1,0 +1,329 @@
+[
+  {
+    "source": "ad7f7735591c3cd18bd43bddce0a7f06cdd3318b",
+    "configuration": "Debug",
+    "platform": "ARM64",
+    "nativeRuntimeQualified": false,
+    "startedUtc": "2026-09-13T00:16:50.3100500Z",
+    "completedUtc": "2026-09-13T00:21:01.7352014Z",
+    "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ad7f7735-final-ARM64-Debug-build.log",
+    "modules": [
+      {
+        "module": "PerformanceTests2.dll",
+        "sha256": "498FC30B002C2E77278616DF4D8FA81E6D499DEDCEA91FA44C013213212E1063",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "ProductUiTests.exe",
+        "sha256": "9716628F6D53FFCB1FA3F9216B4681D5C0BA3758DC5D471D10F5BE06566A2D68",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "RedConfigure.exe",
+        "sha256": "22ADC3A52820EE32936FD3DD0F2A912FF66424B456E9C3134EDFC445729393C7",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "RedConfigureTests.exe",
+        "sha256": "64E5CB0386664E026C166ED9C28073964BDC4759E73D7A9BCA2510CC6D28C3C9",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "RedSalamander.exe",
+        "sha256": "369C6253CA91EFD7A4F489A60A7A113873A2613A9C21C43F5E4DEAD62644D9D6",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "RedSalamanderMonitor.exe",
+        "sha256": "6080905B0F777351D5F7A606B0E5086D68CA32892FD1EAA14C7500EE4D72258A",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\Terminal.dll",
+        "sha256": "5317A97DFD1756EB9F9F65D41DCC3AEC3CC9F9B2C48C60FED62CFC599D700A3C",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerImgRaw.dll",
+        "sha256": "1620C61C070E5A33EF640CCBDA3AD5A3E9CDAA7C03D9E5D8F71CF0D6B2322D4E",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerPE.dll",
+        "sha256": "AB80A16DECC4B211FD4053BBF2F3016680F44231A5B6EED870FCE2C2AAB6681F",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerSpace.dll",
+        "sha256": "3906D319C5E30878E8F389986709D227FF85E6C777E123A06A4F35C50AC35C02",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerSqlite.dll",
+        "sha256": "B16BEDCDF1C5699F3DD3A97511320003FC94F10B94575B564559754A63E9FE84",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerText.dll",
+        "sha256": "95BCEBCE652BAC3105B8AB69415CAB1CB615540E5F44ED41BDE6789E05D6A69E",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerVLC.dll",
+        "sha256": "0178392A2EE61C9190E0969AEA81AE30824E18DAF67DC51CEB8205343AF9A735",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      },
+      {
+        "module": "Plugins\\ViewerWeb.dll",
+        "sha256": "8148432305E927522C5E73AABC5EA7AC694A243AA72F6B3CC7E5A38244913978",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "13E4BFB18A59A9EF82C800FF9E996097CB7FC70C77E6B6DBB54D15D6BE553938"
+      }
+    ]
+  },
+  {
+    "source": "ad7f7735591c3cd18bd43bddce0a7f06cdd3318b",
+    "configuration": "Release",
+    "platform": "ARM64",
+    "nativeRuntimeQualified": false,
+    "startedUtc": "2026-09-13T00:21:01.7394649Z",
+    "completedUtc": "2026-09-13T00:26:21.6347177Z",
+    "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ad7f7735-final-ARM64-Release-build.log",
+    "modules": [
+      {
+        "module": "PerformanceTests2.dll",
+        "sha256": "07813FB04D7519D547B6009B37701CE91D880E904622F433E1326BE74908427B",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "ProductUiTests.exe",
+        "sha256": "6555B4E0ADDBDB70AF72E37491E8387C9E68D2D03B0B108467DD32DFD9CDD05F",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "RedConfigure.exe",
+        "sha256": "3D7192E9CF63328AB2E17E0D97150B2C994D80E16104D20EAB6E5ACE9902D712",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "RedConfigureTests.exe",
+        "sha256": "BBDE7B0FC8CFC38DF9E4A06B25A020F77146DBEC3CF4530F975D4882EE9231B2",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "RedSalamander.exe",
+        "sha256": "38A974B86B6A826F99F5017F345D84798F0CC1CC95D5F8327EC84D07E5DAD769",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "RedSalamanderMonitor.exe",
+        "sha256": "AA617A32570D4C6E0DD92801E63245B53FEBAF98C0397D02EB53E4A308F5E115",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\Terminal.dll",
+        "sha256": "B49C9183AFC09845885A99E79FB5FCBD0BDD26816D48B6CC4A036233B602FFC2",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerImgRaw.dll",
+        "sha256": "F5093B333A9BF82FFD83A1F2EF448A5C5800CDC11AA8E9E89B6FD8B33C137CD1",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerPE.dll",
+        "sha256": "2DD1BF95D92A813EFDC3BB0F01A92C3902DF6ACD34CBEB196519F5549863E923",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerSpace.dll",
+        "sha256": "EB1F81AF7CA3AB696755BF81716B047E14FD238B2096E129BE2E1E3DA36EFF2A",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerSqlite.dll",
+        "sha256": "147D4875F4031C3AA8FF8B1F23506979A3FFE20D9451B7ED273957AC8478DBF9",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerText.dll",
+        "sha256": "E70057C1103FF00CAC740CBC6838C1580F424C534BF1D58F90485666A4708007",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerVLC.dll",
+        "sha256": "B0F4D6DAA4DC34EB6D689DDBB9FB15A6860F9F1171660838C5038D983124B381",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      },
+      {
+        "module": "Plugins\\ViewerWeb.dll",
+        "sha256": "449193FCCFD62A460AA06BA1825BE824368D6B8C588CF5D98A26CC691A9436DD",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "7163B3B8FE9DCD4046C2DD2E4C2B591F8C19247AC96FECA5E54A1B339BDDDB03"
+      }
+    ]
+  },
+  {
+    "source": "ad7f7735591c3cd18bd43bddce0a7f06cdd3318b",
+    "configuration": "ASan Debug",
+    "platform": "ARM64",
+    "nativeRuntimeQualified": false,
+    "startedUtc": "2026-09-13T00:26:21.6358492Z",
+    "completedUtc": "2026-09-13T00:30:23.0760409Z",
+    "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\ad7f7735-final-ARM64-ASan-Debug-build.log",
+    "modules": [
+      {
+        "module": "PerformanceTests2.dll",
+        "sha256": "DDFFB94E440ED4F36B6879385789E88437EBA666CF1B8BF89B9FF02D07585B33",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "ProductUiTests.exe",
+        "sha256": "775BAD781E7CD84C32411EE8746428117426B0980AB13E460A21E043736D0C2C",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "RedConfigure.exe",
+        "sha256": "D1BFBD9FA3F87AAE0439FE47644581B92EC1C50142933CB97CAC5F7CD448FEB0",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "RedConfigureTests.exe",
+        "sha256": "CDED6F56416F88C0EC921A89EBD838DE686AD57B7C9649E173D53CB325E67FEA",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "RedSalamander.exe",
+        "sha256": "1DA2DC70F68AA8F8C2B1943805DF04FC575DA5D04F17BE6B11548B31BCC9DEFE",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "RedSalamanderMonitor.exe",
+        "sha256": "B2141CD3932D16FF36235C2B747AF80D76691C02D93785786BDE17C7D0D45534",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\Terminal.dll",
+        "sha256": "610DF5EF51FF87A39B9FD4911AB34E3DA7387BDCC5F79A71D26D55D3DE00E747",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerImgRaw.dll",
+        "sha256": "6A6CA98E126063FFCE08AEE1F170678A690B1E693AD8762AE230CDC6E79A1B35",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerPE.dll",
+        "sha256": "C80CA6A6A61BDE583536F8B6889AC5C47912EA03B081A13FB2FCF0A40669FEA6",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerSpace.dll",
+        "sha256": "93B9CCB170C0C86C38A8F8CD8432E04534A488F8CBCD2D01EB5AEEDD543A5133",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerSqlite.dll",
+        "sha256": "034A05FAC2A4C1EFC934C815060D1BB9C07B3D81B1E51B0D8122FCB8600E6AC4",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerText.dll",
+        "sha256": "C332667301DE27423089E29F5F59C029D5535EB09741D33407B146605A85D435",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerVLC.dll",
+        "sha256": "89F42607E8D1588FE4AE450FD763A387180C0F148EE4A8BB97A471E13E1371C4",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      },
+      {
+        "module": "Plugins\\ViewerWeb.dll",
+        "sha256": "BC49FBEDD1A2404BDB3631966F3A8AAB4DA4622E7554D8587F237CB141E289AF",
+        "commit": "13788e95f1c9a16210a87988d742d9dfc6f66eef",
+        "compilerHost": "x64",
+        "archiveSha256": "A0E07B8884F366E9A5586DE6F95FA4AEBB9F550DE084E5E887B3C49B0B802941"
+      }
+    ]
+  }
+]

@@ -1,0 +1,2689 @@
+{
+  "generatedAt": "2026-10-14T18:40:26.6442013+02:00",
+  "selfTests": {
+    "commands": {
+      "runCaseRegistrations": 831,
+      "coordinatorRunCaseRegistrations": 1,
+      "familyRunCaseRegistrations": {
+        "Settings": 115,
+        "BatchRename": 1,
+        "PluginConfig": 24,
+        "Connections": 46,
+        "Preferences Dispatch": 177,
+        "CompareOptions": 15,
+        "Search": 71,
+        "Shortcuts": 1,
+        "ViewCommands": 151,
+        "FileOps": 66,
+        "Navigation": 53,
+        "Dialogs": 67,
+        "ShellCommands": 32,
+        "ThemeOverlay": 11
+      }
+    },
+    "compareDirectories": {
+      "runCaseRegistrations": 264
+    },
+    "fileOperations": {
+      "activePhases": 311
+    }
+  },
+  "standalone": {
+    "nativeExecutables": [
+      "CrashHandlingTests",
+      "FileSystemCurlTests",
+      "LocalizationTests",
+      "MonitorTest",
+      "PluginContractTests",
+      "ProductUiTests",
+      "RedConfigureTests",
+      "SettingsSchemaTests",
+      "ViewerPETests",
+      "ViewerSqliteTests"
+    ],
+    "nativeProjects": [
+      {
+        "name": "CrashHandlingTests",
+        "kind": "Executable",
+        "planEntries": [
+          "CrashHandlingTests"
+        ]
+      },
+      {
+        "name": "FileSystemCurlTests",
+        "kind": "Executable",
+        "planEntries": [
+          "FileSystemCurlTests"
+        ]
+      },
+      {
+        "name": "LocalizationTests",
+        "kind": "Executable",
+        "planEntries": [
+          "LocalizationTests"
+        ]
+      },
+      {
+        "name": "MonitorTest",
+        "kind": "Executable",
+        "planEntries": [
+          "MonitorTest"
+        ]
+      },
+      {
+        "name": "PerformanceTests2",
+        "kind": "CppUnitTest",
+        "planEntries": [
+          "PerformanceTests2"
+        ]
+      },
+      {
+        "name": "PluginContractTests",
+        "kind": "Executable",
+        "planEntries": [
+          "PluginContractTests"
+        ]
+      },
+      {
+        "name": "ProductUiTests",
+        "kind": "Executable",
+        "planEntries": [
+          "ProductUiTests"
+        ]
+      },
+      {
+        "name": "RedConfigureTests",
+        "kind": "Executable",
+        "planEntries": [
+          "RedConfigureTests"
+        ]
+      },
+      {
+        "name": "SettingsSchemaTests",
+        "kind": "Executable",
+        "planEntries": [
+          "SettingsSchemaTests"
+        ]
+      },
+      {
+        "name": "ViewerPETests",
+        "kind": "Executable",
+        "planEntries": [
+          "ViewerPETests.Interactive",
+          "ViewerPETests.Noninteractive",
+          "ViewerPETests.TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly",
+          "ViewerPETests.TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly"
+        ]
+      },
+      {
+        "name": "ViewerSqliteTests",
+        "kind": "Executable",
+        "planEntries": [
+          "ViewerSqliteTests.Interactive",
+          "ViewerSqliteTests.Noninteractive"
+        ]
+      }
+    ],
+    "performanceTests2": {
+      "testMethods": 15
+    },
+    "productUiTests": {
+      "cases": 28
+    }
+  },
+  "scripts": {
+    "toolsPester": {
+      "cases": 1165,
+      "requiresBuildToolchainCases": 80,
+      "fileCases": {
+        "BuildEvidence.Tests.ps1": 19,
+        "BuildOutputProcess.Tests.ps1": 28,
+        "BuildProjectSelection.Tests.ps1": 4,
+        "BuildReproducibility.Tests.ps1": 22,
+        "BuildRuntimeClean.Tests.ps1": 10,
+        "DeleteOnCloseTemporaryFileSourceContracts.Tests.ps1": 9,
+        "DocumentationDriftContracts.Tests.ps1": 18,
+        "DxUiDependency.Tests.ps1": 11,
+        "DxUiUpdate.Tests.ps1": 5,
+        "FailureReportRouting.Tests.ps1": 13,
+        "GhosttyCandidateOverlay.Tests.ps1": 5,
+        "GhosttyCandidateReview.Tests.ps1": 4,
+        "GhosttyRuntimeLifecycle.Tests.ps1": 24,
+        "GhosttyRuntimeStatus.Tests.ps1": 15,
+        "HistoricalTerminalProfile.Tests.ps1": 4,
+        "HwndRenderTargetResourcesSourceContracts.Tests.ps1": 3,
+        "ModalWindowShellSourceContracts.Tests.ps1": 3,
+        "MSBuildInvocation.Tests.ps1": 11,
+        "MtpLiveCloseout.Tests.ps1": 5,
+        "PackedFileInfoBufferSourceContracts.Tests.ps1": 3,
+        "PluginConfigurationConsolidationSourceContracts.Tests.ps1": 3,
+        "PluginLifetimeConsolidationSourceContracts.Tests.ps1": 3,
+        "PostedPayloadCoalescingSourceContracts.Tests.ps1": 4,
+        "ProcessStreaming.Tests.ps1": 10,
+        "RedSalamanderPluginDeployment.Tests.ps1": 1,
+        "ReleaseWorkflowPolicy.Tests.ps1": 34,
+        "RelocatedTestSandbox.Tests.ps1": 1,
+        "RemoveAds.Tests.ps1": 6,
+        "ResourceLocalizationContracts.Tests.ps1": 10,
+        "RunAllTestsPlan.Tests.ps1": 68,
+        "SanitizedEnvironment.Tests.ps1": 10,
+        "ScopedTesting.Tests.ps1": 7,
+        "SharedToolingModules.Tests.ps1": 7,
+        "ShowPerfRuns.Tests.ps1": 7,
+        "SpecInformationArchitecture.Tests.ps1": 46,
+        "TerminalDependencyLifecycle.Tests.ps1": 12,
+        "TerminalEngineArchive.Tests.ps1": 8,
+        "TerminalEngineC7Proof.Tests.ps1": 10,
+        "TerminalEngineCandidateAssessment.Tests.ps1": 14,
+        "TerminalEngineCandidatePatch.Tests.ps1": 6,
+        "TerminalEngineCandidateUniverseTransition.Tests.ps1": 26,
+        "TerminalEngineCollectionDescriptor.Tests.ps1": 5,
+        "TerminalEngineCollectionDriver.Tests.ps1": 6,
+        "TerminalEngineCollectionNeutrality.Tests.ps1": 14,
+        "TerminalEngineCollectionProvider.Tests.ps1": 27,
+        "TerminalEngineEvaluator.Tests.ps1": 43,
+        "TerminalEngineFixtureGenerator.Tests.ps1": 3,
+        "TerminalEngineGate0Harness.Tests.ps1": 10,
+        "TerminalEngineGate0Probe.Tests.ps1": 11,
+        "TerminalEngineNetworkIsolation.Tests.ps1": 20,
+        "TerminalEngineNotices.Tests.ps1": 3,
+        "TerminalEnginePeIdentity.Tests.ps1": 4,
+        "TerminalEngineRound4Closeout.Tests.ps1": 2,
+        "TerminalEngineRuntimeImportPolicy.Tests.ps1": 1,
+        "TerminalEngineSourceReview.Tests.ps1": 3,
+        "TerminalEngineTextIdentity.Tests.ps1": 2,
+        "TerminalEvidence.Tests.ps1": 15,
+        "TerminalPluginSourceContracts.Tests.ps1": 34,
+        "TerminalRuntimeExportIdentity.Tests.ps1": 1,
+        "TestHarnessSourceContracts.Tests.ps1": 201,
+        "TestInventory.Tests.ps1": 7,
+        "TestMachineResources.Tests.ps1": 4,
+        "TestRunArchive.Tests.ps1": 14,
+        "TestSandboxContainment.Tests.ps1": 25,
+        "ThemeDistributionContracts.Tests.ps1": 9,
+        "ToolingGovernance.Tests.ps1": 12,
+        "ToolInventory.Tests.ps1": 17,
+        "ValidationEvidence.Tests.ps1": 24,
+        "ValidationFingerprint.Tests.ps1": 25,
+        "ValidationImpact.Tests.ps1": 11,
+        "VcpkgInstallSafety.Tests.ps1": 28,
+        "VerifyNoProductionGetCursorPos.Tests.ps1": 1,
+        "Versioning.Tests.ps1": 12,
+        "ViewerChromeSourceContracts.Tests.ps1": 6,
+        "WingetPublication.Tests.ps1": 29,
+        "WingetValidation.Tests.ps1": 27
+      },
+      "sourceContracts": {
+        "file": "TestHarnessSourceContracts.Tests.ps1",
+        "categoryCounts": {
+          "LexicalSafetyBan": 2,
+          "StructuralGraphInvariant": 20,
+          "BehavioralShadow": 75,
+          "MixedSourceShape": 104
+        },
+        "replacementCandidates": [
+          "never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine",
+          "carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete",
+          "validates Graph and preauthenticated upload targets before credential-bound dispatch",
+          "keeps bearer values and opaque query values out of diagnostics and serialized header blocks",
+          "documents and enforces bounded self-test timeout multipliers",
+          "keeps scaled self-test timeouts finite and nonzero for nonzero bases",
+          "gives ViewerPETests nested shell churn its own timeout budget",
+          "keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe",
+          "bounds multi-plugin metadata before host indexing and reference-counts shared localization owners",
+          "keeps viewer threadpool module pins alive through the callback return boundary",
+          "rejects viewer async work without module pins and impossible provider read counts",
+          "keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered",
+          "keeps ViewerWeb security setup fail-closed and teardown outside DllMain",
+          "keeps ViewerPE reader commitments exact and current terminal delivery recoverable",
+          "keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate",
+          "publishes authoritative ViewerSpace totals before root completion becomes visible",
+          "captures viewer payload fields before moving the payload into PostMessagePayload",
+          "keeps ViewerText Save As source-first and transactionally committed",
+          "keeps ViewerText async decode and clipboard work terminal and bounded",
+          "requires git identity before accepting self-test archive repo roots",
+          "keeps self-test archive parent walking bounded by a named limit",
+          "scopes the self-test run mutex to the isolated self-test root",
+          "lets native selftests consume the unified test root and run id directly",
+          "exposes native TestSandbox scratch acquisition separate from last_run artifacts",
+          "removes native self-test sandboxes without traversing directory reparse points",
+          "keeps nested settings-save child artifacts shallow and removes them before audit",
+          "routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root",
+          "authorizes test roots centrally and fails closed before native mutation",
+          "routes RedConfigureTests scratch through the unified TestSandbox root",
+          "routes ViewerSqliteTests scratch through the unified TestSandbox root",
+          "routes CrashHandlingTests scratch through the unified TestSandbox root",
+          "routes Commands plugin-config scratch through native TestSandbox roots",
+          "recovers plugin-config debug tab traversal from logical focus position before first-control fallback",
+          "keeps plugin-config tab traversal retries from sending an extra tab after a successful advance",
+          "waits for preview fallback text and source-pane focus together",
+          "separates configured preview publication from external desktop deactivation",
+          "makes quick-search tests own pane sort and extension visibility",
+          "keeps quick-search navigation expectations tied to visible match order",
+          "keeps Hot Paths browse page-settle failures diagnostic-rich",
+          "uses condition-based focus waiting for Viewers roundtrip category navigation",
+          "retries Preferences focus acquisition during condition-based waits",
+          "keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed",
+          "waits for Plugins sort-search header rects before reorder-resize interactions",
+          "waits for Viewers sort-search header rects before reorder-resize interactions",
+          "keeps broad Preferences focus paths on the shared focus helper",
+          "defers change-case folder focus restoration until modal teardown unwinds",
+          "retries transient selected-path lease observations to a diagnostic quiet point",
+          "keeps broad Commands app navigation shell focus checks condition-based",
+          "makes the app Shortcuts navigation-shell fixture own its settings and window isolation",
+          "isolates the Preferences Keyboard reset live interaction fixture",
+          "isolates the pane-filter DxUi surface fixture before global prompt discovery",
+          "isolates both Compare navigation-shell fixtures before asserting restored focus",
+          "isolates mouse-opened menu keyboard ordering and preserves split post diagnostics",
+          "reacquires the submenu placement cascade target after root-menu initialization",
+          "reports locked-desktop clipboard and foreground dependencies as explicit Commands skips",
+          "keeps Preferences category-tree UIA selection pinned to category-id selection",
+          "keeps Preferences debug category selection independent from transient snapshot capture",
+          "keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers",
+          "keeps Preferences category churn settled, attributable, and bounded under uncontended focus",
+          "isolates Compare Directories wrap traversal and keeps failures diagnostic-rich",
+          "carries selected FolderView rename identity across bounded refresh interleavings",
+          "routes Commands long-path and high-cardinality fixtures through native TestSandbox roots",
+          "routes ShellCommands shortcut save temp files through native TestSandbox roots",
+          "routes PerformanceTests2 scratch through the unified TestSandbox root",
+          "routes BatchRename window fixture roots through native TestSandbox roots",
+          "routes ViewerPETests fixture files through the unified TestSandbox root",
+          "keeps shared TestSupport sandbox and environment policies explicit",
+          "keeps viewer message pumping and typed snapshot polling on bounded shared support",
+          "routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots",
+          "routes Compare dummy filesystem scratch through native TestSandbox roots",
+          "routes Tools Pester scratch through the unified TestSandbox root",
+          "gives retained Preferences page-state activation a broad-order settle budget",
+          "unwinds retained Plugins children before parent-grid UIA validation",
+          "uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage",
+          "quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures",
+          "keeps gated test sources inside TestSandbox instead of raw temp or profile roots",
+          "routes SettingsStore app files through the unified TestSandbox root during test runs",
+          "keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS",
+          "moves Compare foreground service capture files into TestSandbox instead of process temp",
+          "wraps foreground search service selftest processes in a kill-on-close JobObject",
+          "keeps broad-order foreground Search service failures process-diagnostic",
+          "keeps foreground Search service stdout tests independent from hidden readiness requests",
+          "keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics",
+          "keeps local index snapshot reload timing advisory instead of a correctness ceiling",
+          "keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes",
+          "keeps foreground Search service status probes behind a condition-based status wait",
+          "lets delete-burst maintenance tests accept an already completed first idle window",
+          "drains Batch Rename central test tasks before provider teardown",
+          "scales named raw self-test waits through the timeout multiplier",
+          "keeps FileOperations popup fixtures inside the current self-test process",
+          "keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts",
+          "suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests",
+          "routes persistent View-to-Files menu hover through the menu bar root-switch path",
+          "centralizes the Commands real-input warning and guards every cursor-warp family",
+          "reuses one native warning across foreground suites and preserves it through Commands isolation",
+          "opens the temporary menu-bar hover-switch popup through keyboard activation",
+          "parks real cursor away from DxUi popup initial hover in menu selftests",
+          "restores broad command-probe UI state and isolates modeless ownership fixtures",
+          "keeps Shortcuts live UIA search interaction message-pumped under broad order",
+          "keeps Compare Options close-reopen churn globally settled before live UIA reuse",
+          "keeps File Operations speed-limit prompt churn ValuePattern checks condition-based",
+          "keeps dialog prompt model and UIA checks condition-based under broad order",
+          "keeps Item Properties UIA interaction off the owning window thread and joins bounded workers",
+          "keeps broad-order Commands fixtures pinned to the state each case owns",
+          "keeps Find destination/action button probes pinned to deterministic input state",
+          "keeps Find header-drag reorder failures diagnostic-rich",
+          "keeps Find reordered-sort restore checks diagnostic-rich under broad order",
+          "stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions",
+          "keeps Compare Directories lower-card scroll focus failures diagnostic-rich",
+          "keeps Connection Manager long-run open-close settled and diagnostic-rich",
+          "keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected",
+          "bypasses fatal error modal dialogs while self-tests are running",
+          "keeps Commands Preferences chunks namespace-self-contained",
+          "keeps IconCache association LRU perf emission outside the association cache lock helper",
+          "bounds DirectoryInfoCache eviction when protected entries exceed the cache budget",
+          "keeps FolderView thumbnail WIC factory ownership local to the processing thread",
+          "keeps IMAP summary repair budget exhaustion local to the current repair pass",
+          "clears FolderView incremental-search layout effects over the visual label text",
+          "matches FolderView incremental-search highlights against visual display names",
+          "cleans stale FolderView incremental-search drawing effects when search is inactive",
+          "isolates every Commands case before fixture dispatch",
+          "resets pane content and transient UI state between Commands explicit-order cases",
+          "rehydrates runtime plugins after the MTP deferred-unload probe",
+          "keeps FolderView overlay perf sample sufficiency advisory",
+          "uses shared self-test result emission for ad hoc and state-machine cases",
+          "preserves partial self-test results when a case or suite crashes",
+          "keeps injected classifier proof hooks explicit and debug-only",
+          "opens the file-operations custom speed-limit prompt asynchronously for self-tests",
+          "keeps FileOperations self-test case prefixes runnable",
+          "keeps FileOperations discovery perf counters race-free under worker concurrency",
+          "closes the discovery scope of every Local mutation entry point exactly once",
+          "gives every provider mutation entry point on a direct route one discovery scope",
+          "keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded",
+          "keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled",
+          "keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out",
+          "keeps same-host overlap choices bounded, relation-scoped, and safely defaulted",
+          "keeps cached Keep Both eligibility scoped to the current top-level conflict",
+          "keeps Riptide low-risk hardening invariants wired",
+          "keeps Floodgate data-safety invariants wired",
+          "keeps Delta reverify file-system safety fixes wired",
+          "keeps Change Case discovery fail-closed and task updates token-owned",
+          "keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt",
+          "keeps File Operations scheduler failure policy local and the worker start gate cancelable",
+          "keeps Curl reader and full-buffer writer waits stop-aware",
+          "isolates the destructive missing-directory hot-reload fixture from the shared settings run",
+          "keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired",
+          "keeps bounded registry strings and canonical WSL discovery wired through Common",
+          "keeps RedConfigure rectangular paste bound to visible row and culture identities",
+          "keeps Riptide test-credibility gaps closed",
+          "keeps focus-independent GUI coverage behind the shared no-activation guard",
+          "stops File Operations interaction immediately when foreground activation fails",
+          "keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime",
+          "keeps IronLedger FolderView data-integrity guards wired",
+          "keeps Observatory Track 5 pack-and-delete output safety wired",
+          "keeps Observatory Track 5 local outputs transactional",
+          "keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination",
+          "keeps Observatory Track 5 archive extraction conflicts explicit and transactional",
+          "keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired",
+          "keeps Observatory Track 7 settings commits conflict-aware and recoverable",
+          "keeps Observatory Track 8 connection identity and authorization boundaries wired",
+          "keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired",
+          "keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired",
+          "keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired",
+          "keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired",
+          "keeps Observatory Track 13 local and Dummy provider mutations fail-before-change",
+          "keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired",
+          "TestConnectionCredentialPromptDestroysWindowOnModalQuit",
+          "TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers",
+          "TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers",
+          "never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX",
+          "agrees on the test-owned VHDX mount layout, F7 name and environment between the harness and native code",
+          "keeps every link, mount, SUBST and share call in test code inside a sandbox-guarded allowlisted helper",
+          "flags the old F7 real-volume mount, an unguarded helper call and unallowlisted links",
+          "fails, never skips, a FileOps case whose loopback share alias the sandbox guard refuses",
+          "guards every link the FileSystem object-binding debug self-test creates",
+          "journals the Recycle Bin item every Local recycle progress sink sees created",
+          "purges a case's recycled items at every case and phase boundary, whatever the outcome",
+          "requires every recycle-bin batch phase to purge exactly the items its task recycled",
+          "deletes only a proven entry of the current user's Recycle Bin and never enumerates the bin"
+        ],
+        "cases": [
+          {
+            "name": "never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine",
+            "category": "MixedSourceShape",
+            "line": 14,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete",
+            "category": "BehavioralShadow",
+            "line": 24,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "validates Graph and preauthenticated upload targets before credential-bound dispatch",
+            "category": "BehavioralShadow",
+            "line": 45,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps bearer values and opaque query values out of diagnostics and serialized header blocks",
+            "category": "MixedSourceShape",
+            "line": 58,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps Mouse in both manual Preferences projections and verifies live Apply persistence",
+            "category": "StructuralGraphInvariant",
+            "line": 79,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "documents every required draft-to-disk integration layer in the spec and project skill",
+            "category": "StructuralGraphInvariant",
+            "line": 89,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "documents and enforces bounded self-test timeout multipliers",
+            "category": "BehavioralShadow",
+            "line": 135,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps scaled self-test timeouts finite and nonzero for nonzero bases",
+            "category": "BehavioralShadow",
+            "line": 148,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "waits for runner-native self-test processes by direct process handle",
+            "category": "StructuralGraphInvariant",
+            "line": 156,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps the nightly shuffle repeat lane separate from the PR gate",
+            "category": "StructuralGraphInvariant",
+            "line": 166,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "gives ViewerPETests nested shell churn its own timeout budget",
+            "category": "BehavioralShadow",
+            "line": 182,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps ViewerVLC dependency loading isolated from the process DLL directory",
+            "category": "StructuralGraphInvariant",
+            "line": 191,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe",
+            "category": "MixedSourceShape",
+            "line": 203,
+            "positiveRegexAssertions": 31,
+            "negativeRegexAssertions": 4
+          },
+          {
+            "name": "bounds multi-plugin metadata before host indexing and reference-counts shared localization owners",
+            "category": "MixedSourceShape",
+            "line": 250,
+            "positiveRegexAssertions": 20,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps viewer threadpool module pins alive through the callback return boundary",
+            "category": "BehavioralShadow",
+            "line": 288,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "rejects viewer async work without module pins and impossible provider read counts",
+            "category": "BehavioralShadow",
+            "line": 318,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered",
+            "category": "BehavioralShadow",
+            "line": 334,
+            "positiveRegexAssertions": 16,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps ViewerWeb security setup fail-closed and teardown outside DllMain",
+            "category": "MixedSourceShape",
+            "line": 359,
+            "positiveRegexAssertions": 28,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps ViewerPE reader commitments exact and current terminal delivery recoverable",
+            "category": "BehavioralShadow",
+            "line": 403,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate",
+            "category": "MixedSourceShape",
+            "line": 422,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "publishes authoritative ViewerSpace totals before root completion becomes visible",
+            "category": "BehavioralShadow",
+            "line": 443,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "captures viewer payload fields before moving the payload into PostMessagePayload",
+            "category": "BehavioralShadow",
+            "line": 460,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps ViewerText Save As source-first and transactionally committed",
+            "category": "MixedSourceShape",
+            "line": 472,
+            "positiveRegexAssertions": 14,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps ViewerText async decode and clipboard work terminal and bounded",
+            "category": "MixedSourceShape",
+            "line": 505,
+            "positiveRegexAssertions": 25,
+            "negativeRegexAssertions": 5
+          },
+          {
+            "name": "requires git identity before accepting self-test archive repo roots",
+            "category": "BehavioralShadow",
+            "line": 552,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps self-test archive parent walking bounded by a named limit",
+            "category": "BehavioralShadow",
+            "line": 560,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "scopes the self-test run mutex to the isolated self-test root",
+            "category": "MixedSourceShape",
+            "line": 567,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "lets native selftests consume the unified test root and run id directly",
+            "category": "MixedSourceShape",
+            "line": 577,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "exposes native TestSandbox scratch acquisition separate from last_run artifacts",
+            "category": "BehavioralShadow",
+            "line": 596,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "removes native self-test sandboxes without traversing directory reparse points",
+            "category": "BehavioralShadow",
+            "line": 611,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps nested settings-save child artifacts shallow and removes them before audit",
+            "category": "MixedSourceShape",
+            "line": 625,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 638,
+            "positiveRegexAssertions": 16,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "authorizes test roots centrally and fails closed before native mutation",
+            "category": "BehavioralShadow",
+            "line": 663,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "routes RedConfigureTests scratch through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 682,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes ViewerSqliteTests scratch through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 697,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes CrashHandlingTests scratch through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 712,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes Commands plugin-config scratch through native TestSandbox roots",
+            "category": "MixedSourceShape",
+            "line": 727,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "recovers plugin-config debug tab traversal from logical focus position before first-control fallback",
+            "category": "BehavioralShadow",
+            "line": 737,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps plugin-config tab traversal retries from sending an extra tab after a successful advance",
+            "category": "MixedSourceShape",
+            "line": 748,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "waits for preview fallback text and source-pane focus together",
+            "category": "BehavioralShadow",
+            "line": 756,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "separates configured preview publication from external desktop deactivation",
+            "category": "MixedSourceShape",
+            "line": 765,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "makes quick-search tests own pane sort and extension visibility",
+            "category": "BehavioralShadow",
+            "line": 775,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps quick-search navigation expectations tied to visible match order",
+            "category": "MixedSourceShape",
+            "line": 798,
+            "positiveRegexAssertions": 18,
+            "negativeRegexAssertions": 6
+          },
+          {
+            "name": "keeps Hot Paths browse page-settle failures diagnostic-rich",
+            "category": "BehavioralShadow",
+            "line": 851,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "uses condition-based focus waiting for Viewers roundtrip category navigation",
+            "category": "MixedSourceShape",
+            "line": 865,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "retries Preferences focus acquisition during condition-based waits",
+            "category": "BehavioralShadow",
+            "line": 881,
+            "positiveRegexAssertions": 12,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed",
+            "category": "BehavioralShadow",
+            "line": 904,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "waits for Plugins sort-search header rects before reorder-resize interactions",
+            "category": "MixedSourceShape",
+            "line": 922,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "waits for Viewers sort-search header rects before reorder-resize interactions",
+            "category": "MixedSourceShape",
+            "line": 955,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps broad Preferences focus paths on the shared focus helper",
+            "category": "MixedSourceShape",
+            "line": 985,
+            "positiveRegexAssertions": 68,
+            "negativeRegexAssertions": 10
+          },
+          {
+            "name": "defers change-case folder focus restoration until modal teardown unwinds",
+            "category": "BehavioralShadow",
+            "line": 1150,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "retries transient selected-path lease observations to a diagnostic quiet point",
+            "category": "BehavioralShadow",
+            "line": 1173,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps broad Commands app navigation shell focus checks condition-based",
+            "category": "MixedSourceShape",
+            "line": 1188,
+            "positiveRegexAssertions": 15,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "makes the app Shortcuts navigation-shell fixture own its settings and window isolation",
+            "category": "BehavioralShadow",
+            "line": 1231,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates the Preferences Keyboard reset live interaction fixture",
+            "category": "BehavioralShadow",
+            "line": 1245,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates the pane-filter DxUi surface fixture before global prompt discovery",
+            "category": "BehavioralShadow",
+            "line": 1258,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates both Compare navigation-shell fixtures before asserting restored focus",
+            "category": "BehavioralShadow",
+            "line": 1271,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates mouse-opened menu keyboard ordering and preserves split post diagnostics",
+            "category": "MixedSourceShape",
+            "line": 1293,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "reacquires the submenu placement cascade target after root-menu initialization",
+            "category": "BehavioralShadow",
+            "line": 1310,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "reports locked-desktop clipboard and foreground dependencies as explicit Commands skips",
+            "category": "BehavioralShadow",
+            "line": 1328,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Preferences category-tree UIA selection pinned to category-id selection",
+            "category": "MixedSourceShape",
+            "line": 1343,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Preferences debug category selection independent from transient snapshot capture",
+            "category": "MixedSourceShape",
+            "line": 1362,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers",
+            "category": "BehavioralShadow",
+            "line": 1379,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Preferences category churn settled, attributable, and bounded under uncontended focus",
+            "category": "BehavioralShadow",
+            "line": 1400,
+            "positiveRegexAssertions": 19,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates Compare Directories wrap traversal and keeps failures diagnostic-rich",
+            "category": "BehavioralShadow",
+            "line": 1432,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "carries selected FolderView rename identity across bounded refresh interleavings",
+            "category": "MixedSourceShape",
+            "line": 1447,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes Commands long-path and high-cardinality fixtures through native TestSandbox roots",
+            "category": "BehavioralShadow",
+            "line": 1460,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "routes ShellCommands shortcut save temp files through native TestSandbox roots",
+            "category": "MixedSourceShape",
+            "line": 1474,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "routes PerformanceTests2 scratch through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 1482,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes BatchRename window fixture roots through native TestSandbox roots",
+            "category": "MixedSourceShape",
+            "line": 1506,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "routes ViewerPETests fixture files through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 1518,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps shared TestSupport sandbox and environment policies explicit",
+            "category": "BehavioralShadow",
+            "line": 1532,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps viewer message pumping and typed snapshot polling on bounded shared support",
+            "category": "MixedSourceShape",
+            "line": 1544,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots",
+            "category": "MixedSourceShape",
+            "line": 1565,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "routes Compare dummy filesystem scratch through native TestSandbox roots",
+            "category": "MixedSourceShape",
+            "line": 1584,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "routes Tools Pester scratch through the unified TestSandbox root",
+            "category": "MixedSourceShape",
+            "line": 1595,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "gives retained Preferences page-state activation a broad-order settle budget",
+            "category": "BehavioralShadow",
+            "line": 1627,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "unwinds retained Plugins children before parent-grid UIA validation",
+            "category": "BehavioralShadow",
+            "line": 1658,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage",
+            "category": "MixedSourceShape",
+            "line": 1684,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures",
+            "category": "MixedSourceShape",
+            "line": 1706,
+            "positiveRegexAssertions": 31,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps gated test sources inside TestSandbox instead of raw temp or profile roots",
+            "category": "BehavioralShadow",
+            "line": 1833,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "routes SettingsStore app files through the unified TestSandbox root during test runs",
+            "category": "BehavioralShadow",
+            "line": 1882,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS",
+            "category": "BehavioralShadow",
+            "line": 1894,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "moves Compare foreground service capture files into TestSandbox instead of process temp",
+            "category": "MixedSourceShape",
+            "line": 1901,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "wraps foreground search service selftest processes in a kill-on-close JobObject",
+            "category": "MixedSourceShape",
+            "line": 1910,
+            "positiveRegexAssertions": 16,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps broad-order foreground Search service failures process-diagnostic",
+            "category": "BehavioralShadow",
+            "line": 1939,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps foreground Search service stdout tests independent from hidden readiness requests",
+            "category": "BehavioralShadow",
+            "line": 1969,
+            "positiveRegexAssertions": 20,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics",
+            "category": "MixedSourceShape",
+            "line": 2023,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps the shared child-process runner contained, concurrently drained, and parity-tested",
+            "category": "StructuralGraphInvariant",
+            "line": 2048,
+            "positiveRegexAssertions": 16,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps local index snapshot reload timing advisory instead of a correctness ceiling",
+            "category": "MixedSourceShape",
+            "line": 2073,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes",
+            "category": "BehavioralShadow",
+            "line": 2082,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps foreground Search service status probes behind a condition-based status wait",
+            "category": "MixedSourceShape",
+            "line": 2093,
+            "positiveRegexAssertions": 30,
+            "negativeRegexAssertions": 9
+          },
+          {
+            "name": "lets delete-burst maintenance tests accept an already completed first idle window",
+            "category": "MixedSourceShape",
+            "line": 2211,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "drains Batch Rename central test tasks before provider teardown",
+            "category": "BehavioralShadow",
+            "line": 2233,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "scales named raw self-test waits through the timeout multiplier",
+            "category": "MixedSourceShape",
+            "line": 2248,
+            "positiveRegexAssertions": 31,
+            "negativeRegexAssertions": 4
+          },
+          {
+            "name": "keeps FileOperations popup fixtures inside the current self-test process",
+            "category": "MixedSourceShape",
+            "line": 2324,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts",
+            "category": "MixedSourceShape",
+            "line": 2339,
+            "positiveRegexAssertions": 29,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests",
+            "category": "MixedSourceShape",
+            "line": 2402,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "routes persistent View-to-Files menu hover through the menu bar root-switch path",
+            "category": "MixedSourceShape",
+            "line": 2423,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "centralizes the Commands real-input warning and guards every cursor-warp family",
+            "category": "MixedSourceShape",
+            "line": 2442,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "reuses one native warning across foreground suites and preserves it through Commands isolation",
+            "category": "MixedSourceShape",
+            "line": 2479,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "opens the temporary menu-bar hover-switch popup through keyboard activation",
+            "category": "MixedSourceShape",
+            "line": 2500,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "parks real cursor away from DxUi popup initial hover in menu selftests",
+            "category": "MixedSourceShape",
+            "line": 2520,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "restores broad command-probe UI state and isolates modeless ownership fixtures",
+            "category": "BehavioralShadow",
+            "line": 2551,
+            "positiveRegexAssertions": 29,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Shortcuts live UIA search interaction message-pumped under broad order",
+            "category": "MixedSourceShape",
+            "line": 2597,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps Compare Options close-reopen churn globally settled before live UIA reuse",
+            "category": "MixedSourceShape",
+            "line": 2622,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps File Operations speed-limit prompt churn ValuePattern checks condition-based",
+            "category": "MixedSourceShape",
+            "line": 2660,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps dialog prompt model and UIA checks condition-based under broad order",
+            "category": "MixedSourceShape",
+            "line": 2680,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Item Properties UIA interaction off the owning window thread and joins bounded workers",
+            "category": "MixedSourceShape",
+            "line": 2716,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 5
+          },
+          {
+            "name": "keeps broad-order Commands fixtures pinned to the state each case owns",
+            "category": "MixedSourceShape",
+            "line": 2747,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Find destination/action button probes pinned to deterministic input state",
+            "category": "MixedSourceShape",
+            "line": 2790,
+            "positiveRegexAssertions": 17,
+            "negativeRegexAssertions": 6
+          },
+          {
+            "name": "keeps Find header-drag reorder failures diagnostic-rich",
+            "category": "MixedSourceShape",
+            "line": 2853,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Find reordered-sort restore checks diagnostic-rich under broad order",
+            "category": "BehavioralShadow",
+            "line": 2869,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions",
+            "category": "MixedSourceShape",
+            "line": 2889,
+            "positiveRegexAssertions": 21,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Compare Directories lower-card scroll focus failures diagnostic-rich",
+            "category": "MixedSourceShape",
+            "line": 2947,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Connection Manager long-run open-close settled and diagnostic-rich",
+            "category": "MixedSourceShape",
+            "line": 2968,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected",
+            "category": "MixedSourceShape",
+            "line": 2986,
+            "positiveRegexAssertions": 10,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "rejects retired outside-root cleanup in the unified runner",
+            "category": "StructuralGraphInvariant",
+            "line": 3002,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "bypasses fatal error modal dialogs while self-tests are running",
+            "category": "BehavioralShadow",
+            "line": 3012,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Commands Preferences chunks namespace-self-contained",
+            "category": "MixedSourceShape",
+            "line": 3024,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps IconCache association LRU perf emission outside the association cache lock helper",
+            "category": "MixedSourceShape",
+            "line": 3045,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "bounds DirectoryInfoCache eviction when protected entries exceed the cache budget",
+            "category": "BehavioralShadow",
+            "line": 3053,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps FolderView thumbnail WIC factory ownership local to the processing thread",
+            "category": "MixedSourceShape",
+            "line": 3063,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps IMAP summary repair budget exhaustion local to the current repair pass",
+            "category": "MixedSourceShape",
+            "line": 3072,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "clears FolderView incremental-search layout effects over the visual label text",
+            "category": "MixedSourceShape",
+            "line": 3082,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "matches FolderView incremental-search highlights against visual display names",
+            "category": "MixedSourceShape",
+            "line": 3093,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "cleans stale FolderView incremental-search drawing effects when search is inactive",
+            "category": "BehavioralShadow",
+            "line": 3102,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "exposes runner-native self-test case listing without executing case bodies",
+            "category": "StructuralGraphInvariant",
+            "line": 3114,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "exposes native self-test repeat and seeded shuffle execution controls",
+            "category": "StructuralGraphInvariant",
+            "line": 3133,
+            "positiveRegexAssertions": 18,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "reinitializes Commands UIA cache after explicit-order case listing",
+            "category": "StructuralGraphInvariant",
+            "line": 3162,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates every Commands case before fixture dispatch",
+            "category": "BehavioralShadow",
+            "line": 3184,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "resets pane content and transient UI state between Commands explicit-order cases",
+            "category": "BehavioralShadow",
+            "line": 3201,
+            "positiveRegexAssertions": 15,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "rehydrates runtime plugins after the MTP deferred-unload probe",
+            "category": "BehavioralShadow",
+            "line": 3227,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps CompareDirectories seeded shuffle native through explicit case order",
+            "category": "StructuralGraphInvariant",
+            "line": 3240,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps FileOperations repeat coverage native instead of runner-only",
+            "category": "StructuralGraphInvariant",
+            "line": 3254,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps FolderView overlay perf sample sufficiency advisory",
+            "category": "MixedSourceShape",
+            "line": 3272,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "uses shared self-test result emission for ad hoc and state-machine cases",
+            "category": "BehavioralShadow",
+            "line": 3292,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "preserves partial self-test results when a case or suite crashes",
+            "category": "BehavioralShadow",
+            "line": 3304,
+            "positiveRegexAssertions": 23,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps injected classifier proof hooks explicit and debug-only",
+            "category": "BehavioralShadow",
+            "line": 3354,
+            "positiveRegexAssertions": 21,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps CompareDirectories runner-listed case names unique",
+            "category": "StructuralGraphInvariant",
+            "line": 3384,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps CompareDirectories literal RunCase names listed for runner coverage",
+            "category": "StructuralGraphInvariant",
+            "line": 3395,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "opens the file-operations custom speed-limit prompt asynchronously for self-tests",
+            "category": "MixedSourceShape",
+            "line": 3421,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps FileOperations self-test case prefixes runnable",
+            "category": "MixedSourceShape",
+            "line": 3430,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps FileOperations discovery perf counters race-free under worker concurrency",
+            "category": "MixedSourceShape",
+            "line": 3441,
+            "positiveRegexAssertions": 8,
+            "negativeRegexAssertions": 5
+          },
+          {
+            "name": "closes the discovery scope of every Local mutation entry point exactly once",
+            "category": "BehavioralShadow",
+            "line": 3462,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "gives every provider mutation entry point on a direct route one discovery scope",
+            "category": "MixedSourceShape",
+            "line": 3499,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded",
+            "category": "MixedSourceShape",
+            "line": 3658,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 4
+          },
+          {
+            "name": "keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled",
+            "category": "MixedSourceShape",
+            "line": 3676,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out",
+            "category": "MixedSourceShape",
+            "line": 3687,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps FileOperations conflict routing in one arbiter and one engine policy builder",
+            "category": "StructuralGraphInvariant",
+            "line": 3702,
+            "positiveRegexAssertions": 14,
+            "negativeRegexAssertions": 8
+          },
+          {
+            "name": "keeps same-host overlap choices bounded, relation-scoped, and safely defaulted",
+            "category": "BehavioralShadow",
+            "line": 3733,
+            "positiveRegexAssertions": 31,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps cached Keep Both eligibility scoped to the current top-level conflict",
+            "category": "MixedSourceShape",
+            "line": 3774,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Riptide low-risk hardening invariants wired",
+            "category": "MixedSourceShape",
+            "line": 3794,
+            "positiveRegexAssertions": 25,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps Floodgate data-safety invariants wired",
+            "category": "MixedSourceShape",
+            "line": 3840,
+            "positiveRegexAssertions": 146,
+            "negativeRegexAssertions": 17
+          },
+          {
+            "name": "keeps Microsoft Drive merge destination-metadata reuse and Release proof wired",
+            "category": "StructuralGraphInvariant",
+            "line": 4064,
+            "positiveRegexAssertions": 37,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Delta reverify file-system safety fixes wired",
+            "category": "MixedSourceShape",
+            "line": 4109,
+            "positiveRegexAssertions": 32,
+            "negativeRegexAssertions": 9
+          },
+          {
+            "name": "keeps possible file-operation artifact projections visible and recovery-free in FolderView Compare and Find",
+            "category": "StructuralGraphInvariant",
+            "line": 4172,
+            "positiveRegexAssertions": 54,
+            "negativeRegexAssertions": 19
+          },
+          {
+            "name": "keeps Change Case discovery fail-closed and task updates token-owned",
+            "category": "MixedSourceShape",
+            "line": 4276,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "shares only safe File Operations durable-state file mechanics",
+            "category": "StructuralGraphInvariant",
+            "line": 4300,
+            "positiveRegexAssertions": 23,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt",
+            "category": "MixedSourceShape",
+            "line": 4342,
+            "positiveRegexAssertions": 16,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps File Operations scheduler failure policy local and the worker start gate cancelable",
+            "category": "BehavioralShadow",
+            "line": 4379,
+            "positiveRegexAssertions": 9,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Curl reader and full-buffer writer waits stop-aware",
+            "category": "BehavioralShadow",
+            "line": 4404,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "isolates the destructive missing-directory hot-reload fixture from the shared settings run",
+            "category": "BehavioralShadow",
+            "line": 4413,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired",
+            "category": "MixedSourceShape",
+            "line": 4431,
+            "positiveRegexAssertions": 23,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps bounded registry strings and canonical WSL discovery wired through Common",
+            "category": "MixedSourceShape",
+            "line": 4473,
+            "positiveRegexAssertions": 19,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps RedConfigure rectangular paste bound to visible row and culture identities",
+            "category": "MixedSourceShape",
+            "line": 4505,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Riptide test-credibility gaps closed",
+            "category": "MixedSourceShape",
+            "line": 4529,
+            "positiveRegexAssertions": 18,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps focus-independent GUI coverage behind the shared no-activation guard",
+            "category": "BehavioralShadow",
+            "line": 4560,
+            "positiveRegexAssertions": 12,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps new native focus calls inside reviewed focus-sensitive test adapters",
+            "category": "LexicalSafetyBan",
+            "line": 4584,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "stops File Operations interaction immediately when foreground activation fails",
+            "category": "BehavioralShadow",
+            "line": 4611,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime",
+            "category": "BehavioralShadow",
+            "line": 4625,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "serializes build and test artifacts and contains every shared process launch tree",
+            "category": "StructuralGraphInvariant",
+            "line": 4642,
+            "positiveRegexAssertions": 65,
+            "negativeRegexAssertions": 3
+          },
+          {
+            "name": "keeps IronLedger FolderView data-integrity guards wired",
+            "category": "MixedSourceShape",
+            "line": 4739,
+            "positiveRegexAssertions": 31,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Observatory Track 5 pack-and-delete output safety wired",
+            "category": "MixedSourceShape",
+            "line": 4791,
+            "positiveRegexAssertions": 7,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Observatory Track 5 local outputs transactional",
+            "category": "MixedSourceShape",
+            "line": 4805,
+            "positiveRegexAssertions": 21,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination",
+            "category": "BehavioralShadow",
+            "line": 4839,
+            "positiveRegexAssertions": 15,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Observatory Track 5 archive extraction conflicts explicit and transactional",
+            "category": "BehavioralShadow",
+            "line": 4863,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired",
+            "category": "MixedSourceShape",
+            "line": 4882,
+            "positiveRegexAssertions": 37,
+            "negativeRegexAssertions": 5
+          },
+          {
+            "name": "keeps Observatory Track 7 settings commits conflict-aware and recoverable",
+            "category": "MixedSourceShape",
+            "line": 4939,
+            "positiveRegexAssertions": 22,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Observatory Track 8 connection identity and authorization boundaries wired",
+            "category": "MixedSourceShape",
+            "line": 4976,
+            "positiveRegexAssertions": 21,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired",
+            "category": "BehavioralShadow",
+            "line": 5013,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired",
+            "category": "BehavioralShadow",
+            "line": 5026,
+            "positiveRegexAssertions": 26,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired",
+            "category": "BehavioralShadow",
+            "line": 5071,
+            "positiveRegexAssertions": 13,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired",
+            "category": "MixedSourceShape",
+            "line": 5095,
+            "positiveRegexAssertions": 38,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Observatory Track 13 local and Dummy provider mutations fail-before-change",
+            "category": "MixedSourceShape",
+            "line": 5171,
+            "positiveRegexAssertions": 12,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired",
+            "category": "MixedSourceShape",
+            "line": 5193,
+            "positiveRegexAssertions": 11,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "keeps production translation units independently compiled",
+            "category": "StructuralGraphInvariant",
+            "line": 5217,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate",
+            "category": "LexicalSafetyBan",
+            "line": 5248,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "TestConnectionCredentialPromptDestroysWindowOnModalQuit",
+            "category": "BehavioralShadow",
+            "line": 5257,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers",
+            "category": "MixedSourceShape",
+            "line": 5264,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers",
+            "category": "MixedSourceShape",
+            "line": 5279,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX",
+            "category": "MixedSourceShape",
+            "line": 5291,
+            "positiveRegexAssertions": 4,
+            "negativeRegexAssertions": 2
+          },
+          {
+            "name": "agrees on the test-owned VHDX mount layout, F7 name and environment between the harness and native code",
+            "category": "BehavioralShadow",
+            "line": 5329,
+            "positiveRegexAssertions": 5,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "keeps every link, mount, SUBST and share call in test code inside a sandbox-guarded allowlisted helper",
+            "category": "BehavioralShadow",
+            "line": 5491,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "flags the old F7 real-volume mount, an unguarded helper call and unallowlisted links",
+            "category": "BehavioralShadow",
+            "line": 5504,
+            "positiveRegexAssertions": 0,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "fails, never skips, a FileOps case whose loopback share alias the sandbox guard refuses",
+            "category": "MixedSourceShape",
+            "line": 5538,
+            "positiveRegexAssertions": 2,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "guards every link the FileSystem object-binding debug self-test creates",
+            "category": "MixedSourceShape",
+            "line": 5563,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 1
+          },
+          {
+            "name": "journals the Recycle Bin item every Local recycle progress sink sees created",
+            "category": "BehavioralShadow",
+            "line": 5592,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "purges a case's recycled items at every case and phase boundary, whatever the outcome",
+            "category": "BehavioralShadow",
+            "line": 5602,
+            "positiveRegexAssertions": 3,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "requires every recycle-bin batch phase to purge exactly the items its task recycled",
+            "category": "BehavioralShadow",
+            "line": 5634,
+            "positiveRegexAssertions": 1,
+            "negativeRegexAssertions": 0
+          },
+          {
+            "name": "deletes only a proven entry of the current user's Recycle Bin and never enumerates the bin",
+            "category": "MixedSourceShape",
+            "line": 5645,
+            "positiveRegexAssertions": 6,
+            "negativeRegexAssertions": 2
+          }
+        ]
+      }
+    },
+    "vcpkgMergeSynthetic": {
+      "cases": 5
+    },
+    "vcpkgMergeLockValidation": {
+      "cases": 3
+    }
+  },
+  "runPlan": {
+    "ci": [
+      {
+        "id": "selftest.compare-directories",
+        "name": "CompareDirectories",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.compare-directories",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "network",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "selftest.commands",
+        "name": "Commands",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.commands",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "selftest.file-operations",
+        "name": "FileOperations",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.file-operations",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop",
+          "network",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.product-ui",
+        "name": "ProductUiTests",
+        "kind": "Executable",
+        "artifact": "ProductUiTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.product-ui"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.product-ui"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.filesystem-curl",
+        "name": "FileSystemCurlTests",
+        "kind": "Executable",
+        "artifact": "FileSystemCurlTests.exe",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.filesystem-curl"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.filesystem-curl"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "network"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.noninteractive",
+        "name": "ViewerPETests.Noninteractive",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.interactive",
+        "name": "ViewerPETests.Interactive",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-sqlite.noninteractive",
+        "name": "ViewerSqliteTests.Noninteractive",
+        "kind": "Executable",
+        "artifact": "ViewerSqliteTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-sqlite"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-sqlite-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-sqlite.interactive",
+        "name": "ViewerSqliteTests.Interactive",
+        "kind": "Executable",
+        "artifact": "ViewerSqliteTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-sqlite"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-sqlite-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.find-prompt",
+        "name": "ViewerPETests.TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.goto-prompt",
+        "name": "ViewerPETests.TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.monitor",
+        "name": "MonitorTest",
+        "kind": "Executable",
+        "artifact": "MonitorTest.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.monitor"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.monitor"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.localization",
+        "name": "LocalizationTests",
+        "kind": "Executable",
+        "artifact": "LocalizationTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.localization"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.localization"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.red-configure",
+        "name": "RedConfigureTests",
+        "kind": "Executable",
+        "artifact": "RedConfigureTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.red-configure"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.red-configure"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.plugin-contract",
+        "name": "PluginContractTests",
+        "kind": "Executable",
+        "artifact": "PluginContractTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.plugin-contract"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.plugin-contract"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.settings-schema",
+        "name": "SettingsSchemaTests",
+        "kind": "Executable",
+        "artifact": "SettingsSchemaTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.settings-schema"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.settings-schema"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.crash-handling",
+        "name": "CrashHandlingTests",
+        "kind": "Executable",
+        "artifact": "CrashHandlingTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.crash-handling"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.crash-handling"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "perf.performance-tests2",
+        "name": "PerformanceTests2",
+        "kind": "CppUnitTest",
+        "artifact": "PerformanceTests2.dll",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.perf",
+          "test.perf.performance-tests2",
+          "test.performance"
+        ],
+        "artifactReadIds": [
+          "artifact.perf.performance-tests2"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "cpu-heavy",
+          "performance-exclusive"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "tooling.pester",
+        "name": "ToolsPesterTests",
+        "kind": "Pester",
+        "artifact": "CurrentToolingProfile.Tests.ps1",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.tooling"
+        ],
+        "artifactReadIds": [],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "cpu-heavy"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "tooling.vcpkg-merge-synthetic",
+        "name": "VcpkgMergeSynthetic",
+        "kind": "PowerShellScript",
+        "artifact": "vcpkg-merge-synthetic-test.ps1",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.tooling",
+          "test.tooling.vcpkg-merge-synthetic"
+        ],
+        "artifactReadIds": [],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      }
+    ],
+    "full": [
+      {
+        "id": "tooling.pester-build-toolchain",
+        "name": "ToolsPesterBuildToolchain",
+        "kind": "Pester",
+        "artifact": "CurrentToolingProfile.Tests.ps1",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.build",
+          "test.tooling"
+        ],
+        "artifactReadIds": [
+          "artifact.profile"
+        ],
+        "artifactWriteIds": [
+          "artifact.profile"
+        ],
+        "resourceClasses": [
+          "artifact-mutating",
+          "cpu-heavy"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "selftest.compare-directories",
+        "name": "CompareDirectories",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.compare-directories",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "network",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "selftest.commands",
+        "name": "Commands",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.commands",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "selftest.file-operations",
+        "name": "FileOperations",
+        "kind": "SelfTest",
+        "artifact": "RedSalamander.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.file-operations",
+          "test.selftest"
+        ],
+        "artifactReadIds": [
+          "artifact.redsalamander-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop",
+          "network",
+          "stateful"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.product-ui",
+        "name": "ProductUiTests",
+        "kind": "Executable",
+        "artifact": "ProductUiTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.product-ui"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.product-ui"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.noninteractive",
+        "name": "ViewerPETests.Noninteractive",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-pe.interactive",
+        "name": "ViewerPETests.Interactive",
+        "kind": "Executable",
+        "artifact": "ViewerPETests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-pe"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-pe-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-sqlite.noninteractive",
+        "name": "ViewerSqliteTests.Noninteractive",
+        "kind": "Executable",
+        "artifact": "ViewerSqliteTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-sqlite"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-sqlite-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "viewer-sqlite.interactive",
+        "name": "ViewerSqliteTests.Interactive",
+        "kind": "Executable",
+        "artifact": "ViewerSqliteTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.viewer-sqlite"
+        ],
+        "artifactReadIds": [
+          "artifact.viewer-sqlite-tests-runtime"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "interactive-desktop"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.filesystem-curl",
+        "name": "FileSystemCurlTests",
+        "kind": "Executable",
+        "artifact": "FileSystemCurlTests.exe",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.filesystem-curl"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.filesystem-curl"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "network"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.monitor",
+        "name": "MonitorTest",
+        "kind": "Executable",
+        "artifact": "MonitorTest.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.monitor"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.monitor"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.localization",
+        "name": "LocalizationTests",
+        "kind": "Executable",
+        "artifact": "LocalizationTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.localization"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.localization"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.red-configure",
+        "name": "RedConfigureTests",
+        "kind": "Executable",
+        "artifact": "RedConfigureTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.red-configure"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.red-configure"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.plugin-contract",
+        "name": "PluginContractTests",
+        "kind": "Executable",
+        "artifact": "PluginContractTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.plugin-contract"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.plugin-contract"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.settings-schema",
+        "name": "SettingsSchemaTests",
+        "kind": "Executable",
+        "artifact": "SettingsSchemaTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.settings-schema"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.settings-schema"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "standalone.crash-handling",
+        "name": "CrashHandlingTests",
+        "kind": "Executable",
+        "artifact": "CrashHandlingTests.exe",
+        "cachePolicy": "ExactArtifact",
+        "impactTags": [
+          "test.standalone",
+          "test.standalone.crash-handling"
+        ],
+        "artifactReadIds": [
+          "artifact.standalone.crash-handling"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "perf.monitor-etw-latency",
+        "name": "RedSalamanderMonitorEtwLatency",
+        "kind": "Executable",
+        "artifact": "RedSalamanderMonitor.exe",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.perf",
+          "test.perf.monitor-etw-latency",
+          "test.performance"
+        ],
+        "artifactReadIds": [
+          "artifact.perf.monitor-etw-latency"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "cpu-heavy",
+          "interactive-desktop",
+          "performance-exclusive"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "perf.performance-tests2",
+        "name": "PerformanceTests2",
+        "kind": "CppUnitTest",
+        "artifact": "PerformanceTests2.dll",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.perf",
+          "test.perf.performance-tests2",
+          "test.performance"
+        ],
+        "artifactReadIds": [
+          "artifact.perf.performance-tests2"
+        ],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "cpu-heavy",
+          "performance-exclusive"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "tooling.pester",
+        "name": "ToolsPesterTests",
+        "kind": "Pester",
+        "artifact": "CurrentToolingProfile.Tests.ps1",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.tooling"
+        ],
+        "artifactReadIds": [],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only",
+          "cpu-heavy"
+        ],
+        "metadataComplete": true
+      },
+      {
+        "id": "tooling.vcpkg-merge-synthetic",
+        "name": "VcpkgMergeSynthetic",
+        "kind": "PowerShellScript",
+        "artifact": "vcpkg-merge-synthetic-test.ps1",
+        "cachePolicy": "Never",
+        "impactTags": [
+          "test.tooling",
+          "test.tooling.vcpkg-merge-synthetic"
+        ],
+        "artifactReadIds": [],
+        "artifactWriteIds": [],
+        "resourceClasses": [
+          "artifact-read-only"
+        ],
+        "metadataComplete": true
+      }
+    ],
+    "projectBackedSurfaces": [
+      {
+        "name": "CrashHandlingTests",
+        "kind": "Executable",
+        "planEntries": [
+          "CrashHandlingTests"
+        ]
+      },
+      {
+        "name": "FileSystemCurlTests",
+        "kind": "Executable",
+        "planEntries": [
+          "FileSystemCurlTests"
+        ]
+      },
+      {
+        "name": "LocalizationTests",
+        "kind": "Executable",
+        "planEntries": [
+          "LocalizationTests"
+        ]
+      },
+      {
+        "name": "MonitorTest",
+        "kind": "Executable",
+        "planEntries": [
+          "MonitorTest"
+        ]
+      },
+      {
+        "name": "PerformanceTests2",
+        "kind": "CppUnitTest",
+        "planEntries": [
+          "PerformanceTests2"
+        ]
+      },
+      {
+        "name": "PluginContractTests",
+        "kind": "Executable",
+        "planEntries": [
+          "PluginContractTests"
+        ]
+      },
+      {
+        "name": "ProductUiTests",
+        "kind": "Executable",
+        "planEntries": [
+          "ProductUiTests"
+        ]
+      },
+      {
+        "name": "RedConfigureTests",
+        "kind": "Executable",
+        "planEntries": [
+          "RedConfigureTests"
+        ]
+      },
+      {
+        "name": "SettingsSchemaTests",
+        "kind": "Executable",
+        "planEntries": [
+          "SettingsSchemaTests"
+        ]
+      },
+      {
+        "name": "ViewerPETests",
+        "kind": "Executable",
+        "planEntries": [
+          "ViewerPETests.Interactive",
+          "ViewerPETests.Noninteractive",
+          "ViewerPETests.TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly",
+          "ViewerPETests.TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly"
+        ]
+      },
+      {
+        "name": "ViewerSqliteTests",
+        "kind": "Executable",
+        "planEntries": [
+          "ViewerSqliteTests.Interactive",
+          "ViewerSqliteTests.Noninteractive"
+        ]
+      }
+    ]
+  }
+}

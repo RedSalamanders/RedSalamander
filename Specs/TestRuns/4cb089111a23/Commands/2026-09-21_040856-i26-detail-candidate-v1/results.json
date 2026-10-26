@@ -1,0 +1,86 @@
+{
+    "run_started_utc": "2026-09-21T02:08:56.099Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-detail-candidate-v1-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 6335,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 418,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 599,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 442,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 204,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 77,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 118,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+            "status": "passed",
+            "duration_ms": 429,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+            "status": "passed",
+            "duration_ms": 190,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 150,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

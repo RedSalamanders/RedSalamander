@@ -51,6 +51,7 @@ $solutionDirWithSlash = $solutionDir.TrimEnd('\') + '\'
 $versioningModule = Join-Path $solutionDir "Tools\Modules\Build\Versioning.psm1"
 $artifactOperationLockModule = Join-Path $solutionDir "Tools\Modules\Build\ArtifactOperationLock.psm1"
 $sanitizedEnvironmentModule = Join-Path $solutionDir "Tools\Modules\Build\SanitizedEnvironment.psm1"
+$releaseArtifactPolicyModule = Join-Path $solutionDir "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1"
 if (-not (Test-Path $versioningModule)) {
     throw "Version helper module not found: $versioningModule"
 }
@@ -60,10 +61,14 @@ if (-not (Test-Path $artifactOperationLockModule)) {
 if (-not (Test-Path $sanitizedEnvironmentModule)) {
     throw "Contained-process helper module not found: $sanitizedEnvironmentModule"
 }
+if (-not (Test-Path $releaseArtifactPolicyModule)) {
+    throw "Release artifact policy module not found: $releaseArtifactPolicyModule"
+}
 
 Import-Module $versioningModule -Force -ErrorAction Stop
 Import-Module $artifactOperationLockModule -Force -ErrorAction Stop
 Import-Module $sanitizedEnvironmentModule -Force -ErrorAction Stop
+Import-Module $releaseArtifactPolicyModule -Force -ErrorAction Stop
 $artifactProfileScope = @{
     kind = 'packaging-input'
     target = 'msi'
@@ -160,7 +165,7 @@ try {
 
 # Stage files into a clean directory so we can exclude build artifacts (PDB/etc) consistently.
 # Also exclude non-shipping executables (PoC/test), ASAN artifacts, and unused third-party DLLs.
-$exclude = @("*.pdb", "*.lib", "*.exp", "*.ilk", "*.iobj", "*.ipdb", "*.pch", "*.exe", "asan.supp", "aws-cpp-sdk-dynamodb.dll", "aws-cpp-sdk-kinesis.dll", "aws-cpp-sdk-s3.dll", "brotlienc.dll")
+$exclude = @("RedSalamanderMonitor-*", "RedMonitor-wil-LICENSE.txt", "RedMonitor-yyjson-LICENSE.txt", "*.pdb", "*.lib", "*.exp", "*.ilk", "*.iobj", "*.ipdb", "*.pch", "*.exe", "asan.supp", "aws-cpp-sdk-dynamodb.dll", "aws-cpp-sdk-kinesis.dll", "aws-cpp-sdk-s3.dll", "brotlienc.dll")
 $robocopyArgs = @(
     $releaseDir,
     $stageDir,
@@ -185,7 +190,7 @@ if ($robocopyExitCode -ge 8) {
 }
 
 # Copy shipping executables explicitly (we excluded *.exe above).
-$shippingExes = @("RedSalamander.exe", "RedSalamanderMonitor.exe", "RedSalamanderSearchService.exe")
+$shippingExes = @("RedSalamander.exe", "RedSalamanderSearchService.exe")
 foreach ($exe in $shippingExes) {
     $src = Join-Path $releaseDir $exe
     if (-not (Test-Path $src)) {
@@ -214,6 +219,9 @@ foreach ($exe in $shippingExes) {
         throw "Failed to stage shipping executable: $dst"
     }
 }
+
+# The MSI is distributable: refuse staged binaries that carry an ENABLE_TESTS surface.
+Assert-RSShippingPackageHasNoTestSurface -LiteralPath $stageDir
 
 $productWxs = Join-Path $PSScriptRoot "Product.wxs"
 if (-not (Test-Path $productWxs)) {

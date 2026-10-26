@@ -1,0 +1,145 @@
+{
+  "files": [
+    {
+      "path": "captures/viewer-space-analyst.png",
+      "sha256": "c62dd14636f0b68ac09cdb7d7c697d8dac5bea0293a46f26714ed0ed5ef35f02",
+      "bytes": 147458
+    },
+    {
+      "path": "captures/viewer-space-bottom-panel.png",
+      "sha256": "3efcc34a2325c059d4ec442da0ed92669034f16e9f3ff73f304da4216041f33f",
+      "bytes": 160827
+    },
+    {
+      "path": "captures/viewer-space-cleanup-review.png",
+      "sha256": "db0974e05d2a821ebaad3dad000445e32b0fc724a5cf2304798ffa9b9b95d7fb",
+      "bytes": 146621
+    },
+    {
+      "path": "captures/viewer-space-empty.png",
+      "sha256": "5179563a66775559a7cd1a7d66d8a2e127b5f582fab8d72a01f49698c5f3c2e1",
+      "bytes": 50665
+    },
+    {
+      "path": "captures/viewer-space-error.png",
+      "sha256": "7dd32416121e43d204228a74125c6fb15d242d5a60bbb553c91faccb634c357e",
+      "bytes": 48645
+    },
+    {
+      "path": "captures/viewer-space-excluded.png",
+      "sha256": "9ae5f5d65636ed9835293f6dd250f83158f6acd01e6edd76fa035ab86ce3b9a3",
+      "bytes": 135699
+    },
+    {
+      "path": "captures/viewer-space-explorer.png",
+      "sha256": "34df486354156855910037a1b8d9da9fd60ccd1cb19751f4be14d1d8842111ea",
+      "bytes": 209497
+    },
+    {
+      "path": "captures/viewer-space-inflight.png",
+      "sha256": "092743368ae6283dc6f578664e7a64f73b898ee0f82e04d1f06713e510fb3f56",
+      "bytes": 91225
+    },
+    {
+      "path": "captures/viewer-space-map-only.png",
+      "sha256": "c54b4aff5c8a1e51c9511abcee8a0cd6697fa7c97e4a5c727cbfeda7e9d084cc",
+      "bytes": 189770
+    },
+    {
+      "path": "captures/viewer-space-refresh-canceled.png",
+      "sha256": "c62dd14636f0b68ac09cdb7d7c697d8dac5bea0293a46f26714ed0ed5ef35f02",
+      "bytes": 147458
+    },
+    {
+      "path": "captures/viewer-space-refresh-refused.png",
+      "sha256": "0878437a4eaf172c6ee9a7839f6a52e841dd8c4d20dcb27eceaebfc1d96735ba",
+      "bytes": 153087
+    },
+    {
+      "path": "captures/viewer-space-refreshing.png",
+      "sha256": "a5ba8314f0344f79a3857aa54e690e30764d8a6cdf7047d50d49789f85f6683c",
+      "bytes": 98939
+    },
+    {
+      "path": "captures/viewer-space-scanning.png",
+      "sha256": "86e7aba7d791eb087e75b655a73319e15c41ae26831298fad727284a72a28009",
+      "bytes": 61620
+    },
+    {
+      "path": "native-viewer-space-analyst.provenance.json",
+      "sha256": "e8acda98692f6deffb9d29d0c6a00238bf9d50f411dfd1f784e0c5e2293e8e7f",
+      "bytes": 2062
+    },
+    {
+      "path": "native-viewer-space-bottom-panel.provenance.json",
+      "sha256": "97ad7c1c5b75647d6360c1587a42226e179b91841644c695a487239ad8ce62ed",
+      "bytes": 2091
+    },
+    {
+      "path": "native-viewer-space-cleanup-review.provenance.json",
+      "sha256": "aea6ee7ea8ef8a5facd2b4bf4533cbeb4580c7e7b073e76af63625f5e5c4961d",
+      "bytes": 2073
+    },
+    {
+      "path": "native-viewer-space-empty.provenance.json",
+      "sha256": "fe20044c13235f7f70cc3a46a1970fb0707c8fb22d8b7902bb439d52327d399d",
+      "bytes": 2057
+    },
+    {
+      "path": "native-viewer-space-error.provenance.json",
+      "sha256": "ebcd0c11c7cb030194d576bb1aa6a1b000b96f3a08e881fab87338af54f7cccc",
+      "bytes": 2066
+    },
+    {
+      "path": "native-viewer-space-excluded.provenance.json",
+      "sha256": "1435f77114ba08072aca53dd80eeda28e4ac01cd96fec3283dc3bb568a38777e",
+      "bytes": 2077
+    },
+    {
+      "path": "native-viewer-space-explorer.provenance.json",
+      "sha256": "886fdce93e3ca596ec5a195bb8aae38df1edcb412ff153fc24680b5a70b5eda6",
+      "bytes": 2077
+    },
+    {
+      "path": "native-viewer-space-inflight.provenance.json",
+      "sha256": "7e8d61e9368ad17c95f1c10a5a34309e4ce63a6ebf5a0981b42eb46d213dc5c6",
+      "bytes": 2095
+    },
+    {
+      "path": "native-viewer-space-map-only.provenance.json",
+      "sha256": "4ec461edfd5be3a7035dc6be3e7609f5209ca5d27fe05d02376d4eb1fb7fe9fd",
+      "bytes": 2068
+    },
+    {
+      "path": "native-viewer-space-refresh-canceled.provenance.json",
+      "sha256": "06732ec7da6cc6ae56125b2f7dba77201bbda97585dfd93554fd46f88909ba61",
+      "bytes": 2092
+    },
+    {
+      "path": "native-viewer-space-refresh-refused.provenance.json",
+      "sha256": "0b898f9c04e50126e27fec8211f695ba1f0aa5c22e7c47a61b35e3f3e089a430",
+      "bytes": 2089
+    },
+    {
+      "path": "native-viewer-space-refreshing.provenance.json",
+      "sha256": "0c7b07f34e83e3e50b7893ea9d5c8df10ead5e66c74c222ea74c1b5353945c63",
+      "bytes": 2089
+    },
+    {
+      "path": "native-viewer-space-scanning.provenance.json",
+      "sha256": "6deb89bc978eda4db18b10fdec50019b0a0e0e3f0e99b15328d1ad521380c9df",
+      "bytes": 2072
+    },
+    {
+      "path": "README.md",
+      "sha256": "42159cf8a598cab5f759722aa5e7a4a4adb8aa58f2f8c967d22812651ab6003b",
+      "bytes": 610
+    },
+    {
+      "path": "viewer-build-receipt.json",
+      "sha256": "e1607ff5c6c9b3a1f1653493cab9f9103ec6e4bbc9faa4a3b1d7e8bde4df4a73",
+      "bytes": 103068
+    }
+  ],
+  "policy": "Exact bytes of every retained artifact except this self-referential manifest."
+}

@@ -1,0 +1,102 @@
+[
+  {
+    "path": "Common/WindowMessages.h",
+    "sha256": "7d446e7098d85b3e1570bd875ca8bcbf5fd1391e3fcac904b61aa286c531f8d5"
+  },
+  {
+    "path": "RedSalamander/FileOperationsCompletedGroupLayout.h",
+    "sha256": "7831edf313cdaa2bdcb774263b72bcaac8cbbc8bc258296cad3f31afc8d8ec7e"
+  },
+  {
+    "path": "RedSalamander/FileOperationsFooterLayout.h",
+    "sha256": "a1b3f9b36b5d2a35afd1d663cd576305db7d454bff4b06c03ddd7a3120f71711"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+    "sha256": "328c6cb79765fe3d8fdb96629b40b78ec1b939d98bc0d0622cb73906fa876987"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "sha256": "b52dc13641c18bc922eca80978a1c0e0cf433be07a01cd84cc1fb2ea8f00b4b7"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "sha256": "679180ec11bcf1e9fa272ea03b49483ad2b0046c344b091a889f204b3ca4916c"
+  },
+  {
+    "path": "RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc",
+    "sha256": "8716f2e59faba9c08799dd293a62959bfa5f42323583733dba73f7d09f1b09ca"
+  },
+  {
+    "path": "RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc",
+    "sha256": "0ffdca69aba12ae798e8e636961009b07e6cd8f8782ece159432c7e2236eda54"
+  },
+  {
+    "path": "RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc",
+    "sha256": "afbfbeb50c1fe9d3cd8357908f36493b9580f4b71819e6b659227ef2d8a9e6fe"
+  },
+  {
+    "path": "RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc",
+    "sha256": "6aa2042980dbc41ab191fa9bf1d11db10d74a2fd1a519df4264f1d7454b3ae8c"
+  },
+  {
+    "path": "RedSalamander/RedSalamander.cpp",
+    "sha256": "34f374fed64548c30a6904f98f579d1a1db28eb052a1524c25c90c890c34a43a"
+  },
+  {
+    "path": "RedSalamander/RedSalamander.rc",
+    "sha256": "9f727aa3f8012f3a4fec0250740d439945a713be3fc2f788b0af14244a2a171d"
+  },
+  {
+    "path": "RedSalamander/RedSalamander.vcxproj",
+    "sha256": "f02c3b20f2e1a4e7a65df67efb1d3699cf82765eeeb60addc5d62cba0433ab68"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "sha256": "0afc31e67db5082da79614bd2fc87b3d0fd2a2733d65b720c9dedac025454143"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases14_16.cpp",
+    "sha256": "f227762adce0c2c33f09ccc01b0394278582437ed8866402e7fb60a62f02a0b8"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp",
+    "sha256": "667a6eb59e6c88cc2ff4be9570259e3b4828ff3278abe75d1da8b14c0e47894f"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+    "sha256": "0534f1f691c6c2f31a95e560834faca3d5534174feed751600c97d9f33163e49"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+    "sha256": "b3d92d02a94ceb245eba3775cb26f903b020915c9b137b1249884c0652f8f5df"
+  },
+  {
+    "path": "RedSalamander/Ui/AlertOverlay.h",
+    "sha256": "bdfd968f8aefbc4c0317b033507ad9b27cd9d6722ba979ebdc83b532de60c467"
+  },
+  {
+    "path": "RedSalamander/Ui/AlertOverlayWindow.cpp",
+    "sha256": "86c11b948e97a8cce6ebe45400faf94287459f5ad086a44e03a3fd42b7c37bc2"
+  },
+  {
+    "path": "RedSalamander/Ui/AlertOverlayWindow.h",
+    "sha256": "c0726a26d9665c09d07943444fdf56b440f575274bfc527344a74c136e2b706c"
+  },
+  {
+    "path": "RedSalamander/resource.h",
+    "sha256": "d06ea983dbe3b7919d4d7f9e48af1d082fefd42ae348dc79df1ceb0c2b886796"
+  },
+  {
+    "path": "Tests/ProductUiTests/ProductUiTests.cpp",
+    "sha256": "0dbaf11a85263e61a7a6f7a7bf261e7f1a6ea5d428b2446aabecb02e98dd1227"
+  },
+  {
+    "path": "Tools/Tests/ResourceLocalizationContracts.Tests.ps1",
+    "sha256": "b47129bc10518698b520874cf048f6b23d8163b081e09a5a32e4fe2cc779434b"
+  },
+  {
+    "path": "Tools/tool-inventory.json",
+    "sha256": "b575e46a90f6660f039652b9b4084c7593e8c6a8138ed8b36f9c62ca98a8d34b"
+  }
+]

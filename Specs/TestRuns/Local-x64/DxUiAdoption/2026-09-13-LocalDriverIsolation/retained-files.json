@@ -1,0 +1,50 @@
+[
+  {
+    "file": "module-scope-Duplicate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a20f6680-module-scope-Duplicate.json",
+    "bytes": 747,
+    "sha256": "786d154be423ec6f8eb5fb79b25a0148550fda054d35f85e4b2f6991f677b97f"
+  },
+  {
+    "file": "module-scope-Single.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a20f6680-module-scope-Single.json",
+    "bytes": 472,
+    "sha256": "30e121122cff52ea69275b4e7304d6620f68d897a231d6a673290ba8fcfeb596"
+  },
+  {
+    "file": "run-a20f6680-all-local.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-a20f6680-all-local.ps1",
+    "bytes": 365,
+    "sha256": "005329fa5ac41b54eb179b8424d0d8b99d38ae34379e675e6fb2b176545f6f56"
+  },
+  {
+    "file": "build-a20f6680-final-arm64.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\build-a20f6680-final-arm64.ps1",
+    "bytes": 3365,
+    "sha256": "d4a457ff4e2a200a480b7d2c27b3e7d0a0a02f8ce3a4aed2a5310683b7c88e94"
+  },
+  {
+    "file": "run-a20f6680-final-x64.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-a20f6680-final-x64.ps1",
+    "bytes": 6296,
+    "sha256": "5cc80c25480ac6cfbb54443fb6d2a5110df49a98de0424ce19f015b5ea355984"
+  },
+  {
+    "file": "probe-a20f6680-module-scope.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\probe-a20f6680-module-scope.ps1",
+    "bytes": 1453,
+    "sha256": "b5a3ccacce9aa8dd138826e8e1a306f6a736fe7ccf8df9faa65471d15647d66f"
+  },
+  {
+    "file": "run-a20f6680-isolated-x64.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-a20f6680-isolated-x64.ps1",
+    "bytes": 472,
+    "sha256": "2bfe07a1031b4755e6d58b1e3104584cb8bcabdbe83be1a1bc20929fbb93615a"
+  },
+  {
+    "file": "run-a20f6680-isolated-profile.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-a20f6680-isolated-profile.ps1",
+    "bytes": 6230,
+    "sha256": "64150233905b2ff4e0ceb6567aeb3d10b7bd116322365e68d0575071e7c167dc"
+  }
+]

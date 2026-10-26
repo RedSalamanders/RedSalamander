@@ -16,8 +16,6 @@ RedSalamander opens as a **dual-pane** window:
 - Each pane has a **Navigation bar** (path/breadcrumb) and a **Folder view** (items).
 - Most commands apply to the **focused pane**.
 
-![Navigation bar overview](res/navigation-view.png)
-
 ### Essential shortcuts (defaults)
 
 - `Tab`: switch pane focus
@@ -43,8 +41,6 @@ RedSalamander opens as a **dual-pane** window:
 
 Tip: use **Help → Display Shortcuts…** (or `F1`) to see the complete current bindings.
 
-![Display Shortcuts window](res/shortcuts-window.png)
-
 See [Keyboard Shortcuts](KeyboardShortcuts.md) for the full reference.
 
 ## Preferences
@@ -56,4 +52,17 @@ Open **View → Preferences…** to configure:
 - Plugins (enable/disable, configure, test)
 - Keyboard shortcuts
 
-![Preferences dialog](res/preferences.png)
+![Preferences dialog](res/preferences-general.png)
+
+## Continue with a workflow
+
+- [Command Palette](CommandPalette.md): discover and run commands with `Ctrl+Shift+P`.
+- [Selections and File Lists](SelectionsAndLists.md): masks, saved selections,
+  filters, reports and everyday Windows tools.
+- [File Operations](FileOperations.md): background copy/move/delete, counts,
+  verification, decisions and results.
+- [Terminal](Terminal.md): embedded shells, floating tabs, WSL, history and path insertion.
+- [Portable Devices](PortableDevices.md): connect a phone/camera, choose storage,
+  browse read-only and deliberately enable supported changes.
+- [Documentation Map](DocumentationMap.md): search, Compare, all plugin families,
+  settings, viewers, themes and diagnostics.

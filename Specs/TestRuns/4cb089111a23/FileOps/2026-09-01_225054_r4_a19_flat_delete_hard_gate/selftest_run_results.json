@@ -1,0 +1,47 @@
+{
+    "run_started_utc": "2026-09-01T20:50:51.032Z",
+    "duration_ms": 3891,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 1,
+    "case_filter": "R4A19_DiscoveryMeasurementFacts",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\r4-a19-local-copy-delete-debug-20260901b\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 3375,
+            "passed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 1,
+            "case_filter": "R4A19_DiscoveryMeasurementFacts",
+            "failureMessage": "R4-A19 Local Delete control failed: hr=0x00000000 closed=1 sourceExists=0 discoveredFiles=1024/1024 mutationsWhileOpen=0 queueMax=256 durationMs=188.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R4A19_DiscoveryMeasurementFacts",
+                    "status": "failed",
+                    "duration_ms": 1859,
+                    "repeat_index": 1,
+                    "reason": "R4-A19 Local Delete control failed: hr=0x00000000 closed=1 sourceExists=0 discoveredFiles=1024/1024 mutationsWhileOpen=0 queueMax=256 durationMs=188."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 219,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+}

@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="29" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-10-26" time="17:17:36">
+  <environment clr-version="" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" cwd="E:\RedSalamander.Perf\repository-migration-20261024\public-verification-582d644be" user="eric" os-version="10.0.26300" nunit-version="2.5.8.0" machine-name="SINON" user-domain="SINON" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Success" success="True" time="2.6779" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="MSBuild manifest install toolset pin" executed="True" result="Success" success="True" time="1.2262" asserts="0" description="MSBuild manifest install toolset pin">
+        <results>
+          <test-case description="refreshes the installer's overlay triplet before MSBuild can install, inside the platform dependency lock" name="MSBuild manifest install toolset pin.refreshes the installer's overlay triplet before MSBuild can install, inside the platform dependency lock" time="0.0127" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="initializes the once-per-build overlay flag so callers under StrictMode can build" name="MSBuild manifest install toolset pin.initializes the once-per-build overlay flag so callers under StrictMode can build" time="0.2948" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="passes the overlay to the MSBuild manifest install only when the overlay triplet exists" name="MSBuild manifest install toolset pin.passes the overlay to the MSBuild manifest install only when the overlay triplet exists" time="0.9188" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="MSVC 14.52 ARM64 AWS hash compiler workaround" executed="True" result="Success" success="True" time="0.6595" asserts="0" description="MSVC 14.52 ARM64 AWS hash compiler workaround">
+        <results>
+          <test-case description="limits expansion only for the affected compiler target and translation unit" name="MSVC 14.52 ARM64 AWS hash compiler workaround.limits expansion only for the affected compiler target and translation unit" time="0.6595" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="Vcpkg default MSVC toolset pin" executed="True" result="Success" success="True" time="0.3031" asserts="0" description="Vcpkg default MSVC toolset pin">
+        <results>
+          <test-case description="reads the default toolset from the installation, not the newest one installed beside it" name="Vcpkg default MSVC toolset pin.reads the default toolset from the installation, not the newest one installed beside it" time="0.0245" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="fails with the file and the repair when the default toolset version is missing or malformed" name="Vcpkg default MSVC toolset pin.fails with the file and the repair when the default toolset version is missing or malformed" time="0.0266" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="finds the installation the way the build does" name="Vcpkg default MSVC toolset pin.finds the installation the way the build does" time="0.0416" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="writes the stock triplet unchanged in its own line endings, then the two pins" name="Vcpkg default MSVC toolset pin.writes the stock triplet unchanged in its own line endings, then the two pins" time="0.0108" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="rewrites the overlay only when its bytes change" name="Vcpkg default MSVC toolset pin.rewrites the overlay only when its bytes change" time="0.0259" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="finds the stock triplet in triplets, then triplets\community, and keeps the governed leaf-name rule" name="Vcpkg default MSVC toolset pin.finds the stock triplet in triplets, then triplets\community, and keeps the governed leaf-name rule" time="0.0364" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="pins every triplet the installer builds, before any lock, staging directory or download" name="Vcpkg default MSVC toolset pin.pins every triplet the installer builds, before any lock, staging directory or download" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="matches the pinned DxUi modules it mirrors" name="Vcpkg default MSVC toolset pin.matches the pinned DxUi modules it mirrors" time="0.1306" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="Vcpkg dependency pins" executed="True" result="Success" success="True" time="0.1675" asserts="0" description="Vcpkg dependency pins">
+        <results>
+          <test-case description="compares vcpkg version text the way the pin checks need" name="Vcpkg dependency pins.compares vcpkg version text the way the pin checks need" time="0.0284" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="pins builtin-baseline to the vcpkg tool commit" name="Vcpkg dependency pins.pins builtin-baseline to the vcpkg tool commit" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps every direct floor at or below its exact override and the audited AWS SDK and CRT pair together" name="Vcpkg dependency pins.keeps every direct floor at or below its exact override and the audited AWS SDK and CRT pair together" time="0.0042" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps Dependabot away from the vcpkg baseline and the audited AWS pair" name="Vcpkg dependency pins.keeps Dependabot away from the vcpkg baseline and the audited AWS pair" time="0.0048" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps Dependabot from proposing any vcpkg port or baseline update" name="Vcpkg dependency pins.keeps Dependabot from proposing any vcpkg port or baseline update" time="0.0051" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="finds every floor and override in the pinned tool checkout's version database" name="Vcpkg dependency pins.finds every floor and override in the pinned tool checkout's version database" time="0.1218" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="Vcpkg install safety helper" executed="True" result="Success" success="True" time="0.3216" asserts="0" description="Vcpkg install safety helper">
+        <results>
+          <test-case description="contains vcpkg execution and acquires selected platform dependency locks in stable order" name="Vcpkg install safety helper.contains vcpkg execution and acquires selected platform dependency locks in stable order" time="0.1779" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="accepts vcpkg triplet leaf names" name="Vcpkg install safety helper.accepts vcpkg triplet leaf names" time="0.0061" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="rejects triplet values that are paths" name="Vcpkg install safety helper.rejects triplet values that are paths" time="0.0059" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="resolves child paths under the intended root" name="Vcpkg install safety helper.resolves child paths under the intended root" time="0.0092" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="rejects child paths that escape the intended root" name="Vcpkg install safety helper.rejects child paths that escape the intended root" time="0.0437" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="accepts manifest version floors present in the selected registry" name="Vcpkg install safety helper.accepts manifest version floors present in the selected registry" time="0.0188" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="rejects a manifest floor absent from the selected registry before install" name="Vcpkg install safety helper.rejects a manifest floor absent from the selected registry before install" time="0.0096" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="accepts an exact manifest override present in the selected registry" name="Vcpkg install safety helper.accepts an exact manifest override present in the selected registry" time="0.0143" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="rejects an exact manifest override absent from the selected registry" name="Vcpkg install safety helper.rejects an exact manifest override absent from the selected registry" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps the audited AWS SDK serializer dependency on one exact override" name="Vcpkg install safety helper.keeps the audited AWS SDK serializer dependency on one exact override" time="0.0047" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="merges a single source file while StrictMode is active" name="Vcpkg install safety helper.merges a single source file while StrictMode is active" time="0.0218" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

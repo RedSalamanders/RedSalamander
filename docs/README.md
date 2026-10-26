@@ -7,16 +7,18 @@ RedSalamander is a Windows dual-pane file manager with:
 - Viewer plugins (Text/Hex, SQLite, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
 
-![RedSalamander main window](res/main-window.png)
-
 This folder is intentionally named `docs` so it can be used directly as the
 GitHub Pages source folder.
 
 ## Start here
 
-- [Complete User Guide](UserGuide.md)
+- [Visual Tour](VisualTour.md)
+- [User Guide](UserGuide.md)
 - [Getting Started](GettingStarted.md)
 - [Main Window & Panes](MainWindow.md)
+- [Command Palette](CommandPalette.md)
+- [Selections, File Lists and Everyday Tools](SelectionsAndLists.md)
+- [Embedded and Floating Terminal](Terminal.md)
 - [Find Files and Directories](FindFiles.md)
 - [Navigation & Path Syntax](NavigationAndPaths.md)
 - [File Operations (Copy/Move/Delete)](FileOperations.md)
@@ -26,6 +28,7 @@ GitHub Pages source folder.
 
 - [Preferences](Preferences.md)
 - [Connections (Connection Manager)](Connections.md)
+- [Phones, Cameras and Portable Devices (MTP/PTP)](PortableDevices.md)
 - [Plugins (File systems & Viewers)](Plugins.md)
 - [Viewers (F3)](Viewers.md)
 - [Themes](Themes.md)
@@ -34,11 +37,12 @@ GitHub Pages source folder.
 ## Developers
 
 - [Developer Guide](DeveloperGuide.md)
+- [Tests, Evidence and Documentation Captures](dev/TestingAndScreenshots.md)
 - [DxUi Technical Guide](DxUi.md)
 - [Documentation Coverage Map](DocumentationMap.md)
 - [Screenshot Inventory](res/README.md)
 - [Winget Integration](WingetIntegration.md)
-- [RedSalamanderMonitor (ETW/log viewer)](Monitor.md)
+- [RedMonitor (independent ETW/log viewer)](Monitor.md)
 
 ## Specific topics
 

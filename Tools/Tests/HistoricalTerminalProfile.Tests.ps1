@@ -102,6 +102,21 @@ Describe 'Historical Terminal profile integrity' {
         ($round4Tests -join "`0") | Should Be ($expectedRound4 -join "`0")
     }
 
+    It 'excludes only the exact sealed Gate0 workflow from Dependabot action updates' {
+        $dependabot = Get-Content -LiteralPath (Join-Path $repoRoot '.github/dependabot.yml') -Raw
+        $actions = [regex]::Match($dependabot,
+            '(?ms)^  - package-ecosystem: github-actions\r?\n(?<settings>.*?)(?=^  - package-ecosystem:|\z)')
+        $actions.Success | Should Be $true
+        $excluded = [regex]::Match($actions.Groups['settings'].Value,
+            '(?m)^    exclude-paths:\r?\n(?<paths>(?:      - [^\r\n]+\r?\n)+)')
+        $excluded.Success | Should Be $true
+        $paths = @([regex]::Matches($excluded.Groups['paths'].Value, '(?m)^      - (?<path>[^\r\n]+)') |
+            ForEach-Object { $_.Groups['path'].Value.Trim() })
+        $paths.Count | Should Be 1
+        $paths[0] | Should Be '.github/workflows/terminal-engine-gate0.yml'
+        $actions.Groups['settings'].Value | Should Not Match '(?m)^    ignore:'
+    }
+
     It 'classifies the unused generic lifecycle facade without deleting its stable paths' {
         $facade = $manifest.genericLifecycleFacade
         [string]$facade.classification | Should Be 'internal-historical-future-upgrade'

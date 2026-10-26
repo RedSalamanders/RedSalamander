@@ -1,0 +1,6 @@
+{
+  "case": "TestViewerVlcLongPathsAndErrorMessages",
+  "exitCode": 1,
+  "profile": "x64 Debug",
+  "activation": "no-activate"
+}

@@ -1,0 +1,56 @@
+{
+  "kind": "native-production-renderer-harness-capture",
+  "scenario": "cmd_product_documentation_gallery/preferences-viewers",
+  "sourceRunId": "20261019T174153Z-67860-c0ea8986a9ba47abb781c196f70da78c",
+  "source": "Specs/TestRuns/4cb089111a23/Validation/2026-10-19_product-scenarios/captures/preferences-viewers.png",
+  "sha256": "98bc8487c0904e59f2eaf668c8b556d65c9412dcae0e8c605a8620a7dc2ad7cb",
+  "build": {
+    "configuration": "Debug",
+    "platform": "x64",
+    "testsEnabled": true,
+    "gitHead": "56d48a158df3ab8cd9fea9bb3bb2ca71dbef1507",
+    "sourceSnapshotId": "852e660077215c655a5e36fcc8f3f5b4d9c8e447def440088c755203c511d71f",
+    "receiptId": "36439b61e4eda860ece6330bd2dba33df0ea32f88784169912448965006be697",
+    "executableSha256": "ba879490db2cebd3426690021fd87a392515b559a047cfd571a2a05b4861c998",
+    "runtimeAppReceiptId": "36439b61e4eda860ece6330bd2dba33df0ea32f88784169912448965006be697"
+  },
+  "display": {
+    "dpi": 144,
+    "pixelWidth": 1254,
+    "pixelHeight": 1185,
+    "language": "en-US",
+    "numberFormat": "system fr-FR",
+    "theme": "dark"
+  },
+  "syntheticData": {
+    "roots": [
+      "C:\\Demo\\Workspace",
+      "D:\\Demo\\Archive",
+      "/Demo/Projects",
+      "/Demo/Archive",
+      "Demo/Library",
+      "Demo/Media",
+      "Demo/Tools"
+    ],
+    "content": "Invented Workshop documents, generated BMP/PE/media, private default settings and synthetic connection profiles.",
+    "mtpBackend": "existing fake picker backend; no physical-device enumeration"
+  },
+  "privacy": {
+    "dataOrigin": "invented harness fixture",
+    "personalData": false,
+    "redactionLabels": false,
+    "realAccounts": false
+  },
+  "capture": {
+    "noActivation": true,
+    "desktopGlobalInput": false,
+    "wholeFrame": true,
+    "imageEdits": "none"
+  },
+  "review": {
+    "completeFrame": true,
+    "date": "2026-10-19",
+    "basis": "Complete native frame visually inspected with OCR privacy review; no private data or substituted labels."
+  },
+  "limits": "Focused test-enabled x64 Debug presentation evidence; not Full, Release, ARM64, real-input, live-device/provider or playback qualification."
+}

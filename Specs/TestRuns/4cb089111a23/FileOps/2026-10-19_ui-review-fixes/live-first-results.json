@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-19T09:50:24.231Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T094948Z-89132-0da744faca324d0d84a6aaaa18e95d70\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 87109,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1297,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_FolderLiveProgress",
+            "status": "passed",
+            "duration_ms": 85765,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

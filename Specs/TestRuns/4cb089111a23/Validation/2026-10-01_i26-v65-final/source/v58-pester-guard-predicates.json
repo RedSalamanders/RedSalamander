@@ -1,0 +1,52 @@
+{
+  "schema": "i26-v58-pester-source-guard-review.v1",
+  "sourcePath": "RedSalamander/FileOperationMoveBreadcrumb.cpp",
+  "sourceSha256": "45f0f6f0b210a98e780c6dca28e72e4cfa745bdf717f850116de574a182992d8",
+  "testSha256": "d745d67a7efb4e197427f67b62cdc12419c339ff45e7a9380edb0f24a840a627",
+  "originalFailsOnCurrent": true,
+  "correctedMatchesCurrent": true,
+  "formatVariantsPassed": 3,
+  "mutations": [
+    {
+      "mutation": "missing:_path",
+      "rejected": true
+    },
+    {
+      "mutation": "wrong-argument-order",
+      "rejected": true
+    },
+    {
+      "mutation": "extra-statement",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:failIfExists",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:Common::Files::ExistingTargetPolicy::FailIfExists",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:ResolveRoot()",
+      "rejected": true
+    },
+    {
+      "mutation": "unconditional-replace",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:kMaximumRecordBytes",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:json",
+      "rejected": true
+    },
+    {
+      "mutation": "missing:Common::Files::ExistingTargetPolicy::Replace",
+      "rejected": true
+    }
+  ],
+  "nativeRuntimeEvidence": false
+}

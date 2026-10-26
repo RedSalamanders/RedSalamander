@@ -19,7 +19,7 @@
 #include "WindowSizing.h"
 #include <DxUi/DxUi.h>
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
 #endif
 #include "UiMetrics.h"
 
@@ -762,6 +762,7 @@ void FolderWindow::PrepareForNetworkDriveDisconnect(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.CancelPendingEnumeration();
+    EndPaneConflictInspection(pane);
     if (state.fileSystem)
     {
         DirectoryInfoCache::GetInstance().ClearForFileSystem(state.fileSystem.get());
@@ -910,7 +911,7 @@ void FolderWindow::CommandInsertFocusedPathInTerminal(Pane pane, bool fullPath)
     }
 }
 
-HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory) noexcept
+HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory, [[maybe_unused]] bool documentationSource) noexcept
 {
     Debug::Perf::Scope perf(L"terminal.open_to_visible_us");
     perf.SetDetail(workingDirectory.wstring());
@@ -923,8 +924,23 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     PaneState& source                          = sourcePane == Pane::Left ? _leftPane : _rightPane;
     const OwnedTerminalLocation launchLocation = MakeTerminalLocation(workingDirectory);
     const bool localFileSystem                 = IsFilePluginShortId(source.pluginShortId);
-    const OwnedTerminalLocation sourceLocation = MakePaneTerminalSourceLocation(
-        localFileSystem, source.pluginShortId, source.instanceContext, localFileSystem ? std::optional<std::filesystem::path>(workingDirectory) : std::nullopt);
+    bool useDocumentationSource                = false;
+#if defined(ENABLE_TESTS)
+    useDocumentationSource = documentationSource && TerminalHostSupport::DebugDocumentationSessionIsArmed();
+    if (documentationSource && ! useDocumentationSource)
+    {
+        perf.SetHr(E_ACCESSDENIED);
+        return E_ACCESSDENIED;
+    }
+#endif
+    // A test-only armed instance never starts a process or opens this invented location.
+    // Ordinary instances retain the original provider/backing-location validation.
+    const OwnedTerminalLocation sourceLocation =
+        useDocumentationSource ? launchLocation
+                               : MakePaneTerminalSourceLocation(localFileSystem,
+                                                                source.pluginShortId,
+                                                                source.instanceContext,
+                                                                localFileSystem ? std::optional<std::filesystem::path>(workingDirectory) : std::nullopt);
     if (launchLocation.kind == TerminalLocationKind::Unsupported || sourceLocation.kind == TerminalLocationKind::Unsupported)
     {
         perf.SetHr(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
@@ -1267,11 +1283,13 @@ void FolderWindow::OnNavigationPathChanged(Pane pane, const std::optional<std::f
         UpdatePaneFilterBar(pane);
         state.folderView.SetFolderPath(std::nullopt);
         state.updatingPath = false;
+        EndPaneConflictInspection(pane);
         if (_panePathChangedCallback)
         {
             _panePathChangedCallback(pane, std::nullopt);
         }
         PublishTerminalSourceLocation(pane, std::nullopt);
+        NotifyFileOperationsPaneChanged();
         return;
     }
 
@@ -1297,6 +1315,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
             _panePathChangedCallback(pane, std::nullopt);
         }
         PublishTerminalSourceLocation(pane, std::nullopt);
+        NotifyFileOperationsPaneChanged();
         return;
     }
 
@@ -1342,6 +1361,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
         _panePathChangedCallback(pane, path);
     }
     PublishTerminalSourceLocation(pane, path);
+    NotifyFileOperationsPaneChanged();
 }
 
 void FolderWindow::OnFolderViewNavigateUpFromRoot(Pane pane) noexcept

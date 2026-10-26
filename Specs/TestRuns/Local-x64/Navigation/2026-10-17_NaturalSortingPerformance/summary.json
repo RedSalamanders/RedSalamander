@@ -1,0 +1,141 @@
+{
+  "scope": "Focused phase inventory; not a canonical aggregate or Full",
+  "commands": [
+    {
+      "phase": "debug-qualified",
+      "run_id": "20261017T185150Z-106196-6c1e4fa25e99445e9e9b2c0803f2478b",
+      "receipt_id": "a8e229566928911a801b9f32d3037b0b46517040b4f5989e1ab4f4b942148221",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "functional-debug-qualified",
+      "run_id": "20261017T185318Z-106196-baa15bed047a4ab09b7c8a45ff064059",
+      "receipt_id": "a8e229566928911a801b9f32d3037b0b46517040b4f5989e1ab4f4b942148221",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "candidate-release",
+      "run_id": "20261017T183544Z-100924-74a1bb161a1547029fbd541ddd815e6d",
+      "receipt_id": "820a9ff82b273393a8aa7d10b5f47dee423f03e0ec656e5cef682ffe821add37",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "functional-release",
+      "run_id": "20261017T184746Z-78096-93569d51ff284c8789c67fc0da8fa2bc",
+      "receipt_id": "820a9ff82b273393a8aa7d10b5f47dee423f03e0ec656e5cef682ffe821add37",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "viewer": [
+    {
+      "phase": "viewer-debug",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "exit_code": 0,
+      "receipt_id": "a8e229566928911a801b9f32d3037b0b46517040b4f5989e1ab4f4b942148221",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+          "sha256": "2B184ADC8CB06D8FE50E3D51129CF92FCFD3F6494E171AF4A379B889EA0BAD73"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll",
+          "sha256": "D07E7AD0B3CF6CB11CAD9734B51398E975DA320C0D67ED89284DDB1732565668"
+        }
+      ]
+    },
+    {
+      "phase": "viewer-debug-ambient",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "exit_code": 0,
+      "receipt_id": "a8e229566928911a801b9f32d3037b0b46517040b4f5989e1ab4f4b942148221",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+          "sha256": "2B184ADC8CB06D8FE50E3D51129CF92FCFD3F6494E171AF4A379B889EA0BAD73"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll",
+          "sha256": "D07E7AD0B3CF6CB11CAD9734B51398E975DA320C0D67ED89284DDB1732565668"
+        }
+      ]
+    },
+    {
+      "phase": "viewer-debug-identity",
+      "case": "TestViewerSpaceListingValidation",
+      "exit_code": 0,
+      "receipt_id": "a8e229566928911a801b9f32d3037b0b46517040b4f5989e1ab4f4b942148221",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+          "sha256": "2B184ADC8CB06D8FE50E3D51129CF92FCFD3F6494E171AF4A379B889EA0BAD73"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll",
+          "sha256": "D07E7AD0B3CF6CB11CAD9734B51398E975DA320C0D67ED89284DDB1732565668"
+        }
+      ]
+    },
+    {
+      "phase": "viewer-release",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "exit_code": 0,
+      "receipt_id": "820a9ff82b273393a8aa7d10b5f47dee423f03e0ec656e5cef682ffe821add37",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\ViewerPETests.exe",
+          "sha256": "00DFD7346E9364D9D2086EA9D065E7CE08D60989B10E5CD3A843B1D8D17A86B2"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll",
+          "sha256": "D46621928C42F99F118244F4B8C8B0C5780FBD0BEF246511A7388D0A7BE328EF"
+        }
+      ]
+    },
+    {
+      "phase": "viewer-release-ambient",
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "exit_code": 0,
+      "receipt_id": "820a9ff82b273393a8aa7d10b5f47dee423f03e0ec656e5cef682ffe821add37",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\ViewerPETests.exe",
+          "sha256": "00DFD7346E9364D9D2086EA9D065E7CE08D60989B10E5CD3A843B1D8D17A86B2"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll",
+          "sha256": "D46621928C42F99F118244F4B8C8B0C5780FBD0BEF246511A7388D0A7BE328EF"
+        }
+      ]
+    },
+    {
+      "phase": "viewer-release-identity",
+      "case": "TestViewerSpaceListingValidation",
+      "exit_code": 0,
+      "receipt_id": "820a9ff82b273393a8aa7d10b5f47dee423f03e0ec656e5cef682ffe821add37",
+      "binaries": [
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\ViewerPETests.exe",
+          "sha256": "00DFD7346E9364D9D2086EA9D065E7CE08D60989B10E5CD3A843B1D8D17A86B2"
+        },
+        {
+          "path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll",
+          "sha256": "D46621928C42F99F118244F4B8C8B0C5780FBD0BEF246511A7388D0A7BE328EF"
+        }
+      ]
+    }
+  ],
+  "source_contracts": {
+    "total": 310,
+    "passed": 310,
+    "failed": 0,
+    "skipped": 0
+  }
+}

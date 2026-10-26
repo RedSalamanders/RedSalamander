@@ -1,0 +1,618 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-21T02:46:27.0064034Z",
+  "run_ended_utc": "2026-09-21T02:49:25.6533224Z",
+  "duration_ms": 178647,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run",
+  "test_root": "S:\\RedSalamander.Perf",
+  "run_id": "i26-detail-candidate-v5-20260921",
+  "fail_fast": false,
+  "timeout_scale": 3.0,
+  "case_filter": "cmd_pane_fileops_issues_pane_",
+  "exit_code": 1,
+  "passed": 48,
+  "failed": 15,
+  "skipped": 0,
+  "total": 63,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "S:\\RedSalamander.Perf",
+    "run_id": "i26-detail-candidate-v5-20260921",
+    "allowed_run_ids": [
+      "i26-detail-candidate-v5-20260921"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 169593,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 3,
+      "passed": 48,
+      "failed": 15,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 705,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 336,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 790,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 181,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 70,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 95,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351286916213",
+          "duration_ms": 9124,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 66,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 341,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 97,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 474,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9091,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9104,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9101,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9120,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 174,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 127,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 403,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 86,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 772,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 194,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 151,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 232,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 541,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 204,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 71,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 82,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351286971057",
+          "duration_ms": 9068,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 57,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 470,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 99,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 334,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9099,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9089,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9080,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9091,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 161,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 110,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 357,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 94,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 760,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 207,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 147,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_teardown_releases_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 213,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_complete_french_detail",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 551,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 214,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 69,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 110,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351287025854",
+          "duration_ms": 9095,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 457,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 89,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 392,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9097,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9082,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9102,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9098,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 157,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 143,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 374,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 103,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 730,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 160,
+          "attempt": 3
+        }
+      ],
+      "failures": [
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351286916213",
+          "duration_ms": 9124,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9091,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9104,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9101,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9120,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351286971057",
+          "duration_ms": 9068,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9099,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9089,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9080,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9091,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+          "status": "failed",
+          "reason": "Issues pane did not widen the task header after a real pointer resize drag. baselineWidth=70.00 currentWidth=126.00 baselineOperationLeft=248.00 currentOperationLeft=304.00 visibleRows=1 visibleColumns=6 resizeCount=0 resizeFailures=0 selectedTask=17509995351287025854",
+          "duration_ms": 9095,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the widened Task header before sort validation.",
+          "duration_ms": 9097,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before sort validation.",
+          "duration_ms": 9082,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "failed",
+          "reason": "Issues pane did not expose the reordered widened Task header before reordered-resized copy after sort validation.",
+          "duration_ms": 9102,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+          "status": "failed",
+          "reason": "Issues pane did not expose reordered+widened columns before persisted-view-state validation.",
+          "duration_ms": 9098,
+          "attempt": 3
+        }
+      ]
+    }
+  ]
+}

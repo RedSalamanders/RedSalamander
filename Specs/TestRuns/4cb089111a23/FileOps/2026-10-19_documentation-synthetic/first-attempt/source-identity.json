@@ -1,0 +1,22 @@
+[
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp",
+    "sha256": "5BA101E2DAC553EE67C61F42FC4E4E6AFF399E2E9B24E9D6AFB3B9303C041B0F"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+    "sha256": "507D8829C5F865C74B25AC3689F892737FC47222435F8BF39CB80184D5BDD128"
+  },
+  {
+    "path": "Specs/Testing/Testing_SelfTests.md",
+    "sha256": "019671229E7D4DC04BA130762E5910CE1E05D2B702764683FF339B8C48E4000B"
+  },
+  {
+    "path": "AGENTS.md",
+    "sha256": "938A8343ED62FD07ED865FE8F65D93B858BB02C9FDF9CD1BF2861050A26DA2DA"
+  },
+  {
+    "path": "Dependencies/DxUi.lock.json",
+    "sha256": "4E624F7ABFE0F9458245234FBDAAF053794368F25EBFE9155A665DA4E717556A"
+  }
+]

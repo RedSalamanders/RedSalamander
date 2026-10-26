@@ -1,0 +1,47 @@
+[----------] SettingsSchemaParser tests
+[       OK ] smoke: ParseSettingsSchema("{}") returns empty
+[       OK ] synthetic defaults: exactly one field parsed
+[       OK ] synthetic defaults: jsonPath == flag
+[       OK ] synthetic defaults: missing x-ui-control defaults to edit
+[       OK ] synthetic defaults: missing title defaults to jsonPath
+[       OK ] synthetic defaults: schemaType == boolean
+[       OK ] synthetic defaults: bool default true round-trips to L"true"
+[       OK ] synthetic min/max: one field with bounds
+[       OK ] synthetic min/max: hasMin true, minValue 1
+[       OK ] synthetic min/max: hasMax true, maxValue 100
+[       OK ] synthetic min/max: one field without bounds
+[       OK ] synthetic min/max: no bounds -> hasMin/hasMax false
+[       OK ] synthetic enum: one combo field
+[       OK ] synthetic enum: enumValues populated in schema order
+[       OK ] synthetic no-pane: field without x-ui-pane is not returned
+[       OK ] malformed: empty string -> empty vector
+[       OK ] malformed: truncated JSON -> empty vector
+[       OK ] malformed: array root -> empty vector
+[       OK ] malformed: minimum:"abc" -> field kept, hasMin stays false
+[       OK ] missing file: LoadAndParseSettingsSchema returns empty, no crash
+[       OK ] non-ASCII: one field parsed
+[       OK ] non-ASCII: title round-trips (Gr÷▀e)
+[       OK ] non-ASCII: description round-trips (╔lÚment)
+[       OK ] real schema: Specs\SettingsStore.schema.json located
+[----------] using schema: Z:\src\RedSalamander\Specs\SettingsStore.schema.json
+[       OK ] real schema: parse returns a non-empty field set
+[       OK ] real schema: anchor mainMenuSettings.menuBarVisible present
+[       OK ] anchor menuBarVisible: paneName == General
+[       OK ] anchor menuBarVisible: schemaType == boolean
+[       OK ] anchor menuBarVisible: controlType == toggle
+[       OK ] anchor menuBarVisible: section == Display
+[       OK ] anchor menuBarVisible: displayOrder == 10
+[       OK ] anchor menuBarVisible: defaultValue == true
+[       OK ] real schema: anchor mainMenuSettings.functionBarVisible present
+[       OK ] anchor functionBarVisible: paneName == General
+[       OK ] anchor functionBarVisible: schemaType == boolean
+[       OK ] anchor functionBarVisible: controlType == toggle
+[       OK ] anchor functionBarVisible: displayOrder == 20
+[       OK ] real schema: result sorted by pane -> section -> displayOrder
+[       OK ] GetFieldsForPane(General): returns at least one field
+[       OK ] GetFieldsForPane(General): every field belongs to General
+[       OK ] GetFieldsForPane(NoSuchPane): returns empty
+[       OK ] real schema: at least one custom-control field exists
+[       OK ] GetNonCustomFieldsForPane: result contains no custom fields
+[       OK ] GetNonCustomFieldsForPane: drops at least one custom field
+[  PASSED  ] all SettingsSchemaParser tests

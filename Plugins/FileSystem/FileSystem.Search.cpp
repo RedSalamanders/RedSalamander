@@ -411,7 +411,7 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept;
 HRESULT CheckSearchCancelled(SearchRuntime& runtime) noexcept;
 HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase, const std::wstring* currentPath, HRESULT statusHint, bool force) noexcept;
 HRESULT EmitSearchMatch(SearchRuntime& runtime, const SearchEntryMetadata& entry, uint32_t matchedBy, const SearchContentResult& contentResult) noexcept;
-[[nodiscard]] bool WorkerMatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName) noexcept;
+[[nodiscard]] bool WorkerMatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName, uint32_t& outWarnings) noexcept;
 
 HRESULT RejectRegexSearch(SearchRuntime& runtime, std::wstring_view regexKind, std::wstring_view rejectReason) noexcept
 {
@@ -551,7 +551,7 @@ void AccumulateParallelNameOnlyEntry(const SearchRuntime& runtime,
         return;
     }
 
-    const bool nameMatched = WorkerMatchNamePattern(runtime, metadata.displayName);
+    const bool nameMatched = WorkerMatchNamePattern(runtime, metadata.displayName, result.warningFlags);
 
     if (runtime.query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX && state.cancelFlag.load(std::memory_order_acquire))
     {
@@ -1298,7 +1298,7 @@ HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase
     return S_OK;
 }
 
-[[nodiscard]] bool MatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName) noexcept
+[[nodiscard]] bool MatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName, uint32_t& outWarnings) noexcept
 {
     switch (runtime.query->nameMode)
     {
@@ -1316,13 +1316,15 @@ HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase
                 return false;
             }
             // noexcept boundary: std::regex_search may throw regex_error on
-            // implementation-defined complexity/stack limits.
+            // implementation-defined complexity/stack limits. Keep that bound, but
+            // report the name as unevaluated rather than as a silent non-match.
             try
             {
                 return std::regex_search(displayName, *runtime.nameRegex);
             }
             catch (const std::regex_error&)
             {
+                outWarnings |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
                 return false;
             }
         }
@@ -1403,6 +1405,10 @@ HRESULT MatchFileContent(SearchRuntime& runtime, const std::wstring& fullPath, S
     {
         runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
     }
+    if (helperResult.regexEvaluationIncomplete)
+    {
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
+    }
 
     result.matched     = helperResult.matched;
     result.byteOffset  = helperResult.matchOffset;
@@ -1480,7 +1486,7 @@ HRESULT EvaluateEntry(SearchRuntime& runtime,
         }
     }
 
-    const bool nameMatched = MatchNamePattern(runtime, entry.displayName);
+    const bool nameMatched = MatchNamePattern(runtime, entry.displayName, runtime.warningFlags);
 
     if (runtime.query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
     {
@@ -2033,9 +2039,9 @@ struct ParallelChunkWork final
 };
 
 // Worker-safe name matching — reads only immutable fields from runtime.
-[[nodiscard]] bool WorkerMatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName) noexcept
+[[nodiscard]] bool WorkerMatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName, uint32_t& outWarnings) noexcept
 {
-    return MatchNamePattern(runtime, displayName);
+    return MatchNamePattern(runtime, displayName, outWarnings);
 }
 
 // Worker-safe content matching — opens file independently, uses atomic cancel flag,
@@ -2100,6 +2106,10 @@ struct ParallelChunkWork final
     if (helperResult.overflowSkipped)
     {
         outWarnings |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+    }
+    if (helperResult.regexEvaluationIncomplete)
+    {
+        outWarnings |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
     }
 
     result.matched     = helperResult.matched;
@@ -2168,7 +2178,7 @@ void ParallelScanWorkerBody(ParallelChunkWork* chunk) noexcept
             return;
         }
 
-        const bool nameMatched = WorkerMatchNamePattern(runtime, entry.displayName);
+        const bool nameMatched = WorkerMatchNamePattern(runtime, entry.displayName, result.warningFlags);
 
         if (runtime.query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX && chunk->cancelFlag->load(std::memory_order_acquire))
         {

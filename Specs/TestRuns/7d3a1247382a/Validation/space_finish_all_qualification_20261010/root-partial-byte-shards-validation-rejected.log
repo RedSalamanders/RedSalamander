@@ -1,0 +1,70 @@
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b01-p01-baseline\metrics\perf_metrics.jsonl: Performance metric row 5006 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b01-p02-candidate\metrics\perf_metrics.jsonl: Performance metric row 5030 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b01-p03-candidate\metrics\perf_metrics.jsonl: Performance metric row 5026 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b01-p04-baseline\metrics\perf_metrics.jsonl: Performance metric row 4989 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b02-p01-baseline\metrics\perf_metrics.jsonl: Performance metric row 5015 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b02-p02-candidate\metrics\perf_metrics.jsonl: Performance metric row 5026 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b02-p03-candidate\metrics\perf_metrics.jsonl: Performance metric row 5029 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b02-p04-baseline\metrics\perf_metrics.jsonl: Performance metric row 5008 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b03-p01-baseline\metrics\perf_metrics.jsonl: Performance metric row 5015 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b03-p02-candidate\metrics\perf_metrics.jsonl: Performance metric row 5033 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b03-p03-candidate\metrics\perf_metrics.jsonl: Performance metric row 5038 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-b03-p04-baseline\metrics\perf_metrics.jsonl: Performance metric row 5009 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-warmup-baseline\metrics\perf_metrics.jsonl: Performance metric row 5009 is not valid JSON.
+Write-Error: 
+Line |
+   2 |  … _20261010'; & ./Tools/Test-TestRunArchive.ps1 -RunPath $spaceArchiveP …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | PerfJson: Specs\TestRuns\7d3a1247382a\Viewers\ordinary-current-224729245z-4221bb43-warmup-candidate\metrics\perf_metrics.jsonl: Performance metric row 5026 is not valid JSON.

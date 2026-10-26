@@ -191,7 +191,7 @@ Behavior:
 All posted impacts use the standard payload helpers:
 
 - `PostMessagePayload(...)`
-- `TakeMessagePayload<T>(lParam)`
+- `TakeMessagePayload<T>(hwnd, message, lParam)`
 - `DrainPostedPayloadsForWindow(hwnd)`
 
 ## Settings

@@ -1,0 +1,86 @@
+[
+  {
+    "file": "f06f779f-isolated-x64-Debug-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-build.log",
+    "bytes": 28226,
+    "sha256": "980133a0f65dec48837990cd87daaf06efd75c9db6d1438ca28dbdc5c7120279"
+  },
+  {
+    "file": "f06f779f-isolated-x64-Debug-Full.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full.log",
+    "bytes": 1058372,
+    "sha256": "07fd51716fafa97df04e34ca4c35735032873e58a13bab7fc7ad9166cf82a8b0"
+  },
+  {
+    "file": "f06f779f-isolated-x64-Debug-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-summary.json",
+    "bytes": 424,
+    "sha256": "52c19af2c4c939e376494f13aca156d282ac29a3cbfb2679eeb04d3e1b9587e9"
+  },
+  {
+    "file": "run-all-tests-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\final-results\\run-all-tests-results.json",
+    "bytes": 15314,
+    "sha256": "a5c3c5fcc448a1829850d8b1f494db56e6cfb8350c6243b393df4903f2fb9272"
+  },
+  {
+    "file": "f06f779f-isolated-x64-Debug-post-Full-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-post-Full-module-identities.json",
+    "bytes": 7266,
+    "sha256": "3d99a6ada2bb5d890e9a3c783ca160d7ebf374172328f1740c8757957f49e8b3"
+  },
+  {
+    "file": "compare_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\CompareDirectories\\2026-09-13_112154\\compare_results.json",
+    "bytes": 54596,
+    "sha256": "9359ee3ec12c1d72a40ed574236c1c8a6f8aef5b0119f916dca76fadac3c3494"
+  },
+  {
+    "file": "commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\Commands\\2026-09-13_114404\\commands_results.json",
+    "bytes": 177809,
+    "sha256": "f734e50b1d08649b98ae5ab2441ed92191c4edcedfa101c84d8a073e5f6a7edb"
+  },
+  {
+    "file": "fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\FileOps\\2026-09-13_120455\\fileops_results.json",
+    "bytes": 39351,
+    "sha256": "688ba46563ae17c425d49e401e241503d55db1c5192955a5f33e61a92d35702b"
+  },
+  {
+    "file": "validation-plan.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\validation-evidence\\validation-plan.json",
+    "bytes": 22930,
+    "sha256": "c9803366183c29fbe75b4316fcc476f06999bebad912d8b36a0a08a708787fe1"
+  },
+  {
+    "file": "run-state.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\validation-evidence\\run-state.json",
+    "bytes": 7567,
+    "sha256": "36373d52afa366f4cd5aa0c2f39de2baaf82c2ab29f3cd5f51d928df8b689082"
+  },
+  {
+    "file": "123354aaae60bb31250524654e77fa531fcc3ae2413829ae850ecc518759a0a1.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\validation-evidence\\decisions\\123354aaae60bb31250524654e77fa531fcc3ae2413829ae850ecc518759a0a1.json",
+    "bytes": 6694,
+    "sha256": "b12cc7528b35e9a274e7f355dfa431ce5dc93d428547b98cb2854dd5da670123"
+  },
+  {
+    "file": "80bb1975448e2dcd7bbbb50a1e848da333d877c824dd014265d20c7a8035627b.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\terminal-results\\80bb1975448e2dcd7bbbb50a1e848da333d877c824dd014265d20c7a8035627b.json",
+    "bytes": 395,
+    "sha256": "2854b5e820fbe8ac7a72d93ba236e4e69a7e407e260b620c36fd7efa507c83d6"
+  },
+  {
+    "file": "bb06be8156ca9532c392b8563ffd67578b465d91341cb86cbb9ed186f59f4949.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\evidence\\bb06be8156ca9532c392b8563ffd67578b465d91341cb86cbb9ed186f59f4949.json",
+    "bytes": 22062,
+    "sha256": "4434467b87461a37252a99ca4e7953b8d80d0b7b0bd9872ddf7faab9034fe6d8"
+  },
+  {
+    "file": "f06f779f-navigation-fixture-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f06f779f-navigation-fixture-identities.json",
+    "bytes": 1400,
+    "sha256": "c9d3cf6677c41947a66ddddba4e7fc86b426cee79bdc8d5448dba7bb00cc02de"
+  }
+]

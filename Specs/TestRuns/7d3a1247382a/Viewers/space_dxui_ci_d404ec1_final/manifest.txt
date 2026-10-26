@@ -1,0 +1,13 @@
+# SHA-256 manifest for curated CI reports and receipts.
+# Columns: sha256<TAB>bytes<TAB>archived-name
+f27a1511051b9cf362c387e3463337a388396a760d211a6d50eda238f3d7a6af	1224	artifact-receipts.txt
+97c1688854c726a7c9d712772a193be0abe0bb2bda8e6999a26c98e2d0c30069	6231	native-x64-release-attempt1/Menu-x64-Release.report.json
+504dc85b56e8033682ee07637aba4ef37cdda527001b14c16870a940e708852f	18588	native-x64-release-attempt1/test-Menu-x64-Release.output.log
+c7abf5324d4109ed3e293c2eaa97fa1cf57cd69790d4776b29e6902dc1bd2fc9	6226	native-x64-release-attempt2/Menu-x64-Release.report.json
+2a77ffdaad57d00891bd036b3e39bbd62457486592f12b23d1788fbe3880033e	27062	native-x64-release-attempt2/test-Menu-x64-Release.output.log
+35232e613f9f30971aca06327d3e85d7b5bf769ad5da6eec86d2d84da72daf26	126744	paired-attempt1-inconclusive/summary.comparison.json
+f12d141b485dbd348c6deeddfe5d12c8061e5b0ca979cc2efb0371d7263d5aec	47663	paired-attempt1-inconclusive/verdict.comparison.json
+bf7db4f1d59cfceff6a9d56a3084004be54472e1240a4d1a4652e253306932bd	11203	paired-attempt1-inconclusive/verdict.md
+8845beb633575ec5994ec5fa494189105fd400e449e56298201adae5e901e329	127649	paired-attempt3-final-retry-inconclusive/summary.comparison.json
+d59a22190e113c09d5d565cb5493f722349250547d473512578bef7d074d1016	47823	paired-attempt3-final-retry-inconclusive/verdict.comparison.json
+5477495c9d499b58e74466a64f0a3ff89317b2fa059745203af813ce24f69a17	11560	paired-attempt3-final-retry-inconclusive/verdict.md

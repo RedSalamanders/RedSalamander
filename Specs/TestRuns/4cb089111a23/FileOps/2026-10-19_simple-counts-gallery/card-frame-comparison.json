@@ -1,0 +1,29 @@
+{
+  "baseline": {
+    "rows": 1488,
+    "medianUs": 7313.5,
+    "p95Us": 10017,
+    "p99Us": 13163,
+    "maxUs": 18747,
+    "rawMetricSha256": "9ae0c356c0fe2018e23be1e9402daae4588dc8cd7b7582095ee8db039dbdaecc",
+    "rawMetricBytes": 9903702,
+    "selectedRowsSha256": "e2ca02a1271febe0914ec69104b888254b45666a9779dfc81bff14b4cb509dde",
+    "machineHash": "4cb089111a23",
+    "configuration": "Debug"
+  },
+  "candidate": {
+    "rows": 1488,
+    "medianUs": 7359.0,
+    "p95Us": 9544,
+    "p99Us": 12107,
+    "maxUs": 17152,
+    "rawMetricSha256": "8be0b003eaf4475c044ecf8a2c94c807e0605ff0c545e7c308359b3e6181cdd3",
+    "rawMetricBytes": 9963499,
+    "selectedRowsSha256": "44af3644ae0770f95b9407512f33366a62bcbde362c3ebce3cfdb7b606209605",
+    "machineHash": "4cb089111a23",
+    "configuration": "Debug"
+  },
+  "p95Ratio": 0.9527802735349905,
+  "scope": "Same-machine existing CardHierarchy frame metric, unchanged multilingual/width scene loop; all selected raw rows retained in original order. Additional documentation saves are outside this timed scope.",
+  "limits": "Sequential Debug observations, not a controlled A/B/A performance qualification or an optimization claim. No File I/O, throughput or other-platform inference."
+}

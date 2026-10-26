@@ -32,9 +32,9 @@ $actualFiles = @(Find-RSRepositorySourceMatches `
         -Extensions @('.cpp', '.h', '.rc') `
         -Patterns @('STATUSCLASSNAMEW|msctls_progress32|SysTreeView32|WC_TREEVIEWW|ToolbarWindow32|TOOLBARCLASSNAME|SysHeader32|WC_HEADER|SysTabControl32|WC_TABCONTROL|msctls_trackbar32|TRACKBAR_CLASSW') `
         -ExcludedRelativePaths @(
-            'RedSalamander\Commands.SelfTest.cpp',
+            'RedSalamander\Commands.Tests.Runner.cpp',
             'RedSalamander\Preferences.Dialog.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp'
         ) `
         -PathSeparator Slash |
     Select-Object -ExpandProperty Path -Unique |

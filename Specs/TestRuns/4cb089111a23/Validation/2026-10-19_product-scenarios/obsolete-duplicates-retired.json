@@ -1,0 +1,17 @@
+[
+  {
+    "name": "connections-manager.png",
+    "sha256": "41b2fa946d3efae0638fe734edce323092bbc4fba2d91851db618d2c1e99e3ef",
+    "reason": "Superseded by reviewed native synthetic gallery"
+  },
+  {
+    "name": "preferences-plugins.png",
+    "sha256": "de3c85dd3390f37bea0f868f6fff91307eb90d59131ef6b9709ac6d3dc3a4ab8",
+    "reason": "Superseded by reviewed native synthetic gallery"
+  },
+  {
+    "name": "preferences.png",
+    "sha256": "b4fa8e952216653cddc64803953630fca95f503d1119bac544055ccb8c809393",
+    "reason": "Superseded by reviewed native synthetic gallery"
+  }
+]

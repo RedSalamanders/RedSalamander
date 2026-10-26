@@ -1,0 +1,69 @@
+{
+  "captureKind": "actual application; deterministic test harness",
+  "configuration": "x64 Debug",
+  "baseCommit": "41cca99b9a54c84c4cbf94e2be7545a16ad015db",
+  "sourceIdentity": "Exact dirty workspace and artifacts are bound in the associated runner aggregates and build receipts.",
+  "dxuiPin": "78b3de389a189c7f86f611787e0489fb6d474218",
+  "captures": [
+    {
+      "file": "primary-en-US-live-language.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-revision-20260921\\commands\\issues-primary-grid\\repeat-1\\primary-en-US-live-language.png",
+      "sha256": "B6BD5ACBB98F8F3AC62DE25BB5B096C4189AC906831F5FA865FED3F4CF965DD1",
+      "pixelWidth": 784,
+      "pixelHeight": 527,
+      "scenario": "cmd_pane_fileops_issues_pane_primary_grid",
+      "repeat": 1,
+      "language": "en-US",
+      "buildReceipt": "0135cb7402b71af67df1c3d713bd3b959d128412ef6a8127847d1bc0ad52e7b9",
+      "reviewed": true
+    },
+    {
+      "file": "primary-fr-FR-live-language.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-revision-20260921\\commands\\issues-primary-grid\\repeat-1\\primary-fr-FR-live-language.png",
+      "sha256": "9D19688111B3102E90B259DC8A6B7666EECC9E210FE6AD95289202EB2B5F2448",
+      "pixelWidth": 784,
+      "pixelHeight": 527,
+      "scenario": "cmd_pane_fileops_issues_pane_primary_grid",
+      "repeat": 1,
+      "language": "fr-FR",
+      "buildReceipt": "0135cb7402b71af67df1c3d713bd3b959d128412ef6a8127847d1bc0ad52e7b9",
+      "reviewed": true
+    },
+    {
+      "file": "technical-en-US-live-language.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-revision-20260921\\commands\\issues-primary-grid\\repeat-1\\technical-en-US-live-language.png",
+      "sha256": "614BAD2EE9D1AC880DB247410D647E57D116AA0B3E8031269F054B2056267923",
+      "pixelWidth": 784,
+      "pixelHeight": 527,
+      "scenario": "cmd_pane_fileops_issues_pane_primary_grid",
+      "repeat": 1,
+      "language": "en-US",
+      "buildReceipt": "0135cb7402b71af67df1c3d713bd3b959d128412ef6a8127847d1bc0ad52e7b9",
+      "reviewed": true
+    },
+    {
+      "file": "technical-fr-FR-live-language.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-revision-20260921\\commands\\issues-primary-grid\\repeat-1\\technical-fr-FR-live-language.png",
+      "sha256": "7792B50AECD086A66851FBC2EBF987868818F59D46D3E223A4C78B0F2FC9585B",
+      "pixelWidth": 784,
+      "pixelHeight": 527,
+      "scenario": "cmd_pane_fileops_issues_pane_primary_grid",
+      "repeat": 1,
+      "language": "fr-FR",
+      "buildReceipt": "0135cb7402b71af67df1c3d713bd3b959d128412ef6a8127847d1bc0ad52e7b9",
+      "reviewed": true
+    },
+    {
+      "file": "before-primary-en-US.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-baseline-20260921\\commands\\issues-primary-grid\\repeat-1\\primary-en-US-live-language.png",
+      "sha256": "0906E9D0F1C941AF3A93C93993A303BE818AAA3ECE9E75D6E40C9D64D79B388F",
+      "pixelWidth": 784,
+      "pixelHeight": 527,
+      "scenario": "cmd_pane_fileops_issues_pane_primary_grid",
+      "repeat": 1,
+      "language": "en-US",
+      "buildReceipt": "cf4ef65b831dd59c3e2e7917c3be3271fa44dea67e21b648e61aabab4c6ba2f9",
+      "reviewed": true
+    }
+  ]
+}

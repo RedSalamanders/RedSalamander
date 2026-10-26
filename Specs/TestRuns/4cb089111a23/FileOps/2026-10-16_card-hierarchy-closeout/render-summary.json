@@ -1,0 +1,44 @@
+[
+  {
+    "metric": "FileOps.Popup.CardHierarchy.FrameUs",
+    "count": 624,
+    "medianUs": 8099.0,
+    "p95Us": 8497.0,
+    "maximumUs": 10855.0
+  },
+  {
+    "metric": "FileOps.Popup.Render.BuildSnapshotUs",
+    "count": 724,
+    "medianUs": 29.0,
+    "p95Us": 45.0,
+    "maximumUs": 87.0
+  },
+  {
+    "metric": "FileOps.Popup.Render.CardLayoutUs",
+    "count": 724,
+    "medianUs": 133.0,
+    "p95Us": 288.0,
+    "maximumUs": 1662.0
+  },
+  {
+    "metric": "FileOps.Popup.Render.DrawUs",
+    "count": 724,
+    "medianUs": 583.0,
+    "p95Us": 1768.0,
+    "maximumUs": 4848.0
+  },
+  {
+    "metric": "FileOps.Popup.Render.TotalUs",
+    "count": 724,
+    "medianUs": 1929.0,
+    "p95Us": 6069.0,
+    "maximumUs": 16761.0
+  },
+  {
+    "metric": "FileOps.Popup.FactPair.MeasureUs",
+    "count": 56,
+    "medianUs": 26.0,
+    "p95Us": 55.0,
+    "maximumUs": 57.0
+  }
+]

@@ -1,0 +1,6 @@
+[ RUN      ] Terminal live localization contracts
+[       OK ] Terminal.dll: 21/21 live schema, satellite, UI Automation, real-object diagnostic, lifecycle, and cleanup assertions pass
+[ RUN      ] Terminal plugin deterministic selftests
+[       OK ] Terminal.dll: debug selftests pass (passed=45, failed=0, hr=0x00000000)
+[       OK ] Terminal.dll: debug selftest module reaches its unload quiet point
+PluginContractTests focused Terminal selftests passed.

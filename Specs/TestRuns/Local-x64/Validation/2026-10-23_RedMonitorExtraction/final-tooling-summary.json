@@ -1,0 +1,8 @@
+{
+  "scope": "Final affected tooling after effective compiler-policy fix; excludes compiler-required cohort",
+  "runId": "20261023T164258Z-54700-d66215d8aec9425c93c45b625ecd90d3",
+  "passed": 143,
+  "failed": 0,
+  "skipped": 0,
+  "completedUtc": "2026-10-23T16:44:20.1739349Z"
+}

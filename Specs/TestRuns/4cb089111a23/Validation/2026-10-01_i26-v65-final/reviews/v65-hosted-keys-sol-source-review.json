@@ -1,0 +1,41 @@
+{
+  "schema": "i26-primary-hosted-decision-key-source-review.v1",
+  "reviewer": "Sol child; root approval and runtime still required",
+  "reviewUtc": "2026-10-01T09:59:53.129340+00:00",
+  "status": "no blocking source finding",
+  "wholePlanComplete": false,
+  "path": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp",
+  "sourceSha256": "ce155d10601d6db24ebfb5da5b2a4ffbbf1bc76d22f06db6349ab08271701129",
+  "priorV64SourceSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "delta": {
+    "addedLines": 191,
+    "removedLines": 0,
+    "scope": "one TestFileOperationsPopupDecisionKeys function and one registration"
+  },
+  "case": "cmd_pane_fileops_conflict_hosted_decision_keys",
+  "scenarios": [
+    "ordinary default Enter with no focused action",
+    "same-host Escape on exact B Cancel, preserving still-pending A",
+    "Recycle safe Enter on initial Cancel",
+    "Recycle Escape"
+  ],
+  "sourceChecks": [
+    "Existing published policy uses Cancel except explicit same-host Proceed; new assertions bind both default and Cancel.",
+    "Setup admits real Copy collision. Same-host admits real Delete while Copy remains pending; active read scope ownership independently reviewed by root.",
+    "Recycle cancels only setup Copy, installs existing exact source fault through canonical ScopedEnvironmentVariable, then admits actual Recycle Delete.",
+    "Environment declared before fixture; cleanup scope drains operations before fixture and environment destructors; idempotent fixture Cleanup restores panes/settings/theme.",
+    "Queue and prompt result overrides are restored on every normal/early return. Next scenario stops if preceding cleanup set failure.",
+    "Same-host activates only governed owned popup; scroll-to-bottom then exact AutomationId provider focus prevents targeting A by duplicate Cancel caption.",
+    "WM_KEYDOWN/WM_KEYUP goes through production retained HWND routing; no direct decision resolves the tested prompt.",
+    "Each result requires exact task terminal Cancel/E_ABORT, zero published/removed counters, complete source/destination payloads preserved and stable popup HWND.",
+    "Same-host rechecks original immutable Copy inspection after B cancellation.",
+    "Named system_error catch matches existing scoped-environment usage. New code adds no product timing/predicate/threshold relaxation."
+  ],
+  "limitations": [
+    "Source review only; no compiler/native execution by this agent.",
+    "Keyboard evidence is explicit window-message routing through real HWND, not OS-level injected input.",
+    "Only the stated default/cancel journeys are added; current engine families separately cover same-host classification variants and two-file Recycle exact carriers.",
+    "Actual focused Debug/Release and next final Full must include this new case before acceptance."
+  ],
+  "findings": []
+}

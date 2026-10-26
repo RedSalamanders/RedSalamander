@@ -1,0 +1,2 @@
+ .../Commands/Commands.SelfTest.ViewCommands.cpp    | 70 ++++++++++++----------
+ 1 file changed, 38 insertions(+), 32 deletions(-)

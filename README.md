@@ -5,14 +5,20 @@ RedSalamander is a Windows dual-pane file manager with:
 - A fast DirectX-based folder view
 - A modeless Find Files and Directories workflow with native, indexed, and fallback search backends
 - Virtual file systems (archives, FTP/SFTP/SCP/IMAP, S3, …)
+- MTP/PTP phones and cameras, with read-only device profiles by default
+- Embedded and floating Terminal sessions, plus a searchable Command Palette
 - Viewer plugins (Text/Hex, SQLite, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RedSalamanders/RedSalamander/total?style=plastic)
 
-![RedSalamander main window](docs/res/main-window.png)
 
 [Complete User Documentation](docs/UserGuide.md)
+
+Start with [Getting Started](docs/GettingStarted.md), browse the
+[product documentation map](docs/DocumentationMap.md), or go directly to
+[File Operations](docs/FileOperations.md), [Terminal](docs/Terminal.md) and
+[Portable Devices](docs/PortableDevices.md).
 
 ## Why another file manager?
 
@@ -78,7 +84,6 @@ Use the `build.ps1` PowerShell script for easy building:
 .\build.ps1 -Platform ARM64
 
 # Build specific project only
-.\build.ps1 -ProjectName RedSalamanderMonitor
 .\build.ps1 -ProjectName RedSalamander
 .\build.ps1 -ProjectName Common
 
@@ -92,7 +97,7 @@ Use the `build.ps1` PowerShell script for easy building:
 .\build.ps1 -Rebuild -MaxCpuCount 4
 
 # Combined options
-.\build.ps1 -Configuration Release -ProjectName RedSalamanderMonitor -Rebuild
+.\build.ps1 -Configuration Release -ProjectName RedSalamander -Rebuild
 ```
 
 **Build Script Parameters:**
@@ -150,19 +155,36 @@ The build copies the required `clang_rt.asan_dynamic-*.dll` next to each ASan ex
 
 The solution contains the following projects:
 
-- **Applications**: `RedSalamander`, `RedSalamanderMonitor`, `RedSalamanderSearchService`
+- **Applications**: `RedSalamander`, `RedSalamanderSearchService`
 - **Standalone tools**: `RedConfigure`, `RedLauncher`
 - **Installer**: `RedSalamanderInstaller` (MSIX packaging)
 - **Shared library**: `Common`
 - **Plugins** (all under `Plugins\`):
-  - **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemDummy`
+  - **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemMtp`, `FileSystemDummy`
   - **Viewer plugins**: `ViewerText`, `ViewerSqlite`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
 - **Tests**: 8 standalone test projects (e.g. `DxUiTests`, `PerformanceTests2`)
 - **Tools**: inventoried PowerShell commands and modules; start with
   [`Tools/README.md`](Tools/README.md), and find Pester contracts in `Tools\Tests`
-- **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`, `MonitorTest`
+- **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`
 
 The solution also contains per-language localization satellite projects, so Solution Explorer shows far more than the core projects listed above.
+
+### VLC viewer troubleshooting
+
+The VLC viewer requires a desktop VLC installation matching RedSalamander's
+architecture. It detects standard registered installations automatically; for a
+portable installation, select its folder in **Preferences > Plugins > VLC Viewer**.
+
+F3 and the preview pane support local media paths longer than 260 characters,
+including Unicode names, without enabling Windows long-path policy or moving the
+media. File-access errors show the selected path and the Windows error code under
+**Unable to play this file**. Installation instructions and **Download VLC media
+player** appear only when the viewer cannot find a valid VLC installation folder.
+If VLC is found but its DLLs cannot load or initialize, the error shows that specific
+failure. Reinstalling VLC does not repair a missing or inaccessible media file.
+
+The [VLC viewer specification](Specs/Plugins/Plugins_ViewerVLC.md) defines the path,
+error, and regression-test contracts.
 
 ### Output
 
@@ -258,9 +280,9 @@ partition the broad native inventory but remain non-cacheable because they share
 .\Tools\Run-AllTests.ps1 -Suite FileOps -SkipBuild -CaseFilter FileOps_ProviderCapabilityMatrix -SelfTestRepeat 2 -SelfTestShuffleSeed 789 -TimeoutMultiplier 0.1
 ```
 
-`-Suite PR` is the GitHub Actions gate for pull requests and pushes to `main`: the non-interactive standalone entries of Suite CI (ProductUiTests, FileSystemCurlTests, the non-interactive ViewerPE and ViewerSqlite groups, MonitorTest, LocalizationTests, RedConfigureTests, PluginContractTests, SettingsSchemaTests, CrashHandlingTests, PerformanceTests2, the current tooling Pester profile, and the vcpkg-merge synthetic test), about ten minutes on a hosted runner, with no in-product self-test suite, no interactive-desktop entry, and no failure-classification reruns.
+`-Suite PR` is the GitHub Actions gate for pull requests and pushes to `main`: the non-interactive standalone entries of Suite CI (ProductUiTests, FileSystemCurlTests, the non-interactive ViewerPE and ViewerSqlite groups, LocalizationTests, RedConfigureTests, PluginContractTests, SettingsSchemaTests, CrashHandlingTests, PerformanceTests2, the current tooling Pester profile, and the vcpkg-merge synthetic test), about ten minutes on a hosted runner, with no in-product self-test suite, no interactive-desktop entry, and no failure-classification reruns.
 
-`-Suite CI` is the nightly suite (`nightly-ci.yml`, all four native profiles, skipped when `main` has not changed) through `Run-AllTests.ps1`: the three in-product self-test suites as separate processes, everything in Suite PR (ProductUiTests, FileSystemCurlTests, the non-interactive ViewerPE and ViewerSqlite groups, MonitorTest, LocalizationTests, RedConfigureTests, PluginContractTests, SettingsSchemaTests, CrashHandlingTests, PerformanceTests2, the current tooling Pester profile, and the vcpkg-merge synthetic test), plus the interactive ViewerPE and ViewerSqlite groups and the explicit ViewerPE find/goto prompt cases. The current profile dynamically discovers ordinary `Tools\Tests` coverage while excluding the SHA-256-sealed historical Terminal cohort; use the explicit archival profile documented in `Tools/TerminalEngine/README.md` when reproducing Gate0 or Round4.
+`-Suite CI` is the nightly suite (`nightly-ci.yml`, all four native profiles, skipped when `main` has not changed) through `Run-AllTests.ps1`: the three in-product self-test suites as separate processes, everything in Suite PR (ProductUiTests, FileSystemCurlTests, the non-interactive ViewerPE and ViewerSqlite groups, LocalizationTests, RedConfigureTests, PluginContractTests, SettingsSchemaTests, CrashHandlingTests, PerformanceTests2, the current tooling Pester profile, and the vcpkg-merge synthetic test), plus the interactive ViewerPE and ViewerSqlite groups and the explicit ViewerPE find/goto prompt cases. The current profile dynamically discovers ordinary `Tools\Tests` coverage while excluding the SHA-256-sealed historical Terminal cohort; use the explicit archival profile documented in `Tools/TerminalEngine/README.md` when reproducing Gate0 or Round4.
 
 `-Suite CI` also enables failure classification automatically. A standalone pass-on-rerun is reported as blocking `FLAKY`, and fail-again is blocking `REGRESSION`. For broad in-product suite failures, failed cases first rerun through `--selftest-case`; if those pass, the runner performs shuffle triage across three seeds. Pass-all-shuffle evidence becomes blocking `FLAKY`, fail-any-shuffle evidence becomes blocking `REGRESSION`, and missing shuffle evidence remains blocking `ISOLATION_SUSPECT`. Use `-ClassifyFailures` to enable the same retry evidence on non-CI suites.
 
@@ -280,7 +302,7 @@ attempts inherit the matched entry's interactive classification.
 
 Self-test crashes remain failures, but they should not erase evidence: suite `results.json` is flushed after every case, and an in-flight crash is written as `status: "crashed"` in partial aggregate results for the runner to report. Debug self-test builds expose `--selftest-crash-case=NAME` only for proving that crash-signal path.
 
-`-Suite Full` builds the full solution (test projects included) and additionally runs the broader closeout surface: the artifact-mutating build-toolchain Pester lane (a targeted rebuild plus a full re-attestation build) and RedSalamanderMonitorEtwLatency. It is the local closeout gate; GitHub Actions runs `-Suite PR` on pull requests (x64 and ARM64 Debug) and on pushes to `main` (both Debug and Release profiles), `-Suite CI` nightly on all four native profiles, and keeps ASan Debug weekly in `asan.yml` (never on pull requests). Results land under exact `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`, where `X:` defaults to the repository drive and may be any selected fixed local drive. First initialization uses `-AllowExternalTestRoot`; later runs require the ownership marker.
+`-Suite Full` builds the full solution (test projects included) and additionally runs the broader closeout surface: the artifact-mutating build-toolchain Pester lane (a targeted rebuild plus a full re-attestation build). It is the local closeout gate; GitHub Actions runs `-Suite PR` on pull requests (x64 and ARM64 Debug) and on pushes to `main` (both Debug and Release profiles), `-Suite CI` nightly on all four native profiles, and keeps ASan Debug weekly in `asan.yml` (never on pull requests). Completed results land under exact `X:\RedSalamander.Perf\evidence\completed-runs\<runId>\artifacts\selftest\last_run\`, where `X:` defaults to the repository drive and may be any selected fixed local drive. First initialization uses `-AllowExternalTestRoot`; later runs require the ownership marker.
 
 Test tooling never creates, audits, or cleans runtime data outside `X:\RedSalamander.Perf`. `Tools\Clean-TestSandbox.ps1` is dry-run by default and can remove only one explicitly named direct-child run beneath that marked root; historical locations must be handled manually outside the test workflow.
 
@@ -295,18 +317,23 @@ omit those entry points and hooks.
 
 ### Self-test artifacts and results
 
-When launched through `Tools\Run-AllTests.ps1`, self-test output is written under:
+While `Tools\Run-AllTests.ps1` is active, self-test output is written under:
 
 ```text
 X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\
 ```
 
-The runner writes a per-invocation aggregate summary, and native self-tests resolve their `last_run` writer directly from `REDSALAMANDER_TEST_ROOT` plus `REDSALAMANDER_TEST_RUN_ID`:
+After execution and owned-disk teardown, the runner verifies and renames the complete
+run into `evidence\completed-runs\<runId>` on the same marked volume. Passed, failed,
+skipped and interrupted witnesses are retained without payload copies. Startup preserves
+abandoned parseable runs; live owners, unsafe links, unresolved disks and collisions remain
+protected. Create-only records in `evidence\run-archive-records\<runId>` retain the original
+execution-path mapping. Completed summaries and dashboards use these final locations:
 
-- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`
-- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-results.json`
-- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-case-history.jsonl`
-- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-dashboard.md`
+- `X:\RedSalamander.Perf\evidence\completed-runs\<runId>\artifacts\selftest\last_run\`
+- `X:\RedSalamander.Perf\evidence\completed-runs\<runId>\artifacts\selftest\last_run\run-all-tests-results.json`
+- `X:\RedSalamander.Perf\evidence\completed-runs\<runId>\artifacts\selftest\last_run\run-all-tests-case-history.jsonl`
+- `X:\RedSalamander.Perf\evidence\completed-runs\<runId>\artifacts\selftest\last_run\run-all-tests-dashboard.md`
 
 Key files:
 
@@ -419,7 +446,10 @@ git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertF
 .\vcpkg-install.ps1 -Platform ARM64
 ```
 
-The install script validates that local tool identity before modifying the selected platform root beneath `.build\vcpkg_installed`. The repository and
+The install script validates that local tool identity before modifying the selected platform root beneath `.build\vcpkg_installed`.
+It builds every triplet with the Visual Studio installation and the default MSVC toolset the build discovers (an overlay triplet
+beneath `.build\vcpkg-triplets`), not the newest toolset installed beside the default, which can lack an ARM64 compiler and is a
+link hazard for the compiled libraries; the first install after that change rebuilds the packages. The repository and
 CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step. CI
 imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout for the lifetime of the build so headers
 and the complete installed library set come from the same reviewed tool revision.
@@ -452,46 +482,31 @@ Then re-run `.\vcpkg-install.ps1`.
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
 - **Platform**: Windows 11 build 22000.2600 or later (Unicode UTF-16)
 
-## ETW Tracing (RedSalamanderMonitor)
+## ETW tracing with RedMonitor
 
-[RedSalamanderMonitor](RedSalamanderMonitor/) is a real-time ETW (Event Tracing for Windows) viewer for RedSalamander events.
-On some machines it may need extra privileges to start its ETW listener.
+[RedMonitor](https://github.com/RedSalamanders/RedMonitor) is the independent optional ETW viewer.
+Install its standalone production Release ZIP using the included Install-RedMonitor.ps1. The standard
+per-user location is LocalAppData/Programs/RedMonitor; machine installation uses ProgramFiles/RedMonitor.
 
-### One-time permission setup (avoid UAC prompts)
+RedSalamander shares only the pinned Client.h, MIT notice and immutable lock. Ordinary builds verify
+local bytes without downloading sources or rebuilding/staging the viewer. Use
+Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA for an explicit reviewed client update.
 
-Run the helper script once to add your account to the local **Performance Log Users** group (the script will self-elevate):
+Start an installed helper explicitly:
 
-```powershell
-.\init-etw-trace.ps1
-```
+    RedSalamander.exe --redmonitor
 
-Then **sign out/in (or reboot)** so your access token picks up the new group membership, and launch:
+A bare Debug startup may queue that launch asynchronously. Release, help and test startup do not
+auto-launch it. Missing helpers are harmless. All four Red applications normalize their application
+label, severity, Unicode text and process/thread/time fields through the same public header.
 
-- `.build\x64\Debug\RedSalamanderMonitor.exe` (Debug), or
-- `.build\x64\Release\RedSalamanderMonitor.exe` (Release)
-
-To undo the change later:
-
-```powershell
-.\init-etw-trace.ps1 -Remove
-```
-
-### Optional: capture an `.etl` trace file
-
-If you need an external ETW session (e.g. Windows Performance Analyzer), use:
-
-- `.\start-etw-trace.ps1`
-- `.\stop-etw-trace.ps1`
-- `.\clean-etw-trace.ps1`
-
-Note: `RedSalamanderMonitor.exe` has its own built-in ETW listener and does not require an external session for normal use.
-
-Normal Release builds keep Info/Perf/debug-style ETW diagnostics quiet, and RedSalamanderMonitor filters out its own ETW messages. To build a dedicated Release set that emits and displays those diagnostics in RedSalamanderMonitor, use:
-
-```powershell
-.\build.ps1 -Configuration Release -MonitorDiagnostics
-```
-
+ETW session access may require Performance Log Users membership or elevation. The existing
+init-etw-trace.ps1 helper changes that membership only when explicitly run; sign out/in afterward.
+The independent helper owns its listener; external start/stop-etw-trace.ps1 tools are optional for
+capturing ETL files. Normal Release diagnostics remain Error/Warning by default; --etw enables the
+existing diagnostic opt-in. Preferences edits the shared Release 7.0 monitor settings profile in
+every consumer configuration. See [Monitor](docs/Monitor.md) and the
+[integration contract](Specs/Core/Core_RedSalamanderMonitor.md).
 ## Additional Documentation
 
 - **docs/**: User and developer documentation (start at `docs/UserGuide.md` or `docs/DeveloperGuide.md`)
@@ -504,3 +519,11 @@ Normal Release builds keep Info/Perf/debug-style ETW diagnostics quiet, and RedS
 ## License
 
 See `LICENSE.txt` for license information.
+
+Affected iteration, full local coverage, exact reuse and pending PR obligations are described in [the testing guide](Tests/README.md).
+
+## Recording changes
+
+Follow the [Changes workflow](Changes/README.md): validate while editing, then fold before PrePush/final handoff and immediately after integration, even for one fragment.
+
+Builds require default MSVC **14.52.x** (v145). Release C++ uses /Gy /GL with /OPT:REF and full /LTCG at final links. Exact tools and WPO are forwarded to the existing DxUi pin and included in a separate archive-output identity; see the build toolchain contract.

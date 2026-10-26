@@ -101,3 +101,12 @@ S3 Table also exposes:
 - If a profile keeps prompting for credentials, prefer Connection Manager over embedding defaults in plugin settings.
 - If you are using a custom endpoint or self-signed certificate, check the S3/S3 Table plugin settings and your Connection Manager profile.
 - Deleting a virtual folder removes every object under that prefix. If a folder delete is refused, the operation was issued without recursion; confirm the delete so the recursive delete is requested.
+
+## S3 browsing example
+
+The production S3 provider below browses an invented bucket on a private loopback
+fake API, with generated documents. The fixture creates no public cloud resources
+and uses no account credentials. This illustrates S3 object browsing; S3 Table
+query execution has a separate provider contract.
+
+![S3 provider browsing the generated demo-library bucket](res/provider-s3.png)

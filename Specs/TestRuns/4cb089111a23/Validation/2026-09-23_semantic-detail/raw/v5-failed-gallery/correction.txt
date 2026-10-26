@@ -1,0 +1,1 @@
+v4 clean build; warning123 now matched22 pixels. Gallery failed at129b success check. Image visibly contains correct check; ClearType channel differences yield0 matchesat24/32,12at40/48,14at64 in icon-onlycrop. v5 uses existing close-glyph witness tolerance64, minimum4, semanticglyph+bounds+textfitchecks unchanged. No product change fromv4. Preserve fullfailedv4 run.

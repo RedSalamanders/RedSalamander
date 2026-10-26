@@ -1,0 +1,140 @@
+{
+    "run_started_utc": "2026-09-21T06:24:09.262Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-throughput-save-candidate-v4-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 118978,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_global_summary_ignores_finished_tasks",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 7875,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 26597,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 782,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 365,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2442,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_global_summary_ignores_finished_tasks",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 7073,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 26453,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 649,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 367,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2399,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_global_summary_ignores_finished_tasks",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 7136,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_resource_lifetime",
+            "status": "passed",
+            "duration_ms": 26525,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 676,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 414,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2466,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

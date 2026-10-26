@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-23T12:39:35.513Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T123915Z-4736-f5003fd5c8654353b44cac6664c72f7d\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 63937,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Confirmation capture failed: variant 4, hr 0x00000000, result 2",
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "failed",
+            "duration_ms": 63890,
+            "repeat_index": 1,
+            "reason": "Confirmation capture failed: variant 4, hr 0x00000000, result 2"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

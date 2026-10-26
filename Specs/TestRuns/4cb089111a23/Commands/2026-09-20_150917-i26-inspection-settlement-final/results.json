@@ -1,0 +1,126 @@
+{
+    "run_started_utc": "2026-09-20T13:09:20.781Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T130555Z-65700-333c646107434cacb897ede737c35706\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 25358,
+    "passed": 15,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "The owner must receive one failed settlement with the exact status and no old-model selection.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4225,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 341,
+            "repeat_index": 1,
+            "reason": "The owner must receive one failed settlement with the exact status and no old-model selection."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1171,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1017,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4168,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 350,
+            "repeat_index": 2,
+            "reason": "The owner must receive one failed settlement with the exact status and no old-model selection."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1087,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1001,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 164,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4198,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 364,
+            "repeat_index": 3,
+            "reason": "The owner must receive one failed settlement with the exact status and no old-model selection."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1072,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1006,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 169,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

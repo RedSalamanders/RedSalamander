@@ -1,0 +1,181 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-08-23T22:01:48.2806568Z",
+  "run_ended_utc": "2026-08-23T22:02:00.4538546Z",
+  "duration_ms": 12173,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260823T220130Z-76532-02884ae36a7844b982e0ed0af70e69f2\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox",
+  "run_id": "20260823T220130Z-76532-02884ae36a7844b982e0ed0af70e69f2",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+  "exit_code": 1,
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "total": 1,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 22,
+    "test_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox",
+    "run_id": "20260823T220130Z-76532-02884ae36a7844b982e0ed0af70e69f2",
+    "allowed_run_ids": [
+      "20260823T220130Z-76532-02884ae36a7844b982e0ed0af70e69f2"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-path-parent",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\manual-pester",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\a90e6726-fo-high-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-clipboard-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-contract-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-validator-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-chrome-tab-only-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-retry-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-retry2-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Fairstream_CrossFsConcurrentMoveUsesBridge-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-floodgate-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-one-floodgate-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-one-noredirect-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-highs-fo-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-lifecycle-only-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-removal-focus-release-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-review-fixes-final-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-review-fixes-focused-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-terminal-lifecycle-layoutfix-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 7926,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [],
+      "failures": []
+    }
+  ]
+}

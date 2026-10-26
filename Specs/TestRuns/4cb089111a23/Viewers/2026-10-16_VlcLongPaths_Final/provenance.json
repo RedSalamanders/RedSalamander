@@ -1,0 +1,53 @@
+{
+  "head": "cca51ab0935a7d2b8f23eae7c4498fadca523904",
+  "profile": "x64 Debug",
+  "files": [
+    {
+      "path": "Plugins/ViewerVLC/ViewerVLC.cpp",
+      "sha256": "39a7e79df7bb041eb336bc35756414b393c66df64a3545ba313400dc79dde63f"
+    },
+    {
+      "path": "Plugins/ViewerVLC/ViewerVLC.h",
+      "sha256": "0a1fde9c18648ac719317bdd15fbe1d941b7fc8803cbdfeb05f77914cb8d9831"
+    },
+    {
+      "path": "Common/WindowMessages.h",
+      "sha256": "86b993d3cfa577afe41ecbbe333ef220b9b4271a5bb7d5c587fda1734690d497"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "5496a8c85103e485d9a3e7bfa6d4d03833cd7e584d4e403dbb29e1c979c06097"
+    },
+    {
+      "path": "Plugins/ViewerVLC/ViewerVLCResources.rc",
+      "sha256": "016f30b4edaea28a9eaa85a0860b405b7a5b5548ca3f418ff1705e346f5194c7"
+    },
+    {
+      "path": "Plugins/ViewerVLC/resource.h",
+      "sha256": "adba4d8d4be39dff2c2d7651d3c00a8be70b0022b9572b6c9b333c53808c8dc9"
+    },
+    {
+      "path": ".build/x64/Debug/ViewerPETests.exe",
+      "sha256": "3177a3cb620d76357886532bf5df127db7225709996670aaaf36f6cc109b82a3"
+    },
+    {
+      "path": ".build/x64/Debug/Plugins/ViewerVLC.dll",
+      "sha256": "0ec0ed91914f87437c5364dd6d64b87906055c14b175800d3544209dfb52911d"
+    },
+    {
+      "path": ".build/x64/Debug/Common.dll",
+      "sha256": "558d253f6bfdfb23e5b1a0665abd3e053130e75b7c91567d5cb0ec35334386ed"
+    },
+    {
+      "path": "C:/Program Files/VideoLAN/VLC/libvlc.dll",
+      "sha256": "c0b1bedbc8e11267b39111733920a6af73d08791e333e4f8902eaffe4daf6db9"
+    },
+    {
+      "path": "C:/Program Files/VideoLAN/VLC/libvlccore.dll",
+      "sha256": "c089f281affe1e85c61edd5996c2b496191f82fa5cdc7ef709b0c09bf754cdbe"
+    }
+  ],
+  "longPathsEnabled": 0,
+  "vlcVersion": "3.0.24",
+  "scope": "Focused native proof, not a Full repository verdict"
+}

@@ -1,0 +1,491 @@
+{
+  "schema": "i27.fresh-attributes-overlay-diagnostic.v1",
+  "status": "PASSED_WITH_EXPLICIT_GAPS",
+  "native_or_Full_qualification": false,
+  "in_process_overlay_only": true,
+  "source": "C:/RsI27Followup/Tools/Modules/Testing/TestSandbox.psm1",
+  "source_sha256": "d596f9a2009f9aa8401518685dc131a29edc6f30376f806eb7156d1954b040a9",
+  "source_unchanged": true,
+  "patch": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\I27ArchiveScalability-fresh-attributes-proposed-20261004-9372e0d1.patch",
+  "patch_sha256": "a8846a060708b8a7d6841849d5a8735c7265d828378afaa74b93ef98e5ed812c",
+  "archive_module": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\I27NoFollowRunArchive.root-reviewed-v6.psm1",
+  "archive_module_sha256": "90bafaf5720aa65a74f9ac58908ecdac6677692bc161d1c649206cc76db20f31",
+  "script": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\Test-I27FreshAttributesOverlay.root-reviewed-v3.ps1",
+  "script_sha256": "c82fba60ba85b0e479a29ef8829aef36a3d19ebc456861d55a3194a9014e6e94",
+  "before_function_sha256": "369e2a445f07f73bf09185b1e2d6ad1b48e627c34e6eb1d8d5e16ee8b94d31b8",
+  "candidate_function_sha256": "9764805125ef5eb0ce8c234585dea5a681bdc3576ad4a1beea04b8b7c56d985b",
+  "function_hash_encoding": "UTF-8 ScriptBlock.ToString with CRLF normalized to LF",
+  "original_function_restored": true,
+  "root_markers_unchanged": true,
+  "checks": [
+    {
+      "mode": "before0",
+      "name": "paired-archive",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-paired-archive",
+      "files": 192,
+      "directories": 32,
+      "reparses": 2,
+      "ordinary_payload_bytes": 1378272,
+      "manifest_sha256": "16185588a33ab64e7768bcd3cde912638c02d968c416aea802d1d3a39e749cc4",
+      "literal_clone": false
+    },
+    {
+      "mode": "before0",
+      "name": "missing-descendants-permitted",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\not-created\\a\\b.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "unicode-deep-local-path",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\niveau-français-00\\niveau-français-01\\niveau-français-02\\niveau-français-03\\niveau-français-04\\niveau-français-05\\niveau-français-06\\niveau-français-07\\niveau-français-08\\niveau-français-09\\niveau-français-10\\niveau-français-11\\niveau-français-12\\niveau-français-13\\niveau-français-14\\niveau-français-15\\photographie-révision-181.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "junction-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf\\child.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "symlink-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link\\child.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "dangling-symlink-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link\\child.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "live-file-and-directory-symlinks-no-follow",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-live-file-and-directory-symlinks-no-follow",
+      "files": 0,
+      "directories": 0,
+      "reparses": 3,
+      "ordinary_payload_bytes": 0,
+      "manifest_sha256": "aa5d69a29a68617db0704934b7f9f02090b7ec84e004afb84ced2be84ff2686f",
+      "literal_clone": false
+    },
+    {
+      "mode": "before0",
+      "name": "invalid-authority-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Unauthorized TestSandbox root 'C:\\RedSalamander.Perf\\not-an-authority'. Use exact X:\\RedSalamander.Perf on a fixed local drive.",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\absent.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "alternate-data-stream-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Unauthorized TestSandbox path with alternate-data-stream syntax: C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\ordinary-control\\zero.bin:stream",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\ordinary-control\\zero.bin:stream"
+    },
+    {
+      "mode": "before0",
+      "name": "ordinary-ancestor-first-call",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-replace-parent\\missing.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "replaced-junction-ancestor-second-call",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-replace-parent': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-replace-parent\\missing.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-replace-parent\\missing.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "INJECTED-marker-result-false-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "TestSandbox root 'C:\\RedSalamander.Perf' is not authorized. Initialize it explicitly with -AllowExternalTestRoot.",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\never-created.bin"
+    },
+    {
+      "mode": "before0",
+      "name": "ordinary-long-unicode-empty",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-ordinary-long-unicode-empty",
+      "files": 2,
+      "directories": 1,
+      "reparses": 0,
+      "ordinary_payload_bytes": 51,
+      "manifest_sha256": "5657f7f2e2fdc4749199fd2e764717eb1c6c914baba75bbcd174750fa53f157c",
+      "literal_clone": false
+    },
+    {
+      "mode": "before0",
+      "name": "existing-destination-preserved",
+      "passed": true
+    },
+    {
+      "mode": "before0",
+      "name": "empty-source",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-empty-source",
+      "files": 0,
+      "directories": 0,
+      "reparses": 0,
+      "ordinary_payload_bytes": 0,
+      "manifest_sha256": "f03da502420173d4fff5ee8129f63f01451bf9fea827b0815ab43d8f301b07fd",
+      "literal_clone": false
+    },
+    {
+      "mode": "before0",
+      "name": "copied-digest-mismatch",
+      "passed": true,
+      "expected_rejection": "Copied-file receipt inconsistency: photographie française 📷.txt",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-copied-digest-mismatch"
+    },
+    {
+      "mode": "before0",
+      "name": "string-complete",
+      "passed": true,
+      "expected_rejection": "Manifest schema/completion/error fields are invalid.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-string-complete"
+    },
+    {
+      "mode": "before0",
+      "name": "unsafe-relative-path",
+      "passed": true,
+      "expected_rejection": "Unsafe archive-relative path segment: ..\\escape.bin",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-unsafe-relative-path"
+    },
+    {
+      "mode": "before0",
+      "name": "changed-ordinary-bytes",
+      "passed": true,
+      "expected_rejection": "Archived ordinary tree shape differs from manifest.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-changed-ordinary-bytes"
+    },
+    {
+      "mode": "before0",
+      "name": "extra-ordinary-file",
+      "passed": true,
+      "expected_rejection": "Archived ordinary tree shape differs from manifest.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-extra-ordinary-file"
+    },
+    {
+      "mode": "before0",
+      "name": "extra-root-file",
+      "passed": true,
+      "expected_rejection": "Archive root has missing or extra entries.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-extra-root-file"
+    },
+    {
+      "mode": "before0",
+      "name": "changed-raw-reparse-bytes",
+      "passed": true,
+      "expected_rejection": "Reparse blob hash/size mismatch: junction-leaf",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-changed-raw-reparse-bytes"
+    },
+    {
+      "mode": "before0",
+      "name": "missing-catalog-blob",
+      "passed": true,
+      "expected_rejection": "Archive root has missing or extra entries.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-negative-missing-catalog-blob"
+    },
+    {
+      "mode": "before0",
+      "name": "alternate-D-to-C",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\before0-alternate-D-to-C",
+      "files": 1,
+      "directories": 0,
+      "reparses": 0,
+      "ordinary_payload_bytes": 20,
+      "manifest_sha256": "f09b2b76bf977dbf0395bf936b5c607385d5ebfff114fe671df578cd0519bb9d",
+      "literal_clone": false
+    },
+    {
+      "mode": "after00",
+      "name": "paired-archive",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-paired-archive",
+      "files": 192,
+      "directories": 32,
+      "reparses": 2,
+      "ordinary_payload_bytes": 1378272,
+      "manifest_sha256": "125b88ca445cdbcbab961d3854f56fda9ca46a991cab102229e1e7ff627034b3",
+      "literal_clone": false
+    },
+    {
+      "mode": "after00",
+      "name": "missing-descendants-permitted",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\not-created\\a\\b.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "unicode-deep-local-path",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\niveau-français-00\\niveau-français-01\\niveau-français-02\\niveau-français-03\\niveau-français-04\\niveau-français-05\\niveau-français-06\\niveau-français-07\\niveau-français-08\\niveau-français-09\\niveau-français-10\\niveau-français-11\\niveau-français-12\\niveau-français-13\\niveau-français-14\\niveau-français-15\\photographie-révision-181.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "junction-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\paired-source\\junction-leaf\\child.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "symlink-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\directory-link\\child.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "dangling-symlink-ancestor-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link\\child.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\symlink-source\\dangling-link\\child.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "live-file-and-directory-symlinks-no-follow",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-live-file-and-directory-symlinks-no-follow",
+      "files": 0,
+      "directories": 0,
+      "reparses": 3,
+      "ordinary_payload_bytes": 0,
+      "manifest_sha256": "c8a989d3111b5456018cd48d8a5c0a39d69680781f49e260e517bfdec26ea63f",
+      "literal_clone": false
+    },
+    {
+      "mode": "after00",
+      "name": "invalid-authority-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Unauthorized TestSandbox root 'C:\\RedSalamander.Perf\\not-an-authority'. Use exact X:\\RedSalamander.Perf on a fixed local drive.",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\absent.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "alternate-data-stream-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Unauthorized TestSandbox path with alternate-data-stream syntax: C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\ordinary-control\\zero.bin:stream",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\ordinary-control\\zero.bin:stream"
+    },
+    {
+      "mode": "after00",
+      "name": "ordinary-ancestor-first-call",
+      "passed": true,
+      "rejected": false,
+      "expected_rejection": false,
+      "message": "",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-replace-parent\\missing.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "replaced-junction-ancestor-second-call",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "Refusing TestSandbox path with reparse-point component 'C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-replace-parent': C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-replace-parent\\missing.bin",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-replace-parent\\missing.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "INJECTED-marker-result-false-rejected",
+      "passed": true,
+      "rejected": true,
+      "expected_rejection": true,
+      "message": "TestSandbox root 'C:\\RedSalamander.Perf' is not authorized. Initialize it explicitly with -AllowExternalTestRoot.",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\never-created.bin"
+    },
+    {
+      "mode": "after00",
+      "name": "ordinary-long-unicode-empty",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-ordinary-long-unicode-empty",
+      "files": 2,
+      "directories": 1,
+      "reparses": 0,
+      "ordinary_payload_bytes": 51,
+      "manifest_sha256": "c124e06b339b257834cdee8e4ca7503c63ea3ba63d199accac122f860f1f8347",
+      "literal_clone": false
+    },
+    {
+      "mode": "after00",
+      "name": "existing-destination-preserved",
+      "passed": true
+    },
+    {
+      "mode": "after00",
+      "name": "empty-source",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-empty-source",
+      "files": 0,
+      "directories": 0,
+      "reparses": 0,
+      "ordinary_payload_bytes": 0,
+      "manifest_sha256": "54cda45bcf4052165ea452cf22d17f98546f61431cf30ce1a42130bf77b01b89",
+      "literal_clone": false
+    },
+    {
+      "mode": "after00",
+      "name": "copied-digest-mismatch",
+      "passed": true,
+      "expected_rejection": "Copied-file receipt inconsistency: photographie française 📷.txt",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-copied-digest-mismatch"
+    },
+    {
+      "mode": "after00",
+      "name": "string-complete",
+      "passed": true,
+      "expected_rejection": "Manifest schema/completion/error fields are invalid.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-string-complete"
+    },
+    {
+      "mode": "after00",
+      "name": "unsafe-relative-path",
+      "passed": true,
+      "expected_rejection": "Unsafe archive-relative path segment: ..\\escape.bin",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-unsafe-relative-path"
+    },
+    {
+      "mode": "after00",
+      "name": "changed-ordinary-bytes",
+      "passed": true,
+      "expected_rejection": "Archived ordinary tree shape differs from manifest.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-changed-ordinary-bytes"
+    },
+    {
+      "mode": "after00",
+      "name": "extra-ordinary-file",
+      "passed": true,
+      "expected_rejection": "Archived ordinary tree shape differs from manifest.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-extra-ordinary-file"
+    },
+    {
+      "mode": "after00",
+      "name": "extra-root-file",
+      "passed": true,
+      "expected_rejection": "Archive root has missing or extra entries.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-extra-root-file"
+    },
+    {
+      "mode": "after00",
+      "name": "changed-raw-reparse-bytes",
+      "passed": true,
+      "expected_rejection": "Reparse blob hash/size mismatch: junction-leaf",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-changed-raw-reparse-bytes"
+    },
+    {
+      "mode": "after00",
+      "name": "missing-catalog-blob",
+      "passed": true,
+      "expected_rejection": "Archive root has missing or extra entries.",
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-negative-missing-catalog-blob"
+    },
+    {
+      "mode": "after00",
+      "name": "alternate-D-to-C",
+      "passed": true,
+      "archive": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\after00-alternate-D-to-C",
+      "files": 1,
+      "directories": 0,
+      "reparses": 0,
+      "ordinary_payload_bytes": 20,
+      "manifest_sha256": "86bf358f89c3e5bd93ca992533c3a967c5f2666d142ec632a557ab4ae4bfd00f",
+      "literal_clone": false
+    }
+  ],
+  "measurements": [
+    {
+      "mode": "before0",
+      "phase": "archive-capture",
+      "wall_ms": 51452.4452,
+      "cpu_ms": 50890.625,
+      "handles_start": 573,
+      "handles_end": 533,
+      "handle_observation": "two endpoint samples only"
+    },
+    {
+      "mode": "before0",
+      "phase": "independent-reader",
+      "wall_ms": 9543.2441,
+      "cpu_ms": 9390.625,
+      "handles_start": 533,
+      "handles_end": 535,
+      "handle_observation": "two endpoint samples only"
+    },
+    {
+      "mode": "after00",
+      "phase": "archive-capture",
+      "wall_ms": 7560.5618,
+      "cpu_ms": 7406.25,
+      "handles_start": 526,
+      "handles_end": 532,
+      "handle_observation": "two endpoint samples only"
+    },
+    {
+      "mode": "after00",
+      "phase": "independent-reader",
+      "wall_ms": 1722.7052,
+      "cpu_ms": 1703.125,
+      "handles_start": 532,
+      "handles_end": 532,
+      "handle_observation": "two endpoint samples only"
+    }
+  ],
+  "gaps": [
+    "Actual root-marker mutation intentionally not attempted: concurrent controller/owners read it. Injected false marker result is separately labelled.",
+    "Access-denied parity deferred to governed Pester coverage; no self-denying DACL or root-marker change is used.",
+    "Handle observations are start/end samples, not continuous or true peak measurements. This small one-pair result cannot establish large-archive non-regression.",
+    "Historical seven-link recapture intentionally omitted; no old tree is scanned or repaired."
+  ],
+  "fatal_error": null,
+  "comparison_caveat": "One same-process baseline-first pair: candidate benefits from warmed caches; small representative fixture is not the original Full tree. Payload bytes are actual manifest copied-byte totals, not measured OS disk-I/O counters. All v6 content/identity/hash/inventory proof passes and independent readers remain unchanged.",
+  "generated_utc": "2026-10-04T09:37:33.8300410Z"
+}

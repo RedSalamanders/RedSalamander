@@ -1,0 +1,42 @@
+{
+  "description": "Actual application harness captures. No desktop screenshot or generated mockup.",
+  "frames": [
+    {
+      "file": "candidate__short-body__fr-FR.png",
+      "label": "Rejected: automatic resize defeated the short-window fixture",
+      "source_path": "S:/RedSalamander.Perf/evidence/i26-hosted-body-candidate-20260920/artifacts/selftest/last_run/commands/conflict-inspection/short-body-focused-action__fr-FR.png",
+      "sha256": "72ff544df7864e071effdcbe4250250a853e04147c519dd30a1951c90d2bfba8",
+      "source_snapshot": "c7ec1a3edf9f741125c7227ed5f0470a96dbf250c7772dae060bfc8548cbfa26",
+      "locale": "fr-FR",
+      "scenario": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "capture": "TestSupport::SaveWindowScreenshot",
+      "dpi": null,
+      "reviewed": true
+    },
+    {
+      "file": "final__short-body__fr-FR.png",
+      "label": "Rejected: focus chrome touched the footer clip",
+      "source_path": "S:/RedSalamander.Perf/evidence/i26-hosted-body-final-20260920/artifacts/selftest/last_run/commands/conflict-inspection/short-body-focused-action__fr-FR.png",
+      "sha256": "e770d36e5f0c69009f188b8b8d26129cf2d4b0330508513b718879b56678a1b9",
+      "source_snapshot": "7ae0cf9a6dd3efc81c1c97afed4b7c71b8b16c0225cc4e41bdd597ec6e777316",
+      "locale": "fr-FR",
+      "scenario": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "capture": "TestSupport::SaveWindowScreenshot",
+      "dpi": null,
+      "reviewed": true
+    },
+    {
+      "file": "accepted__short-body__fr-FR.png",
+      "label": "Accepted bounded slice: full focus ring above the footer",
+      "source_path": "S:/RedSalamander.Perf/evidence/i26-hosted-body-accepted-20260920/artifacts/selftest/last_run/commands/conflict-inspection/short-body-focused-action__fr-FR.png",
+      "sha256": "ff74bc48a0165db5cbf48ae585bd6a6aff8e936f4b92b8cdcaf21874bc8cd9dd",
+      "source_snapshot": "06a35d5fd49640ec32ee67dee0ed52fb4c61264e48abe52eb5ebf5b8f0ec7248",
+      "locale": "fr-FR",
+      "scenario": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "capture": "TestSupport::SaveWindowScreenshot",
+      "dpi": null,
+      "reviewed": true
+    }
+  ],
+  "acceptance": "Body/footer clipping, keyboard reveal including focus chrome, explicit height and retained checked scope. Whole-action wrapping, independent oversized-card actions, native mixed DPI and final resources remain open."
+}

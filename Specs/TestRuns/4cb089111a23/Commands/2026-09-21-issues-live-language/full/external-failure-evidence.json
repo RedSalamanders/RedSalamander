@@ -1,0 +1,32 @@
+[
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\fileops-90424.dmp",
+    "bytes": 3443558,
+    "sha256": "5383ca0b662ccacc580ccc7251a14514c79ea986577ecc844f1931ff825ed327"
+  },
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\fileops-trace-before-stop.txt",
+    "bytes": 65894,
+    "sha256": "6dbc097ae5b8a791cff6db238655ff561e82ae1c2d1d3c72623b8f64b5da39e1"
+  },
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\perf-before-stop.jsonl",
+    "bytes": 79107573,
+    "sha256": "48f297e4d0dbee98c6ead5928286fd42cc1ab53d657a37fae2c32c75b955858a"
+  },
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\process-identity.json",
+    "bytes": 355,
+    "sha256": "fc86914bf3f5a611f22d09657110c1e5a8d7d27c7e42c9982158e7d94f21e662"
+  },
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\results-before-stop.json",
+    "bytes": 2921,
+    "sha256": "a353570e854450eb26c286dd6b86fd5c35d918074a5bf6830ce35f92cd89d444"
+  },
+  {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\issues-live-locale-full-20260921\\fileops-hang\\run-trace-before-stop.txt",
+    "bytes": 69606,
+    "sha256": "dbe865db83d166a02bb4d37525c007edd0dc4ebc1c65160fe9f98ac8c76fc686"
+  }
+]

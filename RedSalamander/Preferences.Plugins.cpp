@@ -54,7 +54,7 @@ using DxUi::Grid;
 using DxUi::GridCellData;
 using DxUi::GridColumnDesc;
 using DxUi::GridSelectionMode;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::TextField;
@@ -182,7 +182,7 @@ struct PluginsGridRow
     bool enabled = true;
 };
 
-class PluginsGridModel final : public IDxGridModel
+class PluginsGridModel final : public IGridModel
 {
 public:
     PluginsGridModel()
@@ -291,7 +291,7 @@ struct PluginsCustomPathGridRow
     std::wstring path;
 };
 
-class PluginsCustomPathsGridModel final : public IDxGridModel
+class PluginsCustomPathsGridModel final : public IGridModel
 {
 public:
     PluginsCustomPathsGridModel()
@@ -393,7 +393,7 @@ struct PluginsDxPage
     Label* searchLabel    = nullptr;
     TextField* searchEdit = nullptr;
     Grid* listControl     = nullptr;
-    std::unique_ptr<IDxGridModel> listModelStorage;
+    std::unique_ptr<IGridModel> listModelStorage;
     PluginsGridModel* listModel  = nullptr;
     Button* configureButton      = nullptr;
     Button* testButton           = nullptr;
@@ -403,7 +403,7 @@ struct PluginsDxPage
     Label* customPathsHeader     = nullptr;
     Label* customPathsNote       = nullptr;
     Grid* customPathsListControl = nullptr;
-    std::unique_ptr<IDxGridModel> customPathsListModelStorage;
+    std::unique_ptr<IGridModel> customPathsListModelStorage;
     PluginsCustomPathsGridModel* customPathsListModel = nullptr;
     Button* customPathsAddButton                      = nullptr;
     Button* customPathsRemoveButton                   = nullptr;

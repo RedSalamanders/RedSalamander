@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion>
     <!--
       Centralize build output paths under .build\ so we never create x64/ARM64 intermediates
       inside source folders (ProjectDir\...\x64\Debug etc).
@@ -48,6 +49,15 @@
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='ARM64'">arm64-windows</RSVcpkgTriplet>
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'=='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">$(VCPKG_DEFAULT_TRIPLET)</RSVcpkgTriplet>
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
+
+    <!--
+      MSBuild's manifest install builds with the same overlay triplet as vcpkg-install.ps1: the stock triplet pinned to the
+      Visual Studio installation and default MSVC toolset the build compiles with (build.ps1 refreshes it before MSBuild).
+      Passed only when the triplet's overlay exists, and without a trailing backslash that would escape the closing quote.
+    -->
+    <RSVcpkgOverlayTripletDir Condition="'$(RSIsFirstPartyProject)'=='true'">$(RSBuildRoot)vcpkg-triplets\$(RSVcpkgPlatformScope)</RSVcpkgOverlayTripletDir>
+    <VcpkgAdditionalInstallOptions Condition="'$(RSIsFirstPartyProject)'=='true' and Exists('$(RSVcpkgOverlayTripletDir)\$(RSVcpkgTriplet).cmake')">$(VcpkgAdditionalInstallOptions) "--overlay-triplets=$(RSVcpkgOverlayTripletDir)"</VcpkgAdditionalInstallOptions>
+    <VcpkgAdditionalInstallOptions Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='ARM64'">$(VcpkgAdditionalInstallOptions) &quot;--overlay-ports=$(MSBuildThisFileDirectory)Build\vcpkg-ports&quot;</VcpkgAdditionalInstallOptions>
 
     <!--
       ASan Debug links against the standard non-ASan vcpkg triplets. To prevent
@@ -122,7 +132,7 @@
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup
-    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedSalamander' or '$(MSBuildProjectName)'=='RedSalamanderMonitor' or '$(MSBuildProjectName)'=='LocalizationTests')">
+    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedSalamander' or '$(MSBuildProjectName)'=='LocalizationTests')">
     <ClCompile>
       <PreprocessorDefinitions>REDSAL_USE_COMMON_LOCALIZATION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
@@ -136,22 +146,6 @@
     </Link>
     <ResourceCompile>
       <PreprocessorDefinitions>$(ResourceCultureDefine);%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ResourceCompile>
-  </ItemDefinitionGroup>
-
-  <!--
-    RedSalamanderMonitor self diagnostics are runtime opt-in in both Debug and Release so the monitor
-    can listen to RedSalamander without adding its own Info/Perf/debug chatter. RedSalamander.exe
-    still enables diagnostics in Debug by default; Release enables ETW/JSONL capture with its command
-    line switches. Use the runtime ETW/perf switches when launching the monitor to enable its own diagnostics.
-  -->
-  <ItemDefinitionGroup
-    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedSalamanderMonitor' or '$(MSBuildProjectName)'=='MonitorTest')">
-    <ClCompile>
-      <PreprocessorDefinitions>RS_DIAGNOSTICS_RUNTIME_OPT_IN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>RS_DIAGNOSTICS_RUNTIME_OPT_IN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
@@ -191,5 +185,8 @@
     <IntermediateOutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntermediateOutputPath>
     <BaseOutputPath>$(RSBuildRoot)Intermediate\</BaseOutputPath>
     <OutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='Release'">
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
 </Project>

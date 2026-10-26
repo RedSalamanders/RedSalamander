@@ -1,0 +1,13 @@
+{
+  "recordedUtc": "2026-10-15T15:53:42.4904462Z",
+  "total": 305,
+  "passed": 304,
+  "failed": 1,
+  "skipped": 0,
+  "failures": [
+    {
+      "Name": "partitions the broad native inventory into an exact non-overlapping family union",
+      "FailureMessage": "Commands inventory requires an explicit supported validation profile."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-13T07:34:56.774Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T073436Z-94968-4a2b79cacbe44b519e2234b7689b0fe1\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 3250,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1469,
+            "repeat_index": 1
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1656,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

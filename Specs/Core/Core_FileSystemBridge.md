@@ -131,7 +131,8 @@ An opaque provider proof advances logical verification progress once for the pro
 is charged to the task bandwidth limiter as one completed unit after the provider returns. It does
 not fabricate host-readback bytes, read calls, a verification graph sample, or a readback rate. Exact
 host readback is charged incrementally per buffer and is the only source of the verification graph
-series.
+series. Each selected item verifies through its own bridge context, and the task's verification progress
+is the sum over its items: each report adds the bytes that item verified since its previous report.
 
 ## Directory traversal
 
@@ -147,9 +148,28 @@ The bridge uses the single-pass discovery scheduler from
   directories non-recursively and deepest-first.
 - A new/changed, skipped, or retained source descendant blocks parent removal without opening a
   second cleanup prompt. That retention propagates through only the affected ancestor chain.
-- Directory metadata retains only O(depth) state. Metadata is restored post-order only for a
-  destination directory created or replaced by the current operation; a pre-existing merge target
-  keeps its own metadata.
+- Directory metadata retains O(depth + directories with in-flight children) state. Metadata is
+  restored post-order only for a destination directory created or replaced by the current operation;
+  a pre-existing merge target keeps its own metadata. The bridge holds no handle on a created directory
+  while its children copy (I35: a Samba server refuses every rename inside a directory another handle
+  holds with DELETE access): it releases the published directory at once and keeps its identity
+  snapshot; when the children have finished it binds the path again, no-follow, and writes the metadata
+  only through a bound directory whose snapshot equals the recorded one. A destination that cannot bind
+  it again records the one-per-task note that it keeps no timestamps; a renamed, replaced or removed
+  directory is never written (Warning `metadata.basic.lost`).
+- Closure at listing end (I35 S2). The parallel producer counts each listing whole when it reads it
+  (a name the destination refuses is not counted; the walk records it as a failure when it reaches
+  it), so a root's discovery closes once the root and every directory its listings counted are listed;
+  a directory the producer will not list (a link it does not follow, a skipped or failed directory)
+  stops holding the scope open when that is decided. The producer moves on as soon as a directory is
+  listed: each queued file holds a count on its directory's completion record, and whoever finishes
+  last (the producer or a worker) restores the created directory's metadata, children first. A
+  directory whose children are still in flight counts against the producer's queue lead, so parked
+  directories stay bounded; after the workers join, a stop releases the queued work it abandoned so
+  every created directory is still restored.
+  The sequential walker counts each listing when it reads it and lists pending plain directories ahead
+  of the walk within the lookahead budget of the File Operations spec, so a root's discovery closes at
+  its last listing; a rename merge lists only what it walks into.
 - `Common/FileOperationTraversalPolicy.h` is shared with the Local provider for the quantitative
   ceilings plus queue-target and worker-reservation calculations; bridge queue/error/I/O ownership
   remains local to the host.
@@ -190,7 +210,8 @@ graph, or pathname cleanup manifest. A link into the moved tree therefore keeps 
 location; the spec states that consequence and the engine does not repair it.
 
 The sequential walker validates one provider directory buffer, then keeps only that active
-directory's bounded entry/name views plus its O(depth) ancestor frames.
+directory's bounded entry/name views plus its O(depth) ancestor frames and the listings its lookahead
+made ahead of the walk (at most 128 listings and 16 MiB).
 
 ## Buffering and scheduling
 
@@ -203,6 +224,18 @@ directory's bounded entry/name views plus its O(depth) ancestor frames.
 - Verification bytes consume the configured bandwidth limit and are reported separately from pump
   throughput.
 - Pause, Cancel, deadline, and live bandwidth changes are observed at checkpoints.
+
+Progress phases (I35 S6, no ABI involved): the bridge names each file's phase on the host progress
+boundary: Opening before its writer and stage exist (that report honors a cancellation; on a
+connection with a copy/move limit it comes before the permit wait, so the wait is the file's Opening
+rather than the previous file's publication), Transferring for pump chunks, Finalizing from the
+always-sent report of the file's last bytes (commit-and-prove follows it without a report of its own;
+a file of unknown size reports Finalizing before commit-and-prove), Publishing before publication
+and for link records, and Verifying for exact readback. The Publishing boundary is sent only when the
+stream's last report is at least one progress period old, so a stream of small files keeps the
+ordinary report cadence. The Finalizing and Publishing boundaries are observation points only: they
+never consume a cancellation, so a cancel is met at the next ordinary checkpoint and the cleanup it
+triggers is unchanged.
 
 Current numeric queue targets are perf parameters, not Preferences or ABI. Tuning must preserve
 boundedness, non-starvation, and immediate Skip-discovery release.
@@ -235,8 +268,9 @@ writer with the granted flags, passes that occupant through `IFileWriterExpected
 before the first byte, and the provider replaces only that occupant (`ERROR_REVISION_MISMATCH`
 otherwise, nothing published). A route that can do neither withholds every destructive action.
 Replacing a directory link uses an atomically created, identity-owned directory stage;
-the resulting receipt never becomes a recursive overwrite grant. Metadata restoration targets the
-published bound object and has no pathname fallback.
+the resulting receipt never becomes a recursive overwrite grant. Its metadata is restored like any
+created directory's: through the path bound again and accepted only with the identity recorded at
+publication, never by a blind pathname write.
 
 An operation-wide compatibility overwrite flag is not a destination receipt. When the final name is
 absent, both Local and cross-provider publication remain create-exclusive and retain the newly
@@ -248,8 +282,9 @@ metadata/source-retention gate before exact source cleanup.
 Keep Both belongs to the reported collision depth. The bridge chooses the sibling path in the
 colliding item's parent and records only that changed component in the sparse semantic-link map.
 It never retries a nested collision by renaming the selected top-level directory. Apply-to-all is
-an explicit exact-scope grant; plain Skip is one-shot and Skip All is unavailable for Recycle or
-unresolved semantic-link target retention.
+an explicit exact-scope grant. Skip with the checkbox checked records the same scoped grant as
+Skip All; unchecked Skip is one-shot. Skip All is unavailable for Recycle or unresolved semantic-link
+target retention.
 
 Cleanup may call `AbortOwnedObject` only for the exact stage token returned by exclusive creation.
 A name pattern such as `.rs_tmp_` is never cleanup authority. Publication failure, cancellation,
@@ -323,3 +358,43 @@ provider proof, bound host-readback, zero-byte content, mismatch, unavailable pr
 before cleanup, Native NotApplicable, deep long paths, wide-tree
 retention high-water, exact ceiling diagnostics with prior-success preservation, post-order directory
 metadata, bounded memory, and Copy-only downgrade.
+
+## Logical-file progress at bridge mutation boundaries
+
+The bridge owns stable logical-leaf receipts across pump/publication retries. It reports active
+Finalizing after payload pumping, Publishing before destination mutation, and Verifying before
+proof. Successful owned-stage mutation reports Published in the committed branch before any
+missing-authority, provider HRESULT or later proof failure; direct atomic-final Commit reports
+Published immediately after the successful commit before metadata consent/proof can fail.
+Directory-stage publication has no file receipt and never increments the copied-file counter.
+Terminal preserves the last observed written bytes, including partial failed/canceled attempts.
+
+Known file sizes survive phase-only observations, including files at most one MiB; no 0/0 reset
+stands in for finalization. A selected single file can adopt its actual reader size as the whole
+total. Sequential directory children cannot: discovery owns that folder denominator, and their
+cumulative written bytes must not clamp to the first child's size. Listing metadata with omitted
+sizes does not certify a partial total. Complete totals use independently summed reader sizes
+only after every discovered file-shaped leaf has a known size and traversal closes; unsupported
+size stays unavailable. Existing fail-closed source-size/proof policy is not relaxed.
+
+Host-owned nested stage/promote/cleanup calls suppress discovery and file-work observation.
+Receipt storage remains bounded to admitted regular workers plus producer-only semantic-link
+work, and adds no per-chunk observer traffic. Operation control remains the only pause/cancel
+checkpoint. The test-only committed-error seam binds one exact owned virtual source and sandboxed
+physical destination, consumes once only after real committed publication with returned authority,
+and clears at the worker quiet point; it never synthesizes a progress event or selects a renderer.
+
+The observer independently certifies ordinary-directory completion. A sequential directory emits
+`ObjectCompleted` only after its successful epilogue; a parallel directory does so only after its
+last required child and metadata complete. Failed, skipped, canceled and abandoned subtrees do not
+become copied folders. These reports use the existing depth/in-flight directory state rather than
+an unbounded path set, do not increment copied-file count and do not add per-chunk callbacks.
+Replay without identity-preserving deduplication withdraws directory-count certainty. The task
+retains copied file/folder counts through completion for the single post-Skip work summary.
+
+Deferred metadata/hydration consent carries the admitted destination endpoint's qualified root ID
+separately from the selected destination item path. Repeated choices therefore share the same
+task/risk/profile/root across selected roots while each item still performs its own identity and
+mutation checks. Retargeting cannot carry a grant to another endpoint. EFS Move consent explicitly
+states that continuing the move removes the encrypted original after successful transfer; its
+alternative is Copy and keep source. EFS Copy has no redundant retain-source choice.

@@ -1,0 +1,23 @@
+{
+  "case": "folderView_perf_directory_change_storm",
+  "root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands\\work\\folder_directory_change_storm_{4B08BAC0-7BC9-45BB-89C8-0401D579224B}",
+  "createdFiles": 200,
+  "renamedFiles": 100,
+  "deletedFiles": 100,
+  "createdAndDeletedDirectories": 20,
+  "finalItemCount": 101,
+  "mutationUs": 437621,
+  "settleUs": 38129,
+  "refreshDelta": 0,
+  "enumerationCount": 2,
+  "focusedItem": "focus_anchor.txt",
+  "refreshMetricRows": {
+    "preserve": 1,
+    "rebuild": 1,
+    "selectionPreserve": 1,
+    "renameTransfer": 1,
+    "requestToPaint": 1,
+    "debounceDelay": 1,
+    "enumeration": 1
+  }
+}

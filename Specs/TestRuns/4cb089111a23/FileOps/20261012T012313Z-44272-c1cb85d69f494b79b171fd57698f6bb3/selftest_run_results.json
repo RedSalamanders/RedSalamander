@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-10-12T01:23:57.124Z",
+    "duration_ms": 13249,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T012313Z-44272-c1cb85d69f494b79b171fd57698f6bb3\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 11625,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1625,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+                    "status": "passed",
+                    "duration_ms": 9828,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 172,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

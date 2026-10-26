@@ -1,0 +1,8 @@
+{
+  "captured_utc": "2026-10-19T06:39:35.5086432Z",
+  "target": "\\\\rubygloom\\RedSalamander-SelfTest\\selftest",
+  "smb445_reachable": true,
+  "registered_directory_reachable": true,
+  "authorization": "User brought the registered NAS online; no target or registration was changed",
+  "previous_status": "Unreachable after host restart; original prerequisite skips retained"
+}

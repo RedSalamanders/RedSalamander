@@ -1,0 +1,44 @@
+{
+  "scope": "Serial portable A/B/A application --help, plugin contract and runtime-closure checks. No installed-product, persisted-settings, minimum-OS or native ARM64 claim.",
+  "runs": [
+    {
+      "stage": "A1",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "configuration": "Release",
+      "platform": "x64",
+      "testEnabled": true,
+      "startedUtc": "2026-09-13T02:07:51.8513987Z",
+      "completedUtc": "2026-09-13T02:07:57.9005371Z",
+      "zip": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\A1-portable.zip",
+      "sha256": "C8564D98E8181850A5AF5738520CE86E2C5142268C7D81401C8BBF9AC5081720",
+      "compressedBytes": 30289465,
+      "cleanExtractionSmokePassed": true
+    },
+    {
+      "stage": "B",
+      "source": "3a43186a3507ca48eb41e7ad8dec8585aed732f9",
+      "configuration": "Release",
+      "platform": "x64",
+      "testEnabled": true,
+      "startedUtc": "2026-09-13T02:07:58.0894753Z",
+      "completedUtc": "2026-09-13T02:08:01.7174166Z",
+      "zip": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\B-portable.zip",
+      "sha256": "CB87D5FB294017FEA1EDBBF7239DA2881A7B0F7CD83F725B8E7244C001D5D11E",
+      "compressedBytes": 30694026,
+      "cleanExtractionSmokePassed": true
+    },
+    {
+      "stage": "A2",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "configuration": "Release",
+      "platform": "x64",
+      "testEnabled": true,
+      "startedUtc": "2026-09-13T02:08:01.9000938Z",
+      "completedUtc": "2026-09-13T02:08:05.0676010Z",
+      "zip": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\3a43186a-portable-rollback\\A2-portable.zip",
+      "sha256": "71655D843969F8B703BA674B58AC06BB42BC02B4CEA9CA0705E2FAFD0CE643CC",
+      "compressedBytes": 30289465,
+      "cleanExtractionSmokePassed": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "root": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-v65\\frozen-source\\A",
+    "manifestSha256": "ca58d25c058233ea1fcf08697e20aedfd6b0cf9dc528cd1cc3baf2649289e23e",
+    "rows": 46,
+    "physicalPaths": 46
+  },
+  {
+    "root": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-v65\\frozen-source\\B",
+    "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+    "rows": 86,
+    "physicalPaths": 85
+  }
+]

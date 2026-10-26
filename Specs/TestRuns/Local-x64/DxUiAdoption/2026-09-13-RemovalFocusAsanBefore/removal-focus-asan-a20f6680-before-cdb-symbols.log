@@ -1,0 +1,876 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*Z:/RedSalamander.Perf/runs/I19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols
+OK                                             Z:/RsI19Closeout/.build/x64/ASan Debug
+OK                                             C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [Z:\RedSalamander.Perf\evidence\I19-20260909\removal-focus-asan-a20f6680-before.dmp]
+User Mini Dump File with Full Memory : Only application data is available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*Z:/RedSalamander.Perf/runs/I19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols
+OK                                             Z:/RsI19Closeout/.build/x64/ASan Debug
+OK                                             C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64
+Symbol search path is: srv*Z:/RedSalamander.Perf/runs/I19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols;Z:/RsI19Closeout/.build/x64/ASan Debug;C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64
+Executable search path is: 
+Windows 10 Version 26200 MP (32 procs) Free x64
+Product: WinNt, suite: SingleUserTS
+Edition build lab: 26100.1.amd64fre.ge_release.240331-1435
+Debug session time: Sun Sep 13 09:21:55.000 2026 (UTC + 2:00)
+System Uptime: 0 days 23:14:09.104
+Process Uptime: 0 days 0:00:06.000
+................................................................
+................................................................
+..........................................
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+
+************* Symbol Loading Error Summary **************
+Module name            Error
+ntdll                  The system cannot find the file specified
+
+You can troubleshoot most symbol related issues by turning on symbol loading diagnostics (!sym noisy) and repeating the command that caused symbols to be loaded.
+You should also verify that your symbol search path (.sympath) is correct.
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr
+(133c8.19838): Sanitizer exception - code e073616e (first/second chance not available)
+
+ASAN Error: heap-use-after-free
+
++------------------------------------------------------------------------+
+| This target supports Hardware-enforced Stack Protection. A HW based    |
+| "Shadow Stack" may be available to assist in debugging and analysis.   |
+| See aka.ms/userhsp for more info.                                      |
+|                                                                        |
+| dps @ssp                                                               |
+|                                                                        |
++------------------------------------------------------------------------+
+
+For analysis of this file, run !analyze -v
+ntdll!ZwGetContextThread+0x14:
+00007ffd`a7de2d14 c3              ret
+0:000> cdb: Reading initial command '.reload /f; .ecxr; !analyze -v; kP; q'
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for RedSalamander.exe
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for yyjson.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for sqlite3.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for Common.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for blake3.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystem.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystem7z.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemCurl.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for libcurl-d.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for libssl-3-x64.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for libcrypto-3-x64.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for zd.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for libssh2.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for brotlidec.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for nghttp2.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for brotlicommon.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemDummy.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemGoogleDrive.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemMicrosoftDrive.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemMtp.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for FileSystemS3.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-cpp-sdk-core.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-cpp-sdk-s3-crt.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-cpp-sdk-s3tables.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-crt-cpp.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-event-stream.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-common.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-auth.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-s3.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-http.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-io.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-cal.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-mqtt.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-checksums.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-sdkutils.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for aws-c-compression.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerText.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerSpace.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerImgRaw.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for raw_rd.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for turbojpeg.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for jpeg8.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for Terminal.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerPE.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for pe-parse.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerSqlite.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerVLC.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerWeb.dll
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+.
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+
+
+************* Symbol Loading Error Summary **************
+Module name            Error
+ntdll                  The system cannot find the file specified
+kernel32               The system cannot find the file specified
+KERNELBASE             The system cannot find the file specified
+user32                 The system cannot find the file specified
+win32u                 The system cannot find the file specified
+gdi32                  The system cannot find the file specified
+gdi32full              The system cannot find the file specified
+msvcp_win              The system cannot find the file specified
+ucrtbase               The system cannot find the file specified
+comdlg32               The system cannot find the file specified
+combase                The system cannot find the file specified
+rpcrt4                 The system cannot find the file specified
+SHCore                 The system cannot find the file specified
+shlwapi                The system cannot find the file specified
+shell32                The system cannot find the file specified
+advapi32               The system cannot find the file specified
+comctl32               The system cannot find the file specified
+msvcrt                 The system cannot find the file specified
+sechost                The system cannot find the file specified
+ole32                  The system cannot find the file specified
+oleaut32               The system cannot find the file specified
+imm32                  The system cannot find the file specified
+MSVCP140D              The system cannot find the file specified
+MSVCP140D_ATOMIC_WAIT  The system cannot find the file specified
+bcrypt                 The system cannot find the file specified
+dwmapi                 The system cannot find the file specified
+dbghelp                The system cannot find the file specified
+d2d1                   The system cannot find the file specified
+DWrite                 The system cannot find the file specified
+d3d11                  The system cannot find the file specified
+dxgi                   The system cannot find the file specified
+IPHLPAPI               The system cannot find the file specified
+cldapi                 The system cannot find the file specified
+netapi32               The system cannot find the file specified
+uiautomationcore       The system cannot find the file specified
+mpr                    The system cannot find the file specified
+uxtheme                The system cannot find the file specified
+wtsapi32               The system cannot find the file specified
+dcomp                  The system cannot find the file specified
+crypt32                The system cannot find the file specified
+VCRUNTIME140D          The system cannot find the file specified
+VCRUNTIME140_1D        The system cannot find the file specified
+ucrtbased              The system cannot find the file specified
+dbgcore                The system cannot find the file specified
+VCRUNTIME140_1         The system cannot find the file specified
+VCRUNTIME140           The system cannot find the file specified
+powrprof               The system cannot find the file specified
+sspicli                The system cannot find the file specified
+kernel.appcore         The system cannot find the file specified
+Microsoft.Internal.War The system cannot find the file specified
+srvcli                 The system cannot find the file specified
+netutils               The system cannot find the file specified
+bcryptPrimitives       The system cannot find the file specified
+umpdc                  The system cannot find the file specified
+windows.storage        The system cannot find the file specified
+profapi                The system cannot find the file specified
+msctf                  The system cannot find the file specified
+TextShaping            The system cannot find the file specified
+DXCore                 The system cannot find the file specified
+directxdatabasehelper  The system cannot find the file specified
+cfgmgr32               The system cannot find the file specified
+nvldumdx               The system cannot find the file specified
+version                The system cannot find the file specified
+msasn1                 The system cannot find the file specified
+cryptnet               The system cannot find the file specified
+CRYPTBASE              The system cannot find the file specified
+wldp                   The system cannot find the file specified
+drvstore               The system cannot find the file specified
+devobj                 The system cannot find the file specified
+wintrust               The system cannot find the file specified
+imagehlp               The system cannot find the file specified
+cryptsp                The system cannot find the file specified
+rsaenh                 The system cannot find the file specified
+nvgpucomp64            The system cannot find the file specified
+ws2_32                 The system cannot find the file specified
+secur32                The system cannot find the file specified
+NvMemMapStoragex       The system cannot find the file specified
+winmm                  The system cannot find the file specified
+winhttp                The system cannot find the file specified
+nvwgf2umx              The system cannot find the file specified
+nvspcap64              The system cannot find the file specified
+ntmarta                The system cannot find the file specified
+userenv                The system cannot find the file specified
+wininet                The system cannot find the file specified
+psapi                  The system cannot find the file specified
+ncrypt                 The system cannot find the file specified
+ntasn1                 The system cannot find the file specified
+MSVCP140_1D            The system cannot find the file specified
+nvppex                 The system cannot find the file specified
+VCOMP140D              The system cannot find the file specified
+WebView2Loader         The system cannot find the file specified
+IconCodecService       The system cannot find the file specified
+WindowsCodecs          The system cannot find the file specified
+winsta                 The system cannot find the file specified
+clbcatq                The system cannot find the file specified
+dataexchange           The system cannot find the file specified
+twinapi.appcore        The system cannot find the file specified
+winnsi                 The system cannot find the file specified
+nsi                    The system cannot find the file specified
+DXGIDebug              The system cannot find the file specified
+D3D11_3SDKLayers       The system cannot find the file specified
+textinputframework     The system cannot find the file specified
+oleacc                 The system cannot find the file specified
+propsys                The system cannot find the file specified
+MrmCoreR               The system cannot find the file specified
+iertutil               The system cannot find the file specified
+windows.staterepositor The system cannot find the file specified
+sxs                    The system cannot find the file specified
+Windows.System.Launche The system cannot find the file specified
+WinTypes               The system cannot find the file specified
+Windows.FileExplorer.C The system cannot find the file specified
+urlmon                 The system cannot find the file specified
+virtdisk               The system cannot find the file specified
+apphelp                The system cannot find the file specified
+NetworkExplorer        The system cannot find the file specified
+D2D1Debug3             The system cannot find the file specified
+thumbcache             The system cannot find the file specified
+policymanager          The system cannot find the file specified
+CoreMessaging          The system cannot find the file specified
+CoreUIComponents       The system cannot find the file specified
+
+You can troubleshoot most symbol related issues by turning on symbol loading diagnostics (!sym noisy) and repeating the command that caused symbols to be loaded.
+You should also verify that your symbol search path (.sympath) is correct.
+rax=0000000000000000 rbx=0000004a87de29c8 rcx=0000000000000000
+rdx=0000000000000000 rsi=0000000000000000 rdi=00000000e073616e
+rip=00007ffda54c41ca rsp=0000004a87de27e0 rbp=0000000000000001
+ r8=0000004a87de1b68  r9=000000000000016f r10=0000015e98d403fe
+r11=0000000000000000 r12=0000000000000000 r13=0000000000000000
+r14=0000004a87de3810 r15=00001176ab15c118
+iopl=0         nv up ei pl nz na pe nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+KERNELBASE!RaiseException+0x8a:
+00007ffd`a54c41ca 0f1f440000      nop     dword ptr [rax+rax]
+................................................................
+................................................................
+..........................................
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+
+************* Symbol Loading Error Summary **************
+Module name            Error
+ntdll                  The system cannot find the file specified
+
+You can troubleshoot most symbol related issues by turning on symbol loading diagnostics (!sym noisy) and repeating the command that caused symbols to be loaded.
+You should also verify that your symbol search path (.sympath) is correct.
+*******************************************************************************
+*                                                                             *
+*                        Exception Analysis                                   *
+*                                                                             *
+*******************************************************************************
+
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: ntdll!_PEB                                    ***
+***                                                                   ***
+*************************************************************************
+DBGHELP: Z:/RedSalamander.Perf/runs/I19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: $ntdllsym!_CONTEXT                            ***
+***                                                                   ***
+*************************************************************************
+***** OS symbols are WRONG. Please fix symbols to do analysis.
+
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: nt!_KTHREAD                                   ***
+***                                                                   ***
+*************************************************************************
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: ntdll!_CONTEXT                                ***
+***                                                                   ***
+*************************************************************************
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for ViewerWeb.dll
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+*** WARNING: Unable to verify checksum for RedSalamander.exe
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+DBGHELP: z:/redsalamander.perf/runs/i19-work/scratch/symbols*https://msdl.microsoft.com/download/symbols is not a valid store
+
+KEY_VALUES_STRING: 1
+
+    Key  : Analysis.CPU.mSec
+    Value: 218
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 209
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 2
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 0
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 578
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 829
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 342
+
+    Key  : Analysis.Version.DbgEng
+    Value: 10.0.29617.1000
+
+    Key  : Analysis.Version.Description
+    Value: 10.2604.29.1 amd64fre
+
+    Key  : Analysis.Version.Ext
+    Value: 1.2604.29.1
+
+    Key  : Failure.Bucket
+    Value: WRONG_SYMBOLS_X64_26100.1.amd64fre.ge_release.240331-1435_TIMESTAMP_270508-120010_6BDF03CA_ntdll.wrong.symbols.dll!6BDF03CA267000
+
+    Key  : Failure.Hash
+    Value: {d53133d3-7533-b3d2-35cc-2a33ca476b35}
+
+    Key  : Failure.ProblemClass.Primary
+    Value: APPLICATION_FAULT
+
+    Key  : Faulting.IP.Type
+    Value: Paged
+
+    Key  : Timeline.OS.Boot.DeltaSec
+    Value: 83649
+
+    Key  : Timeline.Process.Start.DeltaSec
+    Value: 6
+
+    Key  : WER.OS.Branch
+    Value: ge_release
+
+    Key  : WER.OS.Version
+    Value: 10.0.26100.1
+
+
+FILE_IN_CAB:  removal-focus-asan-a20f6680-before.dmp
+
+CONTEXT:  (.ecxr)
+rax=0000000000000000 rbx=0000004a87de29c8 rcx=0000000000000000
+rdx=0000000000000000 rsi=0000000000000000 rdi=00000000e073616e
+rip=00007ffda54c41ca rsp=0000004a87de27e0 rbp=0000000000000001
+ r8=0000004a87de1b68  r9=000000000000016f r10=0000015e98d403fe
+r11=0000000000000000 r12=0000000000000000 r13=0000000000000000
+r14=0000004a87de3810 r15=00001176ab15c118
+iopl=0         nv up ei pl nz na pe nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+KERNELBASE!RaiseException+0x8a:
+00007ffd`a54c41ca 0f1f440000      nop     dword ptr [rax+rax]
+Resetting default scope
+
+EXCEPTION_RECORD:  (.exr -1)
+ExceptionAddress: 00007ffda54c41ca (KERNELBASE!RaiseException+0x000000000000008a)
+   ExceptionCode: e073616e (Sanitizer exception)
+  ExceptionFlags: 00000080
+NumberParameters: 1
+   Parameter[0]: 0000004a87de2960
+
+PROCESS_NAME:  ntdll.wrong.symbols.dll
+
+ADDITIONAL_DEBUG_TEXT:  
+You can run '.symfix; .reload' to try to fix the symbol path and load symbols.
+
+WRONG_SYMBOLS_TIMESTAMP: 6bdf03ca
+
+WRONG_SYMBOLS_SIZE: 267000
+
+FAULTING_MODULE: 00007ffda7c80000 ntdll
+
+FAULTING_THREAD:  ffffffff
+
+STACK_TEXT:  
+00000000`00000000 00000000`00000000 WRONG_SYMBOLS!WRONG_SYMBOLS+0x0
+
+
+STACK_COMMAND: ** Pseudo Context ** ManagedPseudo ** Value: ffffffff ** ; kb
+
+IP_IN_PAGED_CODE: 
+KERNELBASE!RaiseException+8a
+00007ffd`a54c41ca 0f1f440000      nop     dword ptr [rax+rax]
+
+BUGCHECK_CODE:  6bdf03ca
+
+EXCEPTION_CODE_STR:  6BDF03CA
+
+EXCEPTION_STR:  WRONG_SYMBOLS
+
+IMAGE_NAME:  ntdll.wrong.symbols.dll
+
+MODULE_NAME: ntdll_wrong_symbols
+
+SYMBOL_NAME:  ntdll_wrong_symbols!6BDF03CA267000
+
+FAILURE_BUCKET_ID:  WRONG_SYMBOLS_X64_26100.1.amd64fre.ge_release.240331-1435_TIMESTAMP_270508-120010_6BDF03CA_ntdll.wrong.symbols.dll!6BDF03CA267000
+
+OS_VERSION:  10.0.26100.1
+
+BUILDLAB_STR:  ge_release
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+FAILURE_ID_HASH:  {d53133d3-7533-b3d2-35cc-2a33ca476b35}
+
+Followup:     MachineOwner
+---------
+
+Child-SP          RetAddr               Call Site
+0000004a`87de0758 00000000`00000000     ntdll!ZwGetContextThread+0x14
+quit:
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'Z:\RedSalamander.Perf\runs\I19-work\scratch\windbg-portable\x64\amd64\Visualizers\winrt.natvis'

@@ -1,0 +1,4 @@
+{
+  "toolInventory": 0,
+  "specInventory": 0
+}

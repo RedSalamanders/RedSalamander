@@ -1,0 +1,100 @@
+[PASS] ViewerSpace test executable path resolves
+[PASS] ViewerSpace.dll is present for runtime validation
+[PASS] ViewerSpace.dll loads successfully
+[PASS] ViewerSpace factory export is available
+[PASS] ViewerSpace factory creates an IViewer instance
+[PASS] ViewerSpace fixture TestSandbox root is available
+[PASS] ViewerSpace keyboard fixture creates its empty child directory
+[PASS] ViewerSpace keyboard fixture creates its sample file
+[PASS] ViewerSpace keyboard fixture reads the sample file's actual Win32 size
+[PASS] ViewerSpace window open succeeds
+[PASS] ViewerSpace window becomes visible
+[PASS] ViewerSpace detaches the native window menu after attaching the DxUi menu bar
+[PASS] ViewerSpace exposes a visible DxUi menu bar host child
+[PASS] ViewerSpace answers the hidden menu-model debug contract
+[PASS] ViewerSpace keeps a hidden HMENU model for DxUi menu conversion
+[PASS] ViewerSpace hidden HMENU model keeps zero owner-draw items after DxUi menu migration
+[PASS] ViewerSpace exposes shared DxUi menu/navigation/analysis hosts without native fallback controls
+[PASS] ViewerSpace answers the tooltip-overlay debug contract
+[PASS] ViewerSpace has a Direct2D render target before tooltip overlay validation
+[PASS] ViewerSpace has a DirectWrite tooltip format before tooltip overlay validation
+[PASS] ViewerSpace tooltip overlay uses a 420 DIP maximum text width
+[PASS] ViewerSpace tooltip paint witness queues an adversarial hover dismissal
+[PASS] ViewerSpace debug hook shows the Direct2D tooltip overlay
+[PASS] ViewerSpace Direct2D tooltip overlay paints after it is shown
+[PASS] ViewerSpace tooltip overlay tracks a client DIP anchor
+[PASS] ViewerSpace tooltip overlay keeps the high-DPI-safe width cap
+[PASS] ViewerSpace tooltip overlay does not create a native tooltip window
+[PASS] ViewerSpace factory creates an embedded IViewer instance
+[PASS] ViewerSpace embedded host window is created
+[PASS] ViewerSpace embedded viewer open succeeds
+[PASS] ViewerSpace embedded child window becomes visible
+[PASS] ViewerSpace embedded viewer has no visible legacy ComboBox child
+[PASS] ViewerSpace embedded viewer has no top-level native menu
+[PASS] ViewerSpace embedded viewer close succeeds
+[PASS] ViewerSpace embedded child window closes cleanly
+[PASS] ViewerSpace keyboard test resolves the owned window work area
+[PASS] ViewerSpace keyboard test has enough work area to expose its linked analysis panel
+[PASS] ViewerSpace owned test window expands so the analysis panel is visible
+[PASS] ViewerSpace keyboard test activates only its owned window under the directed-input warning
+[PASS] ViewerSpace keyboard test creates a UI Automation client
+[PASS] ViewerSpace keyboard test obtains the owned window UIA root
+[PASS] ViewerSpace keyboard fixture publishes the root analysis rows before focus routing
+[PASS] ViewerSpace map surface accepts keyboard focus
+[PASS] ViewerSpace sends real Tab input from the owned map surface
+[PASS] ViewerSpace Tab moves focus from the map to a navigation control
+[PASS] ViewerSpace map-to-navigation Tab keeps native focus in the owned window subtree
+[PASS] ViewerSpace navigation Tab boundary enters the analysis filter
+[PASS] ViewerSpace navigation-to-analysis Tab keeps native focus in the owned window subtree
+[PASS] ViewerSpace sends real Shift+Tab from the analysis filter
+[PASS] ViewerSpace reverse Tab boundary returns from analysis to navigation
+[PASS] ViewerSpace analysis-to-navigation Shift+Tab keeps native focus in the owned window subtree
+[PASS] ViewerSpace reverse Tab boundary returns from navigation to the map surface
+[PASS] ViewerSpace analysis mode button exposes its initial accessible caption
+[PASS] ViewerSpace navigation toolbar can receive real keyboard focus
+[PASS] ViewerSpace sends Ctrl+2 while a navigation control owns focus
+[PASS] ViewerSpace Ctrl+2 changes to Analyst from the focused navigation child
+[PASS] ViewerSpace Ctrl+2 changes presentation without starting a scan generation
+[PASS] ViewerSpace sends Ctrl+1 while a navigation control owns focus
+[PASS] ViewerSpace Ctrl+1 returns to Explorer from the focused navigation child
+[PASS] ViewerSpace Ctrl+1 also leaves the displayed scan generation unchanged
+[PASS] ViewerSpace exposes its folder row to UIA selection and native Grid keyboard focus
+[PASS] ViewerSpace sends real Enter input while the folder row owns Grid focus
+[PASS] ViewerSpace Enter drills into the UIA-selected folder row
+[PASS] ViewerSpace navigation Back control owns focus before history keys
+[PASS] ViewerSpace sends Alt+Left from the focused navigation child
+[PASS] ViewerSpace Alt+Left follows display history back
+[PASS] ViewerSpace sends Alt+Right from the focused navigation child
+[PASS] ViewerSpace Alt+Right restores the history-forward folder
+[PASS] ViewerSpace sends Alt+Up from the focused navigation child
+[PASS] ViewerSpace Alt+Up follows the structural parent from a focused toolbar child
+[PASS] ViewerSpace analysis filter accepts native focus for F5 and Escape routing
+[PASS] ViewerSpace sends real F5 while the analysis filter owns focus
+[PASS] ViewerSpace routes F5 from the focused analysis child into the owning viewer
+[PASS] ViewerSpace focused-child F5 completes a fresh displayed scan generation
+[PASS] ViewerSpace UIA filter provides a nonempty Escape-clear state
+[PASS] ViewerSpace filter settles before the focused Escape check
+[PASS] ViewerSpace filter reclaims logical and native focus before Escape
+[PASS] ViewerSpace sends real Escape while a nonempty filter owns focus
+[PASS] ViewerSpace Escape clears a focused nonempty filter without closing its window
+[PASS] ViewerSpace empty filter remains a focusable command surface
+[PASS] ViewerSpace sends a second real Escape from the focused empty filter
+[PASS] ViewerSpace Escape closes the window cleanly
+[PASS] ViewerSpace keyboard provider callbacks and worker filesystem references retire before fixture teardown
+[PASS] ViewerSpace keyboard fixture window closes before provider teardown
+ViewerPETests passed.
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses parent captures the desktop restoration boundary
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses harness path resolves
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process launches
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process resumes
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process exits before timeout
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness process reports an exit code
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses fresh harness run passes
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses parent observes exact saved foreground and keyboard focus without restoration writes
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.
+Focused diagnostic evidence: D:\RedSalamander.Perf\runs\20261009T115917Z-40568-f4d87559f9ce4b27ae7ca20b1f8a1da7\artifacts\selftest\last_run\viewer-space-focused-diagnostic.json

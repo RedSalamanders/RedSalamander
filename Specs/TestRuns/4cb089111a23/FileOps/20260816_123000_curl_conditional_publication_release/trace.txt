@@ -1,0 +1,8 @@
+run=1 passed=211 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=2 passed=211 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=3 passed=211 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=4 passed=211 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=5 passed=211 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+metric=FileOps.Curl.ConditionalPublicationGuard samples=5 durations_us=0,0,0,0,0 endpoint_commands=0,0,0,0,0 race_injections=0,0,0,0,0 hr=0x80070032
+metric=FileOps.Curl.IdentitySafeRecoveryGuard samples=5 durations_us=20000,22000,18000,20000,21000 endpoint_commands=103,103,103,103,103 preserved_artifacts=3,3,3,3,3 hr=0x8007012B
+perf_metrics_sha256=37dfd98b361f4febda93bf856b76b5bd1c4a99e179dafeb8447e219ff1db1550 raw_lines=175 invalid_json_lines=0 processes=5

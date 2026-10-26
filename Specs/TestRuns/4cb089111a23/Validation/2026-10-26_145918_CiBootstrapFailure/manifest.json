@@ -1,0 +1,68 @@
+{
+  "publicPredecessor": "6dbeba14755fd59c39c3e23292651e075c5c7858",
+  "failedCiRun": 40344755046,
+  "localSourceSnapshot": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+  "scope": "failed hosted bootstrapper before compilation, followed by focused dirty-worktree tooling validation",
+  "files": [
+    {
+      "file": "pr142-x64-debug-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\pr142-x64-debug-job.log",
+      "sha256": "982EDEAFA1B48F2DA4CE6FAAE47AB93D38F7FEC68EA9EF736CFB9BAF821E7360",
+      "bytes": 40732
+    },
+    {
+      "file": "pr142-arm64-debug-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\pr142-arm64-debug-job.log",
+      "sha256": "71FAD41F074ADFD21579B3A1B83F71E0ADB328D1E8729D5D8CBA5B1695CF5353",
+      "bytes": 43743
+    },
+    {
+      "file": "ci-bootstrap-focused-tests.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-bootstrap-focused-tests.json",
+      "sha256": "D4CDBBEDB02B62B2C47A77C9F8E76163734CB5F58FAAFE52C5698C2B68B4AC07",
+      "bytes": 7936
+    },
+    {
+      "file": "ci-bootstrap-source-before.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-bootstrap-source-before.json",
+      "sha256": "C95CB9526A474C91553D08D3E2F589ECD653C1920BBABB23CFEF231E4A241E04",
+      "bytes": 4598
+    },
+    {
+      "file": "ProcessStreaming.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ProcessStreaming.Tests.ps1.xml",
+      "sha256": "3A94D78711ABA128E8DFBF26F9A1707E947C92974892925481C6C4AC2EE38DA2",
+      "bytes": 4387
+    },
+    {
+      "file": "ToolInventory.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ToolInventory.Tests.ps1.xml",
+      "sha256": "2FBBB902C869D0C774359B341D8D45E00C323E8E186A84E590A0E95E44F17ED8",
+      "bytes": 5835
+    },
+    {
+      "file": "ToolingGovernance.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ToolingGovernance.Tests.ps1.xml",
+      "sha256": "22D6CC9BF69FD766B4617DF4CCC32AB533F4BC9AC1265B5420B9AAED833F09BC",
+      "bytes": 4664
+    },
+    {
+      "file": "ci-bootstrap-focused-tests-bound-driver.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-bootstrap-focused-tests-bound-driver.log",
+      "sha256": "D4933604669A93761CC8EE18931CE646FD884D5BD45B702E2B5914E0C5490577",
+      "bytes": 3995
+    },
+    {
+      "file": "setup-msvc-under-test.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\.github\\actions\\setup-msvc\\Setup.ps1",
+      "sha256": "B4A0120A923EA9355E52D11BE02E3E176D38E9E9A85DD1E6BB739921EE75500F",
+      "bytes": 5174
+    },
+    {
+      "file": "process-streaming-under-test.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\Tools\\Tests\\ProcessStreaming.Tests.ps1",
+      "sha256": "63CBBE1267A1854ED4D2CF8A6DE21225B8D032BD96C48315A35D600DE193F75A",
+      "bytes": 24871
+    }
+  ]
+}

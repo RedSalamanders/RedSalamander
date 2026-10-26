@@ -1,0 +1,113 @@
+{
+  "captures": [
+    {
+      "file": "issues-complete-detail-repeat-1-short-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\short-detail-end.png",
+      "sha256": "d648b270667ef2611df76871aeb04a875ac9df799e77448d49c17b8fa1b786ba",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-1-short-detail-top.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\short-detail-top.png",
+      "sha256": "9474b43b84a677ce08e8730aba4a464bf007e4119946a52fdf37ac4602384e36",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-1-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\technical-detail-end.png",
+      "sha256": "f10f99578a896db0f58bec60cb2eb5bd94d96b4b787dc613a6d69531d7e910dc",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-1-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\typed-conflicts.png",
+      "sha256": "36ca3d8e38a22b9b0c5e75ffe86a325259fa6d9ec534a92c74a31e8c0088f171",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-short-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\short-detail-end.png",
+      "sha256": "d648b270667ef2611df76871aeb04a875ac9df799e77448d49c17b8fa1b786ba",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-short-detail-top.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\short-detail-top.png",
+      "sha256": "9474b43b84a677ce08e8730aba4a464bf007e4119946a52fdf37ac4602384e36",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\technical-detail-end.png",
+      "sha256": "7f939fd6ddb89fc68a3b201db94ee94a3b0195f9db45059bf35e7dd40af99059",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\typed-conflicts.png",
+      "sha256": "36ca3d8e38a22b9b0c5e75ffe86a325259fa6d9ec534a92c74a31e8c0088f171",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-short-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\short-detail-end.png",
+      "sha256": "d648b270667ef2611df76871aeb04a875ac9df799e77448d49c17b8fa1b786ba",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-short-detail-top.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\short-detail-top.png",
+      "sha256": "9474b43b84a677ce08e8730aba4a464bf007e4119946a52fdf37ac4602384e36",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\technical-detail-end.png",
+      "sha256": "b0aac9f950df7600c347b3502bc7c11a8b5459662d3b50d202bd7b4b0b387d6a",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\typed-conflicts.png",
+      "sha256": "36ca3d8e38a22b9b0c5e75ffe86a325259fa6d9ec534a92c74a31e8c0088f171",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-typed-projection-repeat-1-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-1\\typed-conflicts.png",
+      "sha256": "143406e8ec98953ccec84dc3372311fd0752219fc4594e7dab01acb1ddf6e801",
+      "locale": "restored app preference"
+    },
+    {
+      "file": "issues-typed-projection-repeat-2-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-2\\typed-conflicts.png",
+      "sha256": "143406e8ec98953ccec84dc3372311fd0752219fc4594e7dab01acb1ddf6e801",
+      "locale": "restored app preference"
+    },
+    {
+      "file": "issues-typed-projection-repeat-3-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v5-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-3\\typed-conflicts.png",
+      "sha256": "143406e8ec98953ccec84dc3372311fd0752219fc4594e7dab01acb1ddf6e801",
+      "locale": "restored app preference"
+    }
+  ],
+  "caption_probes": [
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    },
+    {
+      "pixels": 63,
+      "dpi": 144,
+      "hr": 0
+    }
+  ],
+  "source_snapshot": "5e42d0ff7287d546428ff70056b2655c2ff4e3001988c136fac79c6f7923641f",
+  "capture_method": "SaveWindowScreenshot; private HWND protected by ScopedWindowActivationBlocker"
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "scenario": "curl_transactional_writer_publication",
+  "status": "passed",
+  "machineHash": "4cb089111a23",
+  "workingTreeBase": "e0de6582ee82eaa5bb0711260d04d5b6642a9660",
+  "configuration": "Release x64 ENABLE_TESTS",
+  "repeatCount": 5,
+  "correctness": {
+    "candidatePassedPerRepeat": 130,
+    "candidateFailedPerRepeat": 0,
+    "localStageBeforeCommit": true,
+    "exactRemoteSizeProof": true,
+    "overwriteSentinelRestored": true,
+    "shortUploadRejected": true,
+    "abandonedEndpointCommandCount": 0,
+    "noOverwriteFailsClosed": true,
+    "imapFailsClosed": true,
+    "ownerLifetimeCovered": true,
+    "unloadQuietPointCovered": true
+  },
+  "performance": {
+    "payloadBytes": 4099,
+    "transactionalCommitDurationUs": [5000, 5000, 4000, 5000, 5000],
+    "transactionalCommitCommandCount": [27, 27, 27, 27, 27],
+    "transactionalCommitMedianUs": 5000,
+    "shortUploadDurationUs": [3000, 3000, 3000, 2000, 3000],
+    "shortUploadCommandCount": [15, 15, 15, 15, 15],
+    "shortUploadMedianUs": 3000,
+    "promotionRollbackDurationUs": [5000, 5000, 6000, 5000, 6000],
+    "promotionRollbackCommandCount": [35, 35, 35, 35, 35],
+    "promotionRollbackMedianUs": 5000,
+    "abandonedDurationUs": [0, 0, 0, 0, 0],
+    "abandonedCommandCount": [0, 0, 0, 0, 0]
+  },
+  "comparison": {
+    "unsafeBeforeDirectFinalUpload": true,
+    "comparableBeforeTimingAvailable": false,
+    "candidateAddsBoundedSafetyRequests": true,
+    "liveEndpointClaim": false
+  },
+  "artifacts": {
+    "metrics": "perf_metrics.jsonl",
+    "trace": "trace.txt"
+  }
+}

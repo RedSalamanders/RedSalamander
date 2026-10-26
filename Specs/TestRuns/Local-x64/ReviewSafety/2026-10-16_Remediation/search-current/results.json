@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-10-16T10:31:51.596Z",
+    "duration_ms": 255,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "search_low_hardening_smoke",
+    "suites": [
+        {
+            "suite": "CompareDirectories",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261016T103105Z-77916-e1acef352609460ebc467692b0393402\\artifacts\\selftest\\last_run\\compare",
+            "duration_ms": 81,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "search_low_hardening_smoke",
+            "cases": [
+                {
+                    "name": "search_low_hardening_smoke",
+                    "status": "passed",
+                    "duration_ms": 65,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

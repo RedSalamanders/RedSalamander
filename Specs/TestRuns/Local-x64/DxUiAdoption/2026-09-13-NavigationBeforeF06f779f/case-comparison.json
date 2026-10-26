@@ -1,0 +1,22 @@
+[
+  {
+    "group": "refresh-sequence",
+    "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+    "counts": {
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    "failures": []
+  },
+  {
+    "group": "drive-menu-sequence",
+    "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+    "counts": {
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    "failures": []
+  }
+]

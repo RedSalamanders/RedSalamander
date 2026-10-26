@@ -1,0 +1,693 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19\RedSalamander.sln
+  Target:        All Projects
+  Configuration: ASan Debug
+  Platform:      ARM64
+  Build workers: 2
+  Version:       7.0.100 beta ASan Debug (ARM64)
+  Build number:  100
+  Version state: Z:\RsI19\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Installing DxUi dependencies (arm64-windows)
+warning: The vcpkg Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\vcpkg-tool\vcpkg.exe is using detected vcpkg root Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\vcpkg-tool and ignoring mismatched VCPKG_ROOT environment value Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115. To suppress this message, unset the environment variable or use the --vcpkg-root command line switch.
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+Detecting compiler hash for triplet arm64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/arm64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:arm64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 250 us
+vcpkg dependencies are ready.
+DxUi update check unavailable; the exact pinned dependency remains selected. (Checked 2026-09-13 03:31:26Z)
+DxUi restored at 13788e95f1c9a16210a87988d742d9dfc6f66eef for ARM64; output identity 5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  Terminal-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\Terminal-fr-FR.dll
+  RedSalamander-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamander-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerText-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  compilation header save succeeded; see Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositePS.cso
+  Main.cpp
+  ControlCatalog.cpp
+  RedLauncher.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedLauncher.exe
+  NativeMenuInterop.cpp
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Common.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Common.exp
+  Common.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Common.dll
+  Embedded.cpp
+  FileSystem7z.cpp
+  LocalSearchIndexCore.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+  Generating Code...
+  SearchServiceBroker.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.ComboBox.cpp
+  SqliteIndexStore.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedSalamanderSearchService.exe
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Controls.cpp
+  SearchTextHelpers.cpp
+  FileSystemCurl.CopyMove.cpp
+  DxUi.cpp
+  dllmain.cpp
+  Factory.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.Grid.cpp
+  FileSystem.cpp
+  FileSystemCurl.Imap.cpp
+  DxUi.Menu.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystem.FileOps.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystemCurl.Shared.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  DxUi.SingleLineTextEditing.cpp
+  FileSystem.Path.cpp
+  DxUi.TextInput.cpp
+  FileSystem.Search.cpp
+  Generating Code...
+  DxUi.TextStoreACP.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.exp
+  FileSystemCurl.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.dll
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem7z.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem7z.dll
+  FileSystem.Watch.cpp
+  dllmain.cpp
+  Factory.cpp
+  TextInputServices.cpp
+  FileSystemDummy.cpp
+  Generating Code...
+  TextClipboard.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem.exp
+  Generating Code...
+  FileSystem.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystem.dll
+  DxUi.Theme.cpp
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.exp
+  FileSystemDummy.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.dll
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Tree.cpp
+  FilesInformationGoogleDrive.cpp
+  FilesInformationMicrosoftDrive.cpp
+  Generating Code...
+  FileSystemGoogleDrive.cpp
+  Compiling...
+  DxUi.Typeahead.cpp
+  FileSystemMicrosoftDrive.cpp
+  DxUi.WindowHost.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  Generating Code...
+  Generating Code...
+  DxUi.vcxproj -> Z:\RsI19\.build\dependencies\DxUi\5e667464e32bea572d697bbbc7cebd5584082212ef9f6f2036d8d4adfcd1564f\ARM64\ASan Debug\DxUi.lib
+  ls4.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.dll
+  Generating Code...
+  dllmain.cpp
+  Factory.cpp
+  ls4.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ls4.exe
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.dll
+  dllmain.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  FilesInformationMtp.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  Factory.cpp
+  Factory.cpp
+  FileSystemMtp.Core.cpp
+  ViewerPE.cpp
+  FileSystemMtp.Device.cpp
+  FilesInformationS3.cpp
+  dllmain.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerPE.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerPE.exp
+  ViewerPE.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerPE.dll
+  dllmain.cpp
+  Factory.cpp
+  FileSystemMtp.FakeBackend.cpp
+  FileSystemS3.Configuration.cpp
+  ViewerImgRaw.Decode.cpp
+  FileSystemMtp.Shared.cpp
+  ViewerImgRaw.Export.cpp
+  FileSystemS3.Core.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  ViewerImgRaw.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.Directory.cpp
+  ViewerSpace.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.exp
+  ViewerImgRaw.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.dll
+  FileSystemS3.DirectoryOps.cpp
+  Generating Code...
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  Ghostty terminal runtime ready: mode=Product platform=ARM64 pairedRaw=425c23fb45e8685e497b2c8f1d99bc5773bef86aa2d4c3fb84a6e5babc3bc906 normalizedDiagnostic=fe61836dfaa32388a297971d26f7452a2177944cc27f97c2e44e7e6eae2f887f
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.DriveInfo.cpp
+  Terminal.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSpace.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSpace.exp
+  ViewerSpace.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSpace.dll
+  RedSalamanderMonitor.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedSalamanderMonitor.exe
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.IO.cpp
+  TerminalAccessibility.cpp
+  ViewerText.Encoding.cpp
+  TerminalInternal.cpp
+  FileSystemS3.Menu.cpp
+  ViewerText.MenuTheme.cpp
+  TerminalKittyImagePipeline.cpp
+  ViewerText.cpp
+  FileSystemS3.S3.cpp
+  TerminalCommandSurfaceModel.cpp
+  TerminalRuntimeLoader.cpp
+  ViewerText.Text.cpp
+  FileSystemS3.S3Table.cpp
+  TerminalSecurity.cpp
+  ViewerText.Hex.cpp
+  TerminalSession.cpp
+  FileSystemS3.Shared.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerText.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerText.exp
+  TerminalVt.cpp
+  ViewerText.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerText.dll
+  FileSystemS3.SelfTest.FakeS3.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  Factory.cpp
+  ViewerSqlite.Engine.cpp
+  TerminalVtUpgradeTests.cpp
+  ViewerSqlite.cpp
+  Generating Code...
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemS3.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemS3.exp
+  FileSystemS3.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\FileSystemS3.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  Generating Code...
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.exp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\Terminal.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\Terminal.exp
+  ViewerSqlite.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.dll
+  Terminal.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\Terminal.dll
+  FileSystem-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem-fr-FR.dll
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  dllmain.cpp
+  FileSystem7z-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem7z-fr-FR.dll
+  Factory.cpp
+  ViewerVLC.cpp
+  FileSystemCurl-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerWeb.cpp
+  ViewerSqlite-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem7z-ja-JP.dll
+  Generating Code...
+  FileSystem-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemCurl-ja-JP.dll
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerVLC.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerVLC.exp
+  FileSystemDummy-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemDummy-ja-JP.dll
+  ViewerVLC.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerVLC.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerWeb-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMtp-sk-SK.dll
+  Generating Code...
+  RedConfigure-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedConfigure-ja-JP.dll
+  ls1.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerWeb.lib and object Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerWeb.exp
+  ls2.cpp
+  ViewerWeb.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Plugins\ViewerWeb.dll
+  ls2.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ls2.exe
+  ls1.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ls1.exe
+  ls3.cpp
+  FlipSequentialDiscard.cpp
+  ls3.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ls3.exe
+  Document.cpp
+  FlipSequentialDiscard.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\FlipSequentialDiscard.exe
+  RedConfigure.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedConfigure.exe
+  ViewerSqlite.Engine.cpp
+  EtwListener.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  AppTheme.cpp
+  ViewerSqliteTests.cpp
+  MonitorFileReader.cpp
+  UiMetrics.cpp
+  MonitorFileExporter.cpp
+  Generating Code...
+  ProductUiTests.cpp
+  ViewerSqliteTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ViewerSqliteTests.exe
+  ViewerPETests.cpp
+  MonitorTest.cpp
+  Generating Code...
+  Generating Code...
+  ProductUiTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ProductUiTests.exe
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  LocalizationTests-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\LocalizationTests-fr-FR.dll
+  MonitorTest.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\MonitorTest.exe
+  LocalizationTests.cpp
+  PluginContractTests.cpp
+  ViewerPETests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\ViewerPETests.exe
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  LocalizationTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\LocalizationTests.exe
+  FileSystemPathIdentity.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FileSystemRouteContract.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/ChangeCase.cpp')
+  
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/SelfTest/Commands/Commands.SelfTest.cpp')
+  
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  Generating Code...
+Z:\RsI19\Tests\PluginContractTests\PluginContractTests.cpp(3413,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\PluginContractTests\PluginContractTests.vcxproj]
+Z:\RsI19\Tests\PluginContractTests\PluginContractTests.cpp(3414,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\PluginContractTests\PluginContractTests.vcxproj]
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  SettingsSchemaTests.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.cpp')
+  
+  PluginContractTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\PluginContractTests.exe
+  CommandVisuals.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.Popup.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileSystem.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.State.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.Dialog.cpp')
+  
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.ItemProperties.cpp')
+  
+  CompareDirectoriesEngine.SelfTest.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.Layout.cpp')
+  
+  CompareDirectoriesEngine.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.Interaction.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.SelectionSize.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.Viewers.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.StatusBar.cpp')
+  
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/ConnectionManagerWindow.cpp')
+  
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  SettingsSchemaParser.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  CrashHandlingTests.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/HostServices.cpp')
+  
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/CompareDirectoriesWindow.cpp')
+  
+  Preferences.FileActions.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/CompareDirectoriesWindow.Menu.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/CompareDirectoriesWindow.Progress.cpp')
+  
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FindFilesWindow.cpp')
+  
+  Preferences.General.cpp
+  CrashQuarantine.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/CompareDirectoriesWindow.Options.cpp')
+  
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Generating Code...
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  SelfTestCommon.cpp
+  SettingsSchemaTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\SettingsSchemaTests.exe
+  SelfTestLatencyHooks.cpp
+  CrashHandler.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/RedSalamander.cpp')
+  
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  pch.cpp
+  CrashQuarantine.TestStubs.cpp
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileSystem.Commands.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileSystem.Navigation.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.State.Runtime.cpp')
+  
+Z:\RsI19\RedSalamander\FolderWindow.h(1936,1): warning C4324: 'FolderWindow': structure was padded due to alignment specifier [Z:\RsI19\RedSalamander\RedSalamander.vcxproj]
+  (compiling source file '../../RedSalamander/FolderWindow.FileOperations.State.Queue.cpp')
+  
+  TraceProvider.cpp
+  Generating Code...
+  SelfTestLatencyHooks.cpp
+  CrashHandlingTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\CrashHandlingTests.exe
+  FileSystemPluginManager.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystemCurlTests.cpp
+  Generating Code...
+  FileSystemCurlTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\FileSystemCurlTests.exe
+  PluginModuleLifecycle.cpp
+  DxUi pin verified: 13788e95f1c9a16210a87988d742d9dfc6f66eef
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  ViewerPluginManager.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  Generating Code...
+  RedConfigureRoot.cpp
+  FolderView.Enumeration.Access.cpp
+  IconCache.cpp
+  RedConfigureSession.cpp
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+  RedConfigureWorkflow.cpp
+  FolderIconEnumerationPerfTest.cpp
+  FolderViewColumnLayoutTests.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  RedConfigureTraceProvider.cpp
+  PerformanceTests2.cpp
+  PluginManager.TestStubs.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\ASan Debug\PerformanceTests2.lib and object Z:\RsI19\.build\ARM64\ASan Debug\PerformanceTests2.exp
+  RedConfigureUiHelpers.cpp
+  PerformanceTests2.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\PerformanceTests2.dll
+  FileSystem-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemDummy-sk-SK.dll
+  ThemeCatalog.cpp
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerPE-cs-CZ.dll
+  ThemePreviewModel.cpp
+  ViewerPE-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamander-sk-SK.dll
+  WorkspaceDiscovery.cpp
+  RedSalamanderMonitor-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\Lang\RedConfigure-sk-SK.dll
+  RedConfigureTests.cpp
+  Generating Code...
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1720,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1715,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\pplcancellation_token.h(101,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\pplcancellation_token.h(103,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2271,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1710,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1700,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\pplcancellation_token.h(63,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1518,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2150,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2157,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2176,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2195,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(2253,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\ppltasks.h(1705,1): warning C4746: volatile access of '<expression>' is subject to /volatile:<iso|ms> setting; consider using __iso_volatile_load/store intrinsic functions [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+  RedConfigureTests.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedConfigureTests.exe
+  RedSalamander.vcxproj -> Z:\RsI19\.build\ARM64\ASan Debug\RedSalamander.exe
+Captured log: Z:\RsI19\.build\logs\msbuild-20260913_053134_230-pid88456-e184f5e3.log
+Diagnostics: 46 warning(s), 0 error(s)
+Build artifacts attested: b080ebca07b020810180351b1e4255d77c906802a33457af74e7984c444332df
+
+========================================
+Build completed successfully!
+Configuration: ASan Debug | Platform: ARM64
+Build time: 03:43
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "Z:\RsI19\.build\ARM64\ASan Debug\RedLauncher.exe" # 1.09 MiB
+& "Z:\RsI19\.build\ARM64\ASan Debug\RedSalamander.exe" # 117.10 MiB
+& "Z:\RsI19\.build\ARM64\ASan Debug\RedSalamanderMonitor.exe" # 9.58 MiB

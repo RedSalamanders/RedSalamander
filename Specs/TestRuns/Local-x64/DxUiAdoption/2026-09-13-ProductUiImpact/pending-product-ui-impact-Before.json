@@ -1,0 +1,21 @@
+{
+  "phase": "Before",
+  "source": "db35652f2f57677d304f1e6fd74af799de48e20a",
+  "workingTreeChanges": [
+    "Specs/Testing/Testing_ValidationEvidence.md",
+    "Tools/Tests/ValidationImpact.Tests.ps1"
+  ],
+  "passed": 8,
+  "failed": 1,
+  "skipped": 0,
+  "testSourceSha256": "D6D8C1DE941C767AEB01341C049D0166E38AA263F74522A69F103166E4CBF1D7",
+  "manifestSha256": "A925438CC45F58CFA65024D8BC98C75B7B799B4061A4AB3146DB40D11D7E9A10",
+  "failures": [
+    {
+      "Name": "routes current product UI tests through their live consumer project",
+      "FailureMessage": "Expected: {1}\nBut was:  {0}"
+    }
+  ],
+  "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\pending-product-ui-impact-Before.log",
+  "completedUtc": "2026-09-13T07:23:20.9857787Z"
+}

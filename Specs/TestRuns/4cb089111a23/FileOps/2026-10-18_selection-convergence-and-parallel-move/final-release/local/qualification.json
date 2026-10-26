@@ -1,0 +1,13 @@
+{
+  "run_id": "20261018T160016Z-107956-b55d67575dc84c2db512ec01212efabd",
+  "case_filter": "FileOps_SelectionShapeLocal",
+  "configuration": "Release",
+  "receipt_id": "27345aa8460edbe4db24d92b4ef663d4d28b6f7f8175bb1ba4b8b1d5a42a0471",
+  "source_snapshot_id": "07f633e4f279c81d677a4b949c195c6e2070b16384b48b59c184758ff195e5fd",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "raw_archive": "Z:/RedSalamander.Perf/evidence/selection-convergence/20261018T160016Z-107956-b55d67575dc84c2db512ec01212efabd/artifacts",
+  "activation": "governed-no-activation"
+}

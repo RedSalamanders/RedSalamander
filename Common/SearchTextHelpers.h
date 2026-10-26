@@ -55,10 +55,12 @@ struct TextSearchResult
     uint64_t matchOffset = 0;
     uint32_t matchLength = 0;
     std::wstring previewText;
-    bool binarySkipped           = false;
-    bool overflowSkipped         = false;
-    DecodedTextEncoding encoding = DecodedTextEncoding::None;
-    bool usedFallbackCodePage    = false;
+    bool binarySkipped   = false;
+    bool overflowSkipped = false;
+    // The regex engine hit its complexity/stack limit, so the text was not evaluated.
+    bool regexEvaluationIncomplete = false;
+    DecodedTextEncoding encoding   = DecodedTextEncoding::None;
+    bool usedFallbackCodePage      = false;
 };
 
 using CancelCheck = HRESULT(STDMETHODCALLTYPE*)(void* cookie) noexcept;

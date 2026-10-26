@@ -15,6 +15,11 @@ checking a shipped build; main may describe a later version. Product behavior is
 
 Root `build.ps1` restores the exact source and builds the archive into a consumer-owned output
 root. For an IDE build, first run `Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug`.
+The restore clones with Git long paths (set for that clone only, never in user or global
+configuration) and checks out sparsely, leaving out the library's `Measurements/`, `docs/gallery`
+and `Specs/`; it fails when the tree is not clean or lacks a path the build reads, and a failed
+restore removes the partial checkout it created. Git cannot enter a directory longer than 258
+characters, so keep the checkout root to 186 characters or fewer.
 Every consumer imports `Build/RedSalamander.DxUi.props` and `.targets`; do not add library source
 files to an application project or include private `src` headers.
 
@@ -24,7 +29,11 @@ CRT and sanitizer settings are enforced by the dependency identity. ARM64 cross-
 compilation only; native execution is separate evidence.
 
 To adopt an update, change the exact lock on a branch, restore, build and run the product
-regressions. Fix a library regression in DxUi, update the candidate pin and repeat. Roll back
+regressions. The lock's `apiRevision` is the revision the product has adopted. The library raises
+its revision when a consumer built against the previous one could stop compiling, linking or
+behaving as before, and states the changes in `CHANGELOG.md` and any pending `Changes/` notes. A pin that crosses a revision
+fails at restore until the product is adapted to those notes and `apiRevision` is updated. Fix a
+library regression in DxUi, update the candidate pin and repeat. Roll back
 by restoring the previous lock and rebuilding. Availability notices are advisory and never
 edit the lock. The complete contract is in [Build_Toolchain](../Specs/Build/Build_Toolchain.md).
 
@@ -45,8 +54,13 @@ public control API and logical control tree, including inputs nested in controls
 
 ## Lifetime and rendering
 
-Keep the `DxUi::WindowHost` alive for the HWND it attaches to. Forward the documented host
-messages; disconnect retained models, delegates and callbacks before detaching the host destroys
+Keep the `DxUi::WindowHost` alive for the HWND it attaches to. Forward every window message after
+creation to it, not only input, registered messages (0xC000-0xFFFF) included: the host posts its
+own private messages, registered by name, to its window (the accessibility dispatch and the end of
+a focus-gain turn), and a window procedure that swallows them delays or drops UI Automation focus
+announcements. DxUi uses no `WM_APP` value, so `Common/WindowMessages.h` reserves none for it.
+The main menu bar drives an open menu's hover switch through `DxUi::ContextMenu::PostMenuBarHover`,
+not through a message of its own. Disconnect retained models, delegates and callbacks before detaching the host destroys
 its controls. Forward `WM_NCDESTROY` through any saved subclass procedure before discarding the
 procedure state. Preferences tests exercise repeated close/open cycles and all page categories.
 

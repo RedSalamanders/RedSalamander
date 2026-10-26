@@ -1,0 +1,20 @@
+[
+  {
+    "rawPath": "D:\\RedSalamander.Perf\\evidence\\fileops-ui-review-fixes-20261019-cards-final\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "sha256": "70B50ECC9757A08467380C75BDEBF72ACC9CB1AE439FA8A34659EEF5C910F8F6",
+    "bytes": 9877362,
+    "rows": 25173
+  },
+  {
+    "rawPath": "D:\\RedSalamander.Perf\\evidence\\fileops-ui-review-fixes-20261019-commands-final\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "sha256": "8F7D8AC3E71EA08C9E983BF1299BF9EA7954034471592511D81D5EEACE8AE5E2",
+    "bytes": 4878720,
+    "rows": 12445
+  },
+  {
+    "rawPath": "D:\\RedSalamander.Perf\\evidence\\fileops-ui-review-fixes-20261019-tooltip-baseline\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "sha256": "8A97444918DB6E90502CAF9562B0043C6149BAF2E844737995DAB023FC84099A",
+    "bytes": 2992245,
+    "rows": 7634
+  }
+]

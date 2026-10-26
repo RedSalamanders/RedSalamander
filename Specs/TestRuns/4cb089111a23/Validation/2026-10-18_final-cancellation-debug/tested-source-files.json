@@ -1,0 +1,330 @@
+{
+  "git_head": "a4b506d53b92d716a923199ba436463f95a6e375",
+  "tested_receipt": "0e8bae1ce209243a8e4c4bd75d7598e319ea1ccb8b8c0d9d914ac1cc2f179177",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "sha256": "0c82f3b14478a7043fb685f3fd49edeaa8d2e0dfaa5c28330c862201b001c90b"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha256": "d9e5232b16f9436088aacd5e2331d571952093f2d06b6c07f9fa285135bddf72"
+    },
+    {
+      "path": ".github/workflows/terminal-engine-gate0.yml",
+      "sha256": "e6f15b6fef9c0d367e12dc7f43cb769106dc982934658f501120728599f32d1c"
+    },
+    {
+      "path": "Common/Common/Common.vcxproj",
+      "sha256": "0f7b4bebcd5205635642c39dfcc916d76329f1d77adafd9302198f987c901d60"
+    },
+    {
+      "path": "Common/NaturalSort.h",
+      "sha256": "46bbfeb89e08027f5e2a07689547b5765e7de9a0c60523a7fd314c13c13bae52"
+    },
+    {
+      "path": "Plugins/FileSystem/FileSystem.FileOps.cpp",
+      "sha256": "ecf9500594b9cfee40f0f49276c5f3079ea06c6ae2b7e182e8fecd2f6c7542bc"
+    },
+    {
+      "path": "Plugins/FileSystem/FileSystem.cpp",
+      "sha256": "3a9cf4e53952dadee42163218433dff254269fc0550ae80810e85ae3f4ce16fd"
+    },
+    {
+      "path": "Plugins/FileSystem/FileSystem.h",
+      "sha256": "c173d4b677b6a75d4f8fdc354acd2441467b238fa12bc3ad7a451f918af13494"
+    },
+    {
+      "path": "Plugins/ViewerSpace/ViewerSpace.Analysis.cpp",
+      "sha256": "313c79505315b7dd4039a36dadd35c7448da61701c94002a5bad9d3ff29ff1e9"
+    },
+    {
+      "path": "Plugins/ViewerSpace/ViewerSpace.ListingValidation.h",
+      "sha256": "da39059eb20d93679636774c2c7f48f9917f8d0e484584d31f44e9c633156d15"
+    },
+    {
+      "path": "Plugins/ViewerSpace/ViewerSpace.cpp",
+      "sha256": "f525bb7d9f4b3c07f27c95b3d830319dd36c5552904ba633afba1b7a18def754"
+    },
+    {
+      "path": "RedSalamander/BatchRenameWindow.cpp",
+      "sha256": "a855def433ce5db90e528f2972f692cf102c4b89e6fb990d56b6f5eb954a091d"
+    },
+    {
+      "path": "RedSalamander/FindFilesWindow.cpp",
+      "sha256": "944b0bedf65e29db22097930741b857ed2aae36c4abb3987e549c0b5022dec6d"
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "sha256": "debeedb005d4fe2d059f71bee12052a2c21ad59f9b7d5d410995c259952b5db2"
+    },
+    {
+      "path": "RedSalamander/FolderView.h",
+      "sha256": "bb586fd803b52d757bac1254fb0f4ccf67f07d7fecd06d6a431c3ceccb0f6a3b"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.DecisionMirror.cpp",
+      "sha256": "cf1240def407d03c0662f864f8641c6c35d3fa2befdd8d6a7161678eb3a27806"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+      "sha256": "3cc89041738977da4a116f2ddc7a76952ff5f2996693dfd77205e8038bde16f9"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+      "sha256": "0207040ea51527988e16d1590007e1301537d16d649989df359fa6b6ce10b818"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.Private.h",
+      "sha256": "0f262d66d72e30e37e08616534fefc7544b3fc673fc82e1dedf96a1c4060f646"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+      "sha256": "c2e482fd3fa6ac86694cc5a0bd5fc49eab0cee5041e081c69dd208983fdb9813"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+      "sha256": "47884c1e76cb33f20293803e7a2a08dd53fb693763b9f49076513e0cf7995a4a"
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperationsInternal.h",
+      "sha256": "bcd797b5df8910c329d595d732dc5f654b2451224def0ae81a87295aa8511092"
+    },
+    {
+      "path": "RedSalamander/NavigationView.Edit.cpp",
+      "sha256": "e5611381fffc62b94448e4b98b932a32cb08622b8e4f8537b47cc755b87392dd"
+    },
+    {
+      "path": "RedSalamander/NavigationView.Menus.cpp",
+      "sha256": "262494d62c71ac3aa8f40d095ff6ecd370cfb05b0e1c402b171eea1166555bb5"
+    },
+    {
+      "path": "RedSalamander/NavigationView.h",
+      "sha256": "424bee378459d6d764c1ebd084a2ad8a99645d34bdf9f7a445135eb5369b3797"
+    },
+    {
+      "path": "RedSalamander/NavigationViewInternal.h",
+      "sha256": "2cc1bd47935c54b38668916605de86e935479963253feafb3d8fc15d0a187005"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp",
+      "sha256": "78927e8d45f7a51993884b98783bc77d437179aa80491fb59d273faf5295a683"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp",
+      "sha256": "0a38856e6054b7085d02e9f805a7884b847aea6582ef6b53f303f99c14f0a860"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp",
+      "sha256": "096bdccc35669997e68aa1992159c3c205bf7c9c3213d7301ead2641b77742d8"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp",
+      "sha256": "8d95eab16c567cac8f626246684554ec14acab37cc50581d9ebbb5e8932b8055"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Search.cpp",
+      "sha256": "fab48bbb45b27f694bb9158980e8e8b99bcbb9b2710d604f1d58ad6b96ab396a"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "sha256": "8c22d9d52299080585ae7e9deee51a17290e34b0b9eba1bb52ac59009cd25c88"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DecisionMirror.cpp",
+      "sha256": "0dac091ec754ef794940e487476000dc87726a5f2e3d4850e92d6f8bb256ff3b"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DiscoveryClosure.cpp",
+      "sha256": "9db1c01bc7c95d688e262fc79800e164b6205a6e7af31c7321898e4067b36edd"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases05_06.cpp",
+      "sha256": "3d97ffab199a7058dbc9d91dc151449a5aae17a1b621e6949ac702850edb5758"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases10_13.cpp",
+      "sha256": "3c22299d02589d32060fceeda941b91d033d8accb10b96c40bfd8b319fcbebbd"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+      "sha256": "21fa6497620f2401b585231fd19a8d6ddf0981ed6f998575bf512b0e99da1b1e"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Throughput.cpp",
+      "sha256": "01ff022c963c00bf9ee0e857f7a38ecb37243f95a7e26b80a0c56841b039b5c5"
+    },
+    {
+      "path": "Specs/Core/Core_SharedHelpers.md",
+      "sha256": "263cb560167557515a10fe53e657f4cd442c137110d4c324ddb5fc3fbe32289e"
+    },
+    {
+      "path": "Specs/FileSystem/FileSystem_FileOperations.md",
+      "sha256": "d52811024262d3dd046dd9cc50a0e93909f39bff79083beafae31a38557bf141"
+    },
+    {
+      "path": "Specs/NormativeConsistency.json",
+      "sha256": "fd3a03178b56d7ac58289a16c9edc57bba475b0f5c05b7293236ac8856e9d720"
+    },
+    {
+      "path": "Specs/Plans/Done/Build_ReleaseDependencyRecovery_2026-10-02.md",
+      "sha256": "f83235b2c183806451627fd1f201096674ae497b8e2094e8e75c6697a87c3634"
+    },
+    {
+      "path": "Specs/Plans/Done/FileOperations_DialogKeyboardFocus_2026-10-17.md",
+      "sha256": "4da82e2e47b8f2533ddc0346b24f0348fa10ababd3ed2375a206c6fd1fca847e"
+    },
+    {
+      "path": "Specs/Plans/Done/FileOperations_SelectionConvergenceAndParallelMove_2026-10-18.md",
+      "sha256": "7a65a5e4f723aa09849b04b4a6c4a0d49cc6c6644ee2711165779d0fdc52ada4"
+    },
+    {
+      "path": "Specs/Plans/Done/Navigation_BreadcrumbNaturalSorting_2026-10-17.md",
+      "sha256": "b2e68281d879b7e7505513ff782b4c90b83627e8ff4b47cbe901bec7ec45e8e2"
+    },
+    {
+      "path": "Specs/Plans/Done/Terminal_FontResolutionAndPluginConfigNumericContract_2026-09-10.md",
+      "sha256": "619b336e8494364594fb5c3c10719924a432e599dcc7cfeab1e5e186d6344eb8"
+    },
+    {
+      "path": "Specs/Plans/Done/UI_NaturalNameSorting_2026-10-17.md",
+      "sha256": "e5523f3f40d42268eb4f2360221cac13be88a1d64378a014ec52eab4b4059d7a"
+    },
+    {
+      "path": "Specs/Plans/Done/UI_NaturalSortingPerformance_2026-10-17.md",
+      "sha256": "fe0cec492ad6d273c3e02a31101e2a8433ae37b32dc73fcf1a7ee8404c7ff63e"
+    },
+    {
+      "path": "Specs/Plans/WIP/DxUi_HostMessagesToolsetAndRestore_2026-10-01.md",
+      "sha256": "4c493a441038dd756dfb7d9f92858236907da4cb5e8cd989bdf6e81ace1a9914"
+    },
+    {
+      "path": "Specs/Plans/WIP/FileOperations_PostMergeQualification_2026-10-05.md",
+      "sha256": "420b2864001aaee0ae4015af107a3a58f2c87b9b2cb535be4eb03ef2e3ff6067"
+    },
+    {
+      "path": "Specs/Plans/WIP/README.md",
+      "sha256": "c9d344ebf5eaf6829f676104bc8f23ac8ecf81940a003ac9c607cdd76e8f8ba2"
+    },
+    {
+      "path": "Specs/Plans/WIP/Tooling_ToolsInventoryAndGovernance_2026-08-13.md",
+      "sha256": "db5866cdbff7c86b1055527a5ff6c69b50f8f0d7ecb84b4c38e32c83576127dd"
+    },
+    {
+      "path": "Specs/Plans/WIP/ViewerSpace_ResponsiveTreemapAndAnalysis_2026-10-08.md",
+      "sha256": "2d4cc221932c983f8a4a9503c3ac6418cd4cab803c13e6027c7ce20e5631e063"
+    },
+    {
+      "path": "Specs/Plugins/Plugins_ViewerSpace.md",
+      "sha256": "8b67b903b48769bf3a3f555ab0cd54dcd23309941e081bd65a08ca151e77ed16"
+    },
+    {
+      "path": "Specs/Plugins/Plugins_VirtualFileSystem.md",
+      "sha256": "d7ec0a96fe6faf9562db34e54e5c1584620ced13e828e564d25b38ffdcc51c1e"
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "sha256": "cd86cf2e0cef33a981ca363bb3b2562acea4152da06fd949196f079cc552fb6d"
+    },
+    {
+      "path": "Specs/Testing/Testing_SelfTests.md",
+      "sha256": "c8c05430b45cd9ed24d0172e0c2f331183538ea72159b50ff45dbb172135140b"
+    },
+    {
+      "path": "Specs/Testing/Testing_ToolingGovernance.md",
+      "sha256": "3b72b9ac57887844ccddd2f7f114d7339226ba5410c7ced6425fe741ef6b6a66"
+    },
+    {
+      "path": "Specs/Testing/Testing_ValidationEvidence.md",
+      "sha256": "47784f3c88fbb0e6843b71abd5af83dab973207ede1e841468224e876f01faaa"
+    },
+    {
+      "path": "Specs/UI/UI_BatchRenameWindow.md",
+      "sha256": "047c62e6e0cd02e57436bcf1596b22bd65d321324b2c0252e5c0597ff0be79bb"
+    },
+    {
+      "path": "Specs/UI/UI_DxUiSharedGrid.md",
+      "sha256": "931c3fd2ba6bcdef4b54be753e7649e90da6a9b7e35aa1a0a4463ef2eaa89c91"
+    },
+    {
+      "path": "Specs/UI/UI_FileOperationsPopup.md",
+      "sha256": "0576a151a853692a26447e1bb25518caf8a0a9c374faf7fd404a569f0a7307ae"
+    },
+    {
+      "path": "Specs/UI/UI_FindFilesWindow.md",
+      "sha256": "ceee9baeef89af377c6995e4c857557a09bf41fbc25eac18ec1af4752f351a54"
+    },
+    {
+      "path": "Specs/UI/UI_FolderView.md",
+      "sha256": "c090c9ef9e38c009c78629222cc134cb0a5fbe99438a80a4c29d83fba2e13711"
+    },
+    {
+      "path": "Specs/UI/UI_NavigationView.md",
+      "sha256": "a903e20de958c77b8eeac67e24bc025fb799d7e872c063e9279bb26e9b56a5b0"
+    },
+    {
+      "path": "Tests/README.md",
+      "sha256": "a98d7cc32f6ac72cfcee5848642b568298d59f4222dd8e37703a19015837eb2b"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "ff374e6dbcc549e0b61d586b6c77fc78ad7bc9f7dc2feb3e982fdcdb33c4191c"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp",
+      "sha256": "00aae1d096c2fd273e32399db9ce8f0c87a15828c74d591ac30cd4e8650713ad"
+    },
+    {
+      "path": "Tests/test-scopes.json",
+      "sha256": "e080d3e21cedf93104bf0b10de8ae31c579f45c7262f86df21274dfc4be4715b"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestSuitePlan.psm1",
+      "sha256": "c2473c947851943555c99780ce3c6ae83b67ee89ac459e50a364ef9906498f5c"
+    },
+    {
+      "path": "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
+      "sha256": "321be74b5f0474fd7ea6103da00f867b1fddce2c1d15c799fb47655b2da4b80d"
+    },
+    {
+      "path": "Tools/README.md",
+      "sha256": "9ca42a8f3a03961540fd7405cff26bdfd5ff0523ab9ca48e738b27f97164e647"
+    },
+    {
+      "path": "Tools/Tests/HistoricalTerminalProfile.Tests.ps1",
+      "sha256": "d7a209c684c8e9788af7a89545b9c9420f78eba0a249d016a31a8c7dd486a045"
+    },
+    {
+      "path": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+      "sha256": "420c02aa9ab23975cce95f736dbe9df9d67a6138036b1a139bb7f677adace6a1"
+    },
+    {
+      "path": "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+      "sha256": "f925787d3a38c31bf08535921ba16f60c4e9a35d81d9639db02a5a3fbfdb3553"
+    },
+    {
+      "path": "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+      "sha256": "c9403d726e2a7a40ed4928bee7d3023b938ed203a54cc6f3fa29929bfe090b09"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "sha256": "3adf21b734c7241f8dab204d533752768f996a0f7143a31a1a0e96ff004de6b0"
+    },
+    {
+      "path": "docs/BatchRename.md",
+      "sha256": "59f56f23b923af842cfb1f92b74e1ef256f67ad78f7eea60e8d0baef099c6e84"
+    },
+    {
+      "path": "docs/FileOperations.md",
+      "sha256": "a82adbb3e67e3b0821f0f52a7ca4485f58d57e799560f52f93e4e3569158c93f"
+    },
+    {
+      "path": "docs/FindFiles.md",
+      "sha256": "0501a573122f1dc4aa1dff9abeac8d26950b77a196be64303d0c186c52e1eacd"
+    },
+    {
+      "path": "docs/NavigationAndPaths.md",
+      "sha256": "e559f412d0811ad9282f55208e09363f8be42ae6ee42295008992d372b6d6f1d"
+    }
+  ]
+}

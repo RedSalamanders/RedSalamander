@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-09-19T15:16:34.280Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260919T151219Z-26152-fef8dbf0834e4dcda73aa5fbb9197516\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2220,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 1704,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

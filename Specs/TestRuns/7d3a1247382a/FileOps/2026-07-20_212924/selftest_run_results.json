@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-07-20T19:29:19.674Z",
+    "duration_ms": 4785,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 1,
+    "case_filter": "Floodgate_CrossFsMoveCommitSizeProofAvoidsImmediateRestat",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260720T192918Z-47228-d73c5d2763a744479434d56b41f622ed\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 3484,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 1,
+            "case_filter": "Floodgate_CrossFsMoveCommitSizeProofAvoidsImmediateRestat",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1625,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveCommitSizeProofAvoidsImmediateRestat",
+                    "status": "passed",
+                    "duration_ms": 1766,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 93,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

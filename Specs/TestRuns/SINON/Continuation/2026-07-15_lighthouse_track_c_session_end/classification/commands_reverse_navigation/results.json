@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-07-15T09:24:40.634Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T092433Z-65140-f5dd821388d24fa9828440da758eea18\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 12882,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 12862,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

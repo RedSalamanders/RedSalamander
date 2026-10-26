@@ -1,0 +1,157 @@
+{
+  "schema": "red-salamander.capture-companion-provenance.v1",
+  "sourceRunId": "20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2",
+  "machineHash": "7d3a1247382a",
+  "platform": "x64",
+  "configuration": "Debug",
+  "buildReceiptId": "687fe30cf9b5d5959000e9ed71af515fe41fe16237b74fc4ace7f9c45732d475",
+  "sourceSha256": "d0558ea74aa717ae96028bf3ad4445d9b1ce3398171f50bd768b9cbcb96d59d7",
+  "sourceShaKind": "red-salamander.workspace-snapshot.v1 snapshot_id",
+  "sourceWorkspaceSnapshotId": "d0558ea74aa717ae96028bf3ad4445d9b1ce3398171f50bd768b9cbcb96d59d7",
+  "sourceResultsPath": "../space_final_worker_hook_debug_commands/results.json",
+  "sourceProvenancePath": "../space_final_worker_hook_debug_commands/provenance.json",
+  "captureManifestPath": "../space_final_worker_hook_debug_commands/captures/provenance.json",
+  "captureFiles": [
+    {
+      "file": "boundary-body-455.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-body-455.png",
+      "archivePath": "captures/boundary-body-455.png",
+      "sha256": "257560c6280da47245647f9704ac10c5ad54314bd4e3c6098e694e3126e5b5e3",
+      "bytes": 338709
+    },
+    {
+      "file": "boundary-body-456.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-body-456.png",
+      "archivePath": "captures/boundary-body-456.png",
+      "sha256": "00e08a2b89657eb36aa8ff08247b59600978f4f6376e8583fc6afb93d1f9f188",
+      "bytes": 193235
+    },
+    {
+      "file": "boundary-width-1099.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-1099.png",
+      "archivePath": "captures/boundary-width-1099.png",
+      "sha256": "0c344214e3d98240635ce5edf7e5913812e59d6544d4adf4788c23d9b29e2c76",
+      "bytes": 402057
+    },
+    {
+      "file": "boundary-width-1100.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-1100.png",
+      "archivePath": "captures/boundary-width-1100.png",
+      "sha256": "6e66056cb5f680f09d763239e2384ffe169294f4ec74b7decd74a69eeb396302",
+      "bytes": 524942
+    },
+    {
+      "file": "boundary-width-503.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-503.png",
+      "archivePath": "captures/boundary-width-503.png",
+      "sha256": "df46afc82804c3008c8b01541822dfcf8715e0e957d245665f81b17bc23c2027",
+      "bytes": 152885
+    },
+    {
+      "file": "boundary-width-504.png",
+      "sourceFile": "D:\\RedSalamander.Perf\\runs\\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-504.png",
+      "archivePath": "captures/boundary-width-504.png",
+      "sha256": "691fd73e23bd616426622498f74d88dcf3259ca92872ac2053c86b77238a0992",
+      "bytes": 204958
+    }
+  ],
+  "frameProvenance": [
+    {
+      "file": "boundary-width-1100.png",
+      "widthPx": 1650,
+      "heightPx": 1064,
+      "dpi": 144,
+      "requestedWidthDip": 1100,
+      "requestedHeightDip": 709,
+      "actualWidthDip": 1100.0,
+      "actualHeightDip": 709.33,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 571.33,
+      "analysisVisible": true,
+      "analysisPlacement": "right",
+      "layoutGeneration": 9,
+      "archivePath": "captures/boundary-width-1100.png"
+    },
+    {
+      "file": "boundary-width-1099.png",
+      "widthPx": 1649,
+      "heightPx": 1064,
+      "dpi": 144,
+      "requestedWidthDip": 1099,
+      "requestedHeightDip": 709,
+      "actualWidthDip": 1099.33,
+      "actualHeightDip": 709.33,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 571.33,
+      "analysisVisible": true,
+      "analysisPlacement": "bottom",
+      "layoutGeneration": 10,
+      "archivePath": "captures/boundary-width-1099.png"
+    },
+    {
+      "file": "boundary-width-504.png",
+      "widthPx": 756,
+      "heightPx": 1064,
+      "dpi": 144,
+      "requestedWidthDip": 504,
+      "requestedHeightDip": 709,
+      "actualWidthDip": 504.0,
+      "actualHeightDip": 709.33,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 571.33,
+      "analysisVisible": true,
+      "analysisPlacement": "bottom",
+      "layoutGeneration": 11,
+      "archivePath": "captures/boundary-width-504.png"
+    },
+    {
+      "file": "boundary-width-503.png",
+      "widthPx": 755,
+      "heightPx": 1064,
+      "dpi": 144,
+      "requestedWidthDip": 503,
+      "requestedHeightDip": 709,
+      "actualWidthDip": 503.33,
+      "actualHeightDip": 709.33,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 571.33,
+      "analysisVisible": false,
+      "analysisPlacement": "hidden",
+      "layoutGeneration": 11,
+      "archivePath": "captures/boundary-width-503.png"
+    },
+    {
+      "file": "boundary-body-456.png",
+      "widthPx": 1200,
+      "heightPx": 891,
+      "dpi": 144,
+      "requestedWidthDip": 800,
+      "requestedHeightDip": 594,
+      "actualWidthDip": 800.0,
+      "actualHeightDip": 594.0,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 456.0,
+      "analysisVisible": true,
+      "analysisPlacement": "bottom",
+      "layoutGeneration": 12,
+      "archivePath": "captures/boundary-body-456.png"
+    },
+    {
+      "file": "boundary-body-455.png",
+      "widthPx": 1200,
+      "heightPx": 890,
+      "dpi": 144,
+      "requestedWidthDip": 800,
+      "requestedHeightDip": 593,
+      "actualWidthDip": 800.0,
+      "actualHeightDip": 593.33,
+      "headerBottomDip": 138.0,
+      "availableBodyDip": 455.33,
+      "analysisVisible": false,
+      "analysisPlacement": "hidden",
+      "layoutGeneration": 13,
+      "archivePath": "captures/boundary-body-455.png"
+    }
+  ],
+  "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication."
+}

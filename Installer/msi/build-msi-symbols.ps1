@@ -158,7 +158,6 @@ try {
 
 $shippingPdbs = @(
     "RedSalamander.pdb",
-    "RedSalamanderMonitor.pdb",
     "RedSalamanderSearchService.pdb",
     "Common.pdb"
 )

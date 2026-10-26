@@ -1,0 +1,17 @@
+{
+  "rawRun": "D:/RedSalamander.Perf/evidence/fileops-documentation-synthetic-20261019-final",
+  "fullStream": {
+    "path": "D:\\RedSalamander.Perf\\evidence\\fileops-documentation-synthetic-20261019-final\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "sha256": "a3e273f0bc361b7ce846d48e298b5237ce889eb1ed68cd02da8d91677765a0aa",
+    "bytes": 9951751,
+    "rows": 25240
+  },
+  "limits": "Complete raw evidence retained in the marked sandbox. No renderer change or performance improvement is claimed.",
+  "retained": {
+    "path": "card-frames.jsonl",
+    "metric": "FileOps.Popup.CardHierarchy.FrameUs",
+    "sha256": "fe7b7bfd9dafa223e241b7f693135c51ec4f8548681151bb3d0dfded5b26b7f0",
+    "rows": 1488,
+    "ordering": "all matching rows in original order"
+  }
+}

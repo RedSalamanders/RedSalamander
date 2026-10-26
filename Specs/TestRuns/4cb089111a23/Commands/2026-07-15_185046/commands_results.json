@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-07-15T16:50:45.546Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T165045Z-24152-f722a1a12254449baff41cf8bfadeade\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 702,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_find_dialog_active_close_does_not_join_ui",
+            "status": "passed",
+            "duration_ms": 693,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

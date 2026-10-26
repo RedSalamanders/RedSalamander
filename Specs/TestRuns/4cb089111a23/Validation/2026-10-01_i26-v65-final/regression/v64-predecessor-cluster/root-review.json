@@ -1,0 +1,12 @@
+{
+  "reviewUtc": "2026-10-01T09:03:05.9910232+00:00",
+  "summarySha256": "64ff476ee1b62d48e4ef405cddec3aac92a89543bffab84811cc8a4c4c12184e",
+  "resultHashesVerified": true,
+  "runId": "20261001T090117Z-11004-b0ec823cd95e4d1fa0ceed28c41043f9",
+  "counts": [
+    15,
+    0,
+    0
+  ],
+  "wholePlanComplete": false
+}

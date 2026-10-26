@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-08-26T13:55:18.147Z",
+    "duration_ms": 1259,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260826T135456Z-69056-ad3aac148de444819e687b030e38e1c0\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 586,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "cases": [
+                {
+                    "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+                    "status": "passed",
+                    "duration_ms": 122,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

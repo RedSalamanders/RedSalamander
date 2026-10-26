@@ -1,0 +1,36 @@
+{
+    "run_started_utc": "2026-09-19T18:03:54.196Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\path-access-baseline-repeat\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 49733,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Capture throughput-collapsed__480dip__fr-FR__144dpi.png must contain legacy text and background: hr=0x8007000D, foreground=0, background=0.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 16268,
+            "repeat_index": 1,
+            "reason": "Capture throughput-collapsed__480dip__fr-FR__144dpi.png must contain legacy text and background: hr=0x8007000D, foreground=0, background=0."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 16152,
+            "repeat_index": 2,
+            "reason": "Capture throughput-collapsed__480dip__fr-FR__144dpi.png must contain legacy text and background: hr=0x8007000D, foreground=0, background=0."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 16134,
+            "repeat_index": 3,
+            "reason": "Capture throughput-collapsed__480dip__fr-FR__144dpi.png must contain legacy text and background: hr=0x8007000D, foreground=0, background=0."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

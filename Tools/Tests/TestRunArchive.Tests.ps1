@@ -109,19 +109,26 @@ function Invoke-RSArchiveValidatorProcess {
 
 Describe 'TestRuns archive contract' {
     # Specs/TestRuns is gitignored evidence: the archives these contracts inspect exist only on the
-    # machines that produced them, and the governed inventory is empty on a clone whose history
-    # lacks the archive contract commit. Skip those cases there instead of failing every clone.
+    # machines that produced them. The inventory is governed from the archive contract commit, which a
+    # squashed or shallow clone (hosted runners check out one commit) does not carry; there
+    # Get-RSTestRunArchiveInventoryPaths returns every tracked file, grandfathered evidence included.
+    # Skip those cases there instead of failing every clone (Testing_SelfTests.md).
     $terminalVtArchivePresent = (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071812_pair2-product') -PathType Container) -and
         (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071820_pair2-candidate') -PathType Container)
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
-    $checkedInInventoryPresent = @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
+    $archiveContractCommit = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveContractCommit }
+    & git -C $repoRoot merge-base --is-ancestor $archiveContractCommit HEAD *> $null
+    $archiveContractInHistory = ($LASTEXITCODE -eq 0)
+    $checkedInInventoryPresent = $archiveContractInHistory -and @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
     if (-not $terminalVtArchivePresent) {
         Write-Host 'Skipping the Terminal VT archive contracts: Specs\TestRuns\4cb089111a23\Terminal pair2 evidence is not present (gitignored archive).'
     }
     if (-not $fileOpsSummaryArchivePresent) {
         Write-Host 'Skipping the FileOps summary archive contract: Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550 is not present (gitignored archive).'
     }
-    if (-not $checkedInInventoryPresent) {
+    if (-not $archiveContractInHistory) {
+        Write-Host "Skipping the archive inventory contract: contract commit $($archiveContractCommit.Substring(0, 9)) is not in this (squashed or shallow) clone."
+    } elseif (-not $checkedInInventoryPresent) {
         Write-Host 'Skipping the archive inventory contract: no Specs\TestRuns archive is present (gitignored archive).'
     }
 

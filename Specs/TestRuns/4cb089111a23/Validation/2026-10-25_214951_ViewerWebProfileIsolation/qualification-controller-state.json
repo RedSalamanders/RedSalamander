@@ -1,0 +1,80 @@
+{
+  "head": "cfe43d8ddc92973fd47955876cb80ea0b061509e",
+  "repository": "E:\\RedSalamander.Perf\\integration-20261024",
+  "ownerPid": 85840,
+  "phase": "nowait-repair-serial-x64-ASan-Debug-Full",
+  "outcome": "running",
+  "updatedUtc": "2026-10-25T21:49:51.6331898Z",
+  "entries": [
+    {
+      "phase": "nowait-repair-x64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:00:02.3883844Z",
+      "finishedUtc": "2026-10-25T21:04:09.8680050Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-x64-ASan-Debug-build.log"
+    },
+    {
+      "phase": "nowait-repair-search-original-default-seed",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:04:10.0946626Z",
+      "finishedUtc": "2026-10-25T21:09:43.4871079Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-search-original-default-seed.log"
+    },
+    {
+      "phase": "nowait-repair-ui-predecessor-cluster",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:09:43.6976224Z",
+      "finishedUtc": "2026-10-25T21:12:36.0742515Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-ui-predecessor-cluster.log"
+    },
+    {
+      "phase": "nowait-repair-breadcrumb-repeat",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:12:36.2732870Z",
+      "finishedUtc": "2026-10-25T21:13:28.4538566Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-breadcrumb-repeat.log"
+    },
+    {
+      "phase": "nowait-repair-selection-repeat",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:13:28.6910303Z",
+      "finishedUtc": "2026-10-25T21:23:12.8158022Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-selection-repeat.log"
+    },
+    {
+      "phase": "nowait-repair-x64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:23:13.0513246Z",
+      "finishedUtc": "2026-10-25T21:27:53.0333547Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-x64-Debug-build.log"
+    },
+    {
+      "phase": "nowait-repair-x64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:27:53.2339249Z",
+      "finishedUtc": "2026-10-25T21:33:27.9567867Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-x64-Release-build.log"
+    },
+    {
+      "phase": "nowait-repair-ARM64-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:33:28.1624655Z",
+      "finishedUtc": "2026-10-25T21:38:23.8196214Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-ARM64-Debug-build.log"
+    },
+    {
+      "phase": "nowait-repair-ARM64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:38:24.0092986Z",
+      "finishedUtc": "2026-10-25T21:44:43.8319235Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-ARM64-Release-build.log"
+    },
+    {
+      "phase": "nowait-repair-ARM64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T21:44:44.0376873Z",
+      "finishedUtc": "2026-10-25T21:49:51.3645638Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-repair-ARM64-ASan-Debug-build.log"
+    }
+  ]
+}

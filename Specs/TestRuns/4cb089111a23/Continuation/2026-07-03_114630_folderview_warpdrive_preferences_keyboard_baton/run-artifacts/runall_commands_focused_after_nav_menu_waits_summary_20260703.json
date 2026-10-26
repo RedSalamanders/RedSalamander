@@ -1,0 +1,20 @@
+[
+  {
+    "Case": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+    "Exit": 0,
+    "Passed": 1,
+    "Failed": 0,
+    "Skipped": 0,
+    "Total": 1,
+    "Json": "Z:\\src\\RedSalamander\\.build\\codex-runs\\runall_commands_cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal_focused_after_nav_menu_waits_20260703.run-all.json"
+  },
+  {
+    "Case": "cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup",
+    "Exit": 0,
+    "Passed": 1,
+    "Failed": 0,
+    "Skipped": 0,
+    "Total": 1,
+    "Json": "Z:\\src\\RedSalamander\\.build\\codex-runs\\runall_commands_cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup_focused_after_nav_menu_waits_20260703.run-all.json"
+  }
+]

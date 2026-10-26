@@ -1,0 +1,410 @@
+[
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-exit.txt",
+    "path": "raw/v5-release/fileops-exit.txt",
+    "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-plan.json",
+    "path": "raw/v5-release/fileops-plan.json.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed",
+    "bytes": 105
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-copy-hashes.json",
+    "path": "raw/v5-release/fileops-runner-copy-hashes.json.receipt.txt",
+    "sha256": "e19227b025d4a306decfb74dcb2d2d4b2dee30b652ef111a650749f2740c71da",
+    "bytes": 6047
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops.log",
+    "path": "raw/v5-release/fileops.log",
+    "sha256": "7a02faadbbc9bda78d145551f3e363fb1acdd146c392aa411534a0441d99f88e",
+    "bytes": 6166
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\invocations.json",
+    "path": "raw/v5-release/invocations.json.receipt.txt",
+    "sha256": "9872b9b73354da63f620c08f338692fb3626e2fa9307e4b88c88e37c25122e6b",
+    "bytes": 144
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\candidate-inputs.json",
+    "path": "raw/v5-release/candidate-inputs.json.receipt.txt",
+    "sha256": "e1e859a796f0ef2017d22ea0fd2a26c51fa61cd8950d94b14857517fff22d27f",
+    "bytes": 5932
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/v5-release/results.json.receipt.txt",
+    "sha256": "f2875e1b8dff9ca8de2f1b6c1f4de2fe493582ddf71514fe8e522bf563ba3d88",
+    "bytes": 53301
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/v5-release/run-all-tests-results.json.receipt.txt",
+    "sha256": "1a1aa94e82198411d049557a27bc1c2eb3dc45ac4c0e69f04010cb8fdda52778",
+    "bytes": 46172
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "path": "raw/v5-release/workspace-final.json.receipt.txt",
+    "sha256": "d6e79fa7546f9a43270647c2fc24e5478baa421d4e167c0c644207105282281c",
+    "bytes": 15379
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "path": "raw/v5-release/workspace-after-selftest.file-operations.json.receipt.txt",
+    "sha256": "3658de07f8d567a262c22a8f4d8634c7063399ab02bc9db74444d058ec6aaa2d",
+    "bytes": 15379
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\trace.txt",
+    "path": "raw/v5-release/trace.txt",
+    "sha256": "be570fb65d19c3704687b91432c6b9a91af286611c1908fc7ac42990b49741d2",
+    "bytes": 275068
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/v5-release/fileops/results.json.receipt.txt",
+    "sha256": "36b532dc5bfcb2a704d8975d9ae4d5bf2dd76a93fb32a9803437ddc56ca0d474",
+    "bytes": 42296
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/v5-release/fileops/trace.txt",
+    "sha256": "ab9d5b8f0bb4a3596eb456b9e4333578a48a2c6db7029bf03da52bbb266222a1",
+    "bytes": 202968
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\fileops-current-v5-full-20260927\\run.ps1",
+    "path": "raw/v5-release/run.ps1",
+    "sha256": "f873aa1c8ff0910d1ac851d1b6640c31976e898de081a290281221c750a7a697",
+    "bytes": 4412
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-exit.txt",
+    "path": "raw/v6-release/fileops-exit.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-plan.json",
+    "path": "raw/v6-release/fileops-plan.json.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed",
+    "bytes": 105
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-copy-hashes.json",
+    "path": "raw/v6-release/fileops-runner-copy-hashes.json.receipt.txt",
+    "sha256": "903776c20187d3fed910c88d4b522fcc6d33fd43588a1a66a20d249173a3078b",
+    "bytes": 7461
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops.log",
+    "path": "raw/v6-release/fileops.log",
+    "sha256": "62f140209b8e4946853fb1c5f971516045e55b398fe7557e4973485407ea93f0",
+    "bytes": 5567
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\invocations.json",
+    "path": "raw/v6-release/invocations.json.receipt.txt",
+    "sha256": "f99042b6a625cfba233360e08c9c36eb351f0eb269d24a7b0c524ee70757aa31",
+    "bytes": 144
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\candidate-inputs.json",
+    "path": "raw/v6-release/candidate-inputs.json.receipt.txt",
+    "sha256": "00ef5dcdc903ba22d3a82ee51d9c614802f9512e7094821fb513953f243b89c6",
+    "bytes": 5786
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/v6-release/results.json.receipt.txt",
+    "sha256": "380b9ce645f0d3b2f2c3da0841bfeeffabace9aac70eb09536369acdfc3120fb",
+    "bytes": 53206
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/v6-release/run-all-tests-results.json.receipt.txt",
+    "sha256": "d5fc5b7111ee01d3ae6d70b12b7d0658edf9ea074241d37cc86209ab7c80ba12",
+    "bytes": 46159
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "path": "raw/v6-release/workspace-final.json.receipt.txt",
+    "sha256": "5b3c7fa5298df945e4cb711bc682e35b74c33ad16e13c831df5eca442f640eb9",
+    "bytes": 15380
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "path": "raw/v6-release/workspace-after-selftest.file-operations.json.receipt.txt",
+    "sha256": "8f33e29287a09cce3b2e20517b4e1787d7bb36a07f562bc64f40f9bea8fe9748",
+    "bytes": 15380
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\trace.txt",
+    "path": "raw/v6-release/trace.txt",
+    "sha256": "68bf5aad3b19c97eb032f24010036d7694c70137a69b2bc3441d8623a50b47f7",
+    "bytes": 269190
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/v6-release/fileops/results.json.receipt.txt",
+    "sha256": "6fbfb220e0238dc771c461a906d04752cfd2f7228b3f869e10f76128a6823aee",
+    "bytes": 42217
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/v6-release/fileops/trace.txt",
+    "sha256": "46e5b510803566fc19db911e23ea2a4e78fcb9ceb190dc5d13d12388d8ff5a72",
+    "bytes": 207606
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\run-focused.ps1",
+    "path": "raw/v6-release/run-focused.ps1",
+    "sha256": "bbcaa65999c62ecf44123b8d60ac1195bf66baca9cb8a6fcd4414b08855195eb",
+    "bytes": 4413
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\build-and-test.ps1",
+    "path": "raw/v6-release/build-and-test.ps1",
+    "sha256": "773d9ff0f0a02caaa4f0d262acbe7d85ca6487705d6c7c4f3e994795dee03231",
+    "bytes": 2114
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\build.log",
+    "path": "raw/v6-release/build.log",
+    "sha256": "1b6a8bfad248f17f5f8539243c51231d0d3c5e60db95cba2b0ae43cc19886c02",
+    "bytes": 35721
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\build-exit.txt",
+    "path": "raw/v6-release/build-exit.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\build-receipt.json",
+    "path": "raw/v6-release/build-receipt.json.receipt.txt",
+    "sha256": "ed38d6e257b66e055c5468af1d999d0f4f9a1d385a2027743433cf706194c615",
+    "bytes": 84081
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-exit.txt",
+    "path": "raw/v6-debug/fileops-exit.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-plan.json",
+    "path": "raw/v6-debug/fileops-plan.json.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed",
+    "bytes": 105
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-copy-hashes.json",
+    "path": "raw/v6-debug/fileops-runner-copy-hashes.json.receipt.txt",
+    "sha256": "a89852a19d79b51cce37c3c065713740540fa770f417c151904be6ef7eab96ab",
+    "bytes": 7463
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops.log",
+    "path": "raw/v6-debug/fileops.log",
+    "sha256": "6b4a57b65d789ef00e1a60f3dbca1ae5728a8498f0a3113825e0c5d83428449f",
+    "bytes": 5308
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\invocations.json",
+    "path": "raw/v6-debug/invocations.json.receipt.txt",
+    "sha256": "d76665d757ec68d8b967f94815a05214ab22fdef5dddb7494551438d140b1fa3",
+    "bytes": 349
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\candidate-inputs.json",
+    "path": "raw/v6-debug/candidate-inputs.json.receipt.txt",
+    "sha256": "00ef5dcdc903ba22d3a82ee51d9c614802f9512e7094821fb513953f243b89c6",
+    "bytes": 5786
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/v6-debug/results.json.receipt.txt",
+    "sha256": "7e988c00d62968a8aa65dda392bc75b1771f00681e7c2594aebb68adaa485ccf",
+    "bytes": 53053
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/v6-debug/run-all-tests-results.json.receipt.txt",
+    "sha256": "c4cda5a2548bf9992bfa18dc0eff43f600bbd2bfeb072c1a0783a2a0645bb8d7",
+    "bytes": 46093
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "path": "raw/v6-debug/workspace-final.json.receipt.txt",
+    "sha256": "88c1a1fa81177adc0614f1c39b722a4a6d4578efeffd90bd0aa1cba95291482d",
+    "bytes": 15380
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "path": "raw/v6-debug/workspace-after-selftest.file-operations.json.receipt.txt",
+    "sha256": "653601b149dd88dfa0bd47ac0f5273cc22b4be386abb904ff11a13a0c81cfda1",
+    "bytes": 15380
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\trace.txt",
+    "path": "raw/v6-debug/trace.txt",
+    "sha256": "f7b72db57efad6d49a2e050c48997626465f12baf354edcfa22650d918b5aea5",
+    "bytes": 270026
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/v6-debug/fileops/results.json.receipt.txt",
+    "sha256": "55037a2bcd284d79c98c5dfba802dd67342bdcbe7e66ebb79add77151a1df620",
+    "bytes": 42079
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\fileops-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/v6-debug/fileops/trace.txt",
+    "sha256": "11fd28ea8150e10de8503982f4943c64dfac3bd702a3d5dc028e9c590f35468b",
+    "bytes": 208482
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\run-focused.ps1",
+    "path": "raw/v6-debug/run-focused.ps1",
+    "sha256": "9b5092af570a51239a0a7cffa29382efa9d3cd7547165c22e914c48d33b44636",
+    "bytes": 4468
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\build-and-test.ps1",
+    "path": "raw/v6-debug/build-and-test.ps1",
+    "sha256": "4f1953b110f42b322026087ad39b7497476210719cceb1ee2666b21e89ff26c6",
+    "bytes": 2122
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\build.log",
+    "path": "raw/v6-debug/build.log",
+    "sha256": "f2936a3e5632ba2927773fca7d1ce58492bbbc6385b1ddc2ae43ec113fd553f8",
+    "bytes": 28096
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\build-exit.txt",
+    "path": "raw/v6-debug/build-exit.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\build-receipt.json",
+    "path": "raw/v6-debug/build-receipt.json.receipt.txt",
+    "sha256": "5c81587b873fcb5d6360967ea924dc1372354d68b0c81a4a4c5e2e76f207fc64",
+    "bytes": 82586
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\run-plan-decision.json",
+    "path": "raw/v6-debug/run-plan-decision.json.receipt.txt",
+    "sha256": "a38b5fd1a3a65fadf07df76c098d10fe691360b09a804f68148a1f2f408d19f2",
+    "bytes": 562
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-exit.txt",
+    "path": "raw/v6-debug-common/common_smoke-exit.txt",
+    "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+    "bytes": 3
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-plan.json",
+    "path": "raw/v6-debug-common/common_smoke-plan.json.receipt.txt",
+    "sha256": "4430917ea78da52e3e49dbadd6650a228c8c5905cbcc47331f6b6f1341c3c4ed",
+    "bytes": 105
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-copy-hashes.json",
+    "path": "raw/v6-debug-common/common_smoke-runner-copy-hashes.json.receipt.txt",
+    "sha256": "4c97d821eed944432e67af5f31d0867e8f7d714711290e18846f194bfa1a979d",
+    "bytes": 4622
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke.log",
+    "path": "raw/v6-debug-common/common_smoke.log",
+    "sha256": "ef3dc350ac52ebe8621fdfdd308f3254908c608c1ae75986c6ef44d675e18e60",
+    "bytes": 1705
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\invocations.json",
+    "path": "raw/v6-debug-common/invocations.json.receipt.txt",
+    "sha256": "d76665d757ec68d8b967f94815a05214ab22fdef5dddb7494551438d140b1fa3",
+    "bytes": 349
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\candidate-inputs.json",
+    "path": "raw/v6-debug-common/candidate-inputs.json.receipt.txt",
+    "sha256": "00ef5dcdc903ba22d3a82ee51d9c614802f9512e7094821fb513953f243b89c6",
+    "bytes": 5786
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\results.json",
+    "path": "raw/v6-debug-common/results.json.receipt.txt",
+    "sha256": "dd2e9f0cb1bf028d56edaacd50dc3875500c012ce70198065bf93b5915e5aad2",
+    "bytes": 1017
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "path": "raw/v6-debug-common/run-all-tests-results.json.receipt.txt",
+    "sha256": "fc807c6ae0e4a12e657238677e3d4e1484c040e8e38800343b60405aa2acbea6",
+    "bytes": 2242
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "path": "raw/v6-debug-common/workspace-final.json.receipt.txt",
+    "sha256": "b72be4055ed9368d05fcba9866a236560f33d4cd2b909b3ea1f43895b653ae49",
+    "bytes": 15379
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "path": "raw/v6-debug-common/workspace-after-selftest.file-operations.json.receipt.txt",
+    "sha256": "13795cb1782c9a917aefd72f3bcfe6637a17d4e32edc9fb506eb5b3000a2b07b",
+    "bytes": 15379
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\trace.txt",
+    "path": "raw/v6-debug-common/trace.txt",
+    "sha256": "0dd4a8cb1883be8046d8b276d2e52c906eb1da5e756ab262084bc2b7f5fb2cb6",
+    "bytes": 14454
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "path": "raw/v6-debug-common/fileops/results.json.receipt.txt",
+    "sha256": "ef0a1fbf1108158c3a6ca0e60e2933fb59d95de2e47b9b5f6e5f8280c343237f",
+    "bytes": 575
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-debug-20260927\\common_smoke-runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "path": "raw/v6-debug-common/fileops/trace.txt",
+    "sha256": "46f2ce1d7f5b9f806ea3cff511df6afdb091e97d4cc1ab4b279eed300f9a7772",
+    "bytes": 648
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\exact-bound-results-candidate-v5-20260927\\build-receipt.json",
+    "path": "raw/v5-release/build-receipt.json.receipt.txt",
+    "sha256": "ff28630b4943ff1c042c673c97880877afc6376245c7a235db644c96f27bfc62",
+    "bytes": 84081
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-sequence-20260927.ps1",
+    "path": "raw/sequence.ps1",
+    "sha256": "c4130c86032f82983c7cf20a50976a6b0f202b70ef009d28fa54352dc6cae8a2",
+    "bytes": 249
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\curate-family-dispatch-20260927.py",
+    "path": "raw/curate-family-dispatch.py",
+    "sha256": "38ca1d8842e89c628576a144ca6122933b6d95532a76633f7457ea44e2df2a4f",
+    "bytes": 10553
+  },
+  {
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\family-dispatch-v6-release-20260927\\inputs\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.SelfTest.cpp",
+    "path": "raw/family-registration.cpp.source.txt",
+    "sha256": "243b6c49c6cb45758616ad535ea74eb016bf192e0ada7ae69780d4be64f49a33",
+    "bytes": 365063
+  }
+]

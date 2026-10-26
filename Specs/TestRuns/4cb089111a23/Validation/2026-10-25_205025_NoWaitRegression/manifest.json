@@ -1,0 +1,39 @@
+{
+  "schema": "asan-owned-lock-regression-evidence-v1",
+  "source": "e7f3b7188d9279e74fc1f9ac8d7f337d332445a3",
+  "profile": "x64 ASan Debug",
+  "buildReceipt": "94711f975ce6168ee9702f30290336c1209e507689c68b07d390ec177ee79cd3",
+  "status": "gated query baseline failed; UI cluster passed; focused checks are not repository qualification",
+  "files": [
+    {
+      "file": "gate-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617\\artifacts\\selftest\\last_run\\compare\\results.json",
+      "sha256": "1B3FBEFD56151CE6DC4AD9C2ABDEB0828A03B65890DC6F295C5174254D4D5F07",
+      "bytes": 1673
+    },
+    {
+      "file": "gate-wrapper-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "183844E5E26EBADB4C089A9F0BA59E0425F7D2C60CEFBD5DC2E67B44EE93BCD5",
+      "bytes": 5447
+    },
+    {
+      "file": "ui-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T205119Z-30012-ade9faa31ea640e286d50126ddb705e0\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "sha256": "7496AABEEDC2749C1A9D0C61BE1EAC7A0D9B21C9BF4B9860EF668790FA1726E2",
+      "bytes": 2861
+    },
+    {
+      "file": "ui-wrapper-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261025T205119Z-30012-ade9faa31ea640e286d50126ddb705e0\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "BF8767A0E5E3C338F6C12378F607428A622DE5C9965AD7FA8B917B3DBDB83224",
+      "bytes": 6666
+    },
+    {
+      "file": "driver-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\nowait-baseline-qualification.json",
+      "sha256": "9F3DE868E2BF4EB9392FDF92E3DF869FA8031B41F9EE20755C1131412390A6A9",
+      "bytes": 1293
+    }
+  ]
+}

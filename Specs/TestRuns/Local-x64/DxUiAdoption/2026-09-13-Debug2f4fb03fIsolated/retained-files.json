@@ -1,0 +1,98 @@
+[
+  {
+    "file": "master-integration-2f4fb03f.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\master-integration-2f4fb03f.json",
+    "bytes": 1490,
+    "sha256": "1be0777b965d3441cd3ce72c0272d797e58ece7d5c29dd0216ed9e789ece0ddb"
+  },
+  {
+    "file": "2f4fb03f-isolated-x64-Debug-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-build.log",
+    "bytes": 19706,
+    "sha256": "a7e615f7406b7d34cdd54113e6e4ee2965c1ddbd2bde4a359ea794a66d528e2f"
+  },
+  {
+    "file": "2f4fb03f-isolated-x64-Debug-Full.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full.log",
+    "bytes": 1116231,
+    "sha256": "d642a338d5a105af9addb657ffcc49ed6c8e86476ba9bdae585c0595f8138c66"
+  },
+  {
+    "file": "2f4fb03f-isolated-x64-Debug-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-summary.json",
+    "bytes": 425,
+    "sha256": "f910106d235f489291c836c0bfea4a54271c1bf93893ee7bbf6d68bba01a1793"
+  },
+  {
+    "file": "run-all-tests-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\final-results\\run-all-tests-results.json",
+    "bytes": 15215,
+    "sha256": "f1377c8483c0b14dafaa6253c5e1629b3055446f146bfeb0c2f88958d6987b5a"
+  },
+  {
+    "file": "2f4fb03f-isolated-x64-Debug-post-Full-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-post-Full-module-identities.json",
+    "bytes": 7266,
+    "sha256": "aae8a21212cd9329d626f9052397eb6071dfcb72563fccba4e574e33f82411de"
+  },
+  {
+    "file": "compare_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\CompareDirectories\\2026-09-13_141746\\compare_results.json",
+    "bytes": 54594,
+    "sha256": "9958ddd9c784f826b0ec6ef864a2f6f33d8679b08cc0edf81d781e00e1a0111a"
+  },
+  {
+    "file": "commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\Commands\\2026-09-13_143931\\commands_results.json",
+    "bytes": 177251,
+    "sha256": "48a7b8e17c806770e67ec99fc5e7a52e0f1b05bd8a4ea43182b3c6ce2fb12361"
+  },
+  {
+    "file": "fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\archive\\4cb089111a23\\FileOps\\2026-09-13_150038\\fileops_results.json",
+    "bytes": 39351,
+    "sha256": "d1953a7b95d1e26c17dc864dfb7342356bb7050079820dce6da075063b0402dd"
+  },
+  {
+    "file": "validation-plan.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\validation-plan.json",
+    "bytes": 22930,
+    "sha256": "c9803366183c29fbe75b4316fcc476f06999bebad912d8b36a0a08a708787fe1"
+  },
+  {
+    "file": "run-state.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\run-state.json",
+    "bytes": 7505,
+    "sha256": "d98f8c5c07d137077038b5db35594394dd250a1f897314fbb5860528ee1d8aea"
+  },
+  {
+    "file": "e8bae50315839e0f4b4a5de7709c38b513d0b8dd4e947b1a52cfb6f8e3028ed5.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\decisions\\e8bae50315839e0f4b4a5de7709c38b513d0b8dd4e947b1a52cfb6f8e3028ed5.json",
+    "bytes": 6694,
+    "sha256": "63215a40bfc5ec3518f452e6f607a6efcd901d634bc8beaa74ccb8b712a0bc41"
+  },
+  {
+    "file": "76a00353f6d93f0667474d0422bba19152552a064a046279270f826181f42431.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\terminal-results\\76a00353f6d93f0667474d0422bba19152552a064a046279270f826181f42431.json",
+    "bytes": 395,
+    "sha256": "81a91e2f50295a29cc30d0e161c086cafe84f457c03763b7553fa8fd2e28fdc3"
+  },
+  {
+    "file": "7538c2f20d4d7efd58cd230a7ead727187533e0c9ce29de4ba3d6e0532bd3388.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\evidence\\7538c2f20d4d7efd58cd230a7ead727187533e0c9ce29de4ba3d6e0532bd3388.json",
+    "bytes": 22063,
+    "sha256": "75f3dc0bb6a44ad964697057a1c86c852d927a5e97205b15346bd64bd99e90f3"
+  },
+  {
+    "file": "a7cef30547233f102d42d63b6d6764eab042705f7d94f13d4790ca245a66a2cf.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\entries\\tooling.pester\\terminal-results\\a7cef30547233f102d42d63b6d6764eab042705f7d94f13d4790ca245a66a2cf.json",
+    "bytes": 390,
+    "sha256": "11874f499decefc6fceefe7bf3495a1de3bff687319941b8939526495befb606"
+  },
+  {
+    "file": "8a02235c9500564e33964ee4b092b29abfd04ffeb15da05ce11f6855ea24cef3.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\2f4fb03f-isolated-x64-Debug-Full\\validation-evidence\\entries\\tooling.pester\\evidence\\8a02235c9500564e33964ee4b092b29abfd04ffeb15da05ce11f6855ea24cef3.json",
+    "bytes": 21906,
+    "sha256": "f3a86fe4791ddbb22c1b384417cd547a039082eee766cb7794afb15b32c1c286"
+  }
+]

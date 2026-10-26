@@ -1,0 +1,53 @@
+param([Parameter(Mandatory)][string]$ExpectedHead,[ValidatePattern('^[a-z0-9-]+$')][string]$Variant='pool',[ValidatePattern('^[a-z0-9-]+$')][string]$CandidatePrefix='seed-memory-candidate')
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$repoPath='E:\RedSalamander.Perf\integration-20261024'
+Set-Location -LiteralPath $repoPath
+$records=[Collections.Generic.List[object]]::new()
+$phase='initializing'
+$outcome='running'
+function Assert-FrozenSource{if((git rev-parse HEAD) -ne $ExpectedHead -or (git status --porcelain)){throw 'Native seed pool candidate changed.'}}
+function Save-State{[ordered]@{head=$ExpectedHead;ownerPid=$PID;phase=$phase;outcome=$outcome;updatedUtc=[DateTime]::UtcNow.ToString('o');scope='Focused seed qualification only; six builds and final Full profiles still required.';entries=$records.ToArray()} | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $PSScriptRoot ('native-seed-'+$Variant+'-qualification.json'))}
+function Invoke-Phase([string]$Name,[scriptblock]$Action){
+    Assert-FrozenSource
+    $script:phase=$Name
+    Save-State
+    $started=[DateTime]::UtcNow
+    $log=Join-Path $PSScriptRoot ($Name+'.log')
+    & $Action *> $log
+    $code=$LASTEXITCODE
+    $records.Add([pscustomobject]@{phase=$Name;exitCode=$code;startedUtc=$started.ToString('o');finishedUtc=[DateTime]::UtcNow.ToString('o');log=$log})
+    Save-State
+    Assert-FrozenSource
+    if($code -ne 0){throw "Native seed pool phase failed: $Name ($code)."}
+}
+try{
+    Assert-FrozenSource
+    $baselineState=Get-Content (Join-Path $PSScriptRoot 'ntfs-seed-baselines.json') -Raw | ConvertFrom-Json
+    if($baselineState.outcome -ne 'diagnostic_baselines_complete' -or $baselineState.entries.Count -ne 6){throw 'Retained ASan/Release baselines must complete first.'}
+    Import-Module ./Tools/Modules/Testing/TestInvocation.psm1 -Force
+    $buildEnv=Get-RSBuildEnvironmentOverrides -Suite Full
+    foreach($key in $buildEnv.Keys){[Environment]::SetEnvironmentVariable($key,$buildEnv[$key],'Process')}
+    foreach($profile in @('ASan Debug','Release')){
+        $suffix=if($profile -eq 'ASan Debug'){'asan'}else{'release'}
+        Invoke-Phase ('native-seed-'+$Variant+'-x64-'+$profile.Replace(' ','-')+'-build') {& ./build.ps1 -Platform x64 -Configuration $profile -MaxCpuCount 4}
+        Invoke-Phase ('native-seed-'+$Variant+'-'+$suffix+'-parser') {
+            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-OwnedResidualProbe.ps1') -ExpectedHead $ExpectedHead -Label ('seed-'+$Variant+'-'+$suffix+'-parser') -Suite Compare -Configuration $profile -CaseFilter 'local_index_core_usn_record_bounds_reject_corruption,local_index_core_usn_seed_arena_preserves_unicode_records,local_index_core_ntfs_seed_scratch_owns_storage'
+        }
+        foreach($attempt in 1..3){
+            Invoke-Phase ('native-seed-'+$Variant+'-'+$suffix+'-memory-'+$attempt) {
+                & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-OwnedResidualProbe.ps1') -ExpectedHead $ExpectedHead -Label ($CandidatePrefix+'-'+$suffix+'-'+$attempt) -Suite Compare -Configuration $profile -CaseFilter local_index_core_sqlite_cold_start_stale_root_refreshes_before_query -SampleOwnedMemory
+            }
+        }
+        if($profile -eq 'ASan Debug'){
+            Invoke-Phase ('native-seed-'+$Variant+'-asan-service-regressions') {
+                & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-OwnedResidualProbe.ps1') -ExpectedHead $ExpectedHead -Label ('seed-'+$Variant+'-asan-service-regressions') -Suite Compare -Configuration $profile -CaseFilter 'search_service_sqlite_cold_start_stale_root_refreshes_before_query,search_service_sqlite_default_store_uses_build_specific_programdata_root,search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root,local_search_service_single_request_uses_query,local_search_index_status_snapshot_does_not_wait_for_warmup,local_search_index_nowait_query_does_not_wait_for_warmup,local_search_index_opportunistic_query_does_not_wait_for_warmup'
+            }
+        }
+    }
+    Invoke-Phase ('native-seed-'+$Variant+'-paired-comparison') {& pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-NtfsSeedPoolComparison.ps1') -ExpectedHead $ExpectedHead -CandidatePrefix $CandidatePrefix -OutputLabel $Variant}
+    $phase='complete'
+    $outcome='focused_pass_only'
+    Save-State
+}
+catch{$outcome='failed';Save-State;throw}

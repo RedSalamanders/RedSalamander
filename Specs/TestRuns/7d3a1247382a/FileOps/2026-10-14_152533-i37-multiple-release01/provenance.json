@@ -1,0 +1,58 @@
+{
+  "runId": "20261014T152533Z-42084-65c97c67f3754cfdb2b0293a1a8e84fd",
+  "receipt": "abbd693d6b993271b352381c7c6f30c67c3a2a6ddc417c36b5e7b85f28224d0e",
+  "sourceSnapshotId": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "configuration": "Release",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-multiple-release-20261014-01",
+  "nativeVerdict": "PASSED",
+  "runnerVerdict": "PASSED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, untouched and separate; they do not themselves fail the selected runner.",
+  "note": "Final frozen test-enabled x64 Release: actual regular-file PerItem and direct Native CopyItems qualification passes independently. Named native semantic-link subcases remain unavailable with ERROR_PRIVILEGE_NOT_HELD (1314); top-level skipped count is not semantic-link coverage. Absolute Release characterization has no original Release pair.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 95225,
+      "sha256": "0BC6AADCDA696C51A08812796B51172DD712FEEB288696BFD91C003E9D0C6B81"
+    },
+    {
+      "path": "characterization.json",
+      "bytes": 2832,
+      "sha256": "832822A44826C5AA5D8370D3F24FCC0906609C39F72593CF68A8DEF21124AA94"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 2714,
+      "sha256": "EAB7E8EC09C407E61F86E215962FF1E8FE6EB785C5D2763793CAC357D2E4AE61"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 29226,
+      "sha256": "8C488DA5AAD9EF6C79B9BB21A91DD8CD14CA504723492E8B9F7179D2F973D3E6"
+    },
+    {
+      "path": "qualified-input-source-manifest.json",
+      "bytes": 4069,
+      "sha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1641,
+      "sha256": "E30038E645E4A2EB5E5B3C5F6772D331E679B11A5F4292340A454030A7A65367"
+    },
+    {
+      "path": "results.json",
+      "bytes": 897,
+      "sha256": "F51BDD2DB9275E116AB0E081A856A671A78BDE3658DBCBCEBCC061516A64467E"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3461,
+      "sha256": "80CBEB64D9B2235C30CCDE124383DFAC4F8065B8587D92EFDF473B29E895AFA0"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 7470,
+      "sha256": "9664A2A0BEB22241BF9F1BACCB366046D54A963924524F17C1DF0288B8458AAD"
+    }
+  ]
+}

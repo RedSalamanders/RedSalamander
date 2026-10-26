@@ -1,0 +1,46 @@
+Artifact provenance and exact-byte shard map. All source/output pairs were SHA-256 and size checked.
+run_id=space-perf-sink-microbench-20261009T054653Z-e77273ef5e5b416fb35bf9a0ee98bade
+raw_source_path=D:\RedSalamander.Perf\evidence\space-perf-sink-microbench-20261009T054653Z-e77273ef5e5b416fb35bf9a0ee98bade\perf.jsonl
+raw_source_bytes=3117875
+raw_source_sha256=85314030db6afc446b0d9995e225bcbd5bc5c39c87d21d0d4542c427d2894cfb
+raw_source_rows=4000
+sharding=consecutive source-order rows, split after source row 2000; concatenate part1 then part2 for byte-identical source
+
+archive_file=perf-raw-0001.jsonl
+source_lines=1-2000
+source_byte_offset=0
+source_bytes=1558875
+source_sha256=85314030db6afc446b0d9995e225bcbd5bc5c39c87d21d0d4542c427d2894cfb
+archive_bytes=1558875
+archive_sha256=ecafdbb2067ea0e0bfcedfd7d112f7c041ba5b1ac8a486f7e9ab966e4edeb7db
+
+archive_file=perf-raw-0002.jsonl
+source_lines=2001-4000
+source_byte_offset=1558875
+source_bytes=1559000
+source_sha256=85314030db6afc446b0d9995e225bcbd5bc5c39c87d21d0d4542c427d2894cfb
+archive_bytes=1559000
+archive_sha256=21e2ada86df50f3eabb03f30a5354a39deb30df15e9533f08ae508684eeba478
+
+archive_file=results.json
+source_path=D:\RedSalamander.Perf\evidence\space-perf-sink-microbench-20261009T054653Z-e77273ef5e5b416fb35bf9a0ee98bade\results.json
+source_bytes=955
+source_sha256=7f998c0dbbb22e3d5381d4b7d6932183739348e8d815ed85090fa17337c8d6da
+archive_bytes=955
+archive_sha256=7f998c0dbbb22e3d5381d4b7d6932183739348e8d815ed85090fa17337c8d6da
+
+archive_file=source.txt
+source_path=C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\space-perf-sink-microbench.cpp
+source_bytes=7482
+source_sha256=221f2c5c87002475c5befdd3546dc74c4236a43421e300ba0696fcf0fde8061c
+archive_bytes=7482
+archive_sha256=221f2c5c87002475c5befdd3546dc74c4236a43421e300ba0696fcf0fde8061c
+
+archive_file=build-receipt.json
+source_path=C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\receipts\abfd2cc6e18053a2f77ba8d9dd84155bb232cb7a72428321274e48f226e65475.json
+source_bytes=96954
+source_sha256=d8a2634d6facebb1ef4d9b09219c29ba3421f7efce660858d429f71981adbb83
+archive_bytes=96954
+archive_sha256=d8a2634d6facebb1ef4d9b09219c29ba3421f7efce660858d429f71981adbb83
+
+executable_and_Common.dll identities: see binary-identities.txt; binary files intentionally not copied.

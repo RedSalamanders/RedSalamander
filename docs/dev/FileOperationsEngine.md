@@ -1,6 +1,6 @@
 # File Operations Engine (Developer)
 
-The File Operations Engine runs every long-running Copy/Move/Delete off the UI thread, gates them through a Wait/Parallel queue, dispatches per-item work on a shared scheduler, arbitrates conflicts inline, and moves bytes between unrelated providers through a host-driven cross-filesystem bridge. This page documents the internals; for the user-facing behavior see [../FileOperations.md](../FileOperations.md), for the higher-level subsystem overview see [../DeveloperGuide.md](../DeveloperGuide.md), and for the normative contract see [Specs/FileSystem/FileSystem_FileOperations.md](../../Specs/FileSystem/FileSystem_FileOperations.md).
+The File Operations Engine runs every long-running Copy/Move/Delete off the UI thread, gates them through a Queue/Parallel queue, dispatches per-item work on a shared scheduler, arbitrates conflicts inline, and moves bytes between unrelated providers through a host-driven cross-filesystem bridge. This page documents the internals; for the user-facing behavior see [../FileOperations.md](../FileOperations.md), for the higher-level subsystem overview see [../DeveloperGuide.md](../DeveloperGuide.md), and for the normative contract see [Specs/FileSystem/FileSystem_FileOperations.md](../../Specs/FileSystem/FileSystem_FileOperations.md).
 
 ## Source layout
 
@@ -8,16 +8,18 @@ The engine is split across one header and several translation units so a single 
 
 | File | Role |
 |------|------|
-| `RedSalamander/FolderWindow.FileOperationsInternal.h` | Private header: `FileOperationState`, nested `Task` (implements `IFileSystemCallback` + `IFileSystemDirectorySizeCallback`), `ConflictArbiter`, `ConflictBucket`/`ConflictAction`, `PerItemCallbackCookie`, `PerfStats`, `CompletedTaskSummary`, `TaskDiagnosticEntry` |
-| `RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp` | `StartOperation`, `ApplyQueueMode`, `ShouldQueueNewTask`, `HasActiveOperations`, `CancelAll`, `NotifyQueueChanged`, `Shutdown` |
-| `RedSalamander/FolderWindow.FileOperations.State.Queue.Part.cpp` | `EnterOperation`, `LeaveOperation`, `PostCompleted`, `RemoveFromQueue`, `UpdateQueuePausedTasks`, `FindTask`, `RemoveTask`, plus `ENABLE_TESTS` hooks |
-| `RedSalamander/FolderWindow.FileOperations.State.cpp` | `Task::ThreadMain`, `ExecuteOperation`, `RunPreCalculation`, the `IFileSystemCallback` methods, the conflict arbiter helpers, `PerItemTaskScheduler`, and the `CrossFileSystemBridge` |
-| `RedSalamander/FolderWindow.FileOperations.State.Diagnostics.Part.cpp` | `RecordCompletedTask`, diagnostics log + Issues capture |
-| `RedSalamander/FolderWindow.FileOperations.Popup.cpp` / `.IssuesPane.cpp` | Direct2D/DirectWrite UI; reads published snapshots, posts user actions back via `SubmitConflictDecision` etc. |
+| [`FolderWindow.FileOperationsInternal.h`](../../RedSalamander/FolderWindow.FileOperationsInternal.h) | Private `FileOperationState`, `Task`, result and admission types. |
+| [`FolderWindow.FileOperations.cpp`](../../RedSalamander/FolderWindow.FileOperations.cpp) | UI-thread `AdmitOperation` and `AdmitInlineRename`: captured endpoint facts, planning, capability and same-object checks before `StartOperation`. |
+| [`FolderWindow.FileOperations.State.Runtime.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Runtime.cpp) | `StartOperation`, queue-mode changes, lifecycle, cancellation and popup telemetry-work predicate. |
+| [`FolderWindow.FileOperations.State.Queue.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Queue.cpp) | Queue entry/exit, completion posting, fallback storage and worker-quiet drain. |
+| [`State.Conflict.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Conflict.cpp), [`FileOperationsConflictBroker.cpp`](../../RedSalamander/FileOperationsConflictBroker.cpp) | Generation-checked consent binding and one-shot broker decisions. |
+| [`FolderWindow.FileOperations.State.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.cpp) | Task execution, provider/bridge mutation, callbacks, typed-result reduction and conflict waits. |
+| [`FolderWindow.FileOperations.State.Diagnostics.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp) | Completed task summary and diagnostic capture. |
+| [`Popup.cpp`](../../RedSalamander/FolderWindow.FileOperations.Popup.cpp), [`Popup.PathDetail.cpp`](../../RedSalamander/FolderWindow.FileOperations.Popup.PathDetail.cpp), [`IssuesPane.cpp`](../../RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp), [`IssuesProjection.cpp`](../../RedSalamander/FolderWindow.FileOperations.IssuesProjection.cpp) | Task/Issues presentation, path-detail focus, lifecycle and timer policy. |
 
 ## Per-task jthread model
 
-`StartOperation` is the single entry point. It validates preconditions (provider capabilities through `CanSameFileSystemOperation`, same-folder / overlap rejection, destructive-delete confirmation), snapshots host-owned settings into the new `Task` (`_enablePreCalc`, `_preCalcMaxWorkers`, `_crossFsBridgeBufferBytes`, the seeded `_desiredSpeedLimitBytesPerSecond`), pushes the `unique_ptr<Task>` into `_tasks` under `_mutex`, ensures the popup is visible, and then spawns exactly one worker:
+UI commands first call `AdmitOperation` (or `AdmitInlineRename`) in [`FolderWindow.FileOperations.cpp`](../../RedSalamander/FolderWindow.FileOperations.cpp), which captures provider/endpoint identity, checks capabilities and overlap, and builds typed plans. `StartOperation` in [`State.Runtime.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Runtime.cpp) accepts that prepared admission, snapshots task settings, publishes the task, and starts its worker. Empty selected input returns without creating a task.
 
 ```cpp
 rawTask->_thread = std::jthread([rawTask](std::stop_token stopToken) noexcept { rawTask->ThreadMain(stopToken); });
@@ -30,15 +32,15 @@ There is one `std::jthread` per task (`Task::_thread`). The `std::stop_token` is
 1. `SetWaitingInQueue(_waitForOthers)` so the UI shows "Waiting" immediately for queued tasks.
 2. `_state->EnterOperation(*this, stopToken)` — the start gate (below). If it returns `false` the task was cancelled while queued; it stores `ERROR_CANCELLED` and calls `PostCompleted`.
 3. On success it latches `_enteredOperationTick` / `_enteredOperation` (used by queue-pause ordering).
-4. Runs pre-calc (concurrent or serial, see "5F early admission").
+4. Prepares the selected inputs and uses the provider/host shared discovery path to publish growing facts while work is scheduled.
 5. `ExecuteOperation()` — the actual transfer/delete.
-6. Joins the side pre-calc thread (if any), records perf (`FileOps.Operation`, `FileOps.PreCalc`, `FileOps.Bridge.*`), logs the result diagnostic, and falls through to teardown. `PostCompleted` posts `WndMsg::kFileOperationCompleted` to the FolderWindow.
+6. Waits for owned producers/workers to become quiet, records discovery/operation/bridge metrics and typed diagnostics, then publishes terminal task state. `PostCompleted` first tries an owner-window payload; failed posts retain the completion for owner-thread adoption only after the worker is joined.
 
-On `Shutdown` the state cancels all live tasks (`RequestCancel`) and lets the `_tasks` vector destruct; each `jthread` joins automatically.
+On `Shutdown` the state requests cancellation and joins owned workers and completion drains before releasing borrowed task state. A normal main-window close with active work first asks for Cancel all, keeps the window alive while cards show Stopping, and resumes `WM_CLOSE` after the tasks are quiet; D10 exercises that application path. While that exit is pending, `StartOperation` and `AdmitScheduledRename` refuse every new admission with `FolderWindow::kFileOperationRefusedForPendingExit` before any prompt (and `StartOperation` again after its last prompt), and a second close attempt only brings the popup forward. The exit stays pending until the resumed `WM_CLOSE` has been handled (`ConfirmCancelAllFileOperations` ends it, or the `WndMsg::kFileOperationsDeferredCloseSettled` message posted right behind the `WM_CLOSE`), so a posted message queued ahead of that close is refused rather than admitted as work the close would ask to cancel again. The check is `_owner.IsFileOperationsExitPending()`, which on the Compare Directories window's own `FolderWindow` follows the application `FolderWindow` (`SetApplicationExitFolderWindow`), so Compare's separate engine refuses too. The same link registers Compare's `FolderWindow` with the application one (`_exitLinkedFolderWindows`): the exit consent counts every linked engine, `CancelAllFileOperationsThenClose` cancels them all, and the deferred close resumes only when all are quiet (a linked engine's `ResumeDeferredCloseIfFileOperationsQuiet` forwards to the application window). The Compare window's own `WM_CLOSE` calls `ConfirmCancelAllFileOperations` on its `FolderWindow`, which asks to cancel that window's work and close it and defers that close the same way (FileOps self-test `FileOps_CompareWindowCloseConsent`).
 
 ## EnterOperation: the start-gating queue
 
-`EnterOperation` (in `.Queue.Part.cpp`) implements Wait vs Parallel start gating against `FileOperationState`-owned state: `_queueMutex`, `_queueCv`, a FIFO `std::deque<uint64_t> _queue` of waiting task IDs, and an `unsigned long _activeOperations` count.
+`EnterOperation` (in `FolderWindow.FileOperations.State.Queue.cpp`) implements Wait vs Parallel start gating against `FileOperationState`-owned state: `_queueMutex`, `_queueCv`, a FIFO `std::deque<uint64_t> _queue` of waiting task IDs, and an `unsigned long _activeOperations` count.
 
 - If the task's `_waitForOthers` is false (Parallel), it simply `++_activeOperations` and returns `true` — no blocking.
 - If `_waitForOthers` is true (Wait), it pushes its task ID onto `_queue`, calls `NotifyQueueChanged`, and waits on `_queueCv` until one of:
@@ -46,7 +48,7 @@ On `Shutdown` the state cancels all live tasks (`RequestCancel`) and lets the `_
   - `_waitForOthers` flipped to false mid-wait (mode switched to Parallel) — it removes itself from the queue and proceeds, or
   - `_activeOperations == 0 && _queue.front() == _taskId` — it is the oldest waiter and nothing else is active, so it pops the queue head and `++_activeOperations`.
 
-The crucial property: **pre-calc runs while holding the queue slot**. Because `EnterOperation` is called before pre-calc and before any `IFileSystem::*` call, queued tasks never interleave their pre-calc + operation phases. `LeaveOperation` decrements `_activeOperations` and calls `NotifyQueueChanged` to wake the next waiter; it is invoked both on the normal completion path and on the cancel-before-execute fast exit in `ThreadMain`.
+The start gate precedes discovery and provider mutation. A queued task cannot begin its traversal or transfer before admission to the active operation set.
 
 `ShouldQueueNewTask` decides the initial `_waitForOthers` for a brand-new task: it returns true when global queue mode (`_queueNewTasks`, true by default) is on **and** `HasActiveOperations()` is true (any task object exists, or `_activeOperations > 0` / `_queue` non-empty). Treating any existing task as "active" makes rapid multi-task starts race-free into Wait mode.
 
@@ -68,60 +70,58 @@ Three distinct mechanisms cooperate; do not conflate them:
 
 | Mechanism | Owner state | Effect | Where it blocks |
 |-----------|-------------|--------|-----------------|
-| **Start gating** (Wait mode) | `Task::_waitForOthers`, `_queue`, `_activeOperations` | A waiting task blocks *before* pre-calc until it is the oldest waiter and nothing is active | `EnterOperation` on `_queueCv` |
-| **Pause** (user) | `Task::_paused` | Worker stalls at the next progress checkpoint | `WaitWhilePaused` / `WaitWhilePreCalcPaused` on `_pauseCv` |
+| **Start gating** (Wait mode) | `Task::_waitForOthers`, `_queue`, `_activeOperations` | A waiting task blocks *before* discovery/mutation until it is the oldest waiter and nothing is active | `EnterOperation` on `_queueCv` |
+| **Pause** (user) | `Task::_paused` | Worker stalls at the next cooperative progress checkpoint | `WaitWhilePaused` on `_pauseCv` |
 | **Queue pause** (mode-driven) | `Task::_queuePaused` | Already-active non-oldest tasks stall when switching to Wait while many are running | same `WaitWhilePaused` path |
 
 `ApplyQueueMode(queue)` sets `_queueNewTasks` and reconciles existing tasks: in Parallel it clears `_waitForOthers` on everything (unblocking start-gated tasks); in Wait it sets `_waitForOthers` on not-yet-started tasks, then calls `UpdateQueuePausedTasks`.
 
 `UpdateQueuePausedTasks` selects the single task that keeps running in Wait mode using **operation-enter time, not task ID**: it walks all tasks that `HasEnteredOperation()`, picks the smallest `GetEnteredOperationTick()` (ties broken by ID), clears `_queuePaused` on that one, and sets `_queuePaused` on the rest. Tasks that have not yet entered are left unpaused (they are still gated at `EnterOperation`). This gives deterministic "oldest active task continues" serialization.
 
-`WaitWhilePaused` loops while either `_paused` or `_queuePaused` is set, waiting on `_pauseCv`; it also handles conflict convergence (below). `WaitWhilePreCalcPaused` is the pre-calc-phase equivalent and additionally returns when `_preCalcSkipped` is set.
+`WaitWhilePaused` loops while either `_paused` or `_queuePaused` is set, waiting on `_pauseCv`; it also handles conflict convergence (below).
 
-## 5F early admission: the overlap latch
+## Streaming discovery and scheduling
 
-For **Copy** with pre-calc enabled, the engine overlaps the recursive size scan with the byte transfer so first-byte latency on deep trees does not wait for the full scan. In `ThreadMain`:
+Copy, Move and Delete share traversal work with counting instead of running an
+independent full-tree pre-calculation pass. The local FileSystem provider publishes
+discovery facts as its producer walks, validates and schedules work. Host bridge
+routes preserve the same open/closed discovery distinction. Local selected files
+receive fresh metadata checks before payload transfer; pane-displayed sizes are
+not admission authority. Read failures remain per-item facts.
 
-```cpp
-const bool useEarlyAdmission =
-    (_operation == FILESYSTEM_COPY && _enablePreCalc && ! _preCalcSkipped.load(...));
-```
+A provider listing closes a folder's discovery once all its entries and recursive
+producers are accounted for. Folder operation completion is separate: descendants
+and metadata restoration may still be running. A growing count is provisional;
+percentage/ETA and footer/taskbar state must follow the explicit closure facts.
+The provider's lifetime/join rules remain part of mutation safety, especially
+when Move removes source leaves or a Delete retains parent handles.
 
-When `useEarlyAdmission`, `RunPreCalculation` is launched on a **side `std::jthread`** via `TryStartPreCalculationThread` while `ExecuteOperation` runs the transfer concurrently. If the side thread cannot be created, it falls back to the serial pre-calc-then-execute path. **Move and Delete always stay serial** because they mutate/remove the source, and a concurrent scan would size a tree that is being deleted.
+**Skip counting** is a one-way scheduling change. It stops discovery running ahead
+and releases its reserved transfer capacity, while required enumeration, name
+validation and conflict checks continue. It never discards items or fabricates a
+closed total. The old side pre-calculation thread and overlap latch are not the
+current architecture.
 
-Both producers raise the shared totals under `_progressMutex` with `std::max`, so totals/ETA stay "estimating" (gated on `_preCalcCompleted`) until pre-calc publishes, then reconcile in place.
-
-The deterministic proof that the overlap happened is the `_transferStartedBeforePreCalcComplete` latch. It is set inside `FileSystemProgress` (a *transfer* progress callback) the first time a transfer callback fires while pre-calc is still in progress and not yet complete:
-
-```cpp
-if (! _transferStartedBeforePreCalcComplete.load(...) &&
-    _preCalcInProgress.load(...) && ! _preCalcCompleted.load(...))
-{
-    _transferStartedBeforePreCalcComplete.store(true, ...);
-}
-```
-
-This state is impossible under the old serial model, so a self-test can assert it to prove the transfer genuinely overlapped the scan.
+Use the authoritative
+[streaming discovery and scheduling contract](../../Specs/FileSystem/FileSystem_FileOperations.md#streaming-discovery-and-scheduling)
+for queue bounds, lifetime, cancellation and route-specific behavior. The popup
+shows completed/found counts, current bytes and the effective automatic transfer
+budget from snapshots; it does not derive completion from selected-root counts.
+Speed is a rolling wall-clock observation. Terminal Last note text is measured
+and wrapped above progress/actions, including after resize.
 
 ## Conflict call sequence
 
-`FileSystemIssue` is the `IFileSystemCallback` method plugins call when an item fails and needs a user decision. The engine arbitrates through `Task::_conflictArbiter` (a `ConflictArbiter`: a mutex, a `cv`, a per-bucket `decisionCache`, a single `ConflictPromptState prompt`, an `ownerThreadId`, and a `wil::unique_event` `decisionEvent`). The full sequence:
+A provider issue enters the task's conflict arbiter. The worker classifies the issue and reuses an eligible per-task decision cache; otherwise BeginConflictPrompt publishes one task prompt with a new generation and waits for an actual decision. Other workers for that task converge at the pause/conflict barrier.
 
-1. `FileSystemIssue` calls `WaitWhilePaused`, then classifies the failure into a `ConflictBucket` (`ClassifyConflictBucket` — Exists, ReadOnly, AccessDenied, SharingViolation, DiskFull, PathTooLong, RecycleBinFailed, NetworkOffline, UnsupportedReparse, Unknown).
-2. It first consults the per-task per-bucket cache via `LoadConflictDecisionFromCache`. A cached decision (set only by "Apply to all" or "Skip All") short-circuits without prompting.
-3. Otherwise it computes retry eligibility from the `PerItemCallbackCookie::issueRetryCounts` (Retry is capped to one per `(item, bucket)`), then calls **`BeginConflictPrompt`**. Under the arbiter mutex this re-checks the cache, waits until no other prompt is active (`prompt.active == false`) so **at most one prompt per task** is live, then publishes the `ConflictPromptState` (bucket, paths resolved to the most-specific child, the action layout, `ownerThreadId = GetCurrentThreadId()`) and resets `decisionEvent`. It returns `{action, ownsPrompt}`.
-4. If `ownsPrompt`, the worker calls **`WaitForConflictDecision`**, which loops `WaitForSingleObject(decisionEvent, 50)` (polling cancellation between waits) until the popup signals it.
-5. The popup, on a button click, calls **`Task::SubmitConflictDecision(action, applyToAllChecked)`** (routed from `FolderWindow.FileOperations.Popup.cpp` after `FindTask`). It writes `decisionAction` / `decisionApplyToAll` under the arbiter mutex (forcing `applyToAll = false` for Retry) and `SetEvent(decisionEvent)`.
-6. `WaitForConflictDecision` reads the decision, caches it when `applyToAll` and the action is cacheable, and calls `ClearConflictPrompt` (which clears `prompt`, resets `ownerThreadId`, and notifies the arbiter cv).
-7. `FileSystemIssue` maps the resulting `ConflictAction` to a `FileSystemIssueAction` out-param (Overwrite / ReplaceReadOnly / PermanentDelete / Retry / Skip / Cancel) and returns. `Skip`/`SkipAll` set `_observedSkipAction`; `SkipAll` additionally stores `Skip` in the cache.
-
-While one worker owns the prompt, the **other in-flight workers for the same task converge to a stopped state**: `WaitWhilePaused` checks `prompt.active && ownerThreadId != 0 && ownerThreadId != currentThreadId` and blocks those workers on the arbiter cv until the prompt clears. This satisfies the spec's "serialize prompts; all in-flight workers converge while waiting" rule. Both the serial per-item loop and the cross-FS bridge use the identical `BeginConflictPrompt` / `WaitForConflictDecision` / `StoreConflictDecisionInCache` calls.
+Every hosted action, overflow action, Escape path and UIA activation submits its captured prompt generation and action placement. `FileOperationsConflictBroker::TryAcceptLocked` checks that generation, the currently offered action and one-shot state under the arbiter mutex, and signals the event before unlocking. `WaitForConflictDecision` ignores an event without accepted state, then consumes the decision, updates any allowed repeat policy, resets the prompt/event and releases ownership under the same lock. Cancellation is a separate durable request; a stale signal cannot invent Cancel. Held Enter/Escape activation repeats are filtered before they reach a newly published prompt; navigation autorepeat remains available. See [`FileOperationsConflictBroker.cpp`](../../RedSalamander/FileOperationsConflictBroker.cpp), [`State.Conflict.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Conflict.cpp), [`State.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.cpp) and [`Popup.cpp`](../../RedSalamander/FolderWindow.FileOperations.Popup.cpp).
 
 ### Invariants
 
 - No implicit overwrite/replace-readonly/continue-on-error — conflicts must surface.
 - Overwrite and Replace-read-only grants are **one-shot** (single item) unless "Apply to all" is checked.
 - Retry is per-`(item, bucket)`, capped to one, and **never cached**.
+- Applying a cached "Apply to all" choice records nothing per item: every application of one originating prompt folds into one Issues record (`appliedCount`, last item, the items' common typed result, the first application's time), refreshed at most every 250 ms and at the task's next user prompt, and written to the JSONL log once when the task completes. The bounded Issues reservoirs evict notes, then records whose row has no retained problem, then whole problem rows oldest first: a record never evicts a real Warning/Error, and a retained prompt keeps its decision and result.
 - Directory-vs-directory existence is a merge, not a conflict; a colliding child raises a conflict named by its leaf.
 
 ## Cross-filesystem bridge internals and data safety
@@ -144,14 +144,30 @@ The bridge never writes the final destination path directly. For each file:
 Cross-filesystem Move is Copy + Delete, and the source is deleted only after the destination is **byte-proven**:
 
 - If `IFileReader::GetSize` on the source fails for a Move, the bridge returns `ERROR_PARTIAL_COPY` and **preserves the source** rather than guessing.
-- After a successful promote, for Move with a known source size, the bridge re-opens the destination (`CreateFileReader` + `GetSize`) and requires `destinationSize == fileTotalBytes`. On mismatch or re-stat failure it returns `ERROR_PARTIAL_COPY` with a "preserving source" diagnostic — the source delete is skipped.
+- After successful promote, Move compares the source-byte BLAKE3 digest with a bound provider BLAKE3 proof or host readback of the published destination before removing that leaf's original source. Matching size alone is insufficient. If proof is unavailable or mismatched, that source is retained; other leaves keep their independent results.
 - A child answered **Skip** increments `skippedFileConflictCount`; the source for that child is never deleted and the whole transfer ends `ERROR_PARTIAL_COPY` rather than failing the directory closed.
 
-`ThreadMain` surfaces `ERROR_PARTIAL_COPY` as a Warning diagnostic with explicit "source preserved; partial copy left" wording for Move, so both sides are flagged for user review in the Issues pane. Buffer size is snapshotted from `fileOperations.crossFsBridgeBufferSizeKB` at task creation and may be adapted upward from `GetTransferHints`.
+`ThreadMain` reports `ERROR_PARTIAL_COPY` with item-level typed outcomes and diagnostics. A verified, published Managed Move leaf may have its source removed while later failed leaves retain theirs; inspect each outcome before retry or cleanup. Buffer size is snapshotted from `fileOperations.crossFsBridgeBufferSizeKB` at task creation and may be adapted upward from `GetTransferHints`.
+
+## I27 follow-up ownership seams
+
+The [I27 plan](../../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md)'s [original gallery and protected interaction](../../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/gallery.html)
+retain frozen build/source bindings, native display metadata and original assertions.
+They cover deterministic synthetic File Operations and Issues presentation; protected
+foreground interaction has a separate receipt. Later production viewer-menu ownership
+changes in `Common/ViewerMenuHost.h` and the PE, Web, Text, Space and ImgRaw adapters,
+plus subsequent test and diagnostic fixes, require their own source-bound native
+receipts. These original captures do not qualify those later inputs or final Fresh Full.
+
+- [`FileOperationConfirmation.cpp`](../../RedSalamander/FileOperationConfirmation.cpp) formats Copy/Move and permanent-Delete locations using the captured provider path profile. Unknown or mixed domains keep raw spelling or use the bounded Multiple locations summary; formatting does not change execution endpoints.
+- The host's typed result keeps completion, destination publication, verification, source disposition and owned-stage cleanup independent. [`FileOperationItemResultReducer.h`](../../RedSalamander/FileOperationItemResultReducer.h) classifies provider receipts; host-managed proofs retain their own authority. A task-level partial failure does not prove every source was retained or every destination was published. A claimed successful Delete receipt that commits but retains the original is a failed contradiction. A canceled or partial recursive Delete can legitimately retain its root. Per-item execution marks a selected root `MutationPossible` only when `QualifiedItemPolicy::Process` dispatches it (`Task::MarkSourceItemMutationPossible`); `ThreadMain`'s `EnterSourceItemsMutationGate` keeps the task-wide mark only for bulk and rename executors, so roots a Cancel or a stopping failure left undispatched finalize `NotAttempted`/`Retained`/`Canceled`, not Unknown and not with the failing root's status (`FinalizeTypedItemResults` reduces them with `ERROR_CANCELLED`).
+- `PostCompleted` in [`State.Queue.cpp`](../../RedSalamander/FolderWindow.FileOperations.State.Queue.cpp) stores failed-post completions until owner-thread adoption after worker quiet, including when the reaper or its wakeup cannot be posted.
+- [`Popup.cpp`](../../RedSalamander/FolderWindow.FileOperations.Popup.cpp) suspends periodic telemetry when no operation or visible animation needs it, publishes the final taskbar state once and retains active hidden/minimized taskbar updates. [`AdmissionBaseline.cpp`](../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp) measures actual UI-thread admission. The retained [F6/v2](../../Specs/TestRuns/4cb089111a23/FileOps/20261003T211512Z-80796-0cb73e59c3c741f9bcae95a38bb43929/review/ROOT-F6-V2-BOUNDED-ASSESSMENT.md) and [F7](../../Specs/TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/review/ROOT-F7-ASSESSMENT.md) assessments accept bounded measured behavior; real mounted routes remain capability-skipped and unqualified after access denied. Local's new existing-path observation reuses its brief route cache only after fresh endpoint and mount GUID agreement; unavailable observations keep the original volume resolver. Its native correctness and paired timing qualification remain open, tracked in [I29 Q2-L](../../Specs/Plans/WIP/FileOperations_PostMergeQualification_2026-10-05.md). Full, protected/gallery and archive governance retain separate gates.
+- The private D10 child in [`SelfTest.OwnedShutdown.cpp`](../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.OwnedShutdown.cpp) uses normal Copy overwrite consent, a positive incomplete host bridge stage write, actual `WM_CLOSE`/cancellation and natural application teardown. Its parent checks the external tree only after child exit. The production defer/resume path is in [`FolderWindow.FileOperations.cpp`](../../RedSalamander/FolderWindow.FileOperations.cpp). This fixture is evidence only when its retained runtime receipt passes.
 
 ## Testing and instrumentation
 
-Every change to liveness or data safety must add deterministic `--fileops-selftest` coverage (the engine exposes `ENABLE_TESTS` hooks: `SetFileOpsBridgePipelineModeForSelfTest`, `SetFileOpsBridgeFailNextFileCopiesForSelfTest`, `SetFileOpsBridgeFailNextSourceGetSizeForSelfTest`, `SetFileOpsPreCalcThreadStartFailureForSelfTest`, `SetFileOpsAutoConcurrencyOverrideForSelfTest`, `SetFileOpsPostFinishedCompletionPauseForSelfTest`, and the scheduler shutdown quiet-point runner). Perf is emitted through `Debug::Perf` under the `FileOps.*` metric families (`FileOps.Queue.*`, `FileOps.Scheduler.*`, `FileOps.PreCalc`, `FileOps.Operation`, `FileOps.Bridge.*`, `FileOps.Conflict.WaitUs`). The Riptide and Floodgate WIP plans (`Specs/Plans/WIP/Operation_Riptide_FairstreamRemediation_DataSafetyConflictParity_2026-06-15.md`, `Operation_Floodgate_RiptideMergeCloudDataSafetyAndCloseout_2026-06-17.md`) track remediation of cross-FS data-safety and conflict-routing parity.
+Every change to liveness or data safety must add deterministic `--fileops-selftest` coverage (the engine exposes `ENABLE_TESTS` hooks: `SetFileOpsBridgePipelineModeForSelfTest`, `SetFileOpsBridgeFailNextFileCopiesForSelfTest`, `SetFileOpsBridgeFailNextSourceGetSizeForSelfTest`, `SetFileOpsPreCalcThreadStartFailureForSelfTest`, `SetFileOpsAutoConcurrencyOverrideForSelfTest`, `SetFileOpsPostFinishedCompletionPauseForSelfTest`, and the scheduler shutdown quiet-point runner). Perf is emitted through `Debug::Perf` under the `FileOps.*` metric families (`FileOps.Queue.*`, `FileOps.Scheduler.*`, `FileOps.PreCalc`, `FileOps.Operation`, `FileOps.Bridge.*`, `FileOps.Conflict.WaitUs`). The File Operations safety remediation record and retained TestRuns receipts document qualification; [plan lifecycle](../../Specs/README.md#plan-lifecycle) governs its WIP/Done location. Normative execution, popup, self-test and performance requirements stay in their domain contracts; the old Riptide/Floodgate WIP paths are retired history.
 
 ## See also
 

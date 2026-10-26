@@ -1,0 +1,52 @@
+param(
+ [Parameter(Mandatory=$true)][string]$Repo,
+ [Parameter(Mandatory=$true)][string]$ExpectedSource,
+ [Parameter(Mandatory=$true)][string]$Label
+)
+$ErrorActionPreference='Stop'
+Set-Location -LiteralPath $Repo
+if((git rev-parse HEAD).Trim() -ne $ExpectedSource -or (git status --porcelain)){throw 'Expected clean frozen source'}
+if(Get-Process -Name cl,link,vcpkg,ViewerPETests -ErrorAction SilentlyContinue){throw 'Wait for other build/test work'}
+if(Get-CimInstance Win32_Process -Filter "Name='MSBuild.exe'" | Where-Object CommandLine -NotMatch '/nodemode:'){throw 'Wait for active MSBuild coordinator'}
+$env:REDSALAMANDER_TEST_ROOT='Z:/RedSalamander.Perf'
+$env:RSBuildEnableTests='true'
+$env:VCPKG_ROOT='Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115'
+$env:VcpkgRoot=$env:VCPKG_ROOT
+$env:ForceImportBeforeCppTargets=Join-Path $env:VCPKG_ROOT 'scripts/buildsystems/msbuild/vcpkg.props'
+$env:ForceImportAfterCppTargets=Join-Path $env:VCPKG_ROOT 'scripts/buildsystems/msbuild/vcpkg.targets'
+$env:VcpkgManifestInstall='false'
+$env:VcpkgXUseBuiltInApplocalDeps='false'
+$env:VCPkgLocalAppDataDisabled='true'
+$env:VcpkgConfiguration='Debug'
+Import-Module Pester -RequiredVersion 3.4.0 -Force
+$root='Z:/RedSalamander.Perf/evidence/I19-20260909'
+$prefix='removal-focus-asan-'+$Label
+$log=Join-Path $root ($prefix+'.log')
+$dest=Join-Path $root $prefix
+if((Test-Path -LiteralPath $log) -or (Test-Path -LiteralPath $dest)){throw 'Preserve existing evidence'}
+$filter='cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs'
+$env:ASAN_SAVE_DUMPS=Join-Path $root ($prefix+'.dmp')
+if(Test-Path -LiteralPath $env:ASAN_SAVE_DUMPS){throw 'Preserve sanitizer dump'}
+$started=[DateTime]::UtcNow.ToString('o')
+$code=$null
+try {
+ & ./Tools/Run-AllTests.ps1 -Suite Commands -ValidationMode Fresh -SkipBuild -Configuration 'ASan Debug' -Platform x64 -BuildNumber 100 -CaseFilter $filter -SelfTestRepeat 1 -AllowAlternateVolumeTestRoot *> $log
+ $code=$LASTEXITCODE
+} finally {
+ $pattern='^\d{8}T\d{6}Z-'+$PID+'-'
+ $run=Get-ChildItem (Join-Path $env:REDSALAMANDER_TEST_ROOT 'runs') -Directory | Where-Object Name -Match $pattern | Sort-Object Name -Descending | Select-Object -First 1
+ if($null -ne $run){
+  New-Item -ItemType Directory -Path $dest | Out-Null
+  foreach($item in @(@{Source='artifacts/archive';Name='archive'},@{Source='artifacts/selftest/last_run';Name='final-results'})){
+   $source=Join-Path $run.FullName $item.Source
+   if(Test-Path -LiteralPath $source){Copy-Item -LiteralPath $source -Destination (Join-Path $dest $item.Name) -Recurse}
+  }
+  $validation=Join-Path $env:REDSALAMANDER_TEST_ROOT ('evidence/runs/'+$run.Name)
+  if(Test-Path -LiteralPath $validation){Copy-Item -LiteralPath $validation -Destination (Join-Path $dest 'validation-evidence') -Recurse}
+ }
+ $summary=[ordered]@{source=$ExpectedSource;configuration='ASan Debug';platform='x64';runId=if($run){$run.Name}else{$null};caseFilter=$filter;startedUtc=$started;completedUtc=[DateTime]::UtcNow.ToString('o');exitCode=$code;retained=$dest;noHostedCi=$true}
+ $summary | ConvertTo-Json | Set-Content (Join-Path $root ($prefix+'-summary.json'))
+ Write-Output ($summary | ConvertTo-Json -Compress)
+}
+if($null -eq $code){exit 1}
+exit $code

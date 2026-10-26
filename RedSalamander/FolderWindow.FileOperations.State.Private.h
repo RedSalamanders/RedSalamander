@@ -16,6 +16,7 @@ struct SelfTestPausePoint final
     std::atomic<bool> enabled{false};
     std::atomic<bool> entered{false};
     std::atomic<bool> releaseRequested{false};
+    std::atomic<unsigned int> activeWaiters{0u};
 
     void Set(bool isEnabled) noexcept
     {
@@ -49,8 +50,10 @@ struct SelfTestPausePoint final
             return;
         }
 
+        activeWaiters.fetch_add(1u, std::memory_order_acq_rel);
+        const auto releaseWaiter = wil::scope_exit([&]() noexcept { activeWaiters.fetch_sub(1u, std::memory_order_acq_rel); });
         entered.store(true, std::memory_order_release);
-        const auto clearEntered = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
+        const auto clearEntered   = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
         const ULONGLONG startTick = GetTickCount64();
         while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire))
         {
@@ -71,6 +74,7 @@ extern std::atomic<unsigned long> g_fileOpsBridgeFailNextFileCopyCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextFileCopyAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextSourceGetSizeCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextSourceGetSizeAttempts;
+extern std::atomic<HRESULT> g_fileOpsBridgeFailNextSourceGetSizeStatus;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationGetSizeCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationGetSizeAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationOpenCount;
@@ -106,6 +110,7 @@ extern std::atomic<unsigned long> g_fileOpsPermanentDeleteKnownNonCommitAttempts
 extern std::atomic<HRESULT> g_fileOpsPermanentDeleteKnownNonCommitStatus;
 extern std::atomic<unsigned long> g_fileOpsManagedCleanupUnknownOutcomeCount;
 extern std::atomic<unsigned long> g_fileOpsManagedCleanupUnknownOutcomeAttempts;
+extern std::atomic<uint64_t> g_fileOpsBulkDeleteProviderCalls;
 extern std::atomic<unsigned long> g_fileOpsVerificationForceHostReadbackCount;
 extern std::atomic<unsigned long> g_fileOpsVerificationForceHostReadbackAttempts;
 extern std::atomic<unsigned long> g_fileOpsVerificationForceUnavailableCount;
@@ -115,13 +120,35 @@ extern std::atomic<unsigned long> g_fileOpsVerificationForceMismatchAttempts;
 extern std::atomic<bool> g_fileOpsAutoConcurrencyOverrideEnabled;
 extern std::atomic<unsigned int> g_fileOpsAutoConcurrencyOverridePreferred;
 extern std::atomic<uint32_t> g_fileOpsAutoConcurrencyOverrideStorageKind;
+extern std::atomic<bool> g_fileOpsTransferTuningOverrideEnabled;
+extern std::atomic<uint32_t> g_fileOpsTransferTuningOverride;
+extern std::atomic<int> g_fileOpsCancelAtProgressPhase;
+extern std::atomic<unsigned int> g_fileOpsCancelAtProgressPhaseRemaining;
+extern std::atomic<unsigned int> g_fileOpsCancelAtProgressPhaseFired;
+// I35 R10.5: the preferred concurrency every storage path under `prefix` reports in a self-test.
+struct FileOpsStoragePathConcurrencyOverride final
+{
+    std::wstring prefix;
+    unsigned int preferredConcurrency = 1u;
+    uint32_t storageKind              = FILESYSTEM_STORAGE_UNKNOWN;
+};
+extern std::mutex g_fileOpsStoragePathConcurrencyOverrideMutex;
+extern std::vector<FileOpsStoragePathConcurrencyOverride> g_fileOpsStoragePathConcurrencyOverrides;
 extern SelfTestPausePoint g_fileOpsPostFinishedCompletionPausePoint;
+extern SelfTestPausePoint g_fileOpsFallbackWorkerReturnPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeMoveSourceCleanupPausePoint;
+extern std::atomic<ULONGLONG> g_fileOpsBridgeMoveSourceCleanupPauseBailoutMs;
+extern SelfTestPausePoint g_fileOpsBridgeDirectoryRestorePausePoint;
+extern std::mutex g_fileOpsBridgeDirectoryRestorePauseMutex;
+extern std::wstring g_fileOpsBridgeDirectoryRestorePausePath;
 extern SelfTestPausePoint g_fileOpsBridgePublishedDestinationRetryPausePoint;
 extern SelfTestPausePoint g_fileOpsConflictMetadataPausePoint;
 extern SelfTestPausePoint g_fileOpsKeepBothNestedConflictPausePoint;
 extern SelfTestPausePoint g_fileOpsInlineRenameBeforeMutationPausePoint;
 extern SelfTestPausePoint g_fileOpsBatchRenameBeforeExecutionPausePoint;
+extern SelfTestPausePoint g_fileOpsBatchRenameBeforeMutationPausePoint;
+extern std::atomic<FileOpsBatchRenameReceiptFaultForSelfTest> g_fileOpsBatchRenameReceiptFault;
+extern std::atomic<FileOpsRecycleDeleteReceiptFaultForSelfTest> g_fileOpsRecycleDeleteReceiptFault;
 extern SelfTestPausePoint g_fileOpsRecycleEscalationBeforeBindPausePoint;
 extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeBindPausePoint;
 extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeRecheckPausePoint;
@@ -152,6 +179,7 @@ extern std::mutex g_fileOpsPreparedTransferStrategyMutex;
 extern std::array<PreparedTransferRecordForSelfTest, 64> g_fileOpsPreparedTransferStrategies;
 extern size_t g_fileOpsPreparedTransferStrategyNext;
 void RecordPreparedTransferStrategyForSelfTest(const FolderWindow::FileOperationState::Task& task) noexcept;
+[[nodiscard]] bool RunMutationInterlockLookupDifferentialForSelfTest(std::wstring& failure) noexcept;
 #endif
 
 [[nodiscard]] uint64_t PerfNowUs() noexcept;
@@ -253,9 +281,10 @@ void PublishDiagnosticPathSnapshotLocked(FolderWindow::FileOperationState::Task&
 void SetAutoDismissSuccessInSettings(Common::Settings::Settings& settings, bool enabled) noexcept;
 void SetPopupFooterOnlyInSettings(Common::Settings::Settings& settings, bool footerOnly) noexcept;
 void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool compactDensity) noexcept;
+void PruneFileOperationsSettingsIfDefault(Common::Settings::Settings& settings) noexcept;
 
 void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
                                         std::wstring_view filePrefix,
                                         std::wstring_view fileExtension,
                                         size_t maxFilesToKeep) noexcept;
-}
+} // namespace FolderWindowFileOperationsStateInternal

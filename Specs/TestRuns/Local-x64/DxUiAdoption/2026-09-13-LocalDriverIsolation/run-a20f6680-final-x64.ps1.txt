@@ -1,0 +1,84 @@
+$ErrorActionPreference='Stop'
+Set-Location 'Z:/RsI19Closeout'
+$expected='a20f6680dd5f82835a549f4c231e5666e4047eda'
+if((git rev-parse HEAD).Trim() -ne $expected -or (git status --porcelain)){throw 'Expected frozen a20f6680 source'}
+if(Get-Process -Name cl,link,vcpkg,ViewerPETests -ErrorAction SilentlyContinue){throw 'Wait for other build/test work to finish'}
+if(Get-CimInstance Win32_Process -Filter "Name='MSBuild.exe'" | Where-Object CommandLine -NotMatch '/nodemode:'){throw 'Wait for the active MSBuild coordinator'}
+$env:MSBUILDDISABLENODEREUSE='1'
+$env:REDSALAMANDER_TEST_ROOT='Z:/RedSalamander.Perf'
+$env:RSBuildEnableTests='true'
+$env:VCPKG_ROOT='Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115'
+$env:VcpkgRoot=$env:VCPKG_ROOT
+$env:ForceImportBeforeCppTargets=Join-Path $env:VCPKG_ROOT 'scripts/buildsystems/msbuild/vcpkg.props'
+$env:ForceImportAfterCppTargets=Join-Path $env:VCPKG_ROOT 'scripts/buildsystems/msbuild/vcpkg.targets'
+$env:VcpkgManifestInstall='false'
+$env:VcpkgXUseBuiltInApplocalDeps='false'
+$env:VCPkgLocalAppDataDisabled='true'
+$env:GIT_CONFIG_COUNT='1'
+$env:GIT_CONFIG_KEY_0='url.file:///Z:/src/DxUi.insteadOf'
+$env:GIT_CONFIG_VALUE_0='https://github.com/RedSalamanders/DxUi.git'
+Import-Module Pester -RequiredVersion 3.4.0 -Force
+Import-Module ./Tools/Modules/Testing/ValidationImpact.psm1 -Force
+$impact=Get-Content -LiteralPath ./Tools/validation-impact.json -Raw | ConvertFrom-Json
+$governance=Test-RSValidationImpactGovernance -Manifest $impact -TrackedPaths @(git ls-files) -RepoRoot (Get-Location).Path
+if(-not $governance.IsValid){throw ('Unmapped build inputs: '+($governance.UnmappedBuildInputs -join ', '))}
+$root='Z:/RedSalamander.Perf/evidence/I19-20260909'
+foreach($config in @('Release','ASan Debug','Debug')){
+ $label=$config.Replace(' ','-')
+ $prefix='a20f6680-final-x64-'+$label
+ $buildLog=Join-Path $root ($prefix+'-build.log')
+ $testLog=Join-Path $root ($prefix+'-Full.log')
+ $dest=Join-Path $root ($prefix+'-Full')
+ if((Test-Path -LiteralPath $buildLog) -or (Test-Path -LiteralPath $testLog) -or (Test-Path -LiteralPath $dest)){throw ('Preserve existing '+$prefix+' evidence')}
+ if((git rev-parse HEAD).Trim() -ne $expected -or (git status --porcelain)){throw 'Frozen source changed'}
+ $env:VcpkgConfiguration=if($config -eq 'Release'){'Release'}else{'Debug'}
+ & ./build.ps1 -Configuration $config -Platform x64 -BuildNumber 100 -MaxCpuCount 2 *> $buildLog
+ if($LASTEXITCODE -ne 0){throw ('Final '+$config+' root build failed; see '+$buildLog)}
+ if($config -eq 'ASan Debug'){
+  Import-Module ./Tools/Modules/Build/ArtifactOperationLock.psm1 -Force
+  Import-Module ./Tools/Modules/Build/ProcessStreaming.psm1 -Force
+  $scope=@{platform='x64';configuration=$config}
+  $lease=Enter-RSArtifactOperationLock -RepoRoot 'Z:/RsI19Closeout' -Operation 'I19 final seeded sanitizer detection' -Scope $scope
+  try{
+   if($lease.WasAbandoned -or (Test-RSArtifactOperationContaminated -RepoRoot 'Z:/RsI19Closeout' -Scope $scope)){throw 'Official full rebuild required before sanitizer probe'}
+   $exe='Z:/RsI19Closeout/.build/x64/ASan Debug/PluginContractTests.exe'
+   $probeLog=Join-Path $root ($prefix+'-seeded-heap.log')
+   $probeCode=Invoke-RSStreamingProcess -FilePath $exe -Arguments @('--asan-seed-heap-overflow') -WorkingDirectory 'Z:/RsI19Closeout' -LogPath $probeLog -TimeoutMilliseconds 30000
+   $detected=(Get-Content -LiteralPath $probeLog -Raw) -match 'AddressSanitizer: heap-buffer-overflow'
+   [ordered]@{source=$expected;configuration=$config;platform='x64';exitCode=$probeCode;detected=$detected;executableSha256=(Get-FileHash -LiteralPath $exe).Hash;log=$probeLog;completedUtc=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json|Set-Content (Join-Path $root ($prefix+'-seeded-heap.json'))
+   if($probeCode -eq 0 -or -not $detected){throw 'Final sanitizer binary did not detect the seeded error'}
+  }finally{Exit-RSArtifactOperationLock -Lock $lease}
+ }
+ if($config -eq 'Release'){
+  # A separate shell keeps packaging's TEMP/LOCALAPPDATA sandbox changes out of Full.
+  $hostExecutable=(Get-Process -Id $PID).Path
+  & $hostExecutable -NoProfile -File 'Z:/RedSalamander.Perf/runs/I19-work/scratch/run-a20f6680-portable-rollback.ps1' *> (Join-Path $root ('a20f6680-portable-rollback-driver.log'))
+  if($LASTEXITCODE -ne 0){throw 'Portable rollback rehearsal failed; preserve its evidence before continuing'}
+  Write-Output 'Portable A/B/A rehearsal passed; starting Release Fresh Full.'
+ }
+ Write-Output ($prefix+' root build passed; starting Fresh Full.')
+ $started=[DateTime]::UtcNow.ToString('o')
+ $code=$null
+ try{
+  & ./Tools/Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -SkipBuild -Configuration $config -Platform x64 -BuildNumber 100 -AllowAlternateVolumeTestRoot *> $testLog
+  $code=$LASTEXITCODE
+ }finally{
+  $pattern='^\d{8}T\d{6}Z-'+$PID+'-'
+  $run=Get-ChildItem (Join-Path $env:REDSALAMANDER_TEST_ROOT 'runs') -Directory | Where-Object Name -Match $pattern | Sort-Object Name -Descending | Select-Object -First 1
+  if($null -ne $run){
+   New-Item -ItemType Directory -Path $dest | Out-Null
+   $archive=Join-Path $run.FullName 'artifacts/archive'
+   if(Test-Path -LiteralPath $archive){Copy-Item -LiteralPath $archive -Destination $dest -Recurse}
+   $last=Join-Path $run.FullName 'artifacts/selftest/last_run'
+   if(Test-Path -LiteralPath $last){Copy-Item -LiteralPath $last -Destination (Join-Path $dest 'final-results') -Recurse}
+   $validation=Join-Path $env:REDSALAMANDER_TEST_ROOT ('evidence/runs/'+$run.Name)
+   if(Test-Path -LiteralPath $validation){Copy-Item -LiteralPath $validation -Destination (Join-Path $dest 'validation-evidence') -Recurse}
+  }
+  $summary=[pscustomobject]@{source=$expected;configuration=$config;platform='x64';runId=if($run){$run.Name}else{$null};startedUtc=$started;completedUtc=[DateTime]::UtcNow.ToString('o');exitCode=$code;retained=$dest;noHostedCi=$true}
+  $summary | ConvertTo-Json | Set-Content (Join-Path $root ($prefix+'-summary.json'))
+  Write-Output ($summary|ConvertTo-Json -Compress)
+ }
+ if($null -eq $code -or $code -ne 0){throw ('Fresh Full '+$config+' did not pass; preserve and diagnose before continuing')}
+}
+Write-Output 'All three frozen x64 root builds and Fresh Full runs passed.'
+

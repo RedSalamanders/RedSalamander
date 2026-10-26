@@ -1,0 +1,4 @@
+{
+  "benchmark_started": false,
+  "reason": "Independent build completed but left new reusable worker identities; refresh the same verified-idle-node input under the unchanged observer protocol. No build or app stopped."
+}

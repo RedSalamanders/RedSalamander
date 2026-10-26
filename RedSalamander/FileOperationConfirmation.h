@@ -4,6 +4,7 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include "FileSystemPathIdentity.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 
@@ -21,6 +22,13 @@ struct NonRevertableFileOperationPromptCounts
     bool hasSampleFile = false;
 };
 
+// Display-only: sourceIdentity may be supplied only for one captured endpoint
+// identity domain. Unknown/mixed domains use the bounded Multiple locations
+// summary; every displayed path retains its raw spelling.
+[[nodiscard]] std::wstring FormatFileOperationConfirmationSource(const std::vector<std::filesystem::path>& sourcePaths,
+                                                                 const NonRevertableFileOperationPromptCounts& counts,
+                                                                 const FileSystemPathIdentity* sourceIdentity) noexcept;
+
 [[nodiscard]] bool ConfirmNonRevertableFileOperation(HWND owner,
                                                      IFileSystem* fileSystem,
                                                      FileSystemOperation operation,
@@ -32,5 +40,8 @@ struct NonRevertableFileOperationPromptCounts
                                                      const std::vector<std::filesystem::path>& sourcePaths,
                                                      const std::filesystem::path& destinationFolder,
                                                      const NonRevertableFileOperationPromptCounts& counts,
-                                                     HostFileOperationPromptOptions* options = nullptr,
-                                                     std::wstring_view confirmationMessage = {}) noexcept;
+                                                     HostFileOperationPromptOptions* options           = nullptr,
+                                                     std::wstring_view confirmationMessage             = {},
+                                                     const FileSystemPathIdentity* sourceIdentity      = nullptr,
+                                                     const FileSystemPathIdentity* destinationIdentity = nullptr,
+                                                     std::wstring_view appendedNotice                  = {}) noexcept;

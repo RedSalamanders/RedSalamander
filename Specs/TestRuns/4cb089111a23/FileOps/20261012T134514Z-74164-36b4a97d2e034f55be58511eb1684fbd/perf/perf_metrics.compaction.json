@@ -1,0 +1,31 @@
+{
+  "schema": "red-salamander.i35-nas-nested.perf-compaction.v1",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the rows of the I35 NAS nested Copy claim (the self-test rows with the many-folders Copy wall times, refused restores, unavailable identities, the walker's walk stats, discovery and operation rows) are kept in their original order; the one-per-folder restore rows are replaced by their deterministic summary; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.SelfTest.",
+      "fileops.local.created_directory.restore_refused",
+      "fileops.local.created_directory.identity_unavailable",
+      "FileOps.CopyRecursiveParallel.",
+      "FileOps.Discovery.",
+      "FileOps.Operation"
+    ],
+    "summarizedMetric": "fileops.local.created_directory.restored"
+  },
+  "source": {
+    "bytes": 4605483,
+    "rows": 12937,
+    "sha256": "ca3acf421f7c18eb5f0ff0ed7048e55ff349eec977a7e912f91b44d7ac578548"
+  },
+  "kept": {
+    "bytes": 16278,
+    "rows": 45,
+    "sha256": "eb77e6fb3c5a3d37f8a00ffd1b6fbc9026fae949f5c42f0a1639bf759bba1cdd"
+  },
+  "summaries": [
+    {
+      "metric": "fileops.local.created_directory.restored",
+      "rows": 0
+    }
+  ]
+}

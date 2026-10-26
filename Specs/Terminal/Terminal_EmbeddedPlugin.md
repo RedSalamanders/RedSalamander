@@ -1,5 +1,17 @@
 # Embedded terminal plugin
 
+Documentation captures use the test-only one-instance factory arm described in
+[the screenshot scenario contract](../Testing/Testing_SelfTests.md#product-documentation-gallery).
+It creates the production native host/VT engine and a fixed invented transcript,
+without a shell, ConPTY, user profile/history or path I/O. The arm is thread-local,
+consumed once, reset on exit and absent from ordinary production builds. An invented source location is accepted by the test host only while that arm is
+set; an unarmed request fails before any shell can start. Native
+coverage proves the next unarmed instance keeps its normal behavior. These frames
+illustrate embedded/floating layouts and Find, separately from live-shell tests.
+
+The native fixture verifies that the loaded Find hint preserves both U+2022
+separators. The UTF-8 resource source declares code page 65001.
+
 ## Status and scope
 
 This is the authoritative contract for the first working embedded-terminal
@@ -975,6 +987,10 @@ the Phase-4 descriptor, publishes `candidate-overlay-review.json`, and updates
 only the untracked candidate descriptor with the candidate patch path, digest,
 ordered concerns, and derived input digest. The tracked Product overlay and
 canonical lock remain unchanged until the reviewed admission phase.
+
+Lock validation must reject a false `Test-Json` result even when the cmdlet emits no error records.
+Field-specific diagnostics then use its shipped JsonSchema.NET engine with reference fetching disabled;
+diagnostic reevaluation cannot turn schema rejection into admission. Hash, path, export and dependency rules remain unchanged.
 
 The production boundary is `generated-raw-sha256-v1`. Before C++ compilation,
 the builder writes

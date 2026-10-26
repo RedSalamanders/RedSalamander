@@ -1,0 +1,96 @@
+{
+  "schema": "viewer-space.memory-qualification.v1",
+  "campaign_id": "20261009T224059615Z-9e53a14b",
+  "mode": "CachedReopen200",
+  "created_utc": "2026-10-09T22:40:59.6777698Z",
+  "test_root": "D:\\RedSalamander.Perf",
+  "platform": "x64",
+  "configuration": "Release",
+  "case_filter": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+  "ordering": "single candidate-only 200-sample cached-reopen run; not a baseline comparison.",
+  "timeout_ms": 420000,
+  "archive_limits": {
+    "per_file_bytes": 2097152,
+    "per_run_bytes": 5242880
+  },
+  "expected_receipts": {
+    "baseline": null,
+    "candidate": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd"
+  },
+  "expected_build_source_snapshot_ids": {
+    "baseline": null,
+    "candidate": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554"
+  },
+  "expected_build_log_paths": {
+    "baseline": null,
+    "candidate": "C:/Users/PVB/.codex/worktrees/viewer-space-explorer-analyst/RedSalamander/.build/logs/msbuild-20261009_234710_900-pid43264-027778f3.log"
+  },
+  "workspace_snapshots": "Capture each runner workspace-final.json snapshot_id independently; it is distinct from the build receipt source_snapshot_id.",
+  "raw_sources_root": "raw-sources",
+  "reproduction": {
+    "analyze-viewer-space-memory-campaign.py": {
+      "path": "reproduction\\analyze-viewer-space-memory-campaign.py",
+      "sha256": "cf26c1ba94edac91d6a831622892f8324509882fc7eed964fbf0019e7fbd4eef",
+      "bytes": 27457
+    },
+    "run-viewer-space-memory-qualification.ps1": {
+      "path": "reproduction\\run-viewer-space-memory-qualification.ps1",
+      "sha256": "ca047eb4ffe3e4cf2946c11ba68abf3b4e0cccf728e111431e6af7bd472e8d60",
+      "bytes": 24793
+    },
+    "curate-viewer-space-memory-run.py": {
+      "path": "reproduction\\curate-viewer-space-memory-run.py",
+      "sha256": "03736f72ad5f2cdb1f123f85007548e7771c6e972515226671791e6c31a54d27",
+      "bytes": 22333
+    }
+  },
+  "runs": [
+    {
+      "label": "20261009T224059615Z-9e53a14b-b0-p1-candidate",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 0,
+      "position": 1,
+      "run_id": "20261009T224102Z-43236-26566751591f4c62bbb2370dea3e1e75",
+      "status": "PASSED",
+      "failure_phase": null,
+      "error": null,
+      "started_utc": "2026-10-09T22:40:59.8051066Z",
+      "finished_utc": "2026-10-09T22:42:35.5521012Z",
+      "exit_code": 0,
+      "summary_exit_code": 0,
+      "case_status": "passed",
+      "receipt_id": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd",
+      "receipt_source_snapshot_id": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+      "receipt_sha256": "d20692190256c647089fab52005638563b019d59ece317bb14f9ed2ded3a0cc6",
+      "workspace_snapshot_id": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+      "receipt_ended_utc": "2026-10-09T21:57:01.354579Z",
+      "expected_build_log_path": "C:/Users/PVB/.codex/worktrees/viewer-space-explorer-analyst/RedSalamander/.build/logs/msbuild-20261009_234710_900-pid43264-027778f3.log",
+      "build_log_source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\logs\\msbuild-20261009_234710_900-pid43264-027778f3.log",
+      "build_log_index_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T224059615Z-9e53a14b\\build-inputs\\candidate\\msbuild-log-index.json",
+      "build_log_sha256": "c1beccada832c6f251be4916eb603923e0fc8a7c95728f00e19c97c250c17572",
+      "build_log_bytes": 42095,
+      "stdout_sha256": "969a09cedc14fb25bb8973c3d45c62dc626a06d095c2322a7dee904297b8c8d2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1888,
+      "stderr_bytes": 0,
+      "raw_metrics_original_path": "D:\\RedSalamander.Perf\\runs\\20261009T224102Z-43236-26566751591f4c62bbb2370dea3e1e75\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "raw_metrics_preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T224059615Z-9e53a14b\\raw-sources\\20261009T224059615Z-9e53a14b-b0-p1-candidate\\perf_metrics.jsonl",
+      "raw_metrics_bytes": 10809555,
+      "raw_metrics_sha256": "cbd1671536448dda467364c3da116d8a9b80e8ba7aa67f462850f194175c4eb5",
+      "archive_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T224059615Z-9e53a14b\\runs\\20261009T224059615Z-9e53a14b-b0-p1-candidate",
+      "curation_status": "qualified",
+      "curation_errors": []
+    }
+  ],
+  "measurements": [
+    {
+      "label": "20261009T224059615Z-9e53a14b-b0-p1-candidate",
+      "side": "candidate",
+      "block": 0,
+      "position": 1,
+      "run_id": "20261009T224102Z-43236-26566751591f4c62bbb2370dea3e1e75"
+    }
+  ],
+  "finished_utc": "2026-10-09T22:42:35.5559247Z"
+}

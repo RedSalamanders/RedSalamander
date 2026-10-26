@@ -1,0 +1,22 @@
+{
+  "schema": "i26-v65-carry-root-review.v1",
+  "reviewer": "root",
+  "status": "reviewed",
+  "utc": "2026-10-01T11:51:33.858358+00:00",
+  "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+  "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+  "diagnosticSourceReviewSha256": "3b9211463db614ecd2a4becb5af38f0c04d9ce289840ed1003a541834b64d898",
+  "v64ProtectedReviewSha256": "cfd98152b12af106aa3c90aedefe41f98642ad4bfcf4bd66af77a9bc9283851a",
+  "v55DebugCarryReviewed": true,
+  "v64ProtectedCarryReviewed": true,
+  "changedExistingPaths": [
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+    "Specs/Testing/Testing_PerformanceValidation.md"
+  ],
+  "addedPath": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+  "productDeltaFromV64": false,
+  "scope": "Retain original V55 broad Debug and V64 protected provenance through the existing reviewed predecessor chain. V65 changes test coverage, diagnostic phase counters, one Pester assertion, and documentation only; production/gallery/helper bytes unchanged. V65 builds and added HWND key tests pass separately. No claim of physical key injection or current Full/resource acceptance; R0e total-time limits remain unchanged.",
+  "wholePlanComplete": false
+}

@@ -1,0 +1,226 @@
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.Internal.h b/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
+index 40362f53..96b602ee 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
++++ b/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
+@@ -316,7 +316,12 @@ public:
+ 
+ #ifdef ENABLE_TESTS
+     // Feeds exact callback chunks through the production consumer, without I/O.
+-    [[nodiscard]] static HRESULT ParseChunksForSelfTest(std::span<const std::string_view> chunks, std::vector<FilesInformationCurl::Entry>& entries) noexcept;
++    // A lookup leaf retains only matching rows and counts every validated row,
++    // matching GetEntryInfo's consumer without sockets or fixture LIST generation.
++    [[nodiscard]] static HRESULT ParseChunksForSelfTest(std::span<const std::string_view> chunks,
++                                                        std::vector<FilesInformationCurl::Entry>& entries,
++                                                        std::wstring_view lookupLeaf = {},
++                                                        uint64_t* inspectedRows = nullptr) noexcept;
+     [[nodiscard]] static std::optional<CurlFailedConnectPorts> ParseFailedConnectTraceForSelfTest(curl_infotype type, std::string_view text) noexcept;
+     [[nodiscard]] std::optional<CurlFailedConnectPorts> FailedConnectPortsForSelfTest() const noexcept;
+     [[nodiscard]] bool HasActiveTransferForSelfTest() const noexcept;
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+index bf1fd6a2..5fb69086 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
++++ b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+@@ -6018,7 +6018,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
+             const std::string maxHeader     = std::format("total {}0", std::string(framingLimit - 7u, ' '));
+             const HRESULT overflow          = HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+             const HRESULT invalid           = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+-            const std::array<FramingCase, 10u> framingCases{{
++            const std::array<FramingCase, 12u> framingCases{{
+                 {L"empty", {}, S_OK, {}},
+                 {L"mixed",
+                  "\r\ntotal 0\r\ndrwxr-xr-x 1 owner group 0 Jan 01 2026 .\r\n" + framingRecord + "01-02-26  03:04PM  5 second.bin",
+@@ -6032,6 +6032,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
+                 {L"invalid-utf8", "-rw-r--r-- 1 owner group 4 Jan 01 2026 \xC3\x28.bin\r\n", invalid, {}},
+                 {L"embedded-nul", framingRecord + std::string(1u, '\0') + "\n", invalid, {framingName}},
+                 {L"malformed-after", framingRecord + "invalid LIST record\n", invalid, {framingName}},
++                {L"dos-size-suffix", "01-02-26  03:04PM  4junk trailing.bin\r\n", invalid, {}},
++                {L"dos-size-fraction", "01-02-26  03:04PM  4.5 decimal.bin\r\n", invalid, {}},
+             }};
+             // Fixture-specific oracle: names/sizes are authored facts, not output
+             // from a second parser that could share the same framing mistake.
+@@ -6119,6 +6121,54 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
+                 DebugCheck(correct, L"cursor rejects an oversized transport callback before copying bytes", *passed, *failed);
+             }
+         }
++        // Same cursor callback/framing/parser as native lookup, without FTP,
++        // server generation or whole-directory result retention in the timed loop.
++        for (const bool dos : {false, true})
++        {
++            std::string listing;
++            constexpr size_t rowCount = 4'097u;
++            constexpr size_t repeats  = 64u;
++            for (size_t index = 0u; index < rowCount; ++index)
++            {
++                listing.append(dos ? std::format("01-02-26  03:04PM  4 f-{:05}.bin\r\n", index)
++                                   : std::format("-rw-r--r-- 1 owner group 4 Jan 02 2026 f-{:05}.bin\r\n", index));
++            }
++            std::vector<std::string_view> chunks;
++            for (size_t offset = 0u; offset < listing.size(); offset += (std::min)(static_cast<size_t>(CURL_MAX_WRITE_SIZE), listing.size() - offset))
++            {
++                chunks.push_back(std::string_view(listing).substr(offset, CURL_MAX_WRITE_SIZE));
++            }
++            std::vector<FilesInformationCurl::Entry> ordinary;
++            const HRESULT ordinaryHr = ParseDirectoryListing(
++                dos ? "01-02-26  03:04PM  4 f-04096.bin\r\n" : "-rw-r--r-- 1 owner group 4 Jan 02 2026 f-04096.bin\r\n", ordinary);
++            for (const bool missing : {false, true})
++            {
++                std::vector<FilesInformationCurl::Entry> matches;
++                uint64_t inspected   = 0u;
++                uint64_t matchesSeen = 0u;
++                bool correct         = SUCCEEDED(ordinaryHr) && ordinary.size() == 1u && ordinary.front().lastWriteTime != 0;
++                uint64_t durationUs  = 0u;
++                for (size_t attempt = 0u; attempt < repeats; ++attempt)
++                {
++                    uint64_t rows          = 0u;
++                    const auto started     = std::chrono::steady_clock::now();
++                    const HRESULT parseHr  = CurlDirectoryCursor::ParseChunksForSelfTest(chunks, matches, missing ? L"absent.bin" : L"f-04096.bin", &rows);
++                    durationUs += Debug::Perf::ElapsedUs(started);
++                    inspected += rows;
++                    matchesSeen += matches.size();
++                    correct = correct && parseHr == S_OK && rows == rowCount && matches.size() == (missing ? 0u : 1u);
++                    if (! missing && matches.size() == 1u)
++                    {
++                        const auto& match = matches.front();
++                        correct = correct && match.name == L"f-04096.bin" && match.sizeKnown && match.sizeBytes == 4u &&
++                                  match.attributes == FILE_ATTRIBUTE_NORMAL && match.lastWriteTime == ordinary.front().lastWriteTime;
++                    }
++                }
++                const std::wstring detail = std::format(L"{};queries={};missing={}", dos ? L"DOS" : L"Unix", repeats, missing);
++                Debug::Perf::Emit(L"FileOps.Curl.EntryLookup.ParseOnly", detail.c_str(), durationUs, inspected, matchesSeen, correct ? S_OK : E_FAIL);
++                DebugCheck(correct && inspected == repeats * rowCount, L"pure lookup parser validates every row and retains only exact matches", *passed, *failed);
++            }
++        }
+         const std::vector<uint8_t> bytes{0x31u, 0x00u, 0xAAu, 0xFEu};
+         constexpr std::string_view leaf = "literal%20 -> name.bin";
+         const std::string record        = std::format("-rw-r--r-- 1 owner group 4 Jan 01 2026 {}\r\n", leaf);
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp b/Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp
+index 18c05c9b..d296b37b 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp
++++ b/Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp
+@@ -2937,12 +2937,20 @@ HRESULT CurlDirectoryCursor::Next(FilesInformationCurl::Entry& entry, std::wstri
+ }
+ 
+ #ifdef ENABLE_TESTS
+-HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_view> chunks, std::vector<FilesInformationCurl::Entry>& entries) noexcept
++HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_view> chunks,
++                                                   std::vector<FilesInformationCurl::Entry>& entries,
++                                                   std::wstring_view lookupLeaf,
++                                                   uint64_t* inspectedRows) noexcept
+ {
+     // Deterministic callback/framing seam: no socket, pool borrow, or alternate
+     // parser. Production Next owns transport completion and cancellation proof.
+     auto state = std::make_unique<Impl>();
+     entries.clear();
++    if (inspectedRows)
++    {
++        *inspectedRows = 0u;
++    }
++    FilesInformationCurl::Entry entry{};
+     for (size_t index = 0u;;)
+     {
+         state->complete = index == chunks.size();
+@@ -2965,8 +2973,7 @@ HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_
+         }
+         for (;;)
+         {
+-            FilesInformationCurl::Entry entry{};
+-            const HRESULT hr = state->ConsumeChunk(entry, {});
++            const HRESULT hr = state->ConsumeChunk(entry, lookupLeaf);
+             if (FAILED(hr))
+             {
+                 return hr;
+@@ -2975,7 +2982,14 @@ HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_
+             {
+                 break;
+             }
+-            entries.push_back(std::move(entry));
++            if (inspectedRows)
++            {
++                ++*inspectedRows;
++            }
++            if (lookupLeaf.empty() || entry.name == lookupLeaf)
++            {
++                entries.push_back(std::move(entry));
++            }
+         }
+         if (state->complete)
+         {
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+index b6ce359d..25ddb296 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+@@ -8085,7 +8085,7 @@ case SelfTestState::Step::C0_CurlEntryLookupTruth:
+     }
+     state.c0CurlWorker.join();
+     state.c0CurlModule.reset();
+-    const unsigned int expectedChecks = entryLookup       ? 284u
++    const unsigned int expectedChecks = entryLookup       ? 294u
+                                         : copyTraversal   ? 142u
+                                         : movePreflight   ? 97u
+                                         : directorySize   ? 85u
+diff --git a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+index 62faca36..ea5ac9ef 100644
+--- a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
++++ b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+@@ -200,6 +200,13 @@ change. Preserve all malformed/duplicate/missing/timestamp/final-reply checks an
+ the current deadline; no stale listing cache may become mutation authority.
+ Re-run broad C0 in both builds after the repair, not only an isolated wide case.
+ 
++Work after `3917fef5`: a no-network parser benchmark now covers four Unix/DOS
++present/missing scans (64 x 4,097 rows each), and six fragmented DOS numeric-size
++regressions reject `4junk`/`4.5`. The current DOS parser accepts those integer
++prefixes. Expected lookup count is 294; collect the pre-repair Debug baseline,
++then repair numeric validation and measured per-row filename allocation. These
++new tests and any production repair remain unverified until new runs are archived.
++
+ The same-machine prior Release run had four deep-Move 10048 failures and Copy
+ 134/142; prior Debug serial Copy stopped at 3,828/4,097. New session-lifetime
+ evidence proves the bounded ownership repair, not global TCP exhaustion or a
+diff --git a/Specs/Testing/Testing_PerformanceValidation.md b/Specs/Testing/Testing_PerformanceValidation.md
+index 1502ecef..b72cc5f6 100644
+--- a/Specs/Testing/Testing_PerformanceValidation.md
++++ b/Specs/Testing/Testing_PerformanceValidation.md
+@@ -223,9 +223,10 @@ The whole-tree commitment map and opaque transport allocations remain outside th
+ reservation metric and must not be described as bounded by it.
+ 
+ `C0_CurlEntryLookupTruth` protects single/bulk Copy, Move, Delete and Rename
+-admission with 284 assertions (201 route/setup, 32 framing, four refused-endpoint,
++admission with 294 assertions (201 route/setup, 38 framing, four refused-endpoint,
+ 12 fixture-serialization checks, three allocation/connect controls and 19 actual-
+-socket diagnostic controls, two endpoint-ownership and 11 cursor-lifetime controls).
++socket diagnostic controls, two endpoint-ownership, 11 cursor-lifetime and four
++pure-parser controls).
+ The serializer oracles call the same fake
+ FTP generator as network LIST, with hand-authored byte expectations for empty/root/
+ nested listings, direct-child ordering, literal UTF-8/percent/arrow names, zero/
+@@ -275,9 +276,21 @@ existing byte splits. `FileOps.Curl.NativeCopy.ControlSessions` records source a
+ destination USER counts for each broad scenario; its S_OK denotes measurement,
+ not operation success or a general bound on opaque connection memory.
+ 
++`FileOps.Curl.EntryLookup.ParseOnly` measures 64 scans of a 4,097-row Unix/DOS
++listing with either a present final leaf or a missing leaf. It drives the existing
++cursor callback/framing/parser without sockets or fixture LIST generation, counts
++all 262,208 inspected rows, and retains only matches. Matched name/size/attributes
++and timestamp must agree with the ordinary one-row parser. The reported time
++excludes fixture construction and assertions, but includes the bounded simulated
++transport-chunk copies and cursor construction; it is not pure CPU instruction
++profiling or a replacement for native full-LIST/final-reply tests. Retain a
++same-machine baseline before changing production row allocation/conversion.
++
+ The framing checks feed the existing callback/consumer with 1-byte, 7-byte and
+ `CURL_MAX_WRITE_SIZE` chunks: empty input, ignored rows, mixed Unix/DOS and UTF-8,
+ LF/CRLF/exact-limit/EOF records, overflow, embedded NUL and malformed late rows.
++DOS numeric-size suffixes/fractions must fail, not become a successfully parsed
++integer prefix; retain the initially failing regression witness before repair.
+ They also test every two-chunk split of the mixed stream and reject an oversized
+ callback before copying. `.Framing` records scenario/expected HRESULT, elapsed
+ microseconds, payload bytes in `value0` and submitted chunks in `value1` (summed
+@@ -359,7 +372,7 @@ contract does not promise immediate port reuse after close or qualify a broad ru
+ 
+ `C0_CurlCopyTraversalTruth` has 142 assertions: 46 native scenarios and three
+ passive-listener lifecycle checks, plus Winsock setup. The host's exact-count
+-guard must agree with the current plugin corpus (284 lookup / 142 Copy) and
++guard must agree with the current plugin corpus (294 lookup / 142 Copy) and
+ report expected/observed counts on failure; S_OK alone is not complete coverage. Both
+ singular/bulk Copy APIs run serial/parallel shallow, literal-name, malformed,
+ out-of-root, overlong, blocked LIST, late refusal/cancel and depth-128/129 cases;

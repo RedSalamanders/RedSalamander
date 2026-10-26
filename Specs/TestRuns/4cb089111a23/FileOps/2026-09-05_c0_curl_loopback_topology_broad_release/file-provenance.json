@@ -1,0 +1,58 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 3677,
+    "sha256": "251f16d57cefe79188b8f9a6cb5570fa191315a49a00a27d83079cfe80cc4109",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 8732,
+    "sha256": "287f4995fc7323518353ce10c3713d740276eb2ec9c08e13fc67fa237c548bd6",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 4867,
+    "sha256": "b26f01fcff7ce977be676f551158b51ba953e5dbbd2569eb22f6df8ae0c4cd9d",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 23286,
+    "sha256": "e895f4d7d6732f96d7990ceaba5e980f21dc41a21821cd4f8a4dd4890ed2ba1f",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 37382,
+    "sha256": "53b1b44608c068f57f077690880f24c533158711c57ed4e2820ca8f5b8f1f2fc",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1694,
+    "sha256": "1349d79f40f1270799e9e69db9423b2e53d37b5fa4630604b20e103642ea4f28",
+    "transform": "none"
+  },
+  {
+    "name": "owned-socket-sample.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-broad-release-20260905\\scratch\\diagnostic\\owned-sockets\\owned-socket-sample.json",
+    "bytes": 80666,
+    "sha256": "b418d92195e896e0113d9c24c7ed94c8d8f1a82a38f2126a4a6df496de89fb23",
+    "transform": "none"
+  },
+  {
+    "name": "source-resource-contracts.xml",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-loopback-topology-policy-20260905\\scratch\\policy\\source-resources\\source-resource-contracts.xml",
+    "bytes": 62218,
+    "sha256": "a3f15275c411a1bd9aaeeda14a16fc33cde86a988fa4cb598d747c08036c3e32",
+    "transform": "none"
+  }
+]

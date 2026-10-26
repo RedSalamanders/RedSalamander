@@ -1,0 +1,613 @@
+{
+  "schema": "i27.interaction-publication-allowlist.proposed.v1",
+  "status": "PROPOSED-NOT-PUBLISHED-ROOT-REVIEW-REQUIRED",
+  "original_runner_run_id": "20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583",
+  "machine": "4cb089111a23",
+  "native_metric_run_ids": [
+    "2026-10-03_231939",
+    "2026-10-03_231940"
+  ],
+  "native_metric_process": 95416,
+  "native_metric_commit": "",
+  "native_metric_run_axes": [
+    {
+      "first_metric": "App.Startup.CoInitializeEx",
+      "id": "2026-10-03_231939",
+      "last_utc": "2026-10-03T23:19:40.343Z",
+      "rows": 103,
+      "last_metric": "App.Startup.ApplyPane.Right",
+      "first_utc": "2026-10-03T23:19:39.867Z"
+    },
+    {
+      "first_metric": "App.Startup.MainWindow.WM_CREATE",
+      "id": "2026-10-03_231940",
+      "last_utc": "2026-10-03T23:20:13.228Z",
+      "rows": 5736,
+      "last_metric": "FileOps.Settings.EnqueueUs",
+      "first_utc": "2026-10-03T23:19:40.366Z"
+    }
+  ],
+  "native_archive_date_folder": "2026-10-04_012013",
+  "canonical_git_head": "fbe113a0f747f89af32d6fb337e4e67b9f5bdd6b",
+  "canonical_git_head_status": "Original immutable receipt Git identity; source snapshot/runner components bound independently of blank native metric commit",
+  "source_snapshot_id": "61d189e9b740cf55b0695b21126842ec14a8ceca83dd1f6ef8f835a0aa52da41",
+  "source_snapshot_origin": "Original previous_run entry fingerprints; not new source-tree attestation",
+  "receipt_id": "aa261e2bf802576713e3a5a739b84f9b8b23e352c62ad73049e6f9edee9d2fc4",
+  "declared_build_artifact_component_digest": "074238309607235ec8585cbba4aa3108b4576ff0c37296bcf2fa584632ab9126",
+  "runner_plan_digest": "991f1a7f752f0c1f95ca11c7257de4f706be93dcd63346244cd3409d24bf99c7",
+  "runner_fingerprints_digest": "c4a44266e8415ef0d679bd2e930c07e684ab346a6e855e024aff15366e4250ff",
+  "proposed_repo_run": "Specs/TestRuns/4cb089111a23/FileOps/20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583",
+  "external_packet": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583",
+  "source_original_run": "C:\\RedSalamander.Perf\\runs\\20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583",
+  "archive_complete": true,
+  "archive_error": null,
+  "source_qualification_preserved": true,
+  "original_native_result": {
+    "skipped": 0,
+    "passed": 1,
+    "failed": 0
+  },
+  "original_runner_result": {
+    "passed": 1,
+    "failed": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "exit_code": 0,
+    "repair_attempt_count": 0
+  },
+  "original_sandbox_audit": {
+    "is_clean": false,
+    "issue_count": 265
+  },
+  "raw_metric_stream": {
+    "sha256": "eed248eb54cc2d32e17991debaa95edc8bc105010a8aa52be631107079bb988d",
+    "rows": 5839,
+    "retention": "ALL original bytes and ordering, no row/text/digit/newline edits",
+    "bytes": 2013036
+  },
+  "actual_png_count": 13,
+  "actual_png_bytes": 915796,
+  "interaction_scope": "Original interaction.tsv owns pointer capture on displays1/144 and2/96; native action and text DPI qualification TSVs independently record complete1/1. Native Tab/Shift+Tab, routed text PageDown and focus/caret/selection/same-HWND observations are fixture scope; no external AT or192-DPI claim.",
+  "qualification": "Focused protected Interaction original1/0/0 only; no automatic Full, I27, GPU/performance, CPU/memory neutrality, allocation/leak or global-clean pass; no retroactive historical-failure pass",
+  "files": [
+    {
+      "target": "commands/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "source_relative_to_packet": null,
+      "bytes": 2,
+      "expected_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "compare/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+      "source_relative_to_packet": null,
+      "bytes": 2,
+      "expected_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "source_relative_to_packet": null,
+      "bytes": 579,
+      "expected_sha256": "692d821095d5af3c7e4091f7a41b91b2177f0d84bc67882940f3ddd4fc7982e4",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "source_relative_to_packet": null,
+      "bytes": 16288,
+      "expected_sha256": "4ac6d46fce2c557691a92e2a6e5275c43f9abc3d5867eb9074f4e7c5999bcc45",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/109-keyboard-tab-focus__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\109-keyboard-tab-focus__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 70482,
+      "expected_sha256": "41ec7821e8d2f7477fcbd4a4e113ead78404043c2f9318f4d2f1b57d350aa92c",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/109-keyboard-tab-focus__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\109-keyboard-tab-focus__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 38804,
+      "expected_sha256": "7c4db64bc90105af459c0b88fe99e4f482d1a6873c1a2bce11ee673dcad489ef",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/110-keyboard-shift-tab-focus__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\110-keyboard-shift-tab-focus__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 67424,
+      "expected_sha256": "35dde54c1d42fcbbaf322595917faa71a6e4611fc11d4da42db1e78c9822ff6d",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/110-keyboard-shift-tab-focus__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\110-keyboard-shift-tab-focus__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 39367,
+      "expected_sha256": "fcff851dfe410b812aa7597441c4f9e7582185235f66087a7488ddd2b6fe1971",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/111-pointer-hover__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\111-pointer-hover__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 70703,
+      "expected_sha256": "b5806e90c5081f060b925784a84e8c6b1b4cd8f32909910b7bf69835391078f3",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/111-pointer-hover__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\111-pointer-hover__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 39385,
+      "expected_sha256": "e7ca76209e403486b804369bff15fb37818d984b3149e876dd59544e5a972234",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/112-pointer-pressed__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\112-pointer-pressed__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 69654,
+      "expected_sha256": "bcd883a7680cfab7bfa780c01dfbb2eb62daa7b49ed835394e941db0fad854d5",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/112-pointer-pressed__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\112-pointer-pressed__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 39003,
+      "expected_sha256": "1471b076760001381b5deb6762a81fa74e38de85ded4f6be2f227072276c6072",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/113-dpi-return-to-first-display__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\113-dpi-return-to-first-display__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 70880,
+      "expected_sha256": "a00d9fc1f3900c81e6e67f41ef2da93059d523b46bf2bf976f490aefc5393c2b",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/114-focused-action-dpi-hop__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-focused-action-dpi-hop__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 39653,
+      "expected_sha256": "9da4e889ad1fff6b3bc09d466885116623202842e68a90ecbd29e1fc97458b99",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/115-path-detail-routed-page-down__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-path-detail-routed-page-down__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 89668,
+      "expected_sha256": "15ca7fe6686a750ddcec0c224df24a15b0f2c072b18a5aeefe584f6bda8a9a74",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/116-path-detail-text-focus-dpi-hop__dark__fr-FR__display1__144dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-path-detail-text-focus-dpi-hop__dark__fr-FR__display1__144dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 198428,
+      "expected_sha256": "6ca70073ece87c5e9f28d235f2637201a73eb1a01a9476e6d8fa33e881c05872",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/116-path-detail-text-focus-dpi-hop__dark__fr-FR__display2__96dpi.png",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-path-detail-text-focus-dpi-hop__dark__fr-FR__display2__96dpi.png",
+      "source_relative_to_packet": null,
+      "bytes": 82345,
+      "expected_sha256": "e694160011e01899162152f325df1bcec807a7271ac3587afd11f2d2e45eeff8",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/dpi-focus.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\dpi-focus.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 238,
+      "expected_sha256": "f0588c625093b4ae764f87b75a6bb77f6c565c6d637bb1dc7113995b33332fae",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/interaction.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\interaction.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 122,
+      "expected_sha256": "9f70e4c8cf40e61fcb756664206fbdbcc7233ba4d188105e2e06c873e701893c",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/native-dpi-qualification.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\native-dpi-qualification.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 52,
+      "expected_sha256": "c7d3a636d24eb1cd503f61b612e64ef2d1d216dd276f1fffabd120dcfa6835ee",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/path-detail-native-dpi-qualification.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\path-detail-native-dpi-qualification.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 52,
+      "expected_sha256": "c7d3a636d24eb1cd503f61b612e64ef2d1d216dd276f1fffabd120dcfa6835ee",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/path-detail-native-dpi.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\path-detail-native-dpi.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 127,
+      "expected_sha256": "0c005b38c0265ca4c6b46ca0957d22a537e6a71b06f2d6b69486b6bfb2d17a6e",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/visual-gallery/scenarios.tsv",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\scenarios.tsv",
+      "source_relative_to_packet": null,
+      "bytes": 1773,
+      "expected_sha256": "bd8d0e9f6a2e5d986a1348ab29ae95d0deebb2f3fd5e3feb973221b6b00dce8c",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "perf/perf_metrics.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "source_relative_to_packet": null,
+      "bytes": 2013036,
+      "expected_sha256": "eed248eb54cc2d32e17991debaa95edc8bc105010a8aa52be631107079bb988d",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\results.json",
+      "source_relative_to_packet": null,
+      "bytes": 1026,
+      "expected_sha256": "daed12c83099ee5c8c8966663a5f970b6893e936dae402b117cbe5422bc97222",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-case-history.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "source_relative_to_packet": null,
+      "bytes": 372,
+      "expected_sha256": "49157825590efed1af27d288326114a9aaee66d3e1f889dd687c4858e6ce0e5f",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-dashboard.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+      "source_relative_to_packet": null,
+      "bytes": 515,
+      "expected_sha256": "566e4897b344560d165af5205e1a422c17fd846d65f0feb9cffb1ca346f8c946",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "source_relative_to_packet": null,
+      "bytes": 74279,
+      "expected_sha256": "6d5300dc47d81f95114254d02982e9288d8f08c5f68ea6686967454d387b3d8a",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\trace.txt",
+      "source_relative_to_packet": null,
+      "bytes": 30196,
+      "expected_sha256": "91de3d797077ccf33d4b32a86c1592f867a3fad070e4f1b4d49a95441d580559",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "workspace-after-selftest.file-operations.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+      "source_relative_to_packet": null,
+      "bytes": 27731,
+      "expected_sha256": "5f9c12764c52e07f4d2c92381cc2cb30b706e8d73e8bcc220dcdc2d29f17f152",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "workspace-final.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "source_relative_to_packet": null,
+      "bytes": 27731,
+      "expected_sha256": "13c84da99816addf5c5f445bb5b8213ce2bb811dd5c45e284d2542f08421e3d1",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Complete original focused native/runner/artifact stream or actual harness PNG; byte-exact",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/entry-fingerprints.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "source_relative_to_packet": null,
+      "bytes": 1694,
+      "expected_sha256": "fabbbd660a31196186fc79b19464d6173547457fcc1a81c764e6749681bb981b",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original previous-run lineage; never relabeled as current entry/epoch",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/validation-plan-decision.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "source_relative_to_packet": null,
+      "bytes": 5039,
+      "expected_sha256": "e78259fe016e93e0ced728d294f0a1152abc432f4485596e4a1a18684186afc8",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original previous-run lineage; never relabeled as current entry/epoch",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/validation-plan.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan.json",
+      "source_relative_to_packet": null,
+      "bytes": 1646,
+      "expected_sha256": "9b90a60e5ed125ad9bd3efd7a37b3eeae61994bc512ccd2d1bac7421037024eb",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original previous-run lineage; never relabeled as current entry/epoch",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/previous-run/workspace-initial.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+      "source_relative_to_packet": null,
+      "bytes": 27731,
+      "expected_sha256": "64ca5e6e3c47e2ea1c7241b8219549f1cdb7eacf02dca2ca213e946fc25fc47c",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original previous-run lineage; never relabeled as current entry/epoch",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/native-archive/env.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\env.txt",
+      "source_relative_to_packet": null,
+      "bytes": 488,
+      "expected_sha256": "276e2e2e5aa12a91025f0266f009d36dc35f986c84b14e401f44c73be74adfd3",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original native environment/process-exit envelope; archive date folder is a distinct identity axis",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/native-archive/selftest.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583\\C-archive\\whole-run\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\selftest.txt",
+      "source_relative_to_packet": null,
+      "bytes": 87,
+      "expected_sha256": "2963c4e0e20cce6ad9e84b9e9efbc956f0640006353f1caa8ba22de8a02e3dd2",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original native environment/process-exit envelope; archive date folder is a distinct identity axis",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/invocation-plan.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/invocation-plan.json",
+      "source_relative_to_packet": "invocation-plan.json",
+      "bytes": 1528,
+      "expected_sha256": "8909cc8b88f2df02f34a7881005100970a0f7e0792777d70b6c1941d5fd08d42",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original focused invocation/closure/qualification record; filename-only log extension mapping, no byte rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/invocation.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/invocation.json",
+      "source_relative_to_packet": "invocation.json",
+      "bytes": 1538,
+      "expected_sha256": "f81b192db2c7fd29b705841918efda27f603a2486a601a39fd67fca51cafce91",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original focused invocation/closure/qualification record; filename-only log extension mapping, no byte rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "runner-console.txt",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/runner.log",
+      "source_relative_to_packet": "runner.log",
+      "bytes": 1711,
+      "expected_sha256": "db7cf5503423863fd351b637e43a7b67e32570db467ddcd31fea455e5b0859bc",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original focused invocation/closure/qualification record; filename-only log extension mapping, no byte rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "runner-stderr.txt",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/runner.stderr.log",
+      "source_relative_to_packet": "runner.stderr.log",
+      "bytes": 0,
+      "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original focused invocation/closure/qualification record; filename-only log extension mapping, no byte rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/summary.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/summary.json",
+      "source_relative_to_packet": "summary.json",
+      "bytes": 1616,
+      "expected_sha256": "c5270d442d4928bcc976a86ebf0a06b15c2d016537b19b978938f16bc4d6f0d0",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Original focused invocation/closure/qualification record; filename-only log extension mapping, no byte rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/whole-archive-manifest.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/final-interaction-release-20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/C-archive/archive-manifest.json",
+      "source_relative_to_packet": "C-archive/archive-manifest.json",
+      "bytes": 31441,
+      "expected_sha256": "af87a85ace5c1985e51f65f0aa6e9ef6dc440b7d696997d7604733fbe87948f7",
+      "hash_origin": "Independent closed-source byte hash in this read-only review; matched copied manifest where present",
+      "role": "Exact complete original whole-run inventory/copied hash manifest, including duplicate and adverse records",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/immutable-receipt.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/native-receipt-aa261e2bf802576713e3a5a739b84f9b8b23e352c62ad73049e6f9edee9d2fc4/aa261e2bf802576713e3a5a739b84f9b8b23e352c62ad73049e6f9edee9d2fc4.json",
+      "source_relative_to_packet": null,
+      "bytes": 85040,
+      "expected_sha256": "0e77adb74e0eeadeec99646a91f76698e2bb719ca5273347573ac966ae8b642d",
+      "hash_origin": "Independent bounded closed-source byte hash; matched recorded SHA where provided",
+      "role": "Byte-exact original immutable aa261 receipt, no current-source re-attestation",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/receipt-retention.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/native-receipt-aa261e2bf802576713e3a5a739b84f9b8b23e352c62ad73049e6f9edee9d2fc4/retention.json",
+      "source_relative_to_packet": null,
+      "bytes": 1139,
+      "expected_sha256": "ac2cd0647d86ed32300196be8eb713bafa64d1f45b0734e36a7b2706fff54b4d",
+      "hash_origin": "Independent bounded closed-source byte hash; matched recorded SHA where provided",
+      "role": "Root original canonical semantic check and source-before/copy/after byte binding",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/receipt-component-binding.readonly-review.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\Interaction-Gallery-Publication.final-proposed-20261003T233448Z\\receipt-component-binding.readonly-review.json",
+      "source_relative_to_packet": null,
+      "bytes": 2163,
+      "expected_sha256": "def30c982859d595be63571a3c535493aa2a12e82ffe66af5db59b1a668b5147",
+      "hash_origin": "Independent bounded closed-source byte hash; matched recorded SHA where provided",
+      "role": "Independent canonical retained-metadata component/root/source binding calculation, not a native verdict",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/root-native-provenance-review-notes.json",
+      "source": "C:/RedSalamander.Perf/evidence/i27-followup-20261002-0e139fb/resume-20261003T121349Z/final-run-review/Interaction-Gallery-Publication.final-proposed-20261003T234349Z/root-native-provenance-review-notes.json",
+      "source_relative_to_packet": null,
+      "bytes": 2700,
+      "expected_sha256": "fcaedccbde62652a8c22d61edf743783278dc8c784fbef31a348b21b4b26153c",
+      "hash_origin": "New exact external note of root direct review; root independently verifies before publication",
+      "role": "Narrow native startup/fixture ID and pointer/action/text-DPI/source provenance review; no broadened qualification",
+      "root_byte_verification_required": true
+    }
+  ],
+  "duplicate_original_streams": [
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\commands_trace.txt",
+      "original_bytes": 2,
+      "original_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "identical_publication_target": "commands/trace.txt",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\compare_trace.txt",
+      "original_bytes": 2,
+      "original_sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "identical_publication_target": "commands/trace.txt",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\fileops_results.json",
+      "original_bytes": 579,
+      "original_sha256": "692d821095d5af3c7e4091f7a41b91b2177f0d84bc67882940f3ddd4fc7982e4",
+      "identical_publication_target": "fileops/results.json",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\fileops_trace.txt",
+      "original_bytes": 16288,
+      "original_sha256": "4ac6d46fce2c557691a92e2a6e5275c43f9abc3d5867eb9074f4e7c5999bcc45",
+      "identical_publication_target": "fileops/trace.txt",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\perf\\perf_metrics.jsonl",
+      "original_bytes": 2013036,
+      "original_sha256": "eed248eb54cc2d32e17991debaa95edc8bc105010a8aa52be631107079bb988d",
+      "identical_publication_target": "perf/perf_metrics.jsonl",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\selftest_run_results.json",
+      "original_bytes": 1026,
+      "original_sha256": "daed12c83099ee5c8c8966663a5f970b6893e936dae402b117cbe5422bc97222",
+      "identical_publication_target": "results.json",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    },
+    {
+      "original_path": "artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-04_012013\\selftest_run_trace.txt",
+      "original_bytes": 30196,
+      "original_sha256": "91de3d797077ccf33d4b32a86c1592f867a3fad070e4f1b4d49a95441d580559",
+      "identical_publication_target": "trace.txt",
+      "binding": "Complete exact archive retained externally; byte-identical stream published once, not shortened"
+    }
+  ],
+  "provenance_gaps": [],
+  "limits": {
+    "selected_nonmanifest_bytes": 3275478,
+    "manifest_bytes": 46953,
+    "total_bytes_including_manifest": 3322431,
+    "each_file_max_bytes": 2097152,
+    "original_run_max_bytes": 5242880,
+    "manifest_digest_location": "External index.json binds exact publication-manifest bytes/SHA; manifest has no circular self-digest",
+    "headroom_bytes": 1920449
+  },
+  "required_before_staging": [
+    "Root verifies each source/copy SHA/size, original closure, native/runner schemas and raw action/text qualifiers, auditfalse265, preserved historical failures and two actual native run IDs.",
+    "Keep original focused v1 scope distinct from Full-v2. Receipt retained and runner source/build components matched; no source/output rebaseline or inferred used epoch. Apply only canonically admitted narrow common-ref policy to blank nativecommit.",
+    "Copy exact allowlisted files into the same original run; recalculate caps including final manifest and any root disposition.",
+    "Run Tools/Test-TestRunArchive.ps1 -RunPath <exact run> before force-add, then changed-set/-Inventory. Generic validation does not replace independent source/native/schema review."
+  ],
+  "original_focused_format": "Focused v1 original, intentionally no focused-v2 or Full claim",
+  "native_commit_policy": "Retain blank native commit and both actual startup/fixture IDs without normalization. Root independently reviewed all5839 rows and owning InitSelfTestRun current-second ConfigureJsonlOutput contract: the two groups are not a runner mismatch by themselves. Original receipt/source/component SHA binding is authoritative; apply only a canonically admitted narrow common-ref rule, never a universal exemption or frozen-HEAD source-equivalence claim."
+}

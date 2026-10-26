@@ -1,0 +1,70 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+Skipping build (verified receipt 2bf8224f970817fc029a478e7bcb4a838e959c32050bb7afbaea2ebdd5468647).
+Validation plan: bb54b2851d0258ce1d05f656979844975224e577da4cd1249b135c8c34c90902
+Entry fingerprints: 2564cf8ffc0ffc3075bf9ec141195c29a2edb57a1be310eb3c23f87f86633fac (33 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=cmd_viewer_space_
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+Commands
+  (3m 52.5s)
+         Passed: 32
+  Failed: 0
+  Skipped: 2
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 34
+  Passed: 32
+  Failed: 0
+  Skipped: 2
+  Wall time: 4m 0.3s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- SKIPPED CASES (2 cases) ---
+  SKIP 
+[Commands] 
+cmd_viewer_space_cache_reopen_200_first_map_optin
+ - Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample cached first-map benchmark.
+  SKIP 
+[Commands] 
+cmd_viewer_space_memory_heavy_four_root_optin
+ - Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark.
+
+--- ARTIFACTS ---
+  Test root: D:\RedSalamander.Perf
+  Run id:    20261009T114940Z-46640-68c13f2ed9fc4f429704f7c1a3b76535
+  Disk audit issues: 3
+  Last run: D:\RedSalamander.Perf\runs\20261009T114940Z-46640-68c13f2ed9fc4f429704f7c1a3b76535\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+    perf\viewer_space_input_present_metrics.json
+    perf\viewer_space_layout_50k_visible_optin.json
+    perf\viewer_space_memory_20_cycle_metrics.json
+    perf\viewer_space_navigation_present_metrics.json
+    perf\viewer_space_captures\provenance.json
+

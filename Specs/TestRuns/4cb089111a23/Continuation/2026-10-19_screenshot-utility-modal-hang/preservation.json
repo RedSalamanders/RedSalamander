@@ -1,0 +1,149 @@
+{
+  "rawArchive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\first-attempt\\raw-run.zip",
+  "rawSha256": "c121fdee7cfeeb7217a46f8d18983b8cea5fe37ad92df77f20a1b1bcf713dbaf",
+  "readbackVerified": true,
+  "files": [
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+      "sha256": "8e9328aaba7b387eae0806c21257f9835973daf193ca03d70fd29d9343c44eaa",
+      "bytes": 456
+    },
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+      "sha256": "ff7913bc5b27dbf9682a788587296886aa7222a83f4b38d30343ce15ed42e0c8",
+      "bytes": 2483
+    },
+    {
+      "path": "artifacts/selftest/last_run/trace.txt",
+      "sha256": "7154bafb2dc0fa8772d6c8b52b019d78b30f3c9ca06a0c902276b228445de85c",
+      "bytes": 10694
+    },
+    {
+      "path": "artifacts/selftest/last_run/workspace-after-selftest.commands.json",
+      "sha256": "67a5443acd83ae79155a9bae6182845838de12193b17e19ebb19e1d2e3926e0d",
+      "bytes": 72470
+    },
+    {
+      "path": "artifacts/selftest/last_run/workspace-final.json",
+      "sha256": "0960a78f50e1fdd3b5372f36e44117e1193c7fc326e1a271718e03b2940365b0",
+      "bytes": 72470
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/trace.txt",
+      "sha256": "a6b8f3f4216ec92bb6cc74584357254ae421805ac45bb377abd4e9264666caa1",
+      "bytes": 184
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/folder-view-brief-detailed.png",
+      "sha256": "b68714b709359c902582e9249700f120aad046de86fd360d4930bc93cf3867b5",
+      "bytes": 101525
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/folder-view-extra-detailed.png",
+      "sha256": "b9411bdf5614c2b933611636f3b0884a6969efef5f602951c564be60a1574f4c",
+      "bytes": 106263
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/scenarios.tsv",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-dark.png",
+      "sha256": "b9411bdf5614c2b933611636f3b0884a6969efef5f602951c564be60a1574f4c",
+      "bytes": 106263
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-high-contrast-app.png",
+      "sha256": "d77c20e380589f8e0898aada08539f7d57949bc9aea2ff18a0dbcda095480d47",
+      "bytes": 101017
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-light.png",
+      "sha256": "f189c6dff59977c55512bd37499c1acad3f5e76ed727dd1055218a33562be901",
+      "bytes": 104838
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-rainbow.png",
+      "sha256": "e385fd79f9a5de2109bb49d363e7827075e8fad923f94a5d26784ba47b14d03b",
+      "bytes": 106220
+    },
+    {
+      "path": "artifacts/selftest/last_run/compare/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "sha256": "faef18379bd07229c6d3516c8d643e5d73e85379ed6c10372ad39873aa28fb58",
+      "bytes": 458891
+    },
+    {
+      "path": "artifacts/selftest/previous_run/entry-fingerprints.json",
+      "sha256": "4e4e9dc26f5e54f71fc0995dfa8d74a62cff0e4d24543c3cc0e35502d2568888",
+      "bytes": 1687
+    },
+    {
+      "path": "artifacts/selftest/previous_run/validation-plan-decision.json",
+      "sha256": "14f9857721bbf0b8dd1d136e3c980a4325056a30d3e3c192fb74b1d3667520d7",
+      "bytes": 9277
+    },
+    {
+      "path": "artifacts/selftest/previous_run/validation-plan.json",
+      "sha256": "13650d7eb91f61b8dfa1fa43c1306a2b990edbf6eb3e9f9e05bdfa8d71e1e456",
+      "bytes": 1526
+    },
+    {
+      "path": "artifacts/selftest/previous_run/workspace-initial.json",
+      "sha256": "778aeb0dc79cb7aa1cc6b7d85729f9b9f12bf6d7368cfe56c91c35018134def3",
+      "bytes": 72470
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg-2026-07-27.exe",
+      "sha256": "13b8175e99a884c5ad34249218754b45541a1a63f216e92603aee57a285ac741",
+      "bytes": 6745912
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg0415042a-7afc-4731-8a25-febf096ff904.txt",
+      "sha256": "2e7b7da2a9ecbdbc6d3a6a9c47fb117c3f6fe3d1d1fcc6f193484364966bd815",
+      "bytes": 2386
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg38db5c53-ef95-46d4-85b5-6bfa7b682a94.txt",
+      "sha256": "bf38cdce734d59b50eb3b52e896f54ffaa9ea1dc8e2ec68db243580e5bc165a9",
+      "bytes": 2386
+    }
+  ],
+  "binaryEvidence": [
+    {
+      "name": "RedSalamander.exe",
+      "bytes": 104129024,
+      "sha256": "510fef7c6e42d42dcadff3c894b36c2e8092144b080724f0f3e95848fe5a1d0a"
+    },
+    {
+      "name": "RedSalamander.pdb",
+      "bytes": 285839360,
+      "sha256": "f53b3fcd00858af5d0f12cfee9d2e2bf9165108d53e6bf9f7e2bcb7719e913af"
+    },
+    {
+      "name": "utility-modal-hang.dmp",
+      "bytes": 5257552,
+      "sha256": "bccf463de3589672a98606b3b645e88e4dd86d24f3de973643dfc4edfd17c7a0"
+    },
+    {
+      "name": "Commands.Tests.ViewCommands.cpp",
+      "bytes": 1933342,
+      "sha256": "406ebf93cc64b7d3d09c7a62a039e83da887875bbc0e9a64a06a61e850416fe5"
+    }
+  ]
+}

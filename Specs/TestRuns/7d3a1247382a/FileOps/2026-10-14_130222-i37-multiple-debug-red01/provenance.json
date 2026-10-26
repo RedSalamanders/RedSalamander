@@ -1,0 +1,37 @@
+{
+  "runId": "20261014T130222Z-12496-b7be80fc7fcd4626b03f8d79a01ff366",
+  "receipt": "05de3e17e2ada7b437439a0040217ebbf34454cb250c1fbfb094e59c46a63b3f",
+  "sourceSnapshotId": "f8f0f15eb7ab36a57a9f90f59a5a819f0222862f730b9cccf4bc36c75fc179f1",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-multiple-debug-20261014-01",
+  "nativeVerdict": "FAILED",
+  "runnerVerdict": "FAILED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, left untouched; these findings do not themselves fail the selected runner verdict.",
+  "note": "File-link creation failed with privilege1314 before required regular I/O. Revised fixture separates mandatory regular qualification from named optional semantic-link prerequisites. This run does not prove regular copying.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 93727,
+      "sha256": "CC2531517382DC9A9EC9293FB06189441A864B5E4DBA5BAEA2DD3583FA33ED79"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 1024,
+      "sha256": "8CC63DC47E4AD13F3414F86E6D4DB53CF6E7FC9F46652EFEC60E98E969861F66"
+    },
+    {
+      "path": "results.json",
+      "bytes": 1123,
+      "sha256": "19677FA1B9F33F2C613CCCA36B80A8A4425921D4A6AD126A6E15C41712532757"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3901,
+      "sha256": "C35AF11879B0AC7F3C442416E6C5BAB89432776B105B720250209DAF2AF93FE6"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 5956,
+      "sha256": "1ED02BA18D716BADE5FFFDF828A96C8493EFE11C8E370C76519D54A55E8D8217"
+    }
+  ]
+}

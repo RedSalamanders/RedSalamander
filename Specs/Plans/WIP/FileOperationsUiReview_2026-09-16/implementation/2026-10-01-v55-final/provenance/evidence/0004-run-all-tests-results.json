@@ -1,0 +1,78 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-01T01:30:09.5268764Z",
+  "run_ended_utc": "2026-10-01T01:32:28.7137874Z",
+  "duration_ms": 139187,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\RsI26Adopt\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "V:\\RedSalamander.Perf\\runs\\20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367\\artifacts\\selftest\\last_run",
+  "test_root": "V:\\RedSalamander.Perf",
+  "run_id": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+  "fail_fast": false,
+  "timeout_scale": 3.0,
+  "case_filter": "FileOps_VisualGallery",
+  "exit_code": 0,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "total": 1,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "V:\\RedSalamander.Perf",
+    "run_id": "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367",
+    "allowed_run_ids": [
+      "20261001T012949Z-76256-65bb89cb9d96432b893602e7fe21a367"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 127879,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "FileOps_VisualGallery",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 127109,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

@@ -11,11 +11,11 @@
 
 #include <optional>
 
+#include "ContentDigest.h"
+#include "FileSystemDiscoveryScope.h"
 #include "FileSystemDummy.h"
 #include "FileSystemDummyResources.h"
-#include "FileSystemDiscoveryScope.h"
 #include "Helpers.h"
-#include "ContentDigest.h"
 #include "PlugInterfaces/Host.h"
 
 #pragma warning(push)
@@ -47,7 +47,8 @@ namespace
     return description.c_str();
 }
 
-constexpr size_t kEntryAlignment = sizeof(unsigned long);
+// FileInfo contains 64-bit fields; DWORD-only strides can misalign the next record.
+constexpr size_t kEntryAlignment = alignof(FileInfo);
 constexpr size_t kMaxNameLength  = 96;
 
 thread_local const void* g_activeDirectoryWatchCallback = nullptr;
@@ -803,8 +804,7 @@ public:
             return E_OUTOFMEMORY;
         }
 
-        const HRESULT hr =
-            _owner->CommitFileWriter(_path, _flags, buffer, _replaceConditional, _occupantSizeBytes, _occupantLastWriteTime, &_committedSha256);
+        const HRESULT hr = _owner->CommitFileWriter(_path, _flags, buffer, _replaceConditional, _occupantSizeBytes, _occupantLastWriteTime, &_committedSha256);
         if (FAILED(hr))
         {
             _committedSha256.clear();
@@ -924,7 +924,7 @@ private:
     bool _occupantKnown            = false; // R3-1: an object occupied the name when the writer opened
     uint64_t _occupantSizeBytes    = 0;
     __int64 _occupantLastWriteTime = 0;
-    bool _replaceConditional       = false; // R3-1: the host granted a replacement of that occupant
+    bool _replaceConditional       = false;  // R3-1: the host granted a replacement of that occupant
     std::vector<std::byte> _committedSha256; // R3-2: the store's digest of the committed content
 };
 
@@ -2289,7 +2289,7 @@ struct OperationContext
     void* callbackCookie          = nullptr;
     uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
-    FileSystemOptions* options          = nullptr;
+    FileSystemOptions* options = nullptr;
     // One governed call is one discovery scope. Held by value so it closes when the context dies,
     // which is what keeps the many early returns below from leaving a caller's scope open.
     std::optional<Common::FileOperations::DiscoveryScope> discovery;
@@ -2854,45 +2854,12 @@ HRESULT STDMETHODCALLTYPE DummyFilesInformation::Get(unsigned long index, FileIn
     return LocateEntry(index, ppEntry);
 }
 
-size_t DummyFilesInformation::ComputeEntrySize(const FileInfo* entry) const noexcept
-{
-    if (! entry)
-    {
-        return 0;
-    }
-
-    const size_t baseSize = offsetof(FileInfo, FileName);
-    const size_t nameSize = static_cast<size_t>(entry->FileNameSize);
-    return AlignUp(baseSize + nameSize + sizeof(wchar_t), kEntryAlignment);
-}
-
 HRESULT DummyFilesInformation::LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept
 {
-    const std::byte* base      = _buffer.data();
-    size_t offset              = 0;
-    unsigned long currentIndex = 0;
-
-    while (offset < _usedBytes && offset + sizeof(FileInfo) <= _buffer.size())
-    {
-        auto* entry = reinterpret_cast<const FileInfo*>(base + offset);
-
-        if (currentIndex == index)
-        {
-            *ppEntry = const_cast<FileInfo*>(entry);
-            return S_OK;
-        }
-
-        const size_t advance = (entry->NextEntryOffset != 0) ? static_cast<size_t>(entry->NextEntryOffset) : ComputeEntrySize(entry);
-        if (advance == 0)
-        {
-            break;
-        }
-
-        offset += advance;
-        ++currentIndex;
-    }
-
-    return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
+    const FileInfo* located = nullptr;
+    const HRESULT hr = Common::Plugins::LocatePackedFileInfoRecord(reinterpret_cast<const FileInfo*>(_buffer.data()), _usedBytes, _count, index, &located);
+    *ppEntry         = SUCCEEDED(hr) ? const_cast<FileInfo*>(located) : nullptr;
+    return hr;
 }
 
 FileSystemDummy::FileSystemDummy(IHost* host) noexcept
@@ -4239,10 +4206,7 @@ uint64_t FileSystemDummy::ComputeNodeBytes(const DummyNode& node) const noexcept
 // directory is generated lazily, so an ungenerated subtree is reported as one directory with no
 // descendants rather than forced into existence: discovery must not change what the provider would
 // otherwise do, and an ungenerated child count is unknown, never zero.
-void FileSystemDummy::AccumulateDiscoveredNodes(const DummyNode& node,
-                                                uint64_t& files,
-                                                uint64_t& directories,
-                                                uint64_t& bytes) const noexcept
+void FileSystemDummy::AccumulateDiscoveredNodes(const DummyNode& node, uint64_t& files, uint64_t& directories, uint64_t& bytes) const noexcept
 {
     if (! node.isDirectory)
     {
@@ -4436,7 +4400,7 @@ HRESULT FileSystemDummy::ValidateDeleteNode(DummyNode& target, FileSystemFlags f
         return S_OK;
     }
 
-    const bool recursive = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
+    const bool recursive   = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
     const bool hasChildren = target.childrenGenerated ? ! target.children.empty() : target.plannedChildCount > 0;
     if (! recursive)
     {
@@ -5344,7 +5308,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
         streamChunkLatencyMilliseconds = _streamChunkLatencyMilliseconds;
     }
 
-    auto* created = new (std::nothrow) DummyFileWriter(*this, normalized, flags, streamChunkLatencyMilliseconds, occupantKnown, occupantSizeBytes, occupantLastWriteTime);
+    auto* created =
+        new (std::nothrow) DummyFileWriter(*this, normalized, flags, streamChunkLatencyMilliseconds, occupantKnown, occupantSizeBytes, occupantLastWriteTime);
     if (! created)
     {
         return E_OUTOFMEMORY;
@@ -5354,9 +5319,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemDummy::SupportsAtomicWriterCommit(const wchar_t* path,
-                                                                       FileSystemFlags flags,
-                                                                       BOOL* supported) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemDummy::SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept
 {
     if (supported == nullptr)
     {
@@ -5368,12 +5331,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SupportsAtomicWriterCommit(const wcha
         return E_INVALIDARG;
     }
 
-    constexpr uint32_t knownFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY |
-                                    FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+    constexpr uint32_t knownFlags =
+        FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
     const uint32_t requestedFlags = static_cast<uint32_t>(flags);
     if ((requestedFlags & ~knownFlags) != 0u ||
-        ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u &&
-         (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
+        ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
     {
         return E_INVALIDARG;
     }
@@ -5506,9 +5468,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetFileBasicInformation(const wchar_t
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemDummy::GetPathCapabilities(const wchar_t* path,
-                                                                FileSystemOperation operation,
-                                                                const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemDummy::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
@@ -5524,9 +5484,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetPathCapabilities(const wchar_t* pa
     return S_OK;
 }
 
-HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                                         FileSystemOperation operation,
-                                                         FileSystemRouteDescriptor& descriptor) noexcept
+HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept
 {
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
@@ -5534,35 +5492,35 @@ HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path,
         return E_INVALIDARG;
     }
 
-    descriptor = {};
-    descriptor.providerId = kPluginId;
-    descriptor.pathProfileId = L"dummy-local";
-    descriptor.rootId = L"dummy-root";
-    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor                   = {};
+    descriptor.providerId        = kPluginId;
+    descriptor.pathProfileId     = L"dummy-local";
+    descriptor.rootId            = L"dummy-root";
+    descriptor.availability      = FILESYSTEM_ROUTE_AVAILABLE;
     descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
     // R3-2: SHA-256 of the committed content; the "writerProof":false configuration removes the claim
     // so self-tests can cover Copy-only Move into a destination without content proof.
-    descriptor.proofFlags = _writerProof ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
-    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
-    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
-    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
-    descriptor.copyMoveMaxConcurrency = 4u;
-    descriptor.deleteMaxConcurrency = 8u;
+    descriptor.proofFlags                     = _writerProof ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
+    descriptor.namespaceKind                  = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+    descriptor.componentComparison            = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+    descriptor.caseOnlyRename                 = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.copyMoveMaxConcurrency         = 4u;
+    descriptor.deleteMaxConcurrency           = 8u;
     descriptor.deleteRecycleBinMaxConcurrency = 2u;
-    descriptor.copyOperation = true;
-    descriptor.moveOperation = true;
-    descriptor.nativeMoveOperation = true;
-    descriptor.createDirectoryOperation = true;
-    descriptor.propertiesOperation = true;
-    descriptor.readOperation = true;
-    descriptor.writeOperation = true;
-    descriptor.exportCopyAll = true;
-    descriptor.exportMoveAll = true;
-    descriptor.importCopyAll = true;
-    descriptor.importMoveAll = true;
-    descriptor.preferredSeparator = L'\\';
-    descriptor.acceptedSeparators = L"\\/";
-    descriptor.forbiddenChildCharacters = L":*?\"<>|";
+    descriptor.copyOperation                  = true;
+    descriptor.moveOperation                  = true;
+    descriptor.nativeMoveOperation            = true;
+    descriptor.createDirectoryOperation       = true;
+    descriptor.propertiesOperation            = true;
+    descriptor.readOperation                  = true;
+    descriptor.writeOperation                 = true;
+    descriptor.exportCopyAll                  = true;
+    descriptor.exportMoveAll                  = true;
+    descriptor.importCopyAll                  = true;
+    descriptor.importMoveAll                  = true;
+    descriptor.preferredSeparator             = L'\\';
+    descriptor.acceptedSeparators             = L"\\/";
+    descriptor.forbiddenChildCharacters       = L":*?\"<>|";
     return S_OK;
 }
 
@@ -6271,11 +6229,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    uint64_t itemBytes            = 0;
-    HRESULT itemHr                = S_OK;
-    uint64_t discoveredFiles      = 0;
+    uint64_t itemBytes             = 0;
+    HRESULT itemHr                 = S_OK;
+    uint64_t discoveredFiles       = 0;
     uint64_t discoveredDirectories = 0;
-    uint64_t discoveredBytes      = 0;
+    uint64_t discoveredBytes       = 0;
 
     {
         std::scoped_lock lock(_mutex);

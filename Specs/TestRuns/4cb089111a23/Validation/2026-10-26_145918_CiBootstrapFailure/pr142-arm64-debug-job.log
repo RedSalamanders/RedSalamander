@@ -1,0 +1,520 @@
+﻿2026-10-26T14:58:49.6534732Z Current runner version: '2.338.0'
+2026-10-26T14:58:49.6570364Z ##[group]Runner Image Provisioner
+2026-10-26T14:58:49.6571241Z Hosted Compute Agent
+2026-10-26T14:58:49.6571702Z Version: 20261021.618
+2026-10-26T14:58:49.6572200Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-26T14:58:49.6572782Z Build Date: 2026-10-21T00:45:21Z
+2026-10-26T14:58:49.6573324Z Worker ID: {1b829103-2a71-4db5-b28e-e358e02d32be}
+2026-10-26T14:58:49.6574206Z Region: westus3
+2026-10-26T14:58:49.6574635Z Cloud: Azure
+2026-10-26T14:58:49.6575052Z ##[endgroup]
+2026-10-26T14:58:49.6576824Z ##[group]Operating System
+2026-10-26T14:58:49.6578162Z Microsoft Windows 11
+2026-10-26T14:58:49.6578669Z 10.0.26200
+2026-10-26T14:58:49.6579098Z Enterprise
+2026-10-26T14:58:49.6579887Z ##[endgroup]
+2026-10-26T14:58:49.6580564Z ##[group]Runner Image
+2026-10-26T14:58:49.6581055Z Image: windows-11-vs2026-arm64
+2026-10-26T14:58:49.6581549Z Version: 20261022.194.1
+2026-10-26T14:58:49.6583113Z Included Software: https://github.com/actions/runner-images/blob/win11-vs2026-arm64/20261022.194/images/windows/Windows11-VS2026-Arm64-Readme.md
+2026-10-26T14:58:49.6584635Z Image Release: https://github.com/actions/runner-images/releases/tag/win11-vs2026-arm64%2F20261022.194
+2026-10-26T14:58:49.6585571Z ##[endgroup]
+2026-10-26T14:58:49.6586841Z ##[group]GITHUB_TOKEN Permissions
+2026-10-26T14:58:49.6589536Z Contents: read
+2026-10-26T14:58:49.6590096Z Metadata: read
+2026-10-26T14:58:49.6590534Z ##[endgroup]
+2026-10-26T14:58:49.6593079Z Secret source: Actions
+2026-10-26T14:58:49.6593863Z Cache mode: write
+2026-10-26T14:58:49.6594502Z Prepare workflow directory
+2026-10-26T14:58:49.7295639Z Prepare all required actions
+2026-10-26T14:58:49.7354939Z Getting action download info
+2026-10-26T14:58:50.0503292Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-26T14:58:50.3510413Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+2026-10-26T14:58:50.8821491Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-10-26T14:58:51.2803678Z Uses: RedSalamanders/RedSalamander/.github/workflows/build-reusable.yml@refs/pull/142/merge (39b2e056369c3bbe360a44ef5bb46f5f5e019611)
+2026-10-26T14:58:51.2809471Z ##[group] Inputs
+2026-10-26T14:58:51.2810050Z   configuration: Debug
+2026-10-26T14:58:51.2810499Z   platform: ARM64
+2026-10-26T14:58:51.2810948Z   native_runner: windows-11-vs2026-arm
+2026-10-26T14:58:51.2812064Z   run_full_tests: true
+2026-10-26T14:58:51.2812535Z   test_suite: PR
+2026-10-26T14:58:51.2812940Z   build_number: 
+2026-10-26T14:58:51.2813354Z   official_release: false
+2026-10-26T14:58:51.2813826Z   upload_build_output: false
+2026-10-26T14:58:51.2814327Z   run_asan_plugin_contracts: false
+2026-10-26T14:58:51.2814839Z ##[endgroup]
+2026-10-26T14:58:51.2815440Z Complete job name: native (ARM64, windows-11-vs2026-arm, Debug) / build
+2026-10-26T14:58:51.4585485Z ##[group]Run git config --global core.longpaths true
+2026-10-26T14:58:51.4586714Z [36;1mgit config --global core.longpaths true[0m
+2026-10-26T14:58:51.4656628Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T14:58:51.4657841Z env:
+2026-10-26T14:58:51.4662024Z   GH_TOKEN: ***
+2026-10-26T14:58:51.4662488Z   RSBuildEnableTests: true
+2026-10-26T14:58:51.4663083Z   VCPKG_ROOT: C:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T14:58:51.4663931Z   VCPKG_INSTALLED_DIR: C:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\arm64
+2026-10-26T14:58:51.4664679Z   VCPKG_DEFAULT_TRIPLET: arm64-windows
+2026-10-26T14:58:51.4665192Z ##[endgroup]
+2026-10-26T14:58:52.4480316Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-10-26T14:58:52.4481630Z with:
+2026-10-26T14:58:52.4482235Z   persist-credentials: false
+2026-10-26T14:58:52.4483006Z   repository: RedSalamanders/RedSalamander
+2026-10-26T14:58:52.4492305Z   token: ***
+2026-10-26T14:58:52.4492921Z   ssh-strict: true
+2026-10-26T14:58:52.4493551Z   ssh-user: git
+2026-10-26T14:58:52.4494120Z   clean: true
+2026-10-26T14:58:52.4494728Z   sparse-checkout-cone-mode: true
+2026-10-26T14:58:52.4495453Z   fetch-depth: 1
+2026-10-26T14:58:52.4496051Z   fetch-tags: false
+2026-10-26T14:58:52.4496658Z   show-progress: true
+2026-10-26T14:58:52.4497270Z   lfs: false
+2026-10-26T14:58:52.4497830Z   submodules: false
+2026-10-26T14:58:52.4498457Z   set-safe-directory: true
+2026-10-26T14:58:52.4499166Z   allow-unsafe-pr-checkout: false
+2026-10-26T14:58:52.4499878Z env:
+2026-10-26T14:58:52.4506180Z   GH_TOKEN: ***
+2026-10-26T14:58:52.4506790Z   RSBuildEnableTests: true
+2026-10-26T14:58:52.4507732Z   VCPKG_ROOT: C:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T14:58:52.4509246Z   VCPKG_INSTALLED_DIR: C:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\arm64
+2026-10-26T14:58:52.4510433Z   VCPKG_DEFAULT_TRIPLET: arm64-windows
+2026-10-26T14:58:52.4511189Z ##[endgroup]
+2026-10-26T14:58:52.7091837Z Syncing repository: RedSalamanders/RedSalamander
+2026-10-26T14:58:52.7094403Z ##[group]Getting Git version info
+2026-10-26T14:58:52.7095376Z Working directory is 'C:\a\RedSalamander\RedSalamander'
+2026-10-26T14:58:52.8132813Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-26T14:58:52.8724801Z git version 2.56.0.windows.3
+2026-10-26T14:58:52.8787601Z ##[endgroup]
+2026-10-26T14:58:52.8798955Z Copying 'C:\Users\runneradmin\.gitconfig' to 'C:\a\_temp\6731167d-b7e8-4602-8eff-a86e95092c3c\.gitconfig'
+2026-10-26T14:58:52.8827675Z Temporarily overriding HOME='C:\a\_temp\6731167d-b7e8-4602-8eff-a86e95092c3c' before making global git config changes
+2026-10-26T14:58:52.8829614Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T14:58:52.8838158Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory C:\a\RedSalamander\RedSalamander
+2026-10-26T14:58:52.9390905Z Deleting the contents of 'C:\a\RedSalamander\RedSalamander'
+2026-10-26T14:58:52.9399162Z ##[group]Determining repository object format
+2026-10-26T14:58:52.9400895Z ##[endgroup]
+2026-10-26T14:58:52.9402641Z ##[group]Initializing the repository
+2026-10-26T14:58:52.9410101Z [command]"C:\Program Files\Git\bin\git.exe" init C:\a\RedSalamander\RedSalamander
+2026-10-26T14:58:53.0751993Z Initialized empty Git repository in C:/a/RedSalamander/RedSalamander/.git/
+2026-10-26T14:58:53.0819628Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/RedSalamanders/RedSalamander
+2026-10-26T14:58:53.1497011Z ##[endgroup]
+2026-10-26T14:58:53.1498094Z ##[group]Disabling automatic garbage collection
+2026-10-26T14:58:53.1506032Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-10-26T14:58:53.2064783Z ##[endgroup]
+2026-10-26T14:58:53.2067179Z ##[group]Setting up auth
+2026-10-26T14:58:53.2068000Z Removing SSH command configuration
+2026-10-26T14:58:53.2077264Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T14:58:53.2633294Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T14:58:55.7192646Z Removing HTTP extra header
+2026-10-26T14:58:55.7198788Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T14:58:55.7749483Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T14:58:57.0941565Z Removing includeIf entries pointing to credentials config files
+2026-10-26T14:58:57.0953274Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T14:58:57.1504784Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T14:58:58.4755241Z [command]"C:\Program Files\Git\bin\git.exe" config --file C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-10-26T14:58:58.5328538Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:C:/a/RedSalamander/RedSalamander/.git.path C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T14:58:58.5887037Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:C:/a/RedSalamander/RedSalamander/.git/worktrees/*.path C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T14:58:58.6449919Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T14:58:58.7047376Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T14:58:58.7610850Z ##[endgroup]
+2026-10-26T14:58:58.7611320Z ##[group]Fetching the repository
+2026-10-26T14:58:58.7624425Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +39b2e056369c3bbe360a44ef5bb46f5f5e019611:refs/remotes/pull/142/merge
+2026-10-26T14:59:17.8610006Z From https://github.com/RedSalamanders/RedSalamander
+2026-10-26T14:59:17.8611264Z  * [new ref]           39b2e056369c3bbe360a44ef5bb46f5f5e019611 -> pull/142/merge
+2026-10-26T14:59:17.8671394Z ##[endgroup]
+2026-10-26T14:59:17.8671938Z ##[group]Determining the checkout info
+2026-10-26T14:59:17.8672785Z ##[endgroup]
+2026-10-26T14:59:17.8684297Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-10-26T14:59:17.9375829Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-10-26T14:59:17.9912815Z ##[group]Checking out the ref
+2026-10-26T14:59:17.9922404Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/142/merge
+2026-10-26T14:59:19.2755671Z Updating files:   2% (622/27060)
+2026-10-26T14:59:19.6109827Z Updating files:   3% (812/27060)
+2026-10-26T14:59:20.1803451Z Updating files:   4% (1083/27060)
+2026-10-26T14:59:20.3851771Z Updating files:   4% (1156/27060)
+2026-10-26T14:59:20.6732249Z Updating files:   5% (1353/27060)
+2026-10-26T14:59:21.0010184Z Updating files:   6% (1624/27060)
+2026-10-26T14:59:21.1322306Z Updating files:   7% (1895/27060)
+2026-10-26T14:59:21.3816249Z Updating files:   7% (1985/27060)
+2026-10-26T14:59:21.7506163Z Updating files:   8% (2165/27060)
+2026-10-26T14:59:22.0920182Z Updating files:   9% (2436/27060)
+2026-10-26T14:59:22.1337179Z Updating files:  10% (2706/27060)
+2026-10-26T14:59:22.7895791Z Updating files:  10% (2731/27060)
+2026-10-26T14:59:23.5113778Z Updating files:  11% (2977/27060)
+2026-10-26T14:59:24.0986879Z Updating files:  11% (3165/27060)
+2026-10-26T14:59:24.1605509Z Updating files:  12% (3248/27060)
+2026-10-26T14:59:24.4789390Z Updating files:  12% (3293/27060)
+2026-10-26T14:59:24.8492104Z Updating files:  13% (3518/27060)
+2026-10-26T14:59:25.2601523Z Updating files:  14% (3789/27060)
+2026-10-26T14:59:25.3690018Z Updating files:  14% (4014/27060)
+2026-10-26T14:59:26.1780415Z Updating files:  15% (4059/27060)
+2026-10-26T14:59:26.2124186Z Updating files:  15% (4316/27060)
+2026-10-26T14:59:26.5116228Z Updating files:  16% (4330/27060)
+2026-10-26T14:59:26.8097727Z Updating files:  17% (4601/27060)
+2026-10-26T14:59:27.0987457Z Updating files:  18% (4871/27060)
+2026-10-26T14:59:27.1762438Z Updating files:  19% (5142/27060)
+2026-10-26T14:59:27.3047740Z Updating files:  19% (5238/27060)
+2026-10-26T14:59:27.5295891Z Updating files:  20% (5412/27060)
+2026-10-26T14:59:27.7485895Z Updating files:  21% (5683/27060)
+2026-10-26T14:59:28.4457683Z Updating files:  22% (5954/27060)
+2026-10-26T14:59:28.8112413Z Updating files:  22% (6209/27060)
+2026-10-26T14:59:29.0424432Z Updating files:  23% (6224/27060)
+2026-10-26T14:59:29.2028104Z Updating files:  24% (6495/27060)
+2026-10-26T14:59:29.4678047Z Updating files:  24% (6634/27060)
+2026-10-26T14:59:29.6843169Z Updating files:  25% (6765/27060)
+2026-10-26T14:59:29.9677695Z Updating files:  26% (7036/27060)
+2026-10-26T14:59:30.1964389Z Updating files:  27% (7307/27060)
+2026-10-26T14:59:30.2031493Z Updating files:  28% (7577/27060)
+2026-10-26T14:59:30.6028256Z Updating files:  28% (7585/27060)
+2026-10-26T14:59:31.7530710Z Updating files:  29% (7848/27060)
+2026-10-26T14:59:31.8535086Z Updating files:  29% (8011/27060)
+2026-10-26T14:59:32.3457239Z Updating files:  30% (8118/27060)
+2026-10-26T14:59:32.4584686Z Updating files:  30% (8248/27060)
+2026-10-26T14:59:32.6727003Z Updating files:  31% (8389/27060)
+2026-10-26T14:59:32.9148873Z Updating files:  32% (8660/27060)
+2026-10-26T14:59:33.1461726Z Updating files:  33% (8930/27060)
+2026-10-26T14:59:33.2471489Z Updating files:  34% (9201/27060)
+2026-10-26T14:59:34.7056113Z Updating files:  34% (9310/27060)
+2026-10-26T14:59:35.7381987Z Updating files:  34% (9410/27060)
+2026-10-26T14:59:35.8929661Z Updating files:  34% (9434/27060)
+2026-10-26T14:59:36.1650629Z Updating files:  35% (9471/27060)
+2026-10-26T14:59:36.2909539Z Updating files:  36% (9742/27060)
+2026-10-26T14:59:37.9872153Z Updating files:  36% (9840/27060)
+2026-10-26T14:59:38.3512708Z Updating files:  36% (9968/27060)
+2026-10-26T14:59:38.4296189Z Updating files:  36% (9971/27060)
+2026-10-26T14:59:38.9439460Z Updating files:  37% (10013/27060)
+2026-10-26T14:59:39.3339868Z Updating files:  38% (10283/27060)
+2026-10-26T14:59:40.4442466Z Updating files:  38% (10516/27060)
+2026-10-26T14:59:40.4466559Z Updating files:  38% (10549/27060)
+2026-10-26T14:59:40.9571329Z Updating files:  39% (10554/27060)
+2026-10-26T14:59:41.7611517Z Updating files:  40% (10824/27060)
+2026-10-26T14:59:42.6366999Z Updating files:  40% (10976/27060)
+2026-10-26T14:59:42.9028622Z Updating files:  40% (10988/27060)
+2026-10-26T14:59:43.3794082Z Updating files:  41% (11095/27060)
+2026-10-26T14:59:43.3802886Z Updating files:  41% (11364/27060)
+2026-10-26T14:59:44.3255210Z Updating files:  42% (11366/27060)
+2026-10-26T14:59:44.4420724Z Updating files:  43% (11636/27060)
+2026-10-26T14:59:44.7687002Z Updating files:  43% (11645/27060)
+2026-10-26T14:59:44.9945720Z Updating files:  44% (11907/27060)
+2026-10-26T14:59:45.5854794Z Updating files:  45% (12177/27060)
+2026-10-26T14:59:45.8403362Z Updating files:  45% (12289/27060)
+2026-10-26T14:59:46.0776954Z Updating files:  46% (12448/27060)
+2026-10-26T14:59:46.3098313Z Updating files:  47% (12719/27060)
+2026-10-26T14:59:46.4227427Z Updating files:  48% (12989/27060)
+2026-10-26T14:59:46.9097246Z Updating files:  48% (13112/27060)
+2026-10-26T14:59:47.1971653Z Updating files:  49% (13260/27060)
+2026-10-26T14:59:47.4035417Z Updating files:  50% (13530/27060)
+2026-10-26T14:59:47.4379037Z Updating files:  51% (13801/27060)
+2026-10-26T14:59:47.6116070Z Updating files:  51% (13850/27060)
+2026-10-26T14:59:47.8222910Z Updating files:  52% (14072/27060)
+2026-10-26T14:59:48.4425126Z Updating files:  53% (14342/27060)
+2026-10-26T14:59:48.5735814Z Updating files:  53% (14475/27060)
+2026-10-26T14:59:48.8361482Z Updating files:  54% (14613/27060)
+2026-10-26T14:59:49.1098157Z Updating files:  55% (14883/27060)
+2026-10-26T14:59:49.5203584Z Updating files:  56% (15154/27060)
+2026-10-26T14:59:49.7091587Z Updating files:  56% (15231/27060)
+2026-10-26T14:59:49.9609013Z Updating files:  57% (15425/27060)
+2026-10-26T14:59:50.2034799Z Updating files:  58% (15695/27060)
+2026-10-26T14:59:50.4571056Z Updating files:  59% (15966/27060)
+2026-10-26T14:59:50.4694766Z Updating files:  60% (16236/27060)
+2026-10-26T14:59:51.0810353Z Updating files:  60% (16250/27060)
+2026-10-26T14:59:51.5029102Z Updating files:  61% (16507/27060)
+2026-10-26T14:59:51.5389974Z Updating files:  61% (16729/27060)
+2026-10-26T14:59:51.7379445Z Updating files:  62% (16778/27060)
+2026-10-26T14:59:53.4440693Z Updating files:  63% (17048/27060)
+2026-10-26T14:59:53.5833001Z Updating files:  63% (17263/27060)
+2026-10-26T14:59:53.6387824Z Updating files:  63% (17265/27060)
+2026-10-26T14:59:53.8921265Z Updating files:  64% (17319/27060)
+2026-10-26T14:59:54.1459092Z Updating files:  65% (17589/27060)
+2026-10-26T14:59:54.3748168Z Updating files:  66% (17860/27060)
+2026-10-26T14:59:54.4994067Z Updating files:  67% (18131/27060)
+2026-10-26T14:59:54.6111022Z Updating files:  67% (18271/27060)
+2026-10-26T14:59:55.1142470Z Updating files:  68% (18401/27060)
+2026-10-26T14:59:55.3681938Z Updating files:  69% (18672/27060)
+2026-10-26T14:59:55.5147483Z Updating files:  70% (18942/27060)
+2026-10-26T14:59:55.6570616Z Updating files:  70% (19081/27060)
+2026-10-26T14:59:55.8883884Z Updating files:  71% (19213/27060)
+2026-10-26T14:59:56.3487480Z Updating files:  72% (19484/27060)
+2026-10-26T14:59:56.5306606Z Updating files:  73% (19754/27060)
+2026-10-26T14:59:56.5877741Z Updating files:  73% (19956/27060)
+2026-10-26T14:59:56.8397804Z Updating files:  74% (20025/27060)
+2026-10-26T14:59:57.2291219Z Updating files:  75% (20295/27060)
+2026-10-26T14:59:57.6246466Z Updating files:  76% (20566/27060)
+2026-10-26T14:59:57.7062889Z Updating files:  76% (20733/27060)
+2026-10-26T14:59:57.9610376Z Updating files:  77% (20837/27060)
+2026-10-26T14:59:58.1883372Z Updating files:  78% (21107/27060)
+2026-10-26T14:59:58.4882258Z Updating files:  79% (21378/27060)
+2026-10-26T14:59:58.5591860Z Updating files:  80% (21648/27060)
+2026-10-26T14:59:59.1147046Z Updating files:  80% (21716/27060)
+2026-10-26T14:59:59.3960867Z Updating files:  81% (21919/27060)
+2026-10-26T14:59:59.5731397Z Updating files:  82% (22190/27060)
+2026-10-26T14:59:59.6747938Z Updating files:  82% (22375/27060)
+2026-10-26T14:59:59.9161224Z Updating files:  83% (22460/27060)
+2026-10-26T15:00:00.5934260Z Updating files:  84% (22731/27060)
+2026-10-26T15:00:01.0480947Z Updating files:  84% (22915/27060)
+2026-10-26T15:00:01.2826833Z Updating files:  85% (23001/27060)
+2026-10-26T15:00:01.5309248Z Updating files:  86% (23272/27060)
+2026-10-26T15:00:01.5766750Z Updating files:  87% (23543/27060)
+2026-10-26T15:00:01.8640698Z Updating files:  87% (23576/27060)
+2026-10-26T15:00:02.4596909Z Updating files:  88% (23813/27060)
+2026-10-26T15:00:02.6274185Z Updating files:  89% (24084/27060)
+2026-10-26T15:00:02.8503238Z Updating files:  89% (24095/27060)
+2026-10-26T15:00:03.0465256Z Updating files:  90% (24354/27060)
+2026-10-26T15:00:03.2650724Z Updating files:  91% (24625/27060)
+2026-10-26T15:00:03.7713874Z Updating files:  92% (24896/27060)
+2026-10-26T15:00:03.9078177Z Updating files:  92% (25018/27060)
+2026-10-26T15:00:05.1103567Z Updating files:  93% (25166/27060)
+2026-10-26T15:00:05.5876518Z Updating files:  93% (25187/27060)
+2026-10-26T15:00:05.6104553Z Updating files:  94% (25437/27060)
+2026-10-26T15:00:05.8164136Z Updating files:  94% (25460/27060)
+2026-10-26T15:00:06.4024250Z Updating files:  95% (25707/27060)
+2026-10-26T15:00:06.6234364Z Updating files:  96% (25978/27060)
+2026-10-26T15:00:06.6582306Z Updating files:  96% (26206/27060)
+2026-10-26T15:00:06.9144317Z Updating files:  97% (26249/27060)
+2026-10-26T15:00:07.1455923Z Updating files:  98% (26519/27060)
+2026-10-26T15:00:07.3892886Z Updating files:  99% (26790/27060)
+2026-10-26T15:00:07.3893189Z Updating files: 100% (27060/27060)
+2026-10-26T15:00:07.3893421Z Updating files: 100% (27060/27060), done.
+2026-10-26T15:00:07.4380928Z Note: switching to 'refs/remotes/pull/142/merge'.
+2026-10-26T15:00:07.4381237Z 
+2026-10-26T15:00:07.4381420Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-26T15:00:07.4381857Z changes and commit them, and you can discard any commits you make in this
+2026-10-26T15:00:07.4383178Z state without impacting any branches by switching back to a branch.
+2026-10-26T15:00:07.4383445Z 
+2026-10-26T15:00:07.4383613Z If you want to create a new branch to retain commits you create, you may
+2026-10-26T15:00:07.4384010Z do so (now or later) by using -c with the switch command. Example:
+2026-10-26T15:00:07.4384240Z 
+2026-10-26T15:00:07.4384439Z   git switch -c <new-branch-name>
+2026-10-26T15:00:07.4384591Z 
+2026-10-26T15:00:07.4384678Z Or undo this operation with:
+2026-10-26T15:00:07.4384868Z 
+2026-10-26T15:00:07.4384935Z   git switch -
+2026-10-26T15:00:07.4385041Z 
+2026-10-26T15:00:07.4385225Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-26T15:00:07.4385507Z 
+2026-10-26T15:00:07.9404908Z HEAD is now at 39b2e056 Merge 6dbeba14755fd59c39c3e23292651e075c5c7858 into 0f6cd8ddbbbec0d4556a334d3252be930edeb1a3
+2026-10-26T15:00:07.9925957Z ##[endgroup]
+2026-10-26T15:00:08.0570941Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-10-26T15:00:08.1064071Z 39b2e056369c3bbe360a44ef5bb46f5f5e019611
+2026-10-26T15:00:08.1127230Z ##[group]Removing auth
+2026-10-26T15:00:08.1127575Z Removing SSH command configuration
+2026-10-26T15:00:08.1144848Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T15:00:08.1686403Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T15:00:09.5310878Z Removing HTTP extra header
+2026-10-26T15:00:09.5320262Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T15:00:09.5852743Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T15:00:10.8774664Z Removing includeIf entries pointing to credentials config files
+2026-10-26T15:00:10.8787375Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T15:00:10.9243070Z includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git.path
+2026-10-26T15:00:10.9243543Z includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git/worktrees/*.path
+2026-10-26T15:00:10.9243928Z includeif.gitdir:/github/workspace/.git.path
+2026-10-26T15:00:10.9244244Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T15:00:10.9304582Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git.path
+2026-10-26T15:00:10.9787255Z C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T15:00:10.9851146Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git.path C\:\\a\\_temp\\git\-credentials\-7bf5a284\-288c\-42a6\-9ed6\-83a91ac0c03b\.config
+2026-10-26T15:00:11.0429090Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git/worktrees/*.path
+2026-10-26T15:00:11.0919650Z C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T15:00:11.0982850Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:C:/a/RedSalamander/RedSalamander/.git/worktrees/*.path C\:\\a\\_temp\\git\-credentials\-7bf5a284\-288c\-42a6\-9ed6\-83a91ac0c03b\.config
+2026-10-26T15:00:11.1540950Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-26T15:00:11.2027518Z /github/runner_temp/git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T15:00:11.2086587Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-7bf5a284\-288c\-42a6\-9ed6\-83a91ac0c03b\.config
+2026-10-26T15:00:11.2670530Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T15:00:11.3148047Z /github/runner_temp/git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config
+2026-10-26T15:00:11.3213690Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-7bf5a284\-288c\-42a6\-9ed6\-83a91ac0c03b\.config
+2026-10-26T15:00:11.3770510Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T15:00:12.6503037Z Removing credentials config 'C:\a\_temp\git-credentials-7bf5a284-288c-42a6-9ed6-83a91ac0c03b.config'
+2026-10-26T15:00:12.6527086Z ##[endgroup]
+2026-10-26T15:00:12.7015603Z Prepare all required actions
+2026-10-26T15:00:12.7124457Z ##[group]Run ./.github/actions/setup-msvc
+2026-10-26T15:00:12.7124806Z with:
+2026-10-26T15:00:12.7125042Z   platform: ARM64
+2026-10-26T15:00:12.7125278Z env:
+2026-10-26T15:00:12.7128071Z   GH_TOKEN: ***
+2026-10-26T15:00:12.7128329Z   RSBuildEnableTests: true
+2026-10-26T15:00:12.7128671Z   VCPKG_ROOT: C:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:00:12.7129191Z   VCPKG_INSTALLED_DIR: C:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\arm64
+2026-10-26T15:00:12.7129630Z   VCPKG_DEFAULT_TRIPLET: arm64-windows
+2026-10-26T15:00:12.7129906Z ##[endgroup]
+2026-10-26T15:00:12.7201117Z ##[start-action display=Run & "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM;id=__self.__run]
+2026-10-26T15:00:12.7417859Z ##[group]Run & "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM
+2026-10-26T15:00:12.7418522Z [36;1m& "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM[0m
+2026-10-26T15:00:12.7477709Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:00:12.7478076Z env:
+2026-10-26T15:00:12.7480852Z   GH_TOKEN: ***
+2026-10-26T15:00:12.7481046Z   RSBuildEnableTests: true
+2026-10-26T15:00:12.7481329Z   VCPKG_ROOT: C:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:00:12.7481774Z   VCPKG_INSTALLED_DIR: C:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\arm64
+2026-10-26T15:00:12.7482162Z   VCPKG_DEFAULT_TRIPLET: arm64-windows
+2026-10-26T15:00:12.7482404Z   MSVC_SETUP_PLATFORM: ARM64
+2026-10-26T15:00:12.7482619Z ##[endgroup]
+2026-10-26T15:00:17.5818000Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1055\help.html...
+2026-10-26T15:00:17.5818726Z 
+2026-10-26T15:00:17.5819218Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\2052\help.html...
+2026-10-26T15:00:17.5820375Z 
+2026-10-26T15:00:17.5821437Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1028\help.html...
+2026-10-26T15:00:17.5822422Z 
+2026-10-26T15:00:17.5822866Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1033\help.html...
+2026-10-26T15:00:17.5823393Z 
+2026-10-26T15:00:17.5823812Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1040\help.html...
+2026-10-26T15:00:17.5824330Z 
+2026-10-26T15:00:17.5824747Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1045\help.html...
+2026-10-26T15:00:17.5825266Z 
+2026-10-26T15:00:17.5825933Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1036\help.html...
+2026-10-26T15:00:17.5826465Z 
+2026-10-26T15:00:17.5827037Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1029\help.html...
+2026-10-26T15:00:17.5836546Z 
+2026-10-26T15:00:17.5838231Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1041\help.html...
+2026-10-26T15:00:17.5838922Z 
+2026-10-26T15:00:17.5839389Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1049\help.html...
+2026-10-26T15:00:17.5840564Z 
+2026-10-26T15:00:17.5841166Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1046\help.html...
+2026-10-26T15:00:17.5842580Z 
+2026-10-26T15:00:17.5843377Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1042\help.html...
+2026-10-26T15:00:17.5843855Z 
+2026-10-26T15:00:17.5844201Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\3082\help.html...
+2026-10-26T15:00:17.5844643Z 
+2026-10-26T15:00:17.5846803Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\HelpFile\1031\help.html...
+2026-10-26T15:00:17.5847391Z 
+2026-10-26T15:00:17.5847754Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\vs_setup_bootstrapper.exe...
+2026-10-26T15:00:17.5848202Z 
+2026-10-26T15:00:17.5848500Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Azure.Core.dll...
+2026-10-26T15:00:17.5848901Z 
+2026-10-26T15:00:17.5849213Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Azure.Identity.dll...
+2026-10-26T15:00:17.5849644Z 
+2026-10-26T15:00:17.5850019Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Bcl.AsyncInterfaces.dll...
+2026-10-26T15:00:17.5850487Z 
+2026-10-26T15:00:17.5850848Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Bcl.Cryptography.dll...
+2026-10-26T15:00:17.5851310Z 
+2026-10-26T15:00:17.5851720Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.C2RSignatureReader.Interop.dll...
+2026-10-26T15:00:17.5852220Z 
+2026-10-26T15:00:17.5852614Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.C2RSignatureReader.Native.dll...
+2026-10-26T15:00:17.5853105Z 
+2026-10-26T15:00:17.5853541Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.Caching.Abstractions.dll...
+2026-10-26T15:00:17.5854222Z 
+2026-10-26T15:00:17.5854626Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.Caching.Memory.dll...
+2026-10-26T15:00:17.5855115Z 
+2026-10-26T15:00:17.5855594Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.DependencyInjection.Abstractions.dll...
+2026-10-26T15:00:17.5856183Z 
+2026-10-26T15:00:17.5856600Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.Logging.Abstractions.dll...
+2026-10-26T15:00:17.5857119Z 
+2026-10-26T15:00:17.5857483Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.Options.dll...
+2026-10-26T15:00:17.5857946Z 
+2026-10-26T15:00:17.5858340Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Extensions.Primitives.dll...
+2026-10-26T15:00:17.5858812Z 
+2026-10-26T15:00:17.5859230Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Identity.Client.Broker.dll...
+2026-10-26T15:00:17.5859701Z 
+2026-10-26T15:00:17.5860055Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Identity.Client.dll...
+2026-10-26T15:00:17.5861674Z 
+2026-10-26T15:00:17.5862136Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Identity.Client.Extensions.Msal.dll...
+2026-10-26T15:00:17.5863769Z 
+2026-10-26T15:00:17.5864212Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Identity.Client.NativeInterop.dll...
+2026-10-26T15:00:17.5864732Z 
+2026-10-26T15:00:17.8382018Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.Abstractions.dll...
+2026-10-26T15:00:17.8382587Z 
+2026-10-26T15:00:17.8383012Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.JsonWebTokens.dll...
+2026-10-26T15:00:17.8383623Z 
+2026-10-26T15:00:17.8384007Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.Logging.dll...
+2026-10-26T15:00:17.8384520Z 
+2026-10-26T15:00:17.8385992Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.Protocols.dll...
+2026-10-26T15:00:17.8386581Z 
+2026-10-26T15:00:17.8387053Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll...
+2026-10-26T15:00:17.8387596Z 
+2026-10-26T15:00:17.8388185Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.IdentityModel.Tokens.dll...
+2026-10-26T15:00:17.8388668Z 
+2026-10-26T15:00:17.8389067Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.RemoteControl.dll...
+2026-10-26T15:00:17.8389565Z 
+2026-10-26T15:00:17.8389968Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Services.Common.dll...
+2026-10-26T15:00:17.8390470Z 
+2026-10-26T15:00:17.8390877Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.Common.dll...
+2026-10-26T15:00:17.8391374Z 
+2026-10-26T15:00:17.8391744Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.dll...
+2026-10-26T15:00:17.8392203Z 
+2026-10-26T15:00:17.8392611Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.Download.dll...
+2026-10-26T15:00:17.8393110Z 
+2026-10-26T15:00:17.8393489Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Telemetry.dll...
+2026-10-26T15:00:17.8393969Z 
+2026-10-26T15:00:17.8394348Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Threading.dll...
+2026-10-26T15:00:17.8394829Z 
+2026-10-26T15:00:17.8395257Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Utilities.Internal.dll...
+2026-10-26T15:00:17.8395777Z 
+2026-10-26T15:00:17.8396165Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.VisualStudio.Validation.dll...
+2026-10-26T15:00:17.8396643Z 
+2026-10-26T15:00:17.8396995Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Microsoft.Win32.Registry.dll...
+2026-10-26T15:00:17.8397445Z 
+2026-10-26T15:00:17.8397862Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\runtimes\win-x64\native\msalruntime.dll...
+2026-10-26T15:00:17.8398377Z 
+2026-10-26T15:00:17.8398790Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\runtimes\win-arm64\native\msalruntime_arm64.dll...
+2026-10-26T15:00:17.8399294Z 
+2026-10-26T15:00:17.8399618Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\msalruntime_x86.dll...
+2026-10-26T15:00:17.8400030Z 
+2026-10-26T15:00:17.8401423Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\runtimes\win-x86\native\msalruntime_x86.dll...
+2026-10-26T15:00:17.8401937Z 
+2026-10-26T15:00:17.8402259Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Nerdbank.Streams.dll...
+2026-10-26T15:00:17.8402681Z 
+2026-10-26T15:00:17.8402995Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\Newtonsoft.Json.dll...
+2026-10-26T15:00:17.8403414Z 
+2026-10-26T15:00:17.8403730Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.Buffers.dll...
+2026-10-26T15:00:17.8404140Z 
+2026-10-26T15:00:17.8404471Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.ClientModel.dll...
+2026-10-26T15:00:17.8404902Z 
+2026-10-26T15:00:17.8405520Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.Diagnostics.DiagnosticSource.dll...
+2026-10-26T15:00:17.8406041Z 
+2026-10-26T15:00:17.8406376Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.Formats.Asn1.dll...
+2026-10-26T15:00:17.8406807Z 
+2026-10-26T15:00:17.8407181Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.IdentityModel.Tokens.Jwt.dll...
+2026-10-26T15:00:17.8407659Z 
+2026-10-26T15:00:17.8408243Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.IO.FileSystem.AccessControl.dll...
+2026-10-26T15:00:17.8408733Z 
+2026-10-26T15:00:17.8409072Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.IO.Packaging.dll...
+2026-10-26T15:00:17.8409499Z 
+2026-10-26T15:00:17.8409843Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.IO.Pipelines.dll...
+2026-10-26T15:00:17.8410276Z 
+2026-10-26T15:00:17.8410609Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\c459505b412a9d2fb69cf5dac2\vs_bootstrapper_d15\System.Memory.Data.dll...
+2026-10-26T15:00:17.8411037Z 
+2026-10-26T15:00:51.4465266Z [31;1mSetup.ps1: [0mC:\a\_temp\db1d4bfd-a8c4-46ea-9b9d-4f4975d3f61d.ps1:2[0m
+2026-10-26T15:00:51.4465743Z [31;1m[0m[36;1mLine |[0m
+2026-10-26T15:00:51.4466473Z [31;1m[0m[36;1m[36;1m   2 | [0m [36;1m& "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATF[0m …[0m
+2026-10-26T15:00:51.4467205Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+2026-10-26T15:00:51.4468183Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mThe variable '$LASTEXITCODE' cannot be retrieved because it has not been set.[0m
+2026-10-26T15:00:56.5116755Z ##[error]Process completed with exit code 1.
+2026-10-26T15:00:56.5195361Z ##[end-action id=__self.__run;outcome=failure;conclusion=failure;duration_ms=43796]
+2026-10-26T15:00:56.7428825Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-10-26T15:00:56.7429381Z with:
+2026-10-26T15:00:56.7429585Z   name: native-build-ARM64-Debug
+2026-10-26T15:00:56.7429822Z   include-hidden-files: true
+2026-10-26T15:00:56.7430205Z   path: .build/logs/
+.build/ARM64/Debug/*.DxUi.json
+.build/ARM64/Debug/Plugins/*.DxUi.json
+
+2026-10-26T15:00:56.7430600Z   retention-days: 14
+2026-10-26T15:00:56.7430791Z   if-no-files-found: warn
+2026-10-26T15:00:56.7430993Z   compression-level: 6
+2026-10-26T15:00:56.7431185Z   overwrite: false
+2026-10-26T15:00:56.7431369Z   archive: true
+2026-10-26T15:00:56.7431538Z env:
+2026-10-26T15:00:56.7434694Z   GH_TOKEN: ***
+2026-10-26T15:00:56.7434889Z   RSBuildEnableTests: true
+2026-10-26T15:00:56.7435184Z   VCPKG_ROOT: C:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:00:56.7435621Z   VCPKG_INSTALLED_DIR: C:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\arm64
+2026-10-26T15:00:56.7436538Z   VCPKG_DEFAULT_TRIPLET: arm64-windows
+2026-10-26T15:00:56.7436771Z ##[endgroup]
+2026-10-26T15:00:57.0236908Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-26T15:00:57.0242496Z The least common ancestor is C:\a\RedSalamander\RedSalamander\.build. This will be the root directory of the artifact
+2026-10-26T15:00:57.0257382Z ##[warning]No files were found with the provided path: .build/logs/
+.build/ARM64/Debug/*.DxUi.json
+.build/ARM64/Debug/Plugins/*.DxUi.json. No artifacts will be uploaded.
+2026-10-26T15:00:57.0677012Z Post job cleanup.
+2026-10-26T15:00:57.3672597Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-26T15:00:57.4168663Z git version 2.56.0.windows.3
+2026-10-26T15:00:57.4243774Z Copying 'C:\Users\runneradmin\.gitconfig' to 'C:\a\_temp\d665b263-f248-460f-b902-963152b79cd8\.gitconfig'
+2026-10-26T15:00:57.4270300Z Temporarily overriding HOME='C:\a\_temp\d665b263-f248-460f-b902-963152b79cd8' before making global git config changes
+2026-10-26T15:00:57.4271003Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T15:00:57.4280808Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory C:\a\RedSalamander\RedSalamander
+2026-10-26T15:00:57.4856363Z Removing SSH command configuration
+2026-10-26T15:00:57.4868751Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T15:00:57.5424189Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T15:00:58.8258450Z Removing HTTP extra header
+2026-10-26T15:00:58.8269965Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T15:00:58.8826590Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T15:01:00.2215812Z Removing includeIf entries pointing to credentials config files
+2026-10-26T15:01:00.2229215Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T15:01:00.2783976Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T15:01:01.5610821Z Evaluate and set job outputs
+2026-10-26T15:01:01.5618844Z Cleaning up orphan processes

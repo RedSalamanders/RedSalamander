@@ -1,0 +1,2088 @@
+[
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps Floating Terminal messages in the unique central registry",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "renders from a reusable Ghostty structured snapshot instead of flattening styled cells",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "uses measured pixel-aligned cells and seam-free background fills",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "shares one plugin-action ID list and does not reimplement default chords in WindowProc",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps the UI-facing Close method free of joins and wait APIs",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "queues bounded input and performs pipe writes only on a pinned worker",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "admits a suspended shell into a plugin-owned kill-on-close job before it can run",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "routes every legacy path insertion command through the opposite terminal and removes the pseudo prompt",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps inactive pane tabs out of the header and gives terminal input priority over host shortcuts",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "binds path insertion to the latest accepted source and marks input only after admission",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps clipboard reading, paste policy, and bracketed encoding inside Terminal.dll",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "defers bounded OSC 52 text writes to the UI thread behind deny ask allow policy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "activates bounded OSC 8 hyperlinks only through the configured safe policy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "uses Ghostty-owned selection semantics for pointer selection and copy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "routes application mouse modes through Ghostty and otherwise scrolls the viewport",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "round-trips one visible native scrollbar through Ghostty absolute rows",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "dims the complete unfocused terminal scene through the shared pane policy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps IME composition, commit, and candidate placement in the plugin control",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "routes WindowProc domains through handled-result contracts and retires the window last",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "copies a bounded exact-key Kitty visible delta under engine ownership and converts it on one latest-only worker",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "bounds Kitty upload work per frame, preserves CPU generations on device loss, and emits stage metrics",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "retains Terminal device resources across ordinary WM_SIZE and reserves full discard for policy or device loss",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps every authoritative Terminal TestRuns reference resolvable",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "publishes an immutable UI Automation Text snapshot and retires passive providers safely",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "fails the private runtime build and loader closed when required terminal APIs disappear",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps the reviewed mode ABI as the single admitted Product contract",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "initializes every versioned Ghostty record used by the adapter and exercises exact terminal modes",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps the admitted regression for DCS payload bytes above 0x7F",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "keeps the host ABI size-evolvable with the reviewed weak event callback",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "drains floating Terminal payloads before the shared host can consume final teardown",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "uses only the authenticated PowerShell provider for Suggestions history and insertion",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "locks the exact private runtime and Terminal plugin as an atomic generated-hash pair",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "supports offline reproduction and stages the complete private-runtime notice closure",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Embedded Terminal plugin source contracts",
+    "Context": "",
+    "Name": "freezes the measurement-only VT upgrade corpus before changing the product pin",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "IMAP UIDVALIDITY and single-message delete source contracts",
+    "Context": "",
+    "Name": "never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "IMAP UIDVALIDITY and single-message delete source contracts",
+    "Context": "",
+    "Name": "carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Microsoft Drive credential-boundary source contracts",
+    "Context": "",
+    "Name": "validates Graph and preauthenticated upload targets before credential-bound dispatch",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Microsoft Drive credential-boundary source contracts",
+    "Context": "",
+    "Name": "keeps bearer values and opaque query values out of diagnostics and serialized header blocks",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Preferences settings-backed page source contracts",
+    "Context": "",
+    "Name": "keeps Mouse in both manual Preferences projections and verifies live Apply persistence",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Preferences settings-backed page source contracts",
+    "Context": "",
+    "Name": "documents every required draft-to-disk integration layer in the spec and project skill",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "rejects unknown DxUiTests switches instead of silently running every suite",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "rejects empty DxUiTests option values with targeted diagnostics",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "documents and enforces bounded self-test timeout multipliers",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps scaled self-test timeouts finite and nonzero for nonzero bases",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "waits for runner-native self-test processes by direct process handle",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps the nightly shuffle repeat lane separate from the PR gate",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "gives ViewerPETests nested shell churn its own timeout budget",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerVLC dependency loading isolated from the process DLL directory",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "bounds multi-plugin metadata before host indexing and reference-counts shared localization owners",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps viewer threadpool module pins alive through the callback return boundary",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "rejects viewer async work without module pins and impossible provider read counts",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerWeb security setup fail-closed and teardown outside DllMain",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerPE reader commitments exact and current terminal delivery recoverable",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "publishes authoritative ViewerSpace totals before root completion becomes visible",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "captures viewer payload fields before moving the payload into PostMessagePayload",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerText Save As source-first and transactionally committed",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps ViewerText async decode and clipboard work terminal and bounded",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "requires git identity before accepting self-test archive repo roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps self-test archive parent walking bounded by a named limit",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "scopes the self-test run mutex to the isolated self-test root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "lets native selftests consume the unified test root and run id directly",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "exposes native TestSandbox scratch acquisition separate from last_run artifacts",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "removes native self-test sandboxes without traversing directory reparse points",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps nested settings-save child artifacts shallow and removes them before audit",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "authorizes test roots centrally and fails closed before native mutation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes RedConfigureTests scratch through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes ViewerSqliteTests scratch through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes CrashHandlingTests scratch through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes Commands plugin-config scratch through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "recovers plugin-config debug tab traversal from logical focus position before first-control fallback",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps plugin-config tab traversal retries from sending an extra tab after a successful advance",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "waits for preview fallback text and source-pane focus together",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "separates configured preview publication from external desktop deactivation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "makes quick-search tests own pane sort and extension visibility",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps quick-search navigation expectations tied to visible match order",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Hot Paths browse page-settle failures diagnostic-rich",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "uses condition-based focus waiting for Viewers roundtrip category navigation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "retries Preferences focus acquisition during condition-based waits",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "waits for Plugins sort-search header rects before reorder-resize interactions",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "waits for Viewers sort-search header rects before reorder-resize interactions",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps broad Preferences focus paths on the shared focus helper",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "defers change-case folder focus restoration until modal teardown unwinds",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "retries transient selected-path lease observations to a diagnostic quiet point",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps broad Commands app navigation shell focus checks condition-based",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "makes the app Shortcuts navigation-shell fixture own its settings and window isolation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates the Preferences Keyboard reset live interaction fixture",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates the pane-filter DxUi surface fixture before global prompt discovery",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates both Compare navigation-shell fixtures before asserting restored focus",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates mouse-opened menu keyboard ordering and preserves split post diagnostics",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "reacquires the submenu placement cascade target after root-menu initialization",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "reports locked-desktop clipboard and foreground dependencies as explicit Commands skips",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Preferences category-tree UIA selection pinned to category-id selection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Preferences debug category selection independent from transient snapshot capture",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Preferences category churn settled, attributable, and bounded under uncontended focus",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates Compare Directories wrap traversal and keeps failures diagnostic-rich",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "carries selected FolderView rename identity across bounded refresh interleavings",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes Commands long-path and high-cardinality fixtures through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes ShellCommands shortcut save temp files through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes PerformanceTests2 scratch through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes BatchRename window fixture roots through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes ViewerPETests fixture files through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes DxUiTests generated artifact defaults through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps shared TestSupport sandbox and environment policies explicit",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps viewer message pumping and typed snapshot polling on bounded shared support",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes Compare dummy filesystem scratch through native TestSandbox roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes Tools Pester scratch through the unified TestSandbox root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "gives retained Preferences page-state activation a broad-order settle budget",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "unwinds retained Plugins children before parent-grid UIA validation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps gated test sources inside TestSandbox instead of raw temp or profile roots",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes SettingsStore app files through the unified TestSandbox root during test runs",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "moves Compare foreground service capture files into TestSandbox instead of process temp",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "wraps foreground search service selftest processes in a kill-on-close JobObject",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps broad-order foreground Search service failures process-diagnostic",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps foreground Search service stdout tests independent from hidden readiness requests",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps the shared child-process runner contained, concurrently drained, and parity-tested",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps local index snapshot reload timing advisory instead of a correctness ceiling",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps foreground Search service status probes behind a condition-based status wait",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "lets delete-burst maintenance tests accept an already completed first idle window",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "drains Batch Rename central test tasks before provider teardown",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "scales named raw self-test waits through the timeout multiplier",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileOperations popup fixtures inside the current self-test process",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "routes persistent View-to-Files menu hover through the menu bar root-switch path",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "centralizes the Commands real-input warning and guards every cursor-warp family",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "opens the temporary menu-bar hover-switch popup through keyboard activation",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "parks real cursor away from DxUi popup initial hover in menu selftests",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "restores broad command-probe UI state and isolates modeless ownership fixtures",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Shortcuts live UIA search interaction message-pumped under broad order",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Compare Options close-reopen churn globally settled before live UIA reuse",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps File Operations speed-limit prompt churn ValuePattern checks condition-based",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps dialog prompt model and UIA checks condition-based under broad order",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Item Properties UIA interaction off the owning window thread and joins bounded workers",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps broad-order Commands fixtures pinned to the state each case owns",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Find destination/action button probes pinned to deterministic input state",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Find header-drag reorder failures diagnostic-rich",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Find reordered-sort restore checks diagnostic-rich under broad order",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Compare Directories lower-card scroll focus failures diagnostic-rich",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Connection Manager long-run open-close settled and diagnostic-rich",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "rejects retired outside-root cleanup in the unified runner",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "bypasses fatal error modal dialogs while self-tests are running",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Commands Preferences chunks namespace-self-contained",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps IconCache association LRU perf emission outside the association cache lock helper",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "bounds DirectoryInfoCache eviction when protected entries exceed the cache budget",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FolderView thumbnail WIC factory ownership local to the processing thread",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps IMAP summary repair budget exhaustion local to the current repair pass",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "clears FolderView incremental-search layout effects over the visual label text",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "matches FolderView incremental-search highlights against visual display names",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "cleans stale FolderView incremental-search drawing effects when search is inactive",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "exposes runner-native self-test case listing without executing case bodies",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "exposes native self-test repeat and seeded shuffle execution controls",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "reinitializes Commands UIA cache after explicit-order case listing",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates every Commands case before fixture dispatch",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "resets pane content and transient UI state between Commands explicit-order cases",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "rehydrates runtime plugins after the MTP deferred-unload probe",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps CompareDirectories seeded shuffle native through explicit case order",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileOperations repeat coverage native instead of runner-only",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FolderView overlay perf sample sufficiency advisory",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "uses shared self-test result emission for ad hoc and state-machine cases",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "preserves partial self-test results when a case or suite crashes",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps injected classifier proof hooks explicit and debug-only",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps CompareDirectories runner-listed case names unique",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps CompareDirectories literal RunCase names listed for runner coverage",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "opens the file-operations custom speed-limit prompt asynchronously for self-tests",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileOperations self-test case prefixes runnable",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileOperations discovery perf counters race-free under worker concurrency",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps FileOperations conflict routing in one arbiter and one engine policy builder",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps same-host overlap choices bounded, relation-scoped, and safely defaulted",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps cached Keep Both eligibility scoped to the current top-level conflict",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Riptide low-risk hardening invariants wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Floodgate data-safety invariants wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Microsoft Drive merge destination-metadata reuse and Release proof wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Delta reverify file-system safety fixes wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps possible file-operation artifact projections visible and recovery-free in FolderView Compare and Find",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Change Case discovery fail-closed and task updates token-owned",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "shares only safe File Operations durable-state file mechanics",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps File Operations scheduler failure policy local and the worker start gate cancelable",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Curl reader and full-buffer writer waits stop-aware",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "isolates the destructive missing-directory hot-reload fixture from the shared settings run",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps bounded registry strings and canonical WSL discovery wired through Common",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps RedConfigure rectangular paste bound to visible row and culture identities",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Riptide test-credibility gaps closed",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps native DxUi text hosts compatible with Win32 edit text and selection messages",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "gates DxUi focus-sensitive Win32 assertions behind interactive desktop probes",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps focus-independent GUI coverage behind the shared no-activation guard",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps new native focus calls inside reviewed focus-sensitive test adapters",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "serializes build and test artifacts and contains every shared process launch tree",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps IronLedger FolderView data-integrity guards wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 5 pack-and-delete output safety wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 5 local outputs transactional",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 5 archive extraction conflicts explicit and transactional",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 7 settings commits conflict-aware and recoverable",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 8 connection identity and authorization boundaries wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 13 local and Dummy provider mutations fail-before-change",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Test harness source contracts",
+    "Context": "",
+    "Name": "keeps production translation units independently compiled",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "accepts a valid normative document with an evidence-backed consistency row",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "accepts a valid active WIP plan indexed exactly once",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "accepts a compact retired tombstone with the required retrieval fields",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a duplicate WIP index entry",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects an unindexed direct WIP file",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a stale WIP index path",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects an unchecked checkbox in normative prose",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects future or implementation-plan headings in normative prose",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "resolves a local relative link and heading anchor",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "uses GitHub duplicate-heading suffixes",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects missing local targets and heading anchors",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "ignores fake links inside fenced Cpp PowerShell and Markdown examples",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "ignores a fake link inside inline code",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a repository-root escape attempt",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "reports a stale link from immutable Done as informational",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a modified protected Done file",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the reviewed completed menu plan path without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the reviewed completed menu remediation path without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the reviewed retired File Operations popup plan without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the reviewed retired File Operations architecture-debt plan without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the retired File Operations reliability core plan without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits the retired File Operations execution record without weakening Done protection",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits only the reviewed completed Beeline residual record",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "admits only the reviewed Terminal and File Operations follow-up record",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a tombstone above the line cap",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "classifies protected schema theme TestRuns and Mockups outside normative prose rules",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "requires every normative file to have a consistency record and evidence anchors",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects UNVERIFIED and unresolved contradiction statuses in strict inventory",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture",
+    "Context": "",
+    "Name": "rejects a WIP plan that claims authority over current contracts",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Specification information architecture integration",
+    "Context": "",
+    "Name": "keeps every approved post-Terminal Done history blob unchanged",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Visible native audit contracts",
+    "Context": "",
+    "Name": "keeps dependency trees outside the product scan and classifies every current residual",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Keyboard shortcut documentation drift contracts",
+    "Context": "",
+    "Name": "binds the Alt+arrow folder-view chords to history and selected-name commands in code",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Keyboard shortcut documentation drift contracts",
+    "Context": "",
+    "Name": "documents the Alt+arrow chords consistently in docs/KeyboardShortcuts.md",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Keyboard shortcut documentation drift contracts",
+    "Context": "",
+    "Name": "keeps the implemented folderView keyboard spec aligned with the Alt+arrow command ids",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "accepts every canonical formatted theme function spelling",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "reads connections.allowInsecureTlsInAutomation in the settings store",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "declares connections.allowInsecureTlsInAutomation in the settings schema",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "declares the Windows Hello connection keys in the settings schema",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "keeps the settings schema parseable as JSON",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Settings schema vs code key-coverage contracts",
+    "Context": "",
+    "Name": "documents the Monitor filter mask default as 63 (six message types) in the schema",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "File Operations popup documentation drift contracts",
+    "Context": "",
+    "Name": "tracks split popup cases in source and domain specs without freezing them in coverage policy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "marks every review campaign document as a non-live historical snapshot",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "records that the legacy root plans queue was archived to Done and deleted",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "resolves reviewed Markdown links and backticked repository paths",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "keeps the completed Observatory ledger internally consistent",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "keeps generated Theme Gallery Vite state out of version control",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Historical audit governance contracts",
+    "Context": "",
+    "Name": "keeps the vcpkg Dependabot group limited to direct manifest dependencies",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects an unclassified nested file outside reviewed directory rules",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "fails when a derived module consumer is missing from usedBy",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects stale explicit paths",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "requires explicit prerequisites metadata on entries and directory rules",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "requires retention policy for compatibility records",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "requires every non-null replacement to be an exact existing Tools path",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects historical entries without a reviewed manual entry point",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects unreviewed and missing historical manual entry-point paths",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "uses a reviewed nested rule when exactly one rule matches",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "renders a useful Markdown file inventory",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Context": "",
+    "Name": "documents the command contract and supports Validate as an alias",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps the checked-in inventory reconciled with the Tools tree",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps active private implementation modules below Tools Modules",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "limits internal root compatibility loaders to explicit module replacements",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "documents every public command and compatibility loader completely",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "requires canonical replacements and explicit retention policy for compatibility surfaces",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps every historical file reachable from a reviewed manual command root",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps active executable tooling covered by at least one current test contract",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps the README top-level and module maps in exact filesystem parity",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps current Terminal helper export and consumer contracts live in the current profile",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "keeps destructive support commands within their documented static safety boundaries",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "uses psm1 modules with explicit reviewed exports",
+    "Result": "Passed",
+    "FailureMessage": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Context": "",
+    "Name": "records every reviewed public naming exception in the inventory",
+    "Result": "Passed",
+    "FailureMessage": ""
+  }
+]

@@ -1,4 +1,4 @@
-#include "resource.h"
+#include "Localization.Tests.resource.h"
 #include <winres.h>
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US

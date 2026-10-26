@@ -1,0 +1,345 @@
+{
+  "retiredDocumentationImages": [
+    "change-attributes.png",
+    "change-case.png",
+    "command-line.png",
+    "drive-menu.png",
+    "file-operations-popup-2.png",
+    "file-operations-popup-3.png",
+    "find-files.png",
+    "folder-view-brief-detailed.png",
+    "folder-view-extra-thumbnails.png",
+    "folder-view.png",
+    "history-dropdown.png",
+    "main-window.png",
+    "navigation-view.png",
+    "placeholder.png",
+    "plugins.png",
+    "preferences-advanced.png",
+    "preferences-compare-directories.png",
+    "preferences-editors.png",
+    "preferences-file-operations.png",
+    "preferences-general.png",
+    "preferences-hot-paths.png",
+    "preferences-keyboard.png",
+    "preferences-monitor.png",
+    "preferences-mouse.png",
+    "preferences-panes.png",
+    "preferences-plugin-child.png",
+    "preferences-plugins-2.png",
+    "preferences-user-menu.png",
+    "preferences-viewers.png",
+    "preview-pane-text.png",
+    "quick-search.png",
+    "salamander-vs-red.png",
+    "shortcuts-window.png",
+    "theme-dark.png",
+    "theme-high-contrast-app.png",
+    "theme-light.png",
+    "theme-rainbow.png",
+    "viewer-imgraw.png",
+    "viewer-pe.png",
+    "viewer-space-analyst-rainbow.png",
+    "viewer-space-explorer.png",
+    "viewer-space.png",
+    "viewer-vlc.png"
+  ],
+  "retiredSpecImages": [
+    {
+      "file": "Specs/UI/Images/FileOperationsPopup_Product_Active_2026-07-09.png",
+      "sha256": "2984d19630f967235a959fa3292800a4b92521f782126157d8da562bf6aff1c3",
+      "bytes": 103251
+    },
+    {
+      "file": "Specs/UI/Images/FileOperationsPopup_Product_Conflict_2026-07-10.png",
+      "sha256": "7ce1d4045318b2ccf9411c530f9c7f21be36e9bf340068ba1eb629f52567c95b",
+      "bytes": 135666
+    },
+    {
+      "file": "Specs/UI/Images/FileOperationsPopup_Product_Partial_2026-07-09.png",
+      "sha256": "9c20f7d78f3b431e504c305b4350fdda21ae4386ebc434d0257b4f7dea03d9d5",
+      "bytes": 44468
+    }
+  ],
+  "removedReferences": [
+    {
+      "document": "README.md",
+      "image": "main-window.png",
+      "references": 1
+    },
+    {
+      "document": "docs/FindFiles.md",
+      "image": "find-files.png",
+      "references": 1
+    },
+    {
+      "document": "docs/GettingStarted.md",
+      "image": "navigation-view.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "folder-view-extra-thumbnails.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "folder-view.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "quick-search.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "preview-pane-text.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "main-window.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "folder-view-brief-detailed.png",
+      "references": 1
+    },
+    {
+      "document": "docs/MainWindow.md",
+      "image": "navigation-view.png",
+      "references": 1
+    },
+    {
+      "document": "docs/NavigationAndPaths.md",
+      "image": "drive-menu.png",
+      "references": 1
+    },
+    {
+      "document": "docs/NavigationAndPaths.md",
+      "image": "history-dropdown.png",
+      "references": 1
+    },
+    {
+      "document": "docs/NavigationAndPaths.md",
+      "image": "navigation-view.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Plugins.md",
+      "image": "viewer-space-explorer.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Plugins.md",
+      "image": "viewer-pe.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Plugins.md",
+      "image": "viewer-imgraw.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Plugins.md",
+      "image": "viewer-vlc.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Plugins.md",
+      "image": "plugins.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-advanced.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-editors.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-file-operations.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-hot-paths.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "plugins.png",
+      "references": 1
+    },
+    {
+      "document": "docs/README.md",
+      "image": "main-window.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Themes.md",
+      "image": "theme-light.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Themes.md",
+      "image": "theme-rainbow.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Themes.md",
+      "image": "theme-high-contrast-app.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Themes.md",
+      "image": "theme-dark.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "viewer-space-explorer.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "folder-view-extra-thumbnails.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "viewer-pe.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "theme-light.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "preview-pane-text.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "drive-menu.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "main-window.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "theme-rainbow.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "viewer-imgraw.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "theme-high-contrast-app.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "viewer-space-analyst-rainbow.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "folder-view-brief-detailed.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "navigation-view.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "viewer-vlc.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "plugins.png",
+      "references": 1
+    },
+    {
+      "document": "docs/UserGuide.md",
+      "image": "theme-dark.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "viewer-space-explorer.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "viewer-pe.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "preview-pane-text.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "viewer-imgraw.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "viewer-space-analyst-rainbow.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Viewers.md",
+      "image": "viewer-vlc.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-mouse.png",
+      "references": 1
+    },
+    {
+      "document": "docs/Preferences.md",
+      "image": "preferences-user-menu.png",
+      "references": 1
+    }
+  ],
+  "reason": "Private/environment-derived paths or filenames, obsolete UI, or unused placeholder. file-properties.png is retained: its ExampleFolder/Z:/Example fixture is invented. Additional Mouse placeholder and User Menu/taskbar frames are obsolete/outside the owned-window capture contract.",
+  "preservationArchive": "D:\\RedSalamander.Perf\\evidence\\documentation-refresh-20261019\\original-documentation-images.zip",
+  "preservationSha256": "ad028f1b3d6c33cb7fe40a61af9e57797ee0e2ae8ae201a1a7b47c714eb1d2ad",
+  "originalFailuresAndMetadata": "Preserved; no historical qualification verdict was rewritten.",
+  "additionalWholeFrameReview": {
+    "images": [
+      "preferences-keyboard.png",
+      "shortcuts-window.png",
+      "preferences-general.png",
+      "preferences-panes.png",
+      "preferences-viewers.png",
+      "preferences-monitor.png",
+      "preferences-compare-directories.png",
+      "preferences-plugin-child.png",
+      "change-attributes.png",
+      "change-case.png"
+    ],
+    "reason": "Keyboard includes desktop notification badges; other frames contain surrounding desktop or clipped dialog controls. Retire without image editing; preserve original bytes in the verified private archive."
+  }
+}

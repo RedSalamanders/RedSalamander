@@ -1,0 +1,17 @@
+{
+  "originalFile": "Z:\\RedSalamander.Perf\\runs\\20260908T183914Z-71172-fa6f9f19305b4ba7b23d571d207daf93\\artifacts\\archive\\4cb089111a23\\Commands\\2026-09-08_212821\\perf\\perf_metrics.jsonl",
+  "originalBytes": 402412919,
+  "originalRows": 1098752,
+  "originalSha256": "8376583575ac0d5b0a98a55426603d7020ca4a7b8f7b03d4e472f905928d74f8",
+  "selectedFile": "perf-selected.jsonl",
+  "selectedRows": 92,
+  "selectedBytes": 36168,
+  "selectedSha256": "2c95c30dec9608a299ba8578b1089961687c944ebba2cbef55edd022ec36a5cb",
+  "selection": [
+    "folder.removal_focus.begin_us",
+    "terminal.open_to_visible_us",
+    "terminal.render.frame_us"
+  ],
+  "ordering": "Original row bytes and relative order are preserved. Other metrics are omitted.",
+  "scope": "Diagnostic startup/reuse, render, and removal-focus samples; no latency improvement or general benchmark claim."
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp",
+    "previousSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+    "sha256": "ce155d10601d6db24ebfb5da5b2a4ffbbf1bc76d22f06db6349ab08271701129"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "previousSha256": "51eb14585536871816ba4571cb10976d7b3efb2d185eff7508b2c4e9d79c4bbe",
+    "sha256": "7e0d05bb17370e4f497fe4a1a3d4fd2f67ae72da06907a5c196238519089ee10"
+  },
+  {
+    "path": "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+    "previousSha256": "936a88c75e87e0a77ca24f6c650e4cc9b902f962f82d51f3dd2a9efd90fcd6d6",
+    "sha256": "193b78469bf5f4e0da23e9cc8571dbe61965a4fe43afe999c97eae88f08f2b27"
+  },
+  {
+    "path": "Specs/Testing/Testing_PerformanceValidation.md",
+    "previousSha256": "b3165f7809595ea20ff55fbcd68bc449b36929342f8229d332c237003bffd751",
+    "sha256": "8d2dc072cca2fb65fd1024790bfdf35a08d5f12f1b65d1fb0ce541ec7e1a90c5"
+  },
+  {
+    "path": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+    "previousSha256": "afc8dbc72569c3250805cd90d09d7829405a3fda3b05be827de4ebc05aebd066",
+    "sha256": "be845f80ad7704358814deafafff47fbae753651b0fd9685e2d1910ae163623a"
+  }
+]

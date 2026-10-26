@@ -1,0 +1,327 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.10.12120.281)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\RsI19\RedSalamander.sln
+  Target:        All Projects
+  Configuration: Debug
+  Platform:      ARM64
+  Build workers: 2
+  Version:       7.0.100 beta Debug (ARM64)
+  Build number:  100
+  Version state: Z:\RsI19\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Installing DxUi dependencies (arm64-windows)
+warning: The vcpkg Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\vcpkg-tool\vcpkg.exe is using detected vcpkg root Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\vcpkg-tool and ignoring mismatched VCPKG_ROOT environment value Z:/RedSalamander.Perf/runs/I19-work/scratch/vcpkg-139115. To suppress this message, unset the environment variable or use the --vcpkg-root command line switch.
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+Detecting compiler hash for triplet arm64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/arm64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:arm64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 160 us
+vcpkg dependencies are ready.
+DxUi update check unavailable; the exact pinned dependency remains selected. (Checked 2026-09-13 00:00:45Z)
+DxUi restored at 13788e95f1c9a16210a87988d742d9dfc6f66eef for ARM64; output identity fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  Terminal-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\Terminal-fr-FR.dll
+  RedSalamander-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamander-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerText-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  Main.cpp
+  compilation header save succeeded; see Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\Intermediate\ARM64\Debug\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\Intermediate\ARM64\Debug\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\Intermediate\ARM64\Debug\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\Intermediate\ARM64\Debug\DxUi\DxUiCompositePS.cso
+  ControlCatalog.cpp
+  RedLauncher.vcxproj -> Z:\RsI19\.build\ARM64\Debug\RedLauncher.exe
+  NativeMenuInterop.cpp
+  dllmain.cpp
+  Factory.cpp
+  Embedded.cpp
+     Creating library Z:\RsI19\.build\ARM64\Debug\Common.lib and object Z:\RsI19\.build\ARM64\Debug\Common.exp
+  FileSystem7z.cpp
+  Common.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Common.dll
+  LocalSearchIndexCore.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+  Generating Code...
+  SearchServiceBroker.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.ComboBox.cpp
+  SqliteIndexStore.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\RsI19\.build\ARM64\Debug\RedSalamanderSearchService.exe
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Controls.cpp
+  SearchTextHelpers.cpp
+  FileSystemCurl.CopyMove.cpp
+  DxUi.cpp
+  dllmain.cpp
+  Factory.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.Grid.cpp
+  FileSystem.cpp
+  FileSystemCurl.Imap.cpp
+  DxUi.Menu.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystem.FileOps.cpp
+  FileSystemCurl.Shared.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  DxUi.SingleLineTextEditing.cpp
+  DxUi.TextInput.cpp
+  FileSystem.Path.cpp
+  Generating Code...
+  DxUi.TextStoreACP.cpp
+  FileSystem.Search.cpp
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemCurl.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemCurl.exp
+  FileSystemCurl.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemCurl.dll
+  TextInputServices.cpp
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem7z.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem7z.dll
+  dllmain.cpp
+  Factory.cpp
+  FileSystem.Watch.cpp
+  TextClipboard.cpp
+  FileSystemDummy.cpp
+  Generating Code...
+  DxUi.Theme.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemDummy.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemDummy.exp
+  FileSystemDummy.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemDummy.dll
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Tree.cpp
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem.exp
+  FileSystem.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystem.dll
+  dllmain.cpp
+  Factory.cpp
+  FilesInformationGoogleDrive.cpp
+  Generating Code...
+  FilesInformationMicrosoftDrive.cpp
+  FileSystemGoogleDrive.cpp
+  Compiling...
+  DxUi.Typeahead.cpp
+  FileSystemMicrosoftDrive.cpp
+  DxUi.WindowHost.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  Generating Code...
+  DxUi.vcxproj -> Z:\RsI19\.build\dependencies\DxUi\fb963fac99f9ef38bdcaa0d5811724f94f78b8021d3caed7220631e61648ac0f\ARM64\Debug\DxUi.lib
+  ls4.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemGoogleDrive.dll
+  ls4.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ls4.exe
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\RedSalamanderMonitor\RedSalamanderMonitor.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerText\ViewerText.vcxproj]
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMicrosoftDrive.dll
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\Terminal\Terminal.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerImgRaw\ViewerImgRaw.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerPE\ViewerPE.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerSpace\ViewerSpace.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerSqlite\ViewerSqlite.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerVLC\ViewerVLC.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Plugins\ViewerWeb\ViewerWeb.vcxproj]
+  FileSystem-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem-fr-FR.dll
+  FilesInformationMtp.cpp
+  FileSystem7z-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMtp-fr-FR.dll
+  Factory.cpp
+  FileSystemS3-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSqlite-fr-FR.dll
+  FileSystemMtp.Core.cpp
+  ViewerVLC-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSpace-ja-JP.dll
+  FilesInformationS3.cpp
+  ViewerSqlite-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerText-ja-JP.dll
+  FileSystemMtp.Device.cpp
+  ViewerVLC-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerWeb-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMtp-sk-SK.dll
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\RedConfigure\RedConfigure.vcxproj]
+  RedConfigure-ja-JP.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedConfigure-ja-JP.dll
+  ls1.cpp
+  ls1.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ls1.exe
+  ls2.cpp
+  ls2.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ls2.exe
+  FileSystemMtp.FakeBackend.cpp
+  ls3.cpp
+  FileSystemS3.Configuration.cpp
+  ls3.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ls3.exe
+  FlipSequentialDiscard.cpp
+  FileSystemMtp.Shared.cpp
+  FlipSequentialDiscard.vcxproj -> Z:\RsI19\.build\ARM64\Debug\FlipSequentialDiscard.exe
+  Document.cpp
+  FileSystemS3.Core.cpp
+  Generating Code...
+  EtwListener.cpp
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMtp.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemMtp.dll
+  ViewerSqlite.Engine.cpp
+  MonitorFileReader.cpp
+  FileSystemS3.Directory.cpp
+  ViewerSqliteTests.cpp
+  MonitorFileExporter.cpp
+  Generating Code...
+  MonitorTest.cpp
+  ViewerSqliteTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ViewerSqliteTests.exe
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Tests\ProductUiTests\ProductUiTests.vcxproj]
+  ViewerPETests.cpp
+  FileSystemS3.DirectoryOps.cpp
+  Generating Code...
+  MonitorTest.vcxproj -> Z:\RsI19\.build\ARM64\Debug\MonitorTest.exe
+  PluginContractTests.cpp
+  FileSystemS3.DriveInfo.cpp
+  ViewerPETests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\ViewerPETests.exe
+  LocalizationTests-fr-FR.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\LocalizationTests-fr-FR.dll
+  LocalizationTests.cpp
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  Generating Code...
+  LocalizationTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\LocalizationTests.exe
+  SettingsSchemaTests.cpp
+  FileSystemS3.IO.cpp
+  PluginContractTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\PluginContractTests.exe
+  CrashHandlingTests.cpp
+  SettingsSchemaParser.cpp
+  CrashQuarantine.cpp
+  FileSystemS3.Menu.cpp
+  Generating Code...
+  CrashHandler.cpp
+  SettingsSchemaTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\SettingsSchemaTests.exe
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Tests\PerformanceTests2\PerformanceTests2.vcxproj]
+Z:\RsI19\.build\dependencies\DxUi\source\13788e95f1c9a16210a87988d742d9dfc6f66eef\Build\DxUi.Consumer.targets(18,5): error : Consumer and pinned DxUi compiler host architectures differ. Restore with this build's toolchain. [Z:\RsI19\Tests\RedConfigureTests\RedConfigureTests.vcxproj]
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystemCurlTests.cpp
+  FileSystemS3.S3.cpp
+  CrashQuarantine.TestStubs.cpp
+  Generating Code...
+  FileSystemCurlTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\FileSystemCurlTests.exe
+  FileSystem-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemCurl-cs-CZ.dll
+  Generating Code...
+  FileSystemCurl-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemDummy-sk-SK.dll
+  CrashHandlingTests.vcxproj -> Z:\RsI19\.build\ARM64\Debug\CrashHandlingTests.exe
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  FileSystemS3.S3Table.cpp
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamander-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Lang\RedConfigure-sk-SK.dll
+  FileSystemS3.Shared.cpp
+  FileSystemS3.SelfTest.FakeS3.cpp
+  Generating Code...
+     Creating library Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemS3.lib and object Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemS3.exp
+  FileSystemS3.vcxproj -> Z:\RsI19\.build\ARM64\Debug\Plugins\FileSystemS3.dll
+Captured log: Z:\RsI19\.build\logs\msbuild-20260913_020055_220-pid95900-5fa18466.log
+Diagnostics: 0 warning(s), 13 error(s)
+
+========================================
+Build Failed!
+Exit code: 1
+Build time: 02:07
+========================================

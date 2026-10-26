@@ -1,0 +1,36 @@
+{
+    "run_started_utc": "2026-09-21T14:14:53.609Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\i26-issues-live-locale-baseline-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 6716,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "A live Issues language change must refresh title, actions, empty-state and accessible detail names together.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "failed",
+            "duration_ms": 1822,
+            "repeat_index": 1,
+            "reason": "A live Issues language change must refresh title, actions, empty-state and accessible detail names together."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "failed",
+            "duration_ms": 1711,
+            "repeat_index": 2,
+            "reason": "A live Issues language change must refresh title, actions, empty-state and accessible detail names together."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_primary_grid",
+            "status": "failed",
+            "duration_ms": 1788,
+            "repeat_index": 3,
+            "reason": "A live Issues language change must refresh title, actions, empty-state and accessible detail names together."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

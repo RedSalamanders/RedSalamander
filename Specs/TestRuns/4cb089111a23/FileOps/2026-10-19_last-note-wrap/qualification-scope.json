@@ -1,0 +1,23 @@
+{
+  "scope": "Focused x64 Debug only; no-activation FileOps_ReviewRemediationContracts",
+  "baseline": "expected regression failure; 2 runner cases passed, 1 failed",
+  "candidate": "3 runner cases passed, 0 failed, 0 skipped",
+  "build": "x64 Debug; both builds reported zero warnings and errors",
+  "sourceContracts": "204 passed",
+  "notEvaluated": [
+    "Full repository",
+    "Release",
+    "ARM64",
+    "ASan",
+    "real foreground input",
+    "other DPI scales",
+    "storage throughput"
+  ],
+  "sandboxAudit": {
+    "baselineIssues": 272,
+    "candidateIssues": 273,
+    "resolved": false
+  },
+  "dependency": "Both tested builds use the existing unstaged DxUi pin f65e4a4b9311370b3e3070088e2a8abe29adcb27; this task leaves it untouched",
+  "sourceCloseout": "Normative spec and user guide were present in the candidate snapshot. Only plan closeout, staging and curated evidence changed after the successful run; product code and tests did not change."
+}

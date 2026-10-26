@@ -1,0 +1,14 @@
+{
+  "scenario":"cmd_viewer_space_layout_50k_visible_optin",
+  "buildFlavor":"Release",
+  "noActivation":true,
+  "fixture":{"folders":5,"filesPerFolder":9999,"files":49995,"fileBytes":1,"fixtureCreationUs":21536306},
+  "layoutPolicy":{"topFilesPerDirectory":20000,"analysisPanelVisible":false,"leafMinimumDip2":64},
+  "viewport":{"requestedWidthDip":2400,"requestedHeightDip":2600,"windowDpi":144,"actualClientWidthDip":2400.00,"actualClientHeightDip":2600.00,"mapWidthDip":2384.00,"mapHeightDip":2446.00,"mapAreaDip2":5831264,"folderHeaderAreaDip2":104896,"usableLeafAreaDip2":5726368,"requiredLeafAreaDip2":3199680},
+  "contents":{"scanState":3,"realDirectories":6,"fileCandidates":49995,"rootBytes":49995,"directoryTiles":5,"fileTiles":49995,"syntheticTiles":0,"drawItems":50000,"visibleTiles":50000,"culledTiles":0},
+  "processBeforeOpen":{"workingSetBytes":234352640,"privateBytes":234684416},
+  "processPeak":{"workingSetBytes":299532288,"privateBytes":366088192},
+  "processSettled":{"workingSetBytes":293249024,"privateBytes":366088192},
+  "viewerHighWater":{"viewerOwnedBytes":40036178,"pendingQueueBytes":4233608,"workerStagingBytes":28730520},
+  "layout":{"generation":1,"turnCount":33,"maxTurnUs":1360,"lastLayoutUs":1011,"turnMetrics":33,"publishMetrics":1,"cancelCleanupMetrics":1,"buildActive":false,"animationActive":false}
+}

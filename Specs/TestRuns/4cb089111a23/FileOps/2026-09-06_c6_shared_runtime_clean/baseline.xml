@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="8" errors="0" failures="8" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-09-06" time="02:49:53">
+  <environment cwd="C:\Users\eric\.codex\worktrees\fd72\RedSalamander" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" clr-version="" user="eric" machine-name="SINON" nunit-version="2.5.8.0" user-domain="SINON" os-version="10.0.26200" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Failure" success="False" time="18.3947" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="Shared runtime DLL Clean ownership" executed="True" result="Failure" success="False" time="18.3947" asserts="0" description="Shared runtime DLL Clean ownership">
+        <results>
+          <test-case description="migrates old explicit Clean records without deleting another project dependency" name="Shared runtime DLL Clean ownership.migrates old explicit Clean records without deleting another project dependency" time="2.4169" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\32fde280ee9f4150bcd1deb756c88ea2\56351e544c6b4920aff59587aaa86834.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="preserves DLLs used by an earlier rebuilt project even when deletion is denied" name="Shared runtime DLL Clean ownership.preserves DLLs used by an earlier rebuilt project even when deletion is denied" time="2.0482" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\a4a74a124397437f935deabbd494efb7\6181e5a9fee64d299d707d2a33c21677.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="migrates orphaned shared entries before incremental deletion" name="Shared runtime DLL Clean ownership.migrates orphaned shared entries before incremental deletion" time="2.0847" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {True}
+But was:  {False}</message>
+              <stack-trace>at line: 111 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+111:             Test-Path -LiteralPath $fixture.Files[$key] | Should Be $true</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="excludes link and link-skipped dependency writes from new cleanup ownership" name="Shared runtime DLL Clean ownership.excludes link and link-skipped dependency writes from new cleanup ownership" time="2.0469" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Invalid pattern 'C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\81ee289f8bdc4001891313750611445d\output\z.dll' at offset 4. Unrecognized escape sequence \R.</message>
+              <stack-trace>at line: 3 in C:\Program Files\WindowsPowerShell\Modules\Pester\3.4.0\Functions\Assertions\Contain.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="allows late consumer Clean after another project has staged a newer dependency" name="Shared runtime DLL Clean ownership.allows late consumer Clean after another project has staged a newer dependency" time="4.1252" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\c72ab052376a4e1994d139ff6a527fd1\0a4fdde5d2cf41cd9d05e7bc5ed9e78c.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="normalizes path spelling while retaining exact target and private DLL ownership" name="Shared runtime DLL Clean ownership.normalizes path spelling while retaining exact target and private DLL ownership" time="1.9247" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\f711531025ab46209ddc7f9f4c7f98d4\17c9b475fdc64fcaa4ac8cfa6abb79f5.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="protects shared runtimes when a prior test project becomes a production utility" name="Shared runtime DLL Clean ownership.protects shared runtimes when a prior test project becomes a production utility" time="1.9185" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\a16198211012483880f1277f6ae2493c\5e23b6d79d124746a9ff57001b574aeb.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="does not change cleanup behavior for a non-first-party project" name="Shared runtime DLL Clean ownership.does not change cleanup behavior for a non-first-party project" time="1.8297" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>MSBuild fixture failed (1). See C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-20260906\scratch\build-runtime-clean\f61c380c7c184a03869f0066e0765655\fd8e7ad4c9924ae4886f4a3e399df1c6.log</message>
+              <stack-trace>at line: 75 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

@@ -1,0 +1,16 @@
+{
+  "commit": "a48e7d7880cb37ea6898d462ae188a6213a5f3f8",
+  "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+  "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+  "configuration": "Release",
+  "platform": "x64",
+  "suite": "FileOps",
+  "repeat_count": 3,
+  "filter": "FileOps_SmbManagedMoveLeavesNoStage",
+  "run_id": "20261019T061515Z-58644-e5a40dd923f841b4ac4d951772282237",
+  "exit_code": 0,
+  "passed": 6,
+  "failed": 0,
+  "skipped": 3,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-release-2026-10-19\\20261019T061515Z-58644-e5a40dd923f841b4ac4d951772282237"
+}

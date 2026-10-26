@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-08-04T12:17:56.633Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260804T121751Z-46268-66e42a6507a64c39ac85d996a832c3df\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 9343,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_itemProperties_window_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 9320,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,674 @@
+{
+  "original_copies": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\observation.json",
+      "archive": "baseline-release-01/observation.json",
+      "sha256": "3487DF7F54A57B16ED6AECFFCFCCB6EBCE2D188B82829B4EFCAF23FDE07122C7",
+      "bytes": 7897
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\bindings.json",
+      "archive": "baseline-release-01/bindings.json",
+      "sha256": "93A65454638C58B8D93A1469E526C1593F62C4EDE1F5BAD37983DCA74C87B41D",
+      "bytes": 2867
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\results.json",
+      "archive": "baseline-release-01/results.json",
+      "sha256": "D1DA3301D850719DF610F2BE3A7AEFC62FBD06B0ED4D8A683596F46F75F584EC",
+      "bytes": 1913
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\run-all-tests-results.json",
+      "archive": "baseline-release-01/run-all-tests-results.json",
+      "sha256": "51FE49810D55A103792A25F182A879B2C00A2A03048D6274510E76BA7B484979",
+      "bytes": 13878
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\workspace-final.json",
+      "archive": "baseline-release-01/workspace-final.json",
+      "sha256": "0F7A78C9B6477C22EF40EE8F6829D567B63667700DDC9FE3E8E5BC152BC369C6",
+      "bytes": 5796
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\trace.txt",
+      "archive": "baseline-release-01/trace.txt",
+      "sha256": "D50614E811A1047C9237440BC119A52A5DB4A933F107A12081129B1123BBD88C",
+      "bytes": 50886
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\commands\\results.json",
+      "archive": "baseline-release-01/commands/results.json",
+      "sha256": "3CC200F0F067EC2C1D0BE11AE6D525FAD523D1092E0D955C0E2DA62625B2B81A",
+      "bytes": 1270
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\commands\\trace.txt",
+      "archive": "baseline-release-01/commands/trace.txt",
+      "sha256": "90C383DE7360489FD2347F84B71CE2B5A52752EABC1B1FCC28F90E3E9806CB86",
+      "bytes": 2340
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "baseline-release-01/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "2F40DA8676A2F413ED24518854C5D20C3B18D687B7D13AABF20B8F5DE8C7F493",
+      "bytes": 2940
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\observation.json",
+      "archive": "candidate-release-legacy-block1-01/observation.json",
+      "sha256": "C60169841EBE19698C72EBBE13C5025246037B61B20EAA37E943F358C2F354D6",
+      "bytes": 8025
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\bindings.json",
+      "archive": "candidate-release-legacy-block1-01/bindings.json",
+      "sha256": "19BC9F8D585A5D09E6BC2E769B90180FC45154AFCD051D91F24AC4E10DF91387",
+      "bytes": 2917
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\results.json",
+      "archive": "candidate-release-legacy-block1-01/results.json",
+      "sha256": "6A6CCC02670CD29F8F45703C6A6EEC463E033EC763EB68D3713E81285AEA775F",
+      "bytes": 2005
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\run-all-tests-results.json",
+      "archive": "candidate-release-legacy-block1-01/run-all-tests-results.json",
+      "sha256": "8D1FF615E6CD2516FD31853B8A069D8F4C85C5E289F7B845BC20AD2BB8777DF1",
+      "bytes": 13960
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\workspace-final.json",
+      "archive": "candidate-release-legacy-block1-01/workspace-final.json",
+      "sha256": "4809F33D503089205302CF2A350235855DD40AE0127E810EF6D736B3C338E18A",
+      "bytes": 8535
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\trace.txt",
+      "archive": "candidate-release-legacy-block1-01/trace.txt",
+      "sha256": "447D9E070E8A64A9B45BAAA60C80B75B8895B4FF56218DF2E5913C202D72C67F",
+      "bytes": 50918
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\commands\\results.json",
+      "archive": "candidate-release-legacy-block1-01/commands/results.json",
+      "sha256": "E044243B515CB8A8C483F6D42F5DFD40AE8FA2C2A2066BA854E09E89BE17A100",
+      "bytes": 1336
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\commands\\trace.txt",
+      "archive": "candidate-release-legacy-block1-01/commands/trace.txt",
+      "sha256": "5A54D3C18308C299F389717DE3A04FEE60E37F4B70F59C2A86D30F7A92F47A71",
+      "bytes": 2626
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\perf\\folderView_perf_sort_toggle_legacy_warm_control_metrics.json",
+      "archive": "candidate-release-legacy-block1-01/perf/folderView_perf_sort_toggle_legacy_warm_control_metrics.json",
+      "sha256": "D313C9766A4CEC884853FF580EC58DE97DB306EA4516034BBFA19CB767E8C196",
+      "bytes": 3888
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\observation.json",
+      "archive": "candidate-release-legacy-block2-01/observation.json",
+      "sha256": "23E860ADA0DD1CF580ABD55AEF5C829F776C60BD765125E31FA3A74A8A822459",
+      "bytes": 8024
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\bindings.json",
+      "archive": "candidate-release-legacy-block2-01/bindings.json",
+      "sha256": "3CF4E4368B9E37DC0CAAC24DCDDB2ED685854CF4D918D1ADED1EBA4E1BBDC6EF",
+      "bytes": 2917
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\results.json",
+      "archive": "candidate-release-legacy-block2-01/results.json",
+      "sha256": "11900934F9FEE592A224A8E8935F7850AF4770659BC2C05CE46F7BBBA8CB16B7",
+      "bytes": 2005
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\run-all-tests-results.json",
+      "archive": "candidate-release-legacy-block2-01/run-all-tests-results.json",
+      "sha256": "7538936D2B0BEAA8011D201B8806152A8A84106DF2DDCE8F2D58203B517807F2",
+      "bytes": 13960
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\workspace-final.json",
+      "archive": "candidate-release-legacy-block2-01/workspace-final.json",
+      "sha256": "9B51B7F0AFA20152B7C62CAF01D1C3F10A7F8E936014CE573CCF9A6FD3FF74C8",
+      "bytes": 8535
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\trace.txt",
+      "archive": "candidate-release-legacy-block2-01/trace.txt",
+      "sha256": "6D1417C1E11E1C68ED9AD33DD4EF8BF4616A9A58EC657A7BA64877AE273A4512",
+      "bytes": 50916
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\commands\\results.json",
+      "archive": "candidate-release-legacy-block2-01/commands/results.json",
+      "sha256": "7D3EA73F1F2455837583E29A6BB54E4424545BA911CF255078A540FBD93B1123",
+      "bytes": 1336
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\commands\\trace.txt",
+      "archive": "candidate-release-legacy-block2-01/commands/trace.txt",
+      "sha256": "5A54D3C18308C299F389717DE3A04FEE60E37F4B70F59C2A86D30F7A92F47A71",
+      "bytes": 2626
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\perf\\folderView_perf_sort_toggle_legacy_warm_control_metrics.json",
+      "archive": "candidate-release-legacy-block2-01/perf/folderView_perf_sort_toggle_legacy_warm_control_metrics.json",
+      "sha256": "330729E31581A8F0589A4540688C70FA7B4107C413F1E2A66FBBEADB46F25854",
+      "bytes": 3889
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\observation.json",
+      "archive": "candidate-release-product-block1-01/observation.json",
+      "sha256": "725F204A917A3A75C765DADF10A4E2977A09D8938552619216CF06DDCD86BA26",
+      "bytes": 8025
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\bindings.json",
+      "archive": "candidate-release-product-block1-01/bindings.json",
+      "sha256": "F0A892DD6D0986210DA3F57343B499D4E19DEFD00F80885AB6ABE71A531B861F",
+      "bytes": 2892
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\results.json",
+      "archive": "candidate-release-product-block1-01/results.json",
+      "sha256": "2D13666A6DBB43A70EB849E29E4EC62A1DC6A496B8419966ADE8D6E36F5A2EAC",
+      "bytes": 1914
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\run-all-tests-results.json",
+      "archive": "candidate-release-product-block1-01/run-all-tests-results.json",
+      "sha256": "6DA53A4389EB671789CD55DF18772F55752A0A9A517F3B64E8835F50B51BA4AA",
+      "bytes": 13882
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\workspace-final.json",
+      "archive": "candidate-release-product-block1-01/workspace-final.json",
+      "sha256": "D662B546B2475C22E9BF0E55F6718415327F4C97F8F95D4BE5C9C3B676882006",
+      "bytes": 8535
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\trace.txt",
+      "archive": "candidate-release-product-block1-01/trace.txt",
+      "sha256": "9954B8CB337D0B3F337AD793A1FE5616907F769D09CB1D12D60F287BA8A602F4",
+      "bytes": 50760
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\commands\\results.json",
+      "archive": "candidate-release-product-block1-01/commands/results.json",
+      "sha256": "0A8492ECAB679CABA1746000AC5410348828A9DA4CA5919828954CAECC24686E",
+      "bytes": 1271
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\commands\\trace.txt",
+      "archive": "candidate-release-product-block1-01/commands/trace.txt",
+      "sha256": "90C383DE7360489FD2347F84B71CE2B5A52752EABC1B1FCC28F90E3E9806CB86",
+      "bytes": 2340
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-release-product-block1-01/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "C3ED11234FEB23C29EA2827D4CDFAA26A404D75A9E3C9D3E01800B9CBB162564",
+      "bytes": 3868
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\observation.json",
+      "archive": "candidate-release-product-block2-01/observation.json",
+      "sha256": "47499BB93EAE8C7AEAE559297535CDC9D1989A54203D7897A536518A9127BB04",
+      "bytes": 8027
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\bindings.json",
+      "archive": "candidate-release-product-block2-01/bindings.json",
+      "sha256": "41CF2AD3DDA1925C7771B9422AE2FEFDFDF17B51356875F92C9C5BF88B43891F",
+      "bytes": 2892
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\results.json",
+      "archive": "candidate-release-product-block2-01/results.json",
+      "sha256": "761302EA86B897554540B35482E09DC084F7E5E25D5B5A73F469D69D26BF69F9",
+      "bytes": 1914
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\run-all-tests-results.json",
+      "archive": "candidate-release-product-block2-01/run-all-tests-results.json",
+      "sha256": "70111D59A4F6A43E1FB6D0BD0DF5A95AC67C827A7CF82056B68B313937CEE7F7",
+      "bytes": 13882
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\workspace-final.json",
+      "archive": "candidate-release-product-block2-01/workspace-final.json",
+      "sha256": "2F73B583FBEB5DE36E4F07D97E7A87E8F506D1F5724C8A37B02F4B49E4647DBF",
+      "bytes": 8535
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\trace.txt",
+      "archive": "candidate-release-product-block2-01/trace.txt",
+      "sha256": "CE72E1E88D9554D48207CB1BDEC9A56B7FECB0292C762A3AF73B6663E48367B3",
+      "bytes": 50762
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\commands\\results.json",
+      "archive": "candidate-release-product-block2-01/commands/results.json",
+      "sha256": "C7131877B4DE92F632A433F40715F6B7A5D51AA2C4D7B02E4EB4A8A2F773968F",
+      "bytes": 1271
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\commands\\trace.txt",
+      "archive": "candidate-release-product-block2-01/commands/trace.txt",
+      "sha256": "90C383DE7360489FD2347F84B71CE2B5A52752EABC1B1FCC28F90E3E9806CB86",
+      "bytes": 2340
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-release-product-block2-01/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "C21274F6448A3015205425D898ED4A30BCD9AEA823FAF1E029594D35CF1EFF2E",
+      "bytes": 3871
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\bindings.json",
+      "archive": "functional-release-01/bindings.json",
+      "sha256": "5C4413D6D0689617853895A4CC00F34ECA42CB8F4D7F3A247C7452C41D516FED",
+      "bytes": 2905
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\results.json",
+      "archive": "functional-release-01/results.json",
+      "sha256": "B2136B14A1BAB7D70E6448C155F42E866487BE1D5FA746329EE25E343CD12207",
+      "bytes": 3570
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\run-all-tests-results.json",
+      "archive": "functional-release-01/run-all-tests-results.json",
+      "sha256": "51F008CE965F97F7BD0DAFB7472DAC359BD75EF07C64635E625B4128BF5E8083",
+      "bytes": 15070
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\workspace-final.json",
+      "archive": "functional-release-01/workspace-final.json",
+      "sha256": "291F050443B14D874E604DA25FED3CDADD2BFE9954A11A0CCE38CF77C4E56A05",
+      "bytes": 8537
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\trace.txt",
+      "archive": "functional-release-01/trace.txt",
+      "sha256": "20CEFFA916DDC7E63242C25AF81A71DF28A63C152F8738695CBA2FE032FC56E5",
+      "bytes": 255706
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\commands\\results.json",
+      "archive": "functional-release-01/commands/results.json",
+      "sha256": "66002AA4BEE58BA041DC398D380C99841F14FF9C5B9B43F1766A89D26FC2CF04",
+      "bytes": 2030
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\functional-release-01\\commands\\trace.txt",
+      "archive": "functional-release-01/commands/trace.txt",
+      "sha256": "DD6D2D3297750DD2FFA35619903281875FC1681BBCB46DBA9B84F8E68A84822E",
+      "bytes": 3600
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\run-isolated-benchmark.ps1",
+      "archive": "run-isolated-benchmark.ps1",
+      "sha256": "F58ED2FF04B7F866E9ABC7FD78F493A49041995C7ECA7DFA465D1B3774454AC0",
+      "bytes": 12757
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\run-legacy-control-benchmark.ps1",
+      "archive": "run-legacy-control-benchmark.ps1",
+      "sha256": "7FEA4C915FC09C8D7B2685EBEDEC7B120800035E746EC9308F6FFC16F1AABD02",
+      "bytes": 12783
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\run-candidates.ps1",
+      "archive": "run-candidates.ps1",
+      "sha256": "E7DDFD63F4336FAB5A9F2303338C04720D016430610E46562EC1B39FF4616B9D",
+      "bytes": 2049
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\scan-processes.cs",
+      "archive": "scan-processes.cs",
+      "sha256": "7CC66DEDB9F4C6E8964311BF4BBA2CFBCB07ECC71142A78C5FF961F6DA977414",
+      "bytes": 2047
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\observer-control-equivalence.json",
+      "archive": "observer-control-equivalence.json",
+      "sha256": "9106CE59A7A5C75040A3DE0A6BCC80882539C84818C9A02EDA28FAF5013A30AB",
+      "bytes": 852
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\ordering-and-fixture-checks.json",
+      "archive": "ordering-and-fixture-checks.json",
+      "sha256": "354067E6D522E03793DF3B7A0FE89D328006DF8E6A1C50145985415213622F72",
+      "bytes": 701
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-source-copies.json",
+      "archive": "candidate-source-copies.json",
+      "sha256": "28F4BEE756F3AD4626273E3C9124635EC81957F467550969C9D630EDA694E791",
+      "bytes": 2944
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\initial-baseline-identities.json",
+      "archive": "initial-baseline-identities.json",
+      "sha256": "F9EFA0F5A956F4149D1412F465C3F127592A765FA5BCA1C07E55E8ED56482F7D",
+      "bytes": 69715
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tooling-pester-isolated.json",
+      "archive": "tooling-pester-isolated.json",
+      "sha256": "A43914E29CAA29EBC4E42C8050C0B8C0B412AE0606B74B4EECC6C9C59A0E8EA5",
+      "bytes": 93
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tooling-pester-isolated.xml",
+      "archive": "tooling-pester-isolated.xml",
+      "sha256": "DD28D7615F9FEBEA14743F9F9C8ADF9EE755F69CF7AA03B3C69883E57BADB594",
+      "bytes": 106337
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\v1-run-isolated-benchmark.ps1",
+      "archive": "v1-run-isolated-benchmark.ps1",
+      "sha256": "737B168FEF9B8098528CC8E7AB77BDED492E311297F57AC69640D37B40680CF0",
+      "bytes": 12652
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\v1-run-legacy-control-benchmark.ps1",
+      "archive": "v1-run-legacy-control-benchmark.ps1",
+      "sha256": "F1FBFC883C1E4B470D0549B612F1BF356F4B17EFA3445FACD2D90D1812731C7F",
+      "bytes": 12678
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\v1-scan-processes.cs",
+      "archive": "v1-scan-processes.cs",
+      "sha256": "A947009E2027CD64378AB0A07187C1876CC6E85F2EF071B3F544BEBDCB98F9BB",
+      "bytes": 1959
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\source-and-format-proofs.json",
+      "archive": "source-and-format-proofs.json",
+      "sha256": "1F1A962D5D083CD7E35D1A67B96BBD78F51868C44008EBDFC4FDDC8FEA8BEB03",
+      "bytes": 3876
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\source-and-format-proofs.ps1",
+      "archive": "source-and-format-proofs.ps1",
+      "sha256": "2C1FC1ACF4C792B4FAE2C7410C9FF7E4E551731F1B1C288A02E5F1440B1E683E",
+      "bytes": 4661
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\final-identities.json",
+      "archive": "final-identities.json",
+      "sha256": "AA781FFF36F15184628A5FF096F528177D76E33E599181FCD187D780046985E8",
+      "bytes": 70185
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\final-identities-check.ps1",
+      "archive": "final-identities-check.ps1",
+      "sha256": "789D6245A149347BE8ACAFC1B262025FEC99C82876F9EC51078D3C0DDA98ACD6",
+      "bytes": 3833
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\sandbox-audit-comparison.json",
+      "archive": "sandbox-audit-comparison.json",
+      "sha256": "B908AE740A2F191967BFD760AAFB2E20637EC249DFF133A78097D47F26D9F00D",
+      "bytes": 9382
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tooling-pester-main.json",
+      "archive": "tooling-pester-main.json",
+      "sha256": "A43914E29CAA29EBC4E42C8050C0B8C0B412AE0606B74B4EECC6C9C59A0E8EA5",
+      "bytes": 93
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tooling-pester-main.xml",
+      "archive": "tooling-pester-main.xml",
+      "sha256": "646BFC3274AB475E779B37CC2CAEA923A7E7C18C7DD1E3C4A710A5F1CFBC0BC1",
+      "bytes": 106296
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\curate-evidence.ps1",
+      "archive": "curate-evidence.ps1",
+      "sha256": "0DB2F0F941488CD9437992B1835776536FB08AA7C16A7B2815DDE4308B908BAE",
+      "bytes": 13421
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\verify-evidence.ps1",
+      "archive": "verify-evidence.ps1",
+      "sha256": "B88C06AD39F5A67782690A6B2EEA0EF0C736DA9E7C867D31AED288CB4D1424B8",
+      "bytes": 8425
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\render-report.ps1",
+      "archive": "render-report.ps1",
+      "sha256": "DFC5D311B93656B8F54C45D37E266D54940F666C4E90B9EBD7138DDD864A8533",
+      "bytes": 9272
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\original-attribution-bindings.json",
+      "archive": "original-attribution-bindings.json",
+      "sha256": "84A59F916639D29CE8749CA4C754BEA0CEE0026C490394196F6B8D31218AEA04",
+      "bytes": 1005
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\paired-baseline-release-01-stage-attribution.json",
+      "archive": "paired-baseline-release-01-stage-attribution.json",
+      "sha256": "90A44763C524E4DE9B637E56A09D4483FC142C80DF45CEA2C55D5D3C0885C7F6",
+      "bytes": 84444
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\paired-candidate-release-01-stage-attribution.json",
+      "archive": "paired-candidate-release-01-stage-attribution.json",
+      "sha256": "0B6DD1E225E01F3BA7013D3E4B59779BB76DACF43B2DB8ED439B3E2DF26A0AC8",
+      "bytes": 96941
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\observer-runtime-positive-control\\probe-result.json",
+      "archive": "observer-runtime-positive-control/probe-result.json",
+      "sha256": "A6A8D9E6438544746E299BD2396D63FA4EE6CD47926CEF583CF2381697508B71",
+      "bytes": 167
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\observer-runtime-positive-control\\probe-context.json",
+      "archive": "observer-runtime-positive-control/probe-context.json",
+      "sha256": "5680E5B74A35C514EEC4E3C42CB1CF2763AD0CC8D1DA72BE9697313B2A9B9DF5",
+      "bytes": 366
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\observer-runtime-positive-control\\build-process-samples.jsonl",
+      "archive": "observer-runtime-positive-control/build-process-samples.jsonl",
+      "sha256": "3FC27EF60AD5596FD228C229C8EA242D297703DE8FC914D22132E64C6A89818B",
+      "bytes": 2453
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\observer-runtime-positive-control\\observed-build-processes.jsonl",
+      "archive": "observer-runtime-positive-control/observed-build-processes.jsonl",
+      "sha256": "0F29D68EDA619E1FC721F7F7EAE7DAAE08F6FD99F667D87BB847B29B394F464A",
+      "bytes": 3575
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-debug-legacy-block1-01\\setup-retirement.json",
+      "archive": "candidate-debug-legacy-block1-01/setup-retirement.json",
+      "sha256": "CE0C2E98F382354FCBF3C9335F00A37FC7162F8B964F963956CDEE36359E3B9F",
+      "bytes": 427
+    }
+  ],
+  "derived_extracts": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\perf\\perf_metrics.jsonl",
+      "source_sha256": "B9A802CACE1607694890634A9749C9A8F5300A0E689BD43F4A3611109C1F5860",
+      "source_bytes": 19419171,
+      "source_rows": 52950,
+      "archive": "baseline-release-01/perf/perf-selected.jsonl",
+      "archive_sha256": "82F656F76B30CED2AB8333FA9C70690CFC46F25FCBCCAB5B726B6F9C60F45804",
+      "archive_rows": 1089,
+      "policy": "Every row from the named sorting timer/counter, ApplyCurrentSort, enumeration/preparation, layout-total, drawing, presentation and frame text-creation families, with original line content/order. Detailed layout phases and duplicate whole-frame totals remain in the digest-bound external raw file."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\baseline-release-01\\build-process-samples.jsonl",
+      "source_sha256": "8102056468ECB1F3C089EFBE0A3C804E7267D70F35E904EE7179FCBD65766389",
+      "source_bytes": 63531,
+      "source_rows": 502,
+      "archive": "baseline-release-01/build-process-qualifying-samples.jsonl",
+      "archive_sha256": "8102056468ECB1F3C089EFBE0A3C804E7267D70F35E904EE7179FCBD65766389",
+      "archive_rows": 502,
+      "policy": "Every measurement snapshot and final 31 seconds of gate snapshots, preserving original line order/content. Earlier gate activity remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\perf\\perf_metrics.jsonl",
+      "source_sha256": "3D45C2E7E8A3F9E1DFB9ABC98ECB7E1AF483E3AC902BE2291AE228E4BEF26A7D",
+      "source_bytes": 19194109,
+      "source_rows": 52348,
+      "archive": "candidate-release-legacy-block1-01/perf/perf-selected.jsonl",
+      "archive_sha256": "E99EB2CE9BA8493133B9DA8C377AD59E7DF151925FE0284F14DF4788D5CBB97D",
+      "archive_rows": 1140,
+      "policy": "Every row from the named sorting timer/counter, ApplyCurrentSort, enumeration/preparation, layout-total, drawing, presentation and frame text-creation families, with original line content/order. Detailed layout phases and duplicate whole-frame totals remain in the digest-bound external raw file."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block1-01\\build-process-samples.jsonl",
+      "source_sha256": "CF5CA8D733995E62EEFF50A20878B4F15628C68F1EB78A7F16859674DB39A396",
+      "source_bytes": 63732,
+      "source_rows": 504,
+      "archive": "candidate-release-legacy-block1-01/build-process-qualifying-samples.jsonl",
+      "archive_sha256": "CF5CA8D733995E62EEFF50A20878B4F15628C68F1EB78A7F16859674DB39A396",
+      "archive_rows": 504,
+      "policy": "Every measurement snapshot and final 31 seconds of gate snapshots, preserving original line order/content. Earlier gate activity remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\perf\\perf_metrics.jsonl",
+      "source_sha256": "1601ABF3881B3834231EA2AF57CBB4B759BE9D3B01049CD566E8F112FA79DD47",
+      "source_bytes": 19157864,
+      "source_rows": 52114,
+      "archive": "candidate-release-legacy-block2-01/perf/perf-selected.jsonl",
+      "archive_sha256": "4E03A67A5B1E66C8509EB6454419D4E9C5C74BE8E668339EBAD67AF85C22A81A",
+      "archive_rows": 1140,
+      "policy": "Every row from the named sorting timer/counter, ApplyCurrentSort, enumeration/preparation, layout-total, drawing, presentation and frame text-creation families, with original line content/order. Detailed layout phases and duplicate whole-frame totals remain in the digest-bound external raw file."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-legacy-block2-01\\build-process-samples.jsonl",
+      "source_sha256": "6CF529719BA382D1BD0F6483E8531C6D33AFE9D03071127D2795F4B790415CBC",
+      "source_bytes": 64390,
+      "source_rows": 509,
+      "archive": "candidate-release-legacy-block2-01/build-process-qualifying-samples.jsonl",
+      "archive_sha256": "6CF529719BA382D1BD0F6483E8531C6D33AFE9D03071127D2795F4B790415CBC",
+      "archive_rows": 509,
+      "policy": "Every measurement snapshot and final 31 seconds of gate snapshots, preserving original line order/content. Earlier gate activity remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\perf\\perf_metrics.jsonl",
+      "source_sha256": "F0195E5D936CA4E469D86A920238FB629FB391B97A3E7399320B9A840DDBA1B3",
+      "source_bytes": 12789051,
+      "source_rows": 34557,
+      "archive": "candidate-release-product-block1-01/perf/perf-selected.jsonl",
+      "archive_sha256": "82A97D22236A8C2E058823C40AAF6CF87502E1B3A0B22B25B17F14A5857C4E1A",
+      "archive_rows": 720,
+      "policy": "Every row from the named sorting timer/counter, ApplyCurrentSort, enumeration/preparation, layout-total, drawing, presentation and frame text-creation families, with original line content/order. Detailed layout phases and duplicate whole-frame totals remain in the digest-bound external raw file."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block1-01\\build-process-samples.jsonl",
+      "source_sha256": "989EDBBD1210068F75E59C3791E8290146E7C3A6F58787A3BD01BAF0D9E5659F",
+      "source_bytes": 64518,
+      "source_rows": 510,
+      "archive": "candidate-release-product-block1-01/build-process-qualifying-samples.jsonl",
+      "archive_sha256": "989EDBBD1210068F75E59C3791E8290146E7C3A6F58787A3BD01BAF0D9E5659F",
+      "archive_rows": 510,
+      "policy": "Every measurement snapshot and final 31 seconds of gate snapshots, preserving original line order/content. Earlier gate activity remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\perf\\perf_metrics.jsonl",
+      "source_sha256": "A50F208D1680D384E75D327E962E11C9739801F5A5965602CC4C677E7B33378E",
+      "source_bytes": 12670577,
+      "source_rows": 34243,
+      "archive": "candidate-release-product-block2-01/perf/perf-selected.jsonl",
+      "archive_sha256": "D2F56FC6A18675CE676EBA800BA1D021F6AF715BA0DA1D23E94AA69980B9D6AF",
+      "archive_rows": 720,
+      "policy": "Every row from the named sorting timer/counter, ApplyCurrentSort, enumeration/preparation, layout-total, drawing, presentation and frame text-creation families, with original line content/order. Detailed layout phases and duplicate whole-frame totals remain in the digest-bound external raw file."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-release-product-block2-01\\build-process-samples.jsonl",
+      "source_sha256": "7138DC73ED724E67444AE661BC3997D4F7553D846135481AA52E5D29650965F0",
+      "source_bytes": 62795,
+      "source_rows": 496,
+      "archive": "candidate-release-product-block2-01/build-process-qualifying-samples.jsonl",
+      "archive_sha256": "7138DC73ED724E67444AE661BC3997D4F7553D846135481AA52E5D29650965F0",
+      "archive_rows": 496,
+      "policy": "Every measurement snapshot and final 31 seconds of gate snapshots, preserving original line order/content. Earlier gate activity remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-debug-legacy-block1-01\\build-process-samples.jsonl",
+      "source_sha256": "F81383B9CB0C8A70446F11D51D5AE7A88B7E0C8C689E8923C5728C7741B1BD35",
+      "source_bytes": 659456,
+      "source_rows": 1142,
+      "archive": "candidate-debug-legacy-block1-01/gate-tail.jsonl",
+      "archive_sha256": "BB41BE8572DBF12FFAB362380980EEC1D58B19E0D9B16AF3DC8681B16CA4649B",
+      "archive_rows": 7,
+      "policy": "Last eight available gate lines retaining only complete JSON objects. An owned gate retired before any benchmark is diagnostic only and may end with a buffered partial row; full raw bytes remain externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-build-debug.txt",
+      "source_sha256": "9C7FEE5E4B94514727AF04C5C62B5AAFD6A1A80BACA17322B27540548B5A6A6B",
+      "source_bytes": 36357,
+      "source_rows": 612,
+      "archive": "validation-tails/candidate-build-debug.txt",
+      "archive_sha256": "3949810C4085BC4E6F93BC995DEFB1B5D8C61F11D89E5FC4AB4DBD3E36A6BCC9",
+      "archive_rows": 24,
+      "policy": "Last 24 original validation lines; full output remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\candidate-build-release.txt",
+      "source_sha256": "A875EA8A581FBA40FD0CC0AEDBC6D3DFC77DAE66CFAD4037079136256C433386",
+      "source_bytes": 43962,
+      "source_rows": 737,
+      "archive": "validation-tails/candidate-build-release.txt",
+      "archive_sha256": "B1EDB6847A0FA02EF4B1DCE86A7949633E588478764CA307DB1E36C05A821B66",
+      "archive_rows": 24,
+      "policy": "Last 24 original validation lines; full output remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\spec-inventory-isolated.txt",
+      "source_sha256": "22D950E963368841566D418BB00EDDE75FE65A49E75B24C36F49926814BD6C30",
+      "source_bytes": 519,
+      "source_rows": 5,
+      "archive": "validation-tails/spec-inventory-isolated.txt",
+      "archive_sha256": "22D950E963368841566D418BB00EDDE75FE65A49E75B24C36F49926814BD6C30",
+      "archive_rows": 5,
+      "policy": "Last 24 original validation lines; full output remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tool-inventory-isolated.txt",
+      "source_sha256": "3ECB90011516E6532FEB77164419D90BF5FA5ED2DCDD579985237E1235C2B238",
+      "source_bytes": 58676,
+      "source_rows": 211,
+      "archive": "validation-tails/tool-inventory-isolated.txt",
+      "archive_sha256": "78087B11C2A1205F2B2EEF5D3778AAAF8CEC545732D9C164BFEC529D5BD402A8",
+      "archive_rows": 24,
+      "policy": "Last 24 original validation lines; full output remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\spec-inventory-main.txt",
+      "source_sha256": "F6160016B1EC977D56D109722B5F302812FFE47B5F05F6BD09C6BF6EE4179F92",
+      "source_bytes": 351,
+      "source_rows": 5,
+      "archive": "validation-tails/spec-inventory-main.txt",
+      "archive_sha256": "F6160016B1EC977D56D109722B5F302812FFE47B5F05F6BD09C6BF6EE4179F92",
+      "archive_rows": 5,
+      "policy": "Last 24 original final main metadata validation lines; full output remains externally digest-bound."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\natural-sort-release-extension-2026-10-20\\tool-inventory-main.txt",
+      "source_sha256": "D9AAE98F8A1DF1CD62EE0430371B39E01264D86F48AE7AA665A59E21B9C1EF05",
+      "source_bytes": 58716,
+      "source_rows": 211,
+      "archive": "validation-tails/tool-inventory-main.txt",
+      "archive_sha256": "78087B11C2A1205F2B2EEF5D3778AAAF8CEC545732D9C164BFEC529D5BD402A8",
+      "archive_rows": 24,
+      "policy": "Last 24 original final main metadata validation lines; full output remains externally digest-bound."
+    }
+  ]
+}

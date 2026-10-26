@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "scenario": "curl_conditional_publication_identity_safe_recovery",
+  "status": "passed",
+  "machineHash": "4cb089111a23",
+  "workingTreeBase": "e9c76e59aa2b2993170ea1e6c88e7d15362954c7",
+  "configuration": "Release x64 ENABLE_TESTS",
+  "repeatCount": 5,
+  "buildEvidence": {
+    "fileSystemCurlReceipt": "c4383f8a109f7f74fb007bff9862cb7ed6a7ed8ee66b5c4478a359406116456e",
+    "pluginContractTestsReceipt": "136b4b668cbc0a24bf5f2d222e0c9ae5fa138c9c3d6796d3af17af73c71592db",
+    "fileSystemCurlWarnings": 0,
+    "fileSystemCurlErrors": 0,
+    "pluginContractTestsWarnings": 0,
+    "pluginContractTestsErrors": 0
+  },
+  "correctness": {
+    "candidatePassedPerRepeat": 211,
+    "candidateFailedPerRepeat": 0,
+    "focusedExitCodePerRepeat": [0, 0, 0, 0, 0],
+    "directNoOverwriteShapesPerRepeat": 6,
+    "directNoOverwriteRejectedBeforeEndpoint": true,
+    "capabilityCopyMoveRenameDisabled": true,
+    "concurrentFinalPreserved": true,
+    "rollbackBackupPreserved": true,
+    "sourcePreservedAfterDeleteFailure": true,
+    "concurrentRecursiveChildPreserved": true,
+    "pathnameRollbackSuppressedWithoutIdentity": true,
+    "unloadQuietPointCoveredPerRepeat": true
+  },
+  "performance": {
+    "conditionalPublication": {
+      "metric": "FileOps.Curl.ConditionalPublicationGuard",
+      "durationUs": [0, 0, 0, 0, 0],
+      "medianDurationUs": 0,
+      "minimumDurationUs": 0,
+      "maximumDurationUs": 0,
+      "endpointCommandCount": [0, 0, 0, 0, 0],
+      "raceInjectionCount": [0, 0, 0, 0, 0],
+      "resultHresult": [2147942450, 2147942450, 2147942450, 2147942450, 2147942450]
+    },
+    "identitySafeRecovery": {
+      "metric": "FileOps.Curl.IdentitySafeRecoveryGuard",
+      "durationUs": [20000, 22000, 18000, 20000, 21000],
+      "medianDurationUs": 20000,
+      "minimumDurationUs": 18000,
+      "maximumDurationUs": 22000,
+      "endpointCommandCount": [103, 103, 103, 103, 103],
+      "preservedArtifactCount": [3, 3, 3, 3, 3],
+      "resultHresult": [2147942699, 2147942699, 2147942699, 2147942699, 2147942699]
+    },
+    "rawLineCount": 175,
+    "claimRowCount": 10,
+    "processCount": 5,
+    "rawSha256": "37dfd98b361f4febda93bf856b76b5bd1c4a99e179dafeb8447e219ff1db1550"
+  },
+  "comparison": {
+    "sameMachine": true,
+    "applesToApplesHistoricalMetricAvailable": false,
+    "sourceCommitmentArchiveComparable": false,
+    "transactionalWriterArchiveComparable": false,
+    "candidateEstablishesBoundedSafetyCostBaseline": true,
+    "liveEndpointClaim": false,
+    "speedupClaim": false
+  },
+  "artifacts": {
+    "metrics": "perf_metrics.jsonl",
+    "trace": "trace.txt",
+    "summary": "README.md"
+  }
+}

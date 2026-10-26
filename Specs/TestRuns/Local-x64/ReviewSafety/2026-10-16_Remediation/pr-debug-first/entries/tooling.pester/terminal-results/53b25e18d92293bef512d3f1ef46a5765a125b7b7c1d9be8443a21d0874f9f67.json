@@ -1,0 +1,1 @@
+{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":937,"skipped":1,"total":938},"entry_id":"tooling.pester","kind":"Pester","reason_codes":["UNALLOWED_SKIP"],"schema":"red-salamander.validation-terminal-result.v1","status":"FAILED","terminal_result_digest":"53b25e18d92293bef512d3f1ef46a5765a125b7b7c1d9be8443a21d0874f9f67"}

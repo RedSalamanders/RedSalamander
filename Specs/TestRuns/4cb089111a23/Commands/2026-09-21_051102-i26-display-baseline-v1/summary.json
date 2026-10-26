@@ -1,0 +1,83 @@
+{
+  "passed": 6,
+  "failed": 3,
+  "skipped": 0,
+  "source_snapshot": "288a5dfcfbca729ae5cff78f8e4466f8c763265d9b35240d095346a431fcad17",
+  "metrics": {
+    "action-1-cache-0": {
+      "samples_us": [
+        47998,
+        50040,
+        51067,
+        48499,
+        59173,
+        41042
+      ],
+      "median_us": 49269.5,
+      "p95_us": 59173
+    },
+    "action-9-cache-0": {
+      "samples_us": [
+        64402,
+        36075,
+        55257
+      ],
+      "median_us": 55257,
+      "p95_us": 64402
+    },
+    "action-8-cache-0": {
+      "samples_us": [
+        52732,
+        51766,
+        56558
+      ],
+      "median_us": 52732,
+      "p95_us": 56558
+    },
+    "action-11-cache-0": {
+      "samples_us": [
+        33461,
+        54736,
+        27419
+      ],
+      "median_us": 33461,
+      "p95_us": 54736
+    },
+    "action-0-cache-0": {
+      "samples_us": [
+        27399,
+        50220,
+        28867
+      ],
+      "median_us": 28867,
+      "p95_us": 50220
+    },
+    "action-7-cache-0": {
+      "samples_us": [
+        43489,
+        56423,
+        40966
+      ],
+      "median_us": 43489,
+      "p95_us": 56423
+    },
+    "action-1-cache-1": {
+      "samples_us": [
+        60428,
+        61160,
+        48402
+      ],
+      "median_us": 60428,
+      "p95_us": 61160
+    },
+    "action-10-cache-1": {
+      "samples_us": [
+        48182,
+        54707,
+        46831
+      ],
+      "median_us": 48182,
+      "p95_us": 54707
+    }
+  }
+}

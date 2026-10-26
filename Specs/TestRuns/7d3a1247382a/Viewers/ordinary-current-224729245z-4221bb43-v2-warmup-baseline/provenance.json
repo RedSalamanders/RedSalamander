@@ -1,0 +1,63 @@
+{
+  "schema": "viewer-space.ordinary-current-run-provenance.v1",
+  "qualification_scope": "ordinary-current-x64-release-large-and-small-scan-comparison",
+  "sourceRunId": "20261009T224732Z-30968-b9f5d366f8534684b09d532a3499f385",
+  "side": "baseline",
+  "mode": "OrdinaryCurrent",
+  "caseFilter": "viewer_space_perf_",
+  "caseNames": [
+    "viewer_space_perf_small_progressive",
+    "viewer_space_perf_large_optin"
+  ],
+  "buildReceiptId": "935a4954a73b50d93f37a9df89f4f880aecf50ec4e5d55f7663ac0de13c8cf44",
+  "buildSourceSnapshotId": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b",
+  "buildReceiptSha256": "a66f8102fe37d5c7ff56dac4fc764a2ce23aeb9f778fa274a877af9eb3cd1423",
+  "buildLogSourcePath": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\logs\\msbuild-20261010_003631_297-pid10532-59c6e0be.log",
+  "buildLogBytes": 37000,
+  "buildLogSha256": "aeb94db5578c840a4061518ffd39eeae52f43a1d0ed5c8a3d834522cb44cb0eb",
+  "workspaceSnapshotId": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b",
+  "workspaceSnapshotSha256": "98a470fdd4fb8ac4c548c9ba63be34624f08e99b15196caaec5274be0ce792d7",
+  "rawSourceIndexPath": "raw-sources/20261009T224732Z-30968-b9f5d366f8534684b09d532a3499f385/source-index.json",
+  "rawMetricsSha256": "2e996b905814c60e163c26890c964288595585103dbc206ea277fa224024f3ec",
+  "rawMetricsBytes": 2448196,
+  "curatedFiles": {
+    "run-all-tests-results.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/run-all-tests-results.json",
+      "bytes": 3269,
+      "sha256": "65bc03c53cb48215864ae4fa9de57f5e8a2a7d1f2b90aa7eb7bc52a25dc6c4f3"
+    },
+    "workspace-final.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/workspace-final.json",
+      "bytes": 2761,
+      "sha256": "98a470fdd4fb8ac4c548c9ba63be34624f08e99b15196caaec5274be0ce792d7"
+    },
+    "commands/results.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/commands/results.json",
+      "bytes": 746,
+      "sha256": "a31d671fc626b2ed7fb35e5970a1f7bde667520b65cdda42fa59ab1b86059e1e"
+    },
+    "perf/viewer_space_perf_small_progressive_metrics.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/perf/viewer_space_perf_small_progressive_metrics.json",
+      "bytes": 1929,
+      "sha256": "d7ad05130b77ecba7eb76692713b20926048e412b485d06829203830a896e696"
+    },
+    "perf/viewer_space_perf_large_optin_metrics.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/perf/viewer_space_perf_large_optin_metrics.json",
+      "bytes": 1934,
+      "sha256": "5107f5776ed3035cd87dfd46c1255eca53d7e0fb97d298fea00499af31752e35"
+    }
+  },
+  "artifactFiles": {
+    "viewer_space_perf_small_progressive": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/perf/viewer_space_perf_small_progressive_metrics.json",
+      "bytes": 1929,
+      "sha256": "d7ad05130b77ecba7eb76692713b20926048e412b485d06829203830a896e696"
+    },
+    "viewer_space_perf_large_optin": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-warmup_baseline/perf/viewer_space_perf_large_optin_metrics.json",
+      "bytes": 1934,
+      "sha256": "5107f5776ed3035cd87dfd46c1255eca53d7e0fb97d298fea00499af31752e35"
+    }
+  },
+  "qualificationStatus": "qualified"
+}

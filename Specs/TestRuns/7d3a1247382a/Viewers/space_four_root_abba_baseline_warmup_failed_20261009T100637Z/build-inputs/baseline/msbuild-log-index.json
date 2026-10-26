@@ -1,0 +1,12 @@
+{
+  "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\logs\\msbuild-20261009_104730_014-pid46216-a8f6e118.log",
+  "source_bytes": 40505,
+  "source_sha256": "80c9931e2744d8a372288bc7184e81a8f7e6806b67a9400b25f947f360cc0371",
+  "chunks": [
+    {
+      "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-fourrootabba-20261009T100634360Z-fa1c8ae2\\build-inputs\\baseline\\msbuild.log",
+      "bytes": 40505,
+      "sha256": "80c9931e2744d8a372288bc7184e81a8f7e6806b67a9400b25f947f360cc0371"
+    }
+  ]
+}

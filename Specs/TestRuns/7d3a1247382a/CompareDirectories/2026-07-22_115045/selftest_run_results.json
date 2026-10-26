@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-07-22T09:50:44.486Z",
+    "duration_ms": 951,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "search_service_store_writer_ownership_is_resource_scoped",
+    "suites": [
+        {
+            "suite": "CompareDirectories",
+            "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260722T095043Z-35296-b7f94b92012d429596c3304ab57ca4d2\\artifacts\\selftest\\last_run\\compare",
+            "duration_ms": 403,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "search_service_store_writer_ownership_is_resource_scoped",
+            "failureMessage": "A precreated legacy Global event or stale closed lock file blocked isolated store A. ",
+            "cases": [
+                {
+                    "name": "search_service_store_writer_ownership_is_resource_scoped",
+                    "status": "failed",
+                    "duration_ms": 377,
+                    "repeat_index": 1,
+                    "reason": "A precreated legacy Global event or stale closed lock file blocked isolated store A. "
+                }
+            ]
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

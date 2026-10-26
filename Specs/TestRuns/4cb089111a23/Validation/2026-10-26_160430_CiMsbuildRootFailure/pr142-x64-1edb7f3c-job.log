@@ -1,0 +1,2044 @@
+﻿2026-10-26T15:29:16.9990626Z Current runner version: '2.338.0'
+2026-10-26T15:29:17.0260116Z ##[group]Runner Image Provisioner
+2026-10-26T15:29:17.0260971Z Hosted Compute Agent
+2026-10-26T15:29:17.0261519Z Version: 20261021.618
+2026-10-26T15:29:17.0262093Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-26T15:29:17.0262773Z Build Date: 2026-10-21T00:45:21Z
+2026-10-26T15:29:17.0263463Z Worker ID: {653cb151-93b1-487f-9ec8-3a807ad10d72}
+2026-10-26T15:29:17.0264132Z Region: westus
+2026-10-26T15:29:17.0264628Z Cloud: Azure
+2026-10-26T15:29:17.0265110Z ##[endgroup]
+2026-10-26T15:29:17.0266483Z ##[group]Operating System
+2026-10-26T15:29:17.0267402Z Microsoft Windows Server 2025
+2026-10-26T15:29:17.0267970Z 10.0.26100
+2026-10-26T15:29:17.0268447Z Datacenter
+2026-10-26T15:29:17.0268922Z ##[endgroup]
+2026-10-26T15:29:17.0269415Z ##[group]Runner Image
+2026-10-26T15:29:17.0270005Z Image: windows-2025-vs2026
+2026-10-26T15:29:17.0270547Z Version: 20261021.278.1
+2026-10-26T15:29:17.0272088Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261021.278/images/windows/Windows2025-VS2026-Readme.md
+2026-10-26T15:29:17.0274009Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261021.278
+2026-10-26T15:29:17.0275018Z ##[endgroup]
+2026-10-26T15:29:17.0276032Z ##[group]GITHUB_TOKEN Permissions
+2026-10-26T15:29:17.0277965Z Contents: read
+2026-10-26T15:29:17.0278528Z Metadata: read
+2026-10-26T15:29:17.0279053Z ##[endgroup]
+2026-10-26T15:29:17.0281196Z Secret source: Actions
+2026-10-26T15:29:17.0282081Z Cache mode: write
+2026-10-26T15:29:17.0282732Z Prepare workflow directory
+2026-10-26T15:29:17.1625744Z Prepare all required actions
+2026-10-26T15:29:17.1676064Z Getting action download info
+2026-10-26T15:29:17.5290018Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-26T15:29:17.7146550Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+2026-10-26T15:29:17.9896681Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-10-26T15:29:19.1754605Z Uses: RedSalamanders/RedSalamander/.github/workflows/build-reusable.yml@refs/pull/142/merge (2f4ffb2fb1e6a06727aae96931dd812c6e412174)
+2026-10-26T15:29:19.1760990Z ##[group] Inputs
+2026-10-26T15:29:19.1761783Z   configuration: Debug
+2026-10-26T15:29:19.1763004Z   platform: x64
+2026-10-26T15:29:19.1763754Z   native_runner: windows-2025-vs2026
+2026-10-26T15:29:19.1765086Z   run_full_tests: true
+2026-10-26T15:29:19.1765837Z   test_suite: PR
+2026-10-26T15:29:19.1766510Z   build_number: 
+2026-10-26T15:29:19.1767212Z   official_release: false
+2026-10-26T15:29:19.1768015Z   upload_build_output: false
+2026-10-26T15:29:19.1768854Z   run_asan_plugin_contracts: false
+2026-10-26T15:29:19.1769778Z ##[endgroup]
+2026-10-26T15:29:19.1770741Z Complete job name: native (x64, windows-2025-vs2026, Debug) / build
+2026-10-26T15:29:20.1527004Z ##[group]Run git config --global core.longpaths true
+2026-10-26T15:29:20.1527805Z [36;1mgit config --global core.longpaths true[0m
+2026-10-26T15:29:20.2312217Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:29:20.2313200Z env:
+2026-10-26T15:29:20.2316973Z   GH_TOKEN: ***
+2026-10-26T15:29:20.2317417Z   RSBuildEnableTests: true
+2026-10-26T15:29:20.2318017Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:29:20.2318837Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:29:20.2319564Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:29:20.2320047Z ##[endgroup]
+2026-10-26T15:29:21.2306882Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-10-26T15:29:21.2307534Z with:
+2026-10-26T15:29:21.2307833Z   persist-credentials: false
+2026-10-26T15:29:21.2308230Z   repository: RedSalamanders/RedSalamander
+2026-10-26T15:29:21.2313673Z   token: ***
+2026-10-26T15:29:21.2313908Z   ssh-strict: true
+2026-10-26T15:29:21.2314148Z   ssh-user: git
+2026-10-26T15:29:21.2314392Z   clean: true
+2026-10-26T15:29:21.2314634Z   sparse-checkout-cone-mode: true
+2026-10-26T15:29:21.2314917Z   fetch-depth: 1
+2026-10-26T15:29:21.2315144Z   fetch-tags: false
+2026-10-26T15:29:21.2315380Z   show-progress: true
+2026-10-26T15:29:21.2315614Z   lfs: false
+2026-10-26T15:29:21.2315824Z   submodules: false
+2026-10-26T15:29:21.2316069Z   set-safe-directory: true
+2026-10-26T15:29:21.2316375Z   allow-unsafe-pr-checkout: false
+2026-10-26T15:29:21.2316658Z env:
+2026-10-26T15:29:21.2319042Z   GH_TOKEN: ***
+2026-10-26T15:29:21.2319285Z   RSBuildEnableTests: true
+2026-10-26T15:29:21.2319688Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:29:21.2320212Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:29:21.2320668Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:29:21.2320952Z ##[endgroup]
+2026-10-26T15:29:21.3789572Z Syncing repository: RedSalamanders/RedSalamander
+2026-10-26T15:29:21.3791055Z ##[group]Getting Git version info
+2026-10-26T15:29:21.3791500Z Working directory is 'D:\a\RedSalamander\RedSalamander'
+2026-10-26T15:29:21.4634858Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-26T15:29:21.7314709Z git version 2.56.0.windows.2
+2026-10-26T15:29:21.7377565Z ##[endgroup]
+2026-10-26T15:29:21.7390288Z Copying 'C:\Users\runneradmin\.gitconfig' to 'D:\a\_temp\529adebb-1c49-4306-ba90-b6922fc28f33\.gitconfig'
+2026-10-26T15:29:21.7415565Z Temporarily overriding HOME='D:\a\_temp\529adebb-1c49-4306-ba90-b6922fc28f33' before making global git config changes
+2026-10-26T15:29:21.7416930Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T15:29:21.7430213Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\RedSalamander\RedSalamander
+2026-10-26T15:29:21.7820367Z Deleting the contents of 'D:\a\RedSalamander\RedSalamander'
+2026-10-26T15:29:21.7825584Z ##[group]Determining repository object format
+2026-10-26T15:29:21.7827495Z ##[endgroup]
+2026-10-26T15:29:21.7827957Z ##[group]Initializing the repository
+2026-10-26T15:29:21.7837276Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\RedSalamander\RedSalamander
+2026-10-26T15:29:21.9337752Z Initialized empty Git repository in D:/a/RedSalamander/RedSalamander/.git/
+2026-10-26T15:29:21.9404361Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/RedSalamanders/RedSalamander
+2026-10-26T15:29:22.0485505Z ##[endgroup]
+2026-10-26T15:29:22.0486402Z ##[group]Disabling automatic garbage collection
+2026-10-26T15:29:22.0498725Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-10-26T15:29:22.1008712Z ##[endgroup]
+2026-10-26T15:29:22.1009331Z ##[group]Setting up auth
+2026-10-26T15:29:22.1009820Z Removing SSH command configuration
+2026-10-26T15:29:22.1022086Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T15:29:22.1453581Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T15:29:24.1970855Z Removing HTTP extra header
+2026-10-26T15:29:24.1981443Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T15:29:24.2403229Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T15:29:24.7973869Z Removing includeIf entries pointing to credentials config files
+2026-10-26T15:29:24.7985418Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T15:29:24.8421545Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T15:29:25.3942356Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-10-26T15:29:25.4330979Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/RedSalamander/RedSalamander/.git.path D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:25.4716012Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/RedSalamander/RedSalamander/.git/worktrees/*.path D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:25.5138404Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:25.5524221Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:25.5904260Z ##[endgroup]
+2026-10-26T15:29:25.5904676Z ##[group]Fetching the repository
+2026-10-26T15:29:25.5917195Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2f4ffb2fb1e6a06727aae96931dd812c6e412174:refs/remotes/pull/142/merge
+2026-10-26T15:29:40.9787677Z From https://github.com/RedSalamanders/RedSalamander
+2026-10-26T15:29:40.9788665Z  * [new ref]           2f4ffb2fb1e6a06727aae96931dd812c6e412174 -> pull/142/merge
+2026-10-26T15:29:40.9841065Z ##[endgroup]
+2026-10-26T15:29:40.9841768Z ##[group]Determining the checkout info
+2026-10-26T15:29:40.9842455Z ##[endgroup]
+2026-10-26T15:29:40.9852663Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-10-26T15:29:41.0368411Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-10-26T15:29:41.0795918Z ##[group]Checking out the ref
+2026-10-26T15:29:41.0809639Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/142/merge
+2026-10-26T15:29:42.1925967Z Updating files:   6% (1886/27072)
+2026-10-26T15:29:42.3389294Z Updating files:   7% (1896/27072)
+2026-10-26T15:29:42.6108817Z Updating files:   8% (2166/27072)
+2026-10-26T15:29:42.7743367Z Updating files:   9% (2437/27072)
+2026-10-26T15:29:42.9235201Z Updating files:  10% (2708/27072)
+2026-10-26T15:29:43.0800974Z Updating files:  11% (2978/27072)
+2026-10-26T15:29:43.1881528Z Updating files:  12% (3249/27072)
+2026-10-26T15:29:43.2161553Z Updating files:  12% (3461/27072)
+2026-10-26T15:29:43.3418174Z Updating files:  13% (3520/27072)
+2026-10-26T15:29:43.4665965Z Updating files:  14% (3791/27072)
+2026-10-26T15:29:43.6031366Z Updating files:  15% (4061/27072)
+2026-10-26T15:29:43.7331913Z Updating files:  16% (4332/27072)
+2026-10-26T15:29:44.1150344Z Updating files:  17% (4603/27072)
+2026-10-26T15:29:44.1991466Z Updating files:  18% (4873/27072)
+2026-10-26T15:29:44.2656971Z Updating files:  18% (5005/27072)
+2026-10-26T15:29:44.4026074Z Updating files:  19% (5144/27072)
+2026-10-26T15:29:44.5272286Z Updating files:  20% (5415/27072)
+2026-10-26T15:29:44.6576760Z Updating files:  21% (5686/27072)
+2026-10-26T15:29:44.7850651Z Updating files:  22% (5956/27072)
+2026-10-26T15:29:44.9288524Z Updating files:  23% (6227/27072)
+2026-10-26T15:29:45.1103330Z Updating files:  24% (6498/27072)
+2026-10-26T15:29:45.2121810Z Updating files:  25% (6768/27072)
+2026-10-26T15:29:45.2476389Z Updating files:  25% (6954/27072)
+2026-10-26T15:29:45.5478529Z Updating files:  26% (7039/27072)
+2026-10-26T15:29:45.6511465Z Updating files:  27% (7310/27072)
+2026-10-26T15:29:45.7673350Z Updating files:  28% (7581/27072)
+2026-10-26T15:29:45.9061263Z Updating files:  29% (7851/27072)
+2026-10-26T15:29:46.0304164Z Updating files:  30% (8122/27072)
+2026-10-26T15:29:46.1250417Z Updating files:  31% (8393/27072)
+2026-10-26T15:29:46.2131992Z Updating files:  32% (8664/27072)
+2026-10-26T15:29:46.2133966Z Updating files:  33% (8934/27072)
+2026-10-26T15:29:46.3219426Z Updating files:  33% (8935/27072)
+2026-10-26T15:29:46.4500941Z Updating files:  34% (9205/27072)
+2026-10-26T15:29:46.6018168Z Updating files:  35% (9476/27072)
+2026-10-26T15:29:47.0499840Z Updating files:  36% (9746/27072)
+2026-10-26T15:29:47.2154244Z Updating files:  37% (10017/27072)
+2026-10-26T15:29:47.5123988Z Updating files:  37% (10115/27072)
+2026-10-26T15:29:47.9891658Z Updating files:  38% (10288/27072)
+2026-10-26T15:29:48.2181537Z Updating files:  39% (10559/27072)
+2026-10-26T15:29:48.4251519Z Updating files:  39% (10737/27072)
+2026-10-26T15:29:48.9563469Z Updating files:  40% (10829/27072)
+2026-10-26T15:29:49.2160243Z Updating files:  41% (11100/27072)
+2026-10-26T15:29:49.3228852Z Updating files:  41% (11280/27072)
+2026-10-26T15:29:49.7511824Z Updating files:  42% (11371/27072)
+2026-10-26T15:29:50.0492751Z Updating files:  43% (11641/27072)
+2026-10-26T15:29:50.1524875Z Updating files:  44% (11912/27072)
+2026-10-26T15:29:50.2185924Z Updating files:  45% (12183/27072)
+2026-10-26T15:29:50.2585447Z Updating files:  45% (12334/27072)
+2026-10-26T15:29:50.3682272Z Updating files:  46% (12454/27072)
+2026-10-26T15:29:50.4828183Z Updating files:  47% (12724/27072)
+2026-10-26T15:29:50.5775533Z Updating files:  48% (12995/27072)
+2026-10-26T15:29:50.7751610Z Updating files:  49% (13266/27072)
+2026-10-26T15:29:50.8651884Z Updating files:  50% (13536/27072)
+2026-10-26T15:29:51.0037794Z Updating files:  51% (13807/27072)
+2026-10-26T15:29:51.1038821Z Updating files:  52% (14078/27072)
+2026-10-26T15:29:51.2185561Z Updating files:  53% (14349/27072)
+2026-10-26T15:29:51.2313070Z Updating files:  53% (14580/27072)
+2026-10-26T15:29:51.3544942Z Updating files:  54% (14619/27072)
+2026-10-26T15:29:51.4603809Z Updating files:  55% (14890/27072)
+2026-10-26T15:29:51.5742968Z Updating files:  56% (15161/27072)
+2026-10-26T15:29:51.6893659Z Updating files:  57% (15432/27072)
+2026-10-26T15:29:51.8004893Z Updating files:  58% (15702/27072)
+2026-10-26T15:29:51.9175173Z Updating files:  59% (15973/27072)
+2026-10-26T15:29:52.0265638Z Updating files:  60% (16244/27072)
+2026-10-26T15:29:52.1255406Z Updating files:  61% (16514/27072)
+2026-10-26T15:29:52.2109319Z Updating files:  62% (16785/27072)
+2026-10-26T15:29:52.2200325Z Updating files:  63% (17056/27072)
+2026-10-26T15:29:52.3200080Z Updating files:  63% (17080/27072)
+2026-10-26T15:29:52.4356747Z Updating files:  64% (17327/27072)
+2026-10-26T15:29:52.5345496Z Updating files:  65% (17597/27072)
+2026-10-26T15:29:52.6305993Z Updating files:  66% (17868/27072)
+2026-10-26T15:29:52.7259125Z Updating files:  67% (18139/27072)
+2026-10-26T15:29:52.8227085Z Updating files:  68% (18409/27072)
+2026-10-26T15:29:52.9359460Z Updating files:  69% (18680/27072)
+2026-10-26T15:29:53.0315762Z Updating files:  70% (18951/27072)
+2026-10-26T15:29:53.1289075Z Updating files:  71% (19222/27072)
+2026-10-26T15:29:53.2211466Z Updating files:  72% (19492/27072)
+2026-10-26T15:29:53.2246653Z Updating files:  73% (19763/27072)
+2026-10-26T15:29:53.3111543Z Updating files:  73% (19775/27072)
+2026-10-26T15:29:53.4298611Z Updating files:  74% (20034/27072)
+2026-10-26T15:29:53.5214624Z Updating files:  75% (20304/27072)
+2026-10-26T15:29:53.6053600Z Updating files:  76% (20575/27072)
+2026-10-26T15:29:53.7336825Z Updating files:  77% (20846/27072)
+2026-10-26T15:29:53.8591333Z Updating files:  78% (21117/27072)
+2026-10-26T15:29:54.1556687Z Updating files:  79% (21387/27072)
+2026-10-26T15:29:54.2397303Z Updating files:  80% (21658/27072)
+2026-10-26T15:29:54.2968599Z Updating files:  80% (21801/27072)
+2026-10-26T15:29:54.4320674Z Updating files:  81% (21929/27072)
+2026-10-26T15:29:54.5626170Z Updating files:  82% (22200/27072)
+2026-10-26T15:29:54.6752113Z Updating files:  83% (22470/27072)
+2026-10-26T15:29:54.8023447Z Updating files:  84% (22741/27072)
+2026-10-26T15:29:54.9554135Z Updating files:  85% (23012/27072)
+2026-10-26T15:29:55.1149359Z Updating files:  86% (23282/27072)
+2026-10-26T15:29:55.2556795Z Updating files:  87% (23553/27072)
+2026-10-26T15:29:55.3638100Z Updating files:  87% (23681/27072)
+2026-10-26T15:29:55.5182306Z Updating files:  88% (23824/27072)
+2026-10-26T15:29:55.6274895Z Updating files:  89% (24095/27072)
+2026-10-26T15:29:55.7037798Z Updating files:  90% (24365/27072)
+2026-10-26T15:29:55.7917542Z Updating files:  91% (24636/27072)
+2026-10-26T15:29:55.8789514Z Updating files:  92% (24907/27072)
+2026-10-26T15:29:55.9768872Z Updating files:  93% (25177/27072)
+2026-10-26T15:29:56.0688934Z Updating files:  94% (25448/27072)
+2026-10-26T15:29:56.1672767Z Updating files:  95% (25719/27072)
+2026-10-26T15:29:56.2565790Z Updating files:  96% (25990/27072)
+2026-10-26T15:29:56.2693156Z Updating files:  96% (26215/27072)
+2026-10-26T15:29:56.3811870Z Updating files:  97% (26260/27072)
+2026-10-26T15:29:56.4860425Z Updating files:  98% (26531/27072)
+2026-10-26T15:29:56.6725753Z Updating files:  99% (26802/27072)
+2026-10-26T15:29:56.6726244Z Updating files: 100% (27072/27072)
+2026-10-26T15:29:56.6726689Z Updating files: 100% (27072/27072), done.
+2026-10-26T15:29:56.7332154Z Note: switching to 'refs/remotes/pull/142/merge'.
+2026-10-26T15:29:56.7332664Z 
+2026-10-26T15:29:56.7333026Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-26T15:29:56.7333855Z changes and commit them, and you can discard any commits you make in this
+2026-10-26T15:29:56.7334598Z state without impacting any branches by switching back to a branch.
+2026-10-26T15:29:56.7335110Z 
+2026-10-26T15:29:56.7335352Z If you want to create a new branch to retain commits you create, you may
+2026-10-26T15:29:56.7335928Z do so (now or later) by using -c with the switch command. Example:
+2026-10-26T15:29:56.7336264Z 
+2026-10-26T15:29:56.7336436Z   git switch -c <new-branch-name>
+2026-10-26T15:29:56.7336657Z 
+2026-10-26T15:29:56.7336775Z Or undo this operation with:
+2026-10-26T15:29:56.7336968Z 
+2026-10-26T15:29:56.7337070Z   git switch -
+2026-10-26T15:29:56.7337208Z 
+2026-10-26T15:29:56.7337477Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-26T15:29:56.7337882Z 
+2026-10-26T15:29:56.7338344Z HEAD is now at 2f4ffb2f Merge 1edb7f3c6aa6879cc86f13f3e409e0a2977a1ac3 into 0f6cd8ddbbbec0d4556a334d3252be930edeb1a3
+2026-10-26T15:29:56.7766712Z ##[endgroup]
+2026-10-26T15:29:56.8218551Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-10-26T15:29:56.8603504Z 2f4ffb2fb1e6a06727aae96931dd812c6e412174
+2026-10-26T15:29:56.8654615Z ##[group]Removing auth
+2026-10-26T15:29:56.8655096Z Removing SSH command configuration
+2026-10-26T15:29:56.8665737Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T15:29:56.9133488Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T15:29:57.6119126Z Removing HTTP extra header
+2026-10-26T15:29:57.6128954Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T15:29:57.6614551Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T15:29:58.2512959Z Removing includeIf entries pointing to credentials config files
+2026-10-26T15:29:58.2524535Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T15:29:58.2877644Z includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git.path
+2026-10-26T15:29:58.2880695Z includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git/worktrees/*.path
+2026-10-26T15:29:58.2881201Z includeif.gitdir:/github/workspace/.git.path
+2026-10-26T15:29:58.2881584Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T15:29:58.2924424Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git.path
+2026-10-26T15:29:58.3309946Z D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:58.3361986Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git.path D\:\\a\\_temp\\git\-credentials\-8a659dfd\-edae\-4661\-9baf\-b1768febc7a1\.config
+2026-10-26T15:29:58.3762908Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git/worktrees/*.path
+2026-10-26T15:29:58.4111762Z D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:58.4157937Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/RedSalamander/RedSalamander/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-8a659dfd\-edae\-4661\-9baf\-b1768febc7a1\.config
+2026-10-26T15:29:58.4550037Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-26T15:29:58.4892620Z /github/runner_temp/git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:58.4941309Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-8a659dfd\-edae\-4661\-9baf\-b1768febc7a1\.config
+2026-10-26T15:29:58.5332531Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T15:29:58.5673602Z /github/runner_temp/git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config
+2026-10-26T15:29:58.5723137Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-8a659dfd\-edae\-4661\-9baf\-b1768febc7a1\.config
+2026-10-26T15:29:58.6111004Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T15:29:59.2342314Z Removing credentials config 'D:\a\_temp\git-credentials-8a659dfd-edae-4661-9baf-b1768febc7a1.config'
+2026-10-26T15:29:59.2353486Z ##[endgroup]
+2026-10-26T15:29:59.2693357Z Prepare all required actions
+2026-10-26T15:29:59.2741005Z ##[group]Run ./.github/actions/setup-msvc
+2026-10-26T15:29:59.2741297Z with:
+2026-10-26T15:29:59.2741477Z   platform: x64
+2026-10-26T15:29:59.2741668Z env:
+2026-10-26T15:29:59.2744074Z   GH_TOKEN: ***
+2026-10-26T15:29:59.2744288Z   RSBuildEnableTests: true
+2026-10-26T15:29:59.2744612Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:29:59.2745118Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:29:59.2745532Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:29:59.2745776Z ##[endgroup]
+2026-10-26T15:29:59.2802793Z ##[start-action display=Run & "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM;id=__self.__run]
+2026-10-26T15:29:59.3198742Z ##[group]Run & "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM
+2026-10-26T15:29:59.3199590Z [36;1m& "$env:GITHUB_ACTION_PATH/Setup.ps1" -Platform $env:MSVC_SETUP_PLATFORM[0m
+2026-10-26T15:29:59.3271295Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:29:59.3271656Z env:
+2026-10-26T15:29:59.3274109Z   GH_TOKEN: ***
+2026-10-26T15:29:59.3274326Z   RSBuildEnableTests: true
+2026-10-26T15:29:59.3274645Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:29:59.3275134Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:29:59.3275773Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:29:59.3276036Z   MSVC_SETUP_PLATFORM: x64
+2026-10-26T15:29:59.3276253Z ##[endgroup]
+2026-10-26T15:30:05.6194215Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1055\help.html...
+2026-10-26T15:30:05.6236666Z 
+2026-10-26T15:30:05.6245934Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\2052\help.html...
+2026-10-26T15:30:05.6254740Z 
+2026-10-26T15:30:05.6258346Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1028\help.html...
+2026-10-26T15:30:05.6265372Z 
+2026-10-26T15:30:05.6274720Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1033\help.html...
+2026-10-26T15:30:05.6281967Z 
+2026-10-26T15:30:05.6290580Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1040\help.html...
+2026-10-26T15:30:05.6295454Z 
+2026-10-26T15:30:05.6303551Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1045\help.html...
+2026-10-26T15:30:05.6309261Z 
+2026-10-26T15:30:05.6318516Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1036\help.html...
+2026-10-26T15:30:05.6325438Z 
+2026-10-26T15:30:05.6335407Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1029\help.html...
+2026-10-26T15:30:05.6342665Z 
+2026-10-26T15:30:05.6351927Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1041\help.html...
+2026-10-26T15:30:05.6358162Z 
+2026-10-26T15:30:05.6366415Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1049\help.html...
+2026-10-26T15:30:05.6373420Z 
+2026-10-26T15:30:05.6381601Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1046\help.html...
+2026-10-26T15:30:05.6387514Z 
+2026-10-26T15:30:05.6396149Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1042\help.html...
+2026-10-26T15:30:05.6404447Z 
+2026-10-26T15:30:05.6409100Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\3082\help.html...
+2026-10-26T15:30:05.6418557Z 
+2026-10-26T15:30:05.6432099Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\HelpFile\1031\help.html...
+2026-10-26T15:30:05.6440444Z 
+2026-10-26T15:30:05.6448409Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\vs_setup_bootstrapper.exe...
+2026-10-26T15:30:05.6455519Z 
+2026-10-26T15:30:05.6463262Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Azure.Core.dll...
+2026-10-26T15:30:05.6470040Z 
+2026-10-26T15:30:05.6478215Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Azure.Identity.dll...
+2026-10-26T15:30:05.6484281Z 
+2026-10-26T15:30:05.6492392Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Bcl.AsyncInterfaces.dll...
+2026-10-26T15:30:05.6498765Z 
+2026-10-26T15:30:05.6506909Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Bcl.Cryptography.dll...
+2026-10-26T15:30:05.6513731Z 
+2026-10-26T15:30:05.6521646Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.C2RSignatureReader.Interop.dll...
+2026-10-26T15:30:05.6528063Z 
+2026-10-26T15:30:05.6535613Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.C2RSignatureReader.Native.dll...
+2026-10-26T15:30:05.6545171Z 
+2026-10-26T15:30:05.6553162Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.Caching.Abstractions.dll...
+2026-10-26T15:30:05.6558805Z 
+2026-10-26T15:30:05.6567192Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.Caching.Memory.dll...
+2026-10-26T15:30:05.6572537Z 
+2026-10-26T15:30:05.6580784Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.DependencyInjection.Abstractions.dll...
+2026-10-26T15:30:05.6587723Z 
+2026-10-26T15:30:05.6596734Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.Logging.Abstractions.dll...
+2026-10-26T15:30:05.6602298Z 
+2026-10-26T15:30:05.6611786Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.Options.dll...
+2026-10-26T15:30:05.6619208Z 
+2026-10-26T15:30:05.6625768Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Extensions.Primitives.dll...
+2026-10-26T15:30:05.6631949Z 
+2026-10-26T15:30:05.6640021Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Identity.Client.Broker.dll...
+2026-10-26T15:30:05.6646150Z 
+2026-10-26T15:30:05.6654448Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Identity.Client.dll...
+2026-10-26T15:30:05.6660203Z 
+2026-10-26T15:30:05.6668476Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Identity.Client.Extensions.Msal.dll...
+2026-10-26T15:30:05.6673777Z 
+2026-10-26T15:30:05.8848101Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Identity.Client.NativeInterop.dll...
+2026-10-26T15:30:05.8858414Z 
+2026-10-26T15:30:05.8867120Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.Abstractions.dll...
+2026-10-26T15:30:05.8870111Z 
+2026-10-26T15:30:05.8883506Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.JsonWebTokens.dll...
+2026-10-26T15:30:05.8889456Z 
+2026-10-26T15:30:05.8925648Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.Logging.dll...
+2026-10-26T15:30:05.8926840Z 
+2026-10-26T15:30:05.8927698Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.Protocols.dll...
+2026-10-26T15:30:05.8928713Z 
+2026-10-26T15:30:05.8929647Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll...
+2026-10-26T15:30:05.8935102Z 
+2026-10-26T15:30:05.8943178Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.IdentityModel.Tokens.dll...
+2026-10-26T15:30:05.8952150Z 
+2026-10-26T15:30:05.8959701Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.RemoteControl.dll...
+2026-10-26T15:30:05.8966115Z 
+2026-10-26T15:30:05.8975898Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Services.Common.dll...
+2026-10-26T15:30:05.8982898Z 
+2026-10-26T15:30:05.8990490Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.Common.dll...
+2026-10-26T15:30:05.8997138Z 
+2026-10-26T15:30:05.9004970Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.dll...
+2026-10-26T15:30:05.9013544Z 
+2026-10-26T15:30:05.9020650Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Setup.Download.dll...
+2026-10-26T15:30:05.9026881Z 
+2026-10-26T15:30:05.9036120Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Telemetry.dll...
+2026-10-26T15:30:05.9043872Z 
+2026-10-26T15:30:05.9051783Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Threading.dll...
+2026-10-26T15:30:05.9057951Z 
+2026-10-26T15:30:05.9066426Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Utilities.Internal.dll...
+2026-10-26T15:30:05.9074211Z 
+2026-10-26T15:30:05.9083044Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.VisualStudio.Validation.dll...
+2026-10-26T15:30:05.9089364Z 
+2026-10-26T15:30:05.9097511Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Microsoft.Win32.Registry.dll...
+2026-10-26T15:30:05.9104814Z 
+2026-10-26T15:30:05.9114296Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\runtimes\win-x64\native\msalruntime.dll...
+2026-10-26T15:30:05.9120742Z 
+2026-10-26T15:30:05.9129119Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\runtimes\win-arm64\native\msalruntime_arm64.dll...
+2026-10-26T15:30:05.9135642Z 
+2026-10-26T15:30:05.9142813Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\msalruntime_x86.dll...
+2026-10-26T15:30:05.9149282Z 
+2026-10-26T15:30:05.9155992Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\runtimes\win-x86\native\msalruntime_x86.dll...
+2026-10-26T15:30:05.9161838Z 
+2026-10-26T15:30:05.9169826Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Nerdbank.Streams.dll...
+2026-10-26T15:30:05.9176136Z 
+2026-10-26T15:30:05.9182857Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\Newtonsoft.Json.dll...
+2026-10-26T15:30:05.9188627Z 
+2026-10-26T15:30:05.9195682Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Buffers.dll...
+2026-10-26T15:30:05.9202265Z 
+2026-10-26T15:30:05.9209814Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.ClientModel.dll...
+2026-10-26T15:30:05.9217308Z 
+2026-10-26T15:30:05.9224650Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Diagnostics.DiagnosticSource.dll...
+2026-10-26T15:30:05.9603370Z 
+2026-10-26T15:30:05.9613655Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Formats.Asn1.dll...
+2026-10-26T15:30:05.9618696Z 
+2026-10-26T15:30:05.9625334Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.IdentityModel.Tokens.Jwt.dll...
+2026-10-26T15:30:05.9630490Z 
+2026-10-26T15:30:05.9637844Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.IO.FileSystem.AccessControl.dll...
+2026-10-26T15:30:05.9644143Z 
+2026-10-26T15:30:05.9654160Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.IO.Packaging.dll...
+2026-10-26T15:30:05.9660790Z 
+2026-10-26T15:30:05.9848149Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.IO.Pipelines.dll...
+2026-10-26T15:30:05.9853615Z 
+2026-10-26T15:30:05.9861646Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Memory.Data.dll...
+2026-10-26T15:30:05.9864980Z 
+2026-10-26T15:30:05.9872725Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Memory.dll...
+2026-10-26T15:30:05.9876759Z 
+2026-10-26T15:30:05.9884498Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Net.Http.Formatting.dll...
+2026-10-26T15:30:05.9891772Z 
+2026-10-26T15:30:05.9900943Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Numerics.Vectors.dll...
+2026-10-26T15:30:05.9907881Z 
+2026-10-26T15:30:05.9915863Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Runtime.CompilerServices.Unsafe.dll...
+2026-10-26T15:30:05.9918385Z 
+2026-10-26T15:30:05.9927698Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Security.AccessControl.dll...
+2026-10-26T15:30:05.9931171Z 
+2026-10-26T15:30:05.9936429Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Security.Cryptography.Pkcs.dll...
+2026-10-26T15:30:05.9942207Z 
+2026-10-26T15:30:05.9950508Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Security.Cryptography.ProtectedData.dll...
+2026-10-26T15:30:05.9953858Z 
+2026-10-26T15:30:05.9961559Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Security.Principal.Windows.dll...
+2026-10-26T15:30:05.9965095Z 
+2026-10-26T15:30:05.9972716Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Text.Encodings.Web.dll...
+2026-10-26T15:30:05.9975849Z 
+2026-10-26T15:30:05.9983379Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Text.Json.dll...
+2026-10-26T15:30:05.9989897Z 
+2026-10-26T15:30:05.9997963Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\System.Threading.Tasks.Extensions.dll...
+2026-10-26T15:30:06.0000867Z 
+2026-10-26T15:30:06.0009034Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\VSInstallerElevationService.Contracts.dll...
+2026-10-26T15:30:06.0011972Z 
+2026-10-26T15:30:06.0019680Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\es\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0022426Z 
+2026-10-26T15:30:06.0032718Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\ko\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0038815Z 
+2026-10-26T15:30:06.0047105Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\zh-Hans\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0049912Z 
+2026-10-26T15:30:06.0057667Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\cs\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0060702Z 
+2026-10-26T15:30:06.0069200Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\it\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0072427Z 
+2026-10-26T15:30:06.0080519Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\ja\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0087175Z 
+2026-10-26T15:30:06.0095104Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\ru\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0098019Z 
+2026-10-26T15:30:06.0105937Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\pt-BR\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0108819Z 
+2026-10-26T15:30:06.0116533Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\zh-Hant\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0119328Z 
+2026-10-26T15:30:06.0127539Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\de\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0130466Z 
+2026-10-26T15:30:06.0138107Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\fr\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0144901Z 
+2026-10-26T15:30:06.0158348Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\pl\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0165173Z 
+2026-10-26T15:30:06.0170502Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\tr\vs_setup_bootstrapper.resources.dll...
+2026-10-26T15:30:06.0176411Z 
+2026-10-26T15:30:06.0185121Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\vs_setup_bootstrapper.config...
+2026-10-26T15:30:06.0188336Z 
+2026-10-26T15:30:06.0196107Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\vs_setup_bootstrapper.exe.config...
+2026-10-26T15:30:06.0199244Z 
+2026-10-26T15:35:01.6663574Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\detection.json...
+2026-10-26T15:35:01.6675935Z 
+2026-10-26T15:35:01.6687110Z Preparing: C:\Users\RUNNER~1\AppData\Local\Temp\be46adea03f24d45dd1e51527a2f74\vs_bootstrapper_d15\vs_setup_bootstrapper.json...
+2026-10-26T15:35:01.6693052Z 
+2026-10-26T15:35:01.8723726Z Verified required toolchain: {"installation":"D:\\a\\_temp\\VS-Msvc-14.52","version":"14.52.37025","host":"x64","platform":"x64"}
+2026-10-26T15:35:01.9347710Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=302652]
+2026-10-26T15:35:01.9846158Z ##[group]Run $ErrorActionPreference = "Stop"
+2026-10-26T15:35:01.9849097Z [36;1m$ErrorActionPreference = "Stop"[0m
+2026-10-26T15:35:01.9849683Z [36;1m$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"[0m
+2026-10-26T15:35:01.9850210Z [36;1mif (-not (Test-Path $vswhere)) {[0m
+2026-10-26T15:35:01.9852830Z [36;1m  throw "vswhere.exe not found: $vswhere"[0m
+2026-10-26T15:35:01.9853178Z [36;1m}[0m
+2026-10-26T15:35:01.9855671Z [36;1m[0m
+2026-10-26T15:35:01.9856179Z [36;1m# Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset picks the compiler host from the[0m
+2026-10-26T15:35:01.9856904Z [36;1m# MSBuild process's own PROCESSOR_ARCHITECTURE and downgrades a requested arm64 host to x86[0m
+2026-10-26T15:35:01.9859965Z [36;1m# unless that process is ARM64, so an x86 MSBuild on the ARM64 runner can only ever drive the[0m
+2026-10-26T15:35:01.9860788Z [36;1m# 32-bit HostX86 tools (C1002 out of heap on the largest Release translation units). Use the[0m
+2026-10-26T15:35:01.9863531Z [36;1m# MSBuild that matches the host: arm64\ on ARM64, amd64\ on x64.[0m
+2026-10-26T15:35:01.9864216Z [36;1m$hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()[0m
+2026-10-26T15:35:01.9867085Z [36;1m[string[]]$preferredRelativePaths = if ($hostArchitecture -eq 'Arm64') {[0m
+2026-10-26T15:35:01.9867769Z [36;1m  @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')[0m
+2026-10-26T15:35:01.9868269Z [36;1m} else {[0m
+2026-10-26T15:35:01.9870786Z [36;1m  @('MSBuild\Current\Bin\amd64\MSBuild.exe')[0m
+2026-10-26T15:35:01.9871128Z [36;1m}[0m
+2026-10-26T15:35:01.9873676Z [36;1m$msbuild = $null[0m
+2026-10-26T15:35:01.9874246Z [36;1mforeach ($relativePath in ($preferredRelativePaths + [string[]]@('MSBuild\Current\Bin\MSBuild.exe'))) {[0m
+2026-10-26T15:35:01.9874806Z [36;1m  $msbuild =[0m
+2026-10-26T15:35:01.9877619Z [36;1m    (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find $relativePath 2>$null) |[0m
+2026-10-26T15:35:01.9878454Z [36;1m    Select-Object -First 1[0m
+2026-10-26T15:35:01.9878775Z [36;1m  if ($msbuild) { break }[0m
+2026-10-26T15:35:01.9881351Z [36;1m}[0m
+2026-10-26T15:35:01.9881577Z [36;1m[0m
+2026-10-26T15:35:01.9884744Z [36;1mif (-not $msbuild -or -not (Test-Path $msbuild)) {[0m
+2026-10-26T15:35:01.9885331Z [36;1m  Write-Host "Installed Visual Studio instances:" -ForegroundColor Yellow[0m
+2026-10-26T15:35:01.9885850Z [36;1m  & $vswhere -all -prerelease -products *[0m
+2026-10-26T15:35:01.9888689Z [36;1m  throw "MSBuild for Visual Studio 2026 (18.x) not found after installation."[0m
+2026-10-26T15:35:01.9889144Z [36;1m}[0m
+2026-10-26T15:35:01.9891644Z [36;1m[0m
+2026-10-26T15:35:01.9891964Z [36;1m$msbuildDir = Split-Path -Parent $msbuild[0m
+2026-10-26T15:35:01.9892490Z [36;1m$msbuildDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append[0m
+2026-10-26T15:35:01.9895342Z [36;1m"MSBUILD_EXE_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append[0m
+2026-10-26T15:35:01.9895986Z [36;1mWrite-Host "Host $hostArchitecture selected MSBuild: $msbuild"[0m
+2026-10-26T15:35:01.9898729Z [36;1m& $msbuild -version[0m
+2026-10-26T15:35:02.0006899Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:35:02.0009934Z env:
+2026-10-26T15:35:02.0015220Z   GH_TOKEN: ***
+2026-10-26T15:35:02.0015554Z   RSBuildEnableTests: true
+2026-10-26T15:35:02.0018106Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:02.0018681Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:02.0021302Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:02.0021647Z ##[endgroup]
+2026-10-26T15:35:03.0851847Z Host X64 selected MSBuild: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:03.6282941Z MSBuild version 18.12.2-1.26514.2+04f6ca984 for .NET Framework
+2026-10-26T15:35:03.6291599Z 18.12.2.51402
+2026-10-26T15:35:03.7319467Z ##[group]Run $ErrorActionPreference = "Stop"
+2026-10-26T15:35:03.7320016Z [36;1m$ErrorActionPreference = "Stop"[0m
+2026-10-26T15:35:03.7320489Z [36;1mImport-Module .\Tools\Modules\Build\BuildEvidence.psm1 -Force[0m
+2026-10-26T15:35:03.7320998Z [36;1m$identity = Get-RSBuildToolchainIdentity `[0m
+2026-10-26T15:35:03.7321394Z [36;1m  -RepoRoot $env:GITHUB_WORKSPACE `[0m
+2026-10-26T15:35:03.7321774Z [36;1m  -MSBuildPath $env:MSBUILD_EXE_PATH `[0m
+2026-10-26T15:35:03.7322130Z [36;1m  -Platform "x64" `[0m
+2026-10-26T15:35:03.7322420Z [36;1m  -Configuration "Debug"[0m
+2026-10-26T15:35:03.7322764Z [36;1m"digest=$($identity.Digest)" >> $env:GITHUB_OUTPUT[0m
+2026-10-26T15:35:03.7323282Z [36;1mWrite-Host "Canonical toolchain identity: $($identity.Digest)"[0m
+2026-10-26T15:35:03.7398028Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:35:03.7398449Z env:
+2026-10-26T15:35:03.7401190Z   GH_TOKEN: ***
+2026-10-26T15:35:03.7401560Z   RSBuildEnableTests: true
+2026-10-26T15:35:03.7401972Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:03.7402487Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:03.7402899Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:03.7403283Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:03.7403662Z ##[endgroup]
+2026-10-26T15:35:07.6634394Z Canonical toolchain identity: 3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a
+2026-10-26T15:35:08.4613738Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-26T15:35:08.4614290Z with:
+2026-10-26T15:35:08.4614821Z   path: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+.build/vcpkg-tool/downloads
+
+2026-10-26T15:35:08.4615978Z   key: Windows-vcpkg-x64-windows-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-74232bd9d16c7ff3160402fef7eae6b10b39a185e2ec50680f4034612ebd1ae3
+2026-10-26T15:35:08.4617157Z   enableCrossOsArchive: false
+2026-10-26T15:35:08.4617512Z   fail-on-cache-miss: false
+2026-10-26T15:35:08.4617807Z   lookup-only: false
+2026-10-26T15:35:08.4618060Z env:
+2026-10-26T15:35:08.4620716Z   GH_TOKEN: ***
+2026-10-26T15:35:08.4620988Z   RSBuildEnableTests: true
+2026-10-26T15:35:08.4621366Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:08.4621943Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:08.4622475Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:08.4622950Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:08.4623400Z ##[endgroup]
+2026-10-26T15:35:09.0678164Z Cache not found for input keys: Windows-vcpkg-x64-windows-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-74232bd9d16c7ff3160402fef7eae6b10b39a185e2ec50680f4034612ebd1ae3
+2026-10-26T15:35:09.2335775Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-26T15:35:09.2336457Z with:
+2026-10-26T15:35:09.2336658Z   path: .build/TerminalEngine
+2026-10-26T15:35:09.2337543Z   key: Windows-terminal-runtime-x64-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-56aa1c6d63b3d234646c663aa833f8003bbc0c90fc179fbfdd0a76012e89b6fb
+2026-10-26T15:35:09.2338408Z   enableCrossOsArchive: false
+2026-10-26T15:35:09.2338647Z   fail-on-cache-miss: false
+2026-10-26T15:35:09.2338866Z   lookup-only: false
+2026-10-26T15:35:09.2339046Z env:
+2026-10-26T15:35:09.2341994Z   GH_TOKEN: ***
+2026-10-26T15:35:09.2342216Z   RSBuildEnableTests: true
+2026-10-26T15:35:09.2342529Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:09.2343003Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:09.2343410Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:09.2343815Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:09.2344195Z ##[endgroup]
+2026-10-26T15:35:09.7392945Z Cache not found for input keys: Windows-terminal-runtime-x64-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-56aa1c6d63b3d234646c663aa833f8003bbc0c90fc179fbfdd0a76012e89b6fb
+2026-10-26T15:35:09.7660232Z ##[group]Run $ErrorActionPreference = "Stop"
+2026-10-26T15:35:09.7668465Z [36;1m$ErrorActionPreference = "Stop"[0m
+2026-10-26T15:35:09.7669168Z [36;1m[0m
+2026-10-26T15:35:09.7669544Z [36;1m$manifestPath = Join-Path $env:GITHUB_WORKSPACE "vcpkg.json"[0m
+2026-10-26T15:35:09.7670022Z [36;1mif (-not (Test-Path $manifestPath)) {[0m
+2026-10-26T15:35:09.7670467Z [36;1m  throw "vcpkg.json not found at: $manifestPath"[0m
+2026-10-26T15:35:09.7670831Z [36;1m}[0m
+2026-10-26T15:35:09.7671050Z [36;1m[0m
+2026-10-26T15:35:09.7671482Z [36;1m$baseline = (Get-Content -Path $manifestPath -Raw | ConvertFrom-Json)."builtin-baseline"[0m
+2026-10-26T15:35:09.7672060Z [36;1mif ([string]::IsNullOrWhiteSpace($baseline)) {[0m
+2026-10-26T15:35:09.7672691Z [36;1m  throw "vcpkg.json builtin-baseline is missing/empty. Set builtin-baseline to a valid vcpkg commit."[0m
+2026-10-26T15:35:09.7673231Z [36;1m}[0m
+2026-10-26T15:35:09.7673450Z [36;1m[0m
+2026-10-26T15:35:09.7673768Z [36;1m$baseline = $baseline.Trim()[0m
+2026-10-26T15:35:09.7674123Z [36;1mif ($baseline -notmatch '^[0-9a-fA-F]{40}$') {[0m
+2026-10-26T15:35:09.7674646Z [36;1m  throw "vcpkg.json builtin-baseline is not a 40-character commit SHA: '$baseline'"[0m
+2026-10-26T15:35:09.7675127Z [36;1m}[0m
+2026-10-26T15:35:09.7675351Z [36;1m[0m
+2026-10-26T15:35:09.7675629Z [36;1m$baseline = $baseline.ToLowerInvariant()[0m
+2026-10-26T15:35:09.7676056Z [36;1mWrite-Host "vcpkg builtin-baseline: $baseline"[0m
+2026-10-26T15:35:09.7676407Z [36;1m[0m
+2026-10-26T15:35:09.7676748Z [36;1m$toolPinPath = Join-Path $env:GITHUB_WORKSPACE "vcpkg-tool.json"[0m
+2026-10-26T15:35:09.7677212Z [36;1mif (-not (Test-Path $toolPinPath)) {[0m
+2026-10-26T15:35:09.7677619Z [36;1m  throw "vcpkg-tool.json not found at: $toolPinPath"[0m
+2026-10-26T15:35:09.7678228Z [36;1m}[0m
+2026-10-26T15:35:09.7678566Z [36;1m$toolPin = Get-Content -Path $toolPinPath -Raw | ConvertFrom-Json[0m
+2026-10-26T15:35:09.7679085Z [36;1m$toolRepository = ([string]$toolPin.repository).Trim()[0m
+2026-10-26T15:35:09.7679592Z [36;1m$toolCommit = ([string]$toolPin.commit).Trim().ToLowerInvariant()[0m
+2026-10-26T15:35:09.7680089Z [36;1mif ([string]::IsNullOrWhiteSpace($toolRepository)) {[0m
+2026-10-26T15:35:09.7680536Z [36;1m  throw "vcpkg-tool.json repository is missing/empty."[0m
+2026-10-26T15:35:09.7680864Z [36;1m}[0m
+2026-10-26T15:35:09.7681124Z [36;1mif ($toolCommit -notmatch '^[0-9a-f]{40}$') {[0m
+2026-10-26T15:35:09.7681632Z [36;1m  throw "vcpkg-tool.json commit is not a 40-character commit SHA: '$toolCommit'"[0m
+2026-10-26T15:35:09.7682275Z [36;1m}[0m
+2026-10-26T15:35:09.7682593Z [36;1mWrite-Host "vcpkg tool commit: $toolCommit"[0m
+2026-10-26T15:35:09.7682943Z [36;1m[0m
+2026-10-26T15:35:09.7683273Z [36;1m# Keep the managed tool checkout outside the source snapshot.[0m
+2026-10-26T15:35:09.7683758Z [36;1mImport-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force[0m
+2026-10-26T15:35:09.7684389Z [36;1m$toolRoot = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-tool'[0m
+2026-10-26T15:35:09.7684964Z [36;1m$bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'[0m
+2026-10-26T15:35:09.7685325Z [36;1m$gitDir = Join-Path $toolRoot '.git'[0m
+2026-10-26T15:35:09.7685698Z [36;1mif (-not (Test-Path $bootstrap) -or -not (Test-Path $gitDir)) {[0m
+2026-10-26T15:35:09.7686220Z [36;1m  $downloads = Resolve-RSVcpkgSafeChildPath -Root $toolRoot -Child 'downloads'[0m
+2026-10-26T15:35:09.7686952Z [36;1m  $downloadsStash = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-downloads-cache'[0m
+2026-10-26T15:35:09.7687576Z [36;1m  $hadDownloads = Test-Path -LiteralPath $downloads[0m
+2026-10-26T15:35:09.7687897Z [36;1m  if ($hadDownloads) {[0m
+2026-10-26T15:35:09.7688435Z [36;1m    if (Test-Path -LiteralPath $downloadsStash) { Remove-Item -LiteralPath $downloadsStash -Recurse -Force }[0m
+2026-10-26T15:35:09.7690839Z [36;1m    Move-Item -LiteralPath $downloads -Destination $downloadsStash[0m
+2026-10-26T15:35:09.7691286Z [36;1m  }[0m
+2026-10-26T15:35:09.7691702Z [36;1m  if (Test-Path -LiteralPath $toolRoot) { Remove-Item -LiteralPath $toolRoot -Recurse -Force }[0m
+2026-10-26T15:35:09.7692232Z [36;1m  git clone $toolRepository $toolRoot[0m
+2026-10-26T15:35:09.7692691Z [36;1m  if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE" }[0m
+2026-10-26T15:35:09.7693136Z [36;1m  if ($hadDownloads) {[0m
+2026-10-26T15:35:09.7693598Z [36;1m    if (Test-Path -LiteralPath $downloads) { Remove-Item -LiteralPath $downloads -Recurse -Force }[0m
+2026-10-26T15:35:09.7694192Z [36;1m    Move-Item -LiteralPath $downloadsStash -Destination $downloads[0m
+2026-10-26T15:35:09.7694548Z [36;1m  }[0m
+2026-10-26T15:35:09.7694721Z [36;1m}[0m
+2026-10-26T15:35:09.7694902Z [36;1mPush-Location $toolRoot[0m
+2026-10-26T15:35:09.7695134Z [36;1m[0m
+2026-10-26T15:35:09.7695494Z [36;1m# vcpkg port versioning needs git objects that are typically missing in shallow clones.[0m
+2026-10-26T15:35:09.7696072Z [36;1m# Unshallow to avoid "failed to unpack tree object" during `vcpkg install`.[0m
+2026-10-26T15:35:09.7696568Z [36;1m$isShallow = (git rev-parse --is-shallow-repository).Trim()[0m
+2026-10-26T15:35:09.7696923Z [36;1mif ($isShallow -eq "true") {[0m
+2026-10-26T15:35:09.7697274Z [36;1m  Write-Host "vcpkg repo is shallow; fetching full history..."[0m
+2026-10-26T15:35:09.7697747Z [36;1m  git fetch --prune --unshallow origin[0m
+2026-10-26T15:35:09.7698040Z [36;1m  if ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7698392Z [36;1m    throw "git fetch --unshallow failed (exit code $LASTEXITCODE)."[0m
+2026-10-26T15:35:09.7698744Z [36;1m  }[0m
+2026-10-26T15:35:09.7698907Z [36;1m}[0m
+2026-10-26T15:35:09.7699239Z [36;1m[0m
+2026-10-26T15:35:09.7699604Z [36;1m# The executable revision and ports baseline are separate pins; both commits must exist.[0m
+2026-10-26T15:35:09.7700226Z [36;1mforeach ($requiredCommit in @($toolCommit, $baseline) | Select-Object -Unique) {[0m
+2026-10-26T15:35:09.7700718Z [36;1m  git cat-file -e "$requiredCommit^{commit}" 2>$null[0m
+2026-10-26T15:35:09.7701034Z [36;1m  if ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7701328Z [36;1m    git fetch --depth 1 origin $requiredCommit[0m
+2026-10-26T15:35:09.7701628Z [36;1m    if ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7702043Z [36;1m      throw "git fetch failed while obtaining pinned vcpkg commit '$requiredCommit'."[0m
+2026-10-26T15:35:09.7702723Z [36;1m    }[0m
+2026-10-26T15:35:09.7702971Z [36;1m    git cat-file -e "$requiredCommit^{commit}" 2>$null[0m
+2026-10-26T15:35:09.7703289Z [36;1m    if ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7703664Z [36;1m      throw "Pinned vcpkg commit not found after fetch: $requiredCommit"[0m
+2026-10-26T15:35:09.7704029Z [36;1m    }[0m
+2026-10-26T15:35:09.7704189Z [36;1m  }[0m
+2026-10-26T15:35:09.7704350Z [36;1m}[0m
+2026-10-26T15:35:09.7704504Z [36;1m[0m
+2026-10-26T15:35:09.7704839Z [36;1m# Fail fast with a clear message if the manifest pins an unsupported baseline commit.[0m
+2026-10-26T15:35:09.7705349Z [36;1mgit show "${baseline}:versions/baseline.json" 1>$null 2>$null[0m
+2026-10-26T15:35:09.7705700Z [36;1mif ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7706344Z [36;1m  throw "vcpkg.json builtin-baseline '$baseline' is invalid: versions/baseline.json missing at that commit. Update vcpkg.json builtin-baseline."[0m
+2026-10-26T15:35:09.7706984Z [36;1m}[0m
+2026-10-26T15:35:09.7707137Z [36;1m[0m
+2026-10-26T15:35:09.7707470Z [36;1m$toolMetadata = git show "${toolCommit}:scripts/vcpkg-tools.json" | ConvertFrom-Json[0m
+2026-10-26T15:35:09.7707907Z [36;1mif ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7708338Z [36;1m  throw "Unable to read scripts/vcpkg-tools.json from vcpkg tool commit '$toolCommit'."[0m
+2026-10-26T15:35:09.7708762Z [36;1m}[0m
+2026-10-26T15:35:09.7709882Z [36;1m$baselineMetadata = git show "${baseline}:scripts/vcpkg-tools.json" | ConvertFrom-Json[0m
+2026-10-26T15:35:09.7710386Z [36;1mif ($LASTEXITCODE -ne 0) {[0m
+2026-10-26T15:35:09.7710806Z [36;1m  throw "Unable to read scripts/vcpkg-tools.json from vcpkg baseline '$baseline'."[0m
+2026-10-26T15:35:09.7711219Z [36;1m}[0m
+2026-10-26T15:35:09.7711482Z [36;1m$toolSchemaVersion = [int]$toolMetadata.'schema-version'[0m
+2026-10-26T15:35:09.7711936Z [36;1m$baselineSchemaVersion = [int]$baselineMetadata.'schema-version'[0m
+2026-10-26T15:35:09.7712416Z [36;1mif ($toolSchemaVersion -lt 1 -or $baselineSchemaVersion -lt 1) {[0m
+2026-10-26T15:35:09.7713129Z [36;1m  throw "vcpkg tool metadata schema versions must be positive integers; tool=$toolSchemaVersion baseline=$baselineSchemaVersion."[0m
+2026-10-26T15:35:09.7713710Z [36;1m}[0m
+2026-10-26T15:35:09.7713968Z [36;1mif ($toolSchemaVersion -lt $baselineSchemaVersion) {[0m
+2026-10-26T15:35:09.7714846Z [36;1m  throw "vcpkg tool commit '$toolCommit' supports tools schema $toolSchemaVersion, older than baseline '$baseline' schema $baselineSchemaVersion. Update vcpkg-tool.json with the baseline."[0m
+2026-10-26T15:35:09.7715640Z [36;1m}[0m
+2026-10-26T15:35:09.7716001Z [36;1mWrite-Host "vcpkg tools schema: tool=$toolSchemaVersion baseline=$baselineSchemaVersion"[0m
+2026-10-26T15:35:09.7716446Z [36;1m[0m
+2026-10-26T15:35:09.7716628Z [36;1mgit checkout --detach $toolCommit[0m
+2026-10-26T15:35:09.7717098Z [36;1mif ($LASTEXITCODE -ne 0) { throw "Unable to check out pinned vcpkg tool commit '$toolCommit'." }[0m
+2026-10-26T15:35:09.7717679Z [36;1m$actualToolCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()[0m
+2026-10-26T15:35:09.7718092Z [36;1mif ($actualToolCommit -ne $toolCommit) {[0m
+2026-10-26T15:35:09.7718568Z [36;1m  throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."[0m
+2026-10-26T15:35:09.7719358Z [36;1m}[0m
+2026-10-26T15:35:09.7719654Z [36;1m[0m
+2026-10-26T15:35:09.7720376Z [36;1m# The two pins diverge, so the ports and version database come from a registry checkout of the baseline,[0m
+2026-10-26T15:35:09.7721631Z [36;1m# passed to vcpkg install through --vcpkg-root (Build_Toolchain.md): the tool commit's own version database[0m
+2026-10-26T15:35:09.7722661Z [36;1m# lacks entries the manifest requires, and vcpkg then fails with "no version database entry".[0m
+2026-10-26T15:35:09.7723421Z [36;1m$registryRoot = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-registry'[0m
+2026-10-26T15:35:09.7724193Z [36;1mif (Test-Path -LiteralPath $registryRoot) { Remove-Item -LiteralPath $registryRoot -Recurse -Force }[0m
+2026-10-26T15:35:09.7724701Z [36;1mgit worktree prune[0m
+2026-10-26T15:35:09.7725002Z [36;1mgit worktree add --detach $registryRoot $baseline[0m
+2026-10-26T15:35:09.7725548Z [36;1mif ($LASTEXITCODE -ne 0) { throw "Unable to materialize pinned vcpkg ports baseline '$baseline'." }[0m
+2026-10-26T15:35:09.7726192Z [36;1m$actualBaseline = (git -C $registryRoot rev-parse HEAD).Trim().ToLowerInvariant()[0m
+2026-10-26T15:35:09.7726655Z [36;1mif ($actualBaseline -ne $baseline) {[0m
+2026-10-26T15:35:09.7727109Z [36;1m  throw "vcpkg ports identity mismatch: expected '$baseline', found '$actualBaseline'."[0m
+2026-10-26T15:35:09.7727531Z [36;1m}[0m
+2026-10-26T15:35:09.7727918Z [36;1m"VCPKG_REGISTRY_ROOT=$registryRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append[0m
+2026-10-26T15:35:09.7728375Z [36;1m[0m
+2026-10-26T15:35:09.7728539Z [36;1mPop-Location[0m
+2026-10-26T15:35:09.7728725Z [36;1m[0m
+2026-10-26T15:35:09.7728879Z [36;1m& $bootstrap[0m
+2026-10-26T15:35:09.7729272Z [36;1mif ($LASTEXITCODE -ne 0) { throw "bootstrap-vcpkg.bat failed with exit code $LASTEXITCODE" }[0m
+2026-10-26T15:35:09.7801571Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:35:09.7801948Z env:
+2026-10-26T15:35:09.7804402Z   GH_TOKEN: ***
+2026-10-26T15:35:09.7804613Z   RSBuildEnableTests: true
+2026-10-26T15:35:09.7805116Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:09.7805608Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:09.7806017Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:09.7806395Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:09.7806770Z ##[endgroup]
+2026-10-26T15:35:10.1888976Z vcpkg builtin-baseline: d53f25d56e7806475054f624439e93ee38e1e81d
+2026-10-26T15:35:10.1958138Z vcpkg tool commit: d53f25d56e7806475054f624439e93ee38e1e81d
+2026-10-26T15:35:10.3854733Z Cloning into 'D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool'...
+2026-10-26T15:35:25.4295992Z Updating files:  24% (3526/14398)
+2026-10-26T15:35:25.4658168Z Updating files:  25% (3600/14398)
+2026-10-26T15:35:25.5021414Z Updating files:  26% (3744/14398)
+2026-10-26T15:35:25.5381008Z Updating files:  27% (3888/14398)
+2026-10-26T15:35:25.5757889Z Updating files:  28% (4032/14398)
+2026-10-26T15:35:25.6146765Z Updating files:  29% (4176/14398)
+2026-10-26T15:35:25.6519956Z Updating files:  30% (4320/14398)
+2026-10-26T15:35:25.6884364Z Updating files:  31% (4464/14398)
+2026-10-26T15:35:25.7245297Z Updating files:  32% (4608/14398)
+2026-10-26T15:35:25.8309658Z Updating files:  33% (4752/14398)
+2026-10-26T15:35:25.8666812Z Updating files:  34% (4896/14398)
+2026-10-26T15:35:25.9024316Z Updating files:  35% (5040/14398)
+2026-10-26T15:35:25.9377416Z Updating files:  36% (5184/14398)
+2026-10-26T15:35:25.9732223Z Updating files:  37% (5328/14398)
+2026-10-26T15:35:26.0112573Z Updating files:  38% (5472/14398)
+2026-10-26T15:35:26.0478003Z Updating files:  39% (5616/14398)
+2026-10-26T15:35:26.0836415Z Updating files:  40% (5760/14398)
+2026-10-26T15:35:26.1201023Z Updating files:  41% (5904/14398)
+2026-10-26T15:35:26.1578842Z Updating files:  42% (6048/14398)
+2026-10-26T15:35:26.1948322Z Updating files:  43% (6192/14398)
+2026-10-26T15:35:26.2332313Z Updating files:  44% (6336/14398)
+2026-10-26T15:35:26.2737965Z Updating files:  45% (6480/14398)
+2026-10-26T15:35:26.3769959Z Updating files:  46% (6624/14398)
+2026-10-26T15:35:26.4110296Z Updating files:  47% (6768/14398)
+2026-10-26T15:35:26.4142951Z Updating files:  47% (6901/14398)
+2026-10-26T15:35:26.4486700Z Updating files:  48% (6912/14398)
+2026-10-26T15:35:26.4831641Z Updating files:  49% (7056/14398)
+2026-10-26T15:35:26.5177866Z Updating files:  50% (7199/14398)
+2026-10-26T15:35:26.5576989Z Updating files:  51% (7343/14398)
+2026-10-26T15:35:26.5926597Z Updating files:  52% (7487/14398)
+2026-10-26T15:35:26.6269216Z Updating files:  53% (7631/14398)
+2026-10-26T15:35:26.6621895Z Updating files:  54% (7775/14398)
+2026-10-26T15:35:26.6974300Z Updating files:  55% (7919/14398)
+2026-10-26T15:35:26.7326844Z Updating files:  56% (8063/14398)
+2026-10-26T15:35:26.7674569Z Updating files:  57% (8207/14398)
+2026-10-26T15:35:26.8030668Z Updating files:  58% (8351/14398)
+2026-10-26T15:35:26.8380670Z Updating files:  59% (8495/14398)
+2026-10-26T15:35:26.8743990Z Updating files:  60% (8639/14398)
+2026-10-26T15:35:26.9099880Z Updating files:  61% (8783/14398)
+2026-10-26T15:35:26.9461445Z Updating files:  62% (8927/14398)
+2026-10-26T15:35:26.9819240Z Updating files:  63% (9071/14398)
+2026-10-26T15:35:27.0182968Z Updating files:  64% (9215/14398)
+2026-10-26T15:35:27.0532159Z Updating files:  65% (9359/14398)
+2026-10-26T15:35:27.0890526Z Updating files:  66% (9503/14398)
+2026-10-26T15:35:27.1229202Z Updating files:  67% (9647/14398)
+2026-10-26T15:35:27.1601106Z Updating files:  68% (9791/14398)
+2026-10-26T15:35:27.2366069Z Updating files:  69% (9935/14398)
+2026-10-26T15:35:27.2737714Z Updating files:  70% (10079/14398)
+2026-10-26T15:35:27.3233314Z Updating files:  71% (10223/14398)
+2026-10-26T15:35:27.3603564Z Updating files:  72% (10367/14398)
+2026-10-26T15:35:27.3961072Z Updating files:  73% (10511/14398)
+2026-10-26T15:35:27.4112398Z Updating files:  74% (10655/14398)
+2026-10-26T15:35:27.4322291Z Updating files:  74% (10713/14398)
+2026-10-26T15:35:27.4681385Z Updating files:  75% (10799/14398)
+2026-10-26T15:35:27.5035991Z Updating files:  76% (10943/14398)
+2026-10-26T15:35:27.5375646Z Updating files:  77% (11087/14398)
+2026-10-26T15:35:27.5690112Z Updating files:  78% (11231/14398)
+2026-10-26T15:35:27.6032012Z Updating files:  79% (11375/14398)
+2026-10-26T15:35:27.6380071Z Updating files:  80% (11519/14398)
+2026-10-26T15:35:27.6717449Z Updating files:  81% (11663/14398)
+2026-10-26T15:35:27.7036625Z Updating files:  82% (11807/14398)
+2026-10-26T15:35:27.7358293Z Updating files:  83% (11951/14398)
+2026-10-26T15:35:27.7703036Z Updating files:  84% (12095/14398)
+2026-10-26T15:35:27.8030238Z Updating files:  85% (12239/14398)
+2026-10-26T15:35:27.8355992Z Updating files:  86% (12383/14398)
+2026-10-26T15:35:27.8665058Z Updating files:  87% (12527/14398)
+2026-10-26T15:35:27.8986992Z Updating files:  88% (12671/14398)
+2026-10-26T15:35:27.9307250Z Updating files:  89% (12815/14398)
+2026-10-26T15:35:27.9630332Z Updating files:  90% (12959/14398)
+2026-10-26T15:35:27.9961617Z Updating files:  91% (13103/14398)
+2026-10-26T15:35:28.0294757Z Updating files:  92% (13247/14398)
+2026-10-26T15:35:28.0623575Z Updating files:  93% (13391/14398)
+2026-10-26T15:35:28.0961914Z Updating files:  94% (13535/14398)
+2026-10-26T15:35:28.1286062Z Updating files:  95% (13679/14398)
+2026-10-26T15:35:28.1601690Z Updating files:  96% (13823/14398)
+2026-10-26T15:35:28.1917487Z Updating files:  97% (13967/14398)
+2026-10-26T15:35:28.2239071Z Updating files:  98% (14111/14398)
+2026-10-26T15:35:28.2551691Z Updating files:  99% (14255/14398)
+2026-10-26T15:35:28.2552301Z Updating files: 100% (14398/14398)
+2026-10-26T15:35:28.2552815Z Updating files: 100% (14398/14398), done.
+2026-10-26T15:35:28.5436530Z vcpkg tools schema: tool=2 baseline=2
+2026-10-26T15:35:29.4171109Z HEAD is now at d53f25d56e [libjpeg-turbo] Patch vcpkg dependencies for 3.2.0 (#52891)
+2026-10-26T15:35:29.5461679Z Preparing worktree (detached HEAD d53f25d56e)
+2026-10-26T15:35:30.6558124Z Updating files:  26% (3779/14276)
+2026-10-26T15:35:30.6917209Z Updating files:  27% (3855/14276)
+2026-10-26T15:35:30.7277298Z Updating files:  28% (3998/14276)
+2026-10-26T15:35:30.7621931Z Updating files:  29% (4141/14276)
+2026-10-26T15:35:30.7972226Z Updating files:  30% (4283/14276)
+2026-10-26T15:35:30.8331299Z Updating files:  31% (4426/14276)
+2026-10-26T15:35:30.8666431Z Updating files:  32% (4569/14276)
+2026-10-26T15:35:30.9018301Z Updating files:  33% (4712/14276)
+2026-10-26T15:35:30.9367871Z Updating files:  34% (4854/14276)
+2026-10-26T15:35:30.9703773Z Updating files:  35% (4997/14276)
+2026-10-26T15:35:31.0049063Z Updating files:  36% (5140/14276)
+2026-10-26T15:35:31.0413278Z Updating files:  37% (5283/14276)
+2026-10-26T15:35:31.0794692Z Updating files:  38% (5425/14276)
+2026-10-26T15:35:31.1164836Z Updating files:  39% (5568/14276)
+2026-10-26T15:35:31.1522363Z Updating files:  40% (5711/14276)
+2026-10-26T15:35:31.1882621Z Updating files:  41% (5854/14276)
+2026-10-26T15:35:31.2231624Z Updating files:  42% (5996/14276)
+2026-10-26T15:35:31.2579310Z Updating files:  43% (6139/14276)
+2026-10-26T15:35:31.2937469Z Updating files:  44% (6282/14276)
+2026-10-26T15:35:31.3281042Z Updating files:  45% (6425/14276)
+2026-10-26T15:35:31.3643759Z Updating files:  46% (6567/14276)
+2026-10-26T15:35:31.3997432Z Updating files:  47% (6710/14276)
+2026-10-26T15:35:31.4350965Z Updating files:  48% (6853/14276)
+2026-10-26T15:35:31.4696546Z Updating files:  49% (6996/14276)
+2026-10-26T15:35:31.5185791Z Updating files:  50% (7138/14276)
+2026-10-26T15:35:31.5554189Z Updating files:  51% (7281/14276)
+2026-10-26T15:35:31.5917068Z Updating files:  52% (7424/14276)
+2026-10-26T15:35:31.6088508Z Updating files:  53% (7567/14276)
+2026-10-26T15:35:31.6279035Z Updating files:  53% (7629/14276)
+2026-10-26T15:35:31.6626451Z Updating files:  54% (7710/14276)
+2026-10-26T15:35:31.7110600Z Updating files:  55% (7852/14276)
+2026-10-26T15:35:31.7471503Z Updating files:  56% (7995/14276)
+2026-10-26T15:35:31.7819440Z Updating files:  57% (8138/14276)
+2026-10-26T15:35:31.8172961Z Updating files:  58% (8281/14276)
+2026-10-26T15:35:31.8518726Z Updating files:  59% (8423/14276)
+2026-10-26T15:35:31.8863845Z Updating files:  60% (8566/14276)
+2026-10-26T15:35:31.9209928Z Updating files:  61% (8709/14276)
+2026-10-26T15:35:31.9565137Z Updating files:  62% (8852/14276)
+2026-10-26T15:35:31.9914883Z Updating files:  63% (8994/14276)
+2026-10-26T15:35:32.0264177Z Updating files:  64% (9137/14276)
+2026-10-26T15:35:32.0995875Z Updating files:  65% (9280/14276)
+2026-10-26T15:35:32.1346541Z Updating files:  66% (9423/14276)
+2026-10-26T15:35:32.1698559Z Updating files:  67% (9565/14276)
+2026-10-26T15:35:32.2058091Z Updating files:  68% (9708/14276)
+2026-10-26T15:35:32.2409732Z Updating files:  69% (9851/14276)
+2026-10-26T15:35:32.2756866Z Updating files:  70% (9994/14276)
+2026-10-26T15:35:32.3125502Z Updating files:  71% (10136/14276)
+2026-10-26T15:35:32.3502118Z Updating files:  72% (10279/14276)
+2026-10-26T15:35:32.3852677Z Updating files:  73% (10422/14276)
+2026-10-26T15:35:32.4215105Z Updating files:  74% (10565/14276)
+2026-10-26T15:35:32.4567889Z Updating files:  75% (10707/14276)
+2026-10-26T15:35:32.4920646Z Updating files:  76% (10850/14276)
+2026-10-26T15:35:32.5262907Z Updating files:  77% (10993/14276)
+2026-10-26T15:35:32.5573511Z Updating files:  78% (11136/14276)
+2026-10-26T15:35:32.5919219Z Updating files:  79% (11279/14276)
+2026-10-26T15:35:32.6239161Z Updating files:  80% (11421/14276)
+2026-10-26T15:35:32.6260458Z Updating files:  80% (11555/14276)
+2026-10-26T15:35:32.6595855Z Updating files:  81% (11564/14276)
+2026-10-26T15:35:32.6918438Z Updating files:  82% (11707/14276)
+2026-10-26T15:35:32.7252540Z Updating files:  83% (11850/14276)
+2026-10-26T15:35:32.7596496Z Updating files:  84% (11992/14276)
+2026-10-26T15:35:32.7988470Z Updating files:  85% (12135/14276)
+2026-10-26T15:35:32.8306203Z Updating files:  86% (12278/14276)
+2026-10-26T15:35:32.8742543Z Updating files:  87% (12421/14276)
+2026-10-26T15:35:32.9066318Z Updating files:  88% (12563/14276)
+2026-10-26T15:35:32.9376302Z Updating files:  89% (12706/14276)
+2026-10-26T15:35:32.9700506Z Updating files:  90% (12849/14276)
+2026-10-26T15:35:33.0022129Z Updating files:  91% (12992/14276)
+2026-10-26T15:35:33.0351581Z Updating files:  92% (13134/14276)
+2026-10-26T15:35:33.0673616Z Updating files:  93% (13277/14276)
+2026-10-26T15:35:33.1010949Z Updating files:  94% (13420/14276)
+2026-10-26T15:35:33.1328210Z Updating files:  95% (13563/14276)
+2026-10-26T15:35:33.1637227Z Updating files:  96% (13705/14276)
+2026-10-26T15:35:33.1955626Z Updating files:  97% (13848/14276)
+2026-10-26T15:35:33.2275338Z Updating files:  98% (13991/14276)
+2026-10-26T15:35:33.2593270Z Updating files:  99% (14134/14276)
+2026-10-26T15:35:33.2594345Z Updating files: 100% (14276/14276)
+2026-10-26T15:35:33.2595164Z Updating files: 100% (14276/14276), done.
+2026-10-26T15:35:33.2791509Z HEAD is now at d53f25d56e [libjpeg-turbo] Patch vcpkg dependencies for 3.2.0 (#52891)
+2026-10-26T15:35:35.7748787Z Downloading https://github.com/microsoft/vcpkg-tool/releases/download/2026-07-27/vcpkg.exe -> D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool\vcpkg.exe... done.
+2026-10-26T15:35:35.8264516Z Validating signature... done.
+2026-10-26T15:35:35.8397676Z 
+2026-10-26T15:35:35.8610643Z vcpkg package management program version 2026-07-27-98d7cb0cf1f4686a3e43aa5672b6230c1d56bce8
+2026-10-26T15:35:35.8611728Z 
+2026-10-26T15:35:35.8611902Z See LICENSE.txt for license information.
+2026-10-26T15:35:35.8637005Z Telemetry
+2026-10-26T15:35:35.8637294Z ---------
+2026-10-26T15:35:35.8637832Z vcpkg collects usage data in order to help us improve your experience.
+2026-10-26T15:35:35.8638527Z The data collected by Microsoft is anonymous.
+2026-10-26T15:35:35.8639307Z You can opt-out of telemetry by re-running the bootstrap-vcpkg script with -disableMetrics,
+2026-10-26T15:35:35.8640470Z passing --disable-metrics to vcpkg on the command line,
+2026-10-26T15:35:35.8641138Z or by setting the VCPKG_DISABLE_METRICS environment variable.
+2026-10-26T15:35:35.8641740Z 
+2026-10-26T15:35:35.8642002Z Read more about vcpkg telemetry at https://learn.microsoft.com/vcpkg/about/privacy
+2026-10-26T15:35:35.8642593Z Read the Microsoft Privacy Statement at https://go.microsoft.com/fwlink/?LinkId=521839
+2026-10-26T15:35:35.9470389Z ##[group]Run # The executable stays at vcpkg-tool.json's commit; the baseline's registry checkout supplies ports and versions.
+2026-10-26T15:35:35.9471392Z [36;1m# The executable stays at vcpkg-tool.json's commit; the baseline's registry checkout supplies ports and versions.[0m
+2026-10-26T15:35:35.9472107Z [36;1m# Downloads stay beneath the tool checkout, where the vcpkg cache keeps them.[0m
+2026-10-26T15:35:35.9472601Z [36;1m$downloadsRoot = Join-Path $env:VCPKG_ROOT 'downloads'[0m
+2026-10-26T15:35:35.9473668Z [36;1m& "$env:VCPKG_ROOT\vcpkg.exe" install "--vcpkg-root=$env:VCPKG_REGISTRY_ROOT" "--downloads-root=$downloadsRoot" --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR[0m
+2026-10-26T15:35:35.9474813Z [36;1mif ($LASTEXITCODE -ne 0) { throw "vcpkg install failed with exit code $LASTEXITCODE." }[0m
+2026-10-26T15:35:35.9546204Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T15:35:35.9546585Z env:
+2026-10-26T15:35:35.9549031Z   GH_TOKEN: ***
+2026-10-26T15:35:35.9549237Z   RSBuildEnableTests: true
+2026-10-26T15:35:35.9549553Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T15:35:35.9550038Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T15:35:35.9550449Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T15:35:35.9550820Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T15:35:35.9551525Z   VCPKG_REGISTRY_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-registry
+2026-10-26T15:35:35.9551897Z ##[endgroup]
+2026-10-26T15:35:40.2591144Z Detecting compiler hash for triplet x64-windows...
+2026-10-26T15:35:48.5562600Z Compiler found: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+2026-10-26T15:35:48.6156328Z The following packages will be built and installed:
+2026-10-26T15:35:48.6157170Z     7zip:x64-windows@26.3
+2026-10-26T15:35:48.6157642Z   * aws-c-auth:x64-windows@1.0.0
+2026-10-26T15:35:48.6158142Z   * aws-c-cal:x64-windows@1.0.0
+2026-10-26T15:35:48.6158700Z   * aws-c-common:x64-windows@1.0.0
+2026-10-26T15:35:48.6159270Z   * aws-c-compression:x64-windows@1.0.0
+2026-10-26T15:35:48.6159944Z   * aws-c-event-stream:x64-windows@1.0.0
+2026-10-26T15:35:48.6160720Z   * aws-c-http:x64-windows@1.0.0
+2026-10-26T15:35:48.6161247Z   * aws-c-io:x64-windows@1.0.0
+2026-10-26T15:35:48.6161818Z   * aws-c-mqtt:x64-windows@1.0.0
+2026-10-26T15:35:48.6162390Z   * aws-c-s3:x64-windows@1.1.2
+2026-10-26T15:35:48.6162928Z   * aws-c-sdkutils:x64-windows@1.0.0
+2026-10-26T15:35:48.6163913Z   * aws-checksums:x64-windows@1.0.0
+2026-10-26T15:35:48.6164558Z   * aws-crt-cpp:x64-windows@0.43.4
+2026-10-26T15:35:48.6165440Z     aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880
+2026-10-26T15:35:48.6166352Z     blake3:x64-windows@1.8.7
+2026-10-26T15:35:48.6166908Z   * brotli:x64-windows@1.2.0
+2026-10-26T15:35:48.6167742Z     curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1
+2026-10-26T15:35:48.6168552Z     ftxui:x64-windows@7.0.3
+2026-10-26T15:35:48.6169136Z   * jasper:x64-windows@4.2.9
+2026-10-26T15:35:48.6169915Z   * lcms:x64-windows@2.19.1#1
+2026-10-26T15:35:48.6170476Z     libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1
+2026-10-26T15:35:48.6171228Z     libraw[core,dng-lossy,openmp]:x64-windows@0.22.2
+2026-10-26T15:35:48.6171861Z   * libspng:x64-windows@0.7.4#1
+2026-10-26T15:35:48.6172462Z   * libssh2[core,openssl,zlib]:x64-windows@1.11.1#3
+2026-10-26T15:35:48.6173261Z   * nghttp2:x64-windows@1.70.0
+2026-10-26T15:35:48.6173752Z   * openssl:x64-windows@3.6.4
+2026-10-26T15:35:48.6174290Z     pe-parse:x64-windows@2.1.1#1
+2026-10-26T15:35:48.6174849Z     sqlite3[core,json1]:x64-windows@3.53.4#1
+2026-10-26T15:35:48.6175512Z   * vcpkg-cmake:x64-windows@2025-08-07
+2026-10-26T15:35:48.6175889Z   * vcpkg-cmake-config:x64-windows@2026-07-21
+2026-10-26T15:35:48.6178985Z   * vcpkg-cmake-get-vars:x64-windows@2025-05-29
+2026-10-26T15:35:48.6179768Z   * vcpkg-tool-meson:x64-windows@1.9.0#10
+2026-10-26T15:35:48.6180529Z     webview2:x64-windows@1.0.4191.47
+2026-10-26T15:35:48.6181058Z     wil:x64-windows@1.0.260126.7
+2026-10-26T15:35:48.6181855Z     yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0
+2026-10-26T15:35:48.6182649Z   * zlib:x64-windows@1.3.2#2
+2026-10-26T15:35:48.6183708Z Additional packages (*) will be modified to complete this operation.
+2026-10-26T15:35:48.7343270Z Restored 0 package(s) from C:\Users\runneradmin\AppData\Local\vcpkg\archives in 489 us. Use --debug to see more details.
+2026-10-26T15:35:48.7344587Z Installing 1/36 vcpkg-cmake-config:x64-windows@2026-07-21...
+2026-10-26T15:35:48.7345909Z vcpkg-cmake-config:x64-windows@2026-07-21 package ABI: e61a78e7912f6b70c2130d15386cfedb8d52050e0cb240b428f8bd7dcf1f05f1
+2026-10-26T15:35:48.7347162Z Building vcpkg-cmake-config:x64-windows@2026-07-21...
+2026-10-26T15:35:48.7703634Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake
+2026-10-26T15:35:48.7710937Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/vcpkg-port-config.cmake
+2026-10-26T15:35:48.7717088Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/copyright
+2026-10-26T15:35:48.7770904Z -- Skipping post-build validation due to VCPKG_POLICY_EMPTY_PACKAGE
+2026-10-26T15:35:48.7995888Z Starting submission of vcpkg-cmake-config:x64-windows@2026-07-21 to 1 binary cache(s) in the background
+2026-10-26T15:35:48.7997210Z Elapsed time to handle vcpkg-cmake-config:x64-windows: 65.3 ms
+2026-10-26T15:35:48.7997908Z Installing 2/36 vcpkg-cmake:x64-windows@2025-08-07...
+2026-10-26T15:35:48.7998819Z vcpkg-cmake:x64-windows@2025-08-07 package ABI: 0788201167418ca56e463d89c0088d2fe30ade26142f5e4d9d552acaa667c0c1
+2026-10-26T15:35:48.7999677Z Building vcpkg-cmake:x64-windows@2025-08-07...
+2026-10-26T15:35:48.8361091Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake
+2026-10-26T15:35:48.8369328Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_build.cmake
+2026-10-26T15:35:48.8377545Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_install.cmake
+2026-10-26T15:35:48.8383943Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg-port-config.cmake
+2026-10-26T15:35:48.8392702Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/copyright
+2026-10-26T15:35:48.8445482Z -- Performing post-build validation
+2026-10-26T15:35:48.8790625Z Starting submission of vcpkg-cmake:x64-windows@2025-08-07 to 1 binary cache(s) in the background
+2026-10-26T15:35:48.8791881Z Elapsed time to handle vcpkg-cmake:x64-windows: 79.4 ms
+2026-10-26T15:35:48.8792704Z Installing 3/36 7zip:x64-windows@26.3...
+2026-10-26T15:35:48.8793811Z 7zip:x64-windows@26.3 package ABI: d2d350d946c9334e00b058eaaea230c8c931e844a68f4f0a8ce8f41ce3234857
+2026-10-26T15:35:48.8794934Z Building 7zip:x64-windows@26.3...
+2026-10-26T15:35:48.9276446Z Downloading https://github.com/ip7z/7zip/archive/26.03.tar.gz -> ip7z-7zip-26.03.tar.gz
+2026-10-26T15:35:49.6618042Z Successfully downloaded ip7z-7zip-26.03.tar.gz
+2026-10-26T15:35:49.6765026Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/ip7z-7zip-26.03.tar.gz
+2026-10-26T15:35:50.5487108Z -- Applying patch sort-asm.diff
+2026-10-26T15:35:50.5873858Z -- Applying patch fix_timespec_get_broken_on_android.patch
+2026-10-26T15:35:50.6248084Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/7zip/src/26.03-ec6bc20996.clean
+2026-10-26T15:35:50.6540005Z -- Configuring x64-windows
+2026-10-26T15:35:53.4262085Z -- Building x64-windows-dbg
+2026-10-26T15:36:48.8430233Z -- Building x64-windows-rel
+2026-10-26T15:38:04.0953671Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/7zip_x64-windows/share/7zip/copyright
+2026-10-26T15:38:04.1123416Z -- Performing post-build validation
+2026-10-26T15:38:04.1725757Z Starting submission of 7zip:x64-windows@26.3 to 1 binary cache(s) in the background
+2026-10-26T15:38:04.1726640Z Elapsed time to handle 7zip:x64-windows: 2.3 min
+2026-10-26T15:38:04.1727483Z Completed submission of vcpkg-cmake-config:x64-windows@2026-07-21 to 1 binary cache(s) in 208 ms
+2026-10-26T15:38:04.1728769Z Completed submission of vcpkg-cmake:x64-windows@2025-08-07 to 1 binary cache(s) in 60.7 ms
+2026-10-26T15:38:04.1729843Z Installing 4/36 zlib:x64-windows@1.3.2#2...
+2026-10-26T15:38:04.1730632Z zlib:x64-windows@1.3.2#2 package ABI: 7e68d96a38712a096a4ec8686bf54e289227c20c5a464b9b997169cf2804170a
+2026-10-26T15:38:04.1731459Z Building zlib:x64-windows@1.3.2#2...
+2026-10-26T15:38:04.2244034Z Downloading https://github.com/madler/zlib/archive/v1.3.2.tar.gz -> madler-zlib-v1.3.2.tar.gz
+2026-10-26T15:38:04.6888690Z Successfully downloaded madler-zlib-v1.3.2.tar.gz
+2026-10-26T15:38:04.7034425Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/madler-zlib-v1.3.2.tar.gz
+2026-10-26T15:38:04.9174484Z -- Applying patch 0001-no-version-script-on-ohos.patch
+2026-10-26T15:38:04.9689271Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/zlib/src/v1.3.2-c19a0bfd23.clean
+2026-10-26T15:38:05.0039885Z -- Configuring x64-windows
+2026-10-26T15:38:08.4801674Z -- Building x64-windows-dbg
+2026-10-26T15:38:09.1700005Z -- Building x64-windows-rel
+2026-10-26T15:38:10.4671837Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/zlib_x64-windows/lib/pkgconfig/zlib.pc
+2026-10-26T15:38:10.4885327Z Downloading msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst, trying https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:38:11.2939478Z Successfully downloaded msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:38:11.3083533Z Downloading msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:38:11.8907445Z Successfully downloaded msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:38:11.9504524Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:38:11.9629983Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/zlib_x64-windows/debug/lib/pkgconfig/zlib.pc
+2026-10-26T15:38:11.9764959Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/zlib_x64-windows/share/zlib/vcpkg-cmake-wrapper.cmake
+2026-10-26T15:38:11.9778735Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/zlib_x64-windows/share/zlib/copyright
+2026-10-26T15:38:11.9851851Z -- Performing post-build validation
+2026-10-26T15:38:12.0197047Z Starting submission of zlib:x64-windows@1.3.2#2 to 1 binary cache(s) in the background
+2026-10-26T15:38:12.0197600Z Elapsed time to handle zlib:x64-windows: 7.8 s
+2026-10-26T15:38:12.0198269Z Completed submission of 7zip:x64-windows@26.3 to 1 binary cache(s) in 2.2 s
+2026-10-26T15:38:12.0198712Z Installing 5/36 aws-c-common:x64-windows@1.0.0...
+2026-10-26T15:38:12.0199276Z aws-c-common:x64-windows@1.0.0 package ABI: cb69d73c3ba717357b20fa70bb018d73c0bde6200ae7fd6bb89ac11f4029d4ec
+2026-10-26T15:38:12.0199846Z Building aws-c-common:x64-windows@1.0.0...
+2026-10-26T15:38:12.0744214Z Downloading https://github.com/awslabs/aws-c-common/archive/v1.0.0.tar.gz -> awslabs-aws-c-common-v1.0.0.tar.gz
+2026-10-26T15:38:12.6582068Z Successfully downloaded awslabs-aws-c-common-v1.0.0.tar.gz
+2026-10-26T15:38:12.6633387Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-common-v1.0.0.tar.gz
+2026-10-26T15:38:12.9904161Z -- Applying patch disable-internal-crt-option.patch
+2026-10-26T15:38:13.0293576Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-common/src/v1.0.0-3a9c2cd646.clean
+2026-10-26T15:38:13.0572029Z -- Configuring x64-windows
+2026-10-26T15:38:20.3857732Z -- Building x64-windows-dbg
+2026-10-26T15:38:25.3440610Z -- Building x64-windows-rel
+2026-10-26T15:38:31.5803459Z -- Performing post-build validation
+2026-10-26T15:38:31.6261338Z Starting submission of aws-c-common:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:38:31.6262593Z Elapsed time to handle aws-c-common:x64-windows: 20 s
+2026-10-26T15:38:31.6263261Z Completed submission of zlib:x64-windows@1.3.2#2 to 1 binary cache(s) in 157 ms
+2026-10-26T15:38:31.6263906Z Installing 6/36 aws-checksums:x64-windows@1.0.0...
+2026-10-26T15:38:31.6264681Z aws-checksums:x64-windows@1.0.0 package ABI: 26395ac8476394bafadee3e1a0801901e08d47155913b00bc624480e88ac1dd1
+2026-10-26T15:38:31.6265449Z Building aws-checksums:x64-windows@1.0.0...
+2026-10-26T15:38:31.6784012Z Downloading https://github.com/awslabs/aws-checksums/archive/v1.0.0.tar.gz -> awslabs-aws-checksums-v1.0.0.tar.gz
+2026-10-26T15:38:32.2361716Z Successfully downloaded awslabs-aws-checksums-v1.0.0.tar.gz
+2026-10-26T15:38:32.2398136Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-checksums-v1.0.0.tar.gz
+2026-10-26T15:38:32.3807248Z -- Applying patch fix-cmake-config.patch
+2026-10-26T15:38:32.4190703Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-checksums/src/v1.0.0-a7abb87eb4.clean
+2026-10-26T15:38:32.4497297Z -- Configuring x64-windows
+2026-10-26T15:38:47.2169673Z -- Building x64-windows-dbg
+2026-10-26T15:38:50.0656393Z -- Building x64-windows-rel
+2026-10-26T15:38:52.5455572Z -- Performing post-build validation
+2026-10-26T15:38:52.5827147Z Starting submission of aws-checksums:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:38:52.5829128Z Elapsed time to handle aws-checksums:x64-windows: 21 s
+2026-10-26T15:38:52.5830572Z Completed submission of aws-c-common:x64-windows@1.0.0 to 1 binary cache(s) in 332 ms
+2026-10-26T15:38:52.5832207Z Installing 7/36 aws-c-sdkutils:x64-windows@1.0.0...
+2026-10-26T15:38:52.5833755Z aws-c-sdkutils:x64-windows@1.0.0 package ABI: 636abb97804991c9d963bc1a64b1819bb91edd7abaef24b9712333e77e080443
+2026-10-26T15:38:52.5835225Z Building aws-c-sdkutils:x64-windows@1.0.0...
+2026-10-26T15:38:52.6960505Z Downloading https://github.com/awslabs/aws-c-sdkutils/archive/v1.0.0.tar.gz -> awslabs-aws-c-sdkutils-v1.0.0.tar.gz
+2026-10-26T15:38:53.2704984Z Successfully downloaded awslabs-aws-c-sdkutils-v1.0.0.tar.gz
+2026-10-26T15:38:53.2748707Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-sdkutils-v1.0.0.tar.gz
+2026-10-26T15:38:53.4442059Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-sdkutils/src/v1.0.0-4294c0ea17.clean
+2026-10-26T15:38:53.4782646Z -- Configuring x64-windows
+2026-10-26T15:38:57.4908430Z -- Building x64-windows-dbg
+2026-10-26T15:38:59.2790083Z -- Building x64-windows-rel
+2026-10-26T15:39:01.2402239Z -- Performing post-build validation
+2026-10-26T15:39:01.2814538Z Starting submission of aws-c-sdkutils:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:01.2815640Z Elapsed time to handle aws-c-sdkutils:x64-windows: 8.7 s
+2026-10-26T15:39:01.2816571Z Completed submission of aws-checksums:x64-windows@1.0.0 to 1 binary cache(s) in 221 ms
+2026-10-26T15:39:01.2817452Z Installing 8/36 aws-c-cal:x64-windows@1.0.0...
+2026-10-26T15:39:01.2818738Z aws-c-cal:x64-windows@1.0.0 package ABI: 25b9b2be59b4778b1d56f04f9e2e5b2277cbed764bba3529fb6772adf1366769
+2026-10-26T15:39:01.2819740Z Building aws-c-cal:x64-windows@1.0.0...
+2026-10-26T15:39:01.3547491Z Downloading https://github.com/awslabs/aws-c-cal/archive/v1.0.0.tar.gz -> awslabs-aws-c-cal-v1.0.0.tar.gz
+2026-10-26T15:39:01.8883155Z Successfully downloaded awslabs-aws-c-cal-v1.0.0.tar.gz
+2026-10-26T15:39:01.8980068Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-cal-v1.0.0.tar.gz
+2026-10-26T15:39:02.0748401Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-cal/src/v1.0.0-618a68f81e.clean
+2026-10-26T15:39:02.1102065Z -- Configuring x64-windows
+2026-10-26T15:39:07.7595110Z -- Building x64-windows-dbg
+2026-10-26T15:39:11.7024295Z -- Building x64-windows-rel
+2026-10-26T15:39:14.6521201Z -- Performing post-build validation
+2026-10-26T15:39:14.6748424Z Starting submission of aws-c-cal:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:14.6753735Z Elapsed time to handle aws-c-cal:x64-windows: 13 s
+2026-10-26T15:39:14.6758030Z Completed submission of aws-c-sdkutils:x64-windows@1.0.0 to 1 binary cache(s) in 254 ms
+2026-10-26T15:39:14.6760355Z Installing 9/36 aws-c-io:x64-windows@1.0.0...
+2026-10-26T15:39:14.6773765Z aws-c-io:x64-windows@1.0.0 package ABI: 3824f11ebfefc806c1c9d27fd46d45c1376e2ffd17874c0a201e2c913281c25a
+2026-10-26T15:39:14.6774994Z Building aws-c-io:x64-windows@1.0.0...
+2026-10-26T15:39:14.7565974Z Downloading https://github.com/awslabs/aws-c-io/archive/v1.0.0.tar.gz -> awslabs-aws-c-io-v1.0.0.tar.gz
+2026-10-26T15:39:15.2770220Z Successfully downloaded awslabs-aws-c-io-v1.0.0.tar.gz
+2026-10-26T15:39:15.2844494Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-io-v1.0.0.tar.gz
+2026-10-26T15:39:15.4791390Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-io/src/v1.0.0-272d151328.clean
+2026-10-26T15:39:15.5159156Z -- Configuring x64-windows
+2026-10-26T15:39:19.5249636Z -- Building x64-windows-dbg
+2026-10-26T15:39:24.2913322Z -- Building x64-windows-rel
+2026-10-26T15:39:29.8862202Z -- Performing post-build validation
+2026-10-26T15:39:29.9493706Z Starting submission of aws-c-io:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:29.9505776Z Elapsed time to handle aws-c-io:x64-windows: 15 s
+2026-10-26T15:39:29.9506721Z Completed submission of aws-c-cal:x64-windows@1.0.0 to 1 binary cache(s) in 232 ms
+2026-10-26T15:39:29.9507710Z Installing 10/36 aws-c-compression:x64-windows@1.0.0...
+2026-10-26T15:39:29.9508823Z aws-c-compression:x64-windows@1.0.0 package ABI: 33bfd203c378a54a054cc62db8f56083d4cdfd5256a3c69033bc7a90c0c22ebd
+2026-10-26T15:39:29.9510585Z Building aws-c-compression:x64-windows@1.0.0...
+2026-10-26T15:39:30.0193810Z Downloading https://github.com/awslabs/aws-c-compression/archive/v1.0.0.tar.gz -> awslabs-aws-c-compression-v1.0.0.tar.gz
+2026-10-26T15:39:30.4376178Z Successfully downloaded awslabs-aws-c-compression-v1.0.0.tar.gz
+2026-10-26T15:39:30.4406939Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-compression-v1.0.0.tar.gz
+2026-10-26T15:39:30.5802676Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-compression/src/v1.0.0-a07921bd96.clean
+2026-10-26T15:39:30.6115340Z -- Configuring x64-windows
+2026-10-26T15:39:33.3769577Z -- Building x64-windows-dbg
+2026-10-26T15:39:33.8350358Z -- Building x64-windows-rel
+2026-10-26T15:39:34.2441920Z -- Performing post-build validation
+2026-10-26T15:39:34.2662909Z Starting submission of aws-c-compression:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:34.2664131Z Elapsed time to handle aws-c-compression:x64-windows: 4.3 s
+2026-10-26T15:39:34.2664885Z Completed submission of aws-c-io:x64-windows@1.0.0 to 1 binary cache(s) in 356 ms
+2026-10-26T15:39:34.2665805Z Installing 11/36 aws-c-http:x64-windows@1.0.0...
+2026-10-26T15:39:34.2667557Z aws-c-http:x64-windows@1.0.0 package ABI: 53caf0593aeb5200d3ea9ff15a986e945d956c3bf47c94613caca94128082393
+2026-10-26T15:39:34.2668415Z Building aws-c-http:x64-windows@1.0.0...
+2026-10-26T15:39:34.3198645Z Downloading https://github.com/awslabs/aws-c-http/archive/v1.0.0.tar.gz -> awslabs-aws-c-http-v1.0.0.tar.gz
+2026-10-26T15:39:34.8858467Z Successfully downloaded awslabs-aws-c-http-v1.0.0.tar.gz
+2026-10-26T15:39:34.8906143Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-http-v1.0.0.tar.gz
+2026-10-26T15:39:35.0539474Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-http/src/v1.0.0-aa92b1f10b.clean
+2026-10-26T15:39:35.0830674Z -- Configuring x64-windows
+2026-10-26T15:39:37.7198129Z -- Building x64-windows-dbg
+2026-10-26T15:39:39.7572087Z -- Building x64-windows-rel
+2026-10-26T15:39:42.9950316Z -- Performing post-build validation
+2026-10-26T15:39:43.0396320Z Starting submission of aws-c-http:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:43.0397352Z Elapsed time to handle aws-c-http:x64-windows: 8.8 s
+2026-10-26T15:39:43.0398126Z Completed submission of aws-c-compression:x64-windows@1.0.0 to 1 binary cache(s) in 132 ms
+2026-10-26T15:39:43.0398882Z Installing 12/36 aws-c-auth:x64-windows@1.0.0...
+2026-10-26T15:39:43.0399933Z aws-c-auth:x64-windows@1.0.0 package ABI: 1b0a170a556bac26cb82ae476651e38773eaf549b1e268b517588a72803badef
+2026-10-26T15:39:43.0400915Z Building aws-c-auth:x64-windows@1.0.0...
+2026-10-26T15:39:43.0939231Z Downloading https://github.com/awslabs/aws-c-auth/archive/v1.0.0.tar.gz -> awslabs-aws-c-auth-v1.0.0.tar.gz
+2026-10-26T15:39:43.5758232Z Successfully downloaded awslabs-aws-c-auth-v1.0.0.tar.gz
+2026-10-26T15:39:43.5798267Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-auth-v1.0.0.tar.gz
+2026-10-26T15:39:43.8885697Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-auth/src/v1.0.0-c25bc91031.clean
+2026-10-26T15:39:43.9174040Z -- Configuring x64-windows
+2026-10-26T15:39:46.6226789Z -- Building x64-windows-dbg
+2026-10-26T15:39:50.0944678Z -- Building x64-windows-rel
+2026-10-26T15:39:53.6004169Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/aws-c-auth_x64-windows/share/aws-c-auth/copyright
+2026-10-26T15:39:53.6075817Z -- Performing post-build validation
+2026-10-26T15:39:53.6422795Z Starting submission of aws-c-auth:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:39:53.6423640Z Elapsed time to handle aws-c-auth:x64-windows: 11 s
+2026-10-26T15:39:53.6424321Z Completed submission of aws-c-http:x64-windows@1.0.0 to 1 binary cache(s) in 299 ms
+2026-10-26T15:39:53.6425008Z Installing 13/36 aws-c-s3:x64-windows@1.1.2...
+2026-10-26T15:39:53.6425793Z aws-c-s3:x64-windows@1.1.2 package ABI: f1b3c6805ed4169cba7b0b0ef0d3667e41aac3933f5a4192ebcdafc555499ae3
+2026-10-26T15:39:53.6426576Z Building aws-c-s3:x64-windows@1.1.2...
+2026-10-26T15:39:53.6950891Z Downloading https://github.com/awslabs/aws-c-s3/archive/v1.1.2.tar.gz -> awslabs-aws-c-s3-v1.1.2.tar.gz
+2026-10-26T15:39:54.2686112Z Successfully downloaded awslabs-aws-c-s3-v1.1.2.tar.gz
+2026-10-26T15:39:54.2731913Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-s3-v1.1.2.tar.gz
+2026-10-26T15:39:54.4445326Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-s3/src/v1.1.2-dedd2426a5.clean
+2026-10-26T15:39:54.4737408Z -- Configuring x64-windows
+2026-10-26T15:39:57.3563125Z -- Building x64-windows-dbg
+2026-10-26T15:39:59.5594569Z -- Building x64-windows-rel
+2026-10-26T15:40:02.4309111Z -- Performing post-build validation
+2026-10-26T15:40:02.4596428Z Starting submission of aws-c-s3:x64-windows@1.1.2 to 1 binary cache(s) in the background
+2026-10-26T15:40:02.4597215Z Elapsed time to handle aws-c-s3:x64-windows: 8.8 s
+2026-10-26T15:40:02.4598141Z Completed submission of aws-c-auth:x64-windows@1.0.0 to 1 binary cache(s) in 252 ms
+2026-10-26T15:40:02.4598705Z Installing 14/36 aws-c-mqtt:x64-windows@1.0.0...
+2026-10-26T15:40:02.4599309Z aws-c-mqtt:x64-windows@1.0.0 package ABI: 6d4919883138856f7c491776782dd3465d9b8945806604af7bf46d1bf5d601ac
+2026-10-26T15:40:02.4600447Z Building aws-c-mqtt:x64-windows@1.0.0...
+2026-10-26T15:40:02.5128723Z Downloading https://github.com/awslabs/aws-c-mqtt/archive/v1.0.0.tar.gz -> awslabs-aws-c-mqtt-v1.0.0.tar.gz
+2026-10-26T15:40:03.0786125Z Successfully downloaded awslabs-aws-c-mqtt-v1.0.0.tar.gz
+2026-10-26T15:40:03.0831033Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-mqtt-v1.0.0.tar.gz
+2026-10-26T15:40:03.2436265Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-mqtt/src/v1.0.0-8b8ac2885b.clean
+2026-10-26T15:40:03.2726859Z -- Configuring x64-windows
+2026-10-26T15:40:05.9299907Z -- Building x64-windows-dbg
+2026-10-26T15:40:07.9860906Z -- Building x64-windows-rel
+2026-10-26T15:40:11.4241371Z -- Performing post-build validation
+2026-10-26T15:40:11.4671692Z Starting submission of aws-c-mqtt:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:40:11.4672733Z Elapsed time to handle aws-c-mqtt:x64-windows: 9 s
+2026-10-26T15:40:11.4673865Z Completed submission of aws-c-s3:x64-windows@1.1.2 to 1 binary cache(s) in 253 ms
+2026-10-26T15:40:11.4675087Z Installing 15/36 aws-c-event-stream:x64-windows@1.0.0...
+2026-10-26T15:40:11.4676332Z aws-c-event-stream:x64-windows@1.0.0 package ABI: 0f0e7a8c8371b518c79efa85be43e1548453e16e150d47729f7ac9de8285a28b
+2026-10-26T15:40:11.4677882Z Building aws-c-event-stream:x64-windows@1.0.0...
+2026-10-26T15:40:11.5236585Z Downloading https://github.com/awslabs/aws-c-event-stream/archive/v1.0.0.tar.gz -> awslabs-aws-c-event-stream-v1.0.0.tar.gz
+2026-10-26T15:40:11.9646898Z Successfully downloaded awslabs-aws-c-event-stream-v1.0.0.tar.gz
+2026-10-26T15:40:11.9678451Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-c-event-stream-v1.0.0.tar.gz
+2026-10-26T15:40:12.1061746Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-c-event-stream/src/v1.0.0-12b3161c1e.clean
+2026-10-26T15:40:12.1362062Z -- Configuring x64-windows
+2026-10-26T15:40:14.8035644Z -- Building x64-windows-dbg
+2026-10-26T15:40:15.4378797Z -- Building x64-windows-rel
+2026-10-26T15:40:16.3527723Z -- Performing post-build validation
+2026-10-26T15:40:16.4037246Z Starting submission of aws-c-event-stream:x64-windows@1.0.0 to 1 binary cache(s) in the background
+2026-10-26T15:40:16.4038367Z Elapsed time to handle aws-c-event-stream:x64-windows: 4.9 s
+2026-10-26T15:40:16.4039069Z Completed submission of aws-c-mqtt:x64-windows@1.0.0 to 1 binary cache(s) in 295 ms
+2026-10-26T15:40:16.4039730Z Installing 16/36 aws-crt-cpp:x64-windows@0.43.4...
+2026-10-26T15:40:16.4040748Z aws-crt-cpp:x64-windows@0.43.4 package ABI: e2f2c600feb604465a724aee3d2ccb721c7e49f4f3ced508211f0fda4b0d22be
+2026-10-26T15:40:16.4041519Z Building aws-crt-cpp:x64-windows@0.43.4...
+2026-10-26T15:40:16.4683721Z Downloading https://github.com/awslabs/aws-crt-cpp/archive/v0.43.4.tar.gz -> awslabs-aws-crt-cpp-v0.43.4.tar.gz
+2026-10-26T15:40:16.9037307Z Successfully downloaded awslabs-aws-crt-cpp-v0.43.4.tar.gz
+2026-10-26T15:40:16.9079760Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/awslabs-aws-crt-cpp-v0.43.4.tar.gz
+2026-10-26T15:40:17.1054336Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-crt-cpp/src/v0.43.4-13f4b9b6d2.clean
+2026-10-26T15:40:17.1337470Z -- Configuring x64-windows-dbg
+2026-10-26T15:40:19.2427708Z -- Configuring x64-windows-rel
+2026-10-26T15:40:21.2963592Z -- Building x64-windows-dbg
+2026-10-26T15:40:46.1271559Z -- Building x64-windows-rel
+2026-10-26T15:41:27.3365980Z -- Performing post-build validation
+2026-10-26T15:41:27.3996328Z Starting submission of aws-crt-cpp:x64-windows@0.43.4 to 1 binary cache(s) in the background
+2026-10-26T15:41:27.3998101Z Elapsed time to handle aws-crt-cpp:x64-windows: 1.2 min
+2026-10-26T15:41:27.3999369Z Completed submission of aws-c-event-stream:x64-windows@1.0.0 to 1 binary cache(s) in 162 ms
+2026-10-26T15:41:27.4000951Z Installing 17/36 aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880...
+2026-10-26T15:41:27.4003374Z aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880 package ABI: e8ec7e1aa2d1ae22ff7b9112687bc4de960cc37af1954c7528d50e5ec977f01a
+2026-10-26T15:41:27.4005719Z Building aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880...
+2026-10-26T15:41:27.4490618Z CMake Warning at scripts/cmake/vcpkg_buildpath_length_warning.cmake:4 (message):
+2026-10-26T15:41:27.4491768Z   aws-sdk-cpp's buildsystem uses very long paths and may fail on your system.
+2026-10-26T15:41:27.4492307Z 
+2026-10-26T15:41:27.4492713Z   We recommend moving vcpkg to a short path such as 'C:\src\vcpkg' or using
+2026-10-26T15:41:27.4494018Z   the subst command.
+2026-10-26T15:41:27.4494473Z Call Stack (most recent call first):
+2026-10-26T15:41:27.4495594Z   buildtrees/versioning_/versions/aws-sdk-cpp/16847bf67e10d1ed8c0db3849296eab981429ff3/portfile.cmake:1 (vcpkg_buildpath_length_warning)
+2026-10-26T15:41:27.4496328Z   scripts/ports.cmake:209 (include)
+2026-10-26T15:41:27.4496556Z 
+2026-10-26T15:41:27.4496561Z 
+2026-10-26T15:41:27.4635365Z Downloading https://github.com/aws/aws-sdk-cpp/archive/1.11.880.tar.gz -> aws-aws-sdk-cpp-1.11.880.tar.gz
+2026-10-26T15:41:48.1735059Z Successfully downloaded aws-aws-sdk-cpp-1.11.880.tar.gz
+2026-10-26T15:41:48.5021231Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/aws-aws-sdk-cpp-1.11.880.tar.gz
+2026-10-26T15:42:30.2748623Z -- Applying patch fix-aws-root.patch
+2026-10-26T15:42:30.3135631Z -- Applying patch lock-curl-http-and-tls-settings.patch
+2026-10-26T15:42:30.3515357Z -- Applying patch fix_find_curl.patch
+2026-10-26T15:42:30.3909650Z -- Applying patch find-dependency.patch
+2026-10-26T15:42:30.4303287Z -- Applying patch configure-binary-dir.patch
+2026-10-26T15:42:30.6352839Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/aws-sdk-cpp/src/1.11.880-77291d0f48.clean
+2026-10-26T15:42:30.6670374Z -- Configuring x64-windows
+2026-10-26T15:42:38.9943128Z -- Building x64-windows-dbg
+2026-10-26T15:43:39.5614052Z -- Building x64-windows-rel
+2026-10-26T15:46:32.0801010Z -- Performing post-build validation
+2026-10-26T15:46:32.6845240Z Starting submission of aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880 to 1 binary cache(s) in the background
+2026-10-26T15:46:32.6847244Z Elapsed time to handle aws-sdk-cpp:x64-windows: 5.1 min
+2026-10-26T15:46:32.6848345Z Completed submission of aws-crt-cpp:x64-windows@0.43.4 to 1 binary cache(s) in 1.5 s
+2026-10-26T15:46:32.6849728Z Installing 18/36 blake3:x64-windows@1.8.7...
+2026-10-26T15:46:32.6852050Z blake3:x64-windows@1.8.7 package ABI: 2e1807471b09f1244d6c27fc5dd80c93d960dbe47efd89ce7bbb4e9388120915
+2026-10-26T15:46:32.6853052Z Building blake3:x64-windows@1.8.7...
+2026-10-26T15:46:32.7365582Z Downloading https://github.com/BLAKE3-team/BLAKE3/archive/1.8.7.tar.gz -> BLAKE3-team-BLAKE3-1.8.7.tar.gz
+2026-10-26T15:46:33.2298817Z Successfully downloaded BLAKE3-team-BLAKE3-1.8.7.tar.gz
+2026-10-26T15:46:33.2391011Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/BLAKE3-team-BLAKE3-1.8.7.tar.gz
+2026-10-26T15:46:33.4092057Z -- Applying patch fix-windows-arm-build-error.patch
+2026-10-26T15:46:33.4723981Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/blake3/src/1.8.7-873bea20a9.clean
+2026-10-26T15:46:33.5316048Z -- Configuring x64-windows
+2026-10-26T15:46:39.7745647Z -- Building x64-windows-dbg
+2026-10-26T15:46:40.7837183Z -- Building x64-windows-rel
+2026-10-26T15:46:44.7628894Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/blake3_x64-windows/lib/pkgconfig/libblake3.pc
+2026-10-26T15:46:44.7736640Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:46:44.7814432Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:46:44.7818776Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:46:44.7911878Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/blake3_x64-windows/debug/lib/pkgconfig/libblake3.pc
+2026-10-26T15:46:44.8081528Z -- Performing post-build validation
+2026-10-26T15:46:44.8564065Z Starting submission of blake3:x64-windows@1.8.7 to 1 binary cache(s) in the background
+2026-10-26T15:46:44.8565213Z Elapsed time to handle blake3:x64-windows: 12 s
+2026-10-26T15:46:44.8566955Z Completed submission of aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:x64-windows@1.11.880 to 1 binary cache(s) in 10 s
+2026-10-26T15:46:44.8568461Z Installing 19/36 vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+2026-10-26T15:46:44.8569947Z vcpkg-cmake-get-vars:x64-windows@2025-05-29 package ABI: 149fabc961cab94d53d93f7d4893516c4ca5d87e016773a189ff318d9d275970
+2026-10-26T15:46:44.8571402Z Building vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+2026-10-26T15:46:44.8963640Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake
+2026-10-26T15:46:44.8970116Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars
+2026-10-26T15:46:44.8980350Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt
+2026-10-26T15:46:44.8988625Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake-get-vars.cmake.in
+2026-10-26T15:46:44.8995072Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg-port-config.cmake
+2026-10-26T15:46:44.9001823Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/copyright
+2026-10-26T15:46:44.9062010Z -- Performing post-build validation
+2026-10-26T15:46:44.9394231Z Starting submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in the background
+2026-10-26T15:46:44.9395828Z Elapsed time to handle vcpkg-cmake-get-vars:x64-windows: 83 ms
+2026-10-26T15:46:44.9397120Z Completed submission of blake3:x64-windows@1.8.7 to 1 binary cache(s) in 76 ms
+2026-10-26T15:46:44.9398224Z Installing 20/36 openssl:x64-windows@3.6.4...
+2026-10-26T15:46:44.9399540Z openssl:x64-windows@3.6.4 package ABI: 3d3edc294c95c42546586a6cb526f033699bf2ffea8584bb3e58df11a5710501
+2026-10-26T15:46:44.9400876Z Building openssl:x64-windows@3.6.4...
+2026-10-26T15:46:44.9920128Z Downloading https://github.com/openssl/openssl/archive/openssl-3.6.4.tar.gz -> openssl-openssl-openssl-3.6.4.tar.gz
+2026-10-26T15:46:46.3794634Z Successfully downloaded openssl-openssl-openssl-3.6.4.tar.gz
+2026-10-26T15:46:46.5848729Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/openssl-openssl-openssl-3.6.4.tar.gz
+2026-10-26T15:46:48.5512885Z -- Applying patch cmake-config.patch
+2026-10-26T15:46:48.5905264Z -- Applying patch command-line-length.patch
+2026-10-26T15:46:48.6278539Z -- Applying patch script-prefix.patch
+2026-10-26T15:46:48.6652195Z -- Applying patch windows/install-layout.patch
+2026-10-26T15:46:48.7028066Z -- Applying patch windows/install-pdbs.patch
+2026-10-26T15:46:48.7417234Z -- Applying patch windows/install-programs.diff
+2026-10-26T15:46:48.7796974Z -- Applying patch unix/android-cc.patch
+2026-10-26T15:46:48.8174268Z -- Applying patch unix/move-openssldir.patch
+2026-10-26T15:46:48.8561249Z -- Applying patch unix/no-empty-dirs.patch
+2026-10-26T15:46:48.9350764Z -- Applying patch unix/no-static-libs-for-shared.patch
+2026-10-26T15:46:48.9784014Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/openssl/src/nssl-3.6.4-c134d64f50.clean
+2026-10-26T15:46:49.0068803Z -- Getting CMake variables for x64-windows
+2026-10-26T15:46:50.5407584Z -- Loading CMake variables from D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/openssl/cmake-get-vars_C_CXX-x64-windows.cmake.log
+2026-10-26T15:46:50.5578168Z Downloading https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/SP_54221_64bit/strawberry-perl-5.42.2.1-64bit-portable.zip -> strawberry-perl-5.42.2.1-64bit-portable.zip
+2026-10-26T15:46:52.3689567Z Successfully downloaded strawberry-perl-5.42.2.1-64bit-portable.zip
+2026-10-26T15:47:00.0944634Z Downloading nasm-3.01-win64.zip, trying https://www.nasm.us/pub/nasm/releasebuilds/3.01/win64/nasm-3.01-win64.zip
+2026-10-26T15:47:00.2498014Z Successfully downloaded nasm-3.01-win64.zip
+2026-10-26T15:47:00.4188855Z -- Getting CMake variables for x64-windows
+2026-10-26T15:47:02.0623135Z Downloading jom_1_1_7.zip, trying https://download.qt.io/official_releases/jom/jom_1_1_7.zip
+2026-10-26T15:47:03.4340831Z Successfully downloaded jom_1_1_7.zip
+2026-10-26T15:47:07.0595245Z -- Prerunning x64-windows-dbg
+2026-10-26T15:47:25.8502317Z -- Building x64-windows-dbg
+2026-10-26T15:51:01.3852210Z -- Prerunning x64-windows-rel
+2026-10-26T15:51:20.0257491Z -- Building x64-windows-rel
+2026-10-26T15:55:35.9929769Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/lib/pkgconfig/libcrypto.pc
+2026-10-26T15:55:35.9936993Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/lib/pkgconfig/libssl.pc
+2026-10-26T15:55:35.9944525Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/lib/pkgconfig/openssl.pc
+2026-10-26T15:55:36.0051257Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:55:36.0129350Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:55:36.0133836Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:55:36.0391528Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/debug/lib/pkgconfig/libcrypto.pc
+2026-10-26T15:55:36.0397777Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/debug/lib/pkgconfig/libssl.pc
+2026-10-26T15:55:36.0403914Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/debug/lib/pkgconfig/openssl.pc
+2026-10-26T15:55:36.0649670Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/share/openssl/usage
+2026-10-26T15:55:36.0662581Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/openssl_x64-windows/share/openssl/copyright
+2026-10-26T15:55:36.0743377Z -- Performing post-build validation
+2026-10-26T15:55:36.2145983Z Starting submission of openssl:x64-windows@3.6.4 to 1 binary cache(s) in the background
+2026-10-26T15:55:36.2147045Z Elapsed time to handle openssl:x64-windows: 8.9 min
+2026-10-26T15:55:36.2148145Z Completed submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in 63.7 ms
+2026-10-26T15:55:36.2149388Z Installing 21/36 libssh2[core,openssl,zlib]:x64-windows@1.11.1#3...
+2026-10-26T15:55:36.2150882Z libssh2[core,openssl,zlib]:x64-windows@1.11.1#3 package ABI: 7eda4547f2f2181c6879b1becd168918c3cbb554d3c650e42372431dcef741fd
+2026-10-26T15:55:36.2152187Z Building libssh2[core,openssl,zlib]:x64-windows@1.11.1#3...
+2026-10-26T15:55:36.2709109Z Downloading https://github.com/libssh2/libssh2/archive/libssh2-1.11.1.tar.gz -> libssh2-libssh2-libssh2-1.11.1.tar.gz
+2026-10-26T15:55:36.7825874Z Successfully downloaded libssh2-libssh2-libssh2-1.11.1.tar.gz
+2026-10-26T15:55:36.8026352Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/libssh2-libssh2-libssh2-1.11.1.tar.gz
+2026-10-26T15:55:37.0817195Z -- Applying patch cmake-config.diff
+2026-10-26T15:55:37.1555545Z -- Applying patch pkgconfig.diff
+2026-10-26T15:55:37.2221478Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/libssh2/src/sh2-1.11.1-63514a5168.clean
+2026-10-26T15:55:37.2403596Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:55:37.2574265Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:55:37.2580854Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:55:37.3411552Z -- Configuring x64-windows
+2026-10-26T15:55:39.3965261Z -- Building x64-windows-dbg
+2026-10-26T15:55:42.6732160Z -- Building x64-windows-rel
+2026-10-26T15:55:47.0427479Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libssh2_x64-windows/lib/pkgconfig/libssh2.pc
+2026-10-26T15:55:47.0530632Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libssh2_x64-windows/debug/lib/pkgconfig/libssh2.pc
+2026-10-26T15:55:47.1178356Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libssh2_x64-windows/share/libssh2/usage
+2026-10-26T15:55:47.1185896Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libssh2_x64-windows/share/libssh2/copyright
+2026-10-26T15:55:47.1262319Z -- Performing post-build validation
+2026-10-26T15:55:47.1588560Z Starting submission of libssh2[core,openssl,zlib]:x64-windows@1.11.1#3 to 1 binary cache(s) in the background
+2026-10-26T15:55:47.1590184Z Elapsed time to handle libssh2:x64-windows: 11 s
+2026-10-26T15:55:47.1591373Z Completed submission of openssl:x64-windows@3.6.4 to 1 binary cache(s) in 5.4 s
+2026-10-26T15:55:47.1592559Z Installing 22/36 nghttp2:x64-windows@1.70.0...
+2026-10-26T15:55:47.1593931Z nghttp2:x64-windows@1.70.0 package ABI: 2bcaaba8e8cb2aee301efe4520da45b93a1930eabb3169f3c5af28bd1c90aa4a
+2026-10-26T15:55:47.1595863Z Building nghttp2:x64-windows@1.70.0...
+2026-10-26T15:55:47.2193484Z Downloading https://github.com/nghttp2/nghttp2/archive/v1.70.0.tar.gz -> nghttp2-nghttp2-v1.70.0.tar.gz
+2026-10-26T15:55:47.6837647Z Successfully downloaded nghttp2-nghttp2-v1.70.0.tar.gz
+2026-10-26T15:55:47.6901817Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/nghttp2-nghttp2-v1.70.0.tar.gz
+2026-10-26T15:55:47.9466897Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/nghttp2/src/v1.70.0-0ffd05304e.clean
+2026-10-26T15:55:47.9788228Z -- Configuring x64-windows
+2026-10-26T15:55:56.1312698Z -- Building x64-windows-dbg
+2026-10-26T15:55:57.4174778Z -- Building x64-windows-rel
+2026-10-26T15:55:59.7712724Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/nghttp2_x64-windows/lib/pkgconfig/libnghttp2.pc
+2026-10-26T15:55:59.7823911Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:55:59.7903504Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:55:59.7911374Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:55:59.8018022Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/nghttp2_x64-windows/debug/lib/pkgconfig/libnghttp2.pc
+2026-10-26T15:55:59.8154278Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/nghttp2_x64-windows/share/nghttp2/copyright
+2026-10-26T15:55:59.8243840Z -- Performing post-build validation
+2026-10-26T15:55:59.8591922Z Starting submission of nghttp2:x64-windows@1.70.0 to 1 binary cache(s) in the background
+2026-10-26T15:55:59.8593676Z Elapsed time to handle nghttp2:x64-windows: 13 s
+2026-10-26T15:55:59.8594737Z Completed submission of libssh2[core,openssl,zlib]:x64-windows@1.11.1#3 to 1 binary cache(s) in 239 ms
+2026-10-26T15:55:59.8595769Z Installing 23/36 brotli:x64-windows@1.2.0...
+2026-10-26T15:55:59.8596940Z brotli:x64-windows@1.2.0 package ABI: b099ec5d5e7f4dcdaa58cbce4989f40b8c829cf0c9076bfb46ce3f08708dd81c
+2026-10-26T15:55:59.8597971Z Building brotli:x64-windows@1.2.0...
+2026-10-26T15:55:59.9099769Z Downloading https://github.com/google/brotli/archive/v1.2.0.tar.gz -> google-brotli-v1.2.0.tar.gz
+2026-10-26T15:56:00.3787244Z Successfully downloaded google-brotli-v1.2.0.tar.gz
+2026-10-26T15:56:00.3863013Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/google-brotli-v1.2.0.tar.gz
+2026-10-26T15:56:00.5599325Z -- Applying patch install.patch
+2026-10-26T15:56:00.5972189Z -- Applying patch pkgconfig.patch
+2026-10-26T15:56:00.6337877Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/brotli/src/v1.2.0-7af7ca71ad.clean
+2026-10-26T15:56:00.6612561Z -- Configuring x64-windows
+2026-10-26T15:56:02.0634461Z -- Building x64-windows-dbg
+2026-10-26T15:56:04.4965843Z -- Building x64-windows-rel
+2026-10-26T15:56:13.6876374Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/lib/pkgconfig/libbrotlicommon.pc
+2026-10-26T15:56:13.6883276Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/lib/pkgconfig/libbrotlidec.pc
+2026-10-26T15:56:13.6889856Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/lib/pkgconfig/libbrotlienc.pc
+2026-10-26T15:56:13.6997624Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:56:13.7075632Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:56:13.7080297Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:56:13.7325667Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/debug/lib/pkgconfig/libbrotlicommon.pc
+2026-10-26T15:56:13.7332519Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/debug/lib/pkgconfig/libbrotlidec.pc
+2026-10-26T15:56:13.7339152Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/debug/lib/pkgconfig/libbrotlienc.pc
+2026-10-26T15:56:13.8296703Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/share/brotli/usage
+2026-10-26T15:56:13.8302740Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/brotli_x64-windows/share/brotli/copyright
+2026-10-26T15:56:13.8375134Z -- Performing post-build validation
+2026-10-26T15:56:13.8828933Z Starting submission of brotli:x64-windows@1.2.0 to 1 binary cache(s) in the background
+2026-10-26T15:56:13.8829621Z Elapsed time to handle brotli:x64-windows: 14 s
+2026-10-26T15:56:13.8830216Z Completed submission of nghttp2:x64-windows@1.70.0 to 1 binary cache(s) in 203 ms
+2026-10-26T15:56:13.8831007Z Installing 24/36 curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1...
+2026-10-26T15:56:13.8832116Z curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1 package ABI: 3ff58b452f190df1c188adc1946e964e1f5b27d15d85f142f4d4fef0d3647682
+2026-10-26T15:56:13.8833224Z Building curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1...
+2026-10-26T15:56:13.9346968Z Downloading https://github.com/curl/curl/archive/curl-8_22_0.tar.gz -> curl-curl-curl-8_22_0.tar.gz
+2026-10-26T15:56:14.5538594Z Successfully downloaded curl-curl-curl-8_22_0.tar.gz
+2026-10-26T15:56:14.5699980Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/curl-curl-curl-8_22_0.tar.gz
+2026-10-26T15:56:15.6602918Z -- Applying patch dependencies.patch
+2026-10-26T15:56:15.7116700Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/curl/src/url-8_22_0-48214b4564.clean
+2026-10-26T15:56:15.7254465Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:56:15.7333956Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:56:15.7338172Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:56:15.7698247Z -- Configuring x64-windows
+2026-10-26T15:56:19.9401180Z -- Building x64-windows-dbg
+2026-10-26T15:56:39.3485841Z -- Building x64-windows-rel
+2026-10-26T15:57:04.5336852Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/curl_x64-windows/lib/pkgconfig/libcurl.pc
+2026-10-26T15:57:04.5483102Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/curl_x64-windows/debug/lib/pkgconfig/libcurl.pc
+2026-10-26T15:57:04.5715435Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/curl_x64-windows/share/curl/vcpkg-cmake-wrapper.cmake
+2026-10-26T15:57:04.5721850Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/curl_x64-windows/share/curl/usage
+2026-10-26T15:57:04.5804554Z -- Performing post-build validation
+2026-10-26T15:57:04.6438693Z Starting submission of curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1 to 1 binary cache(s) in the background
+2026-10-26T15:57:04.6440045Z Elapsed time to handle curl:x64-windows: 51 s
+2026-10-26T15:57:04.6440724Z Completed submission of brotli:x64-windows@1.2.0 to 1 binary cache(s) in 346 ms
+2026-10-26T15:57:04.6441385Z Installing 25/36 ftxui:x64-windows@7.0.3...
+2026-10-26T15:57:04.6442134Z ftxui:x64-windows@7.0.3 package ABI: b97c23f39da0c5356ceeb949a3355070e200bb5a671db0fa8d03be64d7c660a7
+2026-10-26T15:57:04.6442916Z Building ftxui:x64-windows@7.0.3...
+2026-10-26T15:57:04.6841862Z -- Note: ftxui only supports static library linkage. Building static library.
+2026-10-26T15:57:04.6964037Z Downloading https://github.com/ArthurSonzogni/FTXUI/archive/v7.0.3.tar.gz -> ArthurSonzogni-FTXUI-v7.0.3.tar.gz
+2026-10-26T15:57:05.2532343Z Successfully downloaded ArthurSonzogni-FTXUI-v7.0.3.tar.gz
+2026-10-26T15:57:05.2573256Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/ArthurSonzogni-FTXUI-v7.0.3.tar.gz
+2026-10-26T15:57:05.4712193Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/ftxui/src/v7.0.3-9de044d280.clean
+2026-10-26T15:57:05.5008994Z -- Configuring x64-windows
+2026-10-26T15:57:06.6171685Z -- Building x64-windows-dbg
+2026-10-26T15:57:41.0551682Z -- Building x64-windows-rel
+2026-10-26T15:58:29.1750864Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/ftxui_x64-windows/lib/pkgconfig/ftxui.pc
+2026-10-26T15:58:29.1859761Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:58:29.1938688Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:58:29.1943328Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:58:29.2035130Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/ftxui_x64-windows/debug/lib/pkgconfig/ftxui.pc
+2026-10-26T15:58:29.2169029Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/ftxui_x64-windows/share/ftxui/copyright
+2026-10-26T15:58:29.2238907Z -- Performing post-build validation
+2026-10-26T15:58:29.3965412Z Starting submission of ftxui:x64-windows@7.0.3 to 1 binary cache(s) in the background
+2026-10-26T15:58:29.3966471Z Elapsed time to handle ftxui:x64-windows: 1.4 min
+2026-10-26T15:58:29.3967997Z Completed submission of curl[brotli,core,http2,non-http,openssl,ssh,ssl,sspi]:x64-windows@8.22.0#1 to 1 binary cache(s) in 611 ms
+2026-10-26T15:58:29.3969937Z Installing 26/36 libspng:x64-windows@0.7.4#1...
+2026-10-26T15:58:29.3971081Z libspng:x64-windows@0.7.4#1 package ABI: 3b227acab61c68a671a4e847f4f1d14c1382f2a22f712071b8bf0988fb606a78
+2026-10-26T15:58:29.3972161Z Building libspng:x64-windows@0.7.4#1...
+2026-10-26T15:58:29.4476701Z Downloading https://github.com/randy408/libspng/archive/v0.7.4.tar.gz -> randy408-libspng-v0.7.4.tar.gz
+2026-10-26T15:58:29.9545524Z Successfully downloaded randy408-libspng-v0.7.4.tar.gz
+2026-10-26T15:58:29.9672994Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/randy408-libspng-v0.7.4.tar.gz
+2026-10-26T15:58:30.1694158Z -- Applying patch fix-spngconfig-cmake.patch
+2026-10-26T15:58:30.2462361Z -- Applying patch libspng-pr-286.diff
+2026-10-26T15:58:30.3144391Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/libspng/src/v0.7.4-2d78cb2862.clean
+2026-10-26T15:58:30.3790142Z -- Configuring x64-windows
+2026-10-26T15:58:32.1195065Z -- Building x64-windows-dbg
+2026-10-26T15:58:32.8298449Z -- Building x64-windows-rel
+2026-10-26T15:58:34.8025979Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libspng_x64-windows/lib/pkgconfig/spng.pc
+2026-10-26T15:58:34.8245238Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:58:34.8437747Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:58:34.8443479Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:58:34.8617414Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libspng_x64-windows/debug/lib/pkgconfig/spng.pc
+2026-10-26T15:58:34.8917657Z -- Performing post-build validation
+2026-10-26T15:58:34.9341669Z Starting submission of libspng:x64-windows@0.7.4#1 to 1 binary cache(s) in the background
+2026-10-26T15:58:34.9342662Z Elapsed time to handle libspng:x64-windows: 5.5 s
+2026-10-26T15:58:34.9343408Z Installing 27/36 libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1...
+2026-10-26T15:58:34.9344936Z libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1 package ABI: d14a6d7e82e4ce7804b2af7500c504641ee1a0751b2cc089b965d29c91a611f8
+2026-10-26T15:58:34.9346095Z Building libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1...
+2026-10-26T15:58:35.0086033Z Downloading https://github.com/libjpeg-turbo/libjpeg-turbo/archive/3.2.0.tar.gz -> libjpeg-turbo-libjpeg-turbo-3.2.0.tar.gz
+2026-10-26T15:58:35.5396413Z Successfully downloaded libjpeg-turbo-libjpeg-turbo-3.2.0.tar.gz
+2026-10-26T15:58:35.5871113Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/libjpeg-turbo-libjpeg-turbo-3.2.0.tar.gz
+2026-10-26T15:58:35.9544607Z -- Applying patch add-options-for-docs-headers.patch
+2026-10-26T15:58:36.0068499Z -- Applying patch workaround_cmake_system_processor.patch
+2026-10-26T15:58:36.0535760Z -- Applying patch system-dependency-fixes-pr-901.patch
+2026-10-26T15:58:36.1039494Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/libjpeg-turbo/src/3.2.0-6292819c57.clean
+2026-10-26T15:58:36.1392254Z -- Configuring x64-windows
+2026-10-26T15:58:41.0484005Z -- Building x64-windows-dbg
+2026-10-26T15:58:48.5132290Z -- Building x64-windows-rel
+2026-10-26T15:59:12.6920337Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libjpeg-turbo_x64-windows/lib/pkgconfig/libjpeg.pc
+2026-10-26T15:59:12.6927049Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libjpeg-turbo_x64-windows/lib/pkgconfig/libturbojpeg.pc
+2026-10-26T15:59:12.7036660Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:59:12.7115924Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:59:12.7120829Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:59:12.7298906Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libjpeg-turbo_x64-windows/debug/lib/pkgconfig/libjpeg.pc
+2026-10-26T15:59:12.7305819Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libjpeg-turbo_x64-windows/debug/lib/pkgconfig/libturbojpeg.pc
+2026-10-26T15:59:12.7646180Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libjpeg-turbo_x64-windows/share/libjpeg-turbo/copyright
+2026-10-26T15:59:12.7718036Z -- Performing post-build validation
+2026-10-26T15:59:12.8235267Z Starting submission of libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1 to 1 binary cache(s) in the background
+2026-10-26T15:59:12.8236164Z Elapsed time to handle libjpeg-turbo:x64-windows: 38 s
+2026-10-26T15:59:12.8236799Z Completed submission of ftxui:x64-windows@7.0.3 to 1 binary cache(s) in 6.9 s
+2026-10-26T15:59:12.8237552Z Completed submission of libspng:x64-windows@0.7.4#1 to 1 binary cache(s) in 196 ms
+2026-10-26T15:59:12.8238219Z Installing 28/36 vcpkg-tool-meson:x64-windows@1.9.0#10...
+2026-10-26T15:59:12.8238999Z vcpkg-tool-meson:x64-windows@1.9.0#10 package ABI: 09ac2bb2dbf5904da6740f6946b0896d5fd2692aa8623dc1d378b85ce3dc93f0
+2026-10-26T15:59:12.8239956Z Building vcpkg-tool-meson:x64-windows@1.9.0#10...
+2026-10-26T15:59:12.8721963Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/copyright
+2026-10-26T15:59:12.9172349Z Downloading https://github.com/mesonbuild/meson/archive/1.9.0.tar.gz -> meson-1.9.0.tar.gz
+2026-10-26T15:59:13.3237005Z Successfully downloaded meson-1.9.0.tar.gz
+2026-10-26T15:59:13.4301364Z -- Applying patch D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/meson-intl.patch
+2026-10-26T15:59:13.4693237Z -- Applying patch D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/adjust-python-dep.patch
+2026-10-26T15:59:13.5112948Z -- Applying patch D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/adjust-args.patch
+2026-10-26T15:59:13.5499209Z -- Applying patch D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/remove-pkgconfig-specialization.patch
+2026-10-26T15:59:13.5880626Z -- Applying patch D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/vcpkg-tool-meson_x64-windows/share/vcpkg-tool-meson/meson-56879d5.diff
+2026-10-26T15:59:13.6538430Z Downloading https://www.python.org/ftp/python/3.14.2/python-3.14.2-embed-amd64.zip -> python-3.14.2-embed-amd64.zip
+2026-10-26T15:59:13.7798137Z Successfully downloaded python-3.14.2-embed-amd64.zip
+2026-10-26T15:59:14.0531507Z -- Found Python version '3.14.2 at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/python/python-3.14.2-x64-1/python.exe'
+2026-10-26T15:59:14.0533676Z -- Using meson: D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/meson-1.9.0-633807/meson.py
+2026-10-26T15:59:14.0597549Z -- Performing post-build validation
+2026-10-26T15:59:14.1034275Z Starting submission of vcpkg-tool-meson:x64-windows@1.9.0#10 to 1 binary cache(s) in the background
+2026-10-26T15:59:14.1035532Z Elapsed time to handle vcpkg-tool-meson:x64-windows: 1.3 s
+2026-10-26T15:59:14.1036687Z Completed submission of libjpeg-turbo[core,jpeg8]:x64-windows@3.2.0#1 to 1 binary cache(s) in 590 ms
+2026-10-26T15:59:14.1037817Z Installing 29/36 lcms:x64-windows@2.19.1#1...
+2026-10-26T15:59:14.1038894Z lcms:x64-windows@2.19.1#1 package ABI: d2dc4c3f24855585bdcecd05f95dfd5a3bd93feab38766428ee48b3b18ffafda
+2026-10-26T15:59:14.1039926Z Building lcms:x64-windows@2.19.1#1...
+2026-10-26T15:59:14.1573309Z -- Found Python version '3.14.2 at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/python/python-3.14.2-x64-1/python.exe'
+2026-10-26T15:59:14.1574881Z -- Using meson: D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/meson-1.9.0-633807/meson.py
+2026-10-26T15:59:14.1712579Z Downloading https://github.com/mm2/Little-CMS/archive/lcms2.19.1.tar.gz -> mm2-Little-CMS-lcms2.19.1.tar.gz
+2026-10-26T15:59:14.8169975Z Successfully downloaded mm2-Little-CMS-lcms2.19.1.tar.gz
+2026-10-26T15:59:14.8405639Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/mm2-Little-CMS-lcms2.19.1.tar.gz
+2026-10-26T15:59:15.0757621Z -- Applying patch fix-shared-library.patch
+2026-10-26T15:59:15.1178092Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/lcms/src/lcms2.19.1-03b05538d0.clean
+2026-10-26T15:59:15.1568600Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T15:59:15.1674181Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T15:59:15.1681318Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T15:59:15.1690831Z -- Configuring x64-windows-dbg
+2026-10-26T15:59:15.1751114Z -- Getting CMake variables for x64-windows
+2026-10-26T15:59:16.6880995Z -- Loading CMake variables from D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/lcms/cmake-get-vars_C_CXX-x64-windows.cmake.log
+2026-10-26T15:59:23.4491460Z -- Configuring x64-windows-dbg done
+2026-10-26T15:59:23.4492199Z -- Configuring x64-windows-rel
+2026-10-26T15:59:26.3152516Z -- Configuring x64-windows-rel done
+2026-10-26T15:59:26.3153329Z -- Package x64-windows-dbg
+2026-10-26T15:59:29.3378761Z -- Package x64-windows-rel
+2026-10-26T15:59:34.7084350Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/lib/pkgconfig/lcms2.pc
+2026-10-26T15:59:34.7177302Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/debug/lib/pkgconfig/lcms2.pc
+2026-10-26T15:59:34.7272858Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/share/lcms/lcms-config.cmake
+2026-10-26T15:59:34.7286049Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/share/lcms2/lcms2-config.cmake
+2026-10-26T15:59:34.7294521Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/share/lcms/usage
+2026-10-26T15:59:34.7303049Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/lcms_x64-windows/share/lcms/copyright
+2026-10-26T15:59:34.7392675Z -- Performing post-build validation
+2026-10-26T15:59:34.7702926Z Starting submission of lcms:x64-windows@2.19.1#1 to 1 binary cache(s) in the background
+2026-10-26T15:59:34.7705612Z Elapsed time to handle lcms:x64-windows: 21 s
+2026-10-26T15:59:34.7706590Z Completed submission of vcpkg-tool-meson:x64-windows@1.9.0#10 to 1 binary cache(s) in 71.4 ms
+2026-10-26T15:59:34.7707637Z Installing 30/36 jasper:x64-windows@4.2.9...
+2026-10-26T15:59:34.7708720Z jasper:x64-windows@4.2.9 package ABI: 7e575a7c8d1fe130919e1c55c3dab3a04511cac0656c75302b04556333449a35
+2026-10-26T15:59:34.7709766Z Building jasper:x64-windows@4.2.9...
+2026-10-26T15:59:34.8358299Z Downloading https://github.com/jasper-software/jasper/archive/version-4.2.9.tar.gz -> jasper-software-jasper-version-4.2.9.tar.gz
+2026-10-26T15:59:35.5308317Z Successfully downloaded jasper-software-jasper-version-4.2.9.tar.gz
+2026-10-26T15:59:35.5407823Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/jasper-software-jasper-version-4.2.9.tar.gz
+2026-10-26T15:59:35.7445404Z -- Applying patch no_stdc_check.patch
+2026-10-26T15:59:35.7821457Z -- Applying patch fix-library-name.patch
+2026-10-26T15:59:35.8204114Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/jasper/src/sion-4.2.9-f66eb5598c.clean
+2026-10-26T15:59:35.8502997Z -- Configuring x64-windows
+2026-10-26T15:59:48.6354633Z -- Building x64-windows-dbg
+2026-10-26T15:59:56.1759439Z -- Building x64-windows-rel
+2026-10-26T16:00:05.8756573Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/jasper_x64-windows/lib/pkgconfig/jasper.pc
+2026-10-26T16:00:05.8866444Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T16:00:05.8944405Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T16:00:05.8949184Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T16:00:05.9045143Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/jasper_x64-windows/debug/lib/pkgconfig/jasper.pc
+2026-10-26T16:00:05.9181738Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/jasper_x64-windows/share/jasper/copyright
+2026-10-26T16:00:05.9250163Z -- Performing post-build validation
+2026-10-26T16:00:05.9688615Z Starting submission of jasper:x64-windows@4.2.9 to 1 binary cache(s) in the background
+2026-10-26T16:00:05.9689664Z Elapsed time to handle jasper:x64-windows: 31 s
+2026-10-26T16:00:05.9690551Z Completed submission of lcms:x64-windows@2.19.1#1 to 1 binary cache(s) in 209 ms
+2026-10-26T16:00:05.9691558Z Installing 31/36 libraw[core,dng-lossy,openmp]:x64-windows@0.22.2...
+2026-10-26T16:00:05.9693262Z libraw[core,dng-lossy,openmp]:x64-windows@0.22.2 package ABI: c7ecb46b729af681d27c14c8447d95fe2a421cf349af29ff111c647f15450e41
+2026-10-26T16:00:05.9694693Z Building libraw[core,dng-lossy,openmp]:x64-windows@0.22.2...
+2026-10-26T16:00:06.0211232Z Downloading https://github.com/LibRaw/LibRaw/archive/0.22.2.tar.gz -> LibRaw-LibRaw-0.22.2.tar.gz
+2026-10-26T16:00:06.7690231Z Successfully downloaded LibRaw-LibRaw-0.22.2.tar.gz
+2026-10-26T16:00:06.7738986Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/LibRaw-LibRaw-0.22.2.tar.gz
+2026-10-26T16:00:06.9543023Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/libraw/src/0.22.2-fabf993e5f.clean
+2026-10-26T16:00:06.9659760Z Downloading https://github.com/LibRaw/LibRaw-cmake/archive/eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz -> LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz
+2026-10-26T16:00:07.5038665Z Successfully downloaded LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz
+2026-10-26T16:00:07.5068883Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz
+2026-10-26T16:00:07.6358069Z -- Applying patch dependencies.patch
+2026-10-26T16:00:07.6746593Z -- Applying patch fix-install.patch
+2026-10-26T16:00:07.7124075Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/libraw/src/640ca616d3-f6ae978fdb.clean
+2026-10-26T16:00:07.7500314Z -- Configuring x64-windows
+2026-10-26T16:00:09.7305134Z CMake Warning at D:/a/RedSalamander/RedSalamander/.build/vcpkg_installed/x64/x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake:346 (message):
+2026-10-26T16:00:09.7306291Z   The following variables are not used in CMakeLists.txt:
+2026-10-26T16:00:09.7306670Z 
+2026-10-26T16:00:09.7306823Z       CMAKE_REQUIRE_FIND_PACKAGE_Jasper
+2026-10-26T16:00:09.7307102Z 
+2026-10-26T16:00:09.7307346Z   Please recheck them and remove the unnecessary options from the
+2026-10-26T16:00:09.7307880Z   `vcpkg_cmake_configure` call.
+2026-10-26T16:00:09.7308142Z 
+2026-10-26T16:00:09.7308455Z   If these options should still be passed for whatever reason, please use the
+2026-10-26T16:00:09.7309049Z   `MAYBE_UNUSED_VARIABLES` argument.
+2026-10-26T16:00:09.7309459Z Call Stack (most recent call first):
+2026-10-26T16:00:09.7310287Z   buildtrees/versioning_/versions/libraw/fba030a7be23a0356eb36ed721db8d55b0b64d93/portfile.cmake:33 (vcpkg_cmake_configure)
+2026-10-26T16:00:09.7311144Z   scripts/ports.cmake:209 (include)
+2026-10-26T16:00:09.7311424Z 
+2026-10-26T16:00:09.7311428Z 
+2026-10-26T16:00:09.7313298Z -- Building x64-windows-dbg
+2026-10-26T16:01:22.1709117Z -- Building x64-windows-rel
+2026-10-26T16:03:05.8806726Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libraw_x64-windows/lib/pkgconfig/libraw.pc
+2026-10-26T16:03:05.8812803Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libraw_x64-windows/lib/pkgconfig/libraw_r.pc
+2026-10-26T16:03:05.8921589Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T16:03:05.8999386Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T16:03:05.9003929Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T16:03:05.9188003Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libraw_x64-windows/debug/lib/pkgconfig/libraw.pc
+2026-10-26T16:03:05.9194784Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libraw_x64-windows/debug/lib/pkgconfig/libraw_r.pc
+2026-10-26T16:03:05.9430930Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/libraw_x64-windows/share/libraw/usage
+2026-10-26T16:03:05.9514807Z -- Performing post-build validation
+2026-10-26T16:03:06.0342341Z Starting submission of libraw[core,dng-lossy,openmp]:x64-windows@0.22.2 to 1 binary cache(s) in the background
+2026-10-26T16:03:06.0343553Z Elapsed time to handle libraw:x64-windows: 3 min
+2026-10-26T16:03:06.0344866Z Completed submission of jasper:x64-windows@4.2.9 to 1 binary cache(s) in 264 ms
+2026-10-26T16:03:06.0346222Z Installing 32/36 pe-parse:x64-windows@2.1.1#1...
+2026-10-26T16:03:06.0347424Z pe-parse:x64-windows@2.1.1#1 package ABI: c62476d3d73428a1ef2551a9ec81aab11350dec48a17e61e3f7270c8ff28da48
+2026-10-26T16:03:06.0348546Z Building pe-parse:x64-windows@2.1.1#1...
+2026-10-26T16:03:06.0886570Z Downloading https://github.com/trailofbits/pe-parse/archive/v2.1.1.tar.gz -> trailofbits-pe-parse-v2.1.1.tar.gz
+2026-10-26T16:03:06.5507155Z Successfully downloaded trailofbits-pe-parse-v2.1.1.tar.gz
+2026-10-26T16:03:06.5644603Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/trailofbits-pe-parse-v2.1.1.tar.gz
+2026-10-26T16:03:06.7191708Z -- Applying patch arm64-windows-fix.patch
+2026-10-26T16:03:06.7836273Z -- Applying patch no-werror.patch
+2026-10-26T16:03:06.8405731Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/pe-parse/src/v2.1.1-0d4ae3beb4.clean
+2026-10-26T16:03:06.8796653Z -- Configuring x64-windows
+2026-10-26T16:03:08.6097420Z -- Building x64-windows-dbg
+2026-10-26T16:03:17.0444117Z -- Building x64-windows-rel
+2026-10-26T16:03:27.5368392Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/pe-parse_x64-windows/share/pe-parse/copyright
+2026-10-26T16:03:27.5435136Z -- Performing post-build validation
+2026-10-26T16:03:27.6043709Z Starting submission of pe-parse:x64-windows@2.1.1#1 to 1 binary cache(s) in the background
+2026-10-26T16:03:27.6044724Z Elapsed time to handle pe-parse:x64-windows: 22 s
+2026-10-26T16:03:27.6045471Z Completed submission of libraw[core,dng-lossy,openmp]:x64-windows@0.22.2 to 1 binary cache(s) in 1.5 s
+2026-10-26T16:03:27.6046280Z Installing 33/36 sqlite3[core,json1]:x64-windows@3.53.4#1...
+2026-10-26T16:03:27.6047348Z sqlite3[core,json1]:x64-windows@3.53.4#1 package ABI: f7aa2aa6ec6ef3349981c96a9e050c4232506b2ee27f062e206017c39b916362
+2026-10-26T16:03:27.6048339Z Building sqlite3[core,json1]:x64-windows@3.53.4#1...
+2026-10-26T16:03:27.6614588Z Downloading https://sqlite.org/2026/sqlite-autoconf-3530400.tar.gz -> sqlite-autoconf-3530400.tar.gz
+2026-10-26T16:03:28.3558834Z Successfully downloaded sqlite-autoconf-3530400.tar.gz
+2026-10-26T16:03:28.3712587Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/sqlite-autoconf-3530400.tar.gz
+2026-10-26T16:03:28.5641992Z -- Applying patch fix-arm-uwp.patch
+2026-10-26T16:03:28.6075596Z -- Applying patch add-config-include.patch
+2026-10-26T16:03:28.6751247Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/sqlite3/src/nf-3530400-891c4575fa.clean
+2026-10-26T16:03:28.7076618Z -- Configuring x64-windows
+2026-10-26T16:03:30.2830492Z -- Building x64-windows-dbg
+2026-10-26T16:03:32.0225185Z -- Building x64-windows-rel
+2026-10-26T16:03:49.3400937Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/sqlite3_x64-windows/lib/pkgconfig/sqlite3.pc
+2026-10-26T16:03:49.3509721Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T16:03:49.3586837Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T16:03:49.3591036Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T16:03:49.3684906Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/sqlite3_x64-windows/debug/lib/pkgconfig/sqlite3.pc
+2026-10-26T16:03:49.4349542Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/sqlite3_x64-windows/share/sqlite3/usage
+2026-10-26T16:03:49.4421173Z -- Performing post-build validation
+2026-10-26T16:03:49.5005956Z Starting submission of sqlite3[core,json1]:x64-windows@3.53.4#1 to 1 binary cache(s) in the background
+2026-10-26T16:03:49.5006806Z Elapsed time to handle sqlite3:x64-windows: 22 s
+2026-10-26T16:03:49.5007450Z Completed submission of pe-parse:x64-windows@2.1.1#1 to 1 binary cache(s) in 202 ms
+2026-10-26T16:03:49.5008095Z Installing 34/36 wil:x64-windows@1.0.260126.7...
+2026-10-26T16:03:49.5009159Z wil:x64-windows@1.0.260126.7 package ABI: 3269955e3d03c53ada72c3a74664de707499bd0818f9875266a4706dc5cc6198
+2026-10-26T16:03:49.5009868Z Building wil:x64-windows@1.0.260126.7...
+2026-10-26T16:03:49.5870917Z Downloading https://github.com/Microsoft/wil/archive/v1.0.260126.7.tar.gz -> Microsoft-wil-v1.0.260126.7.tar.gz
+2026-10-26T16:03:50.1562782Z Successfully downloaded Microsoft-wil-v1.0.260126.7.tar.gz
+2026-10-26T16:03:50.1610078Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/Microsoft-wil-v1.0.260126.7.tar.gz
+2026-10-26T16:03:50.3199415Z -- Applying patch cpp14.patch
+2026-10-26T16:03:50.3605982Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/wil/src/0.260126.7-f396d2605e.clean
+2026-10-26T16:03:50.3893860Z -- Configuring x64-windows
+2026-10-26T16:03:51.7993607Z -- Building x64-windows-rel
+2026-10-26T16:03:51.8938474Z -- Up-to-date: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/wil_x64-windows/share/wil/natvis
+2026-10-26T16:03:51.8941653Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/wil_x64-windows/share/wil/natvis/wil.natstepfilter
+2026-10-26T16:03:51.8947176Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/wil_x64-windows/share/wil/natvis/wil.natvis
+2026-10-26T16:03:51.8954535Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/wil_x64-windows/share/wil/copyright
+2026-10-26T16:03:51.9019534Z -- Performing post-build validation
+2026-10-26T16:03:51.9414576Z Starting submission of wil:x64-windows@1.0.260126.7 to 1 binary cache(s) in the background
+2026-10-26T16:03:51.9415276Z Elapsed time to handle wil:x64-windows: 2.4 s
+2026-10-26T16:03:51.9415869Z Completed submission of sqlite3[core,json1]:x64-windows@3.53.4#1 to 1 binary cache(s) in 514 ms
+2026-10-26T16:03:51.9416481Z Installing 35/36 webview2:x64-windows@1.0.4191.47...
+2026-10-26T16:03:51.9417238Z webview2:x64-windows@1.0.4191.47 package ABI: 74e65d9818b4c9c84078af4eebd230056f61fdba5fc3a48f3bdc3113fb116f34
+2026-10-26T16:03:51.9418122Z Building webview2:x64-windows@1.0.4191.47...
+2026-10-26T16:03:51.9987144Z Downloading https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.4191.47 -> microsoft.web.webview2.1.0.4191.47.zip
+2026-10-26T16:03:52.3240499Z Successfully downloaded microsoft.web.webview2.1.0.4191.47.zip
+2026-10-26T16:03:52.3646813Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/microsoft.web.webview2.1.0.4191.47.zip
+2026-10-26T16:03:52.6251656Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/webview2/src/.0.4191.47-87d1a17ed4.clean
+2026-10-26T16:03:52.6526801Z -- Skipping post-build validation due to VCPKG_POLICY_EMPTY_PACKAGE
+2026-10-26T16:03:52.6907428Z Starting submission of webview2:x64-windows@1.0.4191.47 to 1 binary cache(s) in the background
+2026-10-26T16:03:52.6908789Z Elapsed time to handle webview2:x64-windows: 749 ms
+2026-10-26T16:03:52.6909502Z Completed submission of wil:x64-windows@1.0.260126.7 to 1 binary cache(s) in 138 ms
+2026-10-26T16:03:52.6910502Z Installing 36/36 yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0...
+2026-10-26T16:03:52.6911689Z yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0 package ABI: d92ac0cc845b77880198a9f55267d0d01bd4677cc72395c5005b5bec1a578b16
+2026-10-26T16:03:52.6912827Z Building yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0...
+2026-10-26T16:03:52.7445076Z Downloading https://github.com/ibireme/yyjson/archive/0.13.0.tar.gz -> ibireme-yyjson-0.13.0.tar.gz
+2026-10-26T16:03:53.2449987Z Successfully downloaded ibireme-yyjson-0.13.0.tar.gz
+2026-10-26T16:03:53.2535859Z -- Extracting source D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/ibireme-yyjson-0.13.0.tar.gz
+2026-10-26T16:03:53.5583891Z -- Using source at D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/buildtrees/yyjson/src/0.13.0-518a3122b0.clean
+2026-10-26T16:03:53.5903459Z -- Configuring x64-windows
+2026-10-26T16:03:55.3761930Z -- Building x64-windows-dbg
+2026-10-26T16:03:55.9286200Z -- Building x64-windows-rel
+2026-10-26T16:04:09.9556323Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/yyjson_x64-windows/lib/pkgconfig/yyjson.pc
+2026-10-26T16:04:09.9663500Z -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+2026-10-26T16:04:09.9741678Z -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+2026-10-26T16:04:09.9746494Z -- Using msys root at D:/a/RedSalamander/RedSalamander/.build/vcpkg-tool/downloads/tools/msys2/3e71d1f8e22ab23f
+2026-10-26T16:04:09.9838449Z -- Fixing pkgconfig file: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/yyjson_x64-windows/debug/lib/pkgconfig/yyjson.pc
+2026-10-26T16:04:10.0007842Z -- Installing: D:/a/RedSalamander/RedSalamander/.build/vcpkg-registry/packages/yyjson_x64-windows/share/yyjson/copyright
+2026-10-26T16:04:10.0077715Z -- Performing post-build validation
+2026-10-26T16:04:10.0508088Z Starting submission of yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0 to 1 binary cache(s) in the background
+2026-10-26T16:04:10.0509160Z Elapsed time to handle yyjson:x64-windows: 17 s
+2026-10-26T16:04:10.0733880Z Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+2026-10-26T16:04:10.0735404Z Some packages did not declare an SPDX license. Check the `copyright` file for each package for more information about their licensing.
+2026-10-26T16:04:10.0736434Z Packages installed in this vcpkg installation declare the following licenses:
+2026-10-26T16:04:10.0737023Z (CC0-1.0 OR Apache-2.0)
+2026-10-26T16:04:10.0737406Z (LGPL-2.1-only OR CDDL-1.0)
+2026-10-26T16:04:10.0737855Z Apache-2.0
+2026-10-26T16:04:10.0738207Z BSD-2-Clause
+2026-10-26T16:04:10.0738573Z BSD-3-Clause
+2026-10-26T16:04:10.0738955Z IJG
+2026-10-26T16:04:10.0739323Z ISC
+2026-10-26T16:04:10.0739688Z LGPL-2.1-or-later
+2026-10-26T16:04:10.0740065Z MIT
+2026-10-26T16:04:10.0740391Z Zlib
+2026-10-26T16:04:10.0740669Z blessing
+2026-10-26T16:04:10.0740937Z curl
+2026-10-26T16:04:10.0741205Z libpng-2.0
+2026-10-26T16:04:10.0741548Z 7zip provides CMake targets:
+2026-10-26T16:04:10.0741770Z 
+2026-10-26T16:04:10.0742297Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0743083Z   find_package(7zip CONFIG REQUIRED)
+2026-10-26T16:04:10.0751196Z   target_link_libraries(main PRIVATE 7zip::7zip)
+2026-10-26T16:04:10.0751609Z 
+2026-10-26T16:04:10.0751934Z The package aws-sdk-cpp:x64-windows provides CMake targets:
+2026-10-26T16:04:10.0752380Z 
+2026-10-26T16:04:10.0752670Z     When using AWSSDK, AWSSDK_ROOT_DIR must be defined by the user.
+2026-10-26T16:04:10.0753556Z     find_package(AWSSDK CONFIG COMPONENTS core dynamodb kinesis s3 REQUIRED)
+2026-10-26T16:04:10.0754497Z     target_include_directories(main PRIVATE ${AWSSDK_INCLUDE_DIRS})
+2026-10-26T16:04:10.0755345Z     target_link_libraries(main PRIVATE ${AWSSDK_LIBRARIES})
+2026-10-26T16:04:10.0755940Z     
+2026-10-26T16:04:10.0756277Z     OR
+2026-10-26T16:04:10.0756559Z     
+2026-10-26T16:04:10.0756878Z     find_package(aws-cpp-sdk-core REQUIRED)
+2026-10-26T16:04:10.0757383Z     target_link_libraries(main PRIVATE aws-cpp-sdk-core)
+2026-10-26T16:04:10.0757814Z 
+2026-10-26T16:04:10.0757981Z blake3 provides CMake targets:
+2026-10-26T16:04:10.0758243Z 
+2026-10-26T16:04:10.0758448Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0759105Z   find_package(blake3 CONFIG REQUIRED)
+2026-10-26T16:04:10.0759803Z   target_link_libraries(main PRIVATE BLAKE3::blake3)
+2026-10-26T16:04:10.0760203Z 
+2026-10-26T16:04:10.0760435Z blake3 provides pkg-config modules:
+2026-10-26T16:04:10.0760752Z 
+2026-10-26T16:04:10.0760953Z   # BLAKE3 C implementation
+2026-10-26T16:04:10.0761294Z   libblake3
+2026-10-26T16:04:10.0761472Z 
+2026-10-26T16:04:10.0761928Z curl is compatible with built-in CMake targets:
+2026-10-26T16:04:10.0762610Z 
+2026-10-26T16:04:10.0762785Z     find_package(CURL REQUIRED)
+2026-10-26T16:04:10.0763350Z     target_link_libraries(main PRIVATE CURL::libcurl)
+2026-10-26T16:04:10.0763786Z 
+2026-10-26T16:04:10.0763990Z ftxui provides CMake targets:
+2026-10-26T16:04:10.0764227Z 
+2026-10-26T16:04:10.0764548Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0765172Z   find_package(ftxui CONFIG REQUIRED)
+2026-10-26T16:04:10.0765983Z   target_link_libraries(main PRIVATE ftxui::dom ftxui::ftxui ftxui::screen ftxui::component)
+2026-10-26T16:04:10.0766524Z 
+2026-10-26T16:04:10.0766662Z ftxui provides pkg-config modules:
+2026-10-26T16:04:10.0766935Z 
+2026-10-26T16:04:10.0767081Z   # C++ Functional Terminal User Interface.
+2026-10-26T16:04:10.0767482Z   ftxui
+2026-10-26T16:04:10.0767658Z 
+2026-10-26T16:04:10.0767992Z libjpeg-turbo is compatible with built-in implementation-agnostic CMake targets:
+2026-10-26T16:04:10.0768535Z 
+2026-10-26T16:04:10.0768765Z   find_package(JPEG REQUIRED)
+2026-10-26T16:04:10.0769314Z   target_link_libraries(main PRIVATE JPEG::JPEG)
+2026-10-26T16:04:10.0769703Z 
+2026-10-26T16:04:10.0770035Z libjpeg-turbo provides CMake targets for the TurboJPEG C API:
+2026-10-26T16:04:10.0770458Z 
+2026-10-26T16:04:10.0770654Z   find_package(libjpeg-turbo CONFIG REQUIRED)
+2026-10-26T16:04:10.0771628Z   target_link_libraries(main PRIVATE $<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>)
+2026-10-26T16:04:10.0772647Z 
+2026-10-26T16:04:10.0772851Z libjpeg-turbo provides pkg-config modules:
+2026-10-26T16:04:10.0773249Z 
+2026-10-26T16:04:10.0773659Z   # A SIMD-accelerated JPEG codec that provides the libjpeg API
+2026-10-26T16:04:10.0774315Z   libjpeg
+2026-10-26T16:04:10.0774515Z 
+2026-10-26T16:04:10.0774889Z   # A SIMD-accelerated JPEG codec that provides the TurboJPEG API
+2026-10-26T16:04:10.0775567Z   libturbojpeg
+2026-10-26T16:04:10.0775841Z 
+2026-10-26T16:04:10.0776012Z libraw provides CMake targets:
+2026-10-26T16:04:10.0776348Z 
+2026-10-26T16:04:10.0776531Z     find_package(libraw CONFIG REQUIRED)
+2026-10-26T16:04:10.0777109Z     # non-thread-safe
+2026-10-26T16:04:10.0777672Z     target_link_libraries(main PRIVATE libraw::raw)
+2026-10-26T16:04:10.0778242Z     # thread-safe
+2026-10-26T16:04:10.0778713Z     target_link_libraries(main PRIVATE libraw::raw_r)
+2026-10-26T16:04:10.0779349Z 
+2026-10-26T16:04:10.0779598Z libraw provides pkg-config modules:
+2026-10-26T16:04:10.0779938Z 
+2026-10-26T16:04:10.0780203Z   # Raw image decoder library (non-thread-safe)
+2026-10-26T16:04:10.0780772Z   libraw
+2026-10-26T16:04:10.0781010Z 
+2026-10-26T16:04:10.0781210Z   # Raw image decoder library (thread-safe)
+2026-10-26T16:04:10.0781749Z   libraw_r
+2026-10-26T16:04:10.0781980Z 
+2026-10-26T16:04:10.0782661Z pe-parse provides CMake targets:
+2026-10-26T16:04:10.0782990Z 
+2026-10-26T16:04:10.0783309Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0783994Z   find_package(pe-parse CONFIG REQUIRED)
+2026-10-26T16:04:10.0784669Z   target_link_libraries(main PRIVATE pe-parse::pe-parse)
+2026-10-26T16:04:10.0785156Z 
+2026-10-26T16:04:10.0785349Z sqlite3 provides pkgconfig bindings.
+2026-10-26T16:04:10.0785882Z sqlite3 provides CMake targets:
+2026-10-26T16:04:10.0786197Z 
+2026-10-26T16:04:10.0786432Z     find_package(unofficial-sqlite3 CONFIG REQUIRED)
+2026-10-26T16:04:10.0787243Z     target_link_libraries(main PRIVATE unofficial::sqlite3::sqlite3)
+2026-10-26T16:04:10.0787845Z 
+2026-10-26T16:04:10.0788076Z wil provides CMake targets:
+2026-10-26T16:04:10.0788352Z 
+2026-10-26T16:04:10.0788549Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0788948Z   find_package(wil CONFIG REQUIRED)
+2026-10-26T16:04:10.0789300Z   target_link_libraries(main PRIVATE WIL::WIL)
+2026-10-26T16:04:10.0789550Z 
+2026-10-26T16:04:10.0789672Z webview2 provides CMake targets:
+2026-10-26T16:04:10.0790081Z 
+2026-10-26T16:04:10.0790248Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0790684Z   find_package(unofficial-webview2 CONFIG REQUIRED)
+2026-10-26T16:04:10.0791148Z   target_link_libraries(main PRIVATE unofficial::webview2::webview2)
+2026-10-26T16:04:10.0791471Z 
+2026-10-26T16:04:10.0791606Z yyjson provides CMake targets:
+2026-10-26T16:04:10.0791781Z 
+2026-10-26T16:04:10.0791968Z   # this is heuristically generated, and may not be correct
+2026-10-26T16:04:10.0792353Z   find_package(yyjson CONFIG REQUIRED)
+2026-10-26T16:04:10.0792719Z   target_link_libraries(main PRIVATE yyjson::yyjson)
+2026-10-26T16:04:10.0792986Z 
+2026-10-26T16:04:10.0793160Z yyjson provides pkg-config modules:
+2026-10-26T16:04:10.0793550Z 
+2026-10-26T16:04:10.0793686Z   # Fastest JSON library in C
+2026-10-26T16:04:10.0793964Z   yyjson
+2026-10-26T16:04:10.0794102Z 
+2026-10-26T16:04:10.0794390Z Completed submission of webview2:x64-windows@1.0.4191.47 to 1 binary cache(s) in 311 ms
+2026-10-26T16:04:10.0794936Z Waiting for 1 remaining binary cache submissions...
+2026-10-26T16:04:10.2096211Z Completed submission of yyjson[core,fast-fp-conv,non-standard,reader,writer]:x64-windows@0.13.0 to 1 binary cache(s) in 159 ms (1/1)
+2026-10-26T16:04:10.2097331Z All requested installations completed successfully in: 28 min
+2026-10-26T16:04:10.6432142Z ##[group]Run $ErrorActionPreference = "Stop"
+2026-10-26T16:04:10.6432812Z [36;1m$ErrorActionPreference = "Stop"[0m
+2026-10-26T16:04:10.6433204Z [36;1m$triplet = $env:VCPKG_DEFAULT_TRIPLET[0m
+2026-10-26T16:04:10.6433641Z [36;1m$dest = Join-Path $env:VCPKG_INSTALLED_DIR $triplet[0m
+2026-10-26T16:04:10.6434095Z [36;1m$expected = Join-Path $dest "include\wil\com.h"[0m
+2026-10-26T16:04:10.6434488Z [36;1mif (Test-Path $expected) {[0m
+2026-10-26T16:04:10.6434875Z [36;1m  Write-Host "$dest already contains WIL headers."[0m
+2026-10-26T16:04:10.6435285Z [36;1m  exit 0[0m
+2026-10-26T16:04:10.6435530Z [36;1m}[0m
+2026-10-26T16:04:10.6435789Z [36;1m[0m
+2026-10-26T16:04:10.6436036Z [36;1m$candidates = @([0m
+2026-10-26T16:04:10.6436393Z [36;1m  (Join-Path $env:VCPKG_ROOT "installed\$triplet"),[0m
+2026-10-26T16:04:10.6436871Z [36;1m  (Join-Path $env:VCPKG_ROOT "installed\${triplet}-release")[0m
+2026-10-26T16:04:10.6437266Z [36;1m)[0m
+2026-10-26T16:04:10.6437566Z [36;1m[0m
+2026-10-26T16:04:10.6437959Z [36;1m$source = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1[0m
+2026-10-26T16:04:10.6438438Z [36;1mif (-not $source) {[0m
+2026-10-26T16:04:10.6438909Z [36;1m  Write-Host "Expected WIL header not found at: $expected" -ForegroundColor Yellow[0m
+2026-10-26T16:04:10.6439507Z [36;1m  Write-Host "Searched install roots:" -ForegroundColor Yellow[0m
+2026-10-26T16:04:10.6439995Z [36;1m  $candidates | ForEach-Object { Write-Host "  - $_" }[0m
+2026-10-26T16:04:10.6440812Z [36;1m  Write-Host "$env:VCPKG_INSTALLED_DIR contents:" -ForegroundColor Yellow[0m
+2026-10-26T16:04:10.6441516Z [36;1m  Get-ChildItem -Path $env:VCPKG_INSTALLED_DIR -ErrorAction SilentlyContinue | Select-Object Name[0m
+2026-10-26T16:04:10.6442157Z [36;1m  Write-Host "vcpkg contents:" -ForegroundColor Yellow[0m
+2026-10-26T16:04:10.6442743Z [36;1m  Get-ChildItem -Path $env:VCPKG_ROOT -ErrorAction SilentlyContinue | Select-Object Name[0m
+2026-10-26T16:04:10.6443336Z [36;1m  throw "vcpkg install root not found to normalize."[0m
+2026-10-26T16:04:10.6443710Z [36;1m}[0m
+2026-10-26T16:04:10.6443932Z [36;1m[0m
+2026-10-26T16:04:10.6444195Z [36;1mWrite-Host "Syncing $source -> $dest"[0m
+2026-10-26T16:04:10.6444664Z [36;1mNew-Item -ItemType Directory -Path $dest -Force | Out-Null[0m
+2026-10-26T16:04:10.6445203Z [36;1m& robocopy.exe $source $dest /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null[0m
+2026-10-26T16:04:10.6445896Z [36;1mif ($LASTEXITCODE -ge 8) {[0m
+2026-10-26T16:04:10.6446292Z [36;1m  throw "robocopy failed with exit code $LASTEXITCODE"[0m
+2026-10-26T16:04:10.6446666Z [36;1m}[0m
+2026-10-26T16:04:10.6447121Z [36;1m[0m
+2026-10-26T16:04:10.6447378Z [36;1mif (-not (Test-Path $expected)) {[0m
+2026-10-26T16:04:10.6447799Z [36;1m  throw "Expected WIL header not found after sync: $expected"[0m
+2026-10-26T16:04:10.6448189Z [36;1m}[0m
+2026-10-26T16:04:10.6550122Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T16:04:10.6550910Z env:
+2026-10-26T16:04:10.6554236Z   GH_TOKEN: ***
+2026-10-26T16:04:10.6554537Z   RSBuildEnableTests: true
+2026-10-26T16:04:10.6554933Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T16:04:10.6555484Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T16:04:10.6555961Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T16:04:10.6556416Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T16:04:10.6557004Z   VCPKG_REGISTRY_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-registry
+2026-10-26T16:04:10.6557442Z ##[endgroup]
+2026-10-26T16:04:11.0643969Z D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64\x64-windows already contains WIL headers.
+2026-10-26T16:04:11.1350131Z ##[group]Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-26T16:04:11.1350587Z with:
+2026-10-26T16:04:11.1350999Z   path: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+.build/vcpkg-tool/downloads
+
+2026-10-26T16:04:11.1352040Z   key: Windows-vcpkg-x64-windows-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-74232bd9d16c7ff3160402fef7eae6b10b39a185e2ec50680f4034612ebd1ae3
+2026-10-26T16:04:11.1352899Z   enableCrossOsArchive: false
+2026-10-26T16:04:11.1353121Z env:
+2026-10-26T16:04:11.1355702Z   GH_TOKEN: ***
+2026-10-26T16:04:11.1355934Z   RSBuildEnableTests: true
+2026-10-26T16:04:11.1356257Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T16:04:11.1356737Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T16:04:11.1357165Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T16:04:11.1357579Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T16:04:11.1358090Z   VCPKG_REGISTRY_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-registry
+2026-10-26T16:04:11.1358463Z ##[endgroup]
+2026-10-26T16:04:11.4058684Z [command]"C:\Program Files\Git\usr\bin\tar.exe" --posix -cf cache.tzst --exclude cache.tzst -P -C D:/a/RedSalamander/RedSalamander --files-from manifest.txt --force-local --use-compress-program "zstd -T0"
+2026-10-26T16:04:24.7307140Z Sent 0 of 930993991 (0.0%), 0.0 MBs/sec
+2026-10-26T16:04:25.7362094Z Sent 0 of 930993991 (0.0%), 0.0 MBs/sec
+2026-10-26T16:04:26.7337207Z Sent 536870912 of 930993991 (57.7%), 170.4 MBs/sec
+2026-10-26T16:04:27.7451210Z Sent 930993991 of 930993991 (100.0%), 221.1 MBs/sec
+2026-10-26T16:04:28.1747673Z Cache saved with key: Windows-vcpkg-x64-windows-3214e736171d2a78cfecc0be923d76dc1e4a2aa18b12070cf1a6facbc23edb0a-74232bd9d16c7ff3160402fef7eae6b10b39a185e2ec50680f4034612ebd1ae3
+2026-10-26T16:04:28.2133005Z ##[group]Run $ErrorActionPreference = "Stop"
+2026-10-26T16:04:28.2133694Z [36;1m$ErrorActionPreference = "Stop"[0m
+2026-10-26T16:04:28.2134146Z [36;1m[0m
+2026-10-26T16:04:28.2134794Z [36;1m# CI runners don't always include Visual Studio's vcpkg MSBuild integration component.[0m
+2026-10-26T16:04:28.2136001Z [36;1m# Provide vcpkg include/lib paths explicitly so compilation and linking can resolve dependencies.[0m
+2026-10-26T16:04:28.2136923Z [36;1m$triplet = $env:VCPKG_DEFAULT_TRIPLET[0m
+2026-10-26T16:04:28.2137578Z [36;1m$vcpkgRoot = Join-Path $env:VCPKG_INSTALLED_DIR $triplet[0m
+2026-10-26T16:04:28.2138254Z [36;1m$incRoot = Join-Path $vcpkgRoot "include"[0m
+2026-10-26T16:04:28.2138872Z [36;1m$isDebugConfiguration = "Debug" -like "*Debug*"[0m
+2026-10-26T16:04:28.2139724Z [36;1m$vcpkgConfiguration = if ($isDebugConfiguration) { "Debug" } else { "Release" }[0m
+2026-10-26T16:04:28.2140907Z [36;1m$libRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\lib" } else { "lib" })[0m
+2026-10-26T16:04:28.2142451Z [36;1m$binRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\bin" } else { "bin" })[0m
+2026-10-26T16:04:28.2143271Z [36;1m[0m
+2026-10-26T16:04:28.2143855Z [36;1mif (-not (Test-Path $incRoot)) { throw "vcpkg include root not found: $incRoot" }[0m
+2026-10-26T16:04:28.2144845Z [36;1mif (-not (Test-Path $libRoot)) { throw "vcpkg lib root not found: $libRoot" }[0m
+2026-10-26T16:04:28.2145548Z [36;1m[0m
+2026-10-26T16:04:28.2146193Z [36;1m# Import the pinned checkout's MSBuild integration for this build only. The targets add[0m
+2026-10-26T16:04:28.2147337Z [36;1m# the installed libraries themselves (not merely /LIBPATH), without mutating user-wide[0m
+2026-10-26T16:04:28.2148143Z [36;1m# MSBuild state.[0m
+2026-10-26T16:04:28.2148827Z [36;1m$vcpkgMsbuildRoot = Join-Path $env:VCPKG_ROOT "scripts\buildsystems\msbuild"[0m
+2026-10-26T16:04:28.2150084Z [36;1m$vcpkgProps = Join-Path $vcpkgMsbuildRoot "vcpkg.props"[0m
+2026-10-26T16:04:28.2150905Z [36;1m$vcpkgTargets = Join-Path $vcpkgMsbuildRoot "vcpkg.targets"[0m
+2026-10-26T16:04:28.2151912Z [36;1mif (-not (Test-Path $vcpkgProps)) { throw "Pinned vcpkg MSBuild props not found: $vcpkgProps" }[0m
+2026-10-26T16:04:28.2153185Z [36;1mif (-not (Test-Path $vcpkgTargets)) { throw "Pinned vcpkg MSBuild targets not found: $vcpkgTargets" }[0m
+2026-10-26T16:04:28.2154033Z [36;1m[0m
+2026-10-26T16:04:28.2154443Z [36;1m$env:ForceImportBeforeCppTargets = $vcpkgProps[0m
+2026-10-26T16:04:28.2155126Z [36;1m$env:ForceImportAfterCppTargets = $vcpkgTargets[0m
+2026-10-26T16:04:28.2155710Z [36;1m$env:VcpkgRoot = $env:VCPKG_ROOT[0m
+2026-10-26T16:04:28.2156288Z [36;1m$env:VcpkgConfiguration = $vcpkgConfiguration[0m
+2026-10-26T16:04:28.2156882Z [36;1m$env:VcpkgManifestInstall = "false"[0m
+2026-10-26T16:04:28.2157586Z [36;1m# BuildEvidence consumes the vcpkg tlog as an output declaration.[0m
+2026-10-26T16:04:28.2158453Z [36;1m# The built-in copier records source paths there; the pinned[0m
+2026-10-26T16:04:28.2159245Z [36;1m# PowerShell copier records the copied destination paths.[0m
+2026-10-26T16:04:28.2159956Z [36;1m$env:VcpkgXUseBuiltInApplocalDeps = "false"[0m
+2026-10-26T16:04:28.2160568Z [36;1m$env:VCPkgLocalAppDataDisabled = "true"[0m
+2026-10-26T16:04:28.2161077Z [36;1m[0m
+2026-10-26T16:04:28.2161404Z [36;1m$env:CL = "/I`"$incRoot`" $env:CL"[0m
+2026-10-26T16:04:28.2161859Z [36;1m[0m
+2026-10-26T16:04:28.2162154Z [36;1m$linkPaths = @($libRoot)[0m
+2026-10-26T16:04:28.2162692Z [36;1m$libManualRoot = Join-Path $libRoot "manual-link"[0m
+2026-10-26T16:04:28.2163436Z [36;1mif (Test-Path $libManualRoot) { $linkPaths += $libManualRoot }[0m
+2026-10-26T16:04:28.2164327Z [36;1m$linkFlags = ($linkPaths | ForEach-Object { "/LIBPATH:`"$_`"" }) -join ' '[0m
+2026-10-26T16:04:28.2165073Z [36;1m$env:LINK = "$linkFlags $env:LINK"[0m
+2026-10-26T16:04:28.2165520Z [36;1m[0m
+2026-10-26T16:04:28.2168498Z [36;1mif (Test-Path $binRoot) { $env:Path = "$binRoot;$env:Path" }[0m
+2026-10-26T16:04:28.2169215Z [36;1m[0m
+2026-10-26T16:04:28.2170226Z [36;1m# Fresh Full rebuilds after artifact-writing tests in a later step.[0m
+2026-10-26T16:04:28.2171275Z [36;1m# Preserve the same process-local integration for that re-attestation.[0m
+2026-10-26T16:04:28.2172112Z [36;1mif ('true' -eq 'true') {[0m
+2026-10-26T16:04:28.2173071Z [36;1m  foreach ($name in @('ForceImportBeforeCppTargets', 'ForceImportAfterCppTargets', 'VcpkgRoot',[0m
+2026-10-26T16:04:28.2174469Z [36;1m                      'VcpkgConfiguration', 'VcpkgManifestInstall', 'VcpkgXUseBuiltInApplocalDeps',[0m
+2026-10-26T16:04:28.2175610Z [36;1m                      'VCPkgLocalAppDataDisabled', 'CL', 'LINK', 'Path')) {[0m
+2026-10-26T16:04:28.2176703Z [36;1m    "$name=$([Environment]::GetEnvironmentVariable($name, 'Process'))" >> $env:GITHUB_ENV[0m
+2026-10-26T16:04:28.2177629Z [36;1m  }[0m
+2026-10-26T16:04:28.2178001Z [36;1m}[0m
+2026-10-26T16:04:28.2178663Z [36;1m[0m
+2026-10-26T16:04:28.2179231Z [36;1m$buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"[0m
+2026-10-26T16:04:28.2180292Z [36;1mif (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }[0m
+2026-10-26T16:04:28.2181156Z [36;1m[0m
+2026-10-26T16:04:28.2181510Z [36;1m$buildArgs = @{[0m
+2026-10-26T16:04:28.2181807Z [36;1m  Configuration = "Debug"[0m
+2026-10-26T16:04:28.2182152Z [36;1m  Platform      = "x64"[0m
+2026-10-26T16:04:28.2182459Z [36;1m  MaxCpuCount   = 2[0m
+2026-10-26T16:04:28.2182744Z [36;1m}[0m
+2026-10-26T16:04:28.2182986Z [36;1mif ("" -ne "") {[0m
+2026-10-26T16:04:28.2183318Z [36;1m  $buildArgs.BuildNumber = ""[0m
+2026-10-26T16:04:28.2183631Z [36;1m}[0m
+2026-10-26T16:04:28.2183875Z [36;1mif ("false" -eq "true") {[0m
+2026-10-26T16:04:28.2184214Z [36;1m  $buildArgs.OfficialRelease = $true[0m
+2026-10-26T16:04:28.2184552Z [36;1m}[0m
+2026-10-26T16:04:28.2184799Z [36;1m[0m
+2026-10-26T16:04:28.2185038Z [36;1m& $buildScript @buildArgs[0m
+2026-10-26T16:04:28.2185554Z [36;1mif ($LASTEXITCODE -ne 0) { throw "Solution build failed with exit code $LASTEXITCODE." }[0m
+2026-10-26T16:04:28.2186266Z [36;1m$pin = Get-Content Dependencies/DxUi.lock.json -Raw | ConvertFrom-Json[0m
+2026-10-26T16:04:28.2187007Z [36;1m# DxUi API revision 3 replaced its Python build-matrix validator with this script of its consumer interface.[0m
+2026-10-26T16:04:28.2187937Z [36;1m& pwsh -NoProfile -NonInteractive -File ".build/dependencies/DxUi/source/$($pin.commit)/validate-build-matrix.ps1" -Root .[0m
+2026-10-26T16:04:28.2188837Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'First-party six-profile matrix validation failed.' }[0m
+2026-10-26T16:04:28.2263788Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-26T16:04:28.2264247Z env:
+2026-10-26T16:04:28.2267110Z   GH_TOKEN: ***
+2026-10-26T16:04:28.2267869Z   RSBuildEnableTests: true
+2026-10-26T16:04:28.2268506Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T16:04:28.2269104Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T16:04:28.2269592Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T16:04:28.2270076Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T16:04:28.2270674Z   VCPKG_REGISTRY_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-registry
+2026-10-26T16:04:28.2271119Z ##[endgroup]
+2026-10-26T16:04:29.9913222Z    ____          _ ____        _                                _           
+2026-10-26T16:04:29.9920089Z   |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+2026-10-26T16:04:29.9926241Z   | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+2026-10-26T16:04:29.9931765Z   |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+2026-10-26T16:04:29.9938094Z   |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+2026-10-26T16:04:29.9945115Z                      Build, package, and validate with confidence
+2026-10-26T16:04:29.9949565Z 
+2026-10-26T16:04:30.3786792Z Locating MSBuild...
+2026-10-26T16:04:30.3935749Z 
+2026-10-26T16:04:30.3942861Z ========================================
+2026-10-26T16:04:30.3949111Z Build Failed with Exception!
+2026-10-26T16:04:30.3955055Z ========================================
+2026-10-26T16:04:30.3966648Z Error: Workflow-selected MSBuild is not a Visual Studio 2026 executable: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T16:04:30.3986718Z Build time: 00:00
+2026-10-26T16:04:30.5666407Z [31;1mException: [0mD:\a\_temp\82cbe836-5c50-4f14-9350-6e7fb3ef6174.ps1:73[0m
+2026-10-26T16:04:30.5667325Z [31;1m[0m[36;1mLine |[0m
+2026-10-26T16:04:30.5668436Z [31;1m[0m[36;1m[36;1m  73 | [0m … DE -ne 0) { [36;1mthrow "Solution build failed with exit code $LASTEXITCODE[0m …[0m
+2026-10-26T16:04:30.5669925Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+2026-10-26T16:04:30.5671936Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mSolution build failed with exit code 1.[0m
+2026-10-26T16:04:30.6739649Z ##[error]Process completed with exit code 1.
+2026-10-26T16:04:30.6982055Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-10-26T16:04:30.6982545Z with:
+2026-10-26T16:04:30.6982740Z   name: native-build-x64-Debug
+2026-10-26T16:04:30.6982994Z   include-hidden-files: true
+2026-10-26T16:04:30.6983400Z   path: .build/logs/
+.build/x64/Debug/*.DxUi.json
+.build/x64/Debug/Plugins/*.DxUi.json
+
+2026-10-26T16:04:30.6983830Z   retention-days: 14
+2026-10-26T16:04:30.6984037Z   if-no-files-found: warn
+2026-10-26T16:04:30.6984254Z   compression-level: 6
+2026-10-26T16:04:30.6984456Z   overwrite: false
+2026-10-26T16:04:30.6984650Z   archive: true
+2026-10-26T16:04:30.6984824Z env:
+2026-10-26T16:04:30.6987331Z   GH_TOKEN: ***
+2026-10-26T16:04:30.6987632Z   RSBuildEnableTests: true
+2026-10-26T16:04:30.6987981Z   VCPKG_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T16:04:30.6988481Z   VCPKG_INSTALLED_DIR: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64
+2026-10-26T16:04:30.6988942Z   VCPKG_DEFAULT_TRIPLET: x64-windows
+2026-10-26T16:04:30.6989332Z   MSBUILD_EXE_PATH: D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64\MSBuild.exe
+2026-10-26T16:04:30.6989846Z   VCPKG_REGISTRY_ROOT: D:\a\RedSalamander\RedSalamander\.build\vcpkg-registry
+2026-10-26T16:04:30.6990563Z   ForceImportBeforeCppTargets: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool\scripts\buildsystems\msbuild\vcpkg.props
+2026-10-26T16:04:30.6991458Z   ForceImportAfterCppTargets: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool\scripts\buildsystems\msbuild\vcpkg.targets
+2026-10-26T16:04:30.6992114Z   VcpkgRoot: D:\a\RedSalamander\RedSalamander\.build\vcpkg-tool
+2026-10-26T16:04:30.6992470Z   VcpkgConfiguration: Debug
+2026-10-26T16:04:30.6992717Z   VcpkgManifestInstall: false
+2026-10-26T16:04:30.6992975Z   VcpkgXUseBuiltInApplocalDeps: false
+2026-10-26T16:04:30.6993255Z   VCPkgLocalAppDataDisabled: true
+2026-10-26T16:04:30.6993680Z   CL: /I"D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64\x64-windows\include" 
+2026-10-26T16:04:30.6994696Z   LINK: /LIBPATH:"D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64\x64-windows\debug\lib" /LIBPATH:"D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64\x64-windows\debug\lib\manual-link" 
+2026-10-26T16:04:30.7008241Z   Path: D:\a\RedSalamander\RedSalamander\.build\vcpkg_installed\x64\x64-windows\debug\bin;C:\Program Files\PowerShell\7;D:\a\_temp\VS-Msvc-14.52\MSBuild\Current\Bin\amd64;C:\Program Files\MongoDB\Server\7.0\bin;C:\vcpkg;C:\tools\zstd;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\17.0.20-101\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\WSL\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\dotnet\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\ucrt64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files (x86)\sbt\bin;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps
+2026-10-26T16:04:30.7018958Z ##[endgroup]
+2026-10-26T16:04:30.9071117Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-26T16:04:30.9074635Z The least common ancestor is D:\a\RedSalamander\RedSalamander\.build. This will be the root directory of the artifact
+2026-10-26T16:04:30.9089538Z ##[warning]No files were found with the provided path: .build/logs/
+.build/x64/Debug/*.DxUi.json
+.build/x64/Debug/Plugins/*.DxUi.json. No artifacts will be uploaded.
+2026-10-26T16:04:30.9574904Z Post job cleanup.
+2026-10-26T16:04:31.1719220Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-26T16:04:31.2074987Z git version 2.56.0.windows.2
+2026-10-26T16:04:31.2137254Z Copying 'C:\Users\runneradmin\.gitconfig' to 'D:\a\_temp\8fc5b0f9-fad9-407e-b0a5-316c4bd29f2f\.gitconfig'
+2026-10-26T16:04:31.2162335Z Temporarily overriding HOME='D:\a\_temp\8fc5b0f9-fad9-407e-b0a5-316c4bd29f2f' before making global git config changes
+2026-10-26T16:04:31.2163267Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T16:04:31.2173777Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\RedSalamander\RedSalamander
+2026-10-26T16:04:31.2581475Z Removing SSH command configuration
+2026-10-26T16:04:31.2592921Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T16:04:31.3033244Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-26T16:04:31.9272655Z Removing HTTP extra header
+2026-10-26T16:04:31.9287622Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T16:04:31.9691500Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-26T16:04:32.5615804Z Removing includeIf entries pointing to credentials config files
+2026-10-26T16:04:32.5628263Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T16:04:32.6029402Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-26T16:04:33.2086416Z Evaluate and set job outputs
+2026-10-26T16:04:33.2093440Z Cleaning up orphan processes

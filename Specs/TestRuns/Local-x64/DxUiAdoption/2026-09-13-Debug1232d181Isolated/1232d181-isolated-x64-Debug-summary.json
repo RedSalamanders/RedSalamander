@@ -1,0 +1,11 @@
+{
+  "source": "1232d181e74ae7118d3fce7974196811b3cd4398",
+  "configuration": "Debug",
+  "platform": "x64",
+  "runId": "20260913T132145Z-51160-f727f2a4deb64da8970bb652625e6f70",
+  "startedUtc": "2026-09-13T13:21:44.8392861Z",
+  "completedUtc": "2026-09-13T14:28:27.8732775Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\1232d181-isolated-x64-Debug-Full",
+  "noHostedCi": true
+}

@@ -1,0 +1,8 @@
+{
+  "checked_utc": "2026-10-20T12:07:39.4035704Z",
+  "minimum_stable_cpu_seconds": 30,
+  "observed_idle_seconds": 31.3990332,
+  "node_count": 15,
+  "passed": true,
+  "note": "Prepares exact dead-parent MSBuild node identities for the unchanged benchmark observer. The benchmark still requires its separate 30-second gate and samples the entire runner window."
+}

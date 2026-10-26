@@ -1,0 +1,944 @@
+diff --git a/.gitattributes b/.gitattributes
+index 640b058d4..ab12838e7 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -5,0 +6,3 @@
++# Existing-destination identity failure receipts preserve their measured bytes.
++Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_move-existing-message/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
++
+@@ -327,0 +331,3 @@ Specs/TestRuns/Local-x64/Viewers/2026-10-16_125146_DesktopObservation/** -text w
++
++# Keep Both ordering and plain-message validation receipts preserve their measured bytes.
++Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_keep-both-and-plain-messages/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index 5d46bf09e..f041e70b7 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -17409,6 +17409,8 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
+-    task.operation          = FILESYSTEM_COPY;
+-    task.totalBytes         = 100u;
+-    task.completedBytes     = 25u;
+-    task.totalItems         = 4u;
+-    task.completedItems     = 1u;
+-    task.lifecyclePhase     = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Stopping);
++    // This fixture models a known 100-byte Copy; the default is deliberately size-unknown.
++    task.discoveredBytesKnown = true;
++    task.operation            = FILESYSTEM_COPY;
++    task.totalBytes           = 100u;
++    task.completedBytes       = 25u;
++    task.totalItems           = 4u;
++    task.completedItems       = 1u;
++    task.lifecyclePhase       = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Stopping);
+@@ -17481,0 +17484,7 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
++    auto unknownSize                 = task;
++    unknownSize.discoveredBytesKnown = false;
++    const auto unknownProgress       = ResolveWholeTaskProgressPresentation(unknownSize);
++    const auto unknownSummary        = BuildGlobalStatusSummary({unknownSize}, &rates);
++    if (! unknownProgress.includeInAggregateCohort || unknownProgress.determinate || unknownProgress.showTransferMarquee || unknownSummary.totalBytes != 0u ||
++        unknownSummary.hasAggregateEta)
++        return false;
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp b/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
+index e953c619b..b3fb8ff7b 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp
+@@ -39,0 +40,41 @@ using namespace FolderWindowFileOperationsStateInternal;
++namespace
++{
++// File Operations presentation policy, not a general HRESULT translator: these resource
++// sentences describe common item/location failures in the selected application language.
++// Unknown provider codes still use Common's system-message helpers below.
++[[nodiscard]] UINT PlainFileOperationStatusMessageId(HRESULT status) noexcept
++{
++    switch (status)
++    {
++        case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND): return IDS_FILEOPS_CONFLICT_MISSING_FILE;
++        case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND): return IDS_FILEOPS_CONFLICT_MISSING_PATH;
++        case HRESULT_FROM_WIN32(ERROR_FILE_EXISTS):
++        case HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS): return IDS_FILEOPS_CONFLICT_EXISTS;
++        case E_ACCESSDENIED: return IDS_FILEOPS_CONFLICT_ACCESS_DENIED;
++        case HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION):
++        case HRESULT_FROM_WIN32(ERROR_LOCK_VIOLATION): return IDS_FILEOPS_CONFLICT_SHARING;
++        case HRESULT_FROM_WIN32(ERROR_DISK_FULL):
++        case HRESULT_FROM_WIN32(ERROR_HANDLE_DISK_FULL): return IDS_FILEOPS_CONFLICT_DISK_FULL;
++        case HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE): return IDS_FILEOPS_CONFLICT_PATH_TOO_LONG;
++        case HRESULT_FROM_WIN32(ERROR_INVALID_NAME):
++        case HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME): return IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE;
++        case HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT): return IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED;
++        case HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY): return IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY;
++        case HRESULT_FROM_WIN32(ERROR_BAD_NETPATH):
++        case HRESULT_FROM_WIN32(ERROR_BAD_NET_NAME):
++        case HRESULT_FROM_WIN32(ERROR_NETNAME_DELETED):
++        case HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE):
++        case HRESULT_FROM_WIN32(ERROR_CONNECTION_UNAVAIL):
++        case HRESULT_FROM_WIN32(ERROR_NOT_CONNECTED): return IDS_FILEOPS_CONFLICT_NETWORK;
++        case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
++        case HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION):
++        case E_NOTIMPL:
++        case E_NOINTERFACE: return IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED;
++        case HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH): return IDS_FILEOPS_DIAG_ITEM_CHANGED;
++        case E_PENDING:
++        case HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE): return IDS_FILEOPS_RESULT_UNKNOWN;
++        default: return 0u;
++    }
++}
++} // namespace
++
+@@ -106 +147 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
+-    static constexpr std::array<std::pair<std::wstring_view, UINT>, 12> kProducerProblems{{
++    static constexpr std::array<std::pair<std::wstring_view, UINT>, 18> kProducerProblems{{
+@@ -107,0 +149,6 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
++        {L"identity.sameObject", IDS_FILEOPS_DIAG_SAME_OBJECT},
++        {L"identity.sameFolderMove", IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE},
++        {L"identity.destinationInsideSource", IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE},
++        {L"identity.ancestryLink", IDS_FILEOPS_DIAG_ANCESTRY_LINK},
++        {L"identity.sourceChanged", IDS_FILEOPS_DIAG_SOURCE_CHANGED},
++        {L"identity.destinationChanged", IDS_FILEOPS_DIAG_DESTINATION_CHANGED},
+@@ -122,0 +170,3 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
++    if (issue.category == L"identity.unsupported" &&
++        (issue.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || issue.status == E_NOTIMPL || issue.status == E_NOINTERFACE))
++        return LoadStringResource(nullptr, IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE);
+@@ -137,2 +187,2 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
+-    // state.", "Catastrophic failure", ...) do not describe the problem. Only real provider and OS
+-    // failures (access denied, sharing violation, ...) use the system message.
++    // state.", "Catastrophic failure", ...) do not describe the problem. Common failures use app
++    // resources; uncatalogued real provider and OS failures use the system message.
+@@ -143 +193,3 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
+-    if (issue.status == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) || issue.status == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) || issue.status == E_UNEXPECTED)
++    if (const UINT messageId = PlainFileOperationStatusMessageId(issue.status); messageId != 0u)
++        return LoadStringResource(nullptr, messageId);
++    if (issue.status == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) || issue.status == E_UNEXPECTED)
+@@ -149 +201,2 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
+-        std::wstring text = systemText.has_value() ? std::wstring(systemText.value()) : TryFormatSystemMessage(GetSystemMessageIdFromHResult(issue.status));
++        std::wstring text = systemText.has_value() ? TrimTrailingSystemMessageWhitespace(std::wstring(systemText.value()))
++                                                   : TryFormatSystemMessage(GetSystemMessageIdFromHResult(issue.status));
+@@ -448,8 +501,3 @@ std::wstring FileOperations::FormatConflictProblemText(ConflictClass bucket, HRE
+-    if (status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+-        problem = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+-    else if (status == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+-        problem = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_PATH);
+-    else if (status == E_PENDING || status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
+-        problem = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_UNKNOWN);
+-    else if (FAILED(status) && status != E_UNEXPECTED && status != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
+-             status != HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
++    if (const UINT messageId = PlainFileOperationStatusMessageId(status); messageId != 0u)
++        problem = LoadStringResource(nullptr, messageId);
++    else if (FAILED(status) && status != E_UNEXPECTED && status != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
+@@ -464 +512,3 @@ std::wstring FileOperations::FormatConflictProblemText(ConflictClass bucket, HRE
+-    return FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, problem, static_cast<unsigned long>(status));
++    // The original code remains in the diagnostic and Technical details. A question or Last
++    // note is a human explanation, including when the conflict class is not yet known.
++    return problem;
+diff --git a/RedSalamander/FolderWindow.FileOperations.State.cpp b/RedSalamander/FolderWindow.FileOperations.State.cpp
+index c7a25b292..ee3bd8678 100644
+--- a/RedSalamander/FolderWindow.FileOperations.State.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.State.cpp
+@@ -23338,0 +23339,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
++                // A Managed Move can stop at an existing destination's unsupported identity
++                // before it reaches the conflict prompt. Name that collision rather than only
++                // showing ERROR_NOT_SUPPORTED. The extra existence read is diagnostic, runs
++                // only on this failure path, and never grants overwrite or source cleanup.
++                unsigned long destinationAttributes = 0u;
++                if (plan.intent == FileOperations::TransferIntent::Move && guard.state == FileOperations::TransferSafetyState::Unsupported &&
++                    guard.destinationIdentityUnsupported && destinationFileSystemIo &&
++                    SUCCEEDED(destinationFileSystemIo->GetAttributes(std::wstring(destinationPath).c_str(), &destinationAttributes)))
++                {
++                    LogDiagnostic(DiagnosticSeverity::Error,
++                                  guard.status,
++                                  L"identity.destinationExistsUnverifiable",
++                                  LocalizedDiagnosticText{IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE},
++                                  sourcePath,
++                                  destinationPath);
++                    Debug::Perf::EmitCounter(L"FileOps.Conflict.DestinationIdentityUnavailable");
++                    return guard.status;
++                }
+diff --git a/RedSalamander/FolderWindow.FileOperations.cpp b/RedSalamander/FolderWindow.FileOperations.cpp
+index def5050d0..64245d953 100644
+--- a/RedSalamander/FolderWindow.FileOperations.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.cpp
+@@ -1248 +1248 @@ void CALLBACK OpenLocationInFileExplorerCallback(PTP_CALLBACK_INSTANCE /*instanc
+-    HRESULT hr = apartmentHr;
++    HRESULT hr                = apartmentHr;
+@@ -1672,0 +1673 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
++        guard.destinationIdentityUnsupported = destination.state == ObjectBindingState::Unsupported;
+@@ -4772 +4773 @@ LRESULT FolderWindow::OnFileOperationBatchRenameArtifactPrompt(const WPARAM wp,
+-    auto payload          = TakeMessagePayload<FileOperationState::BatchRenameArtifactPromptPayload>(_hWnd.get(), WndMsg::kFileOperationBatchRenameArtifactPrompt, lp);
++    auto payload = TakeMessagePayload<FileOperationState::BatchRenameArtifactPromptPayload>(_hWnd.get(), WndMsg::kFileOperationBatchRenameArtifactPrompt, lp);
+diff --git a/RedSalamander/FolderWindow.FileOperationsInternal.h b/RedSalamander/FolderWindow.FileOperationsInternal.h
+index 49556ced5..cac593699 100644
+--- a/RedSalamander/FolderWindow.FileOperationsInternal.h
++++ b/RedSalamander/FolderWindow.FileOperationsInternal.h
+@@ -226 +226,3 @@ struct TransferMutationGuard
+-    bool samePathText          = false;
++    // Diagnostic provenance only; neither this nor an existence probe authorizes replacement.
++    bool destinationIdentityUnsupported = false;
++    bool samePathText                   = false;
+diff --git a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+index a7ceeed7e..2147f9491 100644
+--- a/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
++++ b/RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc
+@@ -1646,0 +1647,12 @@ BEGIN
++    IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE      "V cílovém umístění již existuje položka, ale toto umístění ji nedokáže bezpečně identifikovat pro nahrazení. Zdroj i stávající cíl zůstaly beze změny."
++    IDS_FILEOPS_DIAG_SAME_OBJECT                        "Zdroj a cíl odkazují na stejnou položku. Vyberte jiné cílové umístění."
++    IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE                   "Tato položka již je v cílové složce. Vyberte jinou složku."
++    IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE          "Složku nelze zkopírovat ani přesunout do sebe samé nebo do některé z jejích podsložek. Vyberte cíl mimo zdrojovou složku."
++    IDS_FILEOPS_DIAG_ANCESTRY_LINK                      "Cesta ke zdrojové nebo cílové složce vede přes odkaz, který tato operace nemůže bezpečně použít. Vyberte přímou cestu ke složce."
++    IDS_FILEOPS_DIAG_SOURCE_CHANGED                     "Zdrojová položka se od přípravy operace změnila. Zkontrolujte ji a spusťte operaci znovu."
++    IDS_FILEOPS_DIAG_DESTINATION_CHANGED                "Cíl se od přípravy operace změnil. Zkontrolujte jej a spusťte operaci znovu."
++    IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE               "Toto umístění nedokáže spolehlivě identifikovat zdrojovou nebo cílovou položku. Operace nemůže bezpečně pokračovat."
++    IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED              "Tato operace není pro tuto položku nebo umístění podporována. Vyberte jinou operaci nebo umístění."
++    IDS_FILEOPS_DIAG_ITEM_CHANGED                       "Během operace se některá položka změnila. Zkontrolujte zdroj a cíl a zkuste to znovu."
++IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Složka není prázdná. Zkontrolujte zbývající položky a zkuste to znovu."
++    IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED             "Umístění je chráněno proti zápisu. Zrušte ochranu proti zápisu a zkuste to znovu."
+diff --git a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+index f56ac9eb9..d47f195d2 100644
+--- a/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
++++ b/RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc
+@@ -1646,0 +1647,12 @@ BEGIN
++    IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE      "Un élément existe déjà à la destination, mais cet emplacement ne permet pas de l’identifier de façon fiable pour le remplacer. La source et l’élément existant à la destination sont restés inchangés."
++    IDS_FILEOPS_DIAG_SAME_OBJECT                        "La source et la destination désignent le même élément. Choisissez une autre destination."
++    IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE                   "Cet élément se trouve déjà dans le dossier de destination. Choisissez un autre dossier."
++    IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE          "Un dossier ne peut pas être copié ou déplacé dans lui-même ou dans l’un de ses sous-dossiers. Choisissez une destination en dehors du dossier source."
++    IDS_FILEOPS_DIAG_ANCESTRY_LINK                      "Le chemin d’un dossier source ou de destination passe par un lien que cette opération ne peut pas utiliser de façon sûre. Choisissez un chemin direct vers le dossier."
++    IDS_FILEOPS_DIAG_SOURCE_CHANGED                     "L’élément source a changé depuis la préparation de l’opération. Vérifiez-le, puis relancez l’opération."
++    IDS_FILEOPS_DIAG_DESTINATION_CHANGED                "La destination a changé depuis la préparation de l’opération. Vérifiez-la, puis relancez l’opération."
++    IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE               "Cet emplacement ne permet pas d’identifier de façon fiable l’élément source ou de destination. L’opération ne peut pas continuer en toute sécurité."
++    IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED              "Cette opération n’est pas prise en charge pour cet élément ou cet emplacement. Choisissez une autre opération ou un autre emplacement."
++    IDS_FILEOPS_DIAG_ITEM_CHANGED                       "Un élément a changé pendant l’opération. Vérifiez la source et la destination, puis réessayez."
++IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Le dossier n’est pas vide. Vérifiez les éléments qui y restent, puis réessayez."
++    IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED             "Cet emplacement est protégé en écriture. Retirez sa protection en écriture, puis réessayez."
+diff --git a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+index 954b13b96..8962da2ee 100644
+--- a/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
++++ b/RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc
+@@ -1646,0 +1647,12 @@ BEGIN
++    IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE      "移動先には既に項目がありますが、この場所では置き換え対象を安全に識別できません。移動元と移動先の既存の項目は変更されていません。"
++    IDS_FILEOPS_DIAG_SAME_OBJECT                        "移動元またはコピー元と、移動先またはコピー先が同じ項目を指しています。別の宛先を選択してください。"
++    IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE                   "この項目は既に移動先のフォルダーにあります。別のフォルダーを選択してください。"
++    IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE          "フォルダーをそのフォルダー自身や配下のサブフォルダーにコピーまたは移動することはできません。元のフォルダーの外にある宛先を選択してください。"
++    IDS_FILEOPS_DIAG_ANCESTRY_LINK                      "元または宛先のフォルダーパスに、この操作では安全に使用できないリンクが含まれています。フォルダーへの直接のパスを選択してください。"
++    IDS_FILEOPS_DIAG_SOURCE_CHANGED                     "操作の準備後に元の項目が変更されました。項目を確認してから、操作をやり直してください。"
++    IDS_FILEOPS_DIAG_DESTINATION_CHANGED                "操作の準備後に宛先が変更されました。宛先を確認してから、操作をやり直してください。"
++    IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE               "この場所では元または宛先の項目を確実に識別できません。操作を安全に続行できません。"
++    IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED              "この項目または場所では、この操作はサポートされていません。別の操作または場所を選択してください。"
++    IDS_FILEOPS_DIAG_ITEM_CHANGED                       "操作中に項目が変更されました。元の場所と宛先を確認してから、再試行してください。"
++IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "フォルダーが空ではありません。残っている項目を確認してから、再試行してください。"
++    IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED             "この場所は書き込み禁止になっています。書き込み禁止を解除してから、もう一度実行してください。"
+diff --git a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+index 320bb0c47..7f49cabca 100644
+--- a/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
++++ b/RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc
+@@ -1646,0 +1647,12 @@ BEGIN
++    IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE      "V cieľovom umiestnení už existuje položka, ale toto umiestnenie ju nedokáže bezpečne identifikovať na nahradenie. Zdroj aj existujúci cieľ zostali nezmenené."
++    IDS_FILEOPS_DIAG_SAME_OBJECT                        "Zdroj a cieľ odkazujú na tú istú položku. Vyberte iné cieľové umiestnenie."
++    IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE                   "Táto položka sa už nachádza v cieľovom priečinku. Vyberte iný priečinok."
++    IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE          "Priečinok nemožno skopírovať ani presunúť do seba samého alebo do niektorého z jeho podpriečinkov. Vyberte cieľ mimo zdrojového priečinka."
++    IDS_FILEOPS_DIAG_ANCESTRY_LINK                      "Cesta k zdrojovému alebo cieľovému priečinku vedie cez odkaz, ktorý táto operácia nemôže bezpečne použiť. Vyberte priamu cestu k priečinku."
++    IDS_FILEOPS_DIAG_SOURCE_CHANGED                     "Zdrojová položka sa od prípravy operácie zmenila. Skontrolujte ju a spustite operáciu znova."
++    IDS_FILEOPS_DIAG_DESTINATION_CHANGED                "Cieľ sa od prípravy operácie zmenil. Skontrolujte ho a spustite operáciu znova."
++    IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE               "Toto umiestnenie nedokáže spoľahlivo identifikovať zdrojovú alebo cieľovú položku. Operácia nemôže bezpečne pokračovať."
++    IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED              "Táto operácia nie je pre túto položku alebo umiestnenie podporovaná. Vyberte inú operáciu alebo umiestnenie."
++    IDS_FILEOPS_DIAG_ITEM_CHANGED                       "Počas operácie sa niektorá položka zmenila. Skontrolujte zdroj a cieľ a skúste to znova."
++IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Priečinok nie je prázdny. Skontrolujte zostávajúce položky a skúste to znova."
++    IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED             "Umiestnenie je chránené proti zápisu. Zrušte ochranu proti zápisu a skúste to znova."
+diff --git a/RedSalamander/RedSalamander.rc b/RedSalamander/RedSalamander.rc
+index 400077783..244aefda3 100644
+--- a/RedSalamander/RedSalamander.rc
++++ b/RedSalamander/RedSalamander.rc
+@@ -1947,0 +1948,12 @@ BEGIN
++    IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE      "An item already exists at the destination, but this location cannot safely identify it for replacement. The source and existing destination were left unchanged."
++    IDS_FILEOPS_DIAG_SAME_OBJECT                        "The source and destination refer to the same item. Choose a different destination."
++    IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE                   "This item is already in the destination folder. Choose a different folder."
++    IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE          "A folder cannot be copied or moved into itself or one of its subfolders. Choose a destination outside the source folder."
++    IDS_FILEOPS_DIAG_ANCESTRY_LINK                      "A source or destination folder path passes through a link that this operation cannot use safely. Choose a direct folder path."
++    IDS_FILEOPS_DIAG_SOURCE_CHANGED                     "The source item changed after the operation was prepared. Check it, then start the operation again."
++    IDS_FILEOPS_DIAG_DESTINATION_CHANGED                "The destination changed after the operation was prepared. Check it, then start the operation again."
++    IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE               "This location cannot reliably identify the source or destination item. The operation cannot continue safely."
++    IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED              "This operation is not supported for this item or location. Choose a different operation or location."
++    IDS_FILEOPS_DIAG_ITEM_CHANGED                       "An item changed during the operation. Check the source and destination, then try again."
++IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "The folder is not empty. Check its remaining items, then try again."
++    IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED             "The location is write-protected. Remove its write protection, then try again."
+diff --git a/RedSalamander/Resource.h b/RedSalamander/Resource.h
+index 814f03092..0d8adc2a5 100644
+--- a/RedSalamander/Resource.h
++++ b/RedSalamander/Resource.h
+@@ -1951,0 +1952,12 @@
++#define IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE 50083
++#define IDS_FILEOPS_DIAG_SAME_OBJECT 50084
++#define IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE 50085
++#define IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE 50086
++#define IDS_FILEOPS_DIAG_ANCESTRY_LINK 50087
++#define IDS_FILEOPS_DIAG_SOURCE_CHANGED 50088
++#define IDS_FILEOPS_DIAG_DESTINATION_CHANGED 50089
++#define IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE 50090
++#define IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED 50091
++#define IDS_FILEOPS_DIAG_ITEM_CHANGED 50092
++#define IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY 50093
++#define IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED 50094
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp
+index 30dbb2c0f..b409750d3 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp
+@@ -201,0 +202,19 @@
++        // Establish the new private fixture in the inheritance model used by SetSecurityInfo
++        // before taking the immutable pre-denial snapshot. Otherwise the first deny/restore
++        // converts SE_DACL_AUTO_INHERITED and an exact restore can never match the old model.
++        // Reapply only its existing DACL and protection; no permission or privilege is granted.
++        const SECURITY_INFORMATION initializeParts =
++            DACL_SECURITY_INFORMATION |
++            ((originalControl & SE_DACL_PROTECTED) != 0u ? PROTECTED_DACL_SECURITY_INFORMATION : UNPROTECTED_DACL_SECURITY_INFORMATION);
++        const DWORD initializeError = SetSecurityInfo(securityHandle.get(), SE_FILE_OBJECT, initializeParts, nullptr, nullptr, originalDacl, nullptr);
++        if (initializeError != ERROR_SUCCESS)
++            return reject(std::format(L"private fixture DACL initialization failed ({}).", initializeError));
++        originalSecurity.reset();
++        originalRaw  = nullptr;
++        originalDacl = nullptr;
++        const DWORD snapshotError =
++            GetSecurityInfo(securityHandle.get(), SE_FILE_OBJECT, securityParts, nullptr, nullptr, &originalDacl, nullptr, &originalRaw);
++        originalSecurity.reset(originalRaw);
++        if (snapshotError != ERROR_SUCCESS || ! originalSecurity || ! originalDacl || ! IsValidAcl(originalDacl) ||
++            ! IsValidSecurityDescriptor(originalSecurity.get()) || ! GetSecurityDescriptorControl(originalSecurity.get(), &originalControl, &originalRevision))
++            return reject(L"initialized pre-denial security snapshot unavailable");
+@@ -211,0 +231,2 @@
++            {
++                AppendLog(std::format(L"ACL Copy restore: SetSecurityInfo failed ({}).", restoreError));
+@@ -212,0 +234 @@
++            }
+@@ -226,0 +249,12 @@
++            {
++                AppendLog(std::format(
++                    L"ACL Copy restore: query={} control=0x{:04X}/0x{:04X} revision={}/{} DACL bytes={}/{} SD bytes={}/{}.",
++                    queryError,
++                    static_cast<unsigned int>(originalControl),
++                    static_cast<unsigned int>(restoredControl),
++                    originalRevision,
++                    restoredRevision,
++                    originalDacl->AclSize,
++                    restoredDacl ? restoredDacl->AclSize : 0u,
++                    GetSecurityDescriptorLength(originalSecurity.get()),
++                    restoredSecurity && IsValidSecurityDescriptor(restoredSecurity.get()) ? GetSecurityDescriptorLength(restoredSecurity.get()) : 0u));
+@@ -227,0 +262 @@
++            }
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IssuesProjection.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IssuesProjection.cpp
+index 598262508..85767fc76 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IssuesProjection.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IssuesProjection.cpp
+@@ -359 +359 @@
+-    constexpr std::array<StatusCase, 9u> cases{{
++    constexpr auto cases = std::to_array<StatusCase>({
+@@ -362 +362,22 @@
+-        {E_ACCESSDENIED, 0u},
++        {HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), IDS_FILEOPS_CONFLICT_EXISTS},
++        {HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), IDS_FILEOPS_CONFLICT_EXISTS},
++        {E_ACCESSDENIED, IDS_FILEOPS_CONFLICT_ACCESS_DENIED},
++        {HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION), IDS_FILEOPS_CONFLICT_SHARING},
++        {HRESULT_FROM_WIN32(ERROR_LOCK_VIOLATION), IDS_FILEOPS_CONFLICT_SHARING},
++        {HRESULT_FROM_WIN32(ERROR_DISK_FULL), IDS_FILEOPS_CONFLICT_DISK_FULL},
++        {HRESULT_FROM_WIN32(ERROR_HANDLE_DISK_FULL), IDS_FILEOPS_CONFLICT_DISK_FULL},
++        {HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE), IDS_FILEOPS_CONFLICT_PATH_TOO_LONG},
++        {HRESULT_FROM_WIN32(ERROR_INVALID_NAME), IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE},
++        {HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME), IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE},
++        {HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT), IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED},
++        {HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY), IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY},
++        {HRESULT_FROM_WIN32(ERROR_BAD_NETPATH), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_BAD_NET_NAME), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_NETNAME_DELETED), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_CONNECTION_UNAVAIL), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_NOT_CONNECTED), IDS_FILEOPS_CONFLICT_NETWORK},
++        {HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED},
++        {HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION), IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED},
++        {E_NOTIMPL, IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED},
++        {E_NOINTERFACE, IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED},
+@@ -366 +387 @@
+-        {HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_CONFLICT_UNKNOWN},
++        {HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_DIAG_ITEM_CHANGED},
+@@ -367,0 +389 @@
++        {E_FAIL, 0u},
+@@ -369 +391 @@
+-    }};
++    });
+@@ -394,2 +416 @@
+-            const std::wstring expected =
+-                FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(base), static_cast<unsigned long>(test.status));
++            const std::wstring expected = base;
+@@ -400 +421 @@
+-                return reject(std::format(L"{} status 0x{:08X} lost its specific meaning or status code", culture, static_cast<unsigned long>(test.status)));
++                return reject(std::format(L"{} status 0x{:08X} lost its plain localized meaning", culture, static_cast<unsigned long>(test.status)));
+@@ -424,0 +446,5 @@
++            issue.acceptedDecision.reset();
++            issue.category = L"legacy.failure";
++            issue.severity = FolderWindow::FileOperationState::DiagnosticSeverity::Error;
++            if (FAILED(test.status) && FolderWindow::FileOperationState::FormatIssueProblemText(issue, supplied) != expected)
++                return reject(L"a legacy Issues row without prompt facts lost its plain failure explanation");
+@@ -426,4 +452,2 @@
+-        constexpr HRESULT unmapped            = static_cast<HRESULT>(0xA1234567u);
+-        const std::wstring unavailableProblem = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_UNKNOWN);
+-        const std::wstring unavailable =
+-            FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(unavailableProblem), static_cast<unsigned long>(unmapped));
++        constexpr HRESULT unmapped     = static_cast<HRESULT>(0xA1234567u);
++        const std::wstring unavailable = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_UNKNOWN);
+@@ -435,3 +459,2 @@
+-        const std::wstring injected = FormatEmbeddedStringResource(
+-            nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(L"Cached system explanation"), static_cast<unsigned long>(E_ACCESSDENIED));
+-        if (FileOperations::FormatConflictProblemText(Bucket::Unknown, E_ACCESSDENIED, std::wstring_view(L"Cached system explanation\r\n ")) != injected)
++        if (FileOperations::FormatConflictProblemText(Bucket::Unknown, E_FAIL, std::wstring_view(L"Cached system explanation\r\n ")) !=
++            L"Cached system explanation")
+@@ -439,0 +463,37 @@
++        struct IdentityCase final
++        {
++            std::wstring_view category;
++            HRESULT status;
++            UINT messageId;
++        };
++        constexpr auto identityCases = std::to_array<IdentityCase>({
++            {L"identity.sameObject", HRESULT_FROM_WIN32(ERROR_INVALID_NAME), IDS_FILEOPS_DIAG_SAME_OBJECT},
++            {L"identity.sameFolderMove", HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), IDS_FILEOPS_DIAG_SAME_FOLDER_MOVE},
++            {L"identity.destinationInsideSource", HRESULT_FROM_WIN32(ERROR_INVALID_NAME), IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE},
++            {L"identity.ancestryLink", HRESULT_FROM_WIN32(ERROR_REPARSE_TAG_INVALID), IDS_FILEOPS_DIAG_ANCESTRY_LINK},
++            {L"identity.sourceChanged", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_DIAG_SOURCE_CHANGED},
++            {L"identity.destinationChanged", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_DIAG_DESTINATION_CHANGED},
++            {L"identity.unsupported", HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE},
++            {L"identity.unsupported", E_NOTIMPL, IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE},
++            {L"identity.unsupported", E_NOINTERFACE, IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE},
++            {L"identity.unsupported", HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE), IDS_FILEOPS_CONFLICT_PATH_TOO_LONG},
++        });
++        for (const auto& test : identityCases)
++        {
++            Diagnostic issue{};
++            issue.operation             = FILESYSTEM_MOVE;
++            issue.severity              = FolderWindow::FileOperationState::DiagnosticSeverity::Error;
++            issue.category              = test.category;
++            issue.status                = test.status;
++            issue.message               = L"Technical engine explanation must not become the user message";
++            const std::wstring expected = LoadStringResource(nullptr, test.messageId);
++            FolderWindow::FileOperationState::CompletedTaskSummary summary{};
++            summary.resultHr    = test.status;
++            summary.lastProblem = issue;
++            if (expected.empty() || FolderWindow::FileOperationState::FormatIssueProblemText(issue, issue.message) != expected ||
++                FolderWindow::FileOperationState::FormatCompletedLastNote(summary) != expected || issue.status != test.status)
++                return reject(std::format(L"{} {} lost its specific meaning or retained status", culture, test.category));
++            AppendLog(std::format(
++                L"FileOps plain identity message: {} {} status=0x{:08X} text={}", culture, test.category, static_cast<unsigned long>(test.status), expected));
++        }
++
+@@ -484 +544,25 @@
+-    const auto restoreLanguage      = wil::scope_exit([&]() noexcept { static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage)); });
++    const auto restoreLanguage = wil::scope_exit([&]() noexcept { static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage)); });
++    struct CompletedCase final
++    {
++        HRESULT status;
++        UINT messageId;
++        unsigned long errors;
++        unsigned long warnings;
++    };
++    constexpr auto cases            = std::to_array<CompletedCase>({
++        {HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), IDS_FILEOPS_CONFLICT_MISSING_FILE, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND), IDS_FILEOPS_CONFLICT_MISSING_PATH, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), IDS_FILEOPS_DIAG_SKIPPED_ITEMS, 0u, 1u},
++        {HRESULT_FROM_WIN32(ERROR_CANCELLED), 0u, 0u, 0u},
++        {E_ACCESSDENIED, IDS_FILEOPS_CONFLICT_ACCESS_DENIED, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), IDS_FILEOPS_CONFLICT_EXISTS, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION), IDS_FILEOPS_CONFLICT_SHARING, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_DISK_FULL), IDS_FILEOPS_CONFLICT_DISK_FULL, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE), IDS_FILEOPS_CONFLICT_PATH_TOO_LONG, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_DIAG_ITEM_CHANGED, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY), IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_BAD_NETPATH), IDS_FILEOPS_CONFLICT_NETWORK, 1u, 0u},
++        {HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT), IDS_FILEOPS_DIAG_LOCATION_WRITE_PROTECTED, 1u, 0u},
++    });
+@@ -486 +570 @@
+-    constexpr uint64_t markerTaskId = firstTaskId + 5u;
++    constexpr uint64_t markerTaskId = firstTaskId + cases.size();
+@@ -495,6 +579 @@
+-    constexpr std::array<HRESULT, 5u> statuses{{HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+-                                                HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND),
+-                                                HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+-                                                HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+-                                                HRESULT_FROM_WIN32(ERROR_CANCELLED)}};
+-    for (size_t index = 0u; index < statuses.size(); ++index)
++    for (size_t index = 0u; index < cases.size(); ++index)
+@@ -505 +584 @@
+-        summary.resultHr      = statuses[index];
++        summary.resultHr      = cases[index].status;
+@@ -541,7 +620 @@
+-        const auto missingText = [](UINT messageId, HRESULT status)
+-        {
+-            const std::wstring problem = LoadStringResource(nullptr, messageId);
+-            return FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(problem), static_cast<unsigned long>(status));
+-        };
+-        const std::wstring missingFile = missingText(IDS_FILEOPS_CONFLICT_MISSING_FILE, statuses[0]);
+-        const std::wstring missingPath = missingText(IDS_FILEOPS_CONFLICT_MISSING_PATH, statuses[1]);
++        const std::wstring missingFile = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+@@ -551,6 +624 @@
+-        const std::array<std::wstring, 5u> expected{{missingFile,
+-                                                     missingPath,
+-                                                     LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE),
+-                                                     LoadStringResource(nullptr, IDS_FILEOPS_DIAG_SKIPPED_ITEMS),
+-                                                     {}}};
+-        for (size_t index = 0u; index < statuses.size(); ++index)
++        for (size_t index = 0u; index < cases.size(); ++index)
+@@ -557,0 +626,2 @@
++            const auto& test            = cases[index];
++            const std::wstring expected = test.messageId != 0u ? LoadStringResource(nullptr, test.messageId) : std::wstring{};
+@@ -560,2 +630,2 @@
+-                snapshot.resultHr != statuses[index] || snapshot.lastDiagnosticMessage != expected[index] || snapshot.errorCount != (index < 3u ? 1u : 0u) ||
+-                snapshot.warningCount != (index == 3u ? 1u : 0u))
++                snapshot.resultHr != test.status || snapshot.lastDiagnosticMessage != expected || snapshot.errorCount != test.errors ||
++                snapshot.warningCount != test.warnings)
+@@ -567 +637 @@
+-        AppendLog(std::format(L"FileOps completed failure text: {} rawMissing=2 specific=1 partial=1 canceled=1 retainedMarker=true", culture));
++        AppendLog(std::format(L"FileOps completed failure text: {} cases={} specific=1 partial=1 canceled=1 retainedMarker=true", culture, cases.size()));
+@@ -627 +697 @@
+-        const std::wstring failureText = FormatHResultMessage(E_ACCESSDENIED);
++        const std::wstring failureText = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_ACCESS_DENIED);
+@@ -766 +836 @@
+-        // The remaining engine sentinel producers, and an unknown conflict class keeping the popup's status suffix.
++        // The remaining engine sentinel producers, and an unknown conflict class using the same plain popup text.
+@@ -779 +849 @@
+-            {Severity::Error, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), L"delete.confirmation.identityChanged", IDS_FILEOPS_CONFLICT_UNKNOWN},
++            {Severity::Error, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), L"delete.confirmation.identityChanged", IDS_FILEOPS_DIAG_ITEM_CHANGED},
+@@ -801,4 +871,2 @@
+-        const std::wstring explainedUnknown = FormatEmbeddedStringResource(
+-            nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(failureText), static_cast<unsigned long>(unknownClass.status));
+-        if (unknownClassText != explainedUnknown)
+-            return reject(std::format(L"{} an unknown conflict class lost the known error explanation or status suffix: '{}'", culture.name, unknownClassText));
++        if (unknownClassText != failureText)
++            return reject(std::format(L"{} an unknown conflict class lost the plain known error explanation: '{}'", culture.name, unknownClassText));
+@@ -824,3 +892 @@
+-            const std::wstring problem = LoadStringResource(nullptr, messageId);
+-            const std::wstring expected =
+-                FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(problem), static_cast<unsigned long>(status));
++            const std::wstring expected = LoadStringResource(nullptr, messageId);
+@@ -1116,3 +1182 @@
+-    const std::wstring frenchProblem = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+-    const std::wstring frenchFailed =
+-        FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(frenchProblem), static_cast<unsigned long>(missingStatus));
++    const std::wstring frenchFailed = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+@@ -1126,3 +1190 @@
+-    const std::wstring englishProblem = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+-    const std::wstring englishFailed =
+-        FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_STATUS, std::wstring_view(englishProblem), static_cast<unsigned long>(missingStatus));
++    const std::wstring englishFailed = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
+@@ -1184 +1246 @@
+-    const std::wstring accessDenied = TryFormatSystemMessage(GetSystemMessageIdFromHResult(E_ACCESSDENIED));
++    const std::wstring accessDenied = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_ACCESS_DENIED);
+@@ -1198,3 +1260,3 @@
+-    using Task       = FolderWindow::FileOperationState::Task;
+-    using Diagnostic = FolderWindow::FileOperationState::TaskDiagnosticEntry;
+-    using ItemKind   = Task::ConflictItemKind;
++    using Task        = FolderWindow::FileOperationState::Task;
++    using Diagnostic  = FolderWindow::FileOperationState::TaskDiagnosticEntry;
++    using ItemKind    = Task::ConflictItemKind;
+@@ -1281,6 +1343,6 @@
+-        const bool checked     = scenarioIndex % 2u == 0u;
+-        auto taskStorage       = std::make_unique<Task>(*operations);
+-        Task& task             = *taskStorage;
+-        task._operation     = FILESYSTEM_COPY;
+-        task._executionMode = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+-        task._fileSystem    = state.fsLocal;
++        const bool checked      = scenarioIndex % 2u == 0u;
++        auto taskStorage        = std::make_unique<Task>(*operations);
++        Task& task              = *taskStorage;
++        task._operation         = FILESYSTEM_COPY;
++        task._executionMode     = FolderWindow::FileOperationState::ExecutionMode::PerItem;
++        task._fileSystem        = state.fsLocal;
+@@ -1321,5 +1383,2 @@
+-                    const auto callbackScope = wil::scope_exit([&]() noexcept
+-                    {
+-                        task._dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed);
+-                    });
+-                    callbackHr = task.FileSystemIssue(
++                    const auto callbackScope = wil::scope_exit([&]() noexcept { task._dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
++                    callbackHr               = task.FileSystemIssue(
+@@ -1380 +1439 @@
+-        const auto& order = kOrders[orderIndex];
++        const auto& order    = kOrders[orderIndex];
+@@ -1740,3 +1799,3 @@
+-    auto& fileOperationsSettings  = EnsureFileOperationsSettingsForSelfTest();
+-    const bool previousShowNotes  = fileOperationsSettings.showInformationalNotes;
+-    const auto restoreShowNotes   = wil::scope_exit([&]() noexcept { EnsureFileOperationsSettingsForSelfTest().showInformationalNotes = previousShowNotes; });
++    auto& fileOperationsSettings = EnsureFileOperationsSettingsForSelfTest();
++    const bool previousShowNotes = fileOperationsSettings.showInformationalNotes;
++    const auto restoreShowNotes  = wil::scope_exit([&]() noexcept { EnsureFileOperationsSettingsForSelfTest().showInformationalNotes = previousShowNotes; });
+@@ -1744,2 +1803,2 @@
+-    auto lifetime = std::make_shared<int>(1);
+-    HWND pane     = FileOperationsIssuesPane::Create(operations, folder, state.mainWindow, lifetime);
++    auto lifetime                                 = std::make_shared<int>(1);
++    HWND pane                                     = FileOperationsIssuesPane::Create(operations, folder, state.mainWindow, lifetime);
+@@ -2045,10 +2104,10 @@
+-        aggregate.taskId           = cachedTask;
+-        aggregate.operation        = FILESYSTEM_COPY;
+-        aggregate.category         = L"item.conflict.accepted";
+-        aggregate.acceptedDecision = FileOperations::AcceptedConflictDecision{.taskId                      = cachedTask,
+-                                                                              .promptGeneration            = 2u,
+-                                                                              .sourceItemIndex             = 1u,
+-                                                                              .action                      = Task::ConflictAction::Skip,
+-                                                                              .applyToAll                  = true,
+-                                                                              .origin                      = FileOperations::ConflictDecisionOrigin::CachedScope,
+-                                                                              .originatingPromptGeneration = 1u};
++        aggregate.taskId                         = cachedTask;
++        aggregate.operation                      = FILESYSTEM_COPY;
++        aggregate.category                       = L"item.conflict.accepted";
++        aggregate.acceptedDecision               = FileOperations::AcceptedConflictDecision{.taskId           = cachedTask,
++                                                                                            .promptGeneration = 2u,
++                                                                                            .sourceItemIndex  = 1u,
++                                                                                            .action           = Task::ConflictAction::Skip,
++                                                                                            .applyToAll       = true,
++                                                                                            .origin           = FileOperations::ConflictDecisionOrigin::CachedScope,
++                                                                                            .originatingPromptGeneration = 1u};
+@@ -2061 +2120,2 @@
+-            return entry.taskId == cachedTask && entry.conflictPrompt.has_value() && ! entry.acceptedDecision.has_value() && entry.conflictPrompt->generation == 1u;
++            return entry.taskId == cachedTask && entry.conflictPrompt.has_value() && ! entry.acceptedDecision.has_value() &&
++                   entry.conflictPrompt->generation == 1u;
+@@ -2063 +2123,3 @@
+-        const bool cached = std::ranges::any_of(entries, [&](const Diagnostic& entry) noexcept {
++        const bool cached = std::ranges::any_of(entries,
++                                                [&](const Diagnostic& entry) noexcept
++        {
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp
+index a6cc12852..d03b67bd4 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp
+@@ -331,0 +332,124 @@ namespace FileOperationItemResultReducerSelfTestInternal
++// Reproduce an existing-file Managed Move to a location without FileIdInfo. The guard must
++// retain both byte streams and explain the collision in the card and Issues, including after
++// an aggregate task.result and a live language change. Negative controls must not invent a collision.
++[[nodiscard]] bool RunFileOperationUnverifiableDestinationCollisionSelfTest(FolderWindow::FileOperationState& fileOperations,
++                                                                            const wil::com_ptr<IFileSystem>& localFileSystem,
++                                                                            const std::filesystem::path& testRoot) noexcept
++{
++    using State = FolderWindow::FileOperationState;
++    wil::com_ptr<IFileSystemIO> io;
++    const auto root = testRoot / L"unverifiable-destination-collision";
++    if (! localFileSystem || FAILED(localFileSystem.try_query_to(io.put())) || ! RecreateEmptyDirectory(root))
++        return false;
++    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
++    Localization::LanguagePreference previousLanguage{};
++    if (g_settings.ui.has_value() && ! g_settings.ui->language.empty() && g_settings.ui->language != L"system")
++        previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui->language};
++    const auto restoreLanguage = wil::scope_exit([&]() noexcept { static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage)); });
++    bool passed                = true;
++    for (unsigned int variant = 0u; variant < 5u; ++variant)
++    {
++        const bool destinationExists = variant != 3u;
++        const bool sourceUnsupported = variant == 4u;
++        const bool expectCollision   = destinationExists && ! sourceUnsupported;
++        const auto caseRoot          = root / std::format(L"case-{}", variant);
++        const auto source            = caseRoot / L"source" / L"file.bin";
++        const auto destinationFolder = caseRoot / L"destination";
++        const auto destination       = destinationFolder / source.filename();
++        const std::string sourceBytes(97u, 's');
++        const std::string destinationBytes(97u, variant == 1u ? 's' : 'd');
++        if (! RecreateEmptyDirectory(source.parent_path()) || ! RecreateEmptyDirectory(destinationFolder) || ! WriteFileTextFsIo(io, source, sourceBytes) ||
++            (destinationExists && ! WriteFileTextFsIo(io, destination, destinationBytes)))
++            return false;
++        const auto injectionPath = sourceUnsupported ? source : variant == 0u || variant == 1u ? destination : destinationFolder;
++        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(kSelfTestEnvBindIdentityUnsupportedPath, injectionPath.native());
++        FileOperations::QualifiedEndpoint endpoint{
++            .pluginId               = L"builtin/file-system",
++            .instanceId             = L"host/default",
++            .profileId              = L"local",
++            .rootId                 = L"local-test-volume",
++            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
++            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
++        };
++        FileOperations::TransferPlan transfer{};
++        transfer.intent                         = FileOperations::TransferIntent::Move;
++        transfer.strategy                       = FileOperations::OperationStrategy::Managed;
++        transfer.sourceEndpoint                 = endpoint;
++        transfer.destinationEndpoint            = endpoint;
++        transfer.selectedItems                  = {{.providerPath = source.native()}};
++        transfer.destination.providerFolderPath = destinationFolder.native();
++        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
++            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
++        State::Task task(fileOperations);
++        task._operation                = FILESYSTEM_MOVE;
++        task._executionMode            = State::ExecutionMode::PerItem;
++        task._fileSystem               = localFileSystem;
++        task._sourcePaths              = {source};
++        task._sourcePluginId           = endpoint.pluginId;
++        task._sourcePluginShortId      = L"file";
++        task._sourceInstanceContext    = endpoint.instanceId;
++        task._sourcePathAttributesHint = {GetFileAttributesW(source.c_str())};
++        task._perItemMaxConcurrency    = 1u;
++        task.InitializeAdmissionInputs(plans,
++                                       {.fileSystem      = localFileSystem,
++                                        .folder          = destinationFolder,
++                                        .pluginId        = endpoint.pluginId,
++                                        .pluginShortId   = L"file",
++                                        .instanceContext = endpoint.instanceId});
++        task.InitializeSourceItemResultBuilders();
++        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
++        if (FAILED(task.PrepareMutationInterlockScopes()))
++            return false;
++        const auto started      = GetTickCount64();
++        const HRESULT executeHr = task.ExecuteOperation();
++        const HRESULT finalHr   = task.FinalizeTypedItemResults(executeHr);
++        task._resultHr.store(finalHr, std::memory_order_release);
++        task.LogDiagnostic(State::DiagnosticSeverity::Error, finalHr, L"task.result", L"Aggregate failure.");
++        unsigned long warnings = 0u;
++        unsigned long errors   = 0u;
++        std::wstring runningNote;
++        fileOperations.CollectTaskDiagnosticSnapshot(task._taskId, warnings, errors, runningNote);
++        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
++        Debug::Perf::EmitValue(L"FileOps.SelfTest.UnverifiableDestinationCollisionMs", GetTickCount64() - started, finalHr);
++        std::string actualSource;
++        std::string actualDestination;
++        std::error_code error;
++        const bool destinationPreserved = destinationExists ? ReadFileTextFsIo(io, destination, actualDestination) && actualDestination == destinationBytes
++                                                            : ! std::filesystem::exists(destination, error) && ! error;
++        const bool matches =
++            executeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && finalHr == executeHr && ReadFileTextFsIo(io, source, actualSource) &&
++            actualSource == sourceBytes && destinationPreserved && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
++            summary.retainedSourceCount == 1u && summary.unknownSourceCount == 0u && task._perf.conflictPromptCount == 0u &&
++            task._itemCompletedCallbackCount.load(std::memory_order_acquire) == 0u &&
++            (summary.lastDiagnosticMessage == LoadStringResource(nullptr, IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE)) == expectCollision &&
++            (! expectCollision || (runningNote == summary.lastDiagnosticMessage && summary.lastProblem.has_value() &&
++                                   summary.lastProblem.value().userText.messageId == IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE));
++        AppendLog(std::format(L"Unverifiable destination collision: case={} exists={} sameBytes={} sourceUnsupported={} hr=0x{:08X} preserved={} "
++                              L"passed={} note='{}'",
++                              variant,
++                              destinationExists,
++                              sourceBytes == destinationBytes,
++                              sourceUnsupported,
++                              static_cast<unsigned long>(finalHr),
++                              destinationPreserved && actualSource == sourceBytes,
++                              matches,
++                              summary.lastDiagnosticMessage));
++        passed = matches && passed;
++        if (expectCollision)
++        {
++            for (const std::wstring_view culture : {L"fr-FR", L"en-US"})
++            {
++                if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(culture)})))
++                    return false;
++                const std::wstring expected = LoadStringResource(nullptr, IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE);
++                const bool localized        = ! expected.empty() && State::FormatCompletedLastNote(summary) == expected && summary.lastProblem.has_value() &&
++                                              State::FormatIssueProblemText(summary.lastProblem.value()) == expected;
++                AppendLog(std::format(
++                    L"Unverifiable destination collision: case={} culture={} completed/Issues={} expected='{}'", variant, culture, localized, expected));
++                passed = localized && passed;
++            }
++        }
++    }
++    return passed;
++}
++
+@@ -377 +501,3 @@ namespace FileOperationItemResultReducerSelfTestInternal
+-        std::filesystem::directory_iterator it(directory, ec);
++        // The runner's owned path may already approach MAX_PATH before FindFirst adds its
++        // search suffix. Observe it through the same extended-path helper as fixture creation.
++        std::filesystem::directory_iterator it(std::filesystem::path(MakeExtendedPathForSelfTest(directory)), ec);
+@@ -378,0 +505,2 @@ namespace FileOperationItemResultReducerSelfTestInternal
++        {
++            AppendLog(std::format(L"Local empty-directory Copy inventory: '{}' could not be opened ({}).", directory.native(), ec.value()));
+@@ -379,0 +508 @@ namespace FileOperationItemResultReducerSelfTestInternal
++        }
+@@ -385,0 +515,2 @@ namespace FileOperationItemResultReducerSelfTestInternal
++            {
++                AppendLog(std::format(L"Local empty-directory Copy inventory: unexpected '{}' in '{}'.", name, directory.native()));
+@@ -386,0 +518 @@ namespace FileOperationItemResultReducerSelfTestInternal
++            }
+@@ -391,0 +524,3 @@ namespace FileOperationItemResultReducerSelfTestInternal
++        if (actualCount != expectedChildren.size())
++            AppendLog(std::format(
++                L"Local empty-directory Copy inventory: '{}' contains {} items, expected {}.", directory.native(), actualCount, expectedChildren.size()));
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases07_09.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases07_09.cpp
+index 9b0cf86f3..1a871fcfd 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases07_09.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases07_09.cpp
+@@ -2691,9 +2691,9 @@ case SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism:
+-        job->options.sizeBytes            = sizeof(FileSystemOptions);
+-        job->source                       = srcDir.native();
+-        job->destination                  = smallStackDstDir.native();
+-        job->copy                         = SmallStackCopy{.fileSystem  = state.fsLocal.get(),
+-                                                           .source      = job->source.c_str(),
+-                                                           .destination = job->destination.c_str(),
+-                                                           .flags       = flags,
+-                                                           .options     = &job->options,
+-                                                           .callback    = &job->callback};
++        job->options.sizeBytes = sizeof(FileSystemOptions);
++        job->source            = srcDir.native();
++        job->destination       = smallStackDstDir.native();
++        job->copy              = SmallStackCopy{.fileSystem  = state.fsLocal.get(),
++                                                .source      = job->source.c_str(),
++                                                .destination = job->destination.c_str(),
++                                                .flags       = flags,
++                                                .options     = &job->options,
++                                                .callback    = &job->callback};
+@@ -7044,3 +7044,4 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
+-        Task* task              = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+-        const auto nestedPrompt = TryGetConflictPromptCopy(task);
+-        if (! task || (! nestedPrompt.has_value() && ! HasFileOpsKeepBothNestedConflictPauseEnteredForSelfTest()))
++        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
++        // The submitted prime decision may still be visible. Wait for the nested worker's
++        // handshake, not for any active prompt, before releasing this pause.
++        if (! task || ! HasFileOpsKeepBothNestedConflictPauseEnteredForSelfTest())
+@@ -7050 +7051,6 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
+-        if (! FileSizeEquals(destinationMovedSibling, kMovedSiblingBytes))
++        const bool siblingCommitted = FileSizeEquals(destinationMovedSibling, kMovedSiblingBytes);
++        // Serial coverage retains the partial-tree witness. Parallel completion order is
++        // unconstrained: the collision may own the provider callback lock before the sibling
++        // finishes. Waiting for that sibling here would deadlock its progress callbacks.
++        // State 4 verifies its bytes and disposition after the task's completion join.
++        if (scenario.concurrency == 1u && ! siblingCommitted)
+@@ -7055,0 +7062,2 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
++        AppendLog(std::format(L"Cached Keep Both scenario {}: nested pause entered; sibling committed before collision={}", scenario.label, siblingCommitted));
++        Debug::Perf::Emit(L"FileOps.SelfTest.KeepBothSiblingOrder", scenario.label, 0u, scenario.concurrency, siblingCommitted ? 1u : 0u, S_OK);
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
+index bd90ccfc3..08e4d742c 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp
+@@ -14750,3 +14749,0 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+-            check(L"every localized-resource producer keeps its own sentence as Issues Problem and Last note in fr-FR and en-US, following the live "
+-                  L"language",
+-                  [&] { return RunFileOpsIssuesProducerResourceTextChecks(state); });
+@@ -14810 +14807,2 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+-            if (! RunFileOpsConflictMessageTextChecks() || ! RunFileOpsIssuesTypedProblemTextChecks(state))
++            if (! RunFileOpsConflictMessageTextChecks() || ! RunFileOpsIssuesTypedProblemTextChecks(state) ||
++                ! RunFileOpsIssuesProducerResourceTextChecks(state))
+@@ -14833 +14831,2 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+-                ! RunFileOperationQueuedMissingSourceTaskSelfTest(*state.fileOps, state.fsLocal, state.tempRoot))
++                ! RunFileOperationQueuedMissingSourceTaskSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
++                ! RunFileOperationUnverifiableDestinationCollisionSelfTest(*state.fileOps, state.fsLocal, state.tempRoot))
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.SameObject.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.SameObject.cpp
+index 91e9bdc8e..364e0494e 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.SameObject.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.SameObject.cpp
+@@ -266,0 +267,2 @@
++            if (! samePathCopy && summary->lastDiagnosticMessage != LoadStringResource(nullptr, IDS_FILEOPS_DIAG_SAME_OBJECT))
++                return reject(L"actual SameObject refusal showed a path-syntax error instead of the same-item explanation");
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallerySurfaces.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallerySurfaces.cpp
+index 8382c9cb4..b5cd0064e 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallerySurfaces.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallerySurfaces.cpp
+@@ -640 +640,2 @@ void CALLBACK CaptureFileOpsGalleryConfirmation(HWND, UINT, UINT_PTR timerId, DW
+-            typedSnapshot.primaryResultText != unknownResult || typedSnapshot.detailTexts[0].find(FormatHResultMessage(legacy.status)) == std::wstring::npos ||
++            typedSnapshot.primaryResultText != unknownResult ||
++            typedSnapshot.detailTexts[0].find(LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_EXISTS)) == std::wstring::npos ||
+diff --git a/Specs/Core/Core_SharedHelpers.md b/Specs/Core/Core_SharedHelpers.md
+index 9da650c50..d0672ea96 100644
+--- a/Specs/Core/Core_SharedHelpers.md
++++ b/Specs/Core/Core_SharedHelpers.md
+@@ -78 +78 @@ and product-specific color contrast thresholds remain distinct until their contr
+-| File Operations conflict problem text | `FileOperations::FormatConflictProblemText` in `RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp` | Application-specific typed-conflict and engine-sentinel policy shared by the card, pane mirror, announcements, Issues and finished failures without retained diagnostics. Missing file/folder guidance uses resources; other real errors reuse `GetSystemMessageIdFromHResult`, `TryFormatSystemMessage` and `TrimTrailingSystemMessageWhitespace` from `Common/Helpers.h`, accepting an Issues view's cached system text. It does not classify mutation policy or infer the missing endpoint. See `Specs/UI/UI_FileOperationsPopup.md`. |
++| File Operations conflict problem text | `FileOperations::FormatConflictProblemText` in `RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp` | Application-specific typed-conflict and engine-sentinel policy shared by the card, pane mirror, announcements, Issues and finished failures without retained diagnostics. The internal `PlainFileOperationStatusMessageId` shares common-failure resources with Issues formatting in the selected application language. Uncatalogued provider errors reuse `GetSystemMessageIdFromHResult`, `TryFormatSystemMessage` and `TrimTrailingSystemMessageWhitespace` from `Common/Helpers.h`, accepting an Issues view's cached system text. Explanations are plain text; original codes remain in Technical details. This is presentation policy, not a general HRESULT translator, mutation classifier or missing-endpoint inference. See `Specs/UI/UI_FileOperationsPopup.md`. |
+diff --git a/Specs/FileSystem/FileSystem_FileOperations.md b/Specs/FileSystem/FileSystem_FileOperations.md
+index 35d45093f..f19421c45 100644
+--- a/Specs/FileSystem/FileSystem_FileOperations.md
++++ b/Specs/FileSystem/FileSystem_FileOperations.md
+@@ -56,0 +57,9 @@ directory object.
++14. A Move refused before mutation at an existing destination whose object binding is Unsupported
++    reports that collision and the unavailable safe replacement authority, rather than only the
++    generic `ERROR_NOT_SUPPORTED` system text. A separate successful existence read establishes
++    this diagnostic fact only; it authorizes no overwrite, source cleanup, or identity/equality
++    claim. Missing destinations, failed probes, and unsupported source/ancestor bindings retain
++    their original failure classification. The original status and both objects are preserved.
++    The extra read runs only on this failure path, on the operation worker. Existing
++    `fileops.identity.guard_us` instrumentation is retained, and
++    `FileOps.Conflict.DestinationIdentityUnavailable` counts the specialized diagnostic.
+@@ -1214,0 +1224,6 @@ scope without capacity receives an explicit one-item limitation instead of a sil
++Recursive parallel Copy/Move does not guarantee sibling completion order. The nested Keep Both
++regression waits for the nested-collision handshake, releases its callback pause promptly, and
++verifies sibling bytes and source disposition after task completion. It must not wait for a sibling
++while holding the provider's serialized issue callback. Serial coverage retains its earlier-sibling
++partial-tree witness; both modes must retain exactly two explicit prompts and no renamed/retried root.
++
+@@ -1227 +1242,2 @@ An otherwise Unknown conflict with Win32 error 2 or 3 still explains the missing
+-folder, and other real errors retain the available system description and code through the shared
++folder. Common failures use plain resources in the application's selected language; uncatalogued
++provider errors retain the available trimmed system description through the shared
+@@ -1230 +1246,6 @@ decisions or infer which source/destination/intermediate item caused the failure
+-and proof sentinels retain their own semantic text. `FileOps_ConflictMessageText` validates the
++and proof sentinels retain their own semantic text. The original HRESULT stays in Technical details,
++logs and exports instead of being appended to the user's explanation. Identity guards explain
++same-item aliases, an already-selected folder, a destination inside the source, unsafe linked
++ancestry, source/destination revision changes and unavailable reliable identity using their stable
++producer categories. A generic unsupported-operation status alone must not imply a collision or
++claim either endpoint was preserved. `FileOps_ConflictMessageText` validates the
+diff --git a/Specs/Testing/Testing_SelfTests.md b/Specs/Testing/Testing_SelfTests.md
+index 29db221cc..4dadda24e 100644
+--- a/Specs/Testing/Testing_SelfTests.md
++++ b/Specs/Testing/Testing_SelfTests.md
+@@ -788 +788,25 @@ Environment variables may select alternate test inputs such as profile names, bu
+-  second cleanup prompt.
++  second cleanup prompt. Cover Copy and Move with concurrency 1 and 2. Wait for the actual nested
++  pause handshake, never the still-visible priming prompt. Only serial execution requires the
++  earlier sibling to have committed before that pause; parallel workers may finish in either order.
++  Release the pause without waiting for another callback (the provider serializes callbacks), then
++  verify the sibling's bytes, disposition, two-prompt count and absence of a renamed root after task
++  completion. Record `FileOps.SelfTest.KeepBothSiblingOrder` with concurrency and the observed sibling
++  state; repeated runs must not turn scheduling order into a correctness requirement.
++- `FileOps_ConflictMessageText` must cover common Windows failure codes and identity refusal
++  categories in fr-FR and en-US through the shared question, announcement, Issues formatter and
++  completed-note paths, including legacy rows without typed prompt facts. Known resources must beat cached OS text; unfamiliar provider codes must
++  preserve a supplied trimmed explanation. Production completed-card snapshots must retain the
++  original HRESULT, specific typed-note priority, partial/cancel semantics and live-language text.
++  The real same-object worker fixture must show a same-item explanation instead of a syntax error.
++  Resource-producer live Issues/note checks belong to this focused message case so storage-fixture
++  failures cannot prevent their independent execution. Empty-directory Copy inventory failures name
++  the unexpected or missing entry count; ACL-restoration failures record the API result and original
++  versus restored control, revision and descriptor lengths without weakening the exact restore check.
++  Directory inventory uses the existing extended-path helper, including the `FindFirst` search
++  suffix at the legacy path limit. The ACL fixture reapplies its own existing DACL/protection once
++  on its newly created private directory, then captures the immutable pre-denial descriptor. This
++  establishes [Windows' automatic inheritance model](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)
++  before the snapshot; the final check still compares every original descriptor/control byte and
++  grants no additional rights or privileges.
++  The synthetic Stopping presentation fixture explicitly declares its known byte total; a separate
++  size-unknown control must retain no percentage, transfer marquee, aggregate byte total or ETA.
+diff --git a/Specs/UI/UI_FileOperationsPopup.md b/Specs/UI/UI_FileOperationsPopup.md
+index 2a12a95d8..1a39903dd 100644
+--- a/Specs/UI/UI_FileOperationsPopup.md
++++ b/Specs/UI/UI_FileOperationsPopup.md
+@@ -1530,0 +1531,14 @@ prevents a blanket claim that every item moved.
++When a Move stops before mutation because the existing destination cannot provide object identity,
++the `identity.destinationExistsUnverifiable` problem uses
++`IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE`: an item already exists at the destination,
++the location cannot identify it safely for replacement, and the source and existing destination
++were left unchanged. This sentence requires both the destination binding's typed Unsupported
++outcome and a successful destination existence probe; an unsupported source/ancestor, a missing
++destination, or a failed existence probe must not invent this collision. Matching names or bytes
++do not prove that the objects are identical. The original HRESULT and refusal remain unchanged.
++The typed resource follows live language changes in the running/completed Last note and Issues;
++the trailing `task.result` does not replace it with the generic Windows status text.
++`FileOps_ReviewRemediationContracts` covers identical/different contents, a destination root without
++identity support, absent-destination and unsupported-source controls, byte preservation, and live
++English/French completed/Issues text.
++
+@@ -2270,3 +2284,8 @@ screen-reader announcement, Issues problem and completed last-note text MUST sha
+-the source, destination or an intermediate item was missing. Other actual failures use the available
+-Windows explanation; absent details use a localized neutral failure sentence. Keep the hexadecimal
+-status for an unclassified problem. Engine outcome/proof sentinels MUST retain their semantic text
++the source, destination or an intermediate item was missing. Common failures (existing item, access
++denied, item in use, full disk, long/invalid path, read-only item, unavailable network, unsupported
++operation, changed item, nonempty folder and write-protected location) use resources in the selected application language.
++`ERROR_WRITE_PROTECT` describes a location/device that cannot be written, not a file's read-only
++attribute; its guidance names the write protection without guessing which endpoint reported it.
++Uncatalogued provider failures use the available, trimmed Windows explanation; absent details use a
++localized neutral failure sentence. Questions, announcements, Problems and Last notes show the plain
++explanation; the original HRESULT remains in Technical details, logs and exports. Engine outcome/proof sentinels MUST retain their semantic text
+@@ -2689 +2708 @@ task card's `Last note` show localized text derived from typed facts, never the
+-   popup's conflict question, including its `(0x…)` status suffix for the unknown class;
++   popup's plain conflict question, including when the class is unknown;
+@@ -2695 +2714,7 @@ task card's `Last note` show localized text derived from typed facts, never the
+-   (the file's size could not be read from the source, so it was not transferred; I35 XP-10);
++   (the file's size could not be read from the source, so it was not transferred; I35 XP-10).
++   Identity refusal codes `identity.sameObject`, `identity.sameFolderMove`,
++   `identity.destinationInsideSource`, `identity.ancestryLink`, `identity.sourceChanged` and
++   `identity.destinationChanged` explain the actual refusal and a useful next step instead of the
++   unrelated generic Win32 name/reparse/revision sentence. `identity.unsupported` explains unavailable
++   reliable identity only for `ERROR_NOT_SUPPORTED`, `E_NOTIMPL` or `E_NOINTERFACE`; a path-length
++   failure in that category must still explain the long path;
+@@ -2703 +2728 @@ task card's `Last note` show localized text derived from typed facts, never the
+-   `ERROR_PARTIAL_COPY`, `ERROR_REVISION_MISMATCH` or `E_UNEXPECTED` otherwise reads
++   `ERROR_PARTIAL_COPY` or `E_UNEXPECTED` otherwise reads
+@@ -2705,2 +2730,4 @@ task card's `Last note` show localized text derived from typed facts, never the
+-6. the system message of any other failure HRESULT (a real provider or OS failure such as access denied
+-   or a sharing violation); a failure with no system text (for example the shell copy-engine
++6. a localized resource for the common failures listed above. `ERROR_REVISION_MISMATCH` explains that
++   an item changed, without inventing which endpoint changed; `ERROR_DIR_NOT_EMPTY` says the folder
++   is not empty, without claiming it is the destination. Otherwise use the trimmed system message of
++   a real provider or OS failure; a failure with no system text (for example the shell copy-engine

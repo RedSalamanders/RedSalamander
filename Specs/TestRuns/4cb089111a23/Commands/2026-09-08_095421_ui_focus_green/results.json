@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-09-08T09:54:36.835Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T095421Z-96212-395605ec406943dea102b212dca09ceb\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 8369,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_reliability_preferences_keyboard_search_reacquires_input",
+            "status": "passed",
+            "duration_ms": 743,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 399,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_reliability_preferences_keyboard_search_reacquires_input",
+            "status": "passed",
+            "duration_ms": 743,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 342,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_reliability_preferences_keyboard_search_reacquires_input",
+            "status": "passed",
+            "duration_ms": 701,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 354,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_reliability_preferences_keyboard_search_reacquires_input",
+            "status": "passed",
+            "duration_ms": 669,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 347,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_reliability_preferences_keyboard_search_reacquires_input",
+            "status": "passed",
+            "duration_ms": 828,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 338,
+            "repeat_index": 5
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 5
+}

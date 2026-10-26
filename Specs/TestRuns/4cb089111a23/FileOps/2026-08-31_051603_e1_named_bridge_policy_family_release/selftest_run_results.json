@@ -1,0 +1,81 @@
+{
+    "run_started_utc": "2026-08-31T03:10:42.586Z",
+    "duration_ms": 321327,
+    "fail_fast": true,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_Phase11_BridgeAndConnections",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\20260831T031026Z-63536-56efdd730e384d2cbe5c5269ae0a2033\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 320782,
+            "passed": 9,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_Phase11_BridgeAndConnections",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1141,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_CrossFileSystemBridge",
+                    "status": "passed",
+                    "duration_ms": 11531,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgeSingleFolderParallelCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 24969,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 97109,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgePipelineDummyToDummyPerf",
+                    "status": "passed",
+                    "duration_ms": 128125,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverridePrecedence",
+                    "status": "passed",
+                    "duration_ms": 1313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideGlobalGate",
+                    "status": "passed",
+                    "duration_ms": 40719,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideClamp",
+                    "status": "passed",
+                    "duration_ms": 15734,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 141,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0
+}

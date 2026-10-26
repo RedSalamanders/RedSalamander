@@ -1,0 +1,92 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-08-09T16:12:51.5076548Z",
+  "run_ended_utc": "2026-08-09T16:12:54.4387189Z",
+  "duration_ms": 2931,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\TestSandbox\\runs\\20260809T161250Z-10872-be416ca3ae23408c89c925bb213b65b1\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\TestSandbox",
+  "run_id": "20260809T161250Z-10872-be416ca3ae23408c89c925bb213b65b1",
+  "fail_fast": false,
+  "timeout_scale": 2.0,
+  "case_filter": "Causeway_BridgeProviderOutputContracts",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "total": 3,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\TestSandbox",
+    "run_id": "20260809T161250Z-10872-be416ca3ae23408c89c925bb213b65b1",
+    "allowed_run_ids": [
+      "20260809T161250Z-10872-be416ca3ae23408c89c925bb213b65b1"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 2810,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1359,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeProviderOutputContracts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 516,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 109,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

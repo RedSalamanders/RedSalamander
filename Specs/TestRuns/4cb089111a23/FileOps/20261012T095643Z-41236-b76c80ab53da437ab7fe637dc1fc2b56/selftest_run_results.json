@@ -1,0 +1,93 @@
+{
+    "run_started_utc": "2026-10-12T09:57:14.398Z",
+    "duration_ms": 24433,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_Phase05_Discovery",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T095643Z-41236-b76c80ab53da437ab7fe637dc1fc2b56\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 22625,
+            "passed": 11,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_Phase05_Discovery",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 6562,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySingleTraversal",
+                    "status": "passed",
+                    "duration_ms": 391,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelReleasesSlot",
+                    "status": "passed",
+                    "duration_ms": 1703,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_CleanupDrainsOutstandingTasks",
+                    "status": "passed",
+                    "duration_ms": 297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelLatencyLocal",
+                    "status": "passed",
+                    "duration_ms": 812,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySkipContinues",
+                    "status": "passed",
+                    "duration_ms": 1188,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "BR3_CancelQueuePausedTransfer",
+                    "status": "passed",
+                    "duration_ms": 9203,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_CancelQueuedTask",
+                    "status": "passed",
+                    "duration_ms": 484,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+                    "status": "passed",
+                    "duration_ms": 625,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_SwitchWaitToParallelResume",
+                    "status": "passed",
+                    "duration_ms": 219,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 1141,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0
+}

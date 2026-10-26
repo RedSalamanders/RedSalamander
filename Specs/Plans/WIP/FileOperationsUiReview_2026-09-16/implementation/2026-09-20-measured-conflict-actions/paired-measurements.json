@@ -1,0 +1,26 @@
+{
+  "FileOps.Popup.CommonName.RedrawBatchUs": {
+    "median_us": {
+      "baseline": 66607,
+      "candidate": 66570,
+      "percent": -0.055549716996716736
+    },
+    "p95_us": {
+      "baseline": 66740,
+      "candidate": 67715,
+      "percent": 1.4608930176805535
+    }
+  },
+  "FileOps.Popup.ConflictRows.RedrawBatchUs": {
+    "median_us": {
+      "baseline": 66578,
+      "candidate": 66593,
+      "percent": 0.02252996485325731
+    },
+    "p95_us": {
+      "baseline": 66836,
+      "candidate": 67403,
+      "percent": 0.8483452031839089
+    }
+  }
+}

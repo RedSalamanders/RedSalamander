@@ -1,0 +1,13 @@
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+CommandsSelfTest: isolated execution order count=1 repeat=1 shuffleSeed=none
+Case: cmd_pane_batchRename_artifact_prompt_shutdown_during_nested_pump
+Case returned: cmd_pane_batchRename_artifact_prompt_shutdown_during_nested_pump ok=yes failed=no skipped=no
+CommandsSelfTest: PASS
+CommandsSelfTest: PASS
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+
+

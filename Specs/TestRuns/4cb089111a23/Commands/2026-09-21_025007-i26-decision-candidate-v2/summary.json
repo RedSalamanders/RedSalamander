@@ -1,0 +1,81 @@
+{
+  "variant": "candidate-v2",
+  "passed": 6,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "3000252ad83290cae378e80ace20d0997e1a3ee67a0f5257c50acfe4c3872bf7",
+  "metrics": {
+    "action-1-cache-0": {
+      "samples_us": [
+        43767,
+        62454,
+        70471
+      ],
+      "median_us": 62454,
+      "p95_us": 70471
+    },
+    "action-9-cache-0": {
+      "samples_us": [
+        64076,
+        53975,
+        17290
+      ],
+      "median_us": 53975,
+      "p95_us": 64076
+    },
+    "action-8-cache-0": {
+      "samples_us": [
+        54682,
+        43174,
+        33348
+      ],
+      "median_us": 43174,
+      "p95_us": 54682
+    },
+    "action-11-cache-0": {
+      "samples_us": [
+        54551,
+        55318,
+        28525
+      ],
+      "median_us": 54551,
+      "p95_us": 55318
+    },
+    "action-0-cache-0": {
+      "samples_us": [
+        59729,
+        17713,
+        31280
+      ],
+      "median_us": 31280,
+      "p95_us": 59729
+    },
+    "action-7-cache-0": {
+      "samples_us": [
+        48657,
+        30441,
+        26114
+      ],
+      "median_us": 30441,
+      "p95_us": 48657
+    },
+    "action-1-cache-1": {
+      "samples_us": [
+        54937,
+        59808,
+        59086
+      ],
+      "median_us": 59086,
+      "p95_us": 59808
+    },
+    "action-10-cache-1": {
+      "samples_us": [
+        50263,
+        40985,
+        54095
+      ],
+      "median_us": 50263,
+      "p95_us": 54095
+    }
+  }
+}

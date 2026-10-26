@@ -1,0 +1,81 @@
+{
+  "variant": "problem-reference-v1",
+  "passed": 6,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "1ff731e8f4ee9248d7b71fc95dcb98cb411bb8a05d1d099983f0faba62a488d4",
+  "metrics": {
+    "action-1-cache-0": {
+      "samples_us": [
+        28919,
+        30686,
+        65037
+      ],
+      "median_us": 30686,
+      "p95_us": 65037
+    },
+    "action-9-cache-0": {
+      "samples_us": [
+        50982,
+        54685,
+        56065
+      ],
+      "median_us": 54685,
+      "p95_us": 56065
+    },
+    "action-8-cache-0": {
+      "samples_us": [
+        28586,
+        46231,
+        31093
+      ],
+      "median_us": 31093,
+      "p95_us": 46231
+    },
+    "action-11-cache-0": {
+      "samples_us": [
+        29222,
+        32608,
+        53666
+      ],
+      "median_us": 32608,
+      "p95_us": 53666
+    },
+    "action-0-cache-0": {
+      "samples_us": [
+        33064,
+        32481,
+        31357
+      ],
+      "median_us": 32481,
+      "p95_us": 33064
+    },
+    "action-7-cache-0": {
+      "samples_us": [
+        29803,
+        62556,
+        58684
+      ],
+      "median_us": 58684,
+      "p95_us": 62556
+    },
+    "action-1-cache-1": {
+      "samples_us": [
+        55142,
+        60538,
+        64972
+      ],
+      "median_us": 60538,
+      "p95_us": 64972
+    },
+    "action-10-cache-1": {
+      "samples_us": [
+        48461,
+        62181,
+        63405
+      ],
+      "median_us": 62181,
+      "p95_us": 63405
+    }
+  }
+}

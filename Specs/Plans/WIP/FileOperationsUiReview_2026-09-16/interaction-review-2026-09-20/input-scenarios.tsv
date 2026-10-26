@@ -1,0 +1,10 @@
+file	scenario	theme	clientWidthDip	dpi	fixture
+109-keyboard-tab-focus__dark__fr-FR__display1__144dpi.png	109-keyboard-tab-focus	dark	0	144	real-foreground-keyboard-input
+110-keyboard-shift-tab-focus__dark__fr-FR__display1__144dpi.png	110-keyboard-shift-tab-focus	dark	0	144	real-foreground-keyboard-input
+111-pointer-hover__dark__fr-FR__display1__144dpi.png	111-pointer-hover	dark	0	144	real-pointer-hover
+112-pointer-pressed__dark__fr-FR__display1__144dpi.png	112-pointer-pressed	dark	0	144	real-pointer-down-capture-owned
+109-keyboard-tab-focus__dark__fr-FR__display2__96dpi.png	109-keyboard-tab-focus	dark	0	96	real-foreground-keyboard-input
+110-keyboard-shift-tab-focus__dark__fr-FR__display2__96dpi.png	110-keyboard-shift-tab-focus	dark	0	96	real-foreground-keyboard-input
+111-pointer-hover__dark__fr-FR__display2__96dpi.png	111-pointer-hover	dark	0	96	real-pointer-hover
+112-pointer-pressed__dark__fr-FR__display2__96dpi.png	112-pointer-pressed	dark	0	96	real-pointer-down-capture-owned
+113-dpi-return-to-first-display__dark__fr-FR__display1__144dpi.png	113-dpi-return-to-first-display	dark	0	144	same-HWND-round-trip-DPI

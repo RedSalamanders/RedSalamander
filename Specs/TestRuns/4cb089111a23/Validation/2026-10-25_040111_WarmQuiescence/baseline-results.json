@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-25T04:01:39.844Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261025T040111Z-75708-0c710bf54e184d3385b9aa85b7f7c004\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2037,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Warm quiescence returned with a queued paint timer still undispatched.",
+    "cases": [
+        {
+            "name": "folder_view_warm_quiescence_drains_pending_paint",
+            "status": "failed",
+            "duration_ms": 1454,
+            "repeat_index": 1,
+            "reason": "Warm quiescence returned with a queued paint timer still undispatched."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

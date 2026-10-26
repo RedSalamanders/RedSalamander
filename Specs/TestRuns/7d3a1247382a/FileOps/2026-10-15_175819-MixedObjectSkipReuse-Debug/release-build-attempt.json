@@ -1,0 +1,14 @@
+{
+  "schema": "red-salamander.validation-attempt.v1",
+  "configuration": "Release",
+  "platform": "x64",
+  "status": "BLOCKED_RUNNING_APPLICATION",
+  "exitCode": 1,
+  "processId": 51848,
+  "executable": "D:\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe",
+  "processCreatedLocal": "2026-10-15T17:34:23.586545+02:00",
+  "nativeCompilationStarted": false,
+  "applicationStopped": false,
+  "releaseExecutableUpdated": false,
+  "output": "DxUi restored at e0260dde04695f0794eed79708030798b7575e0c for x64; output identity 1c3a0f1bdd87b292e28c14b048be612690db13d563c6e4be2cf5cd511e8a0052.\r\nNo compatible build receipt exists; first attestation requires Rebuild.\r\nStarting build...\r\n\r\n========================================\r\nBuild Failed with Exception!\r\n========================================\r\nError: Build canceled because an independently launched process is using an exact target output. It was not terminated because it is not proven to belong to this operation; close it and retry.\n  PID=51848; Path='D:\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe'; CommandLine='\"D:\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe\"'\r\nBuild time: 00:00\r\nException: \r\nLine |\r\n   2 |  … ODE -ne 0) { throw ('Release build failed: ' + $LASTEXITCODE) } } fin …\r\n     |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n     | Release build failed: 1\r\n"
+}

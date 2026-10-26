@@ -1,0 +1,110 @@
+{
+  "schema": "per-item-cancel-fixture-baseline-v1",
+  "source": "56232e438b32953ddf9829529b87e7f3d59f1e5e",
+  "profile": "x64 Release",
+  "buildReceipt": "e6b30dddfa684dd9f568161b266d214e3f15c586c625e0c6255a044bf8d1caea",
+  "appSha256": "1197CC4CF54161C22ACAE98E1824922882A31D57F6381B7CD38FACEEF10C201F",
+  "broadRun": "20261025T071104Z-46092-f370004353b74dc3bc8bccc1798e7ee5",
+  "broadCaseCounts": {
+    "blocked": 305,
+    "passed": 16,
+    "failed": 1
+  },
+  "broadCopyFailure": {
+    "originalTraceSha256": "EEA51D26A40A69E06C889228C91CD213E3735FEF9ECB3ADE8B02E60DEB7338A1",
+    "originalTraceBytes": 1122398,
+    "originalSplitRowCount": 2346,
+    "rowCountDefinition": "CRLF/LF split including the terminal empty row when present",
+    "compaction": "Last eight ordered per-root observations and their rejecting assertion; complete raw trace retained locally under the named completed run",
+    "rows": [
+      {
+        "line": 2316,
+        "text": "[181478687] Per-item cancel Copy root=0 pub/source/completion=2/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2317,
+        "text": "[181478687] Per-item cancel Copy root=1 pub/source/completion=2/1/0 hr=0x00000000"
+      },
+      {
+        "line": 2318,
+        "text": "[181478703] Per-item cancel Copy root=2 pub/source/completion=1/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2319,
+        "text": "[181478703] Per-item cancel Copy root=3 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2320,
+        "text": "[181478718] Per-item cancel Copy root=4 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2321,
+        "text": "[181478718] Per-item cancel Copy root=5 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2322,
+        "text": "[181478718] Per-item cancel Copy root=6 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2323,
+        "text": "[181478734] Per-item cancel Copy root=7 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 2324,
+        "text": "[181478734] Per-item cancel Copy: root 0 result or storage contradicts its dispatch"
+      }
+    ]
+  },
+  "replayRun": "20261025T084433Z-98192-f47832264975477d8a63100aa214343d",
+  "replaySelectedCaseCounts": {
+    "blocked": 12,
+    "passed": 17,
+    "failed": 1
+  },
+  "replayMoveFailure": {
+    "originalTraceSha256": "2EDB9675D09FDCCB60E9F75FBBB7ADF44472068907968B18DB3E26273B988AC7",
+    "originalTraceBytes": 143556,
+    "originalSplitRowCount": 1106,
+    "rowCountDefinition": "CRLF/LF split including the terminal empty row when present",
+    "compaction": "Last eight ordered per-root observations and their rejecting assertion; complete raw trace retained locally under the named completed run",
+    "rows": [
+      {
+        "line": 1076,
+        "text": "[182367359] Per-item cancel Move root=0 pub/source/completion=2/0/2 hr=0x800704C7"
+      },
+      {
+        "line": 1077,
+        "text": "[182367359] Per-item cancel Move root=1 pub/source/completion=2/0/0 hr=0x00000000"
+      },
+      {
+        "line": 1078,
+        "text": "[182367375] Per-item cancel Move root=2 pub/source/completion=1/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1079,
+        "text": "[182367375] Per-item cancel Move root=3 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1080,
+        "text": "[182367375] Per-item cancel Move root=4 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1081,
+        "text": "[182367375] Per-item cancel Move root=5 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1082,
+        "text": "[182367375] Per-item cancel Move root=6 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1083,
+        "text": "[182367375] Per-item cancel Move root=7 pub/source/completion=0/1/2 hr=0x800704C7"
+      },
+      {
+        "line": 1084,
+        "text": "[182367375] Per-item cancel Move: root 0 result or storage contradicts its dispatch"
+      }
+    ]
+  },
+  "candidateStatus": "pending; baseline evidence only"
+}

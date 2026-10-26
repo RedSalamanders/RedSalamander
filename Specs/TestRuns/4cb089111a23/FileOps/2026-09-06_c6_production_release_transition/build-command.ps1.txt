@@ -1,0 +1,33 @@
+$ErrorActionPreference = 'Stop'
+$transitionRepo = (Get-Location).Path
+$env:REDSALAMANDER_TEST_ROOT = 'C:\RedSalamander.Perf'
+$env:REDSALAMANDER_TEST_RUN_ID = 'c6-production-transition-20260906'
+Import-Module .\Tools\Modules\Testing\TestSandbox.psm1
+$transitionScratch = New-RSTestSandboxScratchDirectory -RepoRoot $transitionRepo -Harness policy -Case production-transition
+Import-Module .\Tools\Modules\Build\ArtifactOperationLock.psm1
+Import-Module .\Tools\Modules\Build\BuildEvidence.psm1
+$transitionOutput = Join-Path $transitionRepo '.build/x64/Release'
+$transitionLock = Enter-RSArtifactOperationLock -RepoRoot $transitionRepo -Operation 'Capture test-enabled Release transition baseline' -Scope @{configuration='Release';platform='x64';suite='C6 production transition'}
+try {
+ $priorReceipt = Read-RSBuildReceipt -BuildOutputDir $transitionOutput -SchemaPath (Join-Path $transitionRepo 'Specs/Build/BuildReceipt.schema.json')
+ if ($null -eq $priorReceipt -or -not $priorReceipt.tests_enabled -or $priorReceipt.target -ne 'solution') { throw 'Transition requires a test-enabled full-solution baseline.' }
+ foreach ($artifact in $priorReceipt.outputs) {
+  $artifactPath = [IO.Path]::GetFullPath((Join-Path $transitionRepo $artifact.relative_path))
+  if (-not $artifactPath.StartsWith($transitionOutput + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Baseline artifact outside selected output.' }
+  $artifactFile = Get-Item -LiteralPath $artifactPath -Force
+  if ($artifactFile.PSIsContainer -or ($artifactFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $artifactFile.Length -ne $artifact.size_bytes -or (Get-FileHash -LiteralPath $artifactPath).Hash.ToLowerInvariant() -ne $artifact.sha256) { throw "Baseline artifact mismatch: $($artifact.relative_path)" }
+ }
+ Copy-Item -LiteralPath (Join-Path $transitionOutput 'build-receipt.json') -Destination (Join-Path $transitionScratch 'before-receipt.json')
+ $beforeRecord = [ordered]@{ start_head=(git rev-parse HEAD); receipt_id=$priorReceipt.receipt_id; tests_enabled=$priorReceipt.tests_enabled; artifacts_verified=@($priorReceipt.outputs).Count; source_snapshot_id=$priorReceipt.source_snapshot_id; snapshot_note='Prior committed runtime baseline; diagnostic-only commit follows it.' }
+ [IO.File]::WriteAllText((Join-Path $transitionScratch 'before-verification.json'), ($beforeRecord | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+ $beforeRecord | ConvertTo-Json -Compress
+}
+finally { Exit-RSArtifactOperationLock -Lock $transitionLock }
+$priorRsTests = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
+try {
+ $env:RSBuildEnableTests = 'false'
+ .\build.ps1 -Configuration Release
+ $transitionBuildExit = $LASTEXITCODE
+}
+finally { [Environment]::SetEnvironmentVariable('RSBuildEnableTests', $priorRsTests, 'Process') }
+exit $transitionBuildExit

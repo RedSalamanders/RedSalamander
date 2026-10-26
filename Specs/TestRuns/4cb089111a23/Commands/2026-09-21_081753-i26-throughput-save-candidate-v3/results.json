@@ -1,0 +1,36 @@
+{
+    "run_started_utc": "2026-09-21T06:17:53.028Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-throughput-save-candidate-v3-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 22735,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Reopening the same running task must retain placement and collapsed summary: expanded=false, summary=true, graphs=0, before=(1259,585,2001,1217), after=(1259,585,2001,1145).",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 7387,
+            "repeat_index": 1,
+            "reason": "Reopening the same running task must retain placement and collapsed summary: expanded=false, summary=true, graphs=0, before=(1259,585,2001,1217), after=(1259,585,2001,1145)."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 7129,
+            "repeat_index": 2,
+            "reason": "Reopening the same running task must retain placement and collapsed summary: expanded=false, summary=true, graphs=0, before=(1259,585,2001,1217), after=(1259,585,2001,1145)."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 7074,
+            "repeat_index": 3,
+            "reason": "Reopening the same running task must retain placement and collapsed summary: expanded=false, summary=true, graphs=0, before=(1259,585,2001,1217), after=(1259,585,2001,1145)."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

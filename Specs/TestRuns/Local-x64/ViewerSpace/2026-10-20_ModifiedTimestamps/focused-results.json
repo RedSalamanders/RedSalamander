@@ -1,0 +1,83 @@
+[
+  {
+    "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 103,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.txt"
+  },
+  {
+    "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 103,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceAnalysisHostVirtualGridAndLifetime.txt"
+  },
+  {
+    "case": "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 30,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceBlockedProviderCloseAndPostUpdateRace.txt"
+  },
+  {
+    "case": "TestViewerSpaceBoundedHostileProviderScanning",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 240,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceBoundedHostileProviderScanning.txt"
+  },
+  {
+    "case": "TestViewerSpaceDesktopObservationContracts",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 1,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceDesktopObservationContracts.txt"
+  },
+  {
+    "case": "TestViewerSpaceDirectorySummaryProtocol",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 174,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceDirectorySummaryProtocol.txt"
+  },
+  {
+    "case": "TestViewerSpaceLifecycleCaptures",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 112,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceLifecycleCaptures.txt"
+  },
+  {
+    "case": "TestViewerSpaceListingValidation",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 1,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceListingValidation.txt"
+  },
+  {
+    "case": "TestViewerSpaceScanPolicyHelpers",
+    "configuration": "Debug",
+    "passed": true,
+    "passed_checks": 13,
+    "failed_checks": 0,
+    "skipped_checks": 0,
+    "raw": "debug-TestViewerSpaceScanPolicyHelpers.txt"
+  }
+]

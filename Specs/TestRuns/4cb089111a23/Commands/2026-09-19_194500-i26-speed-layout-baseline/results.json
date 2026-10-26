@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-09-19T17:18:03.781Z",
+    "duration_ms": 4841,
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "S:\\RedSalamander.Perf\\runs\\speed-layout-baseline\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 4214,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 3.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+            "failureMessage": "French speed dialog constrained must fit label/input/help/actions without overlap: hintBottom=132, buttonTop=92, clientBottom=142.",
+            "cases": [
+                {
+                    "name": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+                    "status": "failed",
+                    "duration_ms": 3728,
+                    "repeat_index": 1,
+                    "reason": "French speed dialog constrained must fit label/input/help/actions without overlap: hintBottom=132, buttonTop=92, clientBottom=142."
+                }
+            ]
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-26T10:19:45.661Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T101945Z-99260-ac49a04829b84e8a8cd9ba9d11d01ab8\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 101,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "local_index_core_usn_record_bounds_reject_corruption",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_index_core_usn_seed_arena_preserves_unicode_records",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_index_core_ntfs_seed_scratch_owns_storage",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

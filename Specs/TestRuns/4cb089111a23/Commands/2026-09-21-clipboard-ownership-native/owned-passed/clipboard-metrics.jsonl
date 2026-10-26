@@ -1,0 +1,1 @@
+{"timestamp":"2026-09-21T11:32:37.327Z","process":104328,"thread":112056,"metric":"FileOps.Clipboard.StreamSnapshot","detail":"49343","durationUs":0,"value0":12,"value1":0,"hr":0,"scenario":"SelfTest","build":"Debug","branch":"fileops-ui-i26","commit":"eed5117205037fb8522b781892eed166eb2b8664","machineHash":"4cb089111a23","runId":"2026-09-21_113236","value":12,"unit":"count"}

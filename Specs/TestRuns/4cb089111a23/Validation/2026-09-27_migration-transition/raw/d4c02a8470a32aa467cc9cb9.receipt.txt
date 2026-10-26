@@ -1,0 +1,16 @@
+# Run-AllTests Case Dashboard
+
+- Run: `20260927T151422Z-87984-01e82b162f8d41ada5bd932ec31fbe5b`
+- Suite: `Commands`
+
+## Top Slowest Cases
+
+| Harness | Case | Source | Status | Classification | Duration ms | Seed | Attempt |
+|---|---|---|---|---|---:|---|---:|
+| Commands | cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot | case | passed | PASSED | 5559 |  | 1 |
+
+## Failure And Retry Evidence
+
+| Harness | Case | Source | Status | Classification | Seed | Reason |
+|---|---|---|---|---|---|---|
+| (none) |  |  |  |  |  |  |

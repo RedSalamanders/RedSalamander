@@ -1,0 +1,21 @@
+Observatory Track 3 Microsoft Drive credential-boundary closeout
+UTC timestamp: 2026-07-16T18:47:10.434Z
+Working-tree base: f4e0c8c3bed8
+Machine hash: 4cb089111a23
+
+Debug FileSystemMicrosoftDrive build: PASS (0 warnings, 0 errors)
+PluginContractTests: PASS
+Microsoft Drive debug selftests: PASS (passed=103, failed=0, hr=0x00000000)
+TestHarnessSourceContracts: PASS (passed=133, failed=0, skipped=0)
+Release FileSystemMicrosoftDrive build: PASS (0 warnings, 0 errors)
+
+Credential-boundary deterministic proof:
+- approved same-origin pagination: 2 requests, S_OK
+- foreign HTTPS continuation: 1 request, ERROR_ACCESS_DENIED before second dispatch
+- plaintext Graph continuation: 1 request, ERROR_ACCESS_DENIED before second dispatch
+- repeated continuation: 2 requests, ERROR_INVALID_DATA before third dispatch
+- injected authorized Graph failure: redacted https/graph-api diagnostic; no bearer/query sentinel
+- injected preauthenticated upload failure: redacted https/preauthenticated-upload diagnostic; no opaque-query sentinel
+- Graph bearer header added separately through WinHttpAddRequestHeaders and securely cleared
+- Graph and upload credential-bound requests disable automatic redirects
+- Debug and Release production builds are warning-clean

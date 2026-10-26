@@ -1,0 +1,2 @@
+# Preserve copied CI report and log bytes exactly as listed in manifest.txt.
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
