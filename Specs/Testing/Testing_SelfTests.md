@@ -2057,7 +2057,9 @@ failure, never permission to substitute a desktop screenshot or a partial render
 ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
 The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.
 `REDSALAMANDER_VIEWER_LIFECYCLE_TEST_SMALL_WORKAREA=1` restricts only the owned fixture to a 1024 by 680
-pixel subset of the actual work area for a deterministic small-desktop control; it never changes display settings.
+DIP subset of the actual work area for a deterministic small-desktop control; it never changes display settings.
+This keeps the required analysis panel representable at the current DPI. The real work area still bounds the fixture.
+Capture failures record their API stage and actual witness/frame bounds; fresh child failures record the exit code.
 
 Known layered fixtures SHOULD supply `WindowScreenshotColorProbe` witnesses for their distinct
 render layers. Probe rectangles use client pixels mapped against the captured extended-frame bounds;

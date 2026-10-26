@@ -142,7 +142,8 @@ grow GDI/USER counts by at most two, and grow live allocated bytes by at most 8 
 The original measured burst keeps its private-byte guard and adds 8 MiB live-allocation
 bounds both against its immediate baseline and across the combined cold/measured
 bursts. Thus allocator reservation is warmed while application retention stays bounded.
-Allocator heap/free diagnostics remain visible. No option change or quarantine purge
+Allocator heap/free diagnostics remain visible. Cold handle diagnostics retain the exact
+before/after GDI and USER counts and HWND identities. No option change or quarantine purge
 qualifies this test, and this measurement protocol is not a production performance
 improvement claim. Diagnostic writes remain outside the measured interval; original
 HWND, generation, GDI/USER, timer, capture and teardown assertions remain independent.

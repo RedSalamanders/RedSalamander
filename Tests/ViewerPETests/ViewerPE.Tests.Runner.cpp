@@ -1191,7 +1191,7 @@ struct ViewerHarnessTimeoutProbe final
         return false;
     }
 
-    Check(exitCode == 0u, std::format(L"{} fresh harness run passes", testName), success);
+    Check(exitCode == 0u, std::format(L"{} fresh harness run passes (exit=0x{:08X})", testName, exitCode), success);
     return exitCode == 0u;
 }
 
@@ -11606,8 +11606,8 @@ private:
         if (smallWorkArea.value.has_value() && smallWorkArea.value.value() == L"1")
         {
             // A counterfactual fixture subset; never change the desktop display settings.
-            monitor.rcWork.right  = std::min(monitor.rcWork.right, monitor.rcWork.left + 1024L);
-            monitor.rcWork.bottom = std::min(monitor.rcWork.bottom, monitor.rcWork.top + 680L);
+            monitor.rcWork.right  = std::min(monitor.rcWork.right, monitor.rcWork.left + Common::WindowSizing::DipToPixelRounded(ownerDpi, 1024));
+            monitor.rcWork.bottom = std::min(monitor.rcWork.bottom, monitor.rcWork.top + Common::WindowSizing::DipToPixelRounded(ownerDpi, 680));
         }
         const int ownerWidthPx  = static_cast<int>(std::min<LONG>(targetWidthPx, monitor.rcWork.right - monitor.rcWork.left));
         const int ownerHeightPx = static_cast<int>(std::min<LONG>(targetHeightPx, monitor.rcWork.bottom - monitor.rcWork.top));
@@ -11745,7 +11745,9 @@ private:
         const bool validAfter = gotAfter && expectedState(after);
         const bool stable     = validAfter && stateStable(before, after);
         Check(SUCCEEDED(captureHr),
-              std::format(L"{} no-activation WGC capture passes the theme-background witness", std::wstring(name.begin(), name.end())),
+              std::format(L"{} no-activation WGC capture passes the theme-background witness (hr=0x{:08X})",
+                          std::wstring(name.begin(), name.end()),
+                          static_cast<unsigned long>(captureHr)),
               success);
         Check(foregroundPreserved, std::format(L"{} WGC capture preserves foreground activation", std::wstring(name.begin(), name.end())), success);
         Check(stable, std::format(L"{} lifecycle state and displayed model remain stable across capture", std::wstring(name.begin(), name.end())), success);
@@ -17630,6 +17632,8 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
 int wmain(int argc, wchar_t** argv)
 {
     RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
+    // Preserve the last assertion even if the sanitizer terminates a child.
+    std::wcout << std::unitbuf;
 
     std::wstring filter;
     std::wstring harnessReadyEvent;

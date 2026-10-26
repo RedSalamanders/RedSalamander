@@ -826,9 +826,19 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         state.Require(coldMeasured && warmedMeasured, L"Cold ASan retention memory samples must both be valid.");
         state.Require(warmedLiveBytes <= coldLiveBytes + (8u * 1024u * 1024u),
                       std::format(L"Cold ASan warmup must retain at most 8 MiB of live allocations (before={} after={}).", coldLiveBytes, warmedLiveBytes));
-        state.Require(DebugGetThemeCycleOverlayWindowHandle() == stableWindow && GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= coldGdi + 2u &&
-                          GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS) <= coldUser + 2u,
-                      L"Cold ASan warmup must not retain another overlay or GDI/USER handles.");
+        const DWORD warmedGdi   = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+        const DWORD warmedUser  = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
+        const HWND warmedWindow = DebugGetThemeCycleOverlayWindowHandle();
+        state.Require(warmedWindow == stableWindow && warmedGdi <= coldGdi + 2u && warmedUser <= coldUser + 2u,
+                      std::format(L"Cold ASan warmup must not retain another overlay or GDI/USER handles (GDI={}/{}, USER={}/{}, HWND=0x{:X}/0x{:X}).",
+                                  coldGdi,
+                                  warmedGdi,
+                                  coldUser,
+                                  warmedUser,
+                                  reinterpret_cast<uintptr_t>(stableWindow),
+                                  reinterpret_cast<uintptr_t>(warmedWindow)));
+        Debug::Perf::Emit(L"theme.cycle.overlay.retention.asan_warmup_gdi", L"before/after; original +2 guard", 0u, coldGdi, warmedGdi, S_OK);
+        Debug::Perf::Emit(L"theme.cycle.overlay.retention.asan_warmup_user", L"before/after; original +2 guard", 0u, coldUser, warmedUser, S_OK);
         Debug::Perf::Emit(L"theme.cycle.overlay.retention.asan_warmup_private_bytes",
                           L"cold/default sanitizer; before/after",
                           0u,

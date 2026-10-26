@@ -603,3 +603,12 @@ WGC capture/readback, fits its lifecycle fixture to the real work area, and
 observes UI-published state inside the existing provider-entry deadline.
 Current-source ASan builds/affected checks and public PR/main CI remain open.
 Full runtime reruns remain omitted under the accepted scope. I47 stays WIP.
+
+Public 03cb2510b completed both ASan solution builds and 285 focused tooling checks.
+Its selected native run retained two failures: the 200k-file queue deadline and
+the physical-pixel small-work-area control. The Commands repetition retained one
+cold theme GDI/USER guard failure. Hosted x64 Debug built successfully and passed
+tooling, but actual WGC captures returned E_INVALIDARG. These remain failed receipts.
+The next candidate prioritizes the completed producer's queued tail, expresses
+the small fixture cap in DIPs, and adds exact capture/handle/child diagnostics.
+No test deadline, memory, handle or pixel predicate is relaxed.

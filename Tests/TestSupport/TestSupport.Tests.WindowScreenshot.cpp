@@ -17,7 +17,9 @@
 #pragma warning(pop)
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
+#include <cwchar>
 #include <limits>
 #include <new>
 
@@ -33,21 +35,33 @@
 
 HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std::filesystem::path& path, std::span<WindowScreenshotColorProbe> probes) noexcept
 {
+    const wchar_t* stage = L"owned visible window";
+    const auto fail      = [&](HRESULT result) noexcept
+    {
+        std::fwprintf(stderr,
+                      L"[INFO] WGC capture failed: stage=%ls hr=0x%08lX window=0x%llX dpi=%u probes=%zu\n",
+                      stage,
+                      static_cast<unsigned long>(result),
+                      static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(window)),
+                      GetDpiForWindow(window),
+                      probes.size());
+        return result;
+    };
     for (auto& probe : probes)
         probe.matchedPixels = 0u;
     DWORD processId          = 0;
     const DWORD windowThread = GetWindowThreadProcessId(window, &processId);
     if (processId != GetCurrentProcessId() || ! IsWindowVisible(window) || IsIconic(window))
     {
-        return E_INVALIDARG;
+        return fail(E_INVALIDARG);
     }
     const bool needsClientCoordinates = std::ranges::any_of(probes, [](const WindowScreenshotColorProbe& probe) noexcept { return ! probe.wholeFrame; });
     if (needsClientCoordinates && windowThread != GetCurrentThreadId())
-        return E_INVALIDARG;
+        return fail(E_INVALIDARG);
     std::error_code pathError;
     if (! Common::Testing::IsAuthorizedTestSandboxPath(path, {}, false, pathError))
     {
-        return E_ACCESSDENIED;
+        return fail(E_ACCESSDENIED);
     }
     // C++/WinRT projection APIs throw named HRESULT exceptions. This test boundary converts
     // them to a failed capture; it never substitutes a desktop image or a partial layer.
@@ -57,24 +71,29 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
         namespace Direct3D = winrt::Windows::Graphics::DirectX::Direct3D11;
         if (! Capture::GraphicsCaptureSession::IsSupported())
         {
-            return E_NOTIMPL;
+            return fail(E_NOTIMPL);
         }
         wil::com_ptr<ID3D11Device> device;
         wil::com_ptr<ID3D11DeviceContext> context;
+        stage = L"WARP D3D11 device";
         winrt::check_hresult(D3D11CreateDevice(
             nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0u, D3D11_SDK_VERSION, device.put(), nullptr, context.put()));
         const auto dxgiDevice = device.query<IDXGIDevice>();
         wil::com_ptr<IInspectable> inspectable;
+        stage = L"WinRT Direct3D device";
         winrt::check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(), inspectable.put()));
         Direct3D::IDirect3DDevice projected{nullptr};
         winrt::check_hresult(inspectable->QueryInterface(winrt::guid_of<Direct3D::IDirect3DDevice>(), winrt::put_abi(projected)));
         const auto interop = winrt::get_activation_factory<Capture::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         Capture::GraphicsCaptureItem item{nullptr};
+        stage = L"WGC item for HWND";
         winrt::check_hresult(interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item)));
         wil::unique_event_nothrow frameArrived;
         winrt::check_hresult(frameArrived.create());
+        stage     = L"WGC frame pool";
         auto pool = Capture::Direct3D11CaptureFramePool::CreateFreeThreaded(
             projected, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, item.Size());
+        stage        = L"WGC capture session";
         auto session = pool.CreateCaptureSession(item);
         auto close   = wil::scope_exit([&]
         {
@@ -83,6 +102,7 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
         });
         auto revoke  = pool.FrameArrived(winrt::auto_revoke, [event = frameArrived.get()](const auto&, const auto&) noexcept { SetEvent(event); });
         session.IsCursorCaptureEnabled(false);
+        stage = L"start WGC capture";
         session.StartCapture();
         // A WGC session may initially expose stale HWND content while composition controls
         // are already current. A rejected semantic witness requests a fresh owned-window
@@ -108,7 +128,8 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
             }
             if (WaitForSingleObject(frameArrived.get(), 5000u) != WAIT_OBJECT_0)
             {
-                return HRESULT_FROM_WIN32(rejectedFrame ? ERROR_INVALID_DATA : ERROR_TIMEOUT);
+                stage = L"frame readiness";
+                return fail(HRESULT_FROM_WIN32(rejectedFrame ? ERROR_INVALID_DATA : ERROR_TIMEOUT));
             }
             auto frame = pool.TryGetNextFrame();
             if (! frame)
@@ -116,6 +137,7 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
             auto closeFrame   = wil::scope_exit([&] { frame.Close(); });
             const auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
             wil::com_ptr<ID3D11Texture2D> texture;
+            stage = L"captured DXGI texture";
             winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(texture.put())));
             D3D11_TEXTURE2D_DESC description{};
             texture->GetDesc(&description);
@@ -124,9 +146,11 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
             description.MiscFlags      = 0u;
             description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
             wil::com_ptr<ID3D11Texture2D> staging;
+            stage = L"readback staging texture";
             winrt::check_hresult(device->CreateTexture2D(&description, nullptr, staging.put()));
             context->CopyResource(staging.get(), texture.get());
             D3D11_MAPPED_SUBRESOURCE mapped{};
+            stage = L"map readback texture";
             winrt::check_hresult(context->Map(staging.get(), 0u, D3D11_MAP_READ, 0u, &mapped));
             auto unmap      = wil::scope_exit([&] { context->Unmap(staging.get(), 0u); });
             const auto size = frame.ContentSize();
@@ -155,13 +179,39 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
                     const POINT offset  = probe.wholeFrame ? POINT{} : POINT{clientOrigin.x - frameBounds.left, clientOrigin.y - frameBounds.top};
                     if (bounds.left < 0 || bounds.top < 0 || bounds.right > limit.right || bounds.bottom > limit.bottom || bounds.right <= bounds.left ||
                         bounds.bottom <= bounds.top || probe.minimumMatchingPixels == 0u)
-                        return E_INVALIDARG;
+                    {
+                        stage = L"client witness bounds";
+                        std::fwprintf(stderr,
+                                      L"[INFO] WGC client witness: bounds=[%ld,%ld,%ld,%ld] limit=[%ld,%ld,%ld,%ld]\n",
+                                      bounds.left,
+                                      bounds.top,
+                                      bounds.right,
+                                      bounds.bottom,
+                                      limit.left,
+                                      limit.top,
+                                      limit.right,
+                                      limit.bottom);
+                        return fail(E_INVALIDARG);
+                    }
                     const LONG left   = bounds.left + offset.x;
                     const LONG top    = bounds.top + offset.y;
                     const LONG right  = bounds.right + offset.x;
                     const LONG bottom = bounds.bottom + offset.y;
                     if (left < 0 || top < 0 || right > size.Width || bottom > size.Height)
-                        return E_INVALIDARG;
+                    {
+                        stage = L"frame witness bounds";
+                        std::fwprintf(stderr,
+                                      L"[INFO] WGC frame witness: bounds=[%ld,%ld,%ld,%ld] size=[%d,%d] offset=[%ld,%ld]\n",
+                                      left,
+                                      top,
+                                      right,
+                                      bottom,
+                                      size.Width,
+                                      size.Height,
+                                      offset.x,
+                                      offset.y);
+                        return fail(E_INVALIDARG);
+                    }
                     const auto closeChannel = [&](BYTE actual, BYTE expected) noexcept
                     { return std::abs(static_cast<int>(actual) - static_cast<int>(expected)) <= probe.tolerance; };
                     for (LONG y = top; y < bottom; ++y)
@@ -179,6 +229,7 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
                 }
             }
             wil::com_ptr<IWICImagingFactory> factory;
+            stage = L"WIC PNG encoding";
             winrt::check_hresult(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())));
             wil::com_ptr<IWICStream> stream;
             winrt::check_hresult(factory->CreateStream(stream.put()));
@@ -212,7 +263,7 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
     }
     catch (const winrt::hresult_error& error)
     {
-        return error.code();
+        return fail(error.code());
     }
 }
 #pragma warning(pop)

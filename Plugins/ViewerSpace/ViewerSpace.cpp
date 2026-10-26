@@ -10802,10 +10802,18 @@ bool ViewerSpace::CanBeginScanProjection(bool hasPublishedProjection) const noex
     // A builder borrows the model between turns. Once a preview exists, give a
     // backed-up transport priority instead of freezing it for another full projection.
     // The first preview remains eligible; in-flight builders still finish coherently.
-    if (_scanActive.load() && hasPublishedProjection && _pendingUpdateBytes.load(std::memory_order_relaxed) > 4ull * 1024ull * 1024ull)
+    if (_scanActive.load() && hasPublishedProjection)
     {
-        Debug::Perf::EmitCounter(L"viewer.space.projection.backlog_deferred_count");
-        return false;
+        // Acquire producer completion before observing its final queued posts.
+        // A small terminal tail must drain too: another complete projection can
+        // otherwise hold that tail behind hundreds of borrowed-model turns.
+        const bool producerComplete = _scanWorker.IsComplete();
+        const uint64_t pendingBytes = _pendingUpdateBytes.load(std::memory_order_relaxed);
+        if (pendingBytes > 4ull * 1024ull * 1024ull || (producerComplete && pendingBytes != 0u))
+        {
+            Debug::Perf::EmitCounter(L"viewer.space.projection.backlog_deferred_count");
+            return false;
+        }
     }
     return true;
 }
@@ -10823,15 +10831,13 @@ bool ViewerSpace::IsQueueTerminalReady() noexcept
     }
 
     ReapFinishedScanWorkers();
-    const auto isComplete = [](const ScanWorker& worker) noexcept
-    { return worker.done != nullptr ? worker.done->load(std::memory_order_acquire) : ! worker.thread.joinable(); };
-    if (! isComplete(_scanWorker))
+    if (! _scanWorker.IsComplete())
     {
         return false;
     }
     for (const ScanWorker& worker : _retiredScanWorkers)
     {
-        if (! isComplete(worker))
+        if (! worker.IsComplete())
         {
             return false;
         }

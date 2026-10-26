@@ -769,6 +769,11 @@ private:
         ScanWorker(const ScanWorker&)            = delete;
         ScanWorker& operator=(const ScanWorker&) = delete;
 
+        [[nodiscard]] bool IsComplete() const noexcept
+        {
+            return done != nullptr ? done->load(std::memory_order_acquire) : ! thread.joinable();
+        }
+
         std::jthread thread;
         std::shared_ptr<std::atomic_bool> done;
     };
