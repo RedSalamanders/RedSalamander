@@ -1,0 +1,66 @@
+
+
+
+
+
+Describing ProcessStreaming helper
+ [+] streams process output before the process exits and mirrors it to the log file 1.97s
+ [+] reports stderr lines, creates missing log directories, and returns the child exit code 784ms
+ [+] waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits 2.16s
+ [+] validates split log paths before creation and disposes stdout if stderr open fails 21ms
+ [+] streams child processes with a sanitized Path key 809ms
+ [+] kills the contained process tree when an output callback aborts streaming 893ms
+ [+] bounds output drain when an exited parent leaves inherited pipe handles open 1.15s
+ [+] bounds process runtime and closes the contained process tree on timeout 1.04s
+ [+] propagates artifact-operation delegation through the shared launch path 878ms
+ [+] adds timestamped deployment log paths while preserving helper exceptions 22ms
+ [+] keeps targeted plugin deployment on the bounded shared streaming contract 4ms
+Tests completed in 9.74s
+Passed: 11 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+
+
+
+
+Describing Tools inventory contract
+ [+] classifies every tracked or non-ignored file in the current Tools tree 2.06s
+ [+] rejects an unclassified top-level file even when a broad rule would match it 13ms
+ [+] rejects an unclassified nested file outside reviewed directory rules 3ms
+ [+] fails when a derived module consumer is missing from usedBy 134ms
+ [+] rejects stale explicit paths 8ms
+ [+] ignores tracked files deleted from the working tree during an in-progress move 186ms
+ [+] requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints 9ms
+ [+] requires explicit prerequisites metadata on entries and directory rules 6ms
+ [+] requires retention policy for compatibility records 9ms
+ [+] requires every non-null replacement to be an exact existing Tools path 12ms
+ [+] rejects historical entries without a reviewed manual entry point 3ms
+ [+] rejects unreviewed and missing historical manual entry-point paths 6ms
+ [+] rejects a reviewed manual root whose inventory entry is not a historical command 3ms
+ [+] allows reviewed manual roots to retain themselves and exposes the resolved closure 3ms
+ [+] uses a reviewed nested rule when exactly one rule matches 4ms
+ [+] renders a useful Markdown file inventory 1.72s
+ [+] documents the command contract and supports Validate as an alias 1.97s
+Tests completed in 6.15s
+Passed: 17 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+
+
+
+
+Describing Repository tooling governance
+ [+] keeps the checked-in inventory reconciled with the Tools tree 1.68s
+ [+] keeps active private implementation modules below Tools Modules 5ms
+ [+] limits internal root compatibility loaders to explicit module replacements 5ms
+ [+] documents every public command and compatibility loader completely 1.64s
+ [+] requires canonical replacements and explicit retention policy for compatibility surfaces 10ms
+ [+] keeps every historical file reachable from a reviewed manual command root 16ms
+ [+] keeps active executable tooling covered by at least one current test contract 43ms
+ [+] keeps the README top-level and module maps in exact filesystem parity 18ms
+ [+] keeps current Terminal helper export and consumer contracts live in the current profile 286ms
+ [+] keeps destructive support commands within their documented static safety boundaries 107ms
+ [+] uses psm1 modules with explicit reviewed exports 317ms
+ [+] records every reviewed public naming exception in the inventory 10ms
+Tests completed in 4.15s
+Passed: 12 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+Verified required toolchain: {"installation":"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders","version":"14.52.37025","host":"x64","platform":"x64"}
+Verified required toolchain: {"installation":"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders","version":"14.52.37025","host":"x64","platform":"ARM64"}

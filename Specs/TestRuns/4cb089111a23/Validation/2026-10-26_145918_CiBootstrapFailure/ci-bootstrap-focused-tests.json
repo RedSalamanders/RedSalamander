@@ -1,0 +1,234 @@
+{
+  "head": "6dbeba14755fd59c39c3e23292651e075c5c7858",
+  "sourceSnapshot": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+  "runId": "20261026T152246Z-56400-b36fb8fbd053461a8d4b2ea10800fef6",
+  "root": "E:\\RedSalamander.Perf",
+  "records": [
+    {
+      "file": "ProcessStreaming.Tests.ps1",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "Name": "streams process output before the process exits and mirrors it to the log file",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "reports stderr lines, creates missing log directories, and returns the child exit code",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "validates split log paths before creation and disposes stdout if stderr open fails",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "streams child processes with a sanitized Path key",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "kills the contained process tree when an output callback aborts streaming",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "bounds output drain when an exited parent leaves inherited pipe handles open",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "bounds process runtime and closes the contained process tree on timeout",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "propagates artifact-operation delegation through the shared launch path",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "adds timestamped deployment log paths while preserving helper exceptions",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps targeted plugin deployment on the bounded shared streaming contract",
+          "Result": "Passed",
+          "FailureMessage": ""
+        }
+      ]
+    },
+    {
+      "file": "ToolInventory.Tests.ps1",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects an unclassified nested file outside reviewed directory rules",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "fails when a derived module consumer is missing from usedBy",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects stale explicit paths",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "requires explicit prerequisites metadata on entries and directory rules",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "requires retention policy for compatibility records",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "requires every non-null replacement to be an exact existing Tools path",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects historical entries without a reviewed manual entry point",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects unreviewed and missing historical manual entry-point paths",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "uses a reviewed nested rule when exactly one rule matches",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "renders a useful Markdown file inventory",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "documents the command contract and supports Validate as an alias",
+          "Result": "Passed",
+          "FailureMessage": ""
+        }
+      ]
+    },
+    {
+      "file": "ToolingGovernance.Tests.ps1",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "Name": "keeps the checked-in inventory reconciled with the Tools tree",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps active private implementation modules below Tools Modules",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "limits internal root compatibility loaders to explicit module replacements",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "documents every public command and compatibility loader completely",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "requires canonical replacements and explicit retention policy for compatibility surfaces",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps every historical file reachable from a reviewed manual command root",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps active executable tooling covered by at least one current test contract",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps the README top-level and module maps in exact filesystem parity",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps current Terminal helper export and consumer contracts live in the current profile",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "keeps destructive support commands within their documented static safety boundaries",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "uses psm1 modules with explicit reviewed exports",
+          "Result": "Passed",
+          "FailureMessage": ""
+        },
+        {
+          "Name": "records every reviewed public naming exception in the inventory",
+          "Result": "Passed",
+          "FailureMessage": ""
+        }
+      ]
+    }
+  ],
+  "sourceVerifiedUnchanged": true,
+  "outcome": "focused_pass_only"
+}

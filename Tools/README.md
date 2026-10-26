@@ -384,3 +384,10 @@ identified VLC runtime and passing decoder observations, never a skip.
 See [Changes/README.md](../Changes/README.md). Test-Changelog.ps1 validates without writes; Fold-Changelog.ps1 folds before PrePush/final handoff and after every integration, even one fragment. Use -WhatIf to preview and -Check as the final read-only gate. Test-ChangelogWorkflow.ps1 runs shared fixtures through the current Changelog Pester adapter in the existing marked sandbox. The implementation lives under Modules/Documentation/Changelog.psm1.
 
 Verify-RedMonitorClient.ps1 is also called by direct Common MSBuild; Update-RedMonitorClient.ps1 downloads exactly the public header and MIT notice at an explicit full commit.
+
+Hosted MSVC provisioning uses the existing contained streaming-process module for
+the signed GUI installer, preserving argument boundaries and actual exit status.
+It waits at most 45 minutes, retains stdout/stderr under RUNNER_TEMP, accepts only
+0 or reboot-required 3010, then verifies the required compiler/ASan/SDK/LLVM tools.
+A real GUI fixture exercises delayed completion, Unicode/spaced arguments and
+0/3010/failure exits without installing software; local -VerifyOnly remains read-only.

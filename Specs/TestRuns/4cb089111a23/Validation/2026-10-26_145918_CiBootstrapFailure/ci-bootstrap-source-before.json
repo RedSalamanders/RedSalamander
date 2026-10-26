@@ -1,0 +1,100 @@
+{
+  "GitHead": "6dbeba14755fd59c39c3e23292651e075c5c7858",
+  "SnapshotId": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+  "FileCount": 7,
+  "WorkspaceSnapshot": {
+    "schema": "red-salamander.workspace-snapshot.v1",
+    "canonicalization": "rs-canonical-json-v1",
+    "snapshot_id": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+    "repo_identity": "fb4f7911a5ba40da97f22256e009e945cb10aed92879efbdeef926e839b038d5",
+    "git_head": "6dbeba14755fd59c39c3e23292651e075c5c7858",
+    "base": "6dbeba14755fd59c39c3e23292651e075c5c7858",
+    "files": [
+      {
+        "path": ".github/actions/setup-msvc/Setup.ps1",
+        "status": "modified",
+        "base_sha256": "77d62207efa203bc8c96ddc93382cb43d06fc618e931315a096ab56bf0824385",
+        "base_mode": "100644",
+        "index_sha256": "77d62207efa203bc8c96ddc93382cb43d06fc618e931315a096ab56bf0824385",
+        "index_mode": "100644",
+        "worktree_sha256": "b4a0120a923ea9355e52d11be02e3e176d38e9e9a85dd1e6bb739921ee75500f",
+        "worktree_size_bytes": 5174,
+        "old_path": null
+      },
+      {
+        "path": "CHANGELOG.md",
+        "status": "modified",
+        "base_sha256": "3ad5203a23830301e0b7d2c3c4dfeee626f5f4aa688436e16a4d4aed572532c2",
+        "base_mode": "100644",
+        "index_sha256": "3ad5203a23830301e0b7d2c3c4dfeee626f5f4aa688436e16a4d4aed572532c2",
+        "index_mode": "100644",
+        "worktree_sha256": "058599a2edff086e971ca4d94e2d13b0bbc58a0a2bb813d219d53308ac8fff02",
+        "worktree_size_bytes": 29270,
+        "old_path": null
+      },
+      {
+        "path": "Specs/Build/Build_Toolchain.md",
+        "status": "modified",
+        "base_sha256": "96cae3b3ec16b34e07504d6356d5222a85a82a82cb96e0aacb49ed1dc8022616",
+        "base_mode": "100644",
+        "index_sha256": "96cae3b3ec16b34e07504d6356d5222a85a82a82cb96e0aacb49ed1dc8022616",
+        "index_mode": "100644",
+        "worktree_sha256": "6d80c07f3cc6ef597d0eacdbe299c7dd42b14d1263ebfd5b66486f56b43111e9",
+        "worktree_size_bytes": 64179,
+        "old_path": null
+      },
+      {
+        "path": "Specs/Plans/WIP/RedMonitor_Extraction_2026-10-21.md",
+        "status": "modified",
+        "base_sha256": "d2d908c0422babbc3dee03568bda84d3de90f820fe7c3c8a1d1f9fb3370e2bfb",
+        "base_mode": "100644",
+        "index_sha256": "d2d908c0422babbc3dee03568bda84d3de90f820fe7c3c8a1d1f9fb3370e2bfb",
+        "index_mode": "100644",
+        "worktree_sha256": "0023a9c941c4405b6c98463b1436878ed9494c9888b440e1ade01512b7a33106",
+        "worktree_size_bytes": 47063,
+        "old_path": null
+      },
+      {
+        "path": "Tools/README.md",
+        "status": "modified",
+        "base_sha256": "05a67d2a38ec1460d9e270d8be4f881077c3656a7be8c1b898cb1663309aa1e2",
+        "base_mode": "100644",
+        "index_sha256": "05a67d2a38ec1460d9e270d8be4f881077c3656a7be8c1b898cb1663309aa1e2",
+        "index_mode": "100644",
+        "worktree_sha256": "31e3b29cc0586faed8c71cc5f23039a8c14fd221510e498b9e22f08d13494c58",
+        "worktree_size_bytes": 36565,
+        "old_path": null
+      },
+      {
+        "path": "Tools/Tests/ProcessStreaming.Tests.ps1",
+        "status": "modified",
+        "base_sha256": "ca1344fd5ecfbf95208281a051fe066314c06dd89c1992735e4bf4b26a07d66a",
+        "base_mode": "100644",
+        "index_sha256": "ca1344fd5ecfbf95208281a051fe066314c06dd89c1992735e4bf4b26a07d66a",
+        "index_mode": "100644",
+        "worktree_sha256": "63cbbe1267a1854ed4d2cf8a6de21225b8d032bd96c48315a35d600de193f75a",
+        "worktree_size_bytes": 24871,
+        "old_path": null
+      },
+      {
+        "path": "Tools/tool-inventory.json",
+        "status": "modified",
+        "base_sha256": "3c4401eb43c9ec48b78f944e40f65270699daef300247802d491274281958993",
+        "base_mode": "100644",
+        "index_sha256": "3c4401eb43c9ec48b78f944e40f65270699daef300247802d491274281958993",
+        "index_mode": "100644",
+        "worktree_sha256": "f980d2cc3d14c5bb65b86f5b120752462cdd18b452e0aa1e27a0bf149c8ab7f2",
+        "worktree_size_bytes": 201338,
+        "old_path": null
+      }
+    ],
+    "acquisition_before": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+    "acquisition_after": "eebf7d0e7f94b7d84f6e12ec0895655d8c4579bed7f0fdc285ab147babb47bbd",
+    "acquisition_attempts": 1,
+    "git_discovery_ms": 4396,
+    "content_hashing_ms": 72,
+    "canonicalization_ms": 29,
+    "computation_ms": 9570,
+    "created_utc": "2026-10-26T15:22:56.5733822Z"
+  }
+}

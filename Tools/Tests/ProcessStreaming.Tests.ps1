@@ -92,6 +92,86 @@ exit 17
         (Get-Content -Path $errorLogPath) | Should Be @('stderr-line')
     }
 
+    It 'waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits' {
+        $source = Join-Path $TestDrive 'GuiBootstrapper.cs'
+        $gui = Join-Path $TestDrive 'GUI bootstrapper.exe'
+        @'
+using System;
+using System.IO;
+using System.Threading;
+class GuiBootstrapper {
+    static int Main(string[] args) {
+        string root = args[Array.IndexOf(args, "--installPath") + 1];
+        Thread.Sleep(300);
+        Directory.CreateDirectory(root);
+        File.WriteAllLines(Path.Combine(root, "installed.args"), args);
+        return Int32.Parse(Environment.GetEnvironmentVariable("RS_MsvcFixtureExitCode"));
+    }
+}
+'@ | Set-Content -LiteralPath $source -Encoding UTF8
+        $compile = Join-Path $TestDrive 'CompileGui.ps1'
+        'param($SourcePath,$OutputPath); Add-Type -Path $SourcePath -OutputAssembly $OutputPath -OutputType WindowsApplication' |
+            Set-Content -LiteralPath $compile -Encoding UTF8
+        (Invoke-RSStreamingProcess -FilePath 'powershell.exe' -Arguments @('-NoProfile','-File',$compile,$source,$gui) -WorkingDirectory $TestDrive) | Should Be 0
+        $image = [IO.File]::ReadAllBytes($gui)
+        $peOffset = [BitConverter]::ToInt32($image, 0x3c)
+        [BitConverter]::ToUInt16($image, $peOffset + 24 + 68) | Should Be 2
+
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot '.github/actions/setup-msvc/Setup.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $branches = @($ast.EndBlock.Statements | Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if\s*\(\s*-not\s+\$selected\s*\)'
+        })
+        $branches.Count | Should Be 1
+        $provision = [scriptblock]::Create($branches[0].Extent.Text)
+        $savedEnvironment = @{}
+        foreach($key in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','RUNNER_TEMP','RS_MsvcFixtureExitCode')) {
+            $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key,'Process')
+        }
+        $previousExit = Get-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+        $previousExitValue = if($previousExit){$previousExit.Value}else{$null}
+        try {
+            $env:GITHUB_ACTIONS = 'true'
+            $env:RUNNER_ENVIRONMENT = 'github-hosted'
+            foreach($fixtureExit in @(0,3010,17)) {
+                & {
+                    param($fixtureExit,$provision,$gui,$fixtureRoot,$repoRoot)
+                    $env:RUNNER_TEMP = $fixtureRoot
+                    $env:RS_MsvcFixtureExitCode = [string]$fixtureExit
+                    $root = $repoRoot
+                    $required = '14.52'
+                    $selected = $null
+                    $VerifyOnly = $false
+                    $marker = Join-Path $fixtureRoot 'VS-Msvc-14.52/installed.args'
+                    function Invoke-WebRequest { param($Uri,$OutFile); Copy-Item -LiteralPath $gui -Destination $OutFile }
+                    function Get-AuthenticodeSignature { param($LiteralPath); [pscustomobject]@{Status='Valid';SignerCertificate=[pscustomobject]@{Subject='CN=Fixture, O=Microsoft Corporation, C=US'}} }
+                    function Get-SelectedTools {
+                        if(-not(Test-Path -LiteralPath $marker)){throw 'Compiler verification ran before the GUI installer completed.'}
+                        return [ordered]@{version='14.52.0';platform='x64'}
+                    }
+                    Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+                    $message = ''
+                    try { & $provision } catch { $message = $_.Exception.Message }
+                    (Test-Path -LiteralPath $marker) | Should Be $true
+                    if($fixtureExit -eq 17) {
+                        $message | Should Match 'VS provisioning failed: 17'
+                        ($null -eq $selected) | Should Be $true
+                    } else {
+                        $message | Should Be ''
+                    }
+                    $installedArguments = [IO.File]::ReadAllLines($marker)
+                    $installedArguments[[Array]::IndexOf($installedArguments,'--installPath') + 1] | Should Be (Join-Path $fixtureRoot 'VS-Msvc-14.52')
+                    ($installedArguments -contains '--wait') | Should Be $true
+                } $fixtureExit $provision $gui (Join-Path $TestDrive ("hosted $fixtureExit é日")) $repoRoot
+            }
+        } finally {
+            foreach($key in $savedEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$savedEnvironment[$key],'Process')}
+            if($previousExit){$global:LASTEXITCODE=$previousExitValue}else{Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue}
+        }
+    }
+
     It 'validates split log paths before creation and disposes stdout if stderr open fails' {
         $samePath = Join-Path $TestDrive 'same.log'
         $samePathMessage = $null

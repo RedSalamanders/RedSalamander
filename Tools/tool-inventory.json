@@ -1875,6 +1875,7 @@
       "purpose": "Launch child processes with sanitized environments and live stdout/stderr streaming.",
       "usage": "Import from build and test orchestration that requires live subprocess output.",
       "usedBy": [
+        ".github/actions/setup-msvc/Setup.ps1",
         "build.ps1",
         "Tools/Run-AllTests.ps1",
         "Tools/Tests/BuildRuntimeClean.Tests.ps1",

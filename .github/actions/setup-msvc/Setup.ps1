@@ -50,8 +50,14 @@ if(-not $selected){
         '--add','Microsoft.VisualStudio.Component.VC.ASAN',
         '--add','Microsoft.VisualStudio.Component.VC.Llvm.Clang',
         '--add','Microsoft.VisualStudio.Component.Windows11SDK.26100')
-    & $installer @arguments
-    if($LASTEXITCODE-notin @(0,3010)){throw "VS provisioning failed: $LASTEXITCODE. Installer logs remain under RUNNER_TEMP."}
+    # The bootstrapper is a GUI executable. A bare PowerShell invocation can
+    # return before it exits and leave LASTEXITCODE unset. Wait through the
+    # canonical contained process helper and inspect its explicit exit result.
+    Import-Module (Join-Path $root 'Tools/Modules/Build/ProcessStreaming.psm1') -Force
+    $installerExitCode=Invoke-RSStreamingProcess -FilePath $installer -Arguments $arguments -WorkingDirectory $scratch `
+        -LogPath (Join-Path $scratch 'bootstrapper.stdout.log') -ErrorLogPath (Join-Path $scratch 'bootstrapper.stderr.log') `
+        -TimeoutMilliseconds 2700000
+    if($installerExitCode-notin @(0,3010)){throw "VS provisioning failed: $installerExitCode. Installer logs remain under RUNNER_TEMP."}
     $selected=Get-SelectedTools
     if(-not $selected){throw "Insiders did not provide default MSVC $required.x and every required target tool. Review channel/component availability; another compiler is never accepted."}
 }

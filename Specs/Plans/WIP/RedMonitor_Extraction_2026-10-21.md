@@ -571,3 +571,13 @@ still required before publication; Full runtime reruns remain omitted by the use
 
 
 Final focused source handoff: all six builds, all eight original ASan regressions, 51 native checks, three real ETW roundtrips and the real ASan negative control passed. The [qualified source snapshot packet](../../TestRuns/4cb089111a23/Validation/2026-10-26_145454_MigrationFocusedClosure/README.md) preserves exact source/artifact provenance, no-frame A/B focus and original return assertions, the explicit Full runtime waiver, and fresh public-only source/history/dependency verification. Earlier failed receipts remain failed. This public-history child changes documentation/evidence only; public PR/main CI and primary-checkout routing are subsequent delivery operations. Installed-helper, packages, release and manual platform/accessibility gates remain open; I47 stays WIP.
+
+Public migration PR #142 passed formatting/migration guards but both native Debug
+jobs failed before compilation in hosted MSVC provisioning: the GUI bootstrapper
+returned asynchronously and LASTEXITCODE was unset. No native CI result was promoted.
+The setup action now reuses the contained streaming-process launcher, checks its
+actual 0/3010 result, retains bounded logs and then verifies the required toolchain.
+A real delayed GUI fixture exercises the hosted branch with 0, 3010 and failure
+exits and Unicode/spaced paths. Current public CI must pass; the qualified C++
+source and its 51 focused native checks are unchanged. Full runtime reruns remain
+omitted under the accepted scope; package/manual gates remain open.

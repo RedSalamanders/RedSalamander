@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="12" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-10-26" time="16:23:18">
+  <environment user="eric" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" cwd="E:\RedSalamander.Perf\repository-migration-20261024\public-verification-582d644be" clr-version="" nunit-version="2.5.8.0" machine-name="SINON" os-version="10.0.26300" user-domain="SINON" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Success" success="True" time="4.1481" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="Repository tooling governance" executed="True" result="Success" success="True" time="4.1481" asserts="0" description="Repository tooling governance">
+        <results>
+          <test-case description="keeps the checked-in inventory reconciled with the Tools tree" name="Repository tooling governance.keeps the checked-in inventory reconciled with the Tools tree" time="1.685" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps active private implementation modules below Tools Modules" name="Repository tooling governance.keeps active private implementation modules below Tools Modules" time="0.0058" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="limits internal root compatibility loaders to explicit module replacements" name="Repository tooling governance.limits internal root compatibility loaders to explicit module replacements" time="0.0058" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="documents every public command and compatibility loader completely" name="Repository tooling governance.documents every public command and compatibility loader completely" time="1.6409" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="requires canonical replacements and explicit retention policy for compatibility surfaces" name="Repository tooling governance.requires canonical replacements and explicit retention policy for compatibility surfaces" time="0.0103" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps every historical file reachable from a reviewed manual command root" name="Repository tooling governance.keeps every historical file reachable from a reviewed manual command root" time="0.0167" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps active executable tooling covered by at least one current test contract" name="Repository tooling governance.keeps active executable tooling covered by at least one current test contract" time="0.043" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps the README top-level and module maps in exact filesystem parity" name="Repository tooling governance.keeps the README top-level and module maps in exact filesystem parity" time="0.0183" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps current Terminal helper export and consumer contracts live in the current profile" name="Repository tooling governance.keeps current Terminal helper export and consumer contracts live in the current profile" time="0.2866" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps destructive support commands within their documented static safety boundaries" name="Repository tooling governance.keeps destructive support commands within their documented static safety boundaries" time="0.1074" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="uses psm1 modules with explicit reviewed exports" name="Repository tooling governance.uses psm1 modules with explicit reviewed exports" time="0.3173" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="records every reviewed public naming exception in the inventory" name="Repository tooling governance.records every reviewed public naming exception in the inventory" time="0.0109" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

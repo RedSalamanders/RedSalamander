@@ -418,3 +418,4 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_131427_FocusBindingsFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_140706_DisclosurePointerFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_145454_MigrationFocusedClosure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Validation/2026-10-26_145918_CiBootstrapFailure/** -text -whitespace
