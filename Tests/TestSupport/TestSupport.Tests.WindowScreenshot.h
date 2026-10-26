@@ -34,6 +34,8 @@ struct WindowScreenshotColorProbe final
 // so a hardware adapter is not a precondition for observing the actual composed HWND.
 // Initializes and balances the Windows Runtime while preserving an existing COM
 // STA/MTA; all capture objects are released before that initialization is balanced.
+// Non-activating/tool fixtures temporarily borrow WS_EX_APPWINDOW for capture-item
+// admission on Server; the bit is restored before frame capture, with NOACTIVATE intact.
 // Optional probes reject missing render layers with ERROR_INVALID_DATA after saving the
 // diagnostic PNG. Rejected frames request a non-activating repaint while capture is active,
 // with at most three event-driven frame attempts. A successful encoder alone cannot establish

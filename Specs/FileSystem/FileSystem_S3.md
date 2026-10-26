@@ -406,6 +406,13 @@ throughput claim.
 
 Deterministic test-enabled validation uses the S3 fake graph, exact request counts, and fixed metadata latency. The protected 16-object no-conflict interactive scenario requires one refresh per object; the same-binary legacy comparison requires two. Retry, pre-authorized overwrite, no-callback fail-closed behavior, stacked ancestors, byte preservation, and COPY source preservation are part of the same provider contract. Five-sample Release evidence is archived at `Specs/TestRuns/7d3a1247382a/FileOps/2026-07-21_111500_s3_directory_probe/`: refreshes `32 -> 16`, probes `64 -> 32`, and median fixed-latency probe time `1,011,056 us -> 504,449 us` (-50.11%). This is deterministic request-count evidence, not a live S3 throughput claim.
 
+The fixed 3-ms fake-graph latency uses one owned, one-shot high-resolution waitable timer per
+synchronous graph. Coarse `Sleep(3)` quantization is not a fixed-latency model. Timer creation
+occurs before measurement, waits are bounded, and the fixture changes no global timer resolution.
+Each baseline and candidate records requested/observed latency and proves every expected response
+waited for its full declared latency. The 70% destination-probe, 130% publication and 175%
+source-pinning comparison gates and exact request/content/identity assertions remain unchanged.
+
 Direct-publication validation covers small, forced-multipart, and relay paths for COPY and MOVE; an endpoint that
 explicitly rejects relay conditions; and late-conflict Skip/Overwrite decisions. The protected 16-object
 no-conflict COPY uses fixed publication latency and a same-binary unsafe switch: both baseline and candidate issue

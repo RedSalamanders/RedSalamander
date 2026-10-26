@@ -117,8 +117,45 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
         winrt::check_hresult(inspectable->QueryInterface(winrt::guid_of<Direct3D::IDirect3DDevice>(), winrt::put_abi(projected)));
         const auto interop = winrt::get_activation_factory<Capture::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         Capture::GraphicsCaptureItem item{nullptr};
+        stage                        = L"WGC item for HWND";
+        const LONG_PTR extendedStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        HRESULT itemHr               = E_PENDING;
+        if ((extendedStyle & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) != 0 && (extendedStyle & WS_EX_APPWINDOW) == 0)
+        {
+            // Server's capture-item admission excludes non-activating/tool windows
+            // unless explicitly advertised as app windows. Keep NOACTIVATE intact,
+            // borrow only APPWINDOW, and restore it before starting actual capture.
+            const auto restoreStyle = [&]() noexcept -> HRESULT
+            {
+                const LONG_PTR currentStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+                SetLastError(ERROR_SUCCESS);
+                const LONG_PTR previous = SetWindowLongPtrW(window, GWL_EXSTYLE, currentStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW));
+                const DWORD error       = GetLastError();
+                return previous == 0 && error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : S_OK;
+            };
+            stage = L"WGC app-window admission style";
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR previous = SetWindowLongPtrW(window, GWL_EXSTYLE, extendedStyle | WS_EX_APPWINDOW);
+            const DWORD error       = GetLastError();
+            winrt::check_hresult(previous == 0 && error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : S_OK);
+            auto restore           = wil::scope_exit([&]() noexcept
+            {
+                const HRESULT restored = restoreStyle();
+                if (FAILED(restored))
+                    static_cast<void>(fail(restored));
+            });
+            itemHr                 = interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item));
+            stage                  = L"restore WGC admission style";
+            const HRESULT restored = restoreStyle();
+            restore.release();
+            winrt::check_hresult(restored);
+        }
+        else
+        {
+            itemHr = interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item));
+        }
         stage = L"WGC item for HWND";
-        winrt::check_hresult(interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item)));
+        winrt::check_hresult(itemHr);
         wil::unique_event_nothrow frameArrived;
         winrt::check_hresult(frameArrived.create());
         stage     = L"WGC frame pool";

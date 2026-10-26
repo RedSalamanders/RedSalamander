@@ -72,15 +72,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Fail before the native build if the hosted graphics desktop cannot be prepared.
-      - name: Connect hosted x64 capture session to its console
-        if: ${{ inputs.run_full_tests && runner.environment == 'github-hosted' && runner.arch == 'X64' }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Import-Module ./Tools/Modules/Testing/HostedCaptureDesktop.psm1 -Force
-          Initialize-RSHostedCaptureDesktop | ConvertTo-Json | Write-Host
-
       # ── Setup toolchain ──────────────────────────────────────────────
 
       - name: Prepare required MSVC 14.52 tools

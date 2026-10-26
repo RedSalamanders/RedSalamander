@@ -585,14 +585,29 @@ public:
         return _deleteRequestCount;
     }
 
-    void SetSummaryProbeDelayMs(unsigned long delayMs) noexcept
+    [[nodiscard]] HRESULT SetSummaryProbeDelayMs(unsigned long delayMs) noexcept
     {
         _summaryProbeDelayMs = delayMs;
+        return delayMs == 0u ? S_OK : initializeFixedLatencyTimer();
     }
 
-    void SetCopyPublicationDelayMs(unsigned long delayMs) noexcept
+    [[nodiscard]] HRESULT SetCopyPublicationDelayMs(unsigned long delayMs) noexcept
     {
         _copyPublicationDelayMs = delayMs;
+        return delayMs == 0u ? S_OK : initializeFixedLatencyTimer();
+    }
+
+    [[nodiscard]] uint64_t FixedLatencyWaitCount() const noexcept
+    {
+        return _fixedLatencyWaitCount;
+    }
+    [[nodiscard]] uint64_t FixedLatencyRequestedUs() const noexcept
+    {
+        return _fixedLatencyRequestedUs;
+    }
+    [[nodiscard]] uint64_t FixedLatencyElapsedUs() const noexcept
+    {
+        return _fixedLatencyElapsedUs;
     }
 
     void ForceNextServerSideCopyMultipart() noexcept
@@ -800,7 +815,9 @@ public:
         ++_summaryProbeCount;
         if (_summaryProbeDelayMs != 0u)
         {
-            Sleep(_summaryProbeDelayMs);
+            const HRESULT delayHr = waitForFixedLatency(_summaryProbeDelayMs);
+            if (FAILED(delayHr))
+                return delayHr;
         }
 
         outSizeBytes     = 0;
@@ -1168,7 +1185,9 @@ private:
 
         if (_copyPublicationDelayMs != 0u)
         {
-            Sleep(_copyPublicationDelayMs);
+            const HRESULT delayHr = waitForFixedLatency(_copyPublicationDelayMs);
+            if (FAILED(delayHr))
+                return delayHr;
         }
         if (! _beforeCopyPublicationKey.empty() && destinationKey == _beforeCopyPublicationKey)
         {
@@ -1239,13 +1258,47 @@ private:
     size_t _conditionalDeleteRequestCount      = 0u;
     size_t _revisionMismatchCount              = 0u;
     size_t _sourceReplacementInjectionCount    = 0u;
-    mutable size_t _summaryProbeCount          = 0u;
-    uint64_t _nextRevisionOrdinal              = 0u;
-    unsigned long _summaryProbeDelayMs         = 0u;
-    unsigned long _copyPublicationDelayMs      = 0u;
-    bool _forceNextServerCopyMultipart         = false;
-    bool _sourceReplacementVersioned           = false;
-    bool _versioningEnabled                    = false;
+    // This thread-local synchronous fake graph reuses one owned, one-shot timer.
+    // Sleep(3) is quantized by the host tick and does not model fixed 3-ms I/O.
+    // High-resolution waits preserve the declared latency without changing the
+    // process/system timer resolution, spinning, or relaxing any comparison gate.
+    [[nodiscard]] HRESULT initializeFixedLatencyTimer() const noexcept
+    {
+        if (_fixedLatencyTimer)
+            return S_OK;
+        _fixedLatencyTimer.reset(CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_MODIFY_STATE | SYNCHRONIZE));
+        return _fixedLatencyTimer ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] HRESULT waitForFixedLatency(unsigned long delayMs) const noexcept
+    {
+        if (! _fixedLatencyTimer)
+            return E_UNEXPECTED;
+        const auto started = std::chrono::steady_clock::now();
+        LARGE_INTEGER due{};
+        due.QuadPart = -static_cast<LONGLONG>(delayMs) * 10000LL;
+        if (! SetWaitableTimer(_fixedLatencyTimer.get(), &due, 0, nullptr, nullptr, FALSE))
+            return HRESULT_FROM_WIN32(GetLastError());
+        const DWORD waited = WaitForSingleObject(_fixedLatencyTimer.get(), 5000u);
+        if (waited != WAIT_OBJECT_0)
+            return HRESULT_FROM_WIN32(waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT);
+        ++_fixedLatencyWaitCount;
+        _fixedLatencyRequestedUs += static_cast<uint64_t>(delayMs) * 1000u;
+        _fixedLatencyElapsedUs += Debug::Perf::ElapsedUs(started);
+        return S_OK;
+    }
+
+    mutable wil::unique_handle _fixedLatencyTimer;
+    mutable uint64_t _fixedLatencyWaitCount   = 0u;
+    mutable uint64_t _fixedLatencyRequestedUs = 0u;
+    mutable uint64_t _fixedLatencyElapsedUs   = 0u;
+    mutable size_t _summaryProbeCount         = 0u;
+    uint64_t _nextRevisionOrdinal             = 0u;
+    unsigned long _summaryProbeDelayMs        = 0u;
+    unsigned long _copyPublicationDelayMs     = 0u;
+    bool _forceNextServerCopyMultipart        = false;
+    bool _sourceReplacementVersioned          = false;
+    bool _versioningEnabled                   = false;
 };
 
 thread_local DebugS3Graph* g_debugS3Graph                      = nullptr;
@@ -3279,12 +3332,15 @@ struct DirectoryTransferProbeScenarioResult
     DestinationProbeMetrics metrics{};
     DirectoryPublicationMetrics publicationMetrics{};
     SourceRevisionMetrics sourceRevisionMetrics{};
-    uint64_t durationUs      = 0u;
-    uint64_t totalBytes      = 0u;
-    size_t summaryProbeCount = 0u;
-    unsigned int prompts     = 0u;
-    bool bytesCorrect        = false;
-    HRESULT hr               = E_FAIL;
+    uint64_t durationUs       = 0u;
+    uint64_t totalBytes       = 0u;
+    size_t summaryProbeCount  = 0u;
+    uint64_t delayWaitCount   = 0u;
+    uint64_t delayRequestedUs = 0u;
+    uint64_t delayElapsedUs   = 0u;
+    unsigned int prompts      = 0u;
+    bool bytesCorrect         = false;
+    HRESULT hr                = E_FAIL;
 };
 
 [[nodiscard]] wil::com_ptr<FileSystemS3> MakeDirectoryTransferTestFileSystem() noexcept
@@ -3306,13 +3362,15 @@ struct DirectoryTransferProbeScenarioResult
     constexpr std::string_view kPayload = "payload";
 
     DebugS3Graph graph;
-    graph.SetSummaryProbeDelayMs(3u);
+    DirectoryTransferProbeScenarioResult result{};
+    result.hr = graph.SetSummaryProbeDelayMs(3u);
+    if (FAILED(result.hr))
+        return result;
     for (size_t i = 0u; i < kObjectCount; ++i)
     {
         graph.AddObject(std::format("src/item-{:02}.txt", i), std::string(kPayload));
     }
 
-    DirectoryTransferProbeScenarioResult result{};
     const TransferIssueReporter reporter = [&](const wchar_t*, const wchar_t*, HRESULT, FileSystemIssueAction& action) noexcept -> HRESULT
     {
         ++result.prompts;
@@ -3342,6 +3400,9 @@ struct DirectoryTransferProbeScenarioResult
                                                  &result.sourceRevisionMetrics);
     result.durationUs        = Debug::Perf::ElapsedUs(startedAt);
     result.summaryProbeCount = graph.SummaryProbeCount();
+    result.delayWaitCount    = graph.FixedLatencyWaitCount();
+    result.delayRequestedUs  = graph.FixedLatencyRequestedUs();
+    result.delayElapsedUs    = graph.FixedLatencyElapsedUs();
     result.bytesCorrect      = SUCCEEDED(result.hr);
     for (size_t i = 0u; i < kObjectCount && result.bytesCorrect; ++i)
     {
@@ -3357,6 +3418,9 @@ struct DirectoryPublicationScenarioResult
     uint64_t durationUs               = 0u;
     size_t serverSideCopyRequestCount = 0u;
     size_t conditionalRequestCount    = 0u;
+    uint64_t delayWaitCount           = 0u;
+    uint64_t delayRequestedUs         = 0u;
+    uint64_t delayElapsedUs           = 0u;
     bool bytesCorrect                 = false;
     HRESULT hr                        = E_FAIL;
 };
@@ -3367,13 +3431,15 @@ struct DirectoryPublicationScenarioResult
     constexpr std::string_view kPayload = "payload";
 
     DebugS3Graph graph;
-    graph.SetCopyPublicationDelayMs(3u);
+    DirectoryPublicationScenarioResult result{};
+    result.hr = graph.SetCopyPublicationDelayMs(3u);
+    if (FAILED(result.hr))
+        return result;
     for (size_t i = 0u; i < kObjectCount; ++i)
     {
         graph.AddObject(std::format("src/item-{:02}.txt", i), std::string(kPayload));
     }
 
-    DirectoryPublicationScenarioResult result{};
     DebugS3GraphScope graphScope(graph);
     DebugConditionalDirectPublicationScope publicationScope(conditionalPublicationEnabled);
     uint64_t totalBytes               = 0u;
@@ -3396,6 +3462,9 @@ struct DirectoryPublicationScenarioResult
     result.durationUs                 = Debug::Perf::ElapsedUs(startedAt);
     result.serverSideCopyRequestCount = graph.ServerSideCopyRequestCount();
     result.conditionalRequestCount    = graph.ConditionalPublicationRequestCount();
+    result.delayWaitCount             = graph.FixedLatencyWaitCount();
+    result.delayRequestedUs           = graph.FixedLatencyRequestedUs();
+    result.delayElapsedUs             = graph.FixedLatencyElapsedUs();
     result.bytesCorrect               = SUCCEEDED(result.hr);
     for (size_t i = 0u; i < kObjectCount && result.bytesCorrect; ++i)
     {
@@ -3439,6 +3508,35 @@ void FsS3::RunDirectoryTransferProbeContractSelfTest(unsigned int& passed, unsig
     constexpr uint64_t kCandidateMaximumPercent                        = 70u;
     constexpr uint64_t kPublicationMaximumPercent                      = 130u;
     constexpr uint64_t kSourceRevisionMaximumPercent                   = 175u;
+
+    const auto hasFixedMetadataLatency = [](const DirectoryTransferProbeScenarioResult& result) noexcept
+    {
+        return result.delayWaitCount == result.summaryProbeCount && result.delayRequestedUs == result.summaryProbeCount * 3000u &&
+               result.delayElapsedUs >= result.delayRequestedUs;
+    };
+    const auto hasFixedPublicationLatency = [](const DirectoryPublicationScenarioResult& result) noexcept
+    { return result.delayWaitCount == kObjectCount && result.delayRequestedUs == kObjectCount * 3000u && result.delayElapsedUs >= result.delayRequestedUs; };
+    check(hasFixedMetadataLatency(baseline), L"destination baseline should wait for every declared 3-ms metadata response");
+    check(hasFixedMetadataLatency(candidate), L"destination candidate should wait for every declared 3-ms metadata response");
+    check(hasFixedMetadataLatency(sourceRevisionBaseline), L"source-revision baseline should wait for every declared 3-ms metadata response");
+    check(hasFixedMetadataLatency(sourceRevisionCandidate), L"source-revision candidate should wait for every declared 3-ms metadata response");
+    check(hasFixedPublicationLatency(publicationBaseline), L"publication baseline should wait for every declared 3-ms copy response");
+    check(hasFixedPublicationLatency(publicationCandidate), L"publication candidate should wait for every declared 3-ms copy response");
+
+    std::wcout << std::format(L"[INFO] S3 fixed-latency requested/observed us: destination={}/{} vs {}/{}; publication={}/{} vs {}/{}; "
+                              L"source-revision={}/{} vs {}/{}\n",
+                              baseline.delayRequestedUs,
+                              baseline.delayElapsedUs,
+                              candidate.delayRequestedUs,
+                              candidate.delayElapsedUs,
+                              publicationBaseline.delayRequestedUs,
+                              publicationBaseline.delayElapsedUs,
+                              publicationCandidate.delayRequestedUs,
+                              publicationCandidate.delayElapsedUs,
+                              sourceRevisionBaseline.delayRequestedUs,
+                              sourceRevisionBaseline.delayElapsedUs,
+                              sourceRevisionCandidate.delayRequestedUs,
+                              sourceRevisionCandidate.delayElapsedUs);
 
     std::wcout << std::format(L"[INFO] S3 directory-transfer timing: destination baseline/candidate={}/{} us; publication baseline/candidate={}/{} us; "
                               L"source-revision baseline/candidate={}/{} us\n",
