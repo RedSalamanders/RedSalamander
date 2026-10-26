@@ -3,6 +3,10 @@
 #include "PathUtils.h"
 #include "ViewerDxUiTheme.h"
 
+#ifdef ENABLE_TESTS
+#include "../../Tests/TestSupport/TestSupport.Tests.Runner.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -677,14 +681,71 @@ void RetryStagedFileCleanup() noexcept;
     return ! g_sharedEnvironment.shuttingDown && g_sharedEnvironment.generation == generation;
 }
 
-std::wstring GetWebView2UserDataFolder() noexcept
+HRESULT GetWebView2UserDataFolder(std::wstring& folder) noexcept
 {
-    wchar_t appData[MAX_PATH]{};
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
+    folder.clear();
+#ifdef ENABLE_TESTS
+    // Pass the test profile explicitly. Loader/runtime versions do not all
+    // apply a late process-environment override to an explicit default folder.
+    const auto runId            = RedSalamander::TestSupport::ReadEnvironmentValue(RedSalamander::TestSupport::kTestRunIdEnvironmentVariable);
+    const auto requestedProfile = RedSalamander::TestSupport::ReadEnvironmentValue(L"WEBVIEW2_USER_DATA_FOLDER");
+    if (runId.error != ERROR_SUCCESS || requestedProfile.error != ERROR_SUCCESS)
     {
-        return {};
+        return HRESULT_FROM_WIN32(runId.error != ERROR_SUCCESS ? runId.error : requestedProfile.error);
     }
-    return std::format(L"{}\\RedSalamander\\WebView2UserData", appData);
+    if (runId.value.has_value() && ! RedSalamander::TestSupport::IsSafeTestRunId(runId.value.value()))
+    {
+        return E_ACCESSDENIED;
+    }
+    if (requestedProfile.value.has_value() && ! requestedProfile.value.value().empty())
+    {
+        std::error_code error;
+        const auto profile = Common::Testing::NormalizeAbsoluteTestSandboxPath(requestedProfile.value.value(), error);
+        if (! error && Common::Testing::IsAuthorizedTestSandboxPath(profile, {}, false, error) &&
+            Common::Testing::RequireSandboxedExposureTarget(profile, error) && std::filesystem::is_directory(profile, error) && ! error)
+        {
+            if (runId.value.has_value())
+            {
+                const auto sandbox = RedSalamander::TestSupport::ResolveTestSandboxBase(error);
+                const auto scratch = sandbox / std::wstring(RedSalamander::TestSupport::kRunsDirectoryName) / runId.value.value() /
+                                     std::wstring(RedSalamander::TestSupport::kScratchDirectoryName);
+                if (error || Common::Testing::TestSandboxPathEquals(profile, scratch) || ! Common::Testing::IsSameOrDescendantTestSandboxPath(profile, scratch))
+                {
+                    return E_ACCESSDENIED;
+                }
+            }
+            folder = profile.native();
+            return S_OK;
+        }
+        if (runId.value.has_value())
+        {
+            // An invalid test override must not initialize a normal user profile.
+            return E_ACCESSDENIED;
+        }
+    }
+    else if (runId.value.has_value())
+    {
+        std::error_code error;
+        const auto profile =
+            RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"viewer-web",
+                                                              .leafSegment         = std::format(L"profile-{}-{}", GetCurrentProcessId(), GetTickCount64()),
+                                                              .fallbackRunIdPrefix = L"viewer-web",
+                                                              .cleanExisting       = false},
+                                                             error);
+        if (error || profile.empty())
+        {
+            return E_ACCESSDENIED;
+        }
+        folder = profile.native();
+        return S_OK;
+    }
+#endif
+    wchar_t appData[MAX_PATH]{};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
+    {
+        folder = std::format(L"{}\\RedSalamander\\WebView2UserData", appData);
+    }
+    return S_OK;
 }
 
 void ResetSharedEnvironmentImpl() noexcept
@@ -4122,6 +4183,16 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         return S_FALSE;
     }
 
+    std::wstring userDataFolder;
+    if (! g_sharedEnvironment.environment && ! g_sharedEnvironment.createInProgress)
+    {
+        const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
+        if (FAILED(folderHr))
+        {
+            return folderHr;
+        }
+    }
+
     _webViewInitInProgress = true;
     AddRef();
     const uint64_t sharedEnvironmentGeneration = BeginSharedEnvironmentUse();
@@ -4141,8 +4212,6 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 
     // First caller — create the shared environment.
     g_sharedEnvironment.createInProgress = true;
-
-    const std::wstring userDataFolder = GetWebView2UserDataFolder();
 
     auto callback = MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
         [this, hwnd, sharedEnvironmentGeneration](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT

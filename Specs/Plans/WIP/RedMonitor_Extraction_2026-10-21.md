@@ -620,3 +620,11 @@ window item before pixel validation. The [focused evidence and failed CI log](..
 remain distinct. The capture helper now explicitly initializes Windows Runtime,
 preserves the caller's STA/MTA and balances cleanup after releasing capture
 objects. Current capture qualification and public migration remain open.
+
+The completed b5ea0d679 ARM64 run passed capture and large-tree checks but failed
+the three actual WebView2 profile readbacks: the loader used the normal AppData
+folder despite the harness environment override. The complete failed ARM64 log
+is retained separately. Test builds now pass the validated owned profile directly
+to environment creation, preserving actual browser readback and inherited-profile
+negative controls. Current-source ASan checks and hosted CI remain required;
+Full runtime reruns remain omitted under the accepted scope.

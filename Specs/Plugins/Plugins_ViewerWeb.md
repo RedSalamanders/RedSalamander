@@ -25,6 +25,14 @@ Deployment:
 Runtime requirements:
 - Microsoft Edge **WebView2 Runtime** must be installed on the target machine.
 
+Test builds pass a validated, marked, reparse-free sandbox profile explicitly as
+the WebView2 environment's user-data-folder argument. With a configured run ID,
+the profile must be a strict descendant of that run's scratch tree; an invalid
+override fails closed. A test host without an explicit profile acquires one
+through the canonical native test-directory helper. The actual browser environment
+must still report the fixture's expected profile. Ordinary launches retain the
+normal application profile behavior.
+
 Module lifetime:
 - ViewerWeb owns a DLL-global shared `ICoreWebView2Environment` so multiple viewer instances do not each pay WebView2 environment startup cost.
 - ViewerWeb exports `RedSalamanderPluginShutdown()` to reset that shared environment, unregister the viewer window class, release its WIL-owned class brushes, and retry staged-file deletion as the required module quiet point. The hook is idempotent. `DllMain` process detach deliberately performs no COM release, GDI/container destruction, or staged-file I/O because those operations are forbidden under the loader lock.
