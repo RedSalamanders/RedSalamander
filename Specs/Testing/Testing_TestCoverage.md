@@ -264,7 +264,7 @@ Preferences tests retain live filter/mask application and the shared Release set
 builds, test plans and packages must contain no viewer target, executable or satellite dependency.
 
 The standalone viewer's detailed model, ingestion, file I/O, interaction, lifetime and Release scaling
-obligations transferred to [RedMonitor validation](https://github.com/RedSalamanders/RedMonitor/blob/ej/redmonitor-adoption-20261023/Specs/Testing/Testing_Validation.md).
+obligations transferred to [RedMonitor validation](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Testing/Testing_Validation.md).
 Historical viewer receipts remain historical; consumer component passes cannot qualify those viewer gates.
 The impact manifest maps the vendored client and its lock to the full consumer build/test closure and
 does not select retired viewer projects or suites.

@@ -1,7 +1,7 @@
 # RedMonitor extraction in RedSalamander
 
 Status: ACTIVE consumer qualification. The canonical implementation plan is
-[RedMonitor extraction and all four adoptions](https://github.com/RedSalamanders/RedMonitor/blob/ej/redmonitor-adoption-20261023/Specs/Plans/WIP/RedMonitorExtraction_2026-10-21.md).
+[RedMonitor extraction and all four adoptions](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Plans/WIP/RedMonitorExtraction_2026-10-21.md).
 The current consumer contract is [RedMonitor](../../Core/Core_RedSalamanderMonitor.md).
 
 - [x] Extract viewer/model/resources/tests with source origin and MIT notices into Z:/src/RedMonitor.
