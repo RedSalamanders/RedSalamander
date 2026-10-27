@@ -2069,8 +2069,11 @@ record the API stage and the process's session, window station and desktop.
 
 Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned non-activating/tool
 fixture that lacks it. Windows Server otherwise rejects that HWND with `E_INVALIDARG`.
-The helper preserves `WS_EX_NOACTIVATE`, restores the borrowed bit before frame capture,
-and fails if restoration fails. It never changes the console session. Lifecycle, documentation,
+Only the owning UI thread may prepare or restore that admission scope, preserving
+`WS_EX_NOACTIVATE`. Direct UI capture restores the borrowed bit before frame capture;
+cross-thread capture requires the owner to prepare the scope, pump through worker
+retirement including bounded timeout cleanup, and then restore it. Restoration failure
+fails the scenario. The helper never changes the console session. Lifecycle, documentation,
 in-flight and STA/MTA playback witnesses assert exact extended-style restoration; pixel,
 layer, foreground, ownership and timing assertions remain mandatory, including negative-color controls.
 
