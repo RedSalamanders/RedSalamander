@@ -10951,9 +10951,70 @@ private:
     // Media-specific capture keeps the owner's UI pumping while libVLC presents
     // and resizes its native output. Static application fixtures do not need this
     // reentrant policy. Whole-frame probes require no cross-thread client geometry.
+    const auto joinCaptureWorker =
+        [&](std::jthread& captureThread, const std::atomic_bool& complete, std::chrono::milliseconds timeout, auto&& onTimeout) noexcept
+    {
+        const auto retired  = [&]() noexcept { return complete.load(std::memory_order_acquire); };
+        const bool finished = PumpUntil(retired, timeout);
+        if (! finished)
+        {
+            onTimeout();
+            // Cleanup never turns a missed success deadline into a pass. Keep
+            // servicing synchronous UI work until the owned worker retires.
+            if (! PumpUntil(retired, 5000ms))
+            {
+                Debug::Error(L"Playback capture worker did not retire within its cleanup budget.");
+                std::terminate(); // The parent harness contains this owned test child.
+            }
+        }
+        captureThread.join();
+        return finished;
+    };
+    // Deterministically release synchronous UI work only after a missed deadline.
+    // Stopping the pump and joining immediately would deadlock this control.
+    wil::unique_event_nothrow releaseLateWorker;
+    if (! Check(SUCCEEDED(releaseLateWorker.create()), L"Late capture-worker gate is owned", success))
+        return false;
+    std::atomic_bool lateComplete{false};
+    std::atomic_bool lateMessageDelivered{false};
+    std::atomic_bool workerAdmissionRejected{false};
+    const LONG_PTR lateStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+    try
+    {
+        std::jthread lateWorker([&]() noexcept
+        {
+            RedSalamander::TestSupport::ScopedWindowScreenshotAdmission rejectedAdmission(window);
+            workerAdmissionRejected.store(rejectedAdmission.Status() == E_INVALIDARG, std::memory_order_relaxed);
+            if (WaitForSingleObject(releaseLateWorker.get(), 5000u) == WAIT_OBJECT_0)
+            {
+                SendMessageW(window, WM_NULL, 0u, 0);
+                lateMessageDelivered.store(true, std::memory_order_relaxed);
+            }
+            lateComplete.store(true, std::memory_order_release);
+        });
+        const bool onTime = joinCaptureWorker(lateWorker, lateComplete, 20ms, [&]() noexcept { SetEvent(releaseLateWorker.get()); });
+        Check(! onTime, L"Late capture cleanup preserves the original timeout failure", success);
+        Check(lateMessageDelivered.load(std::memory_order_acquire), L"Late capture cleanup pumps synchronous owner-thread work before joining", success);
+        Check(workerAdmissionRejected.load(std::memory_order_acquire), L"Capture admission refuses style changes from a worker", success);
+        Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == lateStyle, L"Rejected worker admission preserves the window style", success);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error&)
+    {
+        // This noexcept test boundary cannot qualify a worker it could not start.
+        Debug::Error(L"Late playback capture-worker control failed to start.");
+        return false;
+    }
     const auto capturePlaybackFrame = [&](const std::filesystem::path& output,
                                           std::span<RedSalamander::TestSupport::WindowScreenshotColorProbe> probes) noexcept -> HRESULT
     {
+        const LONG_PTR captureStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        RedSalamander::TestSupport::ScopedWindowScreenshotAdmission admission(window);
+        if (FAILED(admission.Status()))
+            return admission.Status();
         std::atomic_bool complete{false};
         std::atomic<HRESULT> captured{E_PENDING};
         try
@@ -10972,8 +11033,13 @@ private:
                 }
                 complete.store(true, std::memory_order_release);
             });
-            const bool finished = PumpUntil([&]() noexcept { return complete.load(std::memory_order_acquire); }, 20000ms);
-            captureThread.join();
+            const bool finished    = joinCaptureWorker(captureThread, complete, 20000ms, []() noexcept {
+                Debug::Error(L"Playback capture missed its success deadline; pumping bounded worker cleanup.");
+            });
+            const HRESULT restored = admission.Restore();
+            Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == captureStyle, L"Playback capture restores the owned window's extended style", success);
+            if (FAILED(restored))
+                return restored;
             return finished ? captured.load(std::memory_order_acquire) : HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         }
         catch (const std::bad_alloc&)
@@ -11331,7 +11397,9 @@ private:
                   L"VLC capture shows a missing runtime without exposing the sandbox path",
                   success);
         }
-        const HRESULT screenshotHr = RedSalamander::TestSupport::SaveWindowScreenshot(window, captures / (std::wstring(scenario.name) + L".png"));
+        const LONG_PTR captureStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        const HRESULT screenshotHr  = RedSalamander::TestSupport::SaveWindowScreenshot(window, captures / (std::wstring(scenario.name) + L".png"));
+        Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == captureStyle, L"Documentation capture restores the owned window's extended style", success);
         Check(SUCCEEDED(screenshotHr),
               std::format(L"Native viewer documentation capture succeeds (hr=0x{:08X})", static_cast<unsigned long>(screenshotHr)),
               success);
@@ -11350,7 +11418,9 @@ private:
                                             8000ms),
                   L"Documentation hex view displays the generated bytes",
                   success);
-            const HRESULT hexScreenshotHr = RedSalamander::TestSupport::SaveWindowScreenshot(window, captures / L"viewer-text-hex.png");
+            const LONG_PTR hexCaptureStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+            const HRESULT hexScreenshotHr  = RedSalamander::TestSupport::SaveWindowScreenshot(window, captures / L"viewer-text-hex.png");
+            Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == hexCaptureStyle, L"Hex documentation capture restores the owned window's extended style", success);
             Check(SUCCEEDED(hexScreenshotHr),
                   std::format(L"Native hex documentation capture succeeds (hr=0x{:08X})", static_cast<unsigned long>(hexScreenshotHr)),
                   success);
@@ -11736,7 +11806,9 @@ private:
                   L"Live theme preserves the window DPI for map geometry and text",
                   success);
         }
+        const LONG_PTR captureStyle    = GetWindowLongPtrW(captureWindow, GWL_EXSTYLE);
         const HRESULT captureHr        = RedSalamander::TestSupport::SaveWindowScreenshot(captureWindow, pngPath, probes);
+        const bool styleRestored       = GetWindowLongPtrW(captureWindow, GWL_EXSTYLE) == captureStyle;
         const bool foregroundPreserved = desktop.Finish();
         const LONG gateCallbacksAfter  = readGate.ActiveCalls();
 
@@ -11744,6 +11816,7 @@ private:
         const bool gotAfter   = readSnapshot(hwnd, after);
         const bool validAfter = gotAfter && expectedState(after);
         const bool stable     = validAfter && stateStable(before, after);
+        Check(styleRestored, L"Lifecycle capture restores the owned window's extended style", success);
         Check(SUCCEEDED(captureHr),
               std::format(L"{} no-activation WGC capture passes the theme-background witness (hr=0x{:08X})",
                           std::wstring(name.begin(), name.end()),
@@ -14589,8 +14662,12 @@ struct ViewerSpaceBlockingDirectoryControl final
                 Check(! artifactError && ! screenshotDirectory.empty(), L"in-flight screenshot uses the authorized artifact sandbox", success);
                 if (! artifactError && ! screenshotDirectory.empty())
                 {
-                    const auto screenshotPath  = screenshotDirectory / L"viewer-space-inflight-scan.png";
-                    const HRESULT screenshotHr = RedSalamander::TestSupport::SaveWindowScreenshot(blockedWindow, screenshotPath);
+                    const auto screenshotPath   = screenshotDirectory / L"viewer-space-inflight-scan.png";
+                    const LONG_PTR captureStyle = GetWindowLongPtrW(blockedWindow, GWL_EXSTYLE);
+                    const HRESULT screenshotHr  = RedSalamander::TestSupport::SaveWindowScreenshot(blockedWindow, screenshotPath);
+                    Check(GetWindowLongPtrW(blockedWindow, GWL_EXSTYLE) == captureStyle,
+                          L"In-flight capture restores the owned window's extended style",
+                          success);
                     Check(SUCCEEDED(screenshotHr),
                           std::format(
                               L"in-flight ViewerSpace screenshot saved: {} (hr=0x{:08X})", screenshotPath.wstring(), static_cast<unsigned long>(screenshotHr)),

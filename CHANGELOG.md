@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep temporary capture admission styles on the owning UI thread and restore them after cross-thread capture workers retire. Timeout cleanup continues pumping within a separate bounded budget, preserves the original failure deadline, and has an event-gated late-worker regression control.
+- Admit owned non-activating windows to Windows Graphics Capture on Server by borrowing and restoring the app-window style before frame capture; preserve activation, pixel/layer and negative-color assertions and verify style restoration. Replace coarse sleeps in S3's fixed 3-ms fake latency with owned one-shot high-resolution waits, add latency-fidelity controls, and retain all request counts and performance thresholds.
 - Point RedMonitor contract and adoption-plan links to its merged main branch so retiring the delivery branch preserves documentation navigation.
 - Added an indexed cross-project agent and skill audit with independently reviewed red-team findings, per-skill dispositions, read-only validator probes, and prioritized recommendations. Guidance repairs and native/runtime qualification remain outside this documentation-only change.
 - Preserve shared browser-creation serialization across profile resolution and drain any queued consumers when test-profile admission fails. The existing viewer lifetime guard, actual profile readbacks and resource bounds remain in force.

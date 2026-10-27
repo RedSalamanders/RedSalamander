@@ -107,6 +107,15 @@ software decoding and `wingdi` output; it does not qualify every GPU output mode
 Its joined MTA capture worker reuses the canonical whole-frame probe while the
 owner UI keeps pumping libVLC resize/presentation messages. Client-region negative
 controls deliberately call that worker and MUST retain owner-thread rejection.
+The owner UI MUST prepare `ScopedWindowScreenshotAdmission` before starting the
+worker and restore the borrowed APPWINDOW bit after it retires; NOACTIVATE remains
+intact. A worker MUST NOT change another thread's window styles. The original
+20-second success deadline remains unchanged. Timeout cleanup MUST keep pumping
+for at most five additional seconds before joining; late completion remains a
+timeout failure. A worker still running after cleanup terminates the owned child
+for parent-harness containment. An event-gated negative control releases a worker
+only after its deadline, requires a synchronous owner-window message to complete
+during cleanup, and proves wrong-thread admission rejection and style preservation.
 Publication requires a real player/video child, positive decoder time and duration,
 whole-frame generated-video color populations, and stable decoder time after the
 owned video child's native pause action. The asynchronous HUD sample settles
@@ -2057,6 +2066,16 @@ The helper MUST initialize and balance Windows Runtime use in the calling thread
 STA/MTA; COM-only initialization does not meet that API precondition. Capture objects and
 event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
 record the API stage and the process's session, window station and desktop.
+
+Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned non-activating/tool
+fixture that lacks it. Windows Server otherwise rejects that HWND with `E_INVALIDARG`.
+Only the owning UI thread may prepare or restore that admission scope, preserving
+`WS_EX_NOACTIVATE`. Direct UI capture restores the borrowed bit before frame capture;
+cross-thread capture requires the owner to prepare the scope, pump through worker
+retirement including bounded timeout cleanup, and then restore it. Restoration failure
+fails the scenario. The helper never changes the console session. Lifecycle, documentation,
+in-flight and STA/MTA playback witnesses assert exact extended-style restoration; pixel,
+layer, foreground, ownership and timing assertions remain mandatory, including negative-color controls.
 
 ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
 The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.
