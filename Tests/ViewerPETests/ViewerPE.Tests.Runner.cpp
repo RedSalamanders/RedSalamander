@@ -10951,10 +10951,70 @@ private:
     // Media-specific capture keeps the owner's UI pumping while libVLC presents
     // and resizes its native output. Static application fixtures do not need this
     // reentrant policy. Whole-frame probes require no cross-thread client geometry.
+    const auto joinCaptureWorker =
+        [&](std::jthread& captureThread, const std::atomic_bool& complete, std::chrono::milliseconds timeout, auto&& onTimeout) noexcept
+    {
+        const auto retired  = [&]() noexcept { return complete.load(std::memory_order_acquire); };
+        const bool finished = PumpUntil(retired, timeout);
+        if (! finished)
+        {
+            onTimeout();
+            // Cleanup never turns a missed success deadline into a pass. Keep
+            // servicing synchronous UI work until the owned worker retires.
+            if (! PumpUntil(retired, 5000ms))
+            {
+                Debug::Error(L"Playback capture worker did not retire within its cleanup budget.");
+                std::terminate(); // The parent harness contains this owned test child.
+            }
+        }
+        captureThread.join();
+        return finished;
+    };
+    // Deterministically release synchronous UI work only after a missed deadline.
+    // Stopping the pump and joining immediately would deadlock this control.
+    wil::unique_event_nothrow releaseLateWorker;
+    if (! Check(SUCCEEDED(releaseLateWorker.create()), L"Late capture-worker gate is owned", success))
+        return false;
+    std::atomic_bool lateComplete{false};
+    std::atomic_bool lateMessageDelivered{false};
+    std::atomic_bool workerAdmissionRejected{false};
+    const LONG_PTR lateStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+    try
+    {
+        std::jthread lateWorker([&]() noexcept
+        {
+            RedSalamander::TestSupport::ScopedWindowScreenshotAdmission rejectedAdmission(window);
+            workerAdmissionRejected.store(rejectedAdmission.Status() == E_INVALIDARG, std::memory_order_relaxed);
+            if (WaitForSingleObject(releaseLateWorker.get(), 5000u) == WAIT_OBJECT_0)
+            {
+                SendMessageW(window, WM_NULL, 0u, 0);
+                lateMessageDelivered.store(true, std::memory_order_relaxed);
+            }
+            lateComplete.store(true, std::memory_order_release);
+        });
+        const bool onTime = joinCaptureWorker(lateWorker, lateComplete, 20ms, [&]() noexcept { SetEvent(releaseLateWorker.get()); });
+        Check(! onTime, L"Late capture cleanup preserves the original timeout failure", success);
+        Check(lateMessageDelivered.load(std::memory_order_acquire), L"Late capture cleanup pumps synchronous owner-thread work before joining", success);
+        Check(workerAdmissionRejected.load(std::memory_order_acquire), L"Capture admission refuses style changes from a worker", success);
+        Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == lateStyle, L"Rejected worker admission preserves the window style", success);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error&)
+    {
+        // This noexcept test boundary cannot qualify a worker it could not start.
+        Debug::Error(L"Late playback capture-worker control failed to start.");
+        return false;
+    }
     const auto capturePlaybackFrame = [&](const std::filesystem::path& output,
                                           std::span<RedSalamander::TestSupport::WindowScreenshotColorProbe> probes) noexcept -> HRESULT
     {
         const LONG_PTR captureStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        RedSalamander::TestSupport::ScopedWindowScreenshotAdmission admission(window);
+        if (FAILED(admission.Status()))
+            return admission.Status();
         std::atomic_bool complete{false};
         std::atomic<HRESULT> captured{E_PENDING};
         try
@@ -10973,9 +11033,13 @@ private:
                 }
                 complete.store(true, std::memory_order_release);
             });
-            const bool finished = PumpUntil([&]() noexcept { return complete.load(std::memory_order_acquire); }, 20000ms);
-            captureThread.join();
+            const bool finished    = joinCaptureWorker(captureThread, complete, 20000ms, []() noexcept {
+                Debug::Error(L"Playback capture missed its success deadline; pumping bounded worker cleanup.");
+            });
+            const HRESULT restored = admission.Restore();
             Check(GetWindowLongPtrW(window, GWL_EXSTYLE) == captureStyle, L"Playback capture restores the owned window's extended style", success);
+            if (FAILED(restored))
+                return restored;
             return finished ? captured.load(std::memory_order_acquire) : HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         }
         catch (const std::bad_alloc&)

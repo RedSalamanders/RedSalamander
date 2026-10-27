@@ -107,6 +107,15 @@ software decoding and `wingdi` output; it does not qualify every GPU output mode
 Its joined MTA capture worker reuses the canonical whole-frame probe while the
 owner UI keeps pumping libVLC resize/presentation messages. Client-region negative
 controls deliberately call that worker and MUST retain owner-thread rejection.
+The owner UI MUST prepare `ScopedWindowScreenshotAdmission` before starting the
+worker and restore the borrowed APPWINDOW bit after it retires; NOACTIVATE remains
+intact. A worker MUST NOT change another thread's window styles. The original
+20-second success deadline remains unchanged. Timeout cleanup MUST keep pumping
+for at most five additional seconds before joining; late completion remains a
+timeout failure. A worker still running after cleanup terminates the owned child
+for parent-harness containment. An event-gated negative control releases a worker
+only after its deadline, requires a synchronous owner-window message to complete
+during cleanup, and proves wrong-thread admission rejection and style preservation.
 Publication requires a real player/video child, positive decoder time and duration,
 whole-frame generated-video color populations, and stable decoder time after the
 owned video child's native pause action. The asynchronous HUD sample settles

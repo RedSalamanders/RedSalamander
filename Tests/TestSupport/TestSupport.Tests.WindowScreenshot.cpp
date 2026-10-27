@@ -35,6 +35,55 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "dwmapi.lib")
 
+RedSalamander::TestSupport::ScopedWindowScreenshotAdmission::ScopedWindowScreenshotAdmission(HWND window) noexcept
+{
+    DWORD processId         = 0u;
+    const DWORD ownerThread = GetWindowThreadProcessId(window, &processId);
+    if (processId != GetCurrentProcessId() || ownerThread != GetCurrentThreadId())
+        return;
+    const LONG_PTR style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+    _status              = S_OK;
+    if ((style & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) == 0 || (style & WS_EX_APPWINDOW) != 0)
+        return;
+    // SetWindowLongPtr sends synchronous style messages. Never call it from a
+    // capture worker: the UI must remain free to pump until that worker retires.
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR previous = SetWindowLongPtrW(window, GWL_EXSTYLE, style | WS_EX_APPWINDOW);
+    const DWORD error       = GetLastError();
+    if (previous == 0 && error != ERROR_SUCCESS)
+        _status = HRESULT_FROM_WIN32(error);
+    else
+        _window = window;
+}
+
+RedSalamander::TestSupport::ScopedWindowScreenshotAdmission::~ScopedWindowScreenshotAdmission() noexcept
+{
+    if (_window)
+    {
+        const HRESULT restored = Restore();
+        if (FAILED(restored))
+            std::fwprintf(stderr, L"[INFO] WGC admission restoration failed: hr=0x%08lX\n", static_cast<unsigned long>(restored));
+    }
+}
+
+HRESULT RedSalamander::TestSupport::ScopedWindowScreenshotAdmission::Restore() noexcept
+{
+    if (! _window)
+        return _status;
+    DWORD processId         = 0u;
+    const DWORD ownerThread = GetWindowThreadProcessId(_window, &processId);
+    if (processId != GetCurrentProcessId() || ownerThread != GetCurrentThreadId())
+        return E_INVALIDARG;
+    const LONG_PTR style = GetWindowLongPtrW(_window, GWL_EXSTYLE);
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR previous = SetWindowLongPtrW(_window, GWL_EXSTYLE, style & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW));
+    const DWORD error       = GetLastError();
+    if (previous == 0 && error != ERROR_SUCCESS)
+        return HRESULT_FROM_WIN32(error);
+    _window = nullptr;
+    return S_OK;
+}
+
 HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std::filesystem::path& path, std::span<WindowScreenshotColorProbe> probes) noexcept
 {
     const wchar_t* stage = L"owned visible window";
@@ -117,38 +166,16 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
         winrt::check_hresult(inspectable->QueryInterface(winrt::guid_of<Direct3D::IDirect3DDevice>(), winrt::put_abi(projected)));
         const auto interop = winrt::get_activation_factory<Capture::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         Capture::GraphicsCaptureItem item{nullptr};
-        stage                        = L"WGC item for HWND";
-        const LONG_PTR extendedStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
-        HRESULT itemHr               = E_PENDING;
-        if ((extendedStyle & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) != 0 && (extendedStyle & WS_EX_APPWINDOW) == 0)
+        stage          = L"WGC item for HWND";
+        HRESULT itemHr = E_PENDING;
+        if (windowThread == GetCurrentThreadId())
         {
-            // Server's capture-item admission excludes non-activating/tool windows
-            // unless explicitly advertised as app windows. Keep NOACTIVATE intact,
-            // borrow only APPWINDOW, and restore it before starting actual capture.
-            const auto restoreStyle = [&]() noexcept -> HRESULT
-            {
-                const LONG_PTR currentStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
-                SetLastError(ERROR_SUCCESS);
-                const LONG_PTR previous = SetWindowLongPtrW(window, GWL_EXSTYLE, currentStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW));
-                const DWORD error       = GetLastError();
-                return previous == 0 && error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : S_OK;
-            };
             stage = L"WGC app-window admission style";
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR previous = SetWindowLongPtrW(window, GWL_EXSTYLE, extendedStyle | WS_EX_APPWINDOW);
-            const DWORD error       = GetLastError();
-            winrt::check_hresult(previous == 0 && error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : S_OK);
-            auto restore           = wil::scope_exit([&]() noexcept
-            {
-                const HRESULT restored = restoreStyle();
-                if (FAILED(restored))
-                    static_cast<void>(fail(restored));
-            });
-            itemHr                 = interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item));
-            stage                  = L"restore WGC admission style";
-            const HRESULT restored = restoreStyle();
-            restore.release();
-            winrt::check_hresult(restored);
+            ScopedWindowScreenshotAdmission admission(window);
+            winrt::check_hresult(admission.Status());
+            itemHr = interop->CreateForWindow(window, winrt::guid_of<Capture::GraphicsCaptureItem>(), winrt::put_abi(item));
+            stage  = L"restore WGC admission style";
+            winrt::check_hresult(admission.Restore());
         }
         else
         {
