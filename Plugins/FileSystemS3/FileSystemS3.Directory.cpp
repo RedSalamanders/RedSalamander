@@ -513,6 +513,12 @@ enum class DebugSourceMutationPoint
 class DebugS3Graph final
 {
 public:
+    DebugS3Graph()                               = default;
+    DebugS3Graph(const DebugS3Graph&)            = delete;
+    DebugS3Graph& operator=(const DebugS3Graph&) = delete;
+    DebugS3Graph(DebugS3Graph&&)                 = delete;
+    DebugS3Graph& operator=(DebugS3Graph&&)      = delete;
+
     void AddObject(std::string key, std::string bytes)
     {
         AddObjectInternal(std::move(key), std::move(bytes), false);
