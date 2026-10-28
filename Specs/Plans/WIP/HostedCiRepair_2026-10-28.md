@@ -149,3 +149,10 @@ Its fresh consumer had no restored DxUi source; the first use-time identity guar
 Restore the exact pin before import, preserving that guard, all artifact hashes and repeat/shuffle controls.
 Check the child's exit inside each protected action, where its status is available, and propagate failure
 through display restoration. A real nonzero-child regression complements the restoration controls.
+
+The broader pin's first consumer build (`0e12ce08f`) failed with four C2589 diagnostics: the Analysis
+and Navigation host headers included Windows without `NOMINMAX` before the new public RichDocument
+header. Apply the same Windows-header boundary already used by the other ViewerSpace host/header;
+do not edit managed dependency products. Repeat a full-solution rebuild and the original regression.
+Both specification and tooling inventories passed without blocking findings. The workflow/receipt
+controls, including a real child exit 7 and display restoration, passed 95/95 with no skips.
