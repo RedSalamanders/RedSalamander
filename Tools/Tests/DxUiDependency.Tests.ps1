@@ -91,7 +91,7 @@ Describe 'Exact DxUi consumer dependency' {
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $rejected=$false; try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $rejected=$true }; $rejected | Should Be $true
         Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing | Should BeNullOrEmpty
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated source fixture.' }
@@ -120,7 +120,7 @@ Describe 'Exact DxUi consumer dependency' {
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
-        $source = Join-Path $dependency "source/$head"
+        $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated provenance fixture.' }
@@ -219,7 +219,7 @@ Describe 'Lighter DxUi source restore' {
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         (Join-Path $source "$deepDirectory/Deep.psm1").Length | Should BeGreaterThan 260
 
         & (Get-Module DxUiDependency) { param($Root, $Origin, $Commit, $Checkout)
@@ -244,7 +244,7 @@ Describe 'Lighter DxUi source restore' {
         # Without include/ the sparse checkout lacks a path the build reads.
         $head = New-RSDxUiRestoreOrigin -Path $origin -DeepDirectory 'Tools/deep' -Omit @('include')
         $root = Join-Path $TestDrive 'failing-restore'
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         $install = { param($Root, $Repository, $Commit, $Checkout)
             Install-RSDxUiPinnedSource -RepoRoot $Root -Repository $Repository -Commit $Commit -Source $Checkout }
         { & (Get-Module DxUiDependency) $install $root $origin $head $source } | Should Throw "lacks 'include'"
@@ -305,7 +305,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
-        $source = Join-Path $dependency "source/$head"
+        $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         (Join-Path $source '.git/hooks/fsmonitor-watchman.sample').Length | Should BeGreaterThan 260
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source

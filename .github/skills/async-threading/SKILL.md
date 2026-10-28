@@ -239,7 +239,7 @@ Rules:
 
 - Guard invalidation must be the **first** operation in teardown; `store(false, release)` in `Stop()` pairs with `load(acquire)` in the callback, so a callback that sees `valid == false` also sees all prior teardown writes.
 - Check both `_stopping` and the guard (defense in depth).
-- Explicit deleted copy/move satisfies MSVC /W4 warnings (C4625, C4626, C5026, C5027).
+- Explicit deleted copy/move documents ownership under MSVC /Wall warnings (C4625, C4626, C5026, C5027).
 - Use when any plugin async callback could outlive the host reference, e.g. threadpool I/O callbacks (`ReadDirectoryChangesW`), background workers invoking registered callbacks, or wherever `SetCallback(nullptr)` must be a hard barrier.
 - Reference implementation: `Plugins/FileSystem/FileSystem.Watch.cpp` (DirectoryWatch).
 

@@ -4744,7 +4744,10 @@
         "Tools/Tests/BuildReproducibility.Tests.ps1"
       ],
       "replacement": null
-    }
+    },
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Locate short dependency folders, refuse full-identity collisions and bind native compiler-policy file digests.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Modules/Build/DxUiPaths.psm1","kind":"module","usedBy":["Tools/Modules/Build/DxUiDependency.psm1","Tools/Tests/BuildConsoleCheck.ps1"]},
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Exercise zero-warning results, terminal links, launch-command quoting and short dependency identity collision refusal.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsoleCheck.ps1","kind":"test","usedBy":["Tools/Tests/BuildConsole.Tests.ps1"]},
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Run the owned build-console and dependency-path behavior checks through Pester.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsole.Tests.ps1","kind":"test","usedBy":["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1","Tools/Run-AllTests.ps1"]}
   ],
   "rules": [
     {

@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'DxUiPaths.psm1') -Scope Local -ErrorAction Stop
 # Product policy around the canonical library's restore identity and imports.
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'ArtifactOperationLock.psm1') -Scope Local
@@ -55,7 +56,7 @@ function Get-RSDxUiSourceIdentity {
     $pin = Get-RSDxUiPin -RepoRoot $RepoRoot
     if ($null -eq $pin) { return $null }
     $source = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build/dependencies/DxUi' `
-        -Path (Join-Path $RepoRoot ".build/dependencies/DxUi/source/$($pin.commit)")
+        -Path (Join-Path $RepoRoot ".build/dependencies/DxUi/source/$($pin.commit.Substring(0,16))")
     if (-not (Test-Path -LiteralPath $source)) {
         if ($AllowMissing) { return $null }
         throw 'The pinned DxUi source is missing. Run Tools/Restore-DxUi.ps1 for this profile.'
@@ -197,7 +198,7 @@ function Restore-RSDxUiDependency {
         Assert-RSNoResidualArtifactToolProcesses -RepoRoot $RepoRoot -Scope $scope
         $dependency = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build/dependencies/DxUi' `
             -Path (Join-Path $RepoRoot '.build/dependencies/DxUi') -CreateDirectory
-        $source = Join-Path $dependency "source/$($pin.commit)"
+        $source = Get-DxUiSourcePath -DependencyRoot $dependency -Commit $pin.commit
         if (-not (Test-Path -LiteralPath $source)) {
             Install-RSDxUiPinnedSource -RepoRoot $RepoRoot -Repository "$($pin.repository).git" -Commit $pin.commit -Source $source
         }
@@ -223,13 +224,14 @@ function Restore-RSDxUiDependency {
             foreach ($entry in $identity.Identity.PSObject.Properties) { $policyIdentity[$entry.Name] = $entry.Value }
         }
         $policyIdentity['releaseOptimizationPolicy'] = 'Gy-REF-GL-LTCG-full-v1'
+foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $RepoRoot).GetEnumerator()){$policyIdentity[$field.Key]=$field.Value}
         $policyHasher = [Security.Cryptography.SHA256]::Create()
         try { $policyFingerprint = ([BitConverter]::ToString($policyHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($policyIdentity | ConvertTo-Json -Depth 8 -Compress))))).Replace('-','').ToLowerInvariant() }
         finally { $policyHasher.Dispose() }
         $identity = [pscustomobject]@{ Fingerprint=$policyFingerprint; Identity=$policyIdentity }
         # Before the library's own dependency restore: a pin that crossed an API revision is adopted deliberately.
         Assert-RSDxUiApiRevision -Pin $pin -Recorded (Get-RSDxUiRecordedApiRevision $identity.Identity) -Context 'The pinned DxUi source'
-        $output = (Join-Path $dependency (Get-RSDxUiOutputKey -Fingerprint $identity.Fingerprint)) + [IO.Path]::DirectorySeparatorChar
+        $output = Initialize-DxUiOutputRoot -DependencyRoot $dependency -BuildIdentity $identity
         Invoke-RSDxUiRestoreProcess $RepoRoot 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',
             (Join-Path $source 'vcpkg-install.ps1'),'-Platform',$Platform,'-OutputRoot',$output)
         $values = [ordered]@{

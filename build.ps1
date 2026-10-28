@@ -99,6 +99,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
+Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 $BuildProjectSelectionModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\BuildProjectSelection.psm1"
 $BuildEvidenceModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\BuildEvidence.psm1"
 $MSBuildInvocationModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\MSBuildInvocation.psm1"
@@ -742,6 +744,7 @@ function Invoke-MSBuild {
         }
         Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
         Write-RSMSBuildDiagnosticSummary -LogPath $logPath
+        if($exitCode -eq 0){Assert-NativeBuildDiagnostics -LogPath $logPath}
         $global:LASTEXITCODE = $exitCode
         return $exitCode
     }
@@ -1422,16 +1425,15 @@ function Assert-BuildOutputProcessNotRunning {
         -SchemaPath $buildReceiptSchema
     Write-Host "Build artifacts attested: $($buildReceipt.receipt_id)" -ForegroundColor Gray
 
-    Write-Host ''
-    foreach ($line in @(ConvertTo-RSBuildSummaryLines `
-            -Configuration $Configuration `
-            -Platform $Platform `
-            -Duration $operationDuration `
-            -Artifacts @($summaryArtifacts))) {
-        $color = if ($line -like '& *' -or $line -like 'Output: *') { 'Cyan' } else { 'Green' }
-        Write-Host $line -ForegroundColor $color
+    $visibleArtifacts=@($summaryArtifacts|Sort-Object relative_path|ForEach-Object{[string]$_.absolute_path_diagnostic})
+    $app=@($summaryArtifacts|Where-Object{[IO.Path]::GetFileName([string]$_.absolute_path_diagnostic)-eq 'RedSalamander.exe'}|Select-Object -First 1)
+    $launch=if($app.Count){[string]$app[0].absolute_path_diagnostic}else{''}
+    $processLog=Get-Variable -Name LastProcessLogPath -Scope Script -ErrorAction SilentlyContinue
+    if($processLog -and (Test-Path -LiteralPath $processLog.Value)){
+        Write-NativeBuildResult -Project RedSalamander -Platform $Platform -Configuration $Configuration -LogPath $processLog.Value -Artifacts $visibleArtifacts -Executable $launch -Duration $nativeEntryElapsed.Elapsed
+    }else{
+        foreach($line in @(ConvertTo-RSBuildSummaryLines -Configuration $Configuration -Platform $Platform -Duration $operationDuration -Artifacts @($summaryArtifacts))){Write-Host $line -ForegroundColor Green}
     }
-
     exit 0
 }
 catch {

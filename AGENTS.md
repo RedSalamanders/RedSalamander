@@ -318,3 +318,12 @@ Run `Tools/Test-Changelog.ps1` while editing. Before PrePush and final handoff, 
 merge/rebase that introduces fragments, run `Tools/Fold-Changelog.ps1` and then `Tools/Fold-Changelog.ps1 -Check`,
 even for one fragment. Include the generated changelog and fragment removals in the current change; do not wait
 for release batches or a separate cleanup PR. Validation is read-only; `-WhatIf` previews folding without writes.
+
+## Shared native build policy (2026-10-28)
+
+Use /Wall with /WX disabled in every first-party profile. A build is accepted
+only with zero warnings and zero errors; fix actionable diagnostics rather than
+adding blanket suppressions. Ordinary Debug uses /ZI, ASan Debug uses /Zi.
+Release explicitly enables /OPT:ICF; Debug/ASan explicitly disable it.
+Follow Specs/Build/Build_ConsoleAndPaths.md for the common green result, safe
+terminal launch links and short dependency folders with full identity checking.
