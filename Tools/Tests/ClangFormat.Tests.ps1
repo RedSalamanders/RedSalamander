@@ -23,6 +23,19 @@ InModuleScope ClangFormat {
         return [pscustomobject]@{Root=$root; Wheel=$wheel; Output=(Join-Path $root '.build/format/clang_format/data/bin/clang-format.exe')}
     }
 
+    function Remove-FormatterFixtureJunction {
+        param([string]$Path, [string]$ExpectedTarget)
+        # The canonical tree cleaner rejects absolute links and removes a whole tree.
+        # This fixture needs to unlink exactly its owned junction while retaining all witnesses.
+        $entry = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        if ($null -eq $entry -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) { return }
+        if ($entry.LinkType -cne 'Junction' -or @($entry.Target).Count -ne 1 -or
+            -not [string]::Equals([string]$entry.Target, $ExpectedTarget, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to unlink a junction the formatter fixture does not own: $Path"
+        }
+        [IO.Directory]::Delete($Path, $false)
+    }
+
     Describe 'Pinned native formatter acquisition' {
         BeforeEach {
             $script:formatterFixture = New-FormatterFixture
@@ -108,12 +121,15 @@ InModuleScope ClangFormat {
             $before = (Get-FileHash -LiteralPath $sentinel).Hash
             $link = Join-Path $script:formatterFixture.Root $RelativePath
             [void][IO.Directory]::CreateDirectory((Split-Path $link))
-            $null = New-RSTestSandboxLink -Path $link -Target $target -ItemType Junction
-            { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel } | Should Throw 'reparse point'
+            try {
+                $null = New-RSTestSandboxLink -Path $link -Target $target -ItemType Junction
+                { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel } | Should Throw 'reparse point'
+                Assert-MockCalled Assert-RSClangFormatVersion -Times 0 -Exactly -Scope It
+                Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
+            } finally { Remove-FormatterFixtureJunction -Path $link -ExpectedTarget $target }
+            (Test-Path -LiteralPath $link) | Should Be $false
             (Get-FileHash -LiteralPath $sentinel).Hash | Should Be $before
             @(Get-ChildItem -LiteralPath $target -Force).Count | Should Be 1
-            Assert-MockCalled Assert-RSClangFormatVersion -Times 0 -Exactly -Scope It
-            Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
         }
         It 'revalidates the output chain at publication and refuses redirected cleanup' {
             [void][IO.Directory]::CreateDirectory((Split-Path $script:formatterFixture.Output))
@@ -128,7 +144,11 @@ InModuleScope ClangFormat {
                 [IO.File]::WriteAllText((Join-Path $script:formatterRedirectedTarget ([IO.Path]::GetFileName($Path))), 'preserve staged-name target')
                 [IO.File]::WriteAllText((Join-Path $script:formatterRedirectedTarget 'clang-format.exe'), 'preserve published-name target')
             }
-            { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel -WarningAction SilentlyContinue } | Should Throw 'reparse point'
+            $link = Split-Path $script:formatterFixture.Output
+            try {
+                { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel -WarningAction SilentlyContinue } | Should Throw 'reparse point'
+            } finally { Remove-FormatterFixtureJunction -Path $link -ExpectedTarget $script:formatterRedirectedTarget }
+            (Test-Path -LiteralPath $link) | Should Be $false
             $original = Join-Path ((Split-Path $script:formatterFixture.Output) + '.original') 'clang-format.exe'
             [IO.File]::ReadAllText($original) | Should Be 'previous formatter'
             $targetFiles = @(Get-ChildItem -LiteralPath $script:formatterRedirectedTarget -File -Force)
