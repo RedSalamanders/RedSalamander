@@ -262,3 +262,11 @@ cache allocation, retaining every graph and timing oracle. Roll back through the
 handle and add a still-open-reader control. A driver-rejected native enumeration falls back
 to complete root traversal, while a malformed-data negative control still fails.
 These latest changes are unbuilt and unqualified until fresh receipts pass.
+
+Source `c28ecab60db2586846908e2ef0593b97df670d36` passed its full-solution x64 Debug
+build in 5:19, receipt `0bda355e7897c6ca0ff748a14f7be52fd93f6b21cad848d244fe96f9ea413f83`,
+and all 282 focused tooling controls without skips in
+`20261028T174151Z-68132-e5362f038e2347579b99f8eb2bedd025`. Review caught the new
+enumeration control reusing a synthetic unchanged journal position after file mutations;
+advance that fixture position before native execution. The product currentness proof is
+unchanged. Rebuild and qualify the corrected source before acceptance.

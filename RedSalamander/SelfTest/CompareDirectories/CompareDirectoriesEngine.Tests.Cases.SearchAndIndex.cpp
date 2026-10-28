@@ -1892,9 +1892,11 @@ SelfTest::RunCase(options,
     state.Require(RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates) == HRESULT_FROM_WIN32(ERROR_BAD_LENGTH) &&
                       candidates.empty(),
                   L"A malformed native enumeration must fail closed without candidates.");
+    uint64_t nextJournalUsn             = 1024u;
     const auto queryRejectedEnumeration = [&](const std::vector<std::wstring>& expected) noexcept
     {
-        repository.SetNextJournalStateForTests(17u, 0u, 1024u);
+        repository.SetNextJournalStateForTests(17u, 0u, nextJournalUsn);
+        nextJournalUsn += 1024u; // A real rename/delete/create advances the journal.
         repository.SetNextNtfsEnumerationFailureForTests(ERROR_INVALID_PARAMETER);
         const auto started = std::chrono::steady_clock::now();
         const HRESULT hr   = RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates);
