@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Register the build-policy follow-up as I50 in the machine-readable WIP table and record the console/path contract's reviewed implementation and test anchors. Keep current-source native/runtime/performance qualification separate from this specification alignment check.
 - Forward explicit alternate-volume File Operations opt-in through the scoped Full and focused entrypoints, preserving the disabled default, exact configured sandbox restriction and separate authorization for new drive-root initialization. Exercise the real wrapper in child processes with and without the flag.
 - Supply the real native and pinned-archive policy files to the compiler-host restore fixture and verify their identity fields, keeping the long Git path, explicit host overrides, API/toolchain refusals and caller-environment restoration checks.
 - Preserve genuinely long Git metadata coverage after shortening DxUi source folders by sizing the restore fixture from its complete path, and restore the tooling README's exact module inventory. The existing over-260-character assertion and restore/environment checks remain enforced.
