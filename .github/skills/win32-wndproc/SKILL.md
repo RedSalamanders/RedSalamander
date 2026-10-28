@@ -20,9 +20,12 @@ metadata:
 
 ## Window Procedure Pattern
 
+This dispatch sketch assumes the host already stores its instance in `GWLP_USERDATA` during `WM_NCCREATE`; it is not complete registration/create boilerplate. Early messages without an instance go to `DefWindowProcW`. Receiving payload windows also initialize/drain the registry as specified below.
+
 ```cpp
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    auto* self = reinterpret_cast<MyWindow*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    auto* self = reinterpret_cast<MyWindow*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+    if (!self) { return DefWindowProcW(hWnd, message, wParam, lParam); }
     
     switch (message) {
     case WM_CREATE:

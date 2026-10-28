@@ -755,7 +755,13 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match 'contents:\s*read'
         $ci | Should Not Match 'contents:\s*write|git commit|git push|format-all\.ps1'
         $ci | Should Match 'git diff --name-only --diff-filter=ACMR'
-        $ci | Should Match '--require-hashes --only-binary=:all: --no-deps'
+        # This guard owns workflow wiring; acquisition integrity belongs to ClangFormat.Tests.ps1.
+        # Restrict bootstrap policy to this job because other build dependencies may need Python.
+        $formatMatch = [regex]::Match($ci, '(?ms)^  format:\s*\r?\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*\r?\n|\z)')
+        $formatMatch.Success | Should Be $true
+        $formatJob = $formatMatch.Groups['body'].Value
+        $formatJob | Should Match '(?m)^\s*shell:\s*pwsh\s*\r?\n\s*run:\s*\.[/\\]Tools[/\\]Install-ClangFormat\.ps1\s*$'
+        $formatJob | Should Not Match '(?im)actions/setup-python@|\b(?:python3?(?:\.exe)?|py(?:\.exe)?)\s+-m\s+pip\b|\bpip3?(?:\.exe)?\s+install\b'
         $ci | Should Match '--dry-run --Werror --style=file'
         $ci | Should Match '\^\(Common\|Plugins\|PoC\|Red\[\^/\]\+\|Tests\|Tools\)'
         $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"

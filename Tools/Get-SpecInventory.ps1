@@ -7,6 +7,7 @@ New completed plans require exact reviewed path admission and a regression check
 that rejects unreviewed siblings; admission does not qualify their implementation.
 
 Builds source-derived JSON and Markdown inventories for the repository specification tree, validates normative consistency records and protected completed-plan history, and also emits the generated test inventory.
+Link and heading checks share the canonical inline/fenced-code mask, including zero-to-three-space top-level fence admission, backtick info-tail and whitespace-only closing-tail rules.
 
 .PARAMETER Root
 Selects the specification root to inventory. The default is Specs.

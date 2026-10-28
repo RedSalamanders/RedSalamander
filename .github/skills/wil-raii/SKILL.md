@@ -99,8 +99,8 @@ fs.attach(rawFs);
 ## Resource Creation and Access
 
 ```cpp
-// Creation
-_icon.reset(LoadIcon(...));
+// LoadImageW without LR_SHARED transfers ownership; LoadIconW returns a shared handle.
+_icon.reset(static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(iconId), IMAGE_ICON, sizePx, sizePx, 0)));
 _tooltip.reset(CreateWindowExW(...));
 
 // Access raw handle for Win32 APIs
