@@ -330,7 +330,7 @@
   "dependencies": [
     {
       "contentArchive": {
-        "fileName": "aro-0.0.0-JSD1QtuBNwCASyBtNF3pqTl_W3oAJQGEVyFAtrBSE_Pa.tar.gz",
+        "fileName": "aro-0.0.0-JSD1QtuBNwCASyBtNF3pqTl_W3oAJQGEVyFAtrBSE_Pa-zig-0.17.0.tar.gz",
         "internalRoot": "aro-0.0.0-JSD1QtuBNwCASyBtNF3pqTl_W3oAJQGEVyFAtrBSE_Pa/arocc",
         "sha256": "dc101a593bbc6a06148ebc79790c2b8b16599dd2e6435bfa840c786dad4b6f70"
       },
@@ -347,7 +347,7 @@
     },
     {
       "contentArchive": {
-        "fileName": "N-V-__8AADYiAAB_80AWnH1AxXC0tql9thT-R-DYO1gBqTLc.tar.gz",
+        "fileName": "N-V-__8AADYiAAB_80AWnH1AxXC0tql9thT-R-DYO1gBqTLc-zig-0.17.0.tar.gz",
         "internalRoot": "N-V-__8AADYiAAB_80AWnH1AxXC0tql9thT-R-DYO1gBqTLc/pixels-d843c2714d32e15b48b8d7eeb480295af537f877",
         "sha256": "9130736893b52ff67ad08550c4b1b4e638c3b8f28b5040a832c1b63ce8bf9943"
       },
@@ -364,7 +364,7 @@
     },
     {
       "contentArchive": {
-        "fileName": "translate_c-2.0.0-Q_BUWltOBwBYABF84EUL208pIFeUIwbBs29FmVBaafN5.tar.gz",
+        "fileName": "translate_c-2.0.0-Q_BUWltOBwBYABF84EUL208pIFeUIwbBs29FmVBaafN5-zig-0.17.0.tar.gz",
         "internalRoot": "translate_c-2.0.0-Q_BUWltOBwBYABF84EUL208pIFeUIwbBs29FmVBaafN5/translate-c",
         "sha256": "d9ba6d509691d5a80930db2e09d0871626881d73d1999e2f9055e0b39f8ce1cc"
       },
@@ -381,7 +381,7 @@
     },
     {
       "contentArchive": {
-        "fileName": "uucode-0.2.0-ZZjBPoGFVgCiflJNFc6Io8xzC67B6PA5bUkk4LT0kCxg.tar.gz",
+        "fileName": "uucode-0.2.0-ZZjBPoGFVgCiflJNFc6Io8xzC67B6PA5bUkk4LT0kCxg-zig-0.17.0.tar.gz",
         "internalRoot": "uucode-0.2.0-ZZjBPoGFVgCiflJNFc6Io8xzC67B6PA5bUkk4LT0kCxg/uucode-ea62149739404a73c202b48a33bf6dd2af4bd9b0",
         "sha256": "fc63687c79f09cc068543909073e1d48c4d7c2846e39675ee54fc53390750dd5"
       },
@@ -398,7 +398,7 @@
     },
     {
       "contentArchive": {
-        "fileName": "N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI.tar.gz",
+        "fileName": "N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI-zig-0.17.0.tar.gz",
         "internalRoot": "N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI/N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI",
         "sha256": "3e893632b22d73f2585dcd0adc8555033ff5ef68ba1f6bf5ffb47fb6379bcf37"
       },

@@ -794,6 +794,11 @@ may retain a transport wrapper even when the Zig package-content hash equals a
 flattened remote cache entry. Lock that exact archive and its nested internal
 root; package staging removes the wrapper. Never accept a mismatching archive
 hash merely because its package-content hash agrees.
+Changed archive representations must use distinct download filenames from
+retained locks. The Zig 0.17 content archives include `-zig-0.17.0` in their
+filenames so a pre-upgrade Wuffs cache remains valid alongside the new one.
+Cache verification stays fail-closed; an upgrade must not depend on deleting
+or overwriting an existing valid archive.
 
 `Tools/Get-GhosttyTerminalRuntimeStatus.ps1` is the active, read-only update
 observation entrypoint. Its schema is

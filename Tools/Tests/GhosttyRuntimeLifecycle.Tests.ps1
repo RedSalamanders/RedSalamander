@@ -259,6 +259,25 @@ Describe 'Ghostty active product runtime lock' {
         ($actual -join "`0") | Should Be ($expected -join "`0")
     }
 
+    It 'keeps changed canonical representations separate from retained pre-upgrade downloads' {
+        $legacyPath = Join-Path $repoRoot 'Specs/TestRuns/4cb089111a23/Terminal/20261028_174540_ghostty140-product/provenance/runtime.lock.json'
+        $legacy = Get-Content -LiteralPath $legacyPath -Raw | ConvertFrom-Json -Depth 100
+        $current = Copy-RSGhosttyRuntimeLockFixture
+        $oldDownloads = @{}
+        foreach ($dependency in $legacy.dependencies) {
+            foreach ($archive in @($dependency.sourceArchive, $dependency.contentArchive)) {
+                $oldDownloads[$archive.fileName] = $archive.sha256
+            }
+        }
+        foreach ($dependency in $current.dependencies) {
+            foreach ($archive in @($dependency.sourceArchive, $dependency.contentArchive)) {
+                if ($oldDownloads.ContainsKey($archive.fileName)) {
+                    $archive.sha256 | Should Be $oldDownloads[$archive.fileName]
+                }
+            }
+        }
+    }
+
     It 'keeps the product builder lock-driven without duplicated active identities' {
         $builder = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Build-GhosttyTerminalRuntime.ps1') -Raw
         $lifecycle = Get-Content -LiteralPath $modulePath -Raw

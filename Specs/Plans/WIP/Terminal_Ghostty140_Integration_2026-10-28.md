@@ -155,6 +155,19 @@ the user agrees to the execution time.
 
 ## Source review dispositions
 
+- Cache coexistence follow-up: Zig 0.17 canonical archives use distinct
+  `-zig-0.17.0.tar.gz` download names. Reusing the pre-upgrade Wuffs filename
+  would otherwise reject a valid warm 0.16 cache. The old archive is retained,
+  and new namespace/governance/scoped tests passed 51/51 in
+  `ghostty140-cache-namespace-20261028a`. The preceding Release/performance
+  receipts remain bound to their original lock bytes; this follow-up changes
+  archive filenames, with source/package contents unchanged.
+- Draft PR: <https://github.com/RedSalamanders/RedSalamander/pull/148>.
+  The initial native dispatch was cancelled while queued to qualify the final
+  cache-namespaced lock instead. PrePush planning delegates matching PR entries
+  as pending CI and retains the build-toolchain and Compare Directories local
+  obligations. Four focus-taking suites remain pending agreement on timing.
+
 - Required loader prototypes remain present; no host-required API needs a
   signature adapter. New search, render-image and animation APIs are not wired
   to new host features by this upgrade.

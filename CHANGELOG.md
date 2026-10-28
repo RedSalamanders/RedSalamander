@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Preserve existing Ghostty dependency caches across the Zig 0.17 upgrade by
+  giving its canonical archives distinct filenames. Add a regression guard
+  against cross-generation download-name collisions; source and content hash
+  checks remain strict.
 - Integrate libghostty-vt from Ghostty 1.4.0 with Zig 0.17.0, a complete locked
   dependency closure, eight staged notices, and a rederived Windows overlay
   preserving clipboard and placement limits. Update candidate evidence, closed

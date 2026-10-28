@@ -3947,7 +3947,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation.",
+      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock.",
       "usage": "Run after any Ghostty product lock, schema, lifecycle, builder, overlay, notice, or loader-export change.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -3956,7 +3956,8 @@
       ],
       "prerequisites": [
         "PowerShell with Pester",
-        "Repository-owned Ghostty lock inputs"
+        "Repository-owned Ghostty lock inputs",
+        "Archived pre-upgrade runtime lock fixture"
       ],
       "sideEffects": [
         "Creates bounded JSON fixtures beneath Pester TestDrive",
