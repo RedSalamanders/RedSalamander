@@ -342,6 +342,11 @@ record makes aggregate evidence `BLOCKED` and maps to corrupt-evidence exit 5.
 
 ### Specialized Terminal VT evidence
 
+The general archive size/schema/identity and unchanged pre-contract inventory rules remain owned by
+[`Specs/TestRuns/README.md`](../TestRuns/README.md), including the immutable parentless baseline for
+the history-free source import. That baseline establishes archive provenance, never runtime qualification.
+Unavailable ancestry fails closed to the complete tracked inventory; it cannot authorize evidence reuse.
+
 Ghostty VT upgrade performance evidence is a governed archive format distinct
 from Startrail aggregate reuse. A claim-bearing Terminal archive contains
 `results.json`, `trace.txt`, and `perf/perf_metrics.jsonl`; `results.json` must

@@ -12,7 +12,9 @@
     Selects one or more run directories for explicit pre-stage validation.
 
 .PARAMETER Inventory
-    Validates the complete archive instead of changed or explicit paths.
+    Validates every archive added or modified since its immutable contract baseline.
+    The history-free import uses its parentless pre-contract snapshot. Missing or
+    unrelated baseline ancestry validates every tracked archive instead.
 
 .PARAMETER BaselineRunPath
     Selects the Product/baseline Terminal VT run for paired admission comparison. CandidateRunPath is required.

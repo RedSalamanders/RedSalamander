@@ -70,6 +70,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Archive/plan grandfathering requires its immutable public baseline ancestors.
+          fetch-depth: 0
           persist-credentials: false
 
       # ── Setup toolchain ──────────────────────────────────────────────

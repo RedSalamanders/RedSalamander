@@ -9398,8 +9398,9 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
     const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
     const HWND foregroundBefore = GetForegroundWindow();
-    const auto focusDeadline    = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds(1500));
+    const auto handoffStarted   = std::chrono::steady_clock::now();
     const bool activated        = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow);
+    const auto handoffElapsed   = std::chrono::steady_clock::now() - handoffStarted;
     DWORD foregroundProcess     = 0u;
     const HWND foregroundAfter  = GetForegroundWindow();
     static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
@@ -9446,8 +9447,10 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Right);
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Left);
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
-    const HWND leftFolderView     = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    const auto remainingFocusTime = std::chrono::duration_cast<std::chrono::milliseconds>(focusDeadline - std::chrono::steady_clock::now());
+    const HWND leftFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    // Preview/terminal retirement above has its own deadline. Only the foreground
+    // handshake consumes the existing focus-acquisition budget.
+    const auto remainingFocusTime = std::chrono::duration_cast<std::chrono::milliseconds>(SelfTest::Scale(std::chrono::milliseconds(1500)) - handoffElapsed);
     state.Require(remainingFocusTime.count() > 0 && WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, remainingFocusTime),
                   std::format(L"Main folder view did not regain stable focus before {}.", context));
     if (! state.failure.empty())

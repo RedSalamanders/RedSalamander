@@ -423,3 +423,10 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_192709_PublicFocusedClosure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_201045_CiArmBrowserProfileFailure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-28_185620_HostedCiRepair-Commands10-Focused/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Compare/2026-10-28_190623_HostedCiRepair-SearchAndMtpBaseline/** -text -whitespace
+/Specs/TestRuns/136659e3341a/Compare/2026-10-28_183027_HostedCiRepair-MtpAsanFailure522/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-28_185620_HostedCiRepair-ThemeResolverPair/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-28_191809_HostedCiRepair-CurlCopyTruth/** -text -whitespace
+
+/Specs/TestRuns/4cb089111a23/Validation/2026-10-28_200100_ArchiveContractBaseline/** -text -whitespace

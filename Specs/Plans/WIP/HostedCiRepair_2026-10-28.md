@@ -290,3 +290,82 @@ and all 282 focused tooling controls without skips in
 enumeration control reusing a synthetic unchanged journal position after file mutations;
 advance that fixture position before native execution. The product currentness proof is
 unchanged. Rebuild and qualify the corrected source before acceptance.
+
+### Focused qualification and remaining MTP timing
+
+Source `58d1e03fdef9ec93e0cfe63139eed80461c9ca18` passed its full-solution x64 Debug
+build without new warnings in 6:55, receipt
+`b4f599f045639901f9f8b063eedee11ee20befecc8dab53305ef631f9cd5ab03`.
+All ten focused Commands cases pass without skips or retries in
+`20261028T185620Z-83432-9a6524d619a24c3b9552cee37f760974` (32.802 seconds).
+This includes all four natural settings-child exits, theme guard, both Batch Rename cases,
+the open-reader rollback, unchanged clipboard, five captures, hotkey admission/refusal/cleanup,
+and the gated old-snapshot invalidation race. The latter requires two provider calls and
+observes the current snapshot in 384 us. Initial and short French captures were inspected.
+See the [complete focused packet](../../TestRuns/4cb089111a23/Commands/2026-10-28_185620_HostedCiRepair-Commands10-Focused/evidence.json).
+Its entire original metric stream is retained in two ordered, byte-preserving shards.
+
+The same source passes all eleven journal/search/MTP baseline cases without skips or retries
+in `20261028T190623Z-68876-624d286bf52c40879e81f6c05f64103f` (283.392 seconds).
+All five journal/index controls and all four service transport controls pass. The existing
+4,096-identity MTP recovery fixture measures 232,237 us in local Debug before optimization.
+The [baseline packet](../../TestRuns/4cb089111a23/Compare/2026-10-28_190623_HostedCiRepair-SearchAndMtpBaseline/evidence.json)
+retains complete case results, ten claim-bearing metric rows and a digest-bound summary of
+all 15,595 original rows; the raw 5.3 MB stream remains in the governed run.
+
+The exact FTP control passes all 142 assertions and all eight 4,096-file matrix variants,
+without skips/retries, in `20261028T191809Z-68876-560949bb942545478dd2e078ae8800be`.
+Its native case takes 232.375 seconds; Setup and cleanup also pass. The
+[packet](../../TestRuns/4cb089111a23/FileOps/2026-10-28_191809_HostedCiRepair-CurlCopyTruth/evidence.json)
+retains the complete original metric stream. The earlier 141-of-142 failure did not reproduce;
+do not attribute that passing repeat to a causal Curl repair. Broader/order qualification
+and the retained original failure remain necessary.
+
+The [theme observations](../../TestRuns/4cb089111a23/Commands/2026-10-28_185620_HostedCiRepair-ThemeResolverPair/evidence.json)
+retain every original 200-sample resolver and 250-sample dynamic row for baseline `173ef7434`
+and candidate `58d1e03fd`. Resolver p50/p95/max are 7,745/8,761/13,364 to
+4,779/5,107/6,507 us. Dynamic p50/p95/max are 141/242/603 to 135/146/1,161 us;
+the candidate maximum outlier is retained. These same-machine Debug observations have
+different campaign order and do not establish independent statistical non-regression or
+an ASan speedup. No threshold or baseline was changed.
+
+Superseded source `5221736dd` x64 ASan exposes one additional failure, the existing
+`mtp_r0c_exact_recovery_identity` two-second ceiling: 2,235,725 us originally and
+2,096,910 us on isolated retry. Retain [both failures and original case statuses](../../TestRuns/136659e3341a/Compare/2026-10-28_183027_HostedCiRepair-MtpAsanFailure522/evidence.json).
+Its first directory enumeration alone takes 1,047,256 us. Repeated canonical MTP paths
+currently rebuild through separator and scheme normalization in enumeration/recovery loops.
+Return their exact owned UTF-16 copy directly; preserve the complete normalization route
+for noncanonical inputs, all identity/recovery checks, the 4,096 objects and two-second cap.
+Expand the existing normalization case to seven root and five exact-content read aliases.
+
+Review `4404905671` validly identifies a new focus deadline including unrelated preview/terminal
+retirement. Deduct only measured foreground-handshake time from the existing 1.5-second
+focus wait; retain the separate teardown deadline. These latest source changes are unbuilt
+and need fresh native, hosted and local-remainder qualification. All five curated packets
+pass explicit pre-stage archive validation; inventory and final closeout remain open.
+
+### Archive boundary lost by the history-free import
+
+The required repository inventory is red at source `58d1e03fd`: the original contract
+`8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a` is not an ancestor of the public snapshot.
+Its fallback validates all 19,500 tracked artifacts, including grandfathered June/early-July
+logs over the current size ceiling and old mismatched machine-profile folders. Retain this
+failed outcome; do not change legacy bytes, raise ceilings or describe the inventory as passed.
+
+Construct parentless baseline `4a9489e9cb2d1190528b8ec35971fba885fd7792`, tree
+`3fb1f79ac855236a8cc2e0bf9b348601ec8cd5f3`, from only the 2,075 exact path/mode/blob
+matches between original pre-contract tree `eaf640798eb0fa21f2b5b6e3883891ac2442a255`
+and already-published source `58d1e03fd`. Every entry is under TestRuns and already public;
+the new commit has no parents and imports no DualTail history. Its
+[construction proof and failed inventory record](../../TestRuns/4cb089111a23/Validation/2026-10-28_200100_ArchiveContractBaseline/proof.json)
+are structural provenance, never runtime acceptance.
+
+Use this exact baseline only when it is an ancestor, preserving the original full-history
+contract when available and the fail-closed all-files fallback otherwise. Existing limits,
+schema/identity checks and explicit legacy RunPath validation remain. New committed archives
+and committed/staged/worktree legacy edits must all be rejected when invalid; an unrelated
+baseline object cannot grant grandfathering. Compare branch additions against public main
+before the legacy master fallback. Fetch complete public history in native CI so the real
+inventory test executes. Add regression controls for every boundary. Preserve the parentless
+baseline through a normal merge of PR146; squashing it out would lose the ancestry proof.
+The original failed inventory remains recorded and the corrected inventory is pending.

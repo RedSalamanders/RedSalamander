@@ -1,0 +1,110 @@
+{
+  "limits": [
+    "Focused evidence only; no Full/native ARM64/ASan claim",
+    "No paired performance speedup claim",
+    "Disk audit retains pre-existing root inventory issues",
+    "Later source has its own acceptance obligations"
+  ],
+  "buildReceipt": "b4f599f045639901f9f8b063eedee11ee20befecc8dab53305ef631f9cd5ab03",
+  "sourceSnapshot": "250638759bc5b18b76bb1740be6c6b413bef3d96acad55aaae695abf9fa18d10",
+  "runId": "20261028T185620Z-83432-9a6524d619a24c3b9552cee37f760974",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84879,
+      "sha256": "3e1c568cfd43bd6213c2f4852ddb13ec48cb31fc45685732de5b357deb4b5123"
+    },
+    {
+      "path": "perf_metrics.001.jsonl",
+      "byteCount": 1499918,
+      "sha256": "b59ea20cf3f4e3a77449e2106fd8a8983c5eb54e2a7dc4df2cd2b944064a9d7b"
+    },
+    {
+      "path": "perf_metrics.002.jsonl",
+      "byteCount": 734044,
+      "sha256": "b774f68093502e8f64f42c6fd04b7d4fb44748e10c673cfd499f5458a792500e"
+    },
+    {
+      "path": "results.json",
+      "byteCount": 2338,
+      "sha256": "2723125518cc31845538379879de888700fa7f643e3acbdea18f7479468b153f"
+    },
+    {
+      "path": "run-all-tests-results.json",
+      "byteCount": 21028,
+      "sha256": "d2b7cb27f986390b4e92709e243205456e1e182f66cd03fd5ccc16114ee481bf"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 14920,
+      "sha256": "943e89b495161f78f5d1b297f334a6bdb96fc2e81da38f2278f875707b25d350"
+    },
+    {
+      "path": "speed-dialog-layout/constrained__fr-FR__144dpi.png",
+      "byteCount": 18734,
+      "sha256": "33c24f624be6711094b0ca20806e01579cfe828acab065720d4038b654634a5f"
+    },
+    {
+      "path": "speed-dialog-layout/corrected__fr-FR__144dpi.png",
+      "byteCount": 18691,
+      "sha256": "1578596884c5cfa1d566cde1b25aaa32ebd8335642dee47fe137a7c116acddef"
+    },
+    {
+      "path": "speed-dialog-layout/initial__fr-FR__144dpi.png",
+      "byteCount": 20008,
+      "sha256": "936432f1766f50eb254619b1963706930d9204b529ee92d3c3d014935a2c1f76"
+    },
+    {
+      "path": "speed-dialog-layout/short-validation-locale__fr-FR.png",
+      "byteCount": 14165,
+      "sha256": "01979398b5e86af26371117dd0e44ff5585ab0aec1f725e4850b95f92be85c83"
+    },
+    {
+      "path": "speed-dialog-layout/validation__fr-FR__144dpi.png",
+      "byteCount": 20843,
+      "sha256": "b95d3d6b53a9e2be9d2e6a4e12e319568008a59ff0070d9a6c6dfb0c60e306fa"
+    }
+  ],
+  "outcome": {
+    "durationMs": 32802,
+    "skipped": 0,
+    "failed": 0,
+    "retries": 0,
+    "wrapperExit": 0,
+    "passed": 10
+  },
+  "metricSelection": "Complete original native metric byte stream split only at row boundaries; concatenate parts in order to reproduce the original bytes",
+  "dependencyCommit": "881e5d5ff252d5988c1357a5c64d14f480b46793",
+  "schema": "hosted-ci-repair.focused-evidence.v1",
+  "sourceCommit": "58d1e03fdef9ec93e0cfe63139eed80461c9ca18",
+  "metricStream": {
+    "rowCount": 6378,
+    "parts": [
+      {
+        "offsetBytes": 0,
+        "path": "perf_metrics.001.jsonl",
+        "byteCount": 1499918,
+        "sha256": "b59ea20cf3f4e3a77449e2106fd8a8983c5eb54e2a7dc4df2cd2b944064a9d7b"
+      },
+      {
+        "offsetBytes": 1499918,
+        "path": "perf_metrics.002.jsonl",
+        "byteCount": 734044,
+        "sha256": "b774f68093502e8f64f42c6fd04b7d4fb44748e10c673cfd499f5458a792500e"
+      }
+    ],
+    "byteCount": 2233962,
+    "sha256": "639db3b5f9f246e8144828c36d2fefac83679214e35ae83bcb8487433cf1a0d3"
+  },
+  "controls": [
+    "Four natural settings-child exits with unchanged deadlines and exact parent environment",
+    "Batch Rename busy refusal, recovery and blocked-provider close",
+    "Private sibling rollback with a still-open reader and original destination intact",
+    "Unhandled empty-grid copy preserves exact clipboard representations and sequence",
+    "All five WGC captures with malformed-token, worker-refusal and admission-teardown controls",
+    "Owned registered-hotkey foreground permission, noactivation/unowned/conflict refusal and cleanup",
+    "Old immutable snapshot held across mutation/invalidation, exactly one follow-up load, subsequent cache reuse",
+    "Unchanged archive round-trip including cp437.zip pane visibility"
+  ],
+  "profile": "x64 Debug"
+}

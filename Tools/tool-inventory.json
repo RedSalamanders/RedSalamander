@@ -2348,14 +2348,15 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, area/version schemas, result bindings, and paired Terminal VT admission thresholds.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, bindings, paired VT thresholds and unchanged pre-contract inventory boundaries across the source-snapshot migration.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
         "performance validation workflows"
       ],
       "prerequisites": [
-        "PowerShell Test-Json support for schema-owned archives"
+        "PowerShell Test-Json support for schema-owned archives",
+        "Git ancestry for immutable archive baselines; absent ancestry validates all tracked files"
       ],
       "sideEffects": [
         "Invokes read-only Git queries"

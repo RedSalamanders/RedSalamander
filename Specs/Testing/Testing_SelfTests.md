@@ -770,8 +770,10 @@ Environment variables may select alternate test inputs such as profile names, bu
   before input when the no-activation guard is active, the target is unowned, a modifier/key
   is held or the registration is unavailable. Never attach a foreign input queue or change
   system foreground-lock policy. Retire the registration and leave the synthetic key released;
-  the bounded handshake counts within the existing focus-acquisition budget. The native
-  `cmd_selftest_foreground_admission_hotkey_contract` exercises the forced handshake, exact
+  the bounded handshake counts within the existing focus-acquisition budget.
+  Terminal/preview retirement retains its separate deadline; deduct only the handshake's
+  elapsed time when beginning the later 1.5-second focus wait.
+  The native `cmd_selftest_foreground_admission_hotkey_contract` exercises the forced handshake, exact
   foreground proof, repeated registration cleanup and refusal controls.
   `cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection` creates a
   keyboard-opened menu, selects its last row before any message pump, and sends a stationary

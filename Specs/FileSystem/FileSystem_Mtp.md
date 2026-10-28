@@ -22,6 +22,14 @@ Canonical plugin identity:
 
 The plugin accepts `mtp:/`, `mtp://`, slash-rooted paths, and connection-manager paths, then normalizes them to one canonical slash-rooted provider path.
 
+Already canonical slash-rooted paths preserve their exact UTF-16 bytes with one owned copy.
+They need no repeated separator/scheme normalization during enumeration or identity recovery.
+Mixed separators, repeated slashes, trailing slashes and case-insensitive scheme prefixes still
+use the complete normalization route. This optimization must not fold object identity, decode
+identity suffixes or bypass recovery authority checks. The path-normalization case exercises
+seven root aliases and five exact-content read aliases; the 4,096-identity recovery fixture and
+its 2,000,000-us ceiling remain unchanged in every configuration.
+
 Connection Manager profiles use:
 - `pluginId`: `builtin/file-system-mtp`.
 - `host`: required WPD PnP device id reconnect hint.

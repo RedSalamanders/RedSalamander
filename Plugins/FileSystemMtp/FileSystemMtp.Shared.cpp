@@ -20,10 +20,7 @@ namespace
 class MemoryBackendFileReader final : public IMtpBackendFileReader
 {
 public:
-    MemoryBackendFileReader(std::vector<std::byte> bytes,
-                            uint32_t readDelayMs,
-                            std::shared_ptr<void> readContext,
-                            MemoryBackendReadObserver observer) noexcept
+    MemoryBackendFileReader(std::vector<std::byte> bytes, uint32_t readDelayMs, std::shared_ptr<void> readContext, MemoryBackendReadObserver observer) noexcept
         : _bytes(std::move(bytes)),
           _readDelayMs(readDelayMs),
           _readContext(std::move(readContext)),
@@ -135,6 +132,14 @@ std::shared_ptr<IMtpBackendFileReader> CreateMemoryBackendFileReader(std::vector
 
 [[nodiscard]] std::wstring NormalizeMtpPath(std::wstring_view rawPath) noexcept
 {
+    // Repeated enumeration/recovery paths are already canonical. One owned
+    // copy preserves their bytes without rebuilding them character by character.
+    if (! rawPath.empty() && rawPath.front() == L'/' && (rawPath.size() == 1u || rawPath.back() != L'/') && rawPath.find(L'\\') == std::wstring_view::npos &&
+        rawPath.find(L"//") == std::wstring_view::npos)
+    {
+        return std::wstring(rawPath);
+    }
+
     std::wstring path(rawPath);
     if (path.empty())
     {

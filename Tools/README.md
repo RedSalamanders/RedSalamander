@@ -431,3 +431,11 @@ the full output chain, including `.build`, cache files and executable parents. R
 the same open stream. An exclusive `.build/format/.install.lock` lease covers cache mutation
 and publication, fails immediately on contention and leaves an empty lock file after closing.
 `-WhatIf` creates neither the cache nor its lease file.
+
+## Archive inventory after source migration
+
+Archive inventory preserves unchanged pre-contract evidence through immutable Git ancestors, including
+the parentless import baseline documented in [the archive contract](../Specs/TestRuns/README.md).
+New or edited evidence retains the size, schema and identity gates; unavailable ancestry validates all
+tracked files. Hosted native checkout keeps complete public history so this inventory check executes.
+Changed evidence uses public origin/main before the legacy origin/master fallback.

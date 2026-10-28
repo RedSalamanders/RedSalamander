@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Preserve the original archive grandfathering boundary after the history-free import through a parentless baseline of unchanged, already-public pre-contract blobs. Keep size and identity gates for every later edit/addition, fail closed without baseline ancestry, check committed changes against origin/main, and execute the real inventory check in full-history hosted clones. Add committed, staged, worktree and unrelated-baseline rejection tests.
+- Avoid repeated normalization of canonical MTP paths during large enumeration and recovery, retaining exact identities and the existing 4,096-object/two-second guard. Expand path alias/content coverage and keep preview teardown separate from the foreground handoff's focus budget. Retain original failed ASan receipts alongside focused Commands, search and FTP qualification evidence.
 - Use the existing WIL handle owner for the directory-cache race fixture's events, preserving resource cleanup without new compiler warnings.
 - Retain directory invalidations received during enumeration so an older snapshot cannot hide newly created archive files. Keep Batch Rename timer cleanup safe after host teardown, configure settings children without changing the pumping parent's environment, and qualify owned foreground handoff with a temporary registered hotkey. Add deterministic race, refusal and cleanup controls; full local and hosted qualification remains required.
 - Repair remaining hosted runtime causes: keep the private settings-child parent responsive within its existing deadline, admit Batch Rename mode switches only after current preview completion, and preserve empty-grid clipboard no-op semantics.
