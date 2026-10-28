@@ -187,3 +187,9 @@ capture and exact extended-style restoration. Do not change capture, geometry or
 Fresh candidate workflows `40709199266` (PR), `40709196329` (nightly), `40709202121` (ASan)
 and `40709208031` (shuffle) were dispatched at `1f3cd13f7`; observer `40709212481` passed.
 Those results remain bound to that source and do not qualify subsequent capture repairs.
+
+Capture-bridge source `e04bb4ffed003a5b04c6e7608aa7e26c32ebf91f` passed all 282 focused
+source/specification tooling checks without skips in governed run
+`20261028T151428Z-58492-137ea5fbcf314a119cd808528e8aa52c`. Its native build failed C1083:
+the application root needs the explicit repository-relative TestSupport header path rather
+than a bare include name. Correct that boundary and rebuild before native acceptance.

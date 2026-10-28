@@ -17,8 +17,8 @@
 #include "WindowMaximizeBehavior.h"
 #include "WindowSizing.h"
 #ifdef ENABLE_TESTS
+#include "../Tests/TestSupport/TestSupport.Tests.WindowScreenshot.h"
 #include "Common.Tests.Runner.h"
-#include "TestSupport.Tests.WindowScreenshot.h"
 #endif
 #include <DxUi/DxUi.h>
 #include <DxUi/Typography.h>
