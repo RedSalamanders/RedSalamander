@@ -156,3 +156,9 @@ header. Apply the same Windows-header boundary already used by the other ViewerS
 do not edit managed dependency products. Repeat a full-solution rebuild and the original regression.
 Both specification and tooling inventories passed without blocking findings. The workflow/receipt
 controls, including a real child exit 7 and display restoration, passed 95/95 with no skips.
+
+The next broader-pin rebuild (`e53451e09`) reached the application and found two obsolete local
+`void CompactChildren` adapters conflicting with the new public counted compaction API. Remove
+those duplicate erasers and the otherwise empty scroll-panel subclass, use the public Panel and
+ScrollPanel API, and retain its tree/accessibility invalidation. Keep all reconciliation, pending
+decision, focus, lifecycle and resource assertions; validate those paths before acceptance.

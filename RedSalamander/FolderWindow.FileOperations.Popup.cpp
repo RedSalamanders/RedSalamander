@@ -250,32 +250,9 @@ public:
         DxUi::Panel::Paint(host);
     }
 
-    // popup-b#1: reconciling the hosted tree moves a retired child out of its slot; drop the empty slots.
-    void CompactChildren() noexcept
-    {
-        std::erase(AccessChildren(), nullptr);
-    }
-
 private:
     const wil::com_ptr<ID2D1DeviceContext>& _context;
     const wil::com_ptr<ID2D1CommandList>& _background;
-};
-
-// The hosted body and conflict comparison panels. Reconciling the hosted tree (popup-b#1) moves a
-// retired child out of its slot; the panel and its other children live on.
-class FileOperationsHostedScrollPanel final : public DxUi::ScrollPanel
-{
-public:
-    FileOperationsHostedScrollPanel()                                                  = default;
-    FileOperationsHostedScrollPanel(const FileOperationsHostedScrollPanel&)            = delete;
-    FileOperationsHostedScrollPanel(FileOperationsHostedScrollPanel&&)                 = delete;
-    FileOperationsHostedScrollPanel& operator=(const FileOperationsHostedScrollPanel&) = delete;
-    FileOperationsHostedScrollPanel& operator=(FileOperationsHostedScrollPanel&&)      = delete;
-
-    void CompactChildren() noexcept
-    {
-        std::erase(AccessChildren(), nullptr);
-    }
 };
 
 // I35 R10.2: the stall band of one throughput graph, painted right after the graph over the same
@@ -7867,7 +7844,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ReconcileHostedContr
         }
         if (! body.panel)
         {
-            auto* panel = _controlsBody->AddChild<FileOperationsHostedScrollPanel>();
+            auto* panel = _controlsBody->AddChild<DxUi::ScrollPanel>();
             panel->SetScrollStepDip(36.0f);
             panel->SetAccessibleAutomationId(std::format(L"FileOperations.Task.{}.Conflict.Comparison", body.taskId));
             panel->SetOnScrollChanged([this, hwnd, taskId = body.taskId](float offset)
@@ -8213,10 +8190,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ReconcileHostedContr
                 }
             }
         }
-        static_cast<FileOperationsPopupRoot*>(_controlsRoot)->CompactChildren();
-        static_cast<FileOperationsHostedScrollPanel*>(_controlsBody)->CompactChildren();
+        // Public compaction also invalidates retained-tree and accessibility snapshots.
+        _controlsRoot->CompactChildren();
+        _controlsBody->CompactChildren();
         for (DxUi::ScrollPanel* panel : bodyPanels)
-            static_cast<FileOperationsHostedScrollPanel*>(panel)->CompactChildren();
+            panel->CompactChildren();
 #ifdef ENABLE_TESTS
         if (_debugRetainRetiredControls)
         {
@@ -8596,7 +8574,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             body.panel = nullptr;
         // Native scrolling owns the offset; ScrollPanel supplies the same body
         // clip to retained paint, pointer dispatch and accessibility hit testing.
-        _controlsBody = _controlsRoot->AddChild<FileOperationsHostedScrollPanel>();
+        _controlsBody = _controlsRoot->AddChild<DxUi::ScrollPanel>();
         _controlsBody->SetInternalScrollbarEnabled(false);
         _hostedButtons.clear();
         _hostedButtonHits.clear();

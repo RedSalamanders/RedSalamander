@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Use the qualified DxUi public compaction API for retained File Operations panels, removing duplicate raw-vector erasers and the empty scroll-panel adapter. Preserve surviving controls and use the library's tree/accessibility invalidation; reconciliation and pending-decision qualification remains required.
 - Reuse ViewerSpace's canonical Windows/DxUi header boundary in the Analysis and Navigation hosts so NOMINMAX precedes Windows and the qualified public headers compile independently. Retain the failed broader-pin build and repeat full-solution/native validation without changing dependency products or test assertions.
 - Adopt explicitly selected DxUi revision 881e5d5, whose six native profiles passed, to repair stationary-pointer keyboard selection and validate the broader consumer update. Restore pinned dependency source before shuffle receipt verification and check native exits inside protected workflow actions; preserve all verification, assertions and repeat coverage.
 - Add a deterministic keyboard-menu stationary-pointer regression against the unchanged DxUi pin, require the existing notified foreground handoff at Commands case boundaries, and register the repair plan in the machine-readable WIP index. Dependency repair and current-source qualification remain pending.
