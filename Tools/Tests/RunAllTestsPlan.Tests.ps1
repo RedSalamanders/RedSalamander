@@ -52,6 +52,34 @@ $ApplyLegacySandboxCleanup = $false
         }
     }
 
+    It 'schedules an empty or interactive-only standalone remainder after PR deferral' {
+        Import-Module $helperModule -Force
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Run-AllTests.ps1') -Raw
+        $start = $runner.IndexOf('$lateResourceClasses =', [StringComparison]::Ordinal)
+        $end = $runner.IndexOf('if ($earlyStandaloneConfigs.Count -gt 0)', $start, [StringComparison]::Ordinal)
+        ($start -ge 0 -and $end -gt $start) | Should Be $true
+        $scheduler = [scriptblock]::Create(
+            'param($standaloneConfigs,$durationEstimates)' + "`n" +
+            $runner.Substring($start, $end - $start) + "`n" +
+            '[pscustomobject]@{ Early=@($earlyStandaloneConfigs | ForEach-Object Id); Late=@($standaloneConfigs | ForEach-Object Id) }')
+        $plan = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'))
+        $late = @($plan | Where-Object { $_.Id -in @('viewer-pe.interactive', 'viewer-sqlite.interactive') })
+        $early = @($plan | Where-Object { $_.Id -eq 'standalone.product-ui' })
+        $late.Count | Should Be 2
+        $early.Count | Should Be 1
+        $scenarios = @(
+            [pscustomobject]@{ Entries=@(); Early=@(); Late=@() }
+            [pscustomobject]@{ Entries=$late; Early=@(); Late=@('viewer-pe.interactive','viewer-sqlite.interactive') }
+            [pscustomobject]@{ Entries=@($early)+@($late); Early=@('standalone.product-ui'); Late=@('viewer-pe.interactive','viewer-sqlite.interactive') }
+        )
+        foreach ($scenario in $scenarios) {
+            $scheduled = & $scheduler $scenario.Entries @{}
+            ($scheduled.Early -join ',') | Should Be ($scenario.Early -join ',')
+            ($scheduled.Late -join ',') | Should Be ($scenario.Late -join ',')
+        }
+    }
+
     It 'rejects an executable outside the selected profile before acquiring its artifact lock' {
         $runnerSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
         $validationIndex = $runnerSource.IndexOf(

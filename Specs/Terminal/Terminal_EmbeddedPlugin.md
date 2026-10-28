@@ -962,7 +962,9 @@ stops the review.
 Candidate Git metadata queries enable long paths within the checkout with an
 invocation-local `-c core.longpaths=true`. They do not change repository or
 machine Git configuration, and deep source paths retain the same provenance
-and ancestry requirements.
+and ancestry requirements. Metadata parsers consume stdout only. Successful
+Git stderr remains visible as warnings; a nonzero exit retains its diagnostics
+and fails the review.
 
 The complete review scope is `build.zig`, `build.zig.zon`,
 `include/ghostty/vt/**`, `src/build/GhosttyLibVt.zig`, `src/lib_vt.zig`, and

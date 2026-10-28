@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep successful Git stderr warnings out of Ghostty candidate metadata parsing,
+  while displaying warnings and preserving diagnostics from failed commands.
+  Real Git stream and nonzero-exit witnesses cover the CI long-path failure.
+- Interactive PrePush validation continues when PR delegation leaves no early standalone entries. Empty, interactive-only and mixed scheduler remainders are covered by regression checks.
 - Ghostty candidate review handles long Windows paths within checkouts without changing Git configuration; runtime staging checks cover the Aro and Pixels notices added by the 1.4 upgrade. Qualification remains pending native ARM64 and repository gates.
 - Retry bounded, guarded Ghostty compiler-cache cleanup after transient file
   locks, preserving the original bootstrap error when cleanup also fails.

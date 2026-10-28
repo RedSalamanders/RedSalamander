@@ -157,6 +157,30 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- The approved interactive PrePush at `ec6ad6c11`, run
+  `20261028T224447Z-93944-65b4e072bbd7461399d2ba61becfd44b`, passed its
+  Embedded-symbol Debug build, all 29 toolchain checks and profile refresh
+  (receipt `8a3a6ab5ca7e0d9d1d349beed5ae6129ba2a3adae044bf05b57e6b6105430c67`).
+  The runner then exited before Compare or any interactive entry. Direct
+  execution of its scheduler against the two canonical deferred viewer entries
+  reproduced strict-mode `The property 'Id' cannot be found` on an empty early
+  set. Scheduling now projects early IDs through the pipeline; regression
+  scenarios cover empty, late-only and mixed inputs. Interactive acceptance
+  remains pending the corrected run. The focused scheduler, scoped-testing and
+  governance regression passed 91/91 in
+  `20261028T233856Z-78424-b76fb160d3b74359990865796b2af6f7`.
+
+- PR CI `40779610989` at `ec6ad6c11` passed the x64 solution build and all
+  eleven runtime entries, but tooling reported 1,052 passed, one failed and two
+  historical skips. Its long-path Git regression received a successful Git
+  stderr warning about `.git/objects/info/alternates`; combining stderr with
+  stdout made that warning look like an inventory row. Metadata now consumes
+  stdout only, with successful diagnostics still visible and failed-command
+  diagnostics retained. Real Git aliases emitting both streams and a nonzero
+  exit cover both boundaries. The combined candidate-review, scheduler,
+  scoped-testing and governance checks passed 99/99 in
+  `20261028T234753Z-75512-55b70c3d9559450e9039da9720a2a66a`.
+
 - The standalone x64 Zig repeat `ghostty140-zig-x64-clean-exit-20261028a`
   passed 3,233 tests, skipped 36 and returned exit 0. Its record retains the
   executable and log hashes and verifies unchanged executable bytes. It closes
@@ -243,7 +267,8 @@ and warning; acceptance remains pending their actual results.
   The initial native dispatch was cancelled while queued to qualify the final
   cache-namespaced lock instead. PrePush planning delegates matching PR entries
   as pending CI and retains the build-toolchain and Compare Directories local
-  obligations. Four focus-taking suites remain pending agreement on timing.
+  obligations. The four focus-taking suites are authorized; acceptance remains
+  pending their actual results.
 
 - Required loader prototypes remain present; no host-required API needs a
   signature adapter. New search, render-image and animation APIs are not wired
