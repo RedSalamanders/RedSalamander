@@ -143,7 +143,7 @@ work and receipt publication. Every `Run:` line must remain copy/paste executabl
 - First-party VC++ projects also default to `/FS`, so solution-targeted builds remain stable under the repo-wide `/MP` compiler settings
 - Plugin DLLs and console test executables inherit shared external-header, include-path, and subsystem defaults from their family-level props files
 - First-party `Application` and `DynamicLibrary` projects default to repo version stamping through `Directory.Build.targets` unless they explicitly opt out
-- Proof-of-concept projects inherit `Level3` plus the shared `C4710/C4711` suppression from `PoC/Directory.Build.props`; keep any extra PoC warning deviations local only when truly project-specific
+- First-party proof-of-concept projects use the same late `/Wall`, `/WX`-disabled, zero-warning policy as other native projects. Keep any reviewed PoC exception local and documented; earlier property defaults do not override the common final policy.
 
 ## Dependencies
 

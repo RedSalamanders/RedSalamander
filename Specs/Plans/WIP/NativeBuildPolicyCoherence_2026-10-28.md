@@ -38,4 +38,4 @@ Baseline audit: E:/DxUi.Perf/flag-coherence-20261028-aea0f188.
 Current task evidence: E:/DxUi.Perf/build-policy-evidence-20261028.
 RedTilde ARM64 restore and required policy/lease logs are under that task's
 RedTilde-ARM64-restore folder; both exited zero before implementation.
-Candidate dependency: `1f385ee013189e967ad5298f2311801a066de2c7` (API4). This selects the reviewed warning/ICF repair for product qualification; it is not a final green receipt. The library's x64 ordinary suites passed; final native refresh and desktop focus qualification remain explicit gates. Product validation must use the normal restore entrypoint and matching headers/archive.
+Candidate dependency: `1f385ee013189e967ad5298f2311801a066de2c7` (API4). Its six native builds, all three ordinary x64 profiles and all three focus profiles passed; focus runs recorded zero capability skips and verified restoration. Task logs `cs28-*-qualification3.log`, `cs28-*-full2.log` and `cs28-*-focus6.log` retain those separate gates. Product validation still requires its normal restore, matching headers/archive, six builds and Fresh Full execution.
