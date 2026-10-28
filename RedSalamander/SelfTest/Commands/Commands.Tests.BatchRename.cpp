@@ -1223,11 +1223,26 @@ private:
                       storeRoot, recordPath, replacement, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace) == publishFailure &&
                       SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == original,
                   L"A failed atomic publish must preserve the previous complete record.");
+    const auto rollbackResult = Common::Files::Testing::LastLocalFileTransactionRollback();
+    Trace(std::format(L"Durable-store rollback: owned={} posix={} posixError={} legacy={} legacyError={} pathDeleteAttempted={} pathDeleteError={}",
+                      rollbackResult.ownedHandle,
+                      rollbackResult.posixDisposition,
+                      rollbackResult.posixError,
+                      rollbackResult.legacyDisposition,
+                      rollbackResult.legacyError,
+                      rollbackResult.pathDeleteAttempted,
+                      rollbackResult.pathDeleteError));
     std::vector<std::filesystem::path> storedFiles;
+    const HRESULT enumerateAfterFailure = FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles);
+    for (const auto& storedPath : storedFiles)
+        Trace(std::format(
+            L"Durable-store rollback entry: leaf='{}' attributes=0x{:08X}", storedPath.filename().native(), GetFileAttributesW(storedPath.c_str())));
     state.Require(
-        SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles)) && storedFiles.size() == 1u &&
+        SUCCEEDED(enumerateAfterFailure) && storedFiles.size() == 1u &&
             Common::Paths::NormalizedWindowsPathEqualsNoCase(storedFiles.front().native(), std::filesystem::absolute(recordPath).lexically_normal().native()),
-        L"A failed atomic publish must remove its private temporary sibling.");
+        std::format(L"A failed atomic publish must remove its private temporary sibling (enumerationHr=0x{:08X}, count={}).",
+                    static_cast<unsigned long>(enumerateAfterFailure),
+                    storedFiles.size()));
     {
         Common::Files::LocalFileTransaction rollback;
         const HRESULT created = Common::Files::LocalFileTransaction::Create(recordPath, Common::Files::ExistingTargetPolicy::Replace, false, rollback);

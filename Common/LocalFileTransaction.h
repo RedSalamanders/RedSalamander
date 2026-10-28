@@ -42,6 +42,23 @@ inline std::atomic<HRESULT> g_nextWriteFailure{S_OK};
 inline std::atomic<HRESULT> g_nextFlushFailure{S_OK};
 inline std::atomic<HRESULT> g_nextPublishFailure{S_OK};
 
+struct LocalFileTransactionRollbackSnapshot final
+{
+    bool ownedHandle         = false;
+    bool posixDisposition    = false;
+    DWORD posixError         = ERROR_SUCCESS;
+    bool legacyDisposition   = false;
+    DWORD legacyError        = ERROR_SUCCESS;
+    bool pathDeleteAttempted = false;
+    DWORD pathDeleteError    = ERROR_SUCCESS;
+};
+inline thread_local LocalFileTransactionRollbackSnapshot g_lastRollbackSnapshot{};
+
+[[nodiscard]] inline LocalFileTransactionRollbackSnapshot LastLocalFileTransactionRollback() noexcept
+{
+    return g_lastRollbackSnapshot;
+}
+
 inline void FailNextLocalFileTransactionWrite(HRESULT hr) noexcept
 {
     g_nextWriteFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
@@ -345,6 +362,10 @@ public:
 
     void Abort() noexcept
     {
+#ifdef ENABLE_TESTS
+        Testing::LocalFileTransactionRollbackSnapshot rollback{.ownedHandle = static_cast<bool>(_file)};
+        const bool observedRollback = ! _committed && ! _temporaryPath.empty();
+#endif
         bool markedForDeletion = false;
         if (_file && ! _committed && ! _temporaryPath.empty())
         {
@@ -352,17 +373,35 @@ public:
             // Closing first opens a race with a reader that denies a path delete.
             FILE_DISPOSITION_INFO_EX disposition{.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS};
             markedForDeletion = SetFileInformationByHandle(_file.get(), FileDispositionInfoEx, &disposition, sizeof(disposition)) != FALSE;
+#ifdef ENABLE_TESTS
+            rollback.posixDisposition = markedForDeletion;
+            rollback.posixError       = markedForDeletion ? ERROR_SUCCESS : GetLastError();
+#endif
             if (! markedForDeletion)
             {
                 FILE_DISPOSITION_INFO legacyDisposition{.DeleteFile = TRUE};
                 markedForDeletion = SetFileInformationByHandle(_file.get(), FileDispositionInfo, &legacyDisposition, sizeof(legacyDisposition)) != FALSE;
+#ifdef ENABLE_TESTS
+                rollback.legacyDisposition = markedForDeletion;
+                rollback.legacyError       = markedForDeletion ? ERROR_SUCCESS : GetLastError();
+#endif
             }
         }
         _file.reset();
         if (! markedForDeletion && ! _committed && ! _temporaryPath.empty())
         {
-            static_cast<void>(DeleteFileW(_temporaryPath.c_str()));
+            const BOOL removed = DeleteFileW(_temporaryPath.c_str());
+#ifdef ENABLE_TESTS
+            rollback.pathDeleteAttempted = true;
+            rollback.pathDeleteError     = removed != FALSE ? ERROR_SUCCESS : GetLastError();
+#else
+            static_cast<void>(removed);
+#endif
         }
+#ifdef ENABLE_TESTS
+        if (observedRollback)
+            Testing::g_lastRollbackSnapshot = rollback;
+#endif
         _temporaryPath.clear();
         _targetPath.clear();
         _committed = false;

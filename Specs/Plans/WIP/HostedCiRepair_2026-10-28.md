@@ -404,3 +404,21 @@ blocking-reader fixture: startup must have cleared alerts while the request is s
 and has no final result; only explicit release may allow completion. Require no fixture timeout.
 The PNG probe additionally requires a retained decoded image. This correction is test-only;
 fresh native and ARM64 hosted validation remains required before claiming the failure fixed.
+
+Candidate `624f9552b` passes the complete x64 Debug build in 5:46 with no new warnings,
+receipt `d26e5e3f00cb0f106efc68c66d05e4975211ac044f5be48c86364f7d9000a30a`.
+Governed run `20261028T204108Z-83756-15cf203bc6994790a55373563c49ba3a` passes all 282
+source/specification controls without skips. These are not native runtime acceptance.
+
+Retained partial source58 ASan artifacts expose two remaining failures: x64
+`cmd_fileops_durable_store_safe_mechanics` still fails the immediate private-sibling cleanup
+assertion; isolated ARM64 Find retries fail before entering their cases because foreground
+admission returns false. Preserve those failures. The hotkey helper currently removes its
+message and activates outside the window procedure. Dispatch it through a scoped subclass
+on the owned warning and activate inside the actual handler, retaining the 500 ms bound.
+Strengthen the existing native control with an independent owned-thread window-procedure
+hook witness; actual foreground, key release, registration cleanup and refusals remain.
+For the unreproduced rollback failure, record each disposition/delete Win32 outcome plus
+the exact enumeration status, entry count and entry attributes without retries or relaxed
+cleanup assertions. No further causal rollback repair or foreground acceptance is claimed
+until new native/hosted evidence establishes it.

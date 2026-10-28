@@ -9,6 +9,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <commctrl.h>
 #include <windows.h>
 
 #pragma warning(push)
@@ -27,6 +28,14 @@ namespace RedSalamander::TestSupport
 class DirectedSelfTestInputWarning final
 {
 public:
+    struct ForegroundAdmissionDiagnostics final
+    {
+        const wchar_t* stage = L"not-started";
+        DWORD win32Error     = ERROR_SUCCESS;
+        int heldKey          = 0;
+        UINT sentInputCount  = 0u;
+    };
+
     explicit DirectedSelfTestInputWarning(HWND owner = nullptr, bool enabled = true) noexcept
     {
         if (! enabled)
@@ -114,15 +123,107 @@ public:
     // A registered hotkey grants its receiving thread foreground permission.
     // Never join a foreign input queue or alter system foreground-lock policy.
     // The explicit hotkey route also gives native controls a deterministic witness.
-    [[nodiscard]] static bool TryActivateOwnedWindow(HWND target, bool requireHotkey = false) noexcept
+    [[nodiscard]] static bool TryActivateOwnedWindow(HWND target, bool requireHotkey = false, ForegroundAdmissionDiagnostics* diagnostics = nullptr) noexcept
     {
+        ForegroundAdmissionDiagnostics localDiagnostics{};
+        auto& observed       = diagnostics ? *diagnostics : localDiagnostics;
+        observed             = {};
+        observed.stage       = L"ownership-warning-or-activation-guard";
         const HWND warning   = _activeWindow.load(std::memory_order_acquire);
         DWORD processId      = 0u;
         const DWORD threadId = GetWindowThreadProcessId(target, &processId);
         if (ScopedWindowActivationBlocker::IsActiveForCurrentThread() || ! warning || ! IsWindowVisible(warning) || ! target ||
             processId != GetCurrentProcessId() || threadId != GetCurrentThreadId())
             return false;
-        const auto activate = [&]() noexcept
+        ForegroundHotkeyRequest request{.target = target, .warning = warning, .threadId = threadId};
+        if (! requireHotkey && request.Activate())
+        {
+            observed.stage = L"direct-activation";
+            return true;
+        }
+
+        // This nontext key is consumed by the registration on the owned target.
+        // Do not release or override a key/modifier held by the person.
+        for (const int key : {VK_F24, VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN})
+            if ((GetAsyncKeyState(key) & 0x8000) != 0)
+            {
+                observed.stage   = L"held-input";
+                observed.heldKey = key;
+                return false;
+            }
+        observed.stage = L"hotkey-atom-or-warning-thread";
+        wil::unique_any<ATOM, decltype(&GlobalDeleteAtom), GlobalDeleteAtom> hotkeyId(
+            GlobalAddAtomW(L"RedSalamander.TestForeground.{56157152-5E78-422C-A88F-73D02F93AA7A}"));
+        if (! hotkeyId || GetWindowThreadProcessId(warning, nullptr) != threadId)
+            return false;
+        request.id     = hotkeyId.get();
+        observed.stage = L"warning-subclass";
+        if (! SetWindowSubclass(warning, ForegroundHotkeyProc, request.id, reinterpret_cast<DWORD_PTR>(&request)))
+        {
+            observed.win32Error = GetLastError();
+            return false;
+        }
+        const auto removeSubclass = wil::scope_exit([&]() noexcept { RemoveWindowSubclass(warning, ForegroundHotkeyProc, request.id); });
+        observed.stage            = L"hotkey-registration";
+        if (! RegisterHotKey(warning, static_cast<int>(request.id), MOD_NOREPEAT, VK_F24))
+        {
+            observed.win32Error = GetLastError();
+            return false;
+        }
+        const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(warning, static_cast<int>(request.id)); });
+        std::array<INPUT, 2u> input{};
+        input[0].type           = INPUT_KEYBOARD;
+        input[0].ki.wVk         = VK_F24;
+        input[1]                = input[0];
+        input[1].ki.dwFlags     = KEYEVENTF_KEYUP;
+        const UINT sent         = SendInput(static_cast<UINT>(input.size()), input.data(), sizeof(INPUT));
+        observed.sentInputCount = sent;
+        observed.stage          = L"hotkey-input";
+        if (sent != input.size())
+        {
+            observed.win32Error = GetLastError();
+            if (sent == 1u)
+                static_cast<void>(SendInput(1u, &input[1], sizeof(INPUT)));
+            return false;
+        }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
+        observed.stage      = L"hotkey-dispatch-timeout";
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            MSG message{};
+            if (PeekMessageW(&message, warning, WM_HOTKEY, WM_HOTKEY, PM_REMOVE))
+            {
+                // Foreground permission belongs to handling the real hotkey.
+                // Merely removing it and activating outside its window procedure
+                // does not establish that dispatch boundary.
+                DispatchMessageW(&message);
+                if (request.handled)
+                {
+                    observed.stage = request.activated ? L"hotkey-activation" : L"hotkey-activation-refused";
+                    return request.activated;
+                }
+            }
+            static_cast<void>(MsgWaitForMultipleObjectsEx(0u, nullptr, 10u, QS_HOTKEY, MWMO_INPUTAVAILABLE));
+        }
+        return false;
+    }
+
+    [[nodiscard]] static bool IsWarningWindow(HWND window) noexcept
+    {
+        return window && window == _activeWindow.load(std::memory_order_acquire);
+    }
+
+private:
+    struct ForegroundHotkeyRequest final
+    {
+        HWND target    = nullptr;
+        HWND warning   = nullptr;
+        DWORD threadId = 0u;
+        UINT_PTR id    = 0u;
+        bool handled   = false;
+        bool activated = false;
+
+        [[nodiscard]] bool Activate() const noexcept
         {
             DWORD currentOwner = 0u;
             if (GetWindowThreadProcessId(target, &currentOwner) != threadId || currentOwner != GetCurrentProcessId() || ! IsWindowVisible(warning))
@@ -136,53 +237,21 @@ public:
             SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
             UpdateWindow(target);
             return GetForegroundWindow() == target;
-        };
-        if (! requireHotkey && activate())
-            return true;
-
-        // This nontext key is consumed by the registration on the owned target.
-        // Do not release or override a key/modifier held by the person.
-        for (const int key : {VK_F24, VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN})
-            if ((GetAsyncKeyState(key) & 0x8000) != 0)
-                return false;
-        wil::unique_any<ATOM, decltype(&GlobalDeleteAtom), GlobalDeleteAtom> hotkeyId(
-            GlobalAddAtomW(L"RedSalamander.TestForeground.{56157152-5E78-422C-A88F-73D02F93AA7A}"));
-        if (! hotkeyId || ! RegisterHotKey(target, static_cast<int>(hotkeyId.get()), MOD_NOREPEAT, VK_F24))
-            return false;
-        const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(target, static_cast<int>(hotkeyId.get())); });
-        std::array<INPUT, 2u> input{};
-        input[0].type       = INPUT_KEYBOARD;
-        input[0].ki.wVk     = VK_F24;
-        input[1]            = input[0];
-        input[1].ki.dwFlags = KEYEVENTF_KEYUP;
-        const UINT sent     = SendInput(static_cast<UINT>(input.size()), input.data(), sizeof(INPUT));
-        if (sent != input.size())
-        {
-            if (sent == 1u)
-                static_cast<void>(SendInput(1u, &input[1], sizeof(INPUT)));
-            return false;
         }
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            MSG message{};
-            if (PeekMessageW(&message, target, WM_HOTKEY, WM_HOTKEY, PM_REMOVE))
-            {
-                if (message.wParam == hotkeyId.get())
-                    return activate();
-                DispatchMessageW(&message);
-            }
-            static_cast<void>(MsgWaitForMultipleObjectsEx(0u, nullptr, 10u, QS_HOTKEY, MWMO_INPUTAVAILABLE));
-        }
-        return false;
-    }
+    };
 
-    [[nodiscard]] static bool IsWarningWindow(HWND window) noexcept
+    static LRESULT CALLBACK ForegroundHotkeyProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR reference) noexcept
     {
-        return window && window == _activeWindow.load(std::memory_order_acquire);
+        auto* const request = reinterpret_cast<ForegroundHotkeyRequest*>(reference);
+        if (message == WM_HOTKEY && request && window == request->warning && wParam == request->id)
+        {
+            request->handled   = true;
+            request->activated = request->Activate();
+            return 0;
+        }
+        return DefSubclassProc(window, message, wParam, lParam);
     }
 
-private:
     static void CALLBACK TimerProc(HWND window, UINT, UINT_PTR, DWORD) noexcept
     {
         if (IsWarningWindow(window))

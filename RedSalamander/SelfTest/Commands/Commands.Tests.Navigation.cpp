@@ -14,12 +14,60 @@
         state.Require(blocker.BlockedActivationCount() == 0u && blocker.BlockedFocusCount() == 0u,
                       L"No-activation admission must refuse before attempting a focus or activation change.");
     }
+    struct HotkeyDispatchWitness final
+    {
+        HWND window                = nullptr;
+        unsigned int dispatchCount = 0u;
+        DWORD installError         = ERROR_SUCCESS;
+        static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR reference) noexcept
+        {
+            auto* const witness = reinterpret_cast<HotkeyDispatchWitness*>(reference);
+            if (message == WM_HOTKEY)
+                ++witness->dispatchCount;
+            return DefSubclassProc(window, message, wParam, lParam);
+        }
+    } witness;
+    constexpr UINT_PTR witnessSubclassId                     = 0x5F12u;
+    static thread_local HotkeyDispatchWitness* activeWitness = nullptr;
+    auto* const previousWitness                              = std::exchange(activeWitness, &witness);
+    const auto restoreWitness                                = wil::scope_exit([&]() noexcept { activeWitness = previousWitness; });
+    // WH_CALLWNDPROC does not observe posted-message dispatch. Install an independent
+    // outer subclass when the real hotkey is removed, after the helper installed its handler.
+    wil::unique_hhook hotkeyDispatchProbe(SetWindowsHookExW(WH_GETMESSAGE,
+                                                            [](int code, WPARAM wParam, LPARAM lParam) noexcept -> LRESULT
+    {
+        const auto* const message = reinterpret_cast<const MSG*>(lParam);
+        if (code >= 0 && wParam == PM_REMOVE && message->message == WM_HOTKEY && activeWitness &&
+            GetWindowThreadProcessId(message->hwnd, nullptr) == GetCurrentThreadId())
+        {
+            if (SetWindowSubclass(message->hwnd, HotkeyDispatchWitness::Procedure, witnessSubclassId, reinterpret_cast<DWORD_PTR>(activeWitness)))
+                activeWitness->window = message->hwnd;
+            else
+                activeWitness->installError = GetLastError();
+        }
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    },
+                                                            nullptr,
+                                                            GetCurrentThreadId()));
+    if (! state.Require(static_cast<bool>(hotkeyDispatchProbe), L"Could not install the owned-thread hotkey dispatch witness."))
+        return false;
+    const auto removeWitness    = wil::scope_exit([&]() noexcept
+    {
+        if (witness.window)
+            RemoveWindowSubclass(witness.window, HotkeyDispatchWitness::Procedure, witnessSubclassId);
+    });
     constexpr int probeHotkeyId = 0x5F11;
     for (unsigned int attempt = 0u; attempt < 2u; ++attempt)
     {
-        if (! state.Require(DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true) && GetForegroundWindow() == mainWindow,
-                            L"The warned hotkey handshake must acquire actual foreground ownership."))
+        const unsigned int dispatchBefore = witness.dispatchCount;
+        const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
+        const bool retiredWitness         = witness.window && RemoveWindowSubclass(witness.window, HotkeyDispatchWitness::Procedure, witnessSubclassId);
+        if (retiredWitness)
+            witness.window = nullptr;
+        if (! state.Require(activated && GetForegroundWindow() == mainWindow, L"The warned hotkey handshake must acquire actual foreground ownership."))
             return false;
+        state.Require(retiredWitness && witness.installError == ERROR_SUCCESS && witness.dispatchCount == dispatchBefore + 1u,
+                      L"Foreground admission must dispatch exactly one real hotkey through its window procedure and retire the independent witness.");
         const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return (GetAsyncKeyState(VK_F24) & 0x8000) == 0;
         }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});

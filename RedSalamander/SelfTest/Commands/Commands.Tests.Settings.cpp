@@ -9398,21 +9398,27 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
     const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
     const HWND foregroundBefore = GetForegroundWindow();
-    const auto handoffStarted   = std::chrono::steady_clock::now();
-    const bool activated        = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow);
-    const auto handoffElapsed   = std::chrono::steady_clock::now() - handoffStarted;
-    DWORD foregroundProcess     = 0u;
-    const HWND foregroundAfter  = GetForegroundWindow();
+    DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
+    const auto handoffStarted  = std::chrono::steady_clock::now();
+    const bool activated       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
+    const auto handoffElapsed  = std::chrono::steady_clock::now() - handoffStarted;
+    DWORD foregroundProcess    = 0u;
+    const HWND foregroundAfter = GetForegroundWindow();
     static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
     if (foregroundBefore != inputWindow)
     {
-        Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={}",
+        Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={} stage={} error={} "
+                          L"heldKey={} sent={}",
                           reinterpret_cast<uintptr_t>(foregroundBefore),
                           reinterpret_cast<uintptr_t>(foregroundAfter),
                           reinterpret_cast<uintptr_t>(inputWindow),
                           foregroundProcess,
                           GetCurrentProcessId(),
-                          activated));
+                          activated,
+                          admission.stage,
+                          admission.win32Error,
+                          admission.heldKey,
+                          admission.sentInputCount));
     }
     state.Require(activated && foregroundAfter == inputWindow,
                   std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}.",

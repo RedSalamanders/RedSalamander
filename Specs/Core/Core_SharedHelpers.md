@@ -216,6 +216,21 @@ private name while delete-compatible readers may retain its bytes; the prior pub
 is unchanged. Unsupported disposition paths retain the established compatible cleanup fallback.
 The held-reader native control requires the private name to disappear before its reader closes,
 the reader to retain the exact unpublished bytes, and the original destination to stay intact.
+Test-enabled builds retain the last actual rollback's per-thread disposition/delete outcome;
+the durable-store control records those Win32 errors and the exact directory entries without
+retrying or weakening the immediate cleanup assertion.
+
+## Warned foreground hotkey dispatch
+
+The registered-hotkey fallback dispatches `WM_HOTKEY` to a temporary subclass on the
+owned warning window and activates the process-owned target inside that window procedure.
+Removing the message from the queue is not a substitute for handling it. The warning must
+belong to the current UI thread. Subclass, registration and atom cleanup are scoped, the
+same 500 ms handshake bound applies, and no foreign input queue or system policy is changed.
+The native admission control independently witnesses exactly one hotkey window-procedure
+dispatch per forced handshake, actual foreground ownership, released input, registration
+cleanup and the existing conflict/no-activation/unowned-window refusals. This follows the
+[Windows hotkey activation contract](https://devblogs.microsoft.com/oldnewthing/20090226-00/?p=19013).
 
 ## Native selftest artifact rotation
 
