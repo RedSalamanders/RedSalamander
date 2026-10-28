@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Scope the ARM64 volatile-model notice to the ASan seeded heap-overflow probe's intentional accesses, preserving sanitizer instrumentation and expected-failure detection.
 - Preserve FolderWindow's intentional ARM64 member-alignment padding with a class-scoped notice annotation. Narrow RedConfigure's old project-wide volatile notice exception to its external future/PPL include, which also covers imported test builds; require Release-only global metadata and retain the spillover negative control.
 - Lock DxUi API4 at 1f385ee013189e967ad5298f2311801a066de2c7 for the native warning/Release folding policy. Preserve the consumer API boundary and restore matching headers/archive through the normal entrypoint; complete product qualification is tracked by the indexed native policy plan.
 - Use the canonical owned test-support include in the test-enabled Web viewer and keep the NT export warning annotation adjacent to its exact typed binding in ls3. Debug builds retain Edit and Continue; the first compiler-PDB write failure is retained for a clean ordinary-profile rerun.

@@ -3197,8 +3197,15 @@ int wmain(int argc, wchar_t** argv)
     {
         auto storage                = std::make_unique<unsigned char[]>(8u);
         volatile unsigned char* raw = storage.get();
+#pragma warning(push)
+#if defined(_M_ARM64)
+// Keep the intentional fault observable under the selected volatile model.
+// Owner: plugin-contract test maintainers; review: 2027-01-31.
+#pragma warning(disable : 4746)
+#endif
         raw[16]                     = 0x5Au;
         return raw[16] == 0x5Au ? 0 : 1;
+#pragma warning(pop)
     }
 #else
     if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--asan-seed-heap-overflow")
