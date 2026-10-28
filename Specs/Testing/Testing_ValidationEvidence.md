@@ -419,6 +419,9 @@ runner owns control are not remapped.
 Active native test sources, helpers, fixtures and seams MUST use `Scope.Tests.Something.h/.cpp`. `Tests/native-test-files.json` owns active membership. Historical archived harnesses and sealed reproduction inputs keep their original identity; they do not define new source naming. Rename project entries, includes, current inventories and callers together. DxUi historical source/test origins retain their original identities and map to current paths separately.
 
 `Test-Changes.ps1` is the ordinary iteration entrypoint. Its default is affected coverage, including committed changes since a local merge base and independent staged, unstaged, deletion, rename-side and untracked discovery. No ref is fetched. Unknown executable inputs widen coverage; prose alone does not require native tests. Explanations name paths, consumers and fallback reasons. Explicit selectors reject unknown scopes. Affected, filtered and environment-reduced coverage MUST NOT be reported as a full repository pass.
+The entrypoint forwards explicit `-AllowAlternateVolumeTestRoot` unchanged to the canonical runner in Full and focused
+FileOps work. Its default remains disabled. An enabled `path.local.alternate` resource restricts the selected root;
+neither that resource nor the forwarding switch supplies authorization to initialize a new drive-root workspace.
 
 Exact local continuation uses the existing explicit Full Resume and its promoted artifact/epoch contracts. Commands families and timing/network-dependent entries retain their declared non-cacheable policies. Affected never consumes reusable evidence.
 

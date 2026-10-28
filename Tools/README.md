@@ -49,6 +49,11 @@ contents, tooling, scripts and build/test policy inputs. Changing a delegated te
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
 
+`Test-Changes.ps1 -Mode Full -Interactive -AllowAlternateVolumeTestRoot` passes the explicit cross-volume opt-in to
+the canonical runner, including focused FileOps runs. The default stays disabled. The primary sandbox's enabled
+`path.local.alternate` resource restricts selection to its exact marked root; new drive-root initialization still
+requires separate authorization.
+
 The PR build-policy guard checks the formatter job's PowerShell installer wiring and rejects
 Python/pip bootstrap only within that job. Formatter acquisition integrity is covered separately
 by `Tests/ClangFormat.Tests.ps1`; other build dependencies retain their own prerequisites.

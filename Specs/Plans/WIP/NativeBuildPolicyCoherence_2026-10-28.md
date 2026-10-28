@@ -65,3 +65,14 @@ restore root. The fixture now supplies the two actual first-party policy inputs 
 alongside all original compiler-host/environment/API-mismatch checks; the failed retry is retained.
 The repaired dependency and tooling-governance suites each pass12 cases with zero failures or skips in a new marked
 sandbox run. This qualifies those tooling repairs; the native recovery case and final Full matrix remain pending.
+
+The older-source Full FileOps run also failed its mandatory R4-A19 independent-volume control because the caller
+omitted `-AllowAlternateVolumeTestRoot`. The selected primary sandbox already has an enabled resource naming
+the existing marked C:/RedSalamander.Perf, on a different fixed NTFS volume. No new drive-root initialization is
+needed. The scoped entrypoint now exposes and forwards the canonical opt-in without changing its disabled default.
+Behavior tests execute the real wrapper for Full/focused FileOps with and without the flag. Final native and Full
+qualification will use the normal explicit opt-in and the existing exact-root registry restriction.
+The focused scoped-testing suite passes all9 cases with zero failures/skips, including four actual child-process
+wrapper combinations. Its first attempt reached all four forwarding assertions but failed fixture cleanup by
+calling a private helper directly; that failed receipt remains, and the corrected test uses its owning module
+without expanding the production export surface. The canonical PR execution digest is refreshed and verified.
