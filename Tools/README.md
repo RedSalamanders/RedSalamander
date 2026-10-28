@@ -286,6 +286,7 @@ and focused tests.
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
 | `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation, exclusive cache lease and guarded atomic executable publication without Python. |
 | `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
+| `Modules/Build/DxUiPaths.psm1` | Short source/output locators with full-identity collision refusal and native compiler-policy digests. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |

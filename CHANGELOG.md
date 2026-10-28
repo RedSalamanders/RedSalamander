@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Supply the real native and pinned-archive policy files to the compiler-host restore fixture and verify their identity fields, keeping the long Git path, explicit host overrides, API/toolchain refusals and caller-environment restoration checks.
+- Preserve genuinely long Git metadata coverage after shortening DxUi source folders by sizing the restore fixture from its complete path, and restore the tooling README's exact module inventory. The existing over-260-character assertion and restore/environment checks remain enforced.
+- Force the real retained Move's finished-before-summary boundary through the existing worker pause point, verify recovery stays unavailable there, and release the pause through RAII before requiring the published identities and original recovery journey.
+- Wait for the real Move's exact completed-summary publication before checking retained-source recovery eligibility. Keep every identity, clipboard-consumption, disposition and action assertion, retain the existing deadline, and record detailed terminal diagnostics for failures.
 - Isolate the seeded ASan heap-overflow probe behind a noinline function so MSVC's ARM64 volatile notice can be annotated at its effective definition scope. The allocation, out-of-bounds accesses and expected-failure detector remain unchanged; compiler controls retain the failing statement-scope and zero-warning definition-scope results.
 - Clarify that first-party proof-of-concept builds follow the common zero-warning `/Wall` policy, and record the pinned library's completed native and desktop qualification separately from pending application qualification.
 - Scope the ARM64 volatile-model notice to the ASan seeded heap-overflow probe's intentional accesses, preserving sanitizer instrumentation and expected-failure detection.

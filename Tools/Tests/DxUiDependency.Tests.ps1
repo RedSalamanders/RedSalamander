@@ -264,12 +264,19 @@ Describe 'Lighter DxUi source restore' {
 Describe 'DxUi consumer profile evaluation' {
     It 'uses the first-party host during restore and restores the caller environment after success or failure' {
         $root = Join-Path $TestDrive 'host-restore'
-        # Full uses a deeper sandbox than focused Pester runs. Exercise that path length in both entrypoints.
-        if ($root.Length -lt 160) { $root = Join-Path $root ('x' * (160 - $root.Length)) }
+        # Exercise a genuinely long Git metadata path in both focused and deeper Full sandboxes.
+        # Size the padding from the shortened source locator rather than the old 40-character folder.
+        $metadataSuffix = '.build/dependencies/DxUi/source/' + ('0' * 16) + '/.git/hooks/fsmonitor-watchman.sample'
+        $metadataPath = Join-Path $root $metadataSuffix
+        if ($metadataPath.Length -lt 280) { $root = Join-Path $root ('x' * (280 - $metadataPath.Length)) }
         $origin = Join-Path $root 'fixture-origin'
-        foreach ($relative in @('RedSalamander','Dependencies','fixture-origin/include','fixture-origin/Tools')) {
+        foreach ($relative in @('RedSalamander','Dependencies','Build','fixture-origin/include','fixture-origin/Tools')) {
             [void](New-Item -ItemType Directory -Path (Join-Path $root $relative) -Force)
         }
+        foreach ($relative in @('Build/NativeBuildPolicy.targets','Build/PinnedDxUiPolicy.targets')) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination (Join-Path $root $relative)
+        }
+        $expectedPolicy = & (Get-Module DxUiDependency) { param($Root) Get-DxUiNativePolicyFields -RepoRoot $Root } $root
         '<Project><PropertyGroup><RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion></PropertyGroup></Project>' |
             Set-Content -LiteralPath (Join-Path $root 'Directory.Build.props')
         # A real MSBuild evaluation with profile-dependent first-party policy; no compilation or SDK fixture is needed.
@@ -325,6 +332,8 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                         $expected = if ($requestedHost -or $configuration -eq 'Release') { 'x86' } else { 'x64' }
                         $resolved.Identity.preferredToolArchitecture | Should Be $expected
                         $resolved.Identity.releaseOptimizationPolicy | Should Be 'Gy-REF-GL-LTCG-full-v1'
+                        $resolved.Identity.nativeBuildPolicy | Should Be $expectedPolicy.nativeBuildPolicy
+                        $resolved.Identity.nativeBuildPolicySha256 | Should Be $expectedPolicy.nativeBuildPolicySha256
                         $resolved.Fingerprint | Should Not Be ('a' * 64)
                         [string]$env:PreferredToolArchitecture | Should Be $requestedHost
                     }
