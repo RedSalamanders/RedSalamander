@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Adopt explicitly selected DxUi revision 881e5d5, whose six native profiles passed, to repair stationary-pointer keyboard selection and validate the broader consumer update. Restore pinned dependency source before shuffle receipt verification and check native exits inside protected workflow actions; preserve all verification, assertions and repeat coverage.
 - Add a deterministic keyboard-menu stationary-pointer regression against the unchanged DxUi pin, require the existing notified foreground handoff at Commands case boundaries, and register the repair plan in the machine-readable WIP index. Dependency repair and current-source qualification remain pending.
 - Integrate the concurrent formatter and tooling repair with the hosted runtime fixes, preserve both sets of generated release notes, and refresh the reviewed PR execution-input digest. Prior source-bound receipts remain retained; integrated native qualification is pending.
 - Keep plugin assertion diagnostics optional so standalone plugins retain their existing link boundary, while the FTP test component records exact failures through its existing metrics dependency. Preserve the failed build receipt and repeat native validation.

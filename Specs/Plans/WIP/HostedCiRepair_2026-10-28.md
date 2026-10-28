@@ -133,3 +133,19 @@ keyboard-opened popup can therefore treat the first stationary event as movement
 keyboard row. Add a deterministic create/End/stationary-event regression before changing the pin,
 with a real-movement control and existing warning/lease/restoration. The suspected library cause
 is not yet a runtime-confirmed fix, and existing focused history success does not close it.
+
+Regression source `1512f7aaa9d9d1cdd0d95dc7ec0bb40c433c09f8`, build receipt
+`2318d0f2122671bac3a4c550a2a0f3f1d7d1dd276afe71a96ac1fdbc2a3a5aea`, reproduced the pointer defect
+in `20261028T131806Z-78428-c12b0ffda10b4833a9f289d0371f8180`: keyboard row 2 became unset and hover
+row 0 replaced it after a stationary event. The exact new case failed in 70 ms, with no skip or retry.
+Canonical DxUi already contains the capture-time history repair. The owner explicitly selected the
+broader consumer adoption of `881e5d5ff252d5988c1357a5c64d14f480b46793`; main push run `40622836997`
+passed all six native profiles, validation, formatting, Windows tooling and the CI gate. Its paired
+benchmark was skipped, and existing performance/platform holds remain separate. Keep API revision 4
+and the single target, and qualify the new consumer source without editing the sibling checkout.
+
+Integrated shuffle run `40691121033` passed portable import but failed receipt use before native tests.
+Its fresh consumer had no restored DxUi source; the first use-time identity guard correctly rejected it.
+Restore the exact pin before import, preserving that guard, all artifact hashes and repeat/shuffle controls.
+Check the child's exit inside each protected action, where its status is available, and propagate failure
+through display restoration. A real nonzero-child regression complements the restoration controls.

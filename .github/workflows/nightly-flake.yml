@@ -61,6 +61,10 @@ jobs:
             Copy-Item -Path .\Themes\* -Destination $dest -Recurse -Force
           }
 
+      - name: Restore pinned DxUi source for receipt verification
+        shell: pwsh
+        run: ./Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug
+
       - name: Verify and rebind portable build attestation
         shell: pwsh
         run: |
@@ -96,7 +100,9 @@ jobs:
           Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
           Invoke-RSWithHostedTestDesktop -Action {
             .\Tools\Run-AllTests.ps1 -Suite All -ValidationMode Fresh -SkipBuild -TimeoutMultiplier 2.0 -SelfTestRepeat 5 -SelfTestShuffleSeed $seed -ClassifyFailures -AllowExternalTestRoot -AllowAlternateVolumeTestRoot
+            if ($LASTEXITCODE -ne 0) { throw "Nightly shuffle suite failed with exit code $LASTEXITCODE." }
           }
+          exit 0
         timeout-minutes: 210
 
       - name: Upload nightly shuffle artifacts

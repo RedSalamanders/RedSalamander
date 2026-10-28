@@ -1,5 +1,14 @@
 # SelfTest Specification
 
+## Hosted qualification prerequisites
+
+The shuffle artifact consumer restores the exact locked DxUi source before portable attestation import.
+Portable outputs alone cannot satisfy `Get-RSDxUiSourceIdentity` at receipt use. Keep the existing
+same-workflow producer/run/source/toolchain checks and byte-for-byte output verification intact.
+The hosted display wrapper propagates exceptions and restores the original mode. Its callers check
+the native child's exit status inside the protected action and throw on any nonzero result; parent
+PowerShell scope state cannot stand in for that result. Report success only after restoration.
+
 ## Sorting paint measurements
 
 The 5,000-file `folderView_perf_sort_toggle_stress` uses the versioned

@@ -496,7 +496,8 @@
       "usage": "Run before IDE builds or use the automatic root build restore.",
       "usedBy": [
         "Developers",
-        "build.ps1"
+        "build.ps1",
+        ".github/workflows/nightly-flake.yml"
       ],
       "prerequisites": [
         "Visual Studio C++",

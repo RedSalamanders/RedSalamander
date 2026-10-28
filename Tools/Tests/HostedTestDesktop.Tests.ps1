@@ -16,6 +16,7 @@ Describe 'Hosted desktop fixture lifecycle' {
             Small = $small
             Large = $large
             ActionCalls = 0
+            NativeExit = 0
         }
         $global:rsHostedDesktopFixtureTest.States.Enqueue($small)
         $global:rsHostedDesktopFixtureTest.States.Enqueue($large)
@@ -41,6 +42,18 @@ Describe 'Hosted desktop fixture lifecycle' {
     }
     It 'restores the display while propagating a failing native action' {
         { Invoke-RSWithHostedTestDesktop { throw 'seeded native failure' } } | Should Throw 'seeded native failure'
+        Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter { $Mode.Width -eq 1024 }
+    }
+    It 'propagates a checked nonzero native child exit while restoring the display' {
+        $action = {
+            $PSNativeCommandUseErrorActionPreference = $false
+            & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -Command 'exit 7'
+            $global:rsHostedDesktopFixtureTest.NativeExit = $LASTEXITCODE
+            if ($LASTEXITCODE -ne 0) { throw "Native fixture failed with exit code $LASTEXITCODE." }
+        }
+        { Invoke-RSWithHostedTestDesktop -Action $action } | Should Throw 'Native fixture failed with exit code 7'
+        $global:rsHostedDesktopFixtureTest.NativeExit | Should Be 7
+        Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 2 -Exactly
         Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter { $Mode.Width -eq 1024 }
     }
     It 'accounts for display coordinate scaling instead of choosing a clipped physical mode' {

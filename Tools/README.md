@@ -6,6 +6,11 @@ It selects a supported sufficient display mode, reports work-area/session/foregr
 and restores the original mode on failure or success. It refuses local invocation; native
 focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
 
+The nightly shuffle consumer restores the exact pinned DxUi source before importing its portable
+attestation; receipt use still verifies that source identity and every attested output byte.
+Protected native actions check child exit status at the call site and throw on failure. A workflow
+reports success only after that check and display restoration complete.
+
 RedMonitor shares one vendored client header/license. Verify-RedMonitorClient.ps1 checks local hashes
 without Git/network/viewer work. Update-RedMonitorClient.ps1 -Commit FULL_SHA is the explicit dependency
 update operation. Restore-RedMonitor.ps1 is a compatibility alias for local verification only.

@@ -695,6 +695,8 @@ Describe 'Release workflow source contracts' {
         $flake | Should Match 'runs-on:\s*windows-2025-vs2026'
         $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeGreaterThan -1
         $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeLessThan $flake.IndexOf('name: Verify and rebind portable build attestation')
+          $flake.IndexOf('./Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug') | Should BeGreaterThan -1
+          $flake.IndexOf('./Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug') | Should BeLessThan $flake.IndexOf('Import-RSPortableBuildAttestation')
         $flake | Should Match 'Initialize-RSTestSandboxRoot -TestRoot \$root -RepoRoot \$env:GITHUB_WORKSPACE -AllowExternalInitialization'
         $flake.IndexOf('Initialize-RSTestSandboxRoot') | Should BeLessThan $flake.IndexOf('name: Run nightly shuffle repeat lane')
         $flake | Should Match 'if:\s*\$\{\{ always\(\) && steps\.test-root\.outputs\.path != '''' \}\}'
@@ -704,7 +706,14 @@ Describe 'Release workflow source contracts' {
         $flake | Should Match '-SelfTestRepeat 5 -SelfTestShuffleSeed \$seed -ClassifyFailures'
         $flake | Should Match '-AllowExternalTestRoot -AllowAlternateVolumeTestRoot'
         $flake | Should Match 'Invoke-RSWithHostedTestDesktop -Action'
+          $flake | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \{\s*\.\\Tools\\Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Nightly shuffle suite failed'
     }
+
+      It 'checks native exit status inside the protected action before reporting success' {
+          $build = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+          $build | Should Match '(?s)\$runTests = \{\s*\./Tools/Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Native'
+          $build | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \$runTests.*?exit 0'
+      }
 
     It 'keeps current artifact downloaders pinned and the exact sealed Gate0 workflow intact' {
         $downloaders = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -Filter '*.yml' |
