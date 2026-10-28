@@ -3166,6 +3166,24 @@ void WriteSamples(std::ofstream& output, const std::array<uint64_t, TerminalVtUp
     return archiveWritten;
 }
 
+#if defined(RS_ASAN_DEBUG_BUILD)
+// Keep the intentional fault observable under the selected volatile model. MSVC
+// requires this diagnostic scope around the function definition, not its statements.
+// Owner: plugin-contract test maintainers; review: 2027-01-31.
+#pragma warning(push)
+#if defined(_M_ARM64)
+#pragma warning(disable : 4746)
+#endif
+__declspec(noinline) int RunSeededAsanHeapOverflowProbe()
+{
+    auto storage                = std::make_unique<unsigned char[]>(8u);
+    volatile unsigned char* raw = storage.get();
+    raw[16]                     = 0x5Au;
+    return raw[16] == 0x5Au ? 0 : 1;
+}
+#pragma warning(pop)
+#endif
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv)
@@ -3195,17 +3213,7 @@ int wmain(int argc, wchar_t** argv)
 #if defined(RS_ASAN_DEBUG_BUILD)
     if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--asan-seed-heap-overflow")
     {
-        auto storage                = std::make_unique<unsigned char[]>(8u);
-        volatile unsigned char* raw = storage.get();
-#pragma warning(push)
-#if defined(_M_ARM64)
-// Keep the intentional fault observable under the selected volatile model.
-// Owner: plugin-contract test maintainers; review: 2027-01-31.
-#pragma warning(disable : 4746)
-#endif
-        raw[16] = 0x5Au;
-        return raw[16] == 0x5Au ? 0 : 1;
-#pragma warning(pop)
+        return RunSeededAsanHeapOverflowProbe();
     }
 #else
     if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--asan-seed-heap-overflow")

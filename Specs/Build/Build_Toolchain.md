@@ -739,7 +739,8 @@ a missing app-local sanitizer runtime fails the build. The existing PluginContra
 `--asan-seed-heap-overflow` child remains the detection probe. Native ARM64 execution is required.
 
 The seeded probe's two intentional volatile accesses retain the selected ARM64 volatile model.
-Their C4746 annotation is statement-scoped; it does not suppress diagnostics in ordinary tests
+Their C4746 annotation surrounds the isolated noinline probe definition; MSVC's ARM64 ASan
+compiler does not honor a statement-only annotation for these accesses. It does not suppress diagnostics in ordinary tests
 or replace the required expected-failure sanitizer detection check.
 Toolchain receipts identify the MSBuild-selected compiler host and its matching SDK resource compiler,
 rather than assuming Hostx64 on every machine.

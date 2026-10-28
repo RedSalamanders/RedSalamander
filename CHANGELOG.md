@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Isolate the seeded ASan heap-overflow probe behind a noinline function so MSVC's ARM64 volatile notice can be annotated at its effective definition scope. The allocation, out-of-bounds accesses and expected-failure detector remain unchanged; compiler controls retain the failing statement-scope and zero-warning definition-scope results.
 - Clarify that first-party proof-of-concept builds follow the common zero-warning `/Wall` policy, and record the pinned library's completed native and desktop qualification separately from pending application qualification.
 - Scope the ARM64 volatile-model notice to the ASan seeded heap-overflow probe's intentional accesses, preserving sanitizer instrumentation and expected-failure detection.
 - Preserve FolderWindow's intentional ARM64 member-alignment padding with a class-scoped notice annotation. Narrow RedConfigure's old project-wide volatile notice exception to its external future/PPL include, which also covers imported test builds; require Release-only global metadata and retain the spillover negative control.
