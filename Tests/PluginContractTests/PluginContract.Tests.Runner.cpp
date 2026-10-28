@@ -3203,7 +3203,7 @@ int wmain(int argc, wchar_t** argv)
 // Owner: plugin-contract test maintainers; review: 2027-01-31.
 #pragma warning(disable : 4746)
 #endif
-        raw[16]                     = 0x5Au;
+        raw[16] = 0x5Au;
         return raw[16] == 0x5Au ? 0 : 1;
 #pragma warning(pop)
     }
