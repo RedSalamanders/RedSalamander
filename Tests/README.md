@@ -206,6 +206,12 @@ CppUnitTest DLL for performance baselines.
 
 **Projects:** `Tests\ViewerPETests\` and `Tests\ViewerSqliteTests\`
 
+ViewerImgRaw fresh-open probes wait for the UI-applied final result, independently of
+host alert activity. The TIFF orientation fixture gates its real provider read to prove
+that startup alert clearing cannot satisfy completion, then checks the same decoded
+image, orientation and geometry after release. PNG and resource-policy probes share
+that terminal predicate; their eight-second decode deadlines remain unchanged.
+
 | Project | Coverage |
 |---------|----------|
 | ViewerPETests | PE, Web, ImgRaw, Text, Space, VLC viewers — DxUi combo host, long-run stability |

@@ -4654,9 +4654,9 @@ private:
 
 // Test-only host stub that records the decode-outcome alerts ViewerImgRaw raises. ViewerImgRaw
 // obtains its alert sink purely via host->QueryInterface(IHostAlerts) (ViewerImgRaw.cpp SetHost),
-// so passing this stub as the factory 'host' argument makes the async decode outcome observable:
-// a successful decode calls ClearAlert, while a decode failure (e.g. the CO_E_NOTINITIALIZED that
-// plan 015 fixes) calls ShowAlert(HOST_ALERT_WARNING). Stack-allocated, so Release never deletes.
+// so passing this stub as the factory 'host' argument makes decode warnings observable.
+// ClearAlert also runs at open-start and for previews, so alert activity is not a terminal signal.
+// Stack-allocated, so Release never deletes.
 class AlertRecordingHostStub final : public IHost, public IHostAlerts
 {
 public:
@@ -4674,11 +4674,6 @@ public:
     {
         return _clearAlerts.load(std::memory_order_acquire);
     }
-    [[nodiscard]] bool DecodeCompleted() const noexcept
-    {
-        return WarningAlertCount() != 0u || ClearAlertCount() != 0u;
-    }
-
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
     {
         if (! ppvObject)
@@ -4734,6 +4729,15 @@ private:
     std::atomic<unsigned int> _warningAlerts{0u};
     std::atomic<unsigned int> _clearAlerts{0u};
 };
+
+// These probes create a fresh viewer and open one request. Wait for the UI to apply that
+// request's final success/failure; initial alert clearing and progressive previews are not final.
+[[nodiscard]] bool ViewerImgRawDecodeResultApplied(HWND viewerWindow) noexcept
+{
+    WndMsg::ViewerImgRawResourceDebugSnapshot snapshot{};
+    return viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE &&
+           snapshot.currentRequestId != 0u && ! snapshot.loading && (snapshot.finalSuccessCount != 0u || snapshot.finalFailureCount != 0u);
+}
 
 [[nodiscard]] bool TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards() noexcept
 {
@@ -4960,6 +4964,24 @@ private:
         }
 
         BuiltinFileSystemStub fileSystem;
+        const auto blockingControl    = path == orientedTiff ? std::make_shared<BlockingReadControl>() : nullptr;
+        const auto releaseBlockedRead = wil::scope_exit([&]() noexcept
+        {
+            if (blockingControl && blockingControl->release)
+            {
+                static_cast<void>(SetEvent(blockingControl->release.get()));
+            }
+            fileSystem.DisableBlockingRead();
+        });
+        if (blockingControl)
+        {
+            Check(blockingControl->IsValid(), L"ViewerImgRaw orientation read gate initializes", success);
+            if (! blockingControl->IsValid())
+            {
+                return probe;
+            }
+            fileSystem.EnableBlockingRead(blockingControl);
+        }
         const std::wstring pathText = path.wstring();
         const wchar_t* otherFiles[] = {pathText.c_str()};
         ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
@@ -5045,7 +5067,27 @@ private:
             Check(menuSnapshot.hasHiddenMenuModel, std::format(L"{} has one hidden RAII menu owner", label), success);
         }
 
-        const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
+        if (blockingControl)
+        {
+            Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->entered.get(), 0u) == WAIT_OBJECT_0; }, 8000ms),
+                  L"ViewerImgRaw oriented TIFF read enters the controlled provider gate",
+                  success);
+            Check(hostStub.ClearAlertCount() != 0u, L"ViewerImgRaw clears alerts before the held TIFF read completes", success);
+            Check(! ViewerImgRawDecodeResultApplied(viewerWindow), L"ViewerImgRaw initial alert clearing is not decode completion", success);
+            WndMsg::ViewerImgRawResourceDebugSnapshot held{};
+            Check(SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&held)) != FALSE &&
+                      held.currentRequestId != 0u && held.loading && held.finalSuccessCount == 0u && held.finalFailureCount == 0u,
+                  L"ViewerImgRaw held TIFF request remains loading without an applied final result",
+                  success);
+            static_cast<void>(SetEvent(blockingControl->release.get()));
+            Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->exited.get(), 0u) == WAIT_OBJECT_0; }, 8000ms) &&
+                      blockingControl->timedOutReadCount.load(std::memory_order_acquire) == 0u,
+                  L"ViewerImgRaw held TIFF read exits through explicit release without timeout",
+                  success);
+            fileSystem.DisableBlockingRead();
+        }
+
+        const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
         Check(decodeCompleted, std::format(L"{} completes decode", label), success);
         Check(hostStub.WarningAlertCount() == 0u, std::format(L"{} decodes without a warning", label), success);
 
@@ -5319,7 +5361,7 @@ private:
             return;
         }
 
-        const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
+        const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
         Check(decodeCompleted, std::format(L"{} reaches a decode result", label), success);
         inspect(viewerWindow, hostStub);
 
@@ -6368,16 +6410,20 @@ private:
         8000ms);
     Check(openedWindow, L"ViewerImgRaw window becomes visible for PNG", success);
 
-    // Wait for the async decode to finish. Each alert site fires only at decode completion
-    // (success -> ClearAlert; failure -> ShowAlert(HOST_ALERT_WARNING)), never at open-start, so
-    // the first alert activity is the terminal decode signal.
-    const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
-    Check(decodeCompleted, L"ViewerImgRaw PNG decode completes (host alert observed)", success);
+    // The UI clears alerts when loading starts and may clear them for a progressive preview.
+    // Only an applied final result establishes completion; warning checks remain independent.
+    const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
+    Check(decodeCompleted, L"ViewerImgRaw PNG decode completes (final result applied)", success);
 
     // Regression assertion: a successful WIC decode raises no warning alert. On the pre-fix code
     // DecodeImageToBgraWic returns CO_E_NOTINITIALIZED and the async-failure path raises
     // ShowAlert(HOST_ALERT_WARNING), so WarningAlertCount() would be non-zero.
     Check(hostStub.WarningAlertCount() == 0u, L"ViewerImgRaw decodes PNG via WIC without a decode-failure alert", success);
+    WndMsg::ViewerImgRawDecodeDebugSnapshot decode{};
+    Check(viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&decode)) != FALSE &&
+              decode.hasImage,
+          L"ViewerImgRaw successful WIC PNG decode retains an image",
+          success);
 
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
     const HRESULT closeHr = viewer->Close();

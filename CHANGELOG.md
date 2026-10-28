@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Make ViewerImgRaw tests wait for the UI-applied final decode result rather than startup alert clearing. Prove the distinction with a gated TIFF provider read, retain all original decode, orientation, ownership, resource and warning checks and the eight-second deadline, and require a decoded PNG image. Record the successful corrected archive inventory; ARM64 hosted and final consumer qualification remain open.
 - Bind scoped PR coverage to the reviewed complete-history checkout and archive migration tests. The existing Suite PR profiles and local runtime obligations remain; pending hosted checks do not establish acceptance.
 - Preserve the original archive grandfathering boundary after the history-free import through a parentless baseline of unchanged, already-public pre-contract blobs. Keep size and identity gates for every later edit/addition, fail closed without baseline ancestry, check committed changes against origin/main, and execute the real inventory check in full-history hosted clones. Add committed, staged, worktree and unrelated-baseline rejection tests.
 - Avoid repeated normalization of canonical MTP paths during large enumeration and recovery, retaining exact identities and the existing 4,096-object/two-second guard. Expand path alias/content coverage and keep preview teardown separate from the foreground handoff's focus budget. Retain original failed ASan receipts alongside focused Commands, search and FTP qualification evidence.

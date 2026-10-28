@@ -384,3 +384,23 @@ in-product suites, interactive viewers and build-toolchain work remain local obl
 Bind reviewed coverage to digest `9a4fe488ec02ae7a41a0549823b119c22e0a569206ba02a1ab8ce552b1a2cae2`.
 The changed binding is not hosted acceptance. Rebuild the final candidate, verify its scoped
 coverage explanation, and retain CI_PENDING until the matching PR checks actually pass.
+
+Candidate `032547ca7` builds the complete x64 Debug solution in 5:46 without new warnings,
+receipt `b46267cb90ac7f5e70e00913b60e05b15cbcd27498cb2c22f74a19dda4b1eedc`.
+Governed run `20261028T202241Z-90024-cde963f1b9cc4f28a62ec40f168fe915` passes all eight
+scoped-testing contracts and the separate corrected archive Inventory entrypoint.
+The original failing inventory remains preserved.
+
+### ARM64 asynchronous image-test readiness
+
+PR run `40749715601` at source `58d1e03fd` passes x64 Debug but fails the ARM64 Debug
+ViewerImgRaw orientation case: TIFF and WIC-fallback snapshots are inspected with no image.
+The test's `DecodeCompleted` incorrectly treats any `ClearAlert` as terminal, although
+`BeginLoadingUi` clears alerts before the worker reads the file. Replace all three callers
+with the existing UI-applied final-result counters plus request identity and ended loading.
+Keep the eight-second completion deadline and all original warning, image, orientation,
+menu-ownership and resource checks. Gate the actual TIFF provider read using the existing
+blocking-reader fixture: startup must have cleared alerts while the request is still loading
+and has no final result; only explicit release may allow completion. Require no fixture timeout.
+The PNG probe additionally requires a retained decoded image. This correction is test-only;
+fresh native and ARM64 hosted validation remains required before claiming the failure fixed.
