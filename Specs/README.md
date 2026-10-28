@@ -96,7 +96,7 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 | Plugins | `Plugins/Plugins_PluginAPI.md`, `Plugins/Plugins_VirtualFileSystem.md`, `Plugins/Plugins_ViewerPlugins.md` |
 | Installer/release | `Installer/Installer_Msix.md`, `Installer/Installer_Msi.md`, `Installer/WingetIntegration.md` |
 | Terminal | `Terminal/Terminal_EmbeddedPlugin.md`, `Terminal/TerminalEngineDecision.md` |
-| Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
+| Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_AgentGuidance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
 
 ## Required validation
 
@@ -111,6 +111,16 @@ Invoke-Pester .\Tools\Tests\DocumentationDriftContracts.Tests.ps1 -PassThru
 ```
 
 `-FailOnFindings` requires every normative file to have a `VERIFIED_MATCH` consistency row, every direct WIP file to be indexed exactly once, WIP index ranks to be unique and not to reuse an ID claimed by an archived plan title, all current local links/anchors to resolve, normative plan markers to be explicitly reviewed, and the protected Done baseline to remain byte-identical.
+
+The canonical Markdown code mask in `Tools/Modules/Tooling/SpecInformationArchitecture.psm1`
+preserves text length and line endings for link and heading diagnostics. Its supported
+top-level fence opener/closer may have zero to three leading spaces; tabs or four spaces
+MUST NOT change fence state or hide following unindented prose. A backtick fence
+opening's info tail MUST contain no backticks; an invalid opener continues through inline-code
+masking and MUST NOT hide following prose. Tilde fence info may contain backticks. A closing
+fence MUST use the opening character with at least the opening run length and a whitespace-only
+tail. A fence-like line with trailing nonwhitespace stays inside its current fence.
+These checks do not expand the parser to general Markdown lists or indented code blocks.
 
 The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.
 

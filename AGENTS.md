@@ -33,6 +33,7 @@ at forbidden old drive-root paths.
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
 - Project skills live in `.github/skills/` (one directory per skill; table below).
 - Cross-tool meta-skills (`improve`, `red-salamander-crash-forensics`) live only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
+- Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
 ## Skills Reference
 
@@ -277,7 +278,7 @@ Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cp
 .\build.ps1 -ProjectName RedSalamander   # Build specific project
 ```
 
-To verify a change is green, use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` (builds + full suite) or `.\Tools\Run-AllTests.ps1 -SkipBuild` (receipt-verified existing build). Exact local continuation uses `-Suite Full -ValidationMode Resume -ResumeFrom <run-id>`; opt-in affected iteration uses `-Suite Full -ValidationMode Affected`. Affected and Commands-family runs report repository `NOT_EVALUATED` and never replace final Fresh Full. See README "Self-tests" for details.
+Use `Test-Changes.ps1 -Explain` and affected execution while editing, and `-Mode PrePush` to account for applicable local and exact matching PR obligations under the scoped testing contract below. Use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` when Full is explicitly requested or required for the changed behavior's qualification; `-SkipBuild` requires a byte-verified compatible receipt. Exact Full continuation uses `-ValidationMode Resume -ResumeFrom <run-id>`. An affected/family pass or pending CI never establishes complete repository qualification. See `Specs/Testing/Testing_ValidationEvidence.md` and `Tests/README.md` for the current acceptance and reuse boundaries.
 
 ## Dependencies
 

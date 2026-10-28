@@ -88,27 +88,33 @@ struct WorkCtx
     HWND hwnd = nullptr;
 };
 
-void StartWorkAsync(HWND hwnd)
+bool TryStartWorkAsync(HWND hwnd)
 {
     auto ctx = std::make_unique<WorkCtx>();
     ctx->hwnd = hwnd;
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kMyPluginModuleAnchor);
+    if (! ctx->moduleKeepAlive)
+    {
+        return false;
+    }
 
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
         {
             std::unique_ptr<WorkCtx> ctx(static_cast<WorkCtx*>(context));
-            static_cast<void>(ctx->moduleKeepAlive); // Keep DLL loaded for callback lifetime
+            TransferModulePinToCallbackReturn(instance, ctx->moduleKeepAlive);
 
             // Do background work, then post back to UI thread using PostMessagePayload(...)
         },
         ctx.get(),
         nullptr);
 
-    if (queued != 0)
+    if (queued == 0)
     {
-        ctx.release(); // Ownership transfers to the callback
+        return false; // Context and pin remain owned by the submitting thread.
     }
+    static_cast<void>(ctx.release()); // Ownership transfers to the callback.
+    return true;
 }
 ```
 
@@ -144,7 +150,7 @@ Define a **quiet point** as the moment after which:
   - signal cancellation (stop tokens/atomics),
   - ensure any threadpool callbacks cannot outlive the instance (wait/cancel in a non-UI context, or keep a strong self lifetime for the callback),
   - if scheduling threadpool callbacks that may outlive host references, **pin the module** with `AcquireModuleReferenceFromAddress(...)`.
-- **Posted payloads:** `PostMessagePayload(...)` only reclaims payloads when `PostMessageW` fails; it does not protect against an `HWND` being destroyed before the message is processed. Quiet-point shutdown must therefore stop producers and/or route payloads to a dispatcher that outlives view windows.
+- **Posted payloads:** initialize receiving windows with `InitPostedPayloadWindow`, receive opaque tokens with the current `TakeMessagePayload<T>` signature in `Common/Helpers.h`, and drain with `DrainPostedPayloadsForWindow` at `WM_NCDESTROY`. The registry reclaims failed posts and drained queued storage. Stop producers before teardown; draining does not keep a raw callback target alive.
 
 ## Interface Example
 

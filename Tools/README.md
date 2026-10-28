@@ -16,6 +16,10 @@ unreviewed companion; admission does not establish runtime qualification.
 The completed October 20 waiting-card record also has exact-file admission.
 Its focused guard rejects a date-shifted sibling and an unreviewed companion.
 
+The I49 agent/skill remediation record has exact-file admission under `Specs/Plans/Done/`.
+Its guard rejects a date-shifted sibling and an unreviewed companion. This records guidance and
+package-check closeout; native runtime qualification remains outside that review's scope.
+
 `Restore-DxUi.ps1 -Platform x64 -Configuration Debug -CheckUpdates` restores the exact
 `Dependencies/DxUi.lock.json` pin before an IDE build. Root `build.ps1` performs this automatically.
 The source and compiler/SDK/CRT-isolated outputs stay under `.build/dependencies/DxUi`; a dirty
@@ -44,6 +48,10 @@ PR delegation uses `Get-ScopedPrWorkflowDigest` over reusable workflows, local a
 contents, tooling, scripts and build/test policy inputs. Changing a delegated test runner
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
+
+The PR build-policy guard checks the formatter job's PowerShell installer wiring and rejects
+Python/pip bootstrap only within that job. Formatter acquisition integrity is covered separately
+by `Tests/ClangFormat.Tests.ps1`; other build dependencies retain their own prerequisites.
 
 The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.json).
 Ghostty lock rejection retains field-specific schema diagnostics when PowerShell's `Test-Json`
@@ -229,6 +237,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Get-TestInventory.ps1` | Public discovery command | Derives test registrations, projects, Pester cases, and run-plan coverage. |
 | `Get-ToolInventory.ps1` | Public governance command | Validates and renders `tool-inventory.json`. |
 | `Get-VisibleTypographyAudit.ps1` | Public UI source audit | Finds visible typography paths outside the intended DirectWrite model. |
+| `Install-ClangFormat.ps1` | Public formatter acquisition | Checksum-pinned native formatter download/offline extraction, cache verification and failure-preserving publication. |
 | `Invoke-SanitizedMsbuild.ps1` | Public build diagnostic command | Runs contained MSBuild with normalized environment plus explicit profile/dependency coordination. |
 | `InvokeSolutionCloc.ps1` | Supported manual compatibility command | Preserves hand-run raw cloc arguments while forwarding solution discovery to `Measure-SourceLines.ps1 -Scope Solution`. |
 | `Manage-WindowsCredentials.ps1` | Public support command | Lists or, with confirmation, removes selected Windows credentials. |
@@ -275,6 +284,7 @@ and focused tests.
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
+| `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation, exclusive cache lease and guarded atomic executable publication without Python. |
 | `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
@@ -304,7 +314,7 @@ and focused tests.
 | `Modules/Testing/ValidationFingerprint.psm1` | Exact canonical JSON/digests, streaming read bounds, atomic replace or create-only record I/O, timed base/index/worktree snapshots, one-time receipt-closure binding, and versioned component-aware entry fingerprints. |
 | `Modules/Testing/ValidationEvidence.psm1` | Schema-validated normalized terminal results, atomic hashed/quota-bound result artifacts, immutable content-addressed decisions/evidence/promotions, one exact direct-child run resolver and semantic promotion loader shared by Resume/summary/history/prune provenance, crash-safe artifact epochs/read barriers, interruption repair, and identity-bound pruning. |
 | `Modules/Testing/ValidationImpact.psm1` | Governed impact-manifest/build-graph validation and deterministic shadow or enforced Affected decisions. |
-| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, link validation, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
+| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, canonical inline/fenced Markdown masking for links/headings, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
 | `Modules/Tooling/ToolInventory.psm1` | Tools manifest reconciliation, validation, and rendering. |
 
 ## Adding or changing a tool
@@ -397,3 +407,14 @@ A real GUI fixture exercises delayed completion, Unicode/spaced arguments and
 Workflow-selected VS18 MSBuild may live in a custom/temporary installation root;
 build discovery checks its real binary version/identity and standard host layout,
 then applies the required compiler/SDK policy independently of the parent name.
+
+
+Tools/Install-ClangFormat.ps1 installs the Build/clang-format.json-pinned native formatter using PowerShell 7, without Python. It validates package and executable bytes, supports an offline -WheelPath and nonmutating -WhatIf, and preserves the existing executable on failure. The cache stays beneath .build/format.
+
+Formatter output paths reuse the guarded path and atomic publication helpers in
+`Modules/Build/ArtifactOperationLock.psm1`. Existing reparse components are rejected through
+the full output chain, including `.build`, cache files and executable parents. Relative
+`-WheelPath` inputs resolve once against the PowerShell location; hashing and extraction use
+the same open stream. An exclusive `.build/format/.install.lock` lease covers cache mutation
+and publication, fails immediately on contention and leaves an empty lock file after closing.
+`-WhatIf` creates neither the cache nor its lease file.

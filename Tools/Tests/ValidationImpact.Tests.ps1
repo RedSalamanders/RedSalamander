@@ -26,6 +26,16 @@ Describe 'Operation Startrail governed impact graph' {
         $script:plan = New-RSImpactPlan
     }
 
+    It 'maps native formatter acquisition inputs to tooling coverage' {
+        foreach ($path in @('Build/clang-format.json', 'Tools/Install-ClangFormat.ps1')) {
+            $decision = Get-RSValidationImpactDecision -Manifest $manifest `
+                -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$path; old_path=$null})) `
+                -ValidationPlan $plan
+            ($decision.entries | Where-Object id -eq 'tooling.pester').affected | Should Be $true
+            ($decision.entries | Where-Object id -eq 'selftest.commands').affected | Should Be $false
+        }
+    }
+
     It 'accumulates production/shared mappings and keeps File Operations test-only changes narrow' {
         $testOnly = Get-RSValidationImpactDecision -Manifest $manifest `
             -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{ path = 'RedSalamander/SelfTest/FileOperations/case.cpp'; old_path = $null })) `

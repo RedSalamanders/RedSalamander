@@ -407,11 +407,14 @@ Invoke-Pester .\Tools\Tests\ToolingGovernance.Tests.ps1 -PassThru
 .\Tools\Get-SpecInventory.ps1 -FailOnFindings
 ```
 
-Run focused tests for each touched module or entrypoint. Tooling closeout also
-runs `.\Tools\Run-AllTests.ps1 -Suite Full`; historical Terminal behavioral
-reproduction uses its explicit archival profile rather than extending every
-default run.
+Run focused tests for each touched module or entrypoint. Use the owning scoped
+testing contract to select affected iteration and PrePush/local-versus-PR obligations.
+Full remains explicit and is required where the affected behavior's acceptance contract
+requires it; a scoped pass or pending CI is not a Full repository pass. Historical
+Terminal reproduction uses its archival profile rather than extending every default run.
 
 ## Changes workflow
 
 The [shared Changes contract](../Core/Core_Changes.md) owns fragment validation and immediate folding. The current tooling profile discovers Changelog.Tests.ps1; its adapter runs the identical shared behavior fixtures in the existing marked sandbox. PrePush rejects pending fragments. Folding is an explicit source-documentation mutation and never a side effect of validation or planning.
+
+The completed PowerShell tooling migration has exact-file admission at Specs/Plans/Done/PowerShellTooling_2026-10-28.md. Focused tests reject a date-shifted sibling and an unreviewed companion. This admission records tooling implementation and validation only; native product/platform qualification is separate.
