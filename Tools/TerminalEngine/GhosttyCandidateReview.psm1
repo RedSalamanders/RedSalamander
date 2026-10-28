@@ -28,7 +28,9 @@ function Invoke-RSGhosttyCandidateGit {
         [switch]$AllowFailure
     )
 
-    $output = @(& git.exe -C $RepositoryPath @Arguments 2>&1)
+    # Candidate file/metadata paths can exceed MAX_PATH; keep this override local
+    # to the metadata query rather than changing repository or machine settings.
+    $output = @(& git.exe -c core.longpaths=true -C $RepositoryPath @Arguments 2>&1)
     $exitCode = $LASTEXITCODE
     if (-not $AllowFailure -and $exitCode -ne 0) {
         throw "${Context} failed with git exit ${exitCode}: $($output -join "`n")"

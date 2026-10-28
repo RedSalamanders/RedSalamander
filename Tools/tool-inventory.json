@@ -3031,7 +3031,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Authenticate and classify one explicit Ghostty runtime candidate into range-bound review and schema-2 descriptor evidence with the complete canonical dependency closure.",
+      "purpose": "Authenticate and classify one explicit Ghostty runtime candidate into range-bound review and schema-2 descriptor evidence with the complete canonical dependency closure and invocation-local Windows long-path Git support.",
       "usage": "Import through New-GhosttyTerminalRuntimeCandidateReview.ps1; focused tests may invoke deterministic path, inventory, ABI, and security-review functions.",
       "usedBy": [
         "Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1",

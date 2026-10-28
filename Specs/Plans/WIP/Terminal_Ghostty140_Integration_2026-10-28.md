@@ -33,7 +33,7 @@ reinterpret its historical runs as current evidence or close that plan.
       closure; build and inspect isolated x64 and ARM64 candidate outputs.
 - [x] Adapt host integration and meaningful regression coverage to public API
       changes while preserving clipboard, placement, teardown, and pairing rules.
-- [ ] Execute deterministic upstream/runtime/plugin coverage and collect a
+- [x] Execute deterministic x64 upstream/runtime/plugin coverage and collect a
       same-machine paired 200-sample Release VT corpus before admission.
 - [ ] Complete required native ARM64 candidate and admitted-product gates;
       cross-compilation alone does not satisfy native runtime qualification.
@@ -55,8 +55,10 @@ plugin execution and portable packaging.
 Use the existing marked `E:\RedSalamander.Perf` for test scratch and evidence;
 its ownership marker was verified before use. Build inputs and candidate sources
 remain under this worktree's `.build/TerminalEngineUpgrade/<commit>`.
-No focus-taking run is authorized by this plan; such gates remain pending until
-the user agrees to the execution time.
+The user authorized the four pending interactive qualification suites on
+2026-10-28: Commands, FileOperations, ViewerPETests.Interactive and
+ViewerSqliteTests.Interactive. Execute them through the canonical desktop lease
+and warning; acceptance remains pending their actual results.
 
 ## Evidence and decisions
 
@@ -154,6 +156,50 @@ the user agrees to the execution time.
   final immutable-commit Full acceptance.
 
 ## Source review dispositions
+
+- The standalone x64 Zig repeat `ghostty140-zig-x64-clean-exit-20261028a`
+  passed 3,233 tests, skipped 36 and returned exit 0. Its record retains the
+  executable and log hashes and verifies unchanged executable bytes. It closes
+  the earlier missing-exit-code evidence gap for that standalone suite; it does
+  not replace native ARM64 or complete workflow qualification.
+- The final local non-interactive PrePush attempt at `62d181cf4`, run
+  `20261028T205029Z-58832-bcd0d2c07e1844db8a929d83588bed49`, passed all 29
+  build/toolchain tests and 260 Compare Directories cases, with 21 environment
+  skips. Its profile refresh passed with receipt
+  `bf0077b96f5178761fccbb0c8a8f2c465397a9ef438c5dcfc69e4be1db5f4980`.
+  The repository verdict remains NOT_EVALUATED: CI/interactive obligations were
+  deferred and the shared sandbox audit reported 74 unexpected top-level/run
+  entries. The preserved run is not a complete PrePush or Full pass.
+- PR CI run `40761500830` passed its x64 build and all eleven native runtime
+  entries, but its tooling profile had two failures (1,050 passed, two skipped):
+  the staged Terminal output expectation omitted Aro/Pixels, and a nested Git
+  metadata path exceeded the Windows short-path limit. Its complete job log and
+  validation artifact are preserved in `ghostty140-prci-x64-40761500830`.
+  Staging expectations now include both notices. Candidate metadata queries use
+  invocation-local long-path support, with independent fixture repositories and
+  a real clone/inventory/ABI regression beyond MAX_PATH. The seven candidate
+  review cases passed with system/global Git configuration isolated in
+  `ghostty140-long-git-path-20261028e`; the deeper-TEMP repeat also passed all
+  seven in `ghostty140-long-git-path-20261028f`. Fixture owners use short,
+  canonical sandbox scratch paths so Git's separate working-directory bound
+  does not obscure file/metadata long-path coverage. The complete CI tooling
+  profile then passed 1,053 tests, zero failed, with two historical-evidence
+  skips in `20261028T220741Z-6780-0c0a868b09834aa1adfa3c7e42563316`.
+  Its execution digest remained
+  `efb23e1071f0ca6bf2773b078950c9b9655cf822772c4b4bb944f2ab771e7073`
+  before/after execution. This is tooling-profile evidence, not repository Full.
+- All 35 completed `ghostty140-*` runs were preserved through
+  `Save-RSTestSandboxRunEvidence` after checking live command references. The
+  helper verified complete inventories before and after each same-volume rename;
+  raw passing and failed results now live under `evidence/completed-runs/`.
+  Transaction receipts are retained in
+  `20261028T221107Z-93048-dbbd98b0ba314902b85285c4c0a11558`. The shared
+  sandbox's other layout issues still require reconciliation before Full
+  acceptance.
+- Review thread `4405126908` originated at `77ba80042` and is resolved after
+  verifying the `62d181cf4` executable/schema/event-filter corrections and the
+  diagnostic-only retry rule. No runtime acceptance is inferred from resolving
+  a review thread.
 
 - Native run `40753290262` on `fbcece451` failed during dependency-fetch cache
   cleanup: Windows denied removal of the Zig 0.17 `maker.exe` in the Pixels

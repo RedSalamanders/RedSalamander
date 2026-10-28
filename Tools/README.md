@@ -259,7 +259,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Measure-SourceLines.ps1` | Public metrics command | Produces the categorized repository source-line report. |
 | `New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` | Public candidate-overlay command | Proves clean apply, exact diff reproduction, review bounds, complete concern disposition, every newly added private ABI value's separation/parity, and candidate-descriptor binding below `.build`. |
 | `New-TerminalEngineNotices.ps1` | Public packaging command | Generates deterministic terminal third-party notices. |
-| `New-GhosttyTerminalRuntimeCandidateReview.ps1` | Public candidate-review command | Authenticates and freezes one explicit Ghostty commit into canonical provenance, inventory, ABI, security-review, and input-bound descriptor evidence below `.build`. |
+| `New-GhosttyTerminalRuntimeCandidateReview.ps1` | Public candidate-review command | Authenticates and freezes one explicit Ghostty commit into canonical provenance, inventory, ABI, security-review, and input-bound descriptor evidence below `.build`; Git queries permit long Windows paths within checkouts per invocation. |
 | `Prepare-TerminalEngineUpgrade.ps1` | Dormant generic lifecycle command | Collects/finalizes explicit-lock future-upgrade evidence on a disposable runner. |
 | `README.md` | Human inventory | This navigation and safety guide. |
 | `remove-ads.ps1` | Public filesystem command | Canonical explicit NTFS alternate-stream removal. |

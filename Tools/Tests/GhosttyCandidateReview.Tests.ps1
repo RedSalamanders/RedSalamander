@@ -8,6 +8,7 @@ $reviewSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeCandidateR
 $descriptorSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeCandidateDescriptor.schema.json'
 
 Import-Module $modulePath -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -ErrorAction Stop
 
 function Invoke-RSGhosttyCandidateTestGit {
     param(
@@ -15,13 +16,13 @@ function Invoke-RSGhosttyCandidateTestGit {
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
 
-    $output = @(& git.exe -C $Root @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "git failed: $($output -join "`n")" }
+    $output = @(& git.exe -c core.longpaths=true -C $Root @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') in '$Root' failed: $($output -join "`n")" }
     return [string[]]$output
 }
 
 function New-RSGhosttyCandidateReviewRepository {
-    $root = Join-Path $TestDrive 'candidate-review-repository'
+    $root = Join-Path $TestDrive ('candidate-' + [Guid]::NewGuid().ToString('N'))
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'include\ghostty\vt') -Force)
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'src\build') -Force)
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'src\terminal') -Force)
@@ -93,6 +94,50 @@ Describe 'Ghostty exact candidate review' {
         $removedLoader[0].replacement | Should Be 'ghostty_terminal_get'
     }
 
+    It 'reads long metadata paths without changing global Git long-path settings' {
+        $fixture = New-RSGhosttyCandidateReviewRepository
+        # Git's working directory stays below MAX_PATH; its object, index and
+        # source-file paths exceed that boundary and require long-path reads.
+        $paddingLength = 240 - ([string]$TestDrive).Length - '\source-'.Length
+        $paddingLength | Should BeGreaterThan 0
+        $longSource = Join-Path $TestDrive ('source-' + ('s' * $paddingLength))
+        $longSource.Length | Should Be 240
+        (Join-Path $longSource '.git\objects\info\alternates').Length | Should BeGreaterThan 260
+        $globalConfig = Join-Path $TestDrive 'isolated-git-global.config'
+        [IO.File]::WriteAllText($globalConfig, '')
+        $isolatedEnvironment = @{
+            GIT_CONFIG_COUNT = '1'
+            GIT_CONFIG_KEY_0 = 'core.longpaths'
+            GIT_CONFIG_VALUE_0 = 'false'
+            GIT_CONFIG_GLOBAL = $globalConfig
+            GIT_CONFIG_NOSYSTEM = '1'
+            GIT_CONFIG_PARAMETERS = $null
+        }
+        $savedEnvironment = @{}
+        foreach ($name in $isolatedEnvironment.Keys) {
+            $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+            [Environment]::SetEnvironmentVariable($name, $isolatedEnvironment[$name], 'Process')
+        }
+        try {
+            Invoke-RSGhosttyCandidateTestGit -Root $TestDrive -Arguments @(
+                'clone', '--quiet', '--no-hardlinks', $fixture.Root, $longSource) | Out-Null
+            $inventory = Get-RSGhosttyCandidateChangeInventory -SourcePath $longSource `
+                -BaseCommit $fixture.Base -CandidateCommit $fixture.Candidate
+            $inventory.fileCount | Should Be 3
+            $abi = Get-RSGhosttyCandidateAbiReview -SourcePath $longSource `
+                -BaseCommit $fixture.Base -CandidateCommit $fixture.Candidate `
+                -LoaderRequiredExports @('ghostty_terminal_keep')
+            $abi.declarations.candidateCount | Should Be 2
+            [IO.File]::ReadAllText($globalConfig) | Should Be ''
+            $env:GIT_CONFIG_VALUE_0 | Should Be 'false'
+        }
+        finally {
+            foreach ($name in $savedEnvironment.Keys) {
+                [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process')
+            }
+        }
+    }
+
     It 'keeps the review and descriptor schemas closed' {
         foreach ($path in @($reviewSchemaPath, $descriptorSchemaPath)) {
             $schema = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -Depth 100
@@ -112,13 +157,20 @@ Describe 'Ghostty exact candidate review' {
 
     It 'freezes all dependency hashes separately and binds a changed dependency into the descriptor digest' {
         $fixture = New-RSGhosttyCandidateReviewRepository
-        $owner = Join-Path $TestDrive 'review-owner'
-        & git.exe clone --quiet --no-hardlinks $fixture.Root $owner
-        if ($LASTEXITCODE -ne 0) { throw 'Fixture owner clone failed.' }
+        # The product's nested candidate layout must fit Git's working-directory
+        # boundary even when Pester's own TestDrive is already deeply nested.
+        $fixtureScope = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot `
+            -Harness pester -Case ('gcr-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+        $owner = Join-Path $fixtureScope 'owner'
+        Invoke-RSGhosttyCandidateTestGit -Root $TestDrive -Arguments @(
+            'clone', '--quiet', '--no-hardlinks', $fixture.Root, $owner) | Out-Null
         $candidateRoot = Join-Path $owner ".build/TerminalEngineUpgrade/$($fixture.Candidate)"
         [void](New-Item -ItemType Directory -Path $candidateRoot -Force)
         $source = Join-Path $candidateRoot 'source-review'
-        Move-Item -LiteralPath $fixture.Root -Destination $source
+        $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+        $fixtureSource = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path $fixture.Root -RequireDescendant
+        $source = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path $source -RequireDescendant
+        Move-Item -LiteralPath $fixtureSource -Destination $source
         Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('remote', 'add', 'origin', 'https://github.com/ghostty-org/ghostty.git') | Out-Null
         Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('checkout', '--detach', $fixture.Candidate) | Out-Null
         $tree = Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('rev-parse', 'HEAD^{tree}') | Select-Object -First 1

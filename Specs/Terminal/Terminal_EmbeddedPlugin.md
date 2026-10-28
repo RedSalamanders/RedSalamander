@@ -959,6 +959,11 @@ and proves the commit descends from the current product pin. Failure in any
 identity, provenance, ancestry, archive, observation, or verification check
 stops the review.
 
+Candidate Git metadata queries enable long paths within the checkout with an
+invocation-local `-c core.longpaths=true`. They do not change repository or
+machine Git configuration, and deep source paths retain the same provenance
+and ancestry requirements.
+
 The complete review scope is `build.zig`, `build.zig.zon`,
 `include/ghostty/vt/**`, `src/build/GhosttyLibVt.zig`, `src/lib_vt.zig`, and
 `src/terminal/**`. Every changed path and line count is classified into exactly
