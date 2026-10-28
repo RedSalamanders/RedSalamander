@@ -3066,7 +3066,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup tolerates transient compiler image locks and preserves primary fetch failures.",
+      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
         ".github/workflows/ghostty-runtime-native-qualification.yml",

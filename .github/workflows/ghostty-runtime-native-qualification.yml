@@ -1,4 +1,5 @@
 name: Ghostty Runtime Native Qualification
+run-name: Ghostty ARM64 - ${{ inputs.diagnostics_only && 'build diagnostics only' || 'native qualification' }}
 
 "on":
   workflow_dispatch:
@@ -25,6 +26,11 @@ name: Ghostty Runtime Native Qualification
         required: true
         default: false
         type: boolean
+      diagnostics_only:
+        description: Collect a time-bounded runtime build log without running or publishing qualification
+        required: true
+        default: false
+        type: boolean
       build_number:
         description: Positive build number used when qualify_product is enabled
         required: true
@@ -39,7 +45,7 @@ concurrency:
 
 jobs:
   qualify-arm64:
-    name: Native ARM64 lib-vt qualification
+    name: ${{ inputs.diagnostics_only && 'ARM64 build diagnostics (not qualification)' || 'Native ARM64 lib-vt qualification' }}
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 120
     env:
@@ -137,7 +143,23 @@ jobs:
             throw 'Candidate lock identity does not bind the requested commit and overlay.'
           }
 
+      - name: Select owned native test-data root
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestRunPlan.psm1') -Force
+          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          $root = Initialize-RSTestSandboxRoot -TestRoot $candidate -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization
+          $env:REDSALAMANDER_TEST_ROOT = $root
+          $env:REDSALAMANDER_TEST_RUN_ID = "ghostty-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+          $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $env:GITHUB_WORKSPACE -Harness upstream-ghostty -Case lib-vt
+          "REDSALAMANDER_TEST_ROOT=$root" >> $env:GITHUB_ENV
+          "REDSALAMANDER_TEST_RUN_ID=$env:REDSALAMANDER_TEST_RUN_ID" >> $env:GITHUB_ENV
+          "RS_NATIVE_TEST_SCRATCH=$scratch" >> $env:GITHUB_ENV
+
       - name: Build exact candidate natively
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -154,22 +176,76 @@ jobs:
             throw 'The native candidate build returned an invalid identity.'
           }
 
-      - name: Select owned native test-data root
+      - name: Collect bounded native build diagnostics only
+        if: ${{ inputs.diagnostics_only }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestRunPlan.psm1') -Force
-          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
-          $root = Initialize-RSTestSandboxRoot -TestRoot $candidate -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization
-          $env:REDSALAMANDER_TEST_ROOT = $root
-          $env:REDSALAMANDER_TEST_RUN_ID = "ghostty-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestSandbox.psm1') -Force
-          $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $env:GITHUB_WORKSPACE -Harness upstream-ghostty -Case lib-vt
-          "REDSALAMANDER_TEST_ROOT=$root" >> $env:GITHUB_ENV
-          "REDSALAMANDER_TEST_RUN_ID=$env:REDSALAMANDER_TEST_RUN_ID" >> $env:GITHUB_ENV
-          "RS_NATIVE_TEST_SCRATCH=$scratch" >> $env:GITHUB_ENV
+          $scratch = $env:RS_NATIVE_TEST_SCRATCH
+          $env:TEMP = $scratch
+          $env:TMP = $scratch
+          Import-Module .\Tools\Modules\Build\ProcessStreaming.psm1 -Force
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $outputRoot = Join-Path $candidateRoot 'candidate-native-arm64'
+          $worker = Join-Path $scratch 'build-candidate.ps1'
+          @'
+          param([string]$RepoRoot, [string]$LockPath, [string]$OutputRoot)
+          $ErrorActionPreference = 'Stop'
+          Set-Location -LiteralPath $RepoRoot
+          $identity = & .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform ARM64 -CandidateLockPath $LockPath -CandidateOutputRoot $OutputRoot -Force -PassThru
+          if ($identity.machine -cne 'ARM64') { throw 'Diagnostic build produced the wrong architecture.' }
+          Write-Host "Diagnostic build produced ARM64 DLL $($identity.dllSha256). No native tests were run."
+          '@ | Set-Content -LiteralPath $worker -Encoding utf8NoBOM
+          $diagnosticExitCode = $null
+          $diagnosticFailure = $null
+          $clock = [Diagnostics.Stopwatch]::StartNew()
+          try {
+            $diagnosticExitCode = Invoke-RSStreamingProcess -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @(
+                '-NoLogo', '-NoProfile', '-NonInteractive', '-File', $worker,
+                '-RepoRoot', $env:GITHUB_WORKSPACE, '-LockPath', $lockPath, '-OutputRoot', $outputRoot
+              ) -WorkingDirectory $env:GITHUB_WORKSPACE -LogPath (Join-Path $scratch 'native-build.log') -TimeoutMilliseconds 1200000 -OutputLineCallback { param($line) Write-Host $line }
+            if ($diagnosticExitCode -isnot [int] -or $diagnosticExitCode -ne 0) {
+              throw "Diagnostic build failed with exit $diagnosticExitCode."
+            }
+          }
+          catch {
+            $diagnosticFailure = $_.Exception.ToString()
+            throw
+          }
+          finally {
+            $record = [ordered]@{
+              formatId = 'red-salamander-ghostty-native-build-diagnostics'
+              schemaVersion = 1
+              qualification = $false
+              scope = 'build diagnostics only; upstream tests and product qualification were not run'
+              sourceCommit = $env:GITHUB_SHA
+              candidateCommit = $env:RS_CANDIDATE_COMMIT
+              candidateLockSha256 = $env:RS_CANDIDATE_LOCK_SHA256
+              candidateOverlaySha256 = $env:RS_CANDIDATE_PATCH_SHA256
+              exitCode = $diagnosticExitCode
+              failure = $diagnosticFailure
+              elapsedMilliseconds = $clock.ElapsedMilliseconds
+            }
+            [IO.File]::WriteAllText((Join-Path $scratch 'build-diagnostics.json'), ($record | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+            $identityPath = Join-Path $outputRoot 'terminal-runtime-identity.json'
+            if ([IO.File]::Exists($identityPath)) {
+              Copy-Item -LiteralPath $identityPath -Destination (Join-Path $scratch 'diagnostic-runtime-identity.json')
+            }
+          }
+
+      - name: Upload build-only diagnostic evidence
+        if: ${{ always() && inputs.diagnostics_only && env.RS_NATIVE_TEST_SCRATCH != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghostty-native-build-diagnostics-${{ github.run_id }}
+          path: ${{ env.RS_NATIVE_TEST_SCRATCH }}/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Run upstream native ARM64 lib-vt targets
+        id: native_tests
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -535,7 +611,7 @@ jobs:
           }
 
       - name: Upload native crash evidence
-        if: ${{ failure() && env.RS_NATIVE_TEST_SCRATCH != '' }}
+        if: ${{ failure() && !inputs.diagnostics_only && steps.native_tests.outcome == 'failure' && env.RS_NATIVE_TEST_SCRATCH != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-crash-${{ github.run_id }}
@@ -544,6 +620,7 @@ jobs:
           retention-days: 30
 
       - name: Publish canonical native qualification evidence
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         env:
           RS_HOST_OS_ARCHITECTURE: ${{ steps.host.outputs.os_architecture }}
@@ -630,6 +707,7 @@ jobs:
           Get-Content -LiteralPath $reportPath -Raw
 
       - name: Upload native qualification evidence
+        if: ${{ !inputs.diagnostics_only }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-${{ env.RS_CANDIDATE_COMMIT }}
@@ -642,7 +720,7 @@ jobs:
 
   qualify-product:
     name: Continue with admitted-product qualification
-    if: ${{ inputs.qualify_product }}
+    if: ${{ inputs.qualify_product && !inputs.diagnostics_only }}
     needs: qualify-arm64
     permissions:
       contents: read

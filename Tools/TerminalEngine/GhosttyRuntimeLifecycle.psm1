@@ -706,15 +706,29 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
 
         $process = $null
         try {
+            # Report the tool and working directory, never arbitrary URI
+            # arguments that a reviewed private lock might authenticate with.
+            $commandLabel = "{0} cwd={1}" -f $FilePath, $WorkingDirectory
+            $commandClock = [Diagnostics.Stopwatch]::StartNew()
+            Write-Host "[GhosttyRuntime] starting: $commandLabel"
             $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
+            Write-Host "[GhosttyRuntime] started pid=$($process.Id): $commandLabel"
             $stdoutTask = $process.StandardOutput.ReadToEndAsync()
             $stderrTask = $process.StandardError.ReadToEndAsync()
-            $process.WaitForExit()
+            while (-not $process.WaitForExit(30000)) {
+                Write-Host "[GhosttyRuntime] running pid=$($process.Id) elapsedSeconds=$([int]$commandClock.Elapsed.TotalSeconds): $commandLabel"
+            }
+            Write-Host "[GhosttyRuntime] exited pid=$($process.Id) code=$($process.ExitCode); draining output: $commandLabel"
+            $outputReady = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutTask, $stderrTask))
+            while ([Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($outputReady), 30000) -lt 0) {
+                Write-Host "[GhosttyRuntime] output still open after process exit elapsedSeconds=$([int]$commandClock.Elapsed.TotalSeconds): $commandLabel"
+            }
             $stdout = $stdoutTask.GetAwaiter().GetResult()
             $stderr = $stderrTask.GetAwaiter().GetResult()
             if ($process.ExitCode -ne 0) {
                 throw "'$FilePath' failed with exit code $($process.ExitCode).`n$stderr"
             }
+            Write-Host "[GhosttyRuntime] completed elapsedSeconds=$([int]$commandClock.Elapsed.TotalSeconds): $commandLabel"
             return [pscustomobject]@{ Stdout = $stdout; Stderr = $stderr }
         }
         finally {
@@ -740,6 +754,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
     $repositoryMutex = [Threading.Mutex]::new($false, $repositoryMutexName)
     $repositoryMutexAcquired = $false
     try {
+        Write-Host "[GhosttyRuntime] waiting for repository lease: $repoRoot"
         try {
             $repositoryMutexAcquired = $repositoryMutex.WaitOne([TimeSpan]::FromMinutes(10))
         } catch [Threading.AbandonedMutexException] {
@@ -749,6 +764,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
         if (-not $repositoryMutexAcquired) {
             throw "Timed out waiting for this repository's shared Ghostty runtime source, cache, and products: $repoRoot"
         }
+        Write-Host "[GhosttyRuntime] acquired repository lease: $repoRoot"
 
     foreach ($directory in @($terminalBuildRoot, $sourcesRoot, $downloadsRoot, $toolchainsRoot, $cacheRoot)) {
         [void](New-Item -ItemType Directory -Path $directory -Force)
@@ -782,6 +798,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
     }
 
     if (-not (Test-Path -LiteralPath $zigExecutable -PathType Leaf)) {
+        Write-Host "[GhosttyRuntime] expanding pinned Zig archive: $zigArchive"
         Expand-Archive -LiteralPath $zigArchive -DestinationPath $toolchainsRoot -Force
     }
     $actualZigExecutableSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $zigExecutable).Hash.ToLowerInvariant()
@@ -843,6 +860,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
     foreach ($dependencyState in $dependencyStates) {
         $dependency = $dependencyState.Lock
         $dependencyId = [string]$dependency.id
+        Write-Host "[GhosttyRuntime] restoring locked dependency: $dependencyId"
         $sourceArchive = [string]$dependencyState.SourceArchive
         $contentArchive = [string]$dependencyState.ContentArchive
         $sourceSha256 = [string]$dependency.sourceArchive.sha256
@@ -1215,6 +1233,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
         $canonicalDriveMutexAcquired = $false
         $canonicalDriveMutexWasAbandoned = $false
         try {
+            Write-Host '[GhosttyRuntime] waiting for canonical build-drive lease'
             try {
                 $canonicalDriveMutexAcquired = $canonicalDriveMutex.WaitOne([TimeSpan]::FromMinutes(10))
             }
@@ -1225,6 +1244,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             if (-not $canonicalDriveMutexAcquired) {
                 throw "Timed out waiting for the session-wide Ghostty canonical build-drive lease '$canonicalDriveMutexName'. Cache-hit validation and other worktrees that do not rebuild remain independent."
             }
+            Write-Host '[GhosttyRuntime] acquired canonical build-drive lease'
 
             $mappingCreated = $false
             $privateRuntimeOverlayApplied = $false

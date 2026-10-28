@@ -872,21 +872,35 @@ Each simple-runner process receives the fixed seed explicitly; the build graph
 seed alone is not a test-runner argument. Failure uploads require an acquired
 scratch root so an early compiler failure cannot select an unowned fallback path.
 
+The builder reports native command, repository/drive-lease and dependency phases
+on PowerShell's information stream. A long command reports its owned PID and
+elapsed wait periodically; an exited process whose redirected streams remain
+open reports that distinct drain phase. Native stdout/stderr remain separate
+for package-hash and Git parsing, and progress omits arbitrary URI arguments.
+The native workflow acquires owned scratch before starting the candidate build.
+Its optional `diagnostics_only` dispatch has a separate job/check name and a
+20-minute contained build watchdog. It uploads only build diagnostics, skips
+upstream execution and canonical qualification publication, and cannot continue
+into admitted-product qualification. A successful diagnostic build never
+establishes native runtime or product acceptance.
+
 Native Windows ARM64 has reproducibly returned process code 5 on the first
 launch of the newly linked, larger Debug C-ABI test executable while the
 sibling suite and ABI schema target pass. No test failure or matching Windows
 Application Error was reported; the underlying platform cause remains
-unconfirmed. Qualification may retry once only
-when the unchanged upstream graph exits 1 with exactly one code-5 `test.exe`
-command, exactly one zero-failure companion summary, exactly one successful
+unconfirmed. The workflow may retry once only as diagnostic evidence
+when the unchanged upstream graph exits 1 with exactly one code-5 `test.exe`,
+`ghostty-vt-test.exe` or `ghostty-vt-c-test.exe` command, exactly one
+zero-failure companion summary, exactly one successful
 positive-type-count ARM64 schema summary, exactly one single-failure build summary, and no
 reported `FAIL` test. The reported executable must resolve beneath the exact
 candidate `.zig-cache`; the workflow waits two seconds, hashes that settled
 file, runs that exact file once with the same fixed seed, and requires exit 0
-plus exactly one zero-failure summary. The canonical report records whether the
-retry was used, the executable SHA-256 when used, and `not-needed` or `passed`.
-Any different output shape, path, second failure, or reported test failure
-fails closed.
+plus exactly one zero-failure summary. The initial code-5 result always fails
+qualification, including when the diagnostic retry succeeds. Acceptance requires
+a clean first execution. Historical retry fields remain schema-compatible;
+current passing reports record that no retry was needed. Any different output
+shape, path, second failure, or reported test failure also fails closed.
 
 Before testing and after cleanup,
 the candidate-source status must equal the builder's exact two-path allowlist
