@@ -541,6 +541,29 @@ Environment variables may select alternate test inputs such as profile names, bu
   `vcpkg-tool.json`; cache hits or ambient tools cannot bypass it.
 - `.github/workflows/asan.yml` owns the weekly and on-dispatch x64 and ARM64 `ASan Debug` plugin-contract lane. Before accepting a green harness run, it must invoke the opt-in `--asan-seed-heap-overflow` probe, require a nonzero result with an AddressSanitizer diagnostic, and then run the ordinary contracts successfully. `_DISABLE_STL_ANNOTATION` remains documented technical debt for non-ASan vcpkg dependencies; the seeded proof covers ordinary heap detection, not STL container annotations.
 - `.github/workflows/nightly-flake.yml` owns the expensive scheduled/manual shuffle-repeat lane. It must stay separate from PR CI, build the Debug self-test artifact, run `Tools/Run-AllTests.ps1 -Suite All -SkipBuild -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures`, and upload the runner-owned `REDSALAMANDER_TEST_ROOT` tree as `selftest-artifacts-nightly-shuffle`.
+- Scheduled Windows checkouts enable Git long paths before checkout. The shuffle-repeat producer
+  and consumer use the same VS 2026 runner family; the consumer initializes its governed sandbox
+  and verifies/rebinds the unchanged portable attestation before testing. Its evidence upload
+  requires a nonempty selected root and fails for missing files, never falling back to a drive root.
+- Hosted CI/Full and shuffle-repeat UI qualification use `Invoke-RSWithHostedTestDesktop` from
+  `Tools/Modules/Testing/HostedTestDesktop.psm1`. The ephemeral runner must offer a driver-enumerated
+  32-bit mode of at least 1920×1080 scaled for the display coordinates, and expose at least
+  1800×1000 of work area in those coordinates. The wrapper
+  records display, session and foreground ownership, preserves an already sufficient display,
+  and restores a changed mode on success or failure. Unsupported setup or failed restoration
+  fails qualification. Local invocation is refused; native assertions, warnings and desktop leases
+  remain authoritative. The PR suite keeps its noninteractive scope.
+- Theme-cycle animation fixtures explicitly select the supported reduced-motion Off setting and
+  restore the inherited UI settings; they must not depend on a hosted image's OS animation default.
+  The dedicated reduced-motion case still selects On and checks its complete atomic presentation.
+  The fixture-restoration case starts from On, exercises all original animation timing assertions,
+  and proves that On is restored. No timing, memory, handle or retention budget is relaxed.
+- The FileOps long-note overflow fixture has 520 diagnostic lines, retains the greater-than-4096-pixel
+  requirement at every tested width/DPI, and requires more than 520 laid-out lines. The independent
+  volume control may reuse the existing run-owned VHDX when no authorized alternate fixed volume
+  exists. It must validate that exact mount through `EvaluateOwnedVirtualDiskMount`, reject a
+  foreign or same-primary volume, and retain exact bytes, progress overlap, the 30-second ceiling
+  and the 1.35× isolated-time gate. No mounted volume is created or adopted by native test code.
 - Failure classification is blocking evidence, not a pass policy. `FLAKY` means an entry failed and passed on retry; for in-product suite failures it requires the failed cases to pass under `--selftest-case` and then pass shuffle triage. `REGRESSION` means retry evidence failed again, including any shuffle-triage seed that reproduces the failure. `ISOLATION_SUSPECT` means an in-product suite failed and failed cases passed under `--selftest-case`, but shuffle/order triage evidence is missing. Shuffle triage attempts must preserve their `shuffle_seed` in `retry_attempts`. Focused subset runs with `-CaseFilter` must still use failed-case retry plus shuffle triage, preserving the original subset filter for shuffle attempts instead of falling back to a whole-entry retry. When a native suite implements seeded/repeated order by dispatching one exact case at a time, that exact-case replay remains suite/shuffle context for classifier proof; only the runner's failed-case retry is isolated evidence. All non-`PASSED` classifications must keep the aggregate run exit code non-zero until the underlying test is fixed, replaced, or explicitly tracked through the reviewed quarantine process.
 - Before every Commands case dispatch, including the normal single-pass order and seeded/repeated exact-case order, the harness must close same-process non-main top-level windows, exit inherited native menu mode, clear test-owned menu-hover overrides and the visible theme-cycle overlay, verify the main window is enabled, reset shared pane/transient state, and reactivate it. It must then prove stable FolderView focus, pump a bounded directed-input/message quiet point, clear navigation and incremental-search transients again, and re-prove FolderView focus before dispatch. This second clear/focus proof is required because input and teardown completion from the preceding case can arrive after the initial activation. A failed isolation boundary must be recorded as that case's failure instead of running the fixture against inherited UI state. Fail-fast bookkeeping may skip this cleanup after the first recorded failure because remaining cases do not execute.
 - A same-process Commands case that delivers confirmed `WM_ENDSESSION` may validate persistence without performing normal teardown, but its test-only cleanup must reset both the runtime-settings save owner and every committed-shutdown gate before later cases run. In particular, the main-window command gate and host prompt-shutdown state must be restored; leaving the window alive while retaining production shutdown state is invalid suite isolation.

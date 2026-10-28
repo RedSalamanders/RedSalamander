@@ -1541,8 +1541,14 @@ HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
                                  wil::unique_handle& outPipe,
                                  ClientIoContext* context = nullptr) noexcept
 {
-    const std::wstring pipeName         = BuildPipeName(requestedPipeName);
-    const ULONGLONG deadline            = ::GetTickCount64() + 750u;
+    const std::wstring pipeName = BuildPipeName(requestedPipeName);
+    // The server serializes requests. A healthy client's query may hold the only
+    // pipe longer than 750 ms, so connection contention uses the ordinary bounded
+    // frame budget and keeps polling cancellation. Missing-service fallback keeps
+    // its separate, short retry window.
+    ULONGLONG deadline = MakeDeadline(context != nullptr ? context->frameTimeoutMs : kClientFrameTimeoutMs);
+    if (context != nullptr && context->operationDeadline != 0u)
+        deadline = (std::min)(deadline, context->operationDeadline);
     const ULONGLONG missingPipeDeadline = ::GetTickCount64() + missingPipeRetryWindowMs;
 
     for (;;)
@@ -1552,8 +1558,13 @@ HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
         {
             return hr;
         }
+        if (IsDeadlineExpired(deadline, ::GetTickCount64()))
+            return HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT);
 
-        if (::WaitNamedPipeW(pipeName.c_str(), kClientConnectTimeoutMs) == 0)
+        const DWORD waitMs = (std::min)(kClientConnectTimeoutMs, RemainingToDeadlineMs(deadline, ::GetTickCount64()));
+        if (waitMs == 0u)
+            return HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT);
+        if (::WaitNamedPipeW(pipeName.c_str(), waitMs) == 0)
         {
             const DWORD waitError = ::GetLastError();
             if (waitError == ERROR_FILE_NOT_FOUND)

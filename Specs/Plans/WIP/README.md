@@ -1,5 +1,7 @@
 # Active Work Index
 
+- **ACTIVE**: [Hosted CI repair](HostedCiRepair_2026-10-28.md). Preserve native assertions and budgets while repairing scheduled checkout, nightly runtime, ASan and hosted validation failures.
+
 - **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated native profiles, matching pinned-archive policy, all-profile qualification and retained size/performance comparisons.
 
 Priority review: 2026-09-08 against `3dcf7ab1`, including the uncommitted I18 proposal. The recommendations below reconcile the indexed work against current code and archived evidence; individual plans still require their own drift check before execution.

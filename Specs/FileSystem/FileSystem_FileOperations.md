@@ -798,6 +798,11 @@ nonzero storage-resolved budget without re-clamping it to the inactive Manual va
 continues to take the smaller configured/requested limit. Provider/session limits, explicit one,
 verification serialization, discovery reservations, bandwidth and safety checks remain effective.
 
+The shared per-item I/O pool retains four to sixteen transfer workers (processor count clamped
+to that range), plus one starvation-reserve worker. The reserve must not reduce a four-file
+selection to three active transfers on a four-processor host. Existing fairness caps still reserve
+capacity for another task; workers remain bounded, reused and event-driven when idle.
+
 The selection-shape qualification counts the native `Transferring` lifecycle phase
 after exact source/destination handles, metadata preparation, buffer allocation and
 admission, including zero/full byte-report boundaries. Finalizing and Publishing

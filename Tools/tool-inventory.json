@@ -2495,6 +2495,35 @@
       "replacement": null
     },
     {
+      "path": "Tools/Modules/Testing/HostedTestDesktop.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Establish a sufficient driver-supported display fixture for hosted native UI qualification and restore the original mode on success or failure.",
+      "usage": "Import in the reusable native CI/Full job and shuffle-repeat consumer, then wrap synchronous validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
+      "usedBy": [
+        ".github/workflows/build-reusable.yml",
+        ".github/workflows/nightly-flake.yml"
+      ],
+      "prerequisites": [
+        "Windows GitHub Actions runner with an interactive display",
+        "A driver-enumerated 32-bit mode containing the required native UI viewports"
+      ],
+      "sideEffects": [
+        "Temporarily changes display mode only when the current display is insufficient",
+        "Restores the original mode in finally; setup and restoration failures remain errors"
+      ],
+      "outputs": [
+        "Qualification action output and display/work-area/session/foreground diagnostics"
+      ],
+      "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
+      "tests": [
+        "Tools/Tests/HostedTestDesktop.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
       "path": "Tools/Modules/Testing/TestRunSummary.psm1",
       "kind": "module",
       "visibility": "internal",

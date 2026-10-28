@@ -6782,7 +6782,8 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
 }
 
 [[nodiscard]] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot(const std::filesystem::path& referencePath,
-                                                                                                std::wstring& detail) noexcept
+                                                                                                std::wstring& detail,
+                                                                                                bool allowOwnedVirtualDisk = false) noexcept
 {
     detail.clear();
 
@@ -6899,6 +6900,37 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         {
             return candidate;
         }
+    }
+
+    if (allowOwnedVirtualDisk)
+    {
+        // A one-volume hosted runner already has a harness-owned VHDX for FileOps.
+        // Reuse only that exact validated mount; never adopt or mount another volume.
+        using namespace RedSalamander::TestSupport;
+        const std::wstring handedMount  = GetEnvironmentString(kOwnedVirtualDiskMountEnvironmentVariable);
+        const std::wstring handedVolume = GetEnvironmentString(kOwnedVirtualDiskVolumeEnvironmentVariable);
+        const std::wstring testRoot     = GetEnvironmentString(L"REDSALAMANDER_TEST_ROOT");
+        const std::wstring runId        = GetEnvironmentString(L"REDSALAMANDER_TEST_RUN_ID");
+        const auto expectedMount =
+            testRoot.empty() || ! IsSafeTestRunId(runId) ? std::filesystem::path{} : GetOwnedVirtualDiskMountPath(testRoot, runId, L"f7-admission-baseline");
+        const std::filesystem::path mountPath(handedMount);
+        detail = EvaluateOwnedVirtualDiskMount(ObserveOwnedVirtualDiskMount(mountPath, handedVolume), handedVolume, mountPath, expectedMount);
+        if (! detail.empty())
+            return std::nullopt;
+        const auto volume = TryGetVolumeGuidPathForPath(mountPath);
+        if (! volume.has_value() || _wcsicmp(volume.value().c_str(), referenceVolume.value().c_str()) == 0)
+        {
+            detail = L"test-owned-volume-not-distinct-from-primary";
+            return std::nullopt;
+        }
+        const auto candidate = mountPath / std::format(L"independent-volume-{}-{}", GetCurrentProcessId(), GetTickCount64());
+        if (! SelfTest::EnsureDirectory(candidate))
+        {
+            detail = L"test-owned-alternate-case-root-unavailable";
+            return std::nullopt;
+        }
+        AppendLog(std::format(L"Independent-volume fixture uses test-owned VHDX: mount={} volume={}", mountPath.native(), volume.value()));
+        return candidate;
     }
 
     if (detail.empty())

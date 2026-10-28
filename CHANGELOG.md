@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Repair bounded search-service connection contention and four-file selection scheduling; make hosted UI display, animation and long-note fixtures explicit, reuse only the validated test-owned alternate volume, and repair scheduled checkout/sandbox/evidence setup while preserving all native assertions, performance budgets and repeat coverage. Hosted runtime qualification remains pending in the indexed repair plan.
+- Repair the remaining hosted nightly, ASan and scheduled workflow failures with preserved test coverage, assertions and qualification evidence.
 - Keep temporary capture admission styles on the owning UI thread and restore them after cross-thread capture workers retire. Timeout cleanup continues pumping within a separate bounded budget, preserves the original failure deadline, and has an event-gated late-worker regression control.
 - Admit owned non-activating windows to Windows Graphics Capture on Server by borrowing and restoring the app-window style before frame capture; preserve activation, pixel/layer and negative-color assertions and verify style restoration. Replace coarse sleeps in S3's fixed 3-ms fake latency with owned one-shot high-resolution waits, add latency-fidelity controls, and retain all request counts and performance thresholds.
 - Point RedMonitor contract and adoption-plan links to its merged main branch so retiring the delivery branch preserves documentation navigation.

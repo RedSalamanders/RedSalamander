@@ -1,4 +1,11 @@
 # Repository tooling
+
+Hosted CI/Full and nightly shuffle UI runs wrap native validation in
+`Invoke-RSWithHostedTestDesktop` from `Modules/Testing/HostedTestDesktop.psm1`.
+It selects a supported sufficient display mode, reports work-area/session/foreground facts,
+and restores the original mode on failure or success. It refuses local invocation; native
+focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
+
 RedMonitor shares one vendored client header/license. Verify-RedMonitorClient.ps1 checks local hashes
 without Git/network/viewer work. Update-RedMonitorClient.ps1 -Commit FULL_SHA is the explicit dependency
 update operation. Restore-RedMonitor.ps1 is a compatibility alias for local verification only.
@@ -290,6 +297,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
+| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only supported display selection, work-area/session/foreground diagnostics, and restoration around native qualification. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters plus result classification. |

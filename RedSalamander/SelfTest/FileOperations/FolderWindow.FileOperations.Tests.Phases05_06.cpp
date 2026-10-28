@@ -5209,7 +5209,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     if (state.stepState == 0u)
     {
         std::wstring alternateDetail;
-        const std::optional<std::filesystem::path> alternate = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateDetail);
+        const std::optional<std::filesystem::path> alternate = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateDetail, true);
         if (! alternate.has_value())
         {
             Fail(std::format(L"R4-A19 independent-volume control is blocked: {}.", alternateDetail));
@@ -5430,8 +5430,8 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     }
 
     const std::wstring volumeDetail = std::format(L"primary={};alternate={};bytesPerTask={};speedLimit={}",
-                                                  state.tempRoot.root_path().wstring(),
-                                                  state.fileOpsAlternateVolumeRoot.root_path().wstring(),
+                                                  state.tempRoot.wstring(),
+                                                  state.fileOpsAlternateVolumeRoot.wstring(),
                                                   kTaskBytes,
                                                   kSpeedLimitBytesPerSecond);
     Debug::Perf::Emit(

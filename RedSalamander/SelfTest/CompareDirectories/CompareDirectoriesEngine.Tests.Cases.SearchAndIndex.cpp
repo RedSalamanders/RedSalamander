@@ -12417,6 +12417,61 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    // An accepted client can own the serialized service while it is still sending
+    // its request. Hold that connection beyond the former 750 ms connect window;
+    // the next query must wait, then return the exact result after it is released.
+    // Exercise cancellation independently while the same occupied pipe remains busy.
+    for (const bool cancelWhileBusy : {false, true})
+    {
+        state.Require(::WaitNamedPipeW(pipeName.c_str(), 5'000u) != 0, L"Busy-pipe fixture did not find the isolated service listener.");
+        wil::unique_handle occupied(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        state.Require(static_cast<bool>(occupied), L"Busy-pipe fixture could not occupy the isolated service connection.");
+        if (! occupied)
+            return false;
+        wil::unique_event_nothrow clientStarted;
+        clientStarted.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        wil::unique_event_nothrow clientDone;
+        clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        state.Require(clientStarted && clientDone, L"Busy-pipe fixture synchronization events could not be created.");
+        if (! clientStarted || ! clientDone)
+            return false;
+        std::atomic<bool> cancelRequested{false};
+        const auto cancelCheck = [](void* cookie) noexcept -> HRESULT
+        { return static_cast<std::atomic<bool>*>(cookie)->load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK; };
+        QueryOutcome outcome{};
+        std::jthread queuedClient([&]() noexcept
+        {
+            LocalSearchIndexCore::QueryStats stats{};
+            static_cast<void>(::SetEvent(clientStarted.get()));
+            const ULONGLONG started = ::GetTickCount64();
+            outcome.hr              = SearchServiceBroker::Query(request, nullptr, nullptr, cancelCheck, &cancelRequested, outcome.candidates, &stats);
+            outcome.durationMs      = ::GetTickCount64() - started;
+            static_cast<void>(::SetEvent(clientDone.get()));
+        });
+        state.Require(::WaitForSingleObject(clientStarted.get(), 5'000u) == WAIT_OBJECT_0, L"Busy-pipe query did not start.");
+        state.Require(::WaitForSingleObject(clientDone.get(), cancelWhileBusy ? 100u : 1'200u) == WAIT_TIMEOUT,
+                      L"Busy-pipe query returned before the occupied connection was released or cancelled.");
+        if (cancelWhileBusy)
+        {
+            cancelRequested.store(true, std::memory_order_release);
+            state.Require(::WaitForSingleObject(clientDone.get(), 500u) == WAIT_OBJECT_0, L"Busy-pipe query did not cancel promptly.");
+        }
+        occupied.reset();
+        if (::WaitForSingleObject(clientDone.get(), 5'000u) != WAIT_OBJECT_0)
+        {
+            state.Require(false, L"Queued query did not complete after releasing the occupied service connection.");
+            cancelRequested.store(true, std::memory_order_release);
+        }
+        queuedClient.join();
+        state.Require(
+            cancelWhileBusy ? outcome.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) : SUCCEEDED(outcome.hr),
+            std::format(
+                L"Busy-pipe query cancel={} failed. hr=0x{:08X} elapsedMs={}", cancelWhileBusy, static_cast<unsigned long>(outcome.hr), outcome.durationMs));
+        state.Require(cancelWhileBusy ? outcome.candidates.empty()
+                                      : CollectIndexedCandidateNames(outcome.candidates) == std::vector<std::wstring>{L"alpha.txt"},
+                      L"Busy-pipe query returned an unexpected candidate set.");
+    }
+
     std::array<QueryOutcome, 2> outcomes{};
     std::jthread clientA([&]() noexcept
     {

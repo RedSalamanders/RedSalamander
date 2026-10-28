@@ -4,6 +4,25 @@
 
 namespace
 {
+// Animation endpoints are a distinct scenario from the reduced-motion case.
+// Hosted Windows images may disable animations; select the scenario through the
+// supported setting and restore it without changing the desktop's OS preference.
+[[nodiscard]] bool RunAnimatedThemeCycleCase(HWND mainWindow, CaseState& state, bool (*test)(HWND, CaseState&) noexcept) noexcept
+{
+    const auto originalUi = g_settings.ui;
+    const auto restore    = wil::scope_exit([&]() noexcept
+    {
+        DebugHideThemeCycleOverlay();
+        g_settings.ui = originalUi;
+        SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
+        PumpPendingMessages();
+    });
+    auto ui               = g_settings.ui.value_or(Common::Settings::UiSettings{});
+    ui.reducedMotion      = Common::Settings::ReducedMotionMode::Off;
+    g_settings.ui         = ui;
+    return test(mainWindow, state);
+}
+
 [[nodiscard]] uint8_t GetThemeOverlayCaptureAlpha(const DxUi::WindowHostBitmapCapture& capture, LONG x, LONG y) noexcept
 {
     if (x < 0 || y < 0 || static_cast<UINT>(x) >= capture.widthPx || static_cast<UINT>(y) >= capture.heightPx)
@@ -1044,30 +1063,48 @@ void RunThemeCycleOverlayCommandsSelfTestCases(HWND mainWindow, const SelfTest::
         return TestThemeCycleOverlayPureStateAndGeometry(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_keyboard_timing", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlayKeyboardTiming(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayKeyboardTiming);
+    });
+    SelfTest::RunCase(options,
+                      suite,
+                      L"theme_cycle_overlay_animation_fixture_restores_reduced_motion",
+                      [=](CaseState& state) noexcept
+    {
+        const auto originalUi = g_settings.ui;
+        const auto restore    = wil::scope_exit([&]() noexcept { g_settings.ui = originalUi; });
+        auto ui               = g_settings.ui.value_or(Common::Settings::UiSettings{});
+        ui.reducedMotion      = Common::Settings::ReducedMotionMode::On;
+        g_settings.ui         = ui;
+        const bool result     = RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayKeyboardTiming);
+        state.Require(g_settings.ui.has_value() && g_settings.ui.value().reducedMotion == Common::Settings::ReducedMotionMode::On,
+                      L"The animation fixture must restore an inherited reduced-motion preference.");
+        return result && state.failure.empty();
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_menu_noop_reuse", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlayMenuNoOpAndReuse(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayMenuNoOpAndReuse);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_sources_custom_themes", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlaySourcesAndCustomThemes(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlaySourcesAndCustomThemes);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_function_bar_dismiss", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlayFunctionBarAndDismiss(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayFunctionBarAndDismiss);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_rendering_geometry_recovery", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlayRenderingGeometryAndRecovery(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayRenderingGeometryAndRecovery);
     });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_accessibility", [=](CaseState& state) noexcept { return TestThemeCycleOverlayAccessibility(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_accessibility", [=](CaseState& state) noexcept {
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayAccessibility);
+    });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_reduced_motion", [=](CaseState& state) noexcept {
         return TestThemeCycleOverlayReducedMotion(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_timer_fallback", [=](CaseState& state) noexcept {
-        return TestThemeCycleOverlayTimerFallback(mainWindow, state);
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayTimerFallback);
     });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_retention", [=](CaseState& state) noexcept { return TestThemeCycleOverlayRetention(mainWindow, state); });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_perf", [=](CaseState& state) noexcept { return TestThemeCycleOverlayPerfBaseline(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_retention", [=](CaseState& state) noexcept {
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayRetention);
+    });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_perf", [=](CaseState& state) noexcept {
+        return RunAnimatedThemeCycleCase(mainWindow, state, TestThemeCycleOverlayPerfBaseline);
+    });
 }
