@@ -1847,6 +1847,77 @@ SelfTest::RunCase(options,
     return state.failure.empty();
 });
 
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_native_enumeration_rejection_preserves_root_results",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_native_rejection", caseRoot), L"Failed to prepare native-rejection root.");
+    const auto dataRoot = caseRoot / L"data";
+    state.Require(SelfTest::EnsureDirectory(dataRoot / L"sub") && SelfTest::WriteTextFile(dataRoot / L"alpha.txt", "alpha") &&
+                      SelfTest::WriteTextFile(dataRoot / L"sub" / L"gamma.txt", "gamma"),
+                  L"Failed to seed the native-rejection fixture.");
+    if (! state.failure.empty())
+        return false;
+    LocalSearchIndexCore::RepositoryOptions repositoryOptions{};
+    repositoryOptions.snapshotRootDirectory = (caseRoot / L"snapshots").wstring();
+    LocalSearchIndexCore::Repository repository(repositoryOptions);
+    LocalSearchIndexCore::SupportInfo support{};
+    state.Require(SUCCEEDED(repository.ProbePath(dataRoot.wstring(), support)), L"Failed to probe the acquired native-rejection sandbox.");
+    if (! state.failure.empty())
+        return false;
+    if (support.fileSystemKind != LocalSearchIndexCore::FileSystemKind::Ntfs)
+        return state.Skip(L"The acquired sandbox does not support the NTFS enumeration-rejection scenario.");
+
+    constexpr std::wstring_view overrideName = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+    const auto previous                      = RedSalamander::TestSupport::ReadEnvironmentValue(overrideName);
+    state.Require(previous.error == ERROR_SUCCESS, L"Failed to read the inherited native-seed override.");
+    if (! state.failure.empty())
+        return false;
+    const auto restore = wil::scope_exit([&]() noexcept
+    {
+        repository.SetNextNtfsEnumerationFailureForTests(ERROR_SUCCESS);
+        repository.ClearNextJournalStateForTests();
+        static_cast<void>(SetEnvironmentVariableW(overrideName.data(), previous.value.has_value() ? previous.value->c_str() : nullptr));
+    });
+    state.Require(SetEnvironmentVariableW(overrideName.data(), L"0") != FALSE, L"Failed to leave native enumeration eligible.");
+    if (! state.failure.empty())
+        return false;
+
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    repository.SetNextJournalStateForTests(17u, 0u, 1024u);
+    repository.SetNextNtfsEnumerationFailureForTests(ERROR_BAD_LENGTH);
+    state.Require(RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates) == HRESULT_FROM_WIN32(ERROR_BAD_LENGTH) &&
+                      candidates.empty(),
+                  L"A malformed native enumeration must fail closed without candidates.");
+    const auto queryRejectedEnumeration = [&](const std::vector<std::wstring>& expected) noexcept
+    {
+        repository.SetNextJournalStateForTests(17u, 0u, 1024u);
+        repository.SetNextNtfsEnumerationFailureForTests(ERROR_INVALID_PARAMETER);
+        const auto started = std::chrono::steady_clock::now();
+        const HRESULT hr   = RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates);
+        Debug::Perf::Emit(L"search.ntfs.seed_rejection_selftest",
+                          L"invalid-parameter-root-traversal",
+                          Debug::Perf::ElapsedUs(started),
+                          stats.nativeMftSeedAttempts,
+                          static_cast<uint64_t>(candidates.size()),
+                          hr);
+        state.Require(SUCCEEDED(hr) && stats.journalAvailable && stats.nativeMftSeedAttempts == 1u && stats.usedTraversalSeed && ! stats.usedNtfsEnumeration,
+                      L"A rejected native enumeration must use the complete tracked-root traversal and report the degraded seed.");
+        state.Require(CollectIndexedCandidateNames(candidates) == expected, L"Rejected native enumeration returned stale, partial or outside-root candidates.");
+    };
+    queryRejectedEnumeration({L"alpha.txt", L"gamma.txt"});
+    std::error_code error;
+    std::filesystem::rename(dataRoot / L"alpha.txt", dataRoot / L"renamed.txt", error);
+    state.Require(! error, L"Failed to rename the native-rejection fixture.");
+    std::filesystem::remove(dataRoot / L"sub" / L"gamma.txt", error);
+    state.Require(! error && SelfTest::WriteTextFile(dataRoot / L"delta.txt", "delta"), L"Failed to update the native-rejection fixture.");
+    queryRejectedEnumeration({L"delta.txt", L"renamed.txt"});
+    return state.failure.empty();
+});
+
 const auto expectedJournalDirectoryMoveNames = []() noexcept -> std::vector<std::wstring>
 {
     return {

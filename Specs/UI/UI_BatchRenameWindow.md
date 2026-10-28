@@ -37,6 +37,10 @@
 - The window restores the most recent mask, name template, search text, replacement text, scope flags, regex/options flags, flatten separator, and independent file-name/extension case transforms from `settings.batchRename`.
 - On close, the window persists the current root path, scope flags, option flags, flatten separator, case transforms, most-recent-first mask/rule histories, preview grid layout, and preview sort.
 - Manual mode text is transient. The multiline manual-name buffer MUST NOT be persisted and MUST NOT be written into rule histories.
+- Mode switching is disabled while provider collection, execution, current-preview work or its
+  scheduled rebuild is pending. Manual seeding requires the completed current Rules preview;
+  a premature programmatic switch is refused without changing the mode or Manual buffer.
+  Once that preview completes, mode switching becomes available and seeds the complete names.
 - Window placement is stored separately under `settings.windows.BatchRenameWindow`.
 
 ## Preview Grid

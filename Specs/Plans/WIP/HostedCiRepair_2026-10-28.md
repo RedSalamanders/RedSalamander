@@ -227,3 +227,38 @@ The PrePush explanation verified the unchanged reviewed PR digest and six local 
 BuildToolchain tooling, Compare/Search, Commands, FileOps and the two interactive viewer groups.
 The interrupted campaign is not a local remainder pass or a Full result. Current-source hosted
 qualification must follow the corrected code; earlier runs remain diagnostic source-bound records.
+
+### Residual qualification after the capture repair
+
+Source `173ef7434aa4f3e05093487c831ffad3d81ae7fc` built x64 Debug in 5:41, receipt
+`37261316683ddd32cb9fbd8b8c402d67f5ddfecf566edbc1c1082939004e39c1`. All 282 focused
+tooling controls passed without skips in `20261028T165535Z-86156-a530ce5cfbdd45c19fc31b0983eca9c6`.
+Its strengthened speed-dialog case passed in 3.429 seconds without skips/retries in
+`20261028T165503Z-78724-d613e8ca64004c8583c79cb4f1ee09d9`, including malformed tokens,
+all five captures and held-admission destruction. Normal and short French captures were inspected.
+
+The same source reproduces the settings ordering-child timeout locally at 12.002 seconds
+against 12 seconds in `20261028T170424Z-80468-41cd243fa0694c50b944d5f18f4e57ea`. The child
+stops before UI isolation/body entry while the parent blocks its foreground queue.
+Run `20261028T171441Z-86368-4447dedf6a294411a0f30d1ca2a13a1b` reproduces the premature
+Manual-buffer seed and empty Shortcuts handled-copy mismatch; durable mechanics and theme
+performance pass locally. Its 200 largest-graph resolver samples are 7,210–13,364 us,
+mean 7,898.79 us. These are retained baseline observations, not candidate acceptance.
+The two original journal cases pass locally without skips in
+`20261028T172456Z-79636-8025e69bf5cc41919d0cfb5eea31849c`; they do not reproduce ARM64's
+driver rejection and do not close that hosted gate.
+
+Additional original `1f3cd13f7` artifacts retain eight distinct residual failures across profiles:
+settings child, speed capture, empty-grid copy, Manual seed, durable private sibling cleanup,
+theme resolution, and two journal seed queries. Its x64 ASan 200 largest-graph samples are
+80,818–120,999 us, mean 98,026 us, against the unchanged 100,000-us guard. ARM64 ASan
+retains an incomplete native MFT scan after 9,134 nodes and the two `E_INVALIDARG` seed failures.
+Keep that failed source, per-case ledger and raw streams.
+
+Repair the UI wait with the canonical bounded pump, the premature mode transition with busy
+admission plus the existing blocked-provider control, and the new pin's empty-copy contract
+with explicit unhandled/exact-clipboard assertions. Reduce resolver duplicate ownership and
+cache allocation, retaining every graph and timing oracle. Roll back through the owned file
+handle and add a still-open-reader control. A driver-rejected native enumeration falls back
+to complete root traversal, while a malformed-data negative control still fails.
+These latest changes are unbuilt and unqualified until fresh receipts pass.

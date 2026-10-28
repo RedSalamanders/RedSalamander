@@ -346,6 +346,7 @@ public:
     HRESULT QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
     void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn, bool available = true) noexcept;
     void ClearNextJournalStateForTests() noexcept;
+    void SetNextNtfsEnumerationFailureForTests(DWORD error) noexcept;
     void SetNextJournalReplayReadFailureForTests(DWORD error) noexcept;
 #endif
 

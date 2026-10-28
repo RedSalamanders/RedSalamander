@@ -304,6 +304,12 @@ Service rules:
 - full SQLite `VACUUM` maintenance (manual compaction and automatic auto-vacuum-mode rewrite) MUST run `PRAGMA quick_check` first and abort with a failure if the store is not clean. Background checkpoint-only maintenance that hits `SQLITE_BUSY`/`SQLITE_LOCKED` may defer with `S_FALSE`; explicit/manual and post-VACUUM checkpoint failures remain hard maintenance failures.
 - `last_checkpoint_utc` MUST advance only after the final checkpoint succeeds. A background checkpoint deferred with `S_FALSE` must leave the prior timestamp unchanged. SQLite enumeration observability counts only candidates accepted by the callback in `emittedRows`; the internal callback-skip sentinel does not increment it.
 - when NTFS journal/MFT access is unavailable because the service is not elevated, reuse the same traversal seed strategy used for ReFS, persist that traversal seed into SQLite as currentness-unproven, and keep query cutover degraded until a later run can prove currentness from the live journal,
+- if native MFT enumeration rejects the library-owned request or kernel-provided continuation
+  with `ERROR_INVALID_PARAMETER`, discard its partial graph and seed the complete tracked root
+  through the same traversal path. Report that degraded seed and retain currentness-unproven
+  state; never publish the partial native graph or silently certify journal currentness.
+  Malformed native data such as `ERROR_BAD_LENGTH` remains a hard failure. A deterministic
+  native control must distinguish those outcomes and verify exact names after rename/delete/create,
 - keep file content out of the service protocol in v1,
 - report missing, invalid, stale, and cutover-blocked SQLite state by degrading to live filesystem search with `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX`,
 - if a direct SQLite query hits missing, invalid, stale, or cutover-blocked SQLite state, refresh persistent-store info and retry as a belt-and-suspenders path even when early hits have already been emitted; emitted candidate path keys must be deduped across the retry and any live fallback instead of surfacing duplicates or silently degrading,

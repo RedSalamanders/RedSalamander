@@ -208,6 +208,15 @@ must not replace them or force semantically different policies into one helper.
 size; no layout cast or DxUi C++ ownership crosses the plugin ABI. `ProductUiTests`
 covers the complete mapping and base-theme accent polarity.
 
+## Local transaction rollback
+
+When `LocalFileTransaction` still owns its private sibling handle, rollback retires that exact
+file through the DELETE-capable handle before closing it. Local POSIX disposition removes the
+private name while delete-compatible readers may retain its bytes; the prior published target
+is unchanged. Unsupported disposition paths retain the established compatible cleanup fallback.
+The held-reader native control requires the private name to disappear before its reader closes,
+the reader to retain the exact unpublished bytes, and the original destination to stay intact.
+
 ## Native selftest artifact rotation
 
 `SelfTest::RotateSelfTestRuns` in `RedSalamander/SelfTest/Common/Common.Tests.Runner.cpp`

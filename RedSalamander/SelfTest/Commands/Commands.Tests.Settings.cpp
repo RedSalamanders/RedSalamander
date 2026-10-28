@@ -5375,8 +5375,19 @@ enum class SettingsSaveChildMode : uint8_t
     const DWORD deadlineMs        = static_cast<DWORD>(SelfTest::ScaleTimeout(12'000u));
     const uint64_t launchedTickMs = GetTickCount64();
     const auto waitStarted        = std::chrono::steady_clock::now();
-    const DWORD waitResult        = WaitForSingleObject(process.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(12'000u)));
-    const DWORD waitError         = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    DWORD waitResult              = WAIT_TIMEOUT;
+    DWORD waitError               = ERROR_SUCCESS;
+    // The child must acquire foreground input from this parent during Commands
+    // isolation. Keep this UI queue responsive while retaining the same deadline.
+    const auto childWait = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        waitResult = WaitForSingleObject(process.get(), 0u);
+        if (waitResult == WAIT_FAILED)
+            waitError = GetLastError();
+        return waitResult != WAIT_TIMEOUT;
+    },
+        {.timeout = std::chrono::milliseconds{deadlineMs}, .operationName = L"settings-save child exit"});
     const uint64_t waitedMs =
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - waitStarted).count());
     if (waitResult == WAIT_OBJECT_0)
@@ -5407,15 +5418,17 @@ enum class SettingsSaveChildMode : uint8_t
                               waitError));
     SelfTest::AppendSuiteTrace(
         SelfTest::SelfTestSuite::Commands,
-        std::format(L"Settings-save child mode={} pid={} phase=wait-return launchedTickMs={} deadlineMs={} result={} elapsedMs={} error={} quiet={}",
-                    childMode,
-                    processInfo.dwProcessId,
-                    launchedTickMs,
-                    deadlineMs,
-                    waitResult,
-                    waitedMs,
-                    waitError,
-                    childQuiet));
+        std::format(
+            L"Settings-save child mode={} pid={} phase=wait-return launchedTickMs={} deadlineMs={} result={} elapsedMs={} error={} quiet={} dispatched={}",
+            childMode,
+            processInfo.dwProcessId,
+            launchedTickMs,
+            deadlineMs,
+            waitResult,
+            waitedMs,
+            waitError,
+            childQuiet,
+            childWait.dispatchedMessageCount));
     if (! childQuiet)
     {
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,

@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Repair remaining hosted runtime causes: keep the private settings-child parent responsive within its existing deadline, admit Batch Rename mode switches only after current preview completion, and preserve empty-grid clipboard no-op semantics.
+  Reduce transient theme-resolver graph/name allocation without changing graph results or performance guards; retire private rollback names through their owned handles, and recover a rejected native MFT enumeration through complete tracked-root traversal while malformed-data errors still fail.
+  Native controls retain existing behavioral assertions and add blocked-provider, held-reader and enumeration-rejection negative controls. Current-source runtime and hosted qualification remains required.
 - Harden the speed-prompt test channel with typed message tokens, operation checks and synchronized shared responses. Reject malformed requests without mutation, retire admission before handled DxUi destruction, and cover active-admission shutdown and every short/normal layout capture without relaxing existing assertions.
 - Repair hosted native validation without reducing test coverage, assertions or performance gates.
   - Preserve short status/control and missing-pipe fallback while allowing cancellable Search queries to wait for a busy listener; count connection time in operation deadlines and rebuild unavailable-journal indexes only from tracked roots.

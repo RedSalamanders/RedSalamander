@@ -1213,6 +1213,48 @@ private:
         SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles)) && storedFiles.size() == 1u &&
             Common::Paths::NormalizedWindowsPathEqualsNoCase(storedFiles.front().native(), std::filesystem::absolute(recordPath).lexically_normal().native()),
         L"A failed atomic publish must remove its private temporary sibling.");
+    {
+        Common::Files::LocalFileTransaction rollback;
+        const HRESULT created = Common::Files::LocalFileTransaction::Create(recordPath, Common::Files::ExistingTargetPolicy::Replace, false, rollback);
+        state.Require(SUCCEEDED(created), L"The held-reader rollback control must create an independent private sibling.");
+        if (SUCCEEDED(created))
+        {
+            state.Require(SUCCEEDED(rollback.Write(replacement)), L"The rollback control must write its private replacement bytes.");
+            state.Require(SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles)) && storedFiles.size() == 2u,
+                          L"The active rollback control must expose its original record and exactly one private sibling.");
+            const auto privateEntry = std::find_if(storedFiles.begin(), storedFiles.end(), [&](const auto& path) noexcept {
+                return ! Common::Paths::NormalizedWindowsPathEqualsNoCase(path.native(), std::filesystem::absolute(recordPath).lexically_normal().native());
+            });
+            state.Require(privateEntry != storedFiles.end(), L"The rollback control must identify its unique private sibling.");
+            if (privateEntry != storedFiles.end())
+            {
+                const auto privatePath = Common::Paths::ToExtendedWin32Path(privateEntry->native());
+                wil::unique_hfile reader(CreateFileW(privatePath.c_str(),
+                                                     GENERIC_READ,
+                                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                     nullptr,
+                                                     OPEN_EXISTING,
+                                                     FILE_ATTRIBUTE_NORMAL,
+                                                     nullptr));
+                state.Require(static_cast<bool>(reader), L"A delete-compatible reader must be able to retain the private sibling.");
+                if (reader)
+                {
+                    rollback.Abort();
+                    state.Require(SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles)) && storedFiles.size() == 1u &&
+                                      Common::Paths::NormalizedWindowsPathEqualsNoCase(storedFiles.front().native(),
+                                                                                       std::filesystem::absolute(recordPath).lexically_normal().native()),
+                                  L"Rollback must remove its private name even while a compatible reader retains the file.");
+                    std::array<char, 64u> readerBytes{};
+                    DWORD bytesRead = 0u;
+                    state.Require(ReadFile(reader.get(), readerBytes.data(), static_cast<DWORD>(readerBytes.size()), &bytesRead, nullptr) != FALSE &&
+                                      std::string_view(readerBytes.data(), bytesRead) == replacement,
+                                  L"Retiring the private name must leave the reader's exact replacement bytes accessible.");
+                    state.Require(SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == original,
+                                  L"Held-reader rollback must leave the prior complete destination unchanged.");
+                }
+            }
+        }
+    }
     state.Require(SUCCEEDED(FileOperationDurableStore::PersistDirectChild(
                       storeRoot, recordPath, replacement, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace)) &&
                       SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == replacement,
@@ -2612,11 +2654,24 @@ struct BatchRenameLocalStampParts final
     state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u, L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
     state.Require(GetBatchRenameWindowHandle() != nullptr, L"The Batch Rename window should remain available while provider collection is blocked.");
 
+    BatchRenameDebugSnapshot blockedSnapshot{};
+    state.Require(DebugGetBatchRenameWindowSnapshot(blockedSnapshot, false) && ! blockedSnapshot.modeSwitchEnabled && blockedSnapshot.rulesModeSelected &&
+                      blockedSnapshot.manualText.empty(),
+                  L"Blocked provider collection must disable mode switching without seeding a partial Manual buffer.");
+    state.Require(! DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual, false),
+                  L"An immediate Manual switch must be refused while the provider is blocked.");
+    state.Require(DebugGetBatchRenameWindowSnapshot(blockedSnapshot, false) && blockedSnapshot.rulesModeSelected && blockedSnapshot.manualText.empty(),
+                  L"Refusing a premature Manual switch must preserve Rules mode and the untouched Manual buffer.");
     static_cast<void>(SetEvent(gate.get()));
     BatchRenameDebugSnapshot snapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Async collection snapshot should become available after releasing the provider.");
     state.Require(snapshot.previewRowCount == 1u && snapshot.originalNames == std::vector<std::wstring>{L"slow.txt"},
                   L"Background provider collection should populate the preview after completion.");
+    state.Require(snapshot.modeSwitchEnabled && DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
+                  L"Mode switching must become available after the current preview completes.");
+    state.Require(DebugGetBatchRenameWindowSnapshot(snapshot) && snapshot.manualModeSelected && snapshot.manualText == L"slow.txt" &&
+                      snapshot.newNames == std::vector<std::wstring>{L"slow.txt"},
+                  L"An admitted Manual switch must seed the complete current preview after the blocked provider resumes.");
     CloseBatchRenameWindowIfOpen();
 
     state.Require(ResetEvent(gate.get()) != FALSE, L"Async collection teardown fixture should reset its provider gate.");
