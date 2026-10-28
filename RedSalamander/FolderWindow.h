@@ -379,6 +379,12 @@ struct FolderViewChangeCasePromptDebugSnapshot
 [[nodiscard]] bool DebugCancelFolderViewChangeCasePrompt() noexcept;
 #endif
 
+// Owned members require ARM64 alignment padding. Preserve the existing class layout and ABI.
+// Owner: RedSalamander maintainers; review: 2027-01-31.
+#pragma warning(push)
+#if defined(_M_ARM64)
+#pragma warning(disable : 4324)
+#endif
 class FolderWindow : public ITerminalEventCallback
 {
 public:
@@ -2133,6 +2139,7 @@ private:
     friend class FileOperationsPopupInternal::FileOperationsPopupState;
     friend struct FolderWindowFileOperationsStateInternal::CrossFileSystemBridge;
 };
+#pragma warning(pop)
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] inline bool PostDxUiPromptCloseDebugCommand(HWND hwnd, UINT message, WPARAM command) noexcept

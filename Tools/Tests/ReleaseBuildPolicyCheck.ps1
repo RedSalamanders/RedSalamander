@@ -49,10 +49,7 @@ function Assert-Profile($Value,[string]$Configuration,[string]$Label,[switch]$Pi
     foreach($item in $Value.Items.ClCompile){
         if($item['ExcludedFromBuild']-eq 'true'){continue}
         $armLtcgNotice=@($item['DisableSpecificWarnings'] -split '[;, ]+') -contains '4746'
-        # RedConfigure already documents an all-configuration ARM64 PPL/volatile
-        # exception in its project. Do not broaden that existing exception to another project.
-        $redConfigurePpl=$Value.Properties.Platform -eq 'ARM64' -and $Value.Properties.MSBuildProjectName -ceq 'RedConfigure'
-        if($armLtcgNotice -ne ($Value.Properties.Platform -eq 'ARM64' -and ($Configuration -eq 'Release' -or $redConfigurePpl))){
+        if($armLtcgNotice -ne ($Value.Properties.Platform -eq 'ARM64' -and $Configuration -eq 'Release')){
             throw "$Label has an incorrectly scoped ARM64 LTCG volatile-model notice exception."
         }
         if($item['WarningLevel']-ne 'EnableAllWarnings' -or $item['TreatWarningAsError']-ne 'false'){throw "$Label overrides /Wall without /WX."}

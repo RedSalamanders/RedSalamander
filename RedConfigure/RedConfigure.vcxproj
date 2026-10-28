@@ -121,16 +121,6 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
-  <!--
-    Owner: RedConfigure. MSVC v145 PPL headers use legacy volatile accesses on
-    ARM64; the project does not own those external templates. Review this
-    suppression on the next Visual Studio toolset upgrade.
-  -->
-  <ItemDefinitionGroup Condition="'$(Platform)'=='ARM64'">
-    <ClCompile>
-      <DisableSpecificWarnings>4746;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-    </ClCompile>
-  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Localization\PlaceholderValidation.cpp" />
     <ClCompile Include="Localization\RcParser.cpp" />
