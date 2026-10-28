@@ -90,10 +90,6 @@ template <typename... Args> inline void Error(std::wformat_string<Args...> forma
 inline void Error(const std::wstring& message) noexcept;
 template <typename... Args> inline DWORD ErrorWithLastError(std::wformat_string<Args...> format, Args&&... args) noexcept;
 inline DWORD ErrorWithLastError(const std::wstring& message) noexcept;
-namespace Perf
-{
-inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept;
-}
 }; // namespace Debug
 
 namespace LocaleFormatting
@@ -395,6 +391,7 @@ namespace Common::DebugSelfTest
 struct Check final
 {
     std::wstring_view component;
+    void (*recordFailure)(const wchar_t* message, unsigned int passed, unsigned int failed) noexcept = nullptr;
 
     bool operator()(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) const noexcept
     {
@@ -406,9 +403,10 @@ struct Check final
 
         ++failed;
         Debug::Error(L"{} debug selftest failed: {}", component, message);
-        // GUI selftest hosts may have no inherited stderr. The existing captured JSONL sink
-        // must retain the exact plugin assertion as well as the unchanged aggregate failure.
-        Debug::Perf::Emit(L"SelfTest.CheckFailure", message != nullptr ? message : L"(no message)", 0u, failed, passed, E_FAIL);
+        if (recordFailure)
+        {
+            recordFailure(message, passed, failed);
+        }
         // Plugin contract tests execute this code inside a loaded DLL and cannot observe the
         // provider's debugger stream. Mirror only failures to stderr so the harness preserves the
         // exact failed contract instead of reporting an opaque aggregate count.

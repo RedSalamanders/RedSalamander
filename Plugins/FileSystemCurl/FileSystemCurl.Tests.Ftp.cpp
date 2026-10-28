@@ -38,7 +38,13 @@ namespace
 {
 using namespace std::chrono_literals;
 
-constexpr Common::DebugSelfTest::Check DebugCheck{L"FileSystemCurl FTP transport"};
+constexpr Common::DebugSelfTest::Check DebugCheck{L"FileSystemCurl FTP transport",
+                                                  [](const wchar_t* message, unsigned int passed, unsigned int failed) noexcept
+{
+    // The GUI selftest host may have no inherited stderr. This plugin already uses
+    // the captured metrics sink, so retain its exact failed assertion there too.
+    Debug::Perf::Emit(L"SelfTest.CheckFailure", message != nullptr ? message : L"(no message)", 0u, failed, passed, E_FAIL);
+}};
 constexpr std::string_view kUploadSiblingMarker   = ".redsalamander-upload-";
 constexpr std::string_view kRollbackSiblingMarker = ".redsalamander-rollback-";
 constexpr std::string_view kWriterSiblingMarker   = ".redsalamander-writer-";
