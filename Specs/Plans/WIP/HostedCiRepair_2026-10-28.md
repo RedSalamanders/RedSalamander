@@ -77,8 +77,15 @@ The no-journal index path also contradicts the owning Search contract: its fallb
 `BuildIndex`, which can enumerate the complete NTFS MFT, although the contract and original failing
 case require tracked-root traversal when the journal is unavailable. A deterministic unavailable-journal
 probe and an MFT-attempt witness now exercise that distinction while native MFT seeding remains eligible.
-The production fallback is deliberately unchanged for the first regression run. Preserve its failing
-receipt before applying the root-scoped fix. The original replay/candidate assertions remain intact.
+Regression run `20261028T114657Z-20084-58c602e9b16e47dcb241772da654700e`, receipt
+`216643ba312fe899c658854785286193f188ae5c9af66b460fb50c2a49ded8bc`, failed deterministically:
+`journal=false traversal=false nativeMft=true attempts=1`, taking 48.9 seconds for the tiny fixture.
+The failed run also exposed a missing expected-case inventory entry; that coverage error is preserved
+and the new case is now registered. The production unavailable-journal branch now calls tracked-root
+traversal directly. Normal journaled MFT seeding and the original replay/candidate assertions remain intact.
+
+Plugin contract failures now mirror their exact assertion into the existing captured perf JSONL stream;
+the GUI host did not preserve the FTP export's stderr, leaving only its opaque 141/142 aggregate before.
 
 The shuffle artifact consumer now provisions the same pinned MSVC family before portable attestation
 rebind; matching runner labels alone do not ensure the producer-installed compiler is present.

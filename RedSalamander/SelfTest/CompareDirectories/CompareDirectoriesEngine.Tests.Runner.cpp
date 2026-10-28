@@ -128,6 +128,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_index_fileops_artifacts_remain_visible",
     L"local_index_core_query_honors_cancel_check",
     L"local_index_core_refs_probe_and_query_if_available",
+    L"local_index_core_journal_unavailable_rebuild_is_root_scoped",
     L"local_index_core_journal_replay_rename_delete_create",
     L"local_index_core_journal_replay_directory_moves_snapshot",
     L"local_index_core_journal_replay_invalidated_rebuilds",

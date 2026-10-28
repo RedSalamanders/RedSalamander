@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Restrict unavailable-journal index rebuilds to the tracked root and register a deterministic no-journal regression, retaining native MFT seeding for journaled paths. Preserve exact plugin assertion failures in captured JSONL evidence as well as stderr; hosted runtime qualification remains open.
 - Add an unavailable-journal regression that checks exact refreshed candidates and rejects whole-volume MFT attempts, retain the original replay assertions with richer diagnostics, and provision the pinned compiler before shuffle artifact attestation.
 - Preserve short search status/control probes and include connection time in control deadlines while extending cancellable query contention; strengthen occupied-pipe coverage, keep alternate-volume coverage explicitly enabled in the shuffle lane, and restore live theme state after the animation fixture.
 - Repair bounded search-service connection contention and four-file selection scheduling; make hosted UI display, animation and long-note fixtures explicit, reuse only the validated test-owned alternate volume, and repair scheduled checkout/sandbox/evidence setup while preserving all native assertions, performance budgets and repeat coverage. Hosted runtime qualification remains pending in the indexed repair plan.

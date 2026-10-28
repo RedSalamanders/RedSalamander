@@ -3373,7 +3373,7 @@ HRESULT EnsureReady(VolumeIndex& volume,
                 return rebuildProgressHr;
             }
 
-            HRESULT rebuildHr = BuildIndex(volume, cancelCheck, cancelCookie, stats, progress);
+            HRESULT rebuildHr = SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress);
             if (FAILED(rebuildHr))
             {
                 return rebuildHr;
