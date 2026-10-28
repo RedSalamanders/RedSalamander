@@ -43,8 +43,8 @@
     const auto base         = GetBatchRenameLocalFileSystem(state);
     if (! base || ! state.Require(SelfTest::WriteTextFile(root / L"before.txt", "original"), L"Could not seed the original cached file."))
         return false;
-    wil::unique_event snapshotReady(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-    wil::unique_event snapshotRelease(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle snapshotReady(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle snapshotRelease(CreateEventW(nullptr, TRUE, FALSE, nullptr));
     if (! state.Require(snapshotReady && snapshotRelease, L"Could not create the owned snapshot race gates."))
         return false;
     std::atomic_uint32_t calls{0u};
