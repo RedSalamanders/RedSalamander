@@ -105,6 +105,14 @@ actual PE imports for x64 and ARM64. Product Release evidence remains open to th
 separate Terminal release-proof package; historical evidence is not promoted to the
 current product bytes.
 
+The 2026-10-28 integration branch selects libghostty-vt from Ghostty `v1.4.0`
+(`83fb95624b0439ee660c2679b43b38c8b63769cd`) with Zig 0.17.0. The private
+dynamic boundary and exact plugin/runtime pairing remain the decision. The
+rebased five-concern overlay retains clipboard rejection and placement bounds;
+new public APIs do not automatically enable new host features. I50 records
+current validation and open native ARM64/shipping gates. Earlier evidence does
+not qualify these new bytes.
+
 <!-- current-executive-summary:end -->
 
 <!-- superseded-2026-07-31-executive-summary:start -->

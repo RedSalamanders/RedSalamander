@@ -30,6 +30,7 @@ With -PassThru, a PSCustomObject containing the verified runtime identity. Other
 Prerequisites: PowerShell 7, Git, the canonical schema, the selected lock, locked source/toolchain caches or network access when not offline, and the reviewed overlay/notices. Side effects: Product mode may update .build\TerminalEngine; candidate mode may update only .build\TerminalEngineUpgrade. Native children are kill-on-close contained. An exact independently owned output blocks replacement and is never killed.
 
 The delegated lifecycle preserves runtime identity schemaVersion = 5 and pairingContract = 'generated-raw-sha256-v1'. GhosttyRuntimeLifecycle.psm1 owns Get-TerminalRuntimeIdentityHeaderText, $generatedIdentityHeader publication in Product mode, and $expectedLicenseHashes verification.
+Zig bootstrap, build, and fetch caches use explicit per-child repository-local environment paths, preserving caller variables.
 
 .EXAMPLE
 .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform x64 -Offline -PassThru

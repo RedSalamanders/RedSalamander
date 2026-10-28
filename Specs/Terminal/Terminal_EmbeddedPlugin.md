@@ -736,15 +736,17 @@ The canonical product lock is
 `Specs/Terminal/GhosttyRuntimeLock.schema.json`. It is the only source of the
 active upstream commit/tree/archive, Ghostty version, Zig archive and executable
 identity, dependency archives, normalized overlay identity and concern set,
-build tuple, platform/machine/size envelopes, import/export ABI, six notices,
+build tuple, platform/machine/size envelopes, import/export ABI, eight notices,
 and runtime pairing contract. Builder-local copies of those values are
 prohibited. The current lock selects Ghostty commit
-`9c3ec931d64561a8407dde7ac984ce156ae91539`, tree
-`359872ab74fe1ecc96428133c0546be3cb969fdd`, Zig 0.16.0 archive SHA-256
-`68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e`,
-`ReleaseFast`, SIMD disabled, and stripped output. A tracked build-only Windows
-overlay selects LLVM/LLD, propagates stripping to `libghostty-vt`, and omits the
-unused static companion. Zig/LLD does not promise byte-identical output for
+`83fb95624b0439ee660c2679b43b38c8b63769cd` (Ghostty `v1.4.0`), tree
+`4dbd485a3b72c6ced65ad7ea447644a5967e382e`, Zig 0.17.0 archive SHA-256
+`b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428`,
+`fast`, SIMD disabled, stripped output, and no themes/terminfo/termcap emission.
+Ghostty and libghostty have separate release cycles; this pins the libghostty-vt
+source shipped with Ghostty 1.4.0. The tracked Windows overlay selects LLVM/LLD
+and propagates stripping to `libghostty-vt`. The static companion is built but
+never staged or shipped. Zig/LLD does not promise byte-identical output for
 this source graph: clean builds may have different timestamps, CodeView IDs,
 or code layout. Therefore a source-level hard-coded DLL hash is not a valid
 product lock.
@@ -772,6 +774,26 @@ every locked notice must be hash-verified and staged at its locked output path.
 This permits an isolated candidate to declare new build inputs such as
 `translate-c` and Wuffs without weakening or silently extending the current
 Product closure.
+
+The lifecycle derives Zig's global and local caches from its guarded repository
+state root and supplies them through per-child `ZIG_GLOBAL_CACHE_DIR` and
+`ZIG_LOCAL_CACHE_DIR` values before compiler bootstrap. Fetch uses its separate
+disposable repository cache. Neither caller variables nor a default user cache
+may select build inputs; this contract applies to both Zig 0.16 and 0.17.
+
+Zig 0.17 builds use `Expand-RSGhosttyRuntimeLockedPackages` to materialize a
+dedicated, guarded hash-named package directory from the lock's verified content
+archives. The builder passes it to `--system`, which disables remote package
+fetching, including transitive lazy dependencies. Source-local `zig-pkg` caches
+and default user caches are not input authority. Native qualification must
+reuse this package staging helper and the candidate's complete closure.
+The build receipt and CI runtime-cache input closure includes the guarded-path
+module plus the canonical JSON helper's DxUi/process helpers. A helper change
+must invalidate both identities. Canonical archives produced by local `zig fetch`
+may retain a transport wrapper even when the Zig package-content hash equals a
+flattened remote cache entry. Lock that exact archive and its nested internal
+root; package staging removes the wrapper. Never accept a mismatching archive
+hash merely because its package-content hash agrees.
 
 `Tools/Get-GhosttyTerminalRuntimeStatus.ps1` is the active, read-only update
 observation entrypoint. Its schema is
@@ -817,7 +839,9 @@ Native candidate execution uses the separate read-only
 `windows-11-vs2026-arm` runner. Manual dispatch requires the exact candidate
 commit plus the reviewed candidate-lock and normalized-overlay SHA-256 values.
 The corresponding lock and patch bytes are supplied through short-lived
-repository secrets, materialized only below the exact ignored candidate root,
+repository secrets, or explicitly selected with `use_repository_lock` from the
+checked-out canonical files (whose lock/patch line endings are fixed to LF).
+Both modes materialize inputs only below the exact ignored candidate root,
 and rejected before use if their hashes or internal bindings differ. The
 workflow requires native ARM64 PowerShell and Python, performs an isolated
 ARM64 Force build, then runs `test-lib-vt`, `test-lib-vt-build`, and
@@ -827,6 +851,11 @@ source from the hash-locked Zig toolchain byte-for-byte and declares it in
 simple mode. This transport-only override changes neither test bodies nor
 candidate code, records the runner-source SHA-256 in canonical evidence, and
 must be removed before evidence publication.
+Zig 0.17 uses `--seed=<value>`, `-Doptimize=debug`, repository-local child caches,
+and the same hash-verified `--system` package staging as runtime builds. Native
+test processes run in owned TestSandbox scratch with upstream snapshot fixtures
+copied into their expected relative location. Logs, dumps and the qualification
+report stay in that marked sandbox; build inputs remain under `.build`.
 
 Native Windows ARM64 has reproducibly returned process code 5 on the first
 launch of the newly linked, larger Debug C-ABI test executable while the
@@ -937,6 +966,16 @@ qualification, and admission steps must consume this exact descriptor and fail
 closed if any bound input changes; the review command never writes Product, the
 canonical lock, or another tracked file.
 
+Candidate descriptor schema 2 binds every canonical dependency separately in an
+ordered `dependencies` array. Overlay rebinding preserves that complete closure;
+schema-1 descriptors must be regenerated rather than accepting concatenated or
+missing dependency hashes. These are the incumbent inputs frozen at review;
+the proposed runtime lock must separately bind the candidate's complete build
+closure before compilation and qualification. Historical finding dispositions
+are emitted only when all supporting commits occur inside the exact review
+range. The generated commit inventory does not replace the candidate's manual
+source review.
+
 Overlay rederivation remains isolated until manual Product admission.
 `Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` accepts the single
 normalized patch plus clean and independently applied exact-candidate
@@ -952,15 +991,13 @@ strictly after the complete upstream `GhosttyTerminalOption` range and recorded
 in the overlay review. Private Kitty data values are likewise allocated after
 the upstream `GhosttyKittyGraphicsData` range. C and Zig names/values must be
 unique and exactly equal, with compile-time Zig guards and focused Pester
-comparison. For candidate `9c3ec931d64561a8407dde7ac984ce156ae91539`,
-placement limits use private option 40 and the fail-closed Kitty clipboard-write
-gate uses private option 41. The reviewed candidate patch contains seven files,
-387 insertions, 27 deletions, and five concerns; the obsolete candidate-only
-optimization that skipped the Windows static companion was removed to retain
-the frozen five-concern ceiling. The static companion may be built during
-candidate qualification but is never staged or shipped.
+comparison. For `83fb95624b0439ee660c2679b43b38c8b63769cd`, placement limits use
+private option 48 and the fail-closed Kitty clipboard-write gate uses private
+option 49, after upstream options 0-47. Private Kitty data values remain 3-6.
+The reviewed patch contains seven files, 372 insertions, 27 deletions, and five
+concerns. No private allocation may overlap a newly added public option.
 
-Candidate option 41 defaults enabled so the private ABI does not silently alter
+Private option 49 defaults enabled so the private ABI does not silently alter
 other hosts. RedSalamander admission must set it false, before any terminal
 input, and must fail terminal initialization if that set fails. When false, the
 engine rejects Kitty OSC 5522 writes with `ENOSYS` before buffering or invoking
@@ -969,7 +1006,7 @@ gate is mandatory because an unnamed/no-password Kitty write has the same
 callback metadata as OSC 52 and cannot be distinguished truthfully by the host.
 The public `GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE_MAX_BYTES` option must still be
 set to 256 KiB as a separate decoded-data bound. RedSalamander sets the public
-clipboard-read callback to null, the 256 KiB limit, and private option 41 to
+clipboard-read callback to null, the 256 KiB limit, and private option 49 to
 false during candidate terminal initialization; failure of any set fails the
 initialization before terminal input is admitted.
 
@@ -1005,10 +1042,10 @@ normalized SHA-256. The diagnostic normalization zeros only the structurally
 located COFF/debug timestamps and RSDS PDB GUID; it is never the runtime trust
 decision and never hides code-layout changes.
 
-The reviewed runtime ABI is exactly 191 exports. The lock stores the full sorted
+The reviewed runtime ABI is exactly 207 exports. The lock stores the full sorted
 set, the full sorted loader-required subset, the derived count, and the
 sorted-name SHA-256
-`85d134a5fa8c29d83f9c22559632600d474eb433c12a8bd3d55da9863ddeef15`;
+`ed27a2250374deab6e91a2c986ef66e33167499c47913b3b55bd5774468679d0`;
 missing, duplicate, additional, unsorted, or loader-unknown exports fail lock
 validation or the build.
 For the routine network-independent check, run:
@@ -1020,8 +1057,8 @@ pwsh -File Tools/Build-GhosttyTerminalRuntime.ps1 -Platform ARM64 -Offline -Pass
 
 The command verifies the source commit/tree/version and exact allowed Windows
 checkout shape, Zig archive/executable hash/version, overlay hash, machine type, production size
-envelope, exact export-set identity, the six locked import modules, exact
-DLL/header/JSON pairing, build features, and all six canonical UTF-8/LF notice
+envelope, exact export-set identity, the seven locked import modules, exact
+DLL/header/JSON pairing, build features, and all eight canonical UTF-8/LF notice
 hashes.
 Each dependency source tarball and Zig's canonical, path-filtered package cache
 archive are distinct byte representations. Bootstrap asks the pinned Zig tool
@@ -1030,7 +1067,10 @@ exact locked Zig package content hash, and then requires the byte-exact
 canonical archive SHA-256 before that archive can enter a build cache. This
 keeps transport recompression separate from dependency-content identity and
 from the reproducible package-cache identity consumed by the build. The current
-Product closure has three dependencies: `translate-c`, `uucode`, and `wuffs`.
+Product build closure has five dependencies: `aro`, `pixels`, `translate-c`,
+`uucode`, and `wuffs`. The transitive Aro parser and Wuffs Pixels build fixtures
+are locked even though they do not become additional runtime DLLs. Aro and
+Pixels notices are staged through `RuntimeDependencies.props` for both platforms.
 Their exact source/cache archive, internal-root, and license identities live in
 the canonical lock and schema-5 runtime identity; no builder-local list may
 override them. Both representations of every dependency are bounded-preflighted:
@@ -1059,7 +1099,8 @@ own overlay in cleanup.
 Cached reuse, newly built acceptance, and final product acceptance each derive
 the actual import modules from the PE image and require exactly
 `api-ms-win-crt-heap-l1-1-0.dll`, `api-ms-win-crt-math-l1-1-0.dll`,
-`api-ms-win-crt-string-l1-1-0.dll`, `kernel32.dll`, `ntdll.dll`, and
+`api-ms-win-crt-runtime-l1-1-0.dll`, `api-ms-win-crt-string-l1-1-0.dll`,
+`kernel32.dll`, `ntdll.dll`, and
 `vcruntime140.dll`; persisted JSON is compared independently and is never
 trusted as the actual DLL import set.
 
@@ -1098,7 +1139,7 @@ in C++. It records the input and pairing contract here and in
 full RedSalamander suite, clean portable extraction, and before/after
 performance scenarios. Do not combine an engine upgrade with unrelated product
 behavior. Rollback restores the prior source/tool/overlay tuple and ships the
-previous `Terminal.dll`, private DLL, identity JSON, and all six notices as one
+previous `Terminal.dll`, private DLL, identity JSON, and all eight notices as one
 atomic manifest unit.
 
 ## Verification and release qualification

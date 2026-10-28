@@ -4,6 +4,7 @@ Validates and records one rederived Ghostty candidate overlay.
 
 .DESCRIPTION
 Proves that one normalized candidate patch applies to a pristine exact Ghostty commit, exactly reproduces an independently applied source diff, stays within review-size and concern limits, maps every current overlay concern, and allocates every newly added private C/Zig enum value after the complete candidate public ranges. Publishes a strict overlay review and updates only the untracked candidate descriptor below the exact candidate .build root.
+Consumes descriptor schema 2 and preserves the complete ordered canonical dependency identity closure during overlay rebinding.
 
 .PARAMETER CandidateCommit
 The exact lowercase full Ghostty candidate commit.

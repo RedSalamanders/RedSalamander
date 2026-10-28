@@ -4,6 +4,12 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Integrate libghostty-vt from Ghostty 1.4.0 with Zig 0.17.0, a complete locked
+  dependency closure, eight staged notices, and a rederived Windows overlay
+  preserving clipboard and placement limits. Update candidate evidence, closed
+  package staging, paired performance checks and native ARM64 qualification.
+  Local validation is recorded in I50; native ARM64 and shipping qualification
+  remain required before release approval.
 - Align the PR formatter-policy regression with the checksum-pinned PowerShell installer, retaining ARM64, suite, permission and native formatting gates while keeping legitimate Python requirements outside the formatter job independent.
 - Correct canonical Markdown fence recognition so line-leading triple-backtick inline code and tab/four-space indentation cannot hide following unindented missing links; real backtick and tilde fences close only with whitespace after the matching delimiter run. Add link, heading and inventory regression controls, preserve zero-to-three-space top-level admission and retain tilde info containing backticks.
 - Reject reparse points at owned guidance roots and their ancestors before enumeration by reusing the canonical repository path guard; cover ordinary discovery and three junction boundaries with unchanged target witnesses and owned-link teardown.

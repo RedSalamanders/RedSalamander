@@ -10,6 +10,62 @@ function Copy-RSGhosttyRuntimeLockFixture {
         ConvertFrom-Json -Depth 100 -NoEnumerate -DateKind String
 }
 
+function New-RSGhosttyLockedPackageFixture {
+    # A nested canonical root covers transports whose wrapper directory differs
+    # from the final Zig hash-named package directory.
+    $owner = Join-Path $TestDrive ('packages-' + [guid]::NewGuid().ToString('N'))
+    $source = Join-Path $owner '.build/source/fixture-pkg/wrapper'
+    $downloads = Join-Path $owner '.build/downloads'
+    [void](New-Item -ItemType Directory -Path $source, $downloads -Force)
+    'Synthetic package license' | Set-Content (Join-Path $source 'LICENSE') -Encoding utf8NoBOM
+    '.{ .name = .fixture, .version = "0.0.0" }' | Set-Content (Join-Path $source 'build.zig.zon') -Encoding utf8NoBOM
+    $archive = Join-Path $downloads 'fixture-pkg.tar.gz'
+    & tar.exe -czf $archive -C (Join-Path $owner '.build/source') fixture-pkg/wrapper/LICENSE fixture-pkg/wrapper/build.zig.zon
+    if ($LASTEXITCODE -ne 0) { throw 'Canonical package fixture creation failed.' }
+    $lock = [pscustomobject]@{ dependencies = @([pscustomobject]@{
+                id='fixture'; packageName='fixture-pkg'; licenseArchiveRelativePath='LICENSE'
+                contentArchive=[pscustomobject]@{ fileName='fixture-pkg.tar.gz'; internalRoot='fixture-pkg/wrapper'
+                    sha256=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() }
+            }) }
+    return [pscustomobject]@{
+        Owner=$owner; Source=$source; Downloads=$downloads; Lock=$lock
+        Destination=(Join-Path $owner '.build/closed-packages')
+    }
+}
+
+Describe 'Ghostty closed package directory' {
+    It 'stages verified nested archive contents directly beneath their Zig package name' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        $root = Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+            -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination
+        (Get-Content (Join-Path $root 'fixture-pkg/LICENSE') -Raw) |
+            Should Be (Get-Content (Join-Path $fixture.Source 'LICENSE') -Raw)
+        Test-Path (Join-Path $root 'fixture-pkg/build.zig.zon') | Should Be $true
+        Test-Path (Join-Path $root 'fixture-pkg/wrapper') | Should Be $false
+    }
+
+    It 'rejects changed archives before package publication' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        Add-Content (Join-Path $fixture.Downloads 'fixture-pkg.tar.gz') -Value 'changed'
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination } | Should Throw 'SHA-256 mismatch'
+        Test-Path (Join-Path $fixture.Destination 'fixture-pkg') | Should Be $false
+    }
+
+    It 'preserves occupied destinations and rejects an escaped package name' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        [void](New-Item -ItemType Directory -Path $fixture.Destination)
+        'preserve' | Set-Content (Join-Path $fixture.Destination 'owner.txt')
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination } | Should Throw 'absent or empty'
+        Get-Content (Join-Path $fixture.Destination 'owner.txt') | Should Be 'preserve'
+        $fixture.Lock.dependencies[0].packageName = '../escape'
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot (Join-Path $fixture.Owner '.build/other-packages') } |
+            Should Throw 'package name escapes'
+    }
+}
+
 function Assert-RSInvalidGhosttyRuntimeLock {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Mutate,
@@ -181,9 +237,9 @@ Describe 'Ghostty active product runtime lock' {
             -SchemaPath $schemaPath `
             -RepoRoot $repoRoot
 
-        $first.upstream.commit | Should Be '9c3ec931d64561a8407dde7ac984ce156ae91539'
-        $first.upstream.tree | Should Be '359872ab74fe1ecc96428133c0546be3cb969fdd'
-        @($first.abi.exports).Count | Should Be 191
+        $first.upstream.commit | Should Be '83fb95624b0439ee660c2679b43b38c8b63769cd'
+        $first.upstream.tree | Should Be '4dbd485a3b72c6ced65ad7ea447644a5967e382e'
+        @($first.abi.exports).Count | Should Be 207
         (Get-RSGhosttyRuntimeLockDigest -Lock $first) | Should Be (Get-RSGhosttyRuntimeLockDigest -Lock $second)
     }
 
@@ -487,7 +543,7 @@ Describe 'Ghostty active product runtime lock' {
             -SchemaPath $schemaPath `
             -RepoRoot $repoRoot
 
-        @($lock.dependencies.id) | Should Be @('a-test', 'translate-c', 'uucode', 'wuffs')
+        (@($lock.dependencies.id) -join ',') | Should Be 'a-test,aro,pixels,translate-c,uucode,wuffs'
         (@($lock.notices.id) -contains 'a-test') | Should Be $true
     }
 

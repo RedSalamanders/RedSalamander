@@ -4,6 +4,7 @@ Freezes an exact Ghostty runtime candidate into bounded review evidence.
 
 .DESCRIPTION
 Validates an explicit pristine checkout, two byte-identical official archive downloads, an exact Candidate status report, official GitHub commit verification, ancestry from the canonical product lock, the complete lib-vt path-filtered change inventory, public C declarations/enums, every loader-required export, and security-relevant primary commits. Publishes canonical schema-validated review and descriptor files below the exact candidate .build root without changing Product or tracked state.
+Descriptor schema 2 preserves each canonical dependency's identities in order; historical findings require every supporting commit to belong to the reviewed range.
 
 .PARAMETER CandidateCommit
 The exact lowercase full Ghostty commit to freeze.

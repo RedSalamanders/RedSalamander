@@ -57,6 +57,18 @@ The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.j
 Ghostty lock rejection retains field-specific schema diagnostics when PowerShell's `Test-Json`
 returns false without nested error records. The fallback uses the shipped schema engine with
 reference fetching disabled and cannot admit a rejected lock.
+Ghostty candidate descriptor schema 2 retains every canonical dependency identity separately,
+and overlay rebinding preserves the complete ordered closure. Regenerate schema-1 descriptors.
+Historical review findings require all supporting commits to occur inside the exact candidate
+range; an empty generated findings list still requires manual candidate source review.
+The Ghostty lifecycle sets Zig cache paths on each child process before compiler bootstrap.
+This supports Zig 0.16 and 0.17 without selecting global user caches or changing caller variables.
+Zig 0.17 builds additionally use the shared locked-package staging helper and `--system`:
+undeclared transitive/lazy dependencies fail instead of downloading during compilation.
+Terminal VT pair validation requires identical Zig versions unless the caller supplies the
+exact reviewed `-ZigToolchainTransition <baseline>,<candidate>`. All other comparison gates
+remain enforced; the result describes the complete runtime/toolchain upgrade. Contract tests
+generate synthetic 200-sample pairs and do not depend on ignored historical benchmark archives.
 Artifact action upgrades also update `ReleaseWorkflowPolicy.Tests.ps1` pin
 assertions and verify build, release, nightly, and qualification consumers together.
 The exact-byte historical Gate0 workflow is excluded from Dependabot updates. Its older artifact

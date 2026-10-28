@@ -1,0 +1,77 @@
+{
+  "formatId": "red-salamander-ghostty-runtime",
+  "schemaVersion": 5,
+  "ghosttyCommit": "9c3ec931d64561a8407dde7ac984ce156ae91539",
+  "zigVersion": "0.16.0",
+  "zigArchiveSha256": "68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e",
+  "uucodePackageName": "uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA",
+  "uucodeSourceArchiveUri": "https://deps.files.ghostty.org/uucode-2826a37a4562284fdacd8fa029d49509cc9bffcd.tar.gz",
+  "uucodeSourceArchiveCacheFileName": "uucode-2826a37a4562284fdacd8fa029d49509cc9bffcd.tar.gz",
+  "uucodeSourceArchiveSha256": "7e76fc7fab1e7ac728c52b35bbb3e5b8c639841abfc7fe1a4bcb13050594bc9e",
+  "uucodeSourceInternalRoot": "uucode-2826a37a4562284fdacd8fa029d49509cc9bffcd",
+  "uucodePackageCacheFileName": "uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA.tar.gz",
+  "uucodePackageArchiveSha256": "3c571e2e2c1dd6d67d59e7a29322c718a90465ccb0df362e14feafcdde555ed0",
+  "uucodePackageInternalRoot": "uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA",
+  "uucodeLicenseArchiveRelativePath": "LICENSE.md",
+  "uucodeLicenseSha256": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33",
+  "dependencies": [
+    {
+      "id": "translate-c",
+      "packageName": "translate_c-0.0.0-Q_BUWmU6BwB_9JKG2l2W7i_mhmYWeRseTGBEHi_YlV5f",
+      "sourceArchiveSha256": "38c9e59d58f36e3481f6fa38f11fe59c63c12492fccf399ca56f3dfcce17b53e",
+      "contentArchiveSha256": "497d1651b4847b4093dcf2ba6dbbedd9643a85afa3dadf18b68e4cc6d721b251",
+      "licenseSha256": "5c537d6853e005298a285d508cff9ac7192cea23576c840d485b2b586a7ff177"
+    },
+    {
+      "id": "uucode",
+      "packageName": "uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA",
+      "sourceArchiveSha256": "7e76fc7fab1e7ac728c52b35bbb3e5b8c639841abfc7fe1a4bcb13050594bc9e",
+      "contentArchiveSha256": "3c571e2e2c1dd6d67d59e7a29322c718a90465ccb0df362e14feafcdde555ed0",
+      "licenseSha256": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33"
+    },
+    {
+      "id": "wuffs",
+      "packageName": "N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI",
+      "sourceArchiveSha256": "17877d346f7988651d6c62e45b2e3b05c86809a6442c5e34612374b2a9719a1c",
+      "contentArchiveSha256": "17877d346f7988651d6c62e45b2e3b05c86809a6442c5e34612374b2a9719a1c",
+      "licenseSha256": "f8ac2c75e7f629a87565c80d61ff9fe5aa15cdea0bda997d52a4dc13fdbd19cb"
+    }
+  ],
+  "target": "x86_64-windows-msvc",
+  "buildArguments": [
+    "--seed",
+    "0",
+    "-j1",
+    "-fno-incremental",
+    "-Demit-lib-vt",
+    "-Doptimize=ReleaseFast",
+    "-Dsimd=false",
+    "-Dstrip=true"
+  ],
+  "contentHashNormalization": "pe-coff-debug-rsds-v1",
+  "privateRuntimeOverlayPatchSha256": "06847f6594427cc584cef0f0ec66a54080f236b2414fe40e61b381accaf38264",
+  "pairingContract": "generated-raw-sha256-v1",
+  "generatedIdentityHeader": "include/red_salamander/terminal_runtime_identity.generated.h",
+  "dllNormalizedSha256": "e3666de7a4d43d577491aa45d4b6939de2ccd71d26495dea9bdcf95047e0a319",
+  "dllSha256": "dc048bb106385058fd145f5f6fe74e0cb1811c418308fe0a13e1237869b387eb",
+  "dllSizeBytes": "2141184",
+  "machine": "AMD64",
+  "importModules": [
+    "api-ms-win-crt-heap-l1-1-0.dll",
+    "api-ms-win-crt-math-l1-1-0.dll",
+    "api-ms-win-crt-string-l1-1-0.dll",
+    "kernel32.dll",
+    "ntdll.dll",
+    "vcruntime140.dll"
+  ],
+  "exportCount": 191,
+  "exportSetSha256": "85d134a5fa8c29d83f9c22559632600d474eb433c12a8bd3d55da9863ddeef15",
+  "licenseSha256": {
+    "ghostty": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1",
+    "unicode": "1eda5a3b026870c737b22e8bcd4954338612c790db688242e003f41a4fa95175",
+    "uucode": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33",
+    "uucodeBjoernHoehrmann": "6e15e2fded266a51e5acf112e4b40d1a2c020525edb296146ab03db1aac70179",
+    "wuffs": "f8ac2c75e7f629a87565c80d61ff9fe5aa15cdea0bda997d52a4dc13fdbd19cb",
+    "zig": "5c537d6853e005298a285d508cff9ac7192cea23576c840d485b2b586a7ff177"
+  }
+}

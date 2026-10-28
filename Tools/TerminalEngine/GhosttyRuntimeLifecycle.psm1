@@ -448,6 +448,48 @@ function Assert-RSGhosttyRuntimeOutputReplaceable {
     }
 }
 
+function Expand-RSGhosttyRuntimeLockedPackages {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][object]$RuntimeLock,
+        [Parameter(Mandatory)][string]$DownloadsRoot,
+        [Parameter(Mandatory)][string]$DestinationRoot
+    )
+
+    # This domain helper consumes a validated Ghostty lock. It assembles the
+    # hash-named package directory required by Zig 0.17 --system, reusing the
+    # canonical guarded-path and bounded archive implementations.
+    Import-Module (Join-Path $PSScriptRoot '../Modules/Build/ArtifactOperationLock.psm1') -ErrorAction Stop
+    Import-Module (Join-Path $PSScriptRoot 'TerminalEngineArchive.psm1') -ErrorAction Stop
+    $root = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path $DestinationRoot
+    $buildRoot = Join-Path ([IO.Path]::GetFullPath($RepoRoot)) '.build'
+    if (-not (Test-RSGhosttyRuntimePathWithinRoot -Root $buildRoot -Path $root)) {
+        throw 'Locked packages require a dedicated child below repository .build.'
+    }
+    if ((Test-Path -LiteralPath $root) -and @(Get-ChildItem -LiteralPath $root -Force).Count -ne 0) {
+        throw 'Locked package destination must be absent or empty.'
+    }
+    $ordinal = 0
+    foreach ($dependency in $RuntimeLock.dependencies) {
+        $archive = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path (Join-Path $DownloadsRoot $dependency.contentArchive.fileName)
+        $target = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path (Join-Path $root $dependency.packageName)
+        if (-not (Test-RSGhosttyRuntimePathWithinRoot -Root $root -Path $target)) {
+            throw 'Locked package name escapes its dedicated destination.'
+        }
+        $plan = Assert-RSTerminalEngineArchiveLayout -LiteralPath $archive -ExpectedSha256 $dependency.contentArchive.sha256 `
+            -InternalRoot $dependency.contentArchive.internalRoot -RequiredFileRelativePath $dependency.licenseArchiveRelativePath -Label "$($dependency.id) locked package"
+        $stage = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path (Join-Path $root ".unpack-$ordinal")
+        [void](Expand-RSTerminalEngineArchive -LiteralPath $archive -ArchiveKind tar -DestinationRoot $stage -PreflightPlan $plan)
+        $source = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path (Join-Path $stage $dependency.contentArchive.internalRoot)
+        # Re-resolve both absolute move endpoints immediately before mutation.
+        $target = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot '.build' -Path $target
+        Move-Item -LiteralPath $source -Destination $target -ErrorAction Stop
+        ++$ordinal
+    }
+    return $root
+}
+
 function Invoke-RSGhosttyRuntimeBuild {
     [CmdletBinding()]
     param(
@@ -830,8 +872,9 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             try {
                 $actualPackageName = (Invoke-CheckedProcess `
                         -FilePath $zigExecutable `
-                        -ArgumentList @('fetch', '--global-cache-dir', $fetchCacheRoot, $sourceArchive) `
-                        -WorkingDirectory $sourceRoot).Stdout.Trim()
+                        -ArgumentList @('fetch', $sourceArchive) `
+                        -WorkingDirectory $sourceRoot `
+                        -Environment @{ ZIG_GLOBAL_CACHE_DIR = $fetchCacheRoot }).Stdout.Trim()
                 if ($actualPackageName -cne $packageName) {
                     throw "$dependencyId package content hash mismatch: $actualPackageName"
                 }
@@ -1133,6 +1176,12 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
                 -LiteralPath ([string]$dependencyState.ContentArchive) `
                 -Destination (Join-Path $reproduciblePackageCache "$($dependencyState.Lock.packageName).tar.gz")
         }
+        $closedPackages = ''
+        $semanticZigVersion = [version]($zigVersion.Split('-')[0].Split('+')[0])
+        if ($semanticZigVersion -ge [version]'0.17.0') {
+            $closedPackages = Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $repoRoot -RuntimeLock $runtimeLock `
+                -DownloadsRoot $downloadsRoot -DestinationRoot (Join-Path $reproducibleCacheRoot 'packages')
+        }
 
         $canonicalDriveMutexName = 'Local\RedSalamander.GhosttyRuntime.CanonicalDrive.R'
         $canonicalDriveMutex = [Threading.Mutex]::new($false, $canonicalDriveMutexName)
@@ -1182,16 +1231,26 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
                 $mappedReproducibleCacheRoot = Join-Path $mappedRepoRoot ([IO.Path]::GetRelativePath($repoRoot, $reproducibleCacheRoot))
                 $mappedGlobalCache = Join-Path $mappedReproducibleCacheRoot 'global'
                 $mappedLocalCache = Join-Path $mappedReproducibleCacheRoot 'local'
+                # Zig 0.17 bootstraps its maker before parsing build options and
+                # no longer accepts --global-cache-dir there. Both supported
+                # toolchains honor these per-child variables during bootstrap
+                # without mutating the caller's environment.
                 $arguments = @('build') + $buildArguments + @(
-                    '--cache-dir', $mappedLocalCache,
-                    '--global-cache-dir', $mappedGlobalCache,
-                    '--prefix', $mappedPartialProduct,
+                    '-p', $mappedPartialProduct,
                     "-Dtarget=$target"
                 )
+                if ($closedPackages) {
+                    $mappedPackages = Join-Path $mappedRepoRoot ([IO.Path]::GetRelativePath($repoRoot, $closedPackages))
+                    $arguments += @('--system', $mappedPackages)
+                }
                 [void](Invoke-CheckedProcess `
                         -FilePath $mappedZigExecutable `
                         -ArgumentList $arguments `
-                        -WorkingDirectory $mappedSourceRoot)
+                        -WorkingDirectory $mappedSourceRoot `
+                        -Environment @{
+                            ZIG_GLOBAL_CACHE_DIR = $mappedGlobalCache
+                            ZIG_LOCAL_CACHE_DIR = $mappedLocalCache
+                        })
             }
             finally {
                 try {
@@ -1379,4 +1438,5 @@ Export-ModuleMember -Function @(
     'Get-RSGhosttyRuntimeLockDependency',
     'Resolve-RSGhosttyRuntimeBuildPlan',
     'Assert-RSGhosttyRuntimeOutputReplaceable',
+    'Expand-RSGhosttyRuntimeLockedPackages',
     'Invoke-RSGhosttyRuntimeBuild')

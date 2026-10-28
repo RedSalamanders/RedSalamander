@@ -280,11 +280,11 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
         observation = $baseDescriptor.observation
         review = $baseDescriptor.review
         toolchain = $baseDescriptor.toolchain
-        dependency = $baseDescriptor.dependency
+        dependencies = $baseDescriptor.dependencies
         overlay = [ordered]@{ path = $patchRelative; normalizedTextSha256 = $patchIdentity.Sha256; concernIds = $concernIds }
     }
     $updatedDescriptor = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         generatedUtc = $review.generatedUtc
         sourceBinding = $binding.sourceBinding
         canonicalLock = $binding.canonicalLock
@@ -293,7 +293,7 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
         observation = $binding.observation
         review = $binding.review
         toolchain = $binding.toolchain
-        dependency = $binding.dependency
+        dependencies = $binding.dependencies
         overlay = $binding.overlay
         inputDigest = Get-RSCanonicalJsonDigest -InputObject $binding
     }

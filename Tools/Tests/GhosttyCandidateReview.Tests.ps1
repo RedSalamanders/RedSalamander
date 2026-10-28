@@ -33,7 +33,9 @@ function New-RSGhosttyCandidateReviewRepository {
     @'
 GHOSTTY_API GhosttyResult ghostty_terminal_mode_get(void);
 GHOSTTY_API GhosttyResult ghostty_terminal_keep(void);
-typedef enum { GHOSTTY_TERMINAL_OPT_A = 1 } GhosttyTerminalOption;
+typedef enum {
+  GHOSTTY_TERMINAL_OPT_A = 1,
+} GhosttyTerminalOption;
 '@ | Set-Content -LiteralPath (Join-Path $root 'include\ghostty\vt\terminal.h') -Encoding utf8NoBOM
     '.version = "1.0-test",' | Set-Content -LiteralPath (Join-Path $root 'build.zig.zon') -Encoding utf8NoBOM
     'base build' | Set-Content -LiteralPath (Join-Path $root 'build.zig') -Encoding utf8NoBOM
@@ -47,7 +49,10 @@ typedef enum { GHOSTTY_TERMINAL_OPT_A = 1 } GhosttyTerminalOption;
     @'
 GHOSTTY_API GhosttyResult ghostty_terminal_get(void);
 GHOSTTY_API GhosttyResult ghostty_terminal_keep(void);
-typedef enum { GHOSTTY_TERMINAL_OPT_A = 1, GHOSTTY_TERMINAL_OPT_B = 2 } GhosttyTerminalOption;
+typedef enum {
+  GHOSTTY_TERMINAL_OPT_A = 1,
+  GHOSTTY_TERMINAL_OPT_B = 2,
+} GhosttyTerminalOption;
 '@ | Set-Content -LiteralPath (Join-Path $root 'include\ghostty\vt\terminal.h') -Encoding utf8NoBOM
     'candidate parser with bounded OSC state' | Set-Content -LiteralPath (Join-Path $root 'src\terminal\Parser.zig') -Encoding utf8NoBOM
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'src\terminal\kitty') -Force)
@@ -94,6 +99,89 @@ Describe 'Ghostty exact candidate review' {
             $schema.additionalProperties | Should Be $false
             @($schema.required).Count | Should BeGreaterThan 5
         }
+    }
+
+    It 'does not repeat historical findings outside the reviewed commit range' {
+        $fixture = New-RSGhosttyCandidateReviewRepository
+        $security = Get-RSGhosttyCandidateSecurityReview -SourcePath $fixture.Root -BaseCommit $fixture.Base -CandidateCommit $fixture.Candidate
+        $security.reviewedCommitCount | Should Be 1
+        @($security.findings).Count | Should Be 0
+        $schema = Get-Content -LiteralPath $reviewSchemaPath -Raw | ConvertFrom-Json -Depth 100
+        $schema.properties.security.properties.findings.minItems | Should Be 0
+    }
+
+    It 'freezes all dependency hashes separately and binds a changed dependency into the descriptor digest' {
+        $fixture = New-RSGhosttyCandidateReviewRepository
+        $owner = Join-Path $TestDrive 'review-owner'
+        & git.exe clone --quiet --no-hardlinks $fixture.Root $owner
+        if ($LASTEXITCODE -ne 0) { throw 'Fixture owner clone failed.' }
+        $candidateRoot = Join-Path $owner ".build/TerminalEngineUpgrade/$($fixture.Candidate)"
+        [void](New-Item -ItemType Directory -Path $candidateRoot -Force)
+        $source = Join-Path $candidateRoot 'source-review'
+        Move-Item -LiteralPath $fixture.Root -Destination $source
+        Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('remote', 'add', 'origin', 'https://github.com/ghostty-org/ghostty.git') | Out-Null
+        Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('checkout', '--detach', $fixture.Candidate) | Out-Null
+        $tree = Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('rev-parse', 'HEAD^{tree}') | Select-Object -First 1
+
+        $schemas = Join-Path $owner 'Specs/Terminal'
+        [void](New-Item -ItemType Directory -Path $schemas -Force)
+        foreach ($schema in @($reviewSchemaPath, $descriptorSchemaPath)) {
+            Copy-Item -LiteralPath $schema -Destination $schemas
+        }
+        $lockDirectory = Join-Path $owner 'External/TerminalEngine'
+        [void](New-Item -ItemType Directory -Path $lockDirectory -Force)
+        $lock = Get-Content (Join-Path $repoRoot 'External/TerminalEngine/GhosttyRuntimeLock.v1.json') -Raw | ConvertFrom-Json -Depth 100
+        $lock.upstream.commit = $fixture.Base
+        $lock.upstream.tree = Invoke-RSGhosttyCandidateTestGit -Root $source -Arguments @('rev-parse', "$($fixture.Base)^{tree}") | Select-Object -First 1
+        $lock | ConvertTo-Json -Depth 100 | Set-Content (Join-Path $lockDirectory 'GhosttyRuntimeLock.v1.json')
+        $observation = [pscustomobject]@{ mode = 'Candidate'; observation = [pscustomobject]@{
+                candidateRequestedCommit = $fixture.Candidate; commit = $fixture.Candidate; tree = $tree
+            } }
+        & (Get-Module GhosttyCandidateReview) {
+            param($fixtureLock, $fixtureObservation)
+            $script:descriptorTestLock = $fixtureLock
+            $script:descriptorTestObservation = $fixtureObservation
+        } $lock $observation
+        Mock -ModuleName GhosttyCandidateReview Read-RSGhosttyRuntimeLock { return $script:descriptorTestLock }
+        Mock -ModuleName GhosttyCandidateReview Read-RSValidationJsonFile { return $script:descriptorTestObservation }
+        $archive = Join-Path $candidateRoot 'one.tar.gz'
+        $repeat = Join-Path $candidateRoot 'two.tar.gz'
+        'same archive fixture' | Set-Content $archive
+        Copy-Item -LiteralPath $archive -Destination $repeat
+        $observationPath = Join-Path $candidateRoot 'observation.json'
+        '{}' | Set-Content $observationPath
+        $verificationPath = Join-Path $candidateRoot 'verification.json'
+        @{
+            sha = $fixture.Candidate
+            html_url = "https://github.com/ghostty-org/ghostty/commit/$($fixture.Candidate)"
+            commit = @{
+                tree = @{ sha = $tree }
+                verification = @{ verified = $true; reason = 'valid' }
+                author = @{ date = '2026-10-28T00:00:00Z' }
+                committer = @{ date = '2026-10-28T00:00:00Z' }
+            }
+        } | ConvertTo-Json -Depth 8 | Set-Content $verificationPath
+        $arguments = @{
+            RepoRoot = $owner; CandidateCommit = $fixture.Candidate; SourcePath = $source
+            ArchivePath = $archive; RepeatArchivePath = $repeat; ObservationReportPath = $observationPath
+            VerificationFixturePath = $verificationPath; GeneratedUtc = [DateTime]'2026-10-28T00:00:00Z'
+        }
+        $result = New-RSGhosttyRuntimeCandidateReview @arguments
+        $first = Get-Content $result.DescriptorPath -Raw | ConvertFrom-Json -Depth 100
+        $first.schemaVersion | Should Be 2
+        @($first.dependencies).Count | Should Be $lock.dependencies.Count
+        $lock.dependencies.Count | Should BeGreaterThan 1
+        for ($i = 0; $i -lt $lock.dependencies.Count; $i++) {
+            $first.dependencies[$i].id | Should Be $lock.dependencies[$i].id
+            $first.dependencies[$i].sourceArchiveSha256 | Should Be $lock.dependencies[$i].sourceArchive.sha256
+            $first.dependencies[$i].contentArchiveSha256 | Should Be $lock.dependencies[$i].contentArchive.sha256
+            $first.dependencies[$i].licenseSha256 | Should Be $lock.dependencies[$i].licenseSha256
+        }
+        $lock.dependencies[1].sourceArchive.sha256 = 'e' * 64
+        $result = New-RSGhosttyRuntimeCandidateReview @arguments
+        $second = Get-Content $result.DescriptorPath -Raw | ConvertFrom-Json -Depth 100
+        $second.dependencies[1].sourceArchiveSha256 | Should Be ('e' * 64)
+        $second.inputDigest | Should Not Be $first.inputDigest
     }
 
     It 'keeps the public command thin and rejects non-full candidate identities' {

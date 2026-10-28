@@ -15,6 +15,11 @@ name: Ghostty Runtime Native Qualification
         description: SHA-256 of the reviewed normalized candidate overlay
         required: true
         type: string
+      use_repository_lock:
+        description: Qualify the checked-out canonical lock and overlay instead of candidate secrets
+        required: true
+        default: false
+        type: boolean
       qualify_product:
         description: Continue into admitted-product Debug, Commands, Release, and portable qualification
         required: true
@@ -42,6 +47,7 @@ jobs:
       RS_CANDIDATE_LOCK_SHA256: ${{ inputs.candidate_lock_sha256 }}
       RS_CANDIDATE_PATCH_SHA256: ${{ inputs.candidate_patch_sha256 }}
       RS_TEST_SEED: '0x97d35bc7'
+      RS_USE_REPOSITORY_LOCK: ${{ inputs.use_repository_lock }}
 
     steps:
       - name: Enable long Git paths before checkout
@@ -97,17 +103,23 @@ jobs:
               throw "Invalid $($entry.Name) input."
             }
           }
-          if ([string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_LOCK_B64) -or
-              [string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_PATCH_B64)) {
-            throw 'The reviewed candidate lock and patch secrets are required.'
-          }
-
           $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
           [void][IO.Directory]::CreateDirectory($candidateRoot)
           $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
           $patchPath = Join-Path $candidateRoot 'Ghostty-WindowsPrivateRuntime.patch'
-          [IO.File]::WriteAllBytes($lockPath, [Convert]::FromBase64String($env:RS_CANDIDATE_LOCK_B64))
-          [IO.File]::WriteAllBytes($patchPath, [Convert]::FromBase64String($env:RS_CANDIDATE_PATCH_B64))
+          $expectedOverlayPath = ".build/TerminalEngineUpgrade/$env:RS_CANDIDATE_COMMIT/Ghostty-WindowsPrivateRuntime.patch"
+          if ($env:RS_USE_REPOSITORY_LOCK -ceq 'true') {
+            $expectedOverlayPath = 'Tools/TerminalEngine/Patches/Ghostty-WindowsPrivateRuntime.patch'
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'External/TerminalEngine/GhosttyRuntimeLock.v1.json') -Destination $lockPath
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE $expectedOverlayPath) -Destination $patchPath
+          } else {
+            if ([string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_LOCK_B64) -or
+                [string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_PATCH_B64)) {
+              throw 'The reviewed candidate lock and patch secrets are required.'
+            }
+            [IO.File]::WriteAllBytes($lockPath, [Convert]::FromBase64String($env:RS_CANDIDATE_LOCK_B64))
+            [IO.File]::WriteAllBytes($patchPath, [Convert]::FromBase64String($env:RS_CANDIDATE_PATCH_B64))
+          }
 
           $actualLockSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash.ToLowerInvariant()
           $actualPatchSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $patchPath).Hash.ToLowerInvariant()
@@ -119,7 +131,6 @@ jobs:
           }
 
           $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json -Depth 100
-          $expectedOverlayPath = ".build/TerminalEngineUpgrade/$env:RS_CANDIDATE_COMMIT/Ghostty-WindowsPrivateRuntime.patch"
           if ([string]$lock.upstream.commit -cne $env:RS_CANDIDATE_COMMIT -or
               [string]$lock.overlay.path -cne $expectedOverlayPath -or
               [string]$lock.overlay.normalizedTextSha256 -cne $env:RS_CANDIDATE_PATCH_SHA256) {
@@ -143,6 +154,21 @@ jobs:
             throw 'The native candidate build returned an invalid identity.'
           }
 
+      - name: Select owned native test-data root
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestRunPlan.psm1') -Force
+          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          $root = Initialize-RSTestSandboxRoot -TestRoot $candidate -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization
+          $env:REDSALAMANDER_TEST_ROOT = $root
+          $env:REDSALAMANDER_TEST_RUN_ID = "ghostty-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+          $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $env:GITHUB_WORKSPACE -Harness upstream-ghostty -Case lib-vt
+          "REDSALAMANDER_TEST_ROOT=$root" >> $env:GITHUB_ENV
+          "REDSALAMANDER_TEST_RUN_ID=$env:REDSALAMANDER_TEST_RUN_ID" >> $env:GITHUB_ENV
+          "RS_NATIVE_TEST_SCRATCH=$scratch" >> $env:GITHUB_ENV
+
       - name: Run upstream native ARM64 lib-vt targets
         shell: pwsh
         run: |
@@ -159,10 +185,12 @@ jobs:
             throw "Pinned Zig executable is missing: $zig"
           }
 
-          $pythonPackages = Join-Path $env:RUNNER_TEMP 'ghostty-python-packages'
+          $env:TEMP = $env:RS_NATIVE_TEST_SCRATCH
+          $env:TMP = $env:RS_NATIVE_TEST_SCRATCH
+          $pythonPackages = Join-Path $candidateRoot 'python-packages'
           & python -m pip install --disable-pip-version-check --no-warn-script-location --target $pythonPackages jsonschema==4.26.0
           if ($LASTEXITCODE -ne 0) { throw 'Installing the pinned jsonschema test dependency failed.' }
-          $hostTools = Join-Path $env:RUNNER_TEMP 'ghostty-host-tools'
+          $hostTools = Join-Path $candidateRoot 'host-tools'
           [void][IO.Directory]::CreateDirectory($hostTools)
           $pythonPath = (Get-Command python -ErrorAction Stop).Source
           [IO.File]::WriteAllText(
@@ -171,16 +199,33 @@ jobs:
             [Text.UTF8Encoding]::new($false))
           $env:PATH = "$hostTools;$env:PATH"
           $env:PYTHONPATH = $pythonPackages
+          $env:ZIG_GLOBAL_CACHE_DIR = Join-Path $candidateRoot 'native-global-cache'
+          $env:ZIG_LOCAL_CACHE_DIR = Join-Path $sourceRoot '.zig-cache'
+          $modernZig = [version]$lock.toolchain.zigVersion -ge [version]'0.17.0'
+          $packageArguments = @()
+          if ($modernZig) {
+            Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1')
+            $packages = Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $env:GITHUB_WORKSPACE -RuntimeLock $lock `
+              -DownloadsRoot (Join-Path $env:GITHUB_WORKSPACE '.build/TerminalEngineUpgrade/Downloads') `
+              -DestinationRoot (Join-Path $candidateRoot 'native-locked-packages')
+            $packageArguments = @('--system', $packages)
+          }
+          $fixtures = Join-Path $sourceRoot 'src/terminal/snapshot/testdata'
+          $fixtureDestination = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'src/terminal/snapshot/testdata'
+          [void][IO.Directory]::CreateDirectory((Split-Path -Parent $fixtureDestination))
+          Copy-Item -LiteralPath $fixtures -Destination $fixtureDestination -Recurse
 
           $patchApplied = $false
           $buildModified = $false
           $buildPath = Join-Path $sourceRoot 'build.zig'
           $buildOriginal = $null
           $temporaryRunnerPath = Join-Path $sourceRoot '.red-salamander-native-test-runner.zig'
-          $crashRoot = Join-Path $env:RUNNER_TEMP 'ghostty-native-crash'
+          $crashRoot = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'crash'
           [void][IO.Directory]::CreateDirectory($crashRoot)
-          $localDumpKey = 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\test.exe'
-          $werConfigured = $false
+          $localDumpKeys = @('test.exe', 'ghostty-vt-test.exe', 'ghostty-vt-c-test.exe') | ForEach-Object {
+            "HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\$_"
+          }
+          $createdDumpKeys = [Collections.Generic.List[string]]::new()
           $windowsUnmaterializablePaths = @(
             'test/fuzz-libghostty/corpus/parser-cmin/id_000123,time_0,execs_0,orig_id_000940,src_000935,time_9023,execs_524829,op_quick,pos_55,val_+13,+cov',
             'test/fuzz-libghostty/corpus/parser-cmin/id_000213,time_0,execs_0,orig_id_001278,src_001266,time_20982,execs_1128131,op_quick,pos_31,val_+2,+cov'
@@ -195,7 +240,10 @@ jobs:
             throw "Native qualification source differs from the builder's exact Windows allowlist: $($sourceStatusBefore -join '; ')"
           }
           try {
-            [void](New-Item -Path $localDumpKey -Force)
+            foreach ($localDumpKey in $localDumpKeys) {
+              if (Test-Path -LiteralPath $localDumpKey) { throw "Existing WER configuration must be preserved: $localDumpKey" }
+              [void](New-Item -Path $localDumpKey)
+              $createdDumpKeys.Add($localDumpKey)
             [void](New-ItemProperty `
                 -Path $localDumpKey `
                 -Name DumpFolder `
@@ -208,7 +256,7 @@ jobs:
                 -PropertyType DWord `
                 -Value 2 `
                 -Force)
-            $werConfigured = $true
+            }
 
             & git -C $sourceRoot apply --check $patchPath
             if ($LASTEXITCODE -ne 0) { throw 'Candidate overlay preflight failed.' }
@@ -240,8 +288,9 @@ jobs:
               }
               $updatedBuild = $updatedBuild.Replace($needle, $replacement)
             }
+            $cAbiName = if ($modernZig) { "            .name = `"ghostty-vt-c-test`",$newline" } else { '' }
             $cAbiNeedle =
-              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "        const mod_vt_c_test = b.addTest(.{$newline" + $cAbiName +
               "            .root_module = mod.vt_c,$newline"
             $cAbiReplacement =
               "        // The private Windows runtime strips the shared vt_c module.$newline" +
@@ -251,12 +300,21 @@ jobs:
               "        red_salamander_vt_c_test_root.strip = false;$newline" +
               "        red_salamander_vt_c_test_root.omit_frame_pointer = false;$newline" +
               "        red_salamander_vt_c_test_root.unwind_tables = .sync;$newline" +
-              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "        const mod_vt_c_test = b.addTest(.{$newline" + $cAbiName +
               "            .root_module = red_salamander_vt_c_test_root,$newline"
             if ([regex]::Matches($updatedBuild, [regex]::Escape($cAbiNeedle)).Count -cne 1) {
               throw 'Expected one native C-ABI diagnostic module insertion point.'
             }
             $updatedBuild = $updatedBuild.Replace($cAbiNeedle, $cAbiReplacement)
+            $testCwd = $env:RS_NATIVE_TEST_SCRATCH.Replace('\', '\\').Replace('"', '\"')
+            foreach ($testName in @('mod_vt_test', 'mod_vt_c_test')) {
+              $runNeedle = "        const $($testName)_run = b.addRunArtifact($testName);$newline"
+              if ([regex]::Matches($updatedBuild, [regex]::Escape($runNeedle)).Count -cne 1) {
+                throw "Expected one $testName working-directory insertion point."
+              }
+              $updatedBuild = $updatedBuild.Replace($runNeedle,
+                $runNeedle + "        $($testName)_run.setCwd(.{ .cwd_relative = `"$testCwd`" });$newline")
+            }
             [IO.File]::WriteAllText($buildPath, $updatedBuild, [Text.UTF8Encoding]::new($false))
             $buildModified = $true
             "RS_NATIVE_TEST_RUNNER_MODE=simple" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -271,11 +329,15 @@ jobs:
             try {
               # Serialize the unchanged upstream tests and filters through the
               # temporary diagnostic harness prepared above.
-              & $zig build --color off --seed $env:RS_TEST_SEED -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
+              $seedArguments = if ($modernZig) { @("--seed=$env:RS_TEST_SEED") } else { @('--seed', $env:RS_TEST_SEED) }
+              $optimization = if ($modernZig) { '-Doptimize=debug' } else { '-Doptimize=Debug' }
+              & $zig build --color off @seedArguments -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
                 -Dtarget=aarch64-windows-msvc `
-                -Doptimize=Debug `
-                -Dsimd=false 2>&1 | Tee-Object -Variable nativeOutput | Write-Host
+                $optimization -Demit-lib-vt -Demit-themes=false -Demit-terminfo=false -Demit-termcap=false `
+                -Dsimd=false @packageArguments 2>&1 | Tee-Object -Variable nativeOutput | Write-Host
               $nativeExitCode = $LASTEXITCODE
+              [IO.File]::WriteAllLines((Join-Path $env:RS_NATIVE_TEST_SCRATCH 'native-output.txt'),
+                [string[]]@($nativeOutput | ForEach-Object { [string]$_ }), [Text.UTF8Encoding]::new($false))
             }
             finally {
               Pop-Location
@@ -344,7 +406,7 @@ jobs:
                   Copy-Item -LiteralPath $failedTestPdb -Destination (Join-Path $crashRoot 'test.pdb') -Force
                 }
                 $retryOutput = @()
-                Push-Location -LiteralPath $sourceRoot
+                Push-Location -LiteralPath $env:RS_NATIVE_TEST_SCRATCH
                 try {
                   & $failedTestPath "--seed=$env:RS_TEST_SEED" 2>&1 |
                     Tee-Object -Variable retryOutput | Write-Host
@@ -444,8 +506,8 @@ jobs:
               Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
           }
           finally {
-            if ($werConfigured -and (Test-Path -LiteralPath $localDumpKey)) {
-              Remove-Item -LiteralPath $localDumpKey -Recurse -Force
+            foreach ($localDumpKey in $createdDumpKeys) {
+              if (Test-Path -LiteralPath $localDumpKey) { Remove-Item -LiteralPath $localDumpKey -Recurse -Force }
             }
             if ($buildModified) {
               [IO.File]::WriteAllText($buildPath, $buildOriginal, [Text.UTF8Encoding]::new($false))
@@ -472,7 +534,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-crash-${{ github.run_id }}
-          path: ${{ runner.temp }}/ghostty-native-crash
+          path: ${{ env.RS_NATIVE_TEST_SCRATCH }}/crash
           if-no-files-found: warn
           retention-days: 30
 
@@ -488,7 +550,7 @@ jobs:
           $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
           $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
           $identityPath = Join-Path $candidateRoot 'candidate-native-arm64\terminal-runtime-identity.json'
-          $reportPath = Join-Path $candidateRoot 'native-arm64-qualification.json'
+          $reportPath = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'native-arm64-qualification.json'
           $schemaPath = Join-Path $env:GITHUB_WORKSPACE 'Specs\Terminal\GhosttyRuntimeNativeQualification.schema.json'
           Import-Module .\Tools\TerminalEngine\GhosttyRuntimeLifecycle.psm1 -Force -ErrorAction Stop
           Import-Module .\Tools\Modules\Testing\ValidationFingerprint.psm1 -Force -ErrorAction Stop
@@ -559,7 +621,7 @@ jobs:
             -LiteralPath $reportPath `
             -InputObject $report `
             -SchemaPath $schemaPath `
-            -AllowedRoot $candidateRoot
+            -AllowedRoot $env:RS_NATIVE_TEST_SCRATCH
           Get-Content -LiteralPath $reportPath -Raw
 
       - name: Upload native qualification evidence
@@ -567,7 +629,8 @@ jobs:
         with:
           name: ghostty-native-arm64-${{ env.RS_CANDIDATE_COMMIT }}
           path: |
-            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/native-arm64-qualification.json
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-arm64-qualification.json
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-output.txt
             .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/candidate-native-arm64/terminal-runtime-identity.json
           if-no-files-found: error
           retention-days: 30

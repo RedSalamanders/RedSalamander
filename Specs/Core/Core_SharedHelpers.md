@@ -222,4 +222,5 @@ deletes the current last run as a fallback for a failed rename.
 
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
+| Ghostty locked package directory | Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1, Expand-RSGhosttyRuntimeLockedPackages | Assembles Zig 0.17 hash-named packages from a validated Ghostty lock beneath a dedicated guarded .build child. Reuses Resolve-RSGuardedRepositoryPath and bounded canonical archive extraction; refuses nonempty destinations, escaped package names, changed archives and reparse output chains. Runtime builds and native qualification share this policy. See the Terminal runtime contract. |
 | Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, provider-resolved offline input, WhatIf and failure-preserving publication under an exclusive cache lease. Reuses canonical ArtifactOperationLock guarded path/publication helpers. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |
