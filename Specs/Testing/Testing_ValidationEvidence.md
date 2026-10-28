@@ -410,6 +410,11 @@ fingerprints, execution authority, or verdicts. Explain JSON and console output 
 reason codes and costs. Snapshot metrics separately report Git discovery, content
 hashing, canonicalization, and total acquisition time.
 
+Either scheduling partition may be empty, including a PR-deferred Full remainder with only
+interactive standalone readers. Empty cheap-work selection MUST retain every later entry
+exactly once in its original order under strict-mode PowerShell. Nonempty cheap selections
+retain duration/identity ordering. Scheduling does not change entry contracts or verdicts.
+
 ## Exit categories
 
 Startrail-owned exits are stable and are mapped once from the terminal state after summary

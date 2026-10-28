@@ -458,3 +458,32 @@ native qualification are required. Focused run
 for another worktree's desktop lease, before launching its native cases. Retain it as
 incomplete coverage. The person approved the remaining focus-taking tests overnight into
 29 October with the existing warning, desktop lease and focus/cursor restoration.
+
+### Empty deferred scheduling partition
+
+Source `16d07ae35` passes its full x64 ASan Debug build in 6:17, receipt
+`e26403f8a837a3562f89093206654a7096867b2fe58933bc20869497987f36b3`.
+Its local PrePush remainder `20261028T221818Z-96528-20173e430f4748dda03713946a170b62`
+passes all 29 build-toolchain controls without skips, then successfully re-attests x64 Debug
+in 5:44, receipt `6395312c94b2f98787ccbc19612b972cbbb02e2a7d1df61bd31525ed0af0b91c`.
+Before launching native cases, the runner throws at its empty cheap-entry selection:
+strict-mode PowerShell rejects `$earlyStandaloneConfigs.Id` when only the two interactive
+viewer entries remain. The interrupted run is retained; it is not a runtime or Full pass.
+
+Execute the actual scheduling block in four focused controls, including the real deferred
+Full plan. The original code fails exactly the interactive-only and real-remainder cases;
+empty/all-cheap and mixed cost/order/identity controls pass. Materialize cheap IDs through
+pipeline enumeration before excluding them from later work. Preserve all entries, ordering,
+desktop admission, assertions, deadlines and incomplete-coverage semantics.
+The pending ASan rollback run `20261028T222658Z-77500-c602ca6c8ec14322a92496808aaf8cc7`
+was stopped before native launch to permit this source correction and archived as interrupted.
+No rollback or MTP native acceptance is claimed; restore the ASan profile through a canonical
+full Rebuild after that interruption. Recompute and review PR execution coverage for the changed
+runner before a new PrePush attempt. Hosted x64 Debug at source `16d07ae35` is green; ARM64
+and the six-profile runtime qualification remain pending.
+
+The corrected actual-runner controls pass all four cases with zero skips. The reviewed
+execution digest is now `b34cc09f8a684a2cebb3978a75af9174907b8cc66f213a28bf944f10cb8ab6b6`.
+The PR still runs the same two native Debug profiles and unchanged Suite PR contracts;
+the runner fix changes their dependency binding and requires fresh matching CI evidence.
+Tool inventory validation has zero blocking findings and the changelog is folded.

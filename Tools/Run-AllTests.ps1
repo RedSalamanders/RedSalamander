@@ -148,6 +148,7 @@
 .PARAMETER DeferPrGate
     With unfiltered Fresh Full, defers entries with contracts identical to Suite PR to
     the forthcoming verified PR workflow. Coverage remains filtered, NOT_EVALUATED.
+    A remainder containing only later interactive entries executes normally with no cheap entries.
 
 .PARAMETER NonInteractive
     Omits entries that require the person's desktop; omitted acceptance remains pending.
@@ -2037,7 +2038,8 @@ $earlyStandaloneConfigs = @($standaloneConfigs | Where-Object {
     } | Sort-Object `
         @{ Expression = { $estimate = [int64]$durationEstimates[$_.Id]; if ($estimate -gt 0) { $estimate } else { [int64]::MaxValue } } }, `
         @{ Expression = { $_.Id } })
-$standaloneConfigs = @($standaloneConfigs | Where-Object { $_.Id -notin @($earlyStandaloneConfigs.Id) })
+$earlyStandaloneIds = @($earlyStandaloneConfigs | ForEach-Object Id)
+$standaloneConfigs = @($standaloneConfigs | Where-Object { $_.Id -notin $earlyStandaloneIds })
 if ($earlyStandaloneConfigs.Count -gt 0) {
     Write-Host "Scheduler: running $($earlyStandaloneConfigs.Count) cheap noninteractive entries before broad interactive/stateful work." -ForegroundColor DarkGray
 }
