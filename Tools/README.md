@@ -49,6 +49,10 @@ contents, tooling, scripts and build/test policy inputs. Changing a delegated te
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
 
+The PR build-policy guard checks the formatter job's PowerShell installer wiring and rejects
+Python/pip bootstrap only within that job. Formatter acquisition integrity is covered separately
+by `Tests/ClangFormat.Tests.ps1`; other build dependencies retain their own prerequisites.
+
 The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.json).
 Ghostty lock rejection retains field-specific schema diagnostics when PowerShell's `Test-Json`
 returns false without nested error records. The fallback uses the shipped schema engine with

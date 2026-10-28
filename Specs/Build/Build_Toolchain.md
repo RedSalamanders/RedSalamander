@@ -782,6 +782,11 @@ the default Windows Git path limit. This setup runs on the disposable runner bef
 CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
 `Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
 
+The PR build-policy test MUST verify the formatter job invokes this installer with `pwsh` and
+does not bootstrap Python or install pip packages in that job. This job-scoped wiring check
+does not constrain other dependencies' Python requirements. `Tools/Tests/ClangFormat.Tests.ps1`
+owns the separate offline acquisition, integrity, publication and cache-lease behavior checks.
+
 Formatter acquisition MUST reuse `Resolve-RSGuardedRepositoryPath` and
 `Publish-RSGuardedRepositoryFile` for its `.build/format` cache, download staging and
 executable publication. Every existing output component from the repository root through

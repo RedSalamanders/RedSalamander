@@ -10,7 +10,8 @@
       "lifecycle": "active",
       "kind": "command",
       "tests": [
-        "Tools/Tests/ClangFormat.Tests.ps1"
+        "Tools/Tests/ClangFormat.Tests.ps1",
+        "Tools/Tests/BuildReproducibility.Tests.ps1"
       ],
       "path": "Tools/Install-ClangFormat.ps1",
       "usage": "Run before CI formatting or use WheelPath for offline installation.",

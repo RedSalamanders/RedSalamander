@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Align the PR formatter-policy regression with the checksum-pinned PowerShell installer, retaining ARM64, suite, permission and native formatting gates while keeping legitimate Python requirements outside the formatter job independent.
 - Correct canonical Markdown fence recognition so line-leading triple-backtick inline code and tab/four-space indentation cannot hide following unindented missing links; real backtick and tilde fences close only with whitespace after the matching delimiter run. Add link, heading and inventory regression controls, preserve zero-to-three-space top-level admission and retain tilde info containing backticks.
 - Reject reparse points at owned guidance roots and their ancestors before enumeration by reusing the canonical repository path guard; cover ordinary discovery and three junction boundaries with unchanged target witnesses and owned-link teardown.
 - Unlink formatter regression fixtures' owned junctions in guaranteed teardown without following or removing their targets, preserving the original and staged witnesses and allowing canonical test-run evidence archival.
