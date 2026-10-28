@@ -162,3 +162,28 @@ The next broader-pin rebuild (`e53451e09`) reached the application and found two
 those duplicate erasers and the otherwise empty scroll-panel subclass, use the public Panel and
 ScrollPanel API, and retain its tree/accessibility invalidation. Keep all reconciliation, pending
 decision, focus, lifecycle and resource assertions; validate those paths before acceptance.
+
+Candidate `1f3cd13f7ab342dcc5812677ea020492efdf695a` passed its full-solution x64 Debug rebuild
+in 13:03, receipt `650cf08b4103fd5b85b3777025e907527786c83fcc33434b3525188d42e07368`.
+All 14 exact Commands cases passed in `20261028T143733Z-26820-ea86d5ea88ef4574957e6530f1f271d5`,
+with no skips or retries: the original history case, the deterministic stationary-pointer regression
+and all twelve theme-overlay cases. The pointer regression took 59 ms; its real-movement control
+remains required. Popup stable-tree Setup/case/Cleanup passed without skips in
+`20261028T144733Z-73716-425c1baf430a479b841c34cec4b23f24`.
+
+The next remediation run, `20261028T145445Z-73716-17432a0e510a4343a891c176f90b36ad`, failed
+its unchanged final foreground-equality assertion after all four auto-collapse scenarios passed.
+Its original trace lacks the before/after process identities, so do not attribute that change to
+ambient input or the candidate without evidence. Retain the failure and add identities while
+keeping the same assertion. The sequential campaign stopped there; later selections did not run.
+
+The superseded hosted `b79613627d35ec1a84bc4722297d298797b4f20f` x64 Debug terminal Commands
+record retains 956 passes, two failures and six declared skips; its last retry exposes a remaining
+speed-dialog layout capture failure. That callback runs on a worker and bypasses the screenshot
+helper's owner-thread capture admission. Route just that capture through the prompt's existing
+synchronous test-message handler, using the canonical helper on the owner UI; require successful
+capture and exact extended-style restoration. Do not change capture, geometry or foreground gates.
+
+Fresh candidate workflows `40709199266` (PR), `40709196329` (nightly), `40709202121` (ASan)
+and `40709208031` (shuffle) were dispatched at `1f3cd13f7`; observer `40709212481` passed.
+Those results remain bound to that source and do not qualify subsequent capture repairs.

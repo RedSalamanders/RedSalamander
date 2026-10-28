@@ -9483,7 +9483,9 @@ using TickResult = std::optional<bool>;
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
-    const HWND foreground = GetForegroundWindow();
+    const HWND foreground   = GetForegroundWindow();
+    DWORD foregroundProcess = 0u;
+    static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundProcess));
     // Retaining height is an explicit same-binary counterfactual of the old completion path.
     // Fixed geometry prevents window auto-sizing or deferred accessible text from masking the race.
     struct Scenario
@@ -9593,7 +9595,17 @@ using TickResult = std::optional<bool>;
         if (! correct)
             return reject(facts);
     }
-    return GetForegroundWindow() == foreground || reject(L"foreground changed");
+    const HWND finalForeground = GetForegroundWindow();
+    if (finalForeground == foreground)
+        return true;
+    DWORD finalForegroundProcess = 0u;
+    static_cast<void>(GetWindowThreadProcessId(finalForeground, &finalForegroundProcess));
+    return reject(std::format(L"foreground changed: before=0x{:X} beforePid={} after=0x{:X} afterPid={} selfPid={}",
+                              reinterpret_cast<uintptr_t>(foreground),
+                              foregroundProcess,
+                              reinterpret_cast<uintptr_t>(finalForeground),
+                              finalForegroundProcess,
+                              GetCurrentProcessId()));
 }
 
 [[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state) noexcept

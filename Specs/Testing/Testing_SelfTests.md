@@ -2109,6 +2109,12 @@ STA/MTA; COM-only initialization does not meet that API precondition. Capture ob
 event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
 record the API stage and the process's session, window station and desktop.
 
+Speed-dialog layout captures requested by the modal interaction worker MUST route through the
+prompt's synchronous test command on its owning UI thread. The canonical screenshot helper then
+prepares and restores capture admission itself; the worker MUST NOT change window styles.
+Every layout capture retains its success/geometry assertions and verifies the original extended
+style was restored. A missing/destroyed prompt or unhandled capture command is a failed capture.
+
 Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned non-activating/tool
 fixture that lacks it. Windows Server otherwise rejects that HWND with `E_INVALIDARG`.
 Only the owning UI thread may prepare or restore that admission scope, preserving

@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Route worker-driven speed-dialog layout captures through the existing owner-thread test command and canonical screenshot admission, retaining all capture/geometry gates and asserting exact style restoration. Preserve failed qualification receipts and add foreground process identities without relaxing that assertion; native qualification remains pending.
 - Use the qualified DxUi public compaction API for retained File Operations panels, removing duplicate raw-vector erasers and the empty scroll-panel adapter. Preserve surviving controls and use the library's tree/accessibility invalidation; reconciliation and pending-decision qualification remains required.
 - Reuse ViewerSpace's canonical Windows/DxUi header boundary in the Analysis and Navigation hosts so NOMINMAX precedes Windows and the qualified public headers compile independently. Retain the failed broader-pin build and repeat full-solution/native validation without changing dependency products or test assertions.
 - Adopt explicitly selected DxUi revision 881e5d5, whose six native profiles passed, to repair stationary-pointer keyboard selection and validate the broader consumer update. Restore pinned dependency source before shuffle receipt verification and check native exits inside protected workflow actions; preserve all verification, assertions and repeat coverage.

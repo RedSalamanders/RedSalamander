@@ -18,6 +18,7 @@
 #include "WindowSizing.h"
 #ifdef ENABLE_TESTS
 #include "Common.Tests.Runner.h"
+#include "TestSupport.Tests.WindowScreenshot.h"
 #endif
 #include <DxUi/DxUi.h>
 #include <DxUi/Typography.h>
@@ -2654,6 +2655,13 @@ public:
         Cancel,
         SetClientHeightLimit,
         SetSelection,
+        CaptureScreenshot,
+    };
+
+    struct DebugCaptureRequest
+    {
+        const std::filesystem::path* path = nullptr; // Borrowed through synchronous SendMessage only.
+        HRESULT result                    = E_PENDING;
     };
 #endif
 
@@ -3168,6 +3176,15 @@ private:
             }
             case DebugCommand::Confirm: RequestDeferredAction(DeferredAction::Confirm); return TRUE;
             case DebugCommand::Cancel: RequestDeferredAction(DeferredAction::Cancel); return TRUE;
+            case DebugCommand::CaptureScreenshot:
+            {
+                auto* request = reinterpret_cast<DebugCaptureRequest*>(payload);
+                if (! request || ! request->path)
+                    return FALSE;
+                // Server capture admission changes styles only on the owning UI thread.
+                request->result = RedSalamander::TestSupport::SaveWindowScreenshot(_hWnd.get(), *request->path);
+                return TRUE;
+            }
         }
 
         return FALSE;
@@ -17607,6 +17624,18 @@ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
                         kFileOperationsSpeedLimitPromptDebugMessage,
                         static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetText),
                         reinterpret_cast<LPARAM>(payload.get())) != FALSE;
+}
+
+HRESULT DebugCaptureFileOperationsSpeedLimitPromptScreenshot(HWND prompt, const std::filesystem::path& path) noexcept
+{
+    if (! prompt || GetFileOperationsSpeedLimitPromptHandle() != prompt)
+        return E_INVALIDARG;
+    FileOperationsSpeedLimitPromptWindow::DebugCaptureRequest request{&path, E_PENDING};
+    const bool handled = SendMessageW(prompt,
+                                      kFileOperationsSpeedLimitPromptDebugMessage,
+                                      static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::CaptureScreenshot),
+                                      reinterpret_cast<LPARAM>(&request)) != FALSE;
+    return handled ? request.result : E_FAIL;
 }
 
 bool DebugSetFileOperationsSpeedLimitPromptClientHeightLimit(std::optional<float> heightDip) noexcept

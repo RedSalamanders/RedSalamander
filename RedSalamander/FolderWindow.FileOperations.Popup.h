@@ -2184,6 +2184,8 @@ void DebugResolveFileOperationsWholeTaskProgress(const FileOperationsPopupIntern
 void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept;
+// Routes synchronous capture to the prompt UI so canonical WGC admission/restoration never changes styles from a worker.
+[[nodiscard]] HRESULT DebugCaptureFileOperationsSpeedLimitPromptScreenshot(HWND prompt, const std::filesystem::path& path) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptClientHeightLimit(std::optional<float> heightDip) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptSelection(size_t start, size_t end) noexcept;
 [[nodiscard]] bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept;

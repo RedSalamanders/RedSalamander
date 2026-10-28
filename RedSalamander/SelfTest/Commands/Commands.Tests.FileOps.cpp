@@ -19810,9 +19810,12 @@ namespace
                             geometry.hintBounds.bottom,
                             geometry.okBounds.top,
                             geometry.clientBounds.bottom));
-            const auto filename = std::format(L"{}__fr-FR__{}dpi.png", name, GetDpiForWindow(prompt));
-            state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(prompt, captures / filename)),
-                          L"The governed harness could not capture the speed-dialog layout.");
+            const auto filename         = std::format(L"{}__fr-FR__{}dpi.png", name, GetDpiForWindow(prompt));
+            const LONG_PTR captureStyle = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
+            const HRESULT captured      = DebugCaptureFileOperationsSpeedLimitPromptScreenshot(prompt, captures / filename);
+            state.Require(SUCCEEDED(captured), std::format(L"The governed harness could not capture speed-dialog {} layout: hr=0x{:08X}.", name, captured));
+            state.Require(GetWindowLongPtrW(prompt, GWL_EXSTYLE) == captureStyle,
+                          L"The governed speed-dialog capture must restore its original extended style.");
         };
         checkAndCaptureLayout(L"initial");
         const UINT promptDpi = GetDpiForWindow(prompt);
