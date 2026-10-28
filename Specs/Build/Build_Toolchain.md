@@ -782,6 +782,23 @@ the default Windows Git path limit. This setup runs on the disposable runner bef
 CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
 `Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
 
+Formatter acquisition MUST reuse `Resolve-RSGuardedRepositoryPath` and
+`Publish-RSGuardedRepositoryFile` for its `.build/format` cache, download staging and
+executable publication. Every existing output component from the repository root through
+the leaf MUST be admitted without reparses, including `.build` and executable parents;
+paths are revalidated before writes, execution, publication and temporary cleanup. If the
+chain becomes unsafe, cleanup MUST preserve redirected targets and retain the temporary
+artifact for governed cleanup. These path checks do not establish an OS security boundary
+against a process with permission to race filesystem changes.
+
+The installer MUST hold an exclusive `.build/format/.install.lock` file lease while mutating
+the shared formatter cache; contention fails immediately without blocking native artifact
+profiles. The empty lock file remains after closing. `-WhatIf` creates no directories or
+lease file. An explicit `-WheelPath` MUST resolve once through the PowerShell FileSystem
+provider against the caller's PowerShell location. Hash verification and ZIP parsing MUST
+consume the same open stream held against writes/deletion until extraction and publication
+finish, regardless of the process current directory.
+
 The reusable CI build step checks the native build exit status immediately, before
 any matrix validator or other native command can overwrite it. A compiler failure
 must fail the build step and prevent native test/provenance acceptance; a missing

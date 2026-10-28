@@ -33,14 +33,14 @@ InModuleScope ClangFormat {
         It 'supports WhatIf without downloading or creating the install directory' {
             Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WhatIf
             (Test-Path (Join-Path $script:formatterFixture.Root '.build')) | Should Be $false
-            Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly
+            Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
         }
         It 'extracts only the native executable from a verified offline wheel' {
             $result = Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel
             $result | Should Be $script:formatterFixture.Output
             [IO.File]::ReadAllText($result) | Should Be 'verified native fixture'
-            @(Get-ChildItem -LiteralPath (Join-Path $script:formatterFixture.Root '.build') -File -Recurse).Count | Should Be 1
-            Assert-MockCalled Assert-RSClangFormatVersion -Times 1 -Exactly
+            @(Get-ChildItem -LiteralPath (Join-Path $script:formatterFixture.Root '.build') -File -Recurse -Force | Where-Object Name -NE '.install.lock').Count | Should Be 1
+            Assert-MockCalled Assert-RSClangFormatVersion -Times 1 -Exactly -Scope It
         }
         It 'rejects a hash mismatch and preserves an existing formatter and the caller wheel' {
             [void][IO.Directory]::CreateDirectory((Split-Path $script:formatterFixture.Output))
@@ -81,8 +81,8 @@ InModuleScope ClangFormat {
             Mock Invoke-WebRequest { param($Uri,$OutFile) [IO.File]::Copy($script:formatterFixture.Wheel,$OutFile) }
             $null = Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root
             $null = Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root
-            Assert-MockCalled Invoke-RestMethod -Times 1 -Exactly
-            Assert-MockCalled Invoke-WebRequest -Times 1 -Exactly
+            Assert-MockCalled Invoke-RestMethod -Times 1 -Exactly -Scope It
+            Assert-MockCalled Invoke-WebRequest -Times 1 -Exactly -Scope It
             [IO.File]::ReadAllText($script:formatterFixture.Output) | Should Be 'verified native fixture'
         }
         It 'rejects a corrupt download before publishing a cached wheel or executable' {
@@ -93,7 +93,85 @@ InModuleScope ClangFormat {
             Mock Invoke-WebRequest { param($Uri,$OutFile) [IO.File]::WriteAllText($OutFile,'corrupt') }
             { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root } | Should Throw 'pinned SHA-256'
             (Test-Path $script:formatterFixture.Output) | Should Be $false
-            @(Get-ChildItem -LiteralPath (Join-Path $script:formatterFixture.Root '.build/format') -File).Count | Should Be 0
+            @(Get-ChildItem -LiteralPath (Join-Path $script:formatterFixture.Root '.build/format') -File -Force | Where-Object Name -NE '.install.lock').Count | Should Be 0
+        }
+        It 'rejects a junction at <RelativePath> before writing or executing' -TestCases @(
+            @{RelativePath='.build'},
+            @{RelativePath='.build/format'},
+            @{RelativePath='.build/format/clang_format/data/bin'}
+        ) {
+            param($RelativePath)
+            $target = $script:formatterFixture.Root + '-redirected'
+            [void][IO.Directory]::CreateDirectory($target)
+            $sentinel = Join-Path $target 'preserve.txt'
+            [IO.File]::WriteAllText($sentinel, 'untouched target')
+            $before = (Get-FileHash -LiteralPath $sentinel).Hash
+            $link = Join-Path $script:formatterFixture.Root $RelativePath
+            [void][IO.Directory]::CreateDirectory((Split-Path $link))
+            $null = New-RSTestSandboxLink -Path $link -Target $target -ItemType Junction
+            { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel } | Should Throw 'reparse point'
+            (Get-FileHash -LiteralPath $sentinel).Hash | Should Be $before
+            @(Get-ChildItem -LiteralPath $target -Force).Count | Should Be 1
+            Assert-MockCalled Assert-RSClangFormatVersion -Times 0 -Exactly -Scope It
+            Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
+        }
+        It 'revalidates the output chain at publication and refuses redirected cleanup' {
+            [void][IO.Directory]::CreateDirectory((Split-Path $script:formatterFixture.Output))
+            [IO.File]::WriteAllText($script:formatterFixture.Output, 'previous formatter')
+            $script:formatterRedirectedTarget = $script:formatterFixture.Root + '-publication-target'
+            [void][IO.Directory]::CreateDirectory($script:formatterRedirectedTarget)
+            Mock Assert-RSClangFormatVersion {
+                param($Path, $Version)
+                $parent = Split-Path $Path
+                [IO.Directory]::Move($parent, ($parent + '.original'))
+                $null = New-RSTestSandboxLink -Path $parent -Target $script:formatterRedirectedTarget -ItemType Junction
+                [IO.File]::WriteAllText((Join-Path $script:formatterRedirectedTarget ([IO.Path]::GetFileName($Path))), 'preserve staged-name target')
+                [IO.File]::WriteAllText((Join-Path $script:formatterRedirectedTarget 'clang-format.exe'), 'preserve published-name target')
+            }
+            { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel -WarningAction SilentlyContinue } | Should Throw 'reparse point'
+            $original = Join-Path ((Split-Path $script:formatterFixture.Output) + '.original') 'clang-format.exe'
+            [IO.File]::ReadAllText($original) | Should Be 'previous formatter'
+            $targetFiles = @(Get-ChildItem -LiteralPath $script:formatterRedirectedTarget -File -Force)
+            $targetFiles.Count | Should Be 2
+            [IO.File]::ReadAllText((Join-Path $script:formatterRedirectedTarget 'clang-format.exe')) | Should Be 'preserve published-name target'
+            @($targetFiles | Where-Object { [IO.File]::ReadAllText($_.FullName) -eq 'preserve staged-name target' }).Count | Should Be 1
+        }
+        It 'resolves an explicit relative wheel from the PowerShell location once' {
+            $other = $script:formatterFixture.Root + '-process-cwd'
+            [void][IO.Directory]::CreateDirectory($other)
+            $otherWheel = Join-Path $other 'fixture.whl'
+            [IO.File]::WriteAllText($otherWheel, 'different process-relative input')
+            $previousProcessDirectory = [Environment]::CurrentDirectory
+            Push-Location -LiteralPath $script:formatterFixture.Root
+            try {
+                [Environment]::CurrentDirectory = $other
+                $result = Install-RSClangFormat -RepositoryRoot '.' -WheelPath './fixture.whl'
+                $result | Should Be $script:formatterFixture.Output
+                [IO.File]::ReadAllText($result) | Should Be 'verified native fixture'
+                [IO.File]::ReadAllText($otherWheel) | Should Be 'different process-relative input'
+            } finally {
+                [Environment]::CurrentDirectory = $previousProcessDirectory
+                Pop-Location
+            }
+        }
+        It 'keeps the verified wheel open against modification until extraction and publication finish' {
+            Mock Assert-RSClangFormatVersion {
+                $null = { [IO.File]::WriteAllText($script:formatterFixture.Wheel, 'replacement') } | Should Throw 'used by another process'
+            }
+            $result = Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root -WheelPath $script:formatterFixture.Wheel
+            [IO.File]::ReadAllText($result) | Should Be 'verified native fixture'
+            Assert-MockCalled Assert-RSClangFormatVersion -Times 1 -Exactly -Scope It
+        }
+        It 'fails immediately on a competing cache lease before downloading or replacing files' {
+            $cache = Join-Path $script:formatterFixture.Root '.build/format'
+            [void][IO.Directory]::CreateDirectory($cache)
+            $lease = [IO.File]::Open((Join-Path $cache '.install.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            try {
+                { Install-RSClangFormat -RepositoryRoot $script:formatterFixture.Root } | Should Throw 'used by another process'
+                (Test-Path $script:formatterFixture.Output) | Should Be $false
+                Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
+                Assert-MockCalled Assert-RSClangFormatVersion -Times 0 -Exactly -Scope It
+            } finally { $lease.Dispose() }
         }
     }
 }

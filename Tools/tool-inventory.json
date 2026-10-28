@@ -16,11 +16,13 @@
       "usage": "Run before CI formatting or use WheelPath for offline installation.",
       "replacement": null,
       "sideEffects": [
-        "Downloads and caches the verified wheel and stages the native executable beneath .build/format"
+        "Downloads and caches the verified wheel and stages the native executable beneath .build/format",
+        "Holds an exclusive cache lease and fails immediately on contention; rejects reparse output chains"
       ],
       "outputs": [
         ".build/format/clang_format/data/bin/clang-format.exe",
-        ".build/format/clang-format-22.1.3.whl"
+        ".build/format/clang-format-22.1.3.whl",
+        ".build/format/.install.lock (empty persistent lease file)"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "visibility": "public",
@@ -34,14 +36,16 @@
         "Verified native formatter path"
       ],
       "sideEffects": [
-        "Downloads and writes the selected repository-local formatter cache"
+        "Downloads and writes the selected repository-local formatter cache",
+        "Holds an exclusive .build/format/.install.lock lease; leaves the empty lease file after disposal"
       ],
-      "purpose": "Verify formatter package and executable bytes, preserve prior executable on failure, and reuse an authenticated package cache.",
+      "purpose": "Verify and extract the same provider-resolved wheel stream; preserve prior executable with guarded atomic publication under an exclusive cache lease.",
       "replacement": null,
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "prerequisites": [
         "PowerShell 7",
-        "Build/clang-format.json"
+        "Build/clang-format.json",
+        "Tools/Modules/Build/ArtifactOperationLock.psm1 guarded path/publication helpers"
       ],
       "usedBy": [
         "Tools/Install-ClangFormat.ps1",
@@ -1800,7 +1804,8 @@
         "Installer/msix/UpdateManifestVersion.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
-        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1"
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
+        "Tools/Modules/Build/ClangFormat.psm1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -1820,7 +1825,8 @@
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/ClangFormat.Tests.ps1"
       ],
       "replacement": null
     },

@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Harden formatter installation with canonical guarded output paths and atomic publication under an exclusive cache lease; resolve offline wheels against the PowerShell location once and verify/extract the same open stream. Add regression coverage for junction redirection, publication-time substitution, differing process locations and competing installs.
 - Install the checksum-pinned native formatter through PowerShell without Python/pip; verify cached bytes and preserve the previous executable when package or version validation fails.
 - Repaired agent/skill ownership, callback, forensic and validation guidance; consolidated personal plan execution into one maintained workflow with compatibility routes, refreshed advisory roles, and added guidance reference/module-pin regression coverage. Cross-project fixes and independent fixture results are recorded in I49; native runtime qualification is not implied.
 - Keep temporary capture admission styles on the owning UI thread and restore them after cross-thread capture workers retire. Timeout cleanup continues pumping within a separate bounded budget, preserves the original failure deadline, and has an event-gated late-worker regression control.

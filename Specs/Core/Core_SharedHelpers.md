@@ -222,4 +222,4 @@ deletes the current last run as a fallback for a failed rename.
 
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
-| Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, offline input, WhatIf and failure-preserving publication. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |
+| Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, provider-resolved offline input, WhatIf and failure-preserving publication under an exclusive cache lease. Reuses canonical ArtifactOperationLock guarded path/publication helpers. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |

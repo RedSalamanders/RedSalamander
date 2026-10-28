@@ -280,7 +280,7 @@ and focused tests.
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
-| `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation and staged executable publication without Python. |
+| `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation, exclusive cache lease and guarded atomic executable publication without Python. |
 | `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
@@ -406,3 +406,11 @@ then applies the required compiler/SDK policy independently of the parent name.
 
 
 Tools/Install-ClangFormat.ps1 installs the Build/clang-format.json-pinned native formatter using PowerShell 7, without Python. It validates package and executable bytes, supports an offline -WheelPath and nonmutating -WhatIf, and preserves the existing executable on failure. The cache stays beneath .build/format.
+
+Formatter output paths reuse the guarded path and atomic publication helpers in
+`Modules/Build/ArtifactOperationLock.psm1`. Existing reparse components are rejected through
+the full output chain, including `.build`, cache files and executable parents. Relative
+`-WheelPath` inputs resolve once against the PowerShell location; hashing and extraction use
+the same open stream. An exclusive `.build/format/.install.lock` lease covers cache mutation
+and publication, fails immediately on contention and leaves an empty lock file after closing.
+`-WhatIf` creates neither the cache nor its lease file.
