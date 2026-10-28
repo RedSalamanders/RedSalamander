@@ -38,7 +38,7 @@ through, pending CI, cross-builds and filtered execution retain their owning evi
 For meaningful package changes, cover malformed/duplicate metadata, missing references, legitimate
 Markdown paths/code examples, unsupported syntax and the actual public validation entrypoint. Never
 execute example scripts just to inspect their signature. Reuse the canonical repository Markdown
-parser rather than regex-only link extraction; check owned inputs without following reparse points.
+parser rather than regex-only link extraction; check owned inputs without following reparse points. Validate the repository root, each owned guidance root and its component chain before enumeration, then recheck each directory/document before use. Reuse Resolve-RSGuardedRepositoryPath without creation; ordinary children cannot establish that an ancestor is safe.
 
 For complex or consequential instruction changes, independent forward tests use realistic requests
 and minimum raw fixtures without the intended answer. Inspect actual actions/artifacts and preserve
@@ -46,6 +46,6 @@ failures; report case scope/counts instead of universal success rates. Tests use
 sandbox and require separate authorization for focus, foreign-process termination or publication.
 
 Tools/Tests/DocumentationDriftContracts.Tests.ps1 checks actual owned guidance references and the
-Markdown boundary. TestHarnessSourceContracts.Tests.ps1 includes the preferred plugin example in
+Markdown boundary, ordinary discovery and junction refusal at the guidance root, ancestor and repository root. Refusal fixtures assert that enumeration never runs and retain unchanged target witnesses after unlinking their owned junction. TestHarnessSourceContracts.Tests.ps1 includes the preferred plugin example in
 its callback-return module-pin guard. These structural tests complement relevant scenario/forward
 tests; they do not replace production lifetime/input/platform acceptance.

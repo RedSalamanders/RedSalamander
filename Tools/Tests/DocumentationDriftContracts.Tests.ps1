@@ -11,6 +11,28 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Tooling\SpecInformationArchitecture.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+
+# Test-local discovery procedure: canonical guarded-path semantics are shared with repository outputs;
+# this variant only collects owned guidance and performs no creation or publication.
+function Get-RSOwnedGuidanceDocuments {
+    param([Parameter(Mandatory)][string]$RepositoryRoot,
+          [string[]]$RelativeRoots = @('.github/skills', '.agents/skills', '.github/agents'))
+    foreach ($relativeRoot in $RelativeRoots) {
+        $root = Resolve-RSGuardedRepositoryPath -RepoRoot $RepositoryRoot -GuardedRelativeRoot $relativeRoot -Path (Join-Path $RepositoryRoot $relativeRoot)
+        $pending = [Collections.Generic.Stack[string]]::new()
+        $pending.Push($root)
+        while ($pending.Count) {
+            $directory = Resolve-RSGuardedRepositoryPath -RepoRoot $RepositoryRoot -GuardedRelativeRoot $relativeRoot -Path $pending.Pop()
+            foreach ($entry in Get-ChildItem -LiteralPath $directory -Force) {
+                [void](Resolve-RSGuardedRepositoryPath -RepoRoot $RepositoryRoot -GuardedRelativeRoot $relativeRoot -Path $entry.FullName)
+                if ($entry.PSIsContainer) { $pending.Push($entry.FullName) }
+                elseif ($entry.Extension -ieq '.md') { $entry.FullName }
+            }
+        }
+    }
+}
 
 Describe 'Agent guidance packages' {
     It 'uses the canonical Markdown parser for balanced targets and inline code' {
@@ -20,21 +42,48 @@ Describe 'Agent guidance packages' {
         $links[0].Target | Should Be 'contract(v1).md'
     }
 
-    It 'keeps owned skill and agent references usable without loading other checkouts' {
-        $roots = @('.github/skills', '.agents/skills', '.github/agents')
-        $documents = [Collections.Generic.List[string]]::new()
-        foreach ($relativeRoot in $roots) {
-            $pending = [Collections.Generic.Stack[string]]::new()
-            $pending.Push((Join-Path $repoRoot $relativeRoot))
-            while ($pending.Count) {
-                foreach ($entry in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
-                    ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) | Should Be 0
-                    if ($entry.PSIsContainer) { $pending.Push($entry.FullName) }
-                    elseif ($entry.Extension -ieq '.md') { $documents.Add($entry.FullName) }
-                }
-            }
+    It 'collects ordinary guidance through the same guarded discovery used by the corpus check' {
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('guidance-ordinary-' + [guid]::NewGuid().ToString('N'))
+        $skill = Join-Path $fixture '.github/skills/example/SKILL.md'
+        [void][IO.Directory]::CreateDirectory((Split-Path $skill))
+        [IO.File]::WriteAllText($skill, '# Example guidance')
+        $found = @(Get-RSOwnedGuidanceDocuments -RepositoryRoot $fixture -RelativeRoots @('.github/skills'))
+        $found.Count | Should Be 1
+        $found[0] | Should Be $skill
+    }
+
+    It 'refuses a junction at <Name> before enumerating redirected guidance' -TestCases @(
+        @{ Name = 'the guidance root'; Link = '.github/skills'; TargetSubdirectory = '' },
+        @{ Name = 'a guidance ancestor'; Link = '.github'; TargetSubdirectory = 'skills' },
+        @{ Name = 'the repository root'; Link = ''; TargetSubdirectory = '.github/skills' }
+    ) {
+        param($Name, $Link, $TargetSubdirectory)
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('guidance-reparse-' + [guid]::NewGuid().ToString('N'))
+        $repository = Join-Path $fixture 'repository'
+        $target = Join-Path $fixture 'redirected'
+        $targetDocuments = if ($TargetSubdirectory) { Join-Path $target $TargetSubdirectory } else { $target }
+        [void][IO.Directory]::CreateDirectory($targetDocuments)
+        $witness = Join-Path $targetDocuments 'must-not-read.md'
+        [IO.File]::WriteAllText($witness, 'preserve owned target')
+        $digest = (Get-FileHash -LiteralPath $witness).Hash
+        $junction = if ($Link) { Join-Path $repository $Link } else { $repository }
+        [void][IO.Directory]::CreateDirectory((Split-Path $junction))
+        New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $target | Out-Null
+        try {
+            Mock Get-ChildItem { throw 'Unexpected enumeration of redirected guidance' } -ParameterFilter { [string]$LiteralPath -like ($fixture + '\*') }
+            { Get-RSOwnedGuidanceDocuments -RepositoryRoot $repository -RelativeRoots @('.github/skills') } | Should Throw 'reparse point'
+            Assert-MockCalled Get-ChildItem -Times 0 -Exactly
+            (Get-FileHash -LiteralPath $witness).Hash | Should Be $digest
         }
+        finally {
+            Remove-Item -LiteralPath $junction -Force
+        }
+    }
+    It 'keeps owned skill and agent references usable without loading other checkouts' {
+        $documents = @(Get-RSOwnedGuidanceDocuments -RepositoryRoot $repoRoot)
         foreach ($document in $documents) {
+            $documentRoot = ([IO.Path]::GetRelativePath($repoRoot, $document) -split '[\\/]')[0]
+            [void](Resolve-RSGuardedRepositoryPath -RepoRoot $repoRoot -GuardedRelativeRoot $documentRoot -Path $document)
             $content = [IO.File]::ReadAllText($document, [Text.UTF8Encoding]::new($false, $true))
             [string]::IsNullOrWhiteSpace($content) | Should Be $false
             foreach ($link in Get-RSMarkdownLinks -Text $content) {

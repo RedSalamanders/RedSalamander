@@ -358,10 +358,12 @@
       ],
       "prerequisites": [
         "PowerShell with Pester",
-        "Repository source and published documentation assets"
+        "Repository source and published documentation assets",
+        "Existing marked RedSalamander.Perf test sandbox"
       ],
       "sideEffects": [
-        "Runs read-only source, schema and image/provenance checks and existing visible-surface source audits"
+        "Runs read-only source, schema and image/provenance checks and existing visible-surface source audits",
+        "Creates and unlinks owned guidance-junction fixtures inside the marked sandbox; never enumerates redirected roots"
       ],
       "outputs": [
         "Pester pass/fail results"
@@ -1805,7 +1807,8 @@
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
-        "Tools/Modules/Build/ClangFormat.psm1"
+        "Tools/Modules/Build/ClangFormat.psm1",
+        "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -1826,7 +1829,8 @@
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
-        "Tools/Tests/ClangFormat.Tests.ps1"
+        "Tools/Tests/ClangFormat.Tests.ps1",
+        "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
       "replacement": null
     },
