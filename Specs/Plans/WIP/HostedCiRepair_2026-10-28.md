@@ -56,3 +56,19 @@ The local focused Commands subset passed before these runtime changes. The same 
 entry rejected a comma-separated union filter with no matching cases: that entry is invalid coverage,
 not a runtime result. Subsequent FileOps reproductions use its supported exact case/family selector.
 Further runtime and hosted validation remains open; none of these candidate changes is a green-main claim.
+
+## Follow-up validation and review
+
+- Candidate `53fe837c8b9978895cb60c0a647869948390cfb8` built x64 Debug successfully,
+  receipt `be8e8b4d2aee9d2606dc347966a87486da6175eca0907e3a722101e1e7ae8f84`.
+- Focused independent-volume run `20261028T110609Z-58744-6475e570cc05408eadfdc344112cd77d`
+  passed Setup, the unchanged independent-volume gates and Cleanup, with no skips or retries.
+  This is local focused coverage, not hosted or broad-family acceptance.
+- Ghostty Online observer run `40677907341` passed on that candidate. Its unchanged observer
+  report is retained in `candidate-ghostty-online` under the repair evidence root.
+- Review identified an overbroad connection-wait change, operation deadlines beginning after
+  control connection, a missing alternate-volume opt-in in the shuffle consumer, and a fixture
+  restoring settings without refreshing live theme state. Correct those before acceptance:
+  only queries receive the longer contention budget; status remains short; all control budgets
+  include connection; the occupied-pipe regression also checks prompt status/shutdown failure;
+  the shuffle lane explicitly opts into alternate coverage; both fixture scopes reapply restored UI.

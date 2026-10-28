@@ -700,6 +700,8 @@ Describe 'Release workflow source contracts' {
         $flake | Should Match 'Import-RSPortableBuildAttestation'
         $flake | Should Match '-ExpectedAttestationId'
         $flake | Should Match '-SelfTestRepeat 5 -SelfTestShuffleSeed \$seed -ClassifyFailures'
+        $flake | Should Match '-AllowExternalTestRoot -AllowAlternateVolumeTestRoot'
+        $flake | Should Match 'Invoke-RSWithHostedTestDesktop -Action'
     }
 
     It 'keeps current artifact downloaders pinned and the exact sealed Gate0 workflow intact' {

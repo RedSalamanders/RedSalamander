@@ -90,7 +90,7 @@ jobs:
           Write-Host "Nightly self-test shuffle seed: $seed"
           Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
           Invoke-RSWithHostedTestDesktop -Action {
-            .\Tools\Run-AllTests.ps1 -Suite All -ValidationMode Fresh -SkipBuild -TimeoutMultiplier 2.0 -SelfTestRepeat 5 -SelfTestShuffleSeed $seed -ClassifyFailures -AllowExternalTestRoot
+            .\Tools\Run-AllTests.ps1 -Suite All -ValidationMode Fresh -SkipBuild -TimeoutMultiplier 2.0 -SelfTestRepeat 5 -SelfTestShuffleSeed $seed -ClassifyFailures -AllowExternalTestRoot -AllowAlternateVolumeTestRoot
           }
         timeout-minutes: 210
 

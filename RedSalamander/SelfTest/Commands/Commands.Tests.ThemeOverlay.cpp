@@ -1071,7 +1071,12 @@ void RunThemeCycleOverlayCommandsSelfTestCases(HWND mainWindow, const SelfTest::
                       [=](CaseState& state) noexcept
     {
         const auto originalUi = g_settings.ui;
-        const auto restore    = wil::scope_exit([&]() noexcept { g_settings.ui = originalUi; });
+        const auto restore    = wil::scope_exit([&]() noexcept
+        {
+            g_settings.ui = originalUi;
+            SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
+            PumpPendingMessages();
+        });
         auto ui               = g_settings.ui.value_or(Common::Settings::UiSettings{});
         ui.reducedMotion      = Common::Settings::ReducedMotionMode::On;
         g_settings.ui         = ui;

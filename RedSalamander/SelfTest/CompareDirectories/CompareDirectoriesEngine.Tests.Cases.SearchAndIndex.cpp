@@ -12449,6 +12449,18 @@ SelfTest::RunCase(options,
             static_cast<void>(::SetEvent(clientDone.get()));
         });
         state.Require(::WaitForSingleObject(clientStarted.get(), 5'000u) == WAIT_OBJECT_0, L"Busy-pipe query did not start.");
+        if (! cancelWhileBusy)
+        {
+            SearchServiceBroker::ServiceStatus busyStatus{};
+            const ULONGLONG statusStarted = ::GetTickCount64();
+            const HRESULT statusHr        = SearchServiceBroker::GetStatus(busyStatus);
+            state.Require(FAILED(statusHr) && ::GetTickCount64() - statusStarted < 1'000u,
+                          L"A status probe must retain its short connection budget while the service is occupied.");
+            const ULONGLONG shutdownStarted = ::GetTickCount64();
+            const HRESULT shutdownHr        = SearchServiceBroker::RequestShutdown(pipeName, 500u);
+            state.Require(FAILED(shutdownHr) && ::GetTickCount64() - shutdownStarted < 750u,
+                          L"A 500 ms shutdown request must include connection contention in its operation deadline.");
+        }
         state.Require(::WaitForSingleObject(clientDone.get(), cancelWhileBusy ? 100u : 1'200u) == WAIT_TIMEOUT,
                       L"Busy-pipe query returned before the occupied connection was released or cancelled.");
         if (cancelWhileBusy)
