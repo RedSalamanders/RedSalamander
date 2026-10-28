@@ -3066,7 +3066,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification.",
+      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup tolerates transient compiler image locks and preserves primary fetch failures.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
         ".github/workflows/ghostty-runtime-native-qualification.yml",
@@ -3947,7 +3947,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock.",
+      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock. Verify transient/open-file cleanup, bounded permanent-lock failure and original-error preservation.",
       "usage": "Run after any Ghostty product lock, schema, lifecycle, builder, overlay, notice, or loader-export change.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",

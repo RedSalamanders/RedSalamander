@@ -32,6 +32,8 @@ Prerequisites: PowerShell 7, Git, the canonical schema, the selected lock, locke
 The delegated lifecycle preserves runtime identity schemaVersion = 5 and pairingContract = 'generated-raw-sha256-v1'. GhosttyRuntimeLifecycle.psm1 owns Get-TerminalRuntimeIdentityHeaderText, $generatedIdentityHeader publication in Product mode, and $expectedLicenseHashes verification.
 Zig bootstrap, build, and fetch caches use explicit per-child repository-local environment paths, preserving caller variables.
 
+Owned temporary-cache cleanup retries I/O/access failures up to 20 attempts with 250 ms delays. A failed fetch retains its original error when cleanup also fails; independently owned processes are never terminated.
+
 .EXAMPLE
 .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform x64 -Offline -PassThru
 

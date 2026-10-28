@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Retry bounded, guarded Ghostty compiler-cache cleanup after transient file
+  locks, preserving the original bootstrap error when cleanup also fails.
+  Keep native failure uploads within acquired scratch and pass the fixed seed
+  explicitly to both upstream test runners.
 - Preserve existing Ghostty dependency caches across the Zig 0.17 upgrade by
   giving its canonical archives distinct filenames. Add a regression guard
   against cross-generation download-name collisions; source and content hash

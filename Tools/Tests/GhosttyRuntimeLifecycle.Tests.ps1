@@ -66,6 +66,85 @@ Describe 'Ghostty closed package directory' {
     }
 }
 
+Describe 'Ghostty owned cache cleanup' {
+    Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1')
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$tokens, [ref]$parseErrors)
+    $functions = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -in @('Test-PathInsideTerminalBuildRoot', 'Remove-TerminalBuildDirectory')
+    }, $true) | ForEach-Object { $_.Extent.Text })
+    $script:ghosttyCleanupInvocation = [scriptblock]::Create(
+        'param($repoRoot, $terminalBuildRoot, $Path, [switch]$PreservePrimaryError)' + "`n" +
+        ($functions -join "`n") + "`n" +
+        'Remove-TerminalBuildDirectory -Path $Path -PreservePrimaryError:$PreservePrimaryError')
+
+    BeforeEach {
+        $cleanupRepo = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        $terminalRoot = Join-Path $cleanupRepo '.build/TerminalEngine'
+        $cache = Join-Path $terminalRoot 'Cache/fetch'
+        [void](New-Item -ItemType Directory -Path $cache -Force)
+        $marker = Join-Path $cache 'maker.exe'
+        'owned harmless fixture' | Set-Content -LiteralPath $marker
+    }
+
+    It 'waits for an owned open file to close before removing its cache' {
+        if (-not ('RSGhosttyCleanupProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+public static class RSGhosttyCleanupProbe {
+    public static System.Threading.Tasks.Task ReleaseAfter(System.IDisposable owned) {
+        return System.Threading.Tasks.Task.Run(() => {
+            System.Threading.Thread.Sleep(1000);
+            owned.Dispose();
+        });
+    }
+}
+'@
+        }
+        $stream = [IO.File]::Open($marker, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        $release = [RSGhosttyCleanupProbe]::ReleaseAfter($stream)
+        try {
+            & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache
+            $release.Wait(5000) | Should Be $true
+            Test-Path -LiteralPath $cache | Should Be $false
+        } finally {
+            $stream.Dispose()
+        }
+    }
+
+    It 'bounds permanent lock retries and preserves the remaining locked input' {
+        Mock Remove-Item { throw [UnauthorizedAccessException]::new('still mapped') }
+        Mock Start-Sleep {}
+        { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache } | Should Throw 'still mapped'
+        Assert-MockCalled Remove-Item -Times 20 -Exactly -Scope It
+        Assert-MockCalled Start-Sleep -Times 19 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+
+    It 'preserves the original fetch error when bounded cleanup also fails' {
+        Mock Remove-Item { throw [IO.IOException]::new('cleanup locked') }
+        Mock Start-Sleep {}
+        Mock Write-Warning {}
+        $message = ''
+        try {
+            try { throw [InvalidOperationException]::new('primary fetch failure') }
+            finally { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache -PreservePrimaryError }
+        } catch { $message = $_.Exception.Message }
+        $message | Should Be 'primary fetch failure'
+        Assert-MockCalled Remove-Item -Times 20 -Exactly -Scope It
+        Assert-MockCalled Write-Warning -Times 1 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+
+    It 'rejects an escaped path before any removal attempt' {
+        Mock Remove-Item {}
+        { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot (Join-Path $cleanupRepo 'outside') } | Should Throw 'outside the terminal build root'
+        Assert-MockCalled Remove-Item -Times 0 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+}
+
 function Assert-RSInvalidGhosttyRuntimeLock {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Mutate,

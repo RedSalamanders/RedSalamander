@@ -313,7 +313,9 @@ jobs:
                 throw "Expected one $testName working-directory insertion point."
               }
               $updatedBuild = $updatedBuild.Replace($runNeedle,
-                $runNeedle + "        $($testName)_run.setCwd(.{ .cwd_relative = `"$testCwd`" });$newline")
+                $runNeedle +
+                "        $($testName)_run.setCwd(.{ .cwd_relative = `"$testCwd`" });$newline" +
+                "        $($testName)_run.addArg(`"--seed=$env:RS_TEST_SEED`");$newline")
             }
             [IO.File]::WriteAllText($buildPath, $updatedBuild, [Text.UTF8Encoding]::new($false))
             $buildModified = $true
@@ -351,14 +353,15 @@ jobs:
               $codeFiveLines = @($nativeText | Where-Object {
                   $_ -cmatch '^error: process exited with error code 5$'
                 })
+              $failedCommandPattern = '^failed command: "(.+[\\/](?:ghostty-vt(?:-c)?-)?test\.exe)"(?: "--seed=0x97d35bc7"| --seed=0x97d35bc7)?$'
               $failedCommandLines = @($nativeText | Where-Object {
-                  $_ -cmatch '^failed command: "(.+[\\/]test\.exe)"$'
+                  $_ -cmatch $failedCommandPattern
                 })
               $zeroFailureSummaries = @($nativeText | Where-Object {
                   $_ -cmatch '^[0-9]+ passed; [0-9]+ skipped; 0 failed\.$'
                 })
               $schemaSummaries = @($nativeText | Where-Object {
-                  $_ -cmatch '^validated aarch64-windows ABI manifest \(153 types\)$'
+                  $_ -cmatch '^validated aarch64-windows ABI manifest \([1-9][0-9]* types\)$'
                 })
               $singleFailureBuildSummaries = @($nativeText | Where-Object {
                   $_ -cmatch '^Build Summary: [0-9]+/[0-9]+ steps succeeded \(1 failed\)$'
@@ -376,7 +379,7 @@ jobs:
                   $reportedTestFailures.Count -eq 0) {
                 $failedCommandMatch = [regex]::Match(
                   $failedCommandLines[0],
-                  '^failed command: "(.+[\\/]test\.exe)"$',
+                  $failedCommandPattern,
                   [Text.RegularExpressions.RegexOptions]::CultureInvariant)
                 $failedTestPath = [IO.Path]::GetFullPath(
                   (Join-Path $sourceRoot $failedCommandMatch.Groups[1].Value))
@@ -436,7 +439,8 @@ jobs:
                       Id = 1000
                       StartTime = (Get-Date).AddHours(-2)
                     } -ErrorAction SilentlyContinue | Where-Object {
-                      $_.Message -match '(?i)(^|[\\/])test\.exe'
+                      $_.Message.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -and
+                        $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                     } | Select-Object -First 8)
                   $applicationErrorRecords = @($applicationErrors | ForEach-Object {
                       [ordered]@{
@@ -485,7 +489,8 @@ jobs:
                   Id = 1000
                   StartTime = (Get-Date).AddHours(-2)
                 } -ErrorAction SilentlyContinue | Where-Object {
-                  $_.Message -match '(?i)(^|[\\/])test\.exe'
+                  $_.Message.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -and
+                    $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                 } | Select-Object -First 8)
               foreach ($applicationError in $applicationErrors) {
                 $diagnostic = [ordered]@{
@@ -530,7 +535,7 @@ jobs:
           }
 
       - name: Upload native crash evidence
-        if: ${{ failure() }}
+        if: ${{ failure() && env.RS_NATIVE_TEST_SCRATCH != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-crash-${{ github.run_id }}

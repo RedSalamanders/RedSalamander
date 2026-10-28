@@ -799,6 +799,13 @@ retained locks. The Zig 0.17 content archives include `-zig-0.17.0` in their
 filenames so a pre-upgrade Wuffs cache remains valid alongside the new one.
 Cache verification stays fail-closed; an upgrade must not depend on deleting
 or overwriting an existing valid archive.
+Owned temporary-cache cleanup revalidates its guarded path and permits at most
+20 removal attempts, separated by 250 ms, for I/O or access-denied failures.
+This accommodates a compiler image mapping that outlives its parent briefly;
+it never authorizes process-name termination or deletion outside the guarded
+build root. Exhaustion fails a successful operation. During a failed fetch,
+exhausted cleanup emits one warning and preserves the primary failure instead
+of replacing it with a secondary cache-removal error.
 
 `Tools/Get-GhosttyTerminalRuntimeStatus.ps1` is the active, read-only update
 observation entrypoint. Its schema is
@@ -861,6 +868,9 @@ and the same hash-verified `--system` package staging as runtime builds. Native
 test processes run in owned TestSandbox scratch with upstream snapshot fixtures
 copied into their expected relative location. Logs, dumps and the qualification
 report stay in that marked sandbox; build inputs remain under `.build`.
+Each simple-runner process receives the fixed seed explicitly; the build graph
+seed alone is not a test-runner argument. Failure uploads require an acquired
+scratch root so an early compiler failure cannot select an unowned fallback path.
 
 Native Windows ARM64 has reproducibly returned process code 5 on the first
 launch of the newly linked, larger Debug C-ABI test executable while the
@@ -869,7 +879,7 @@ Application Error was reported; the underlying platform cause remains
 unconfirmed. Qualification may retry once only
 when the unchanged upstream graph exits 1 with exactly one code-5 `test.exe`
 command, exactly one zero-failure companion summary, exactly one successful
-153-type ARM64 schema summary, exactly one single-failure build summary, and no
+positive-type-count ARM64 schema summary, exactly one single-failure build summary, and no
 reported `FAIL` test. The reported executable must resolve beneath the exact
 candidate `.zig-cache`; the workflow waits two seconds, hashes that settled
 file, runs that exact file once with the same fixed seed, and requires exit 0
@@ -886,9 +896,11 @@ execution publishes
 only the runtime identity and a canonical report validated against
 `Specs/Terminal/GhosttyRuntimeNativeQualification.schema.json`; it has no
 repository-write permission and does not publish the candidate inputs. If an
-upstream test process fails, the job reports only matching Windows Application
-Error event 1000 records for `test.exe` before failing; it does not upload crash
-dumps or unrelated event-log content.
+upstream test process fails, the job reports only Windows Application Error
+event 1000 records matching both the candidate source root and a known test
+executable name. After owned scratch is acquired, failure artifacts may retain
+that run's test dumps and bounded diagnostic output there; early failures
+cannot upload a fallback root. Unrelated event-log content is excluded.
 
 After candidate admission, the separate read-only
 `.github/workflows/ghostty-runtime-product-qualification.yml` workflow is the

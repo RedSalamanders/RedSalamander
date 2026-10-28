@@ -63,6 +63,9 @@ Historical review findings require all supporting commits to occur inside the ex
 range; an empty generated findings list still requires manual candidate source review.
 The Ghostty lifecycle sets Zig cache paths on each child process before compiler bootstrap.
 This supports Zig 0.16 and 0.17 without selecting global user caches or changing caller variables.
+Owned temporary-cache cleanup rechecks containment and retries transient I/O/access failures
+at most 20 times with 250 ms delays. Failed-fetch cleanup preserves the original failure;
+it never terminates an independently owned compiler process.
 Zig 0.17 builds additionally use the shared locked-package staging helper and `--system`:
 undeclared transitive/lazy dependencies fail instead of downloading during compilation.
 Terminal VT pair validation requires identical Zig versions unless the caller supplies the

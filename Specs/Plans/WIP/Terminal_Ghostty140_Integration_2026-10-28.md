@@ -155,6 +155,37 @@ the user agrees to the execution time.
 
 ## Source review dispositions
 
+- Native run `40753290262` on `fbcece451` failed during dependency-fetch cache
+  cleanup: Windows denied removal of the Zig 0.17 `maker.exe` in the Pixels
+  fetch cache. That secondary error could mask a primary fetch failure; the
+  underlying fetch outcome is not inferred from it. Failed logs are preserved
+  under `ghostty140-native-arm64-40753290262` in the marked sandbox.
+- Temporary cleanup now revalidates containment and retries I/O/access errors
+  up to 20 attempts with 250 ms delays. A failed fetch keeps its primary error
+  when cleanup also fails. The real open-file regression, permanent lock,
+  primary-error preservation and path rejection passed; focused lifecycle,
+  governance, build-evidence, plugin-source and workflow tests passed 136/136
+  in `ghostty140-cleanup-retry-20261028b`. Updated workflow tests passed 36/36.
+  A fresh forced x64 candidate rebuild reproduced the same DLL. Compile-only
+  workflow harness validation returned exit 0 in
+  `ghostty140-workflow-20261028200931`; no unit execution is claimed for that
+  compile-only check.
+- Native simple runners now receive `--seed=0x97d35bc7` explicitly. Failure
+  artifacts require acquired scratch, and event diagnostics require both the
+  source root and a known test executable name. A diagnostic retry still never
+  qualifies an initially failing run.
+- The first real PrePush attempt at `fbcece451` completed a full x64 Debug
+  solution build (receipt
+  `1c447fd8b0f550a097262ace08a778a2307c1cdb245c1b5802217ef4abe5b2c8`)
+  with one C4464 warning in unchanged `Plugins/ViewerWeb/ViewerWeb.cpp`.
+  Build/toolchain tests passed 29/29, including the real targeted deployment
+  rebuild. Its owner PID 79472 was then cancelled before Compare Directories
+  because the native failure requires changed validation inputs. Run
+  `20261028T192005Z-79472-6a990b54e976475e8a82a3dd1c479bd1` retains its
+  checkpoint and explicit cancellation record. It is not a PrePush or Full
+  pass; a matching rebuild must recover any abandoned artifact scope before
+  validation of the updated commit.
+
 - Cache coexistence follow-up: Zig 0.17 canonical archives use distinct
   `-zig-0.17.0.tar.gz` download names. Reusing the pre-upgrade Wuffs filename
   would otherwise reject a valid warm 0.16 cache. The old archive is retained,

@@ -503,6 +503,7 @@ function Invoke-RSGhosttyRuntimeBuild {
     )
 
     $repoRoot = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
+    Import-Module (Join-Path $PSScriptRoot '../Modules/Build/ArtifactOperationLock.psm1') -Scope Local -ErrorAction Stop
     $buildPlan = Resolve-RSGhosttyRuntimeBuildPlan `
         -RepoRoot $repoRoot `
         -Platform $Platform `
@@ -624,7 +625,10 @@ function Invoke-RSGhosttyRuntimeBuild {
     }
 
     function Remove-TerminalBuildDirectory {
-        param([Parameter(Mandatory)][string]$Path)
+        param(
+            [Parameter(Mandatory)][string]$Path,
+            [switch]$PreservePrimaryError
+        )
 
         $fullPath = [IO.Path]::GetFullPath($Path)
         if (-not (Test-PathInsideTerminalBuildRoot -Path $fullPath)) {
@@ -633,8 +637,29 @@ function Invoke-RSGhosttyRuntimeBuild {
         if ($fullPath -eq $terminalBuildRoot) {
             throw 'Refusing to remove the terminal build root itself.'
         }
-        if (Test-Path -LiteralPath $fullPath) {
-            Remove-Item -LiteralPath $fullPath -Recurse -Force
+        # Zig 0.17's maker image can remain mapped briefly after the contained
+        # compiler process exits, especially under Windows ARM64 emulation.
+        # Retry only I/O/access failures; never terminate an independently owned
+        # process. Revalidate the canonical path before every removal attempt.
+        for ($attempt = 1; $attempt -le 20; ++$attempt) {
+            $fullPath = Resolve-RSGuardedRepositoryPath -RepoRoot $repoRoot -GuardedRelativeRoot '.build' -Path $fullPath
+            if (-not (Test-Path -LiteralPath $fullPath)) { return }
+            try {
+                Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop
+                return
+            }
+            catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                if ($attempt -eq 20) {
+                    if ($PreservePrimaryError) {
+                        # The operation is already unwinding. Retain its actual
+                        # failure and leave this exact cache for later diagnosis.
+                        Write-Warning "Ghostty cache cleanup did not complete at '$fullPath': $($_.Exception.Message) The original operation failure is preserved."
+                        return
+                    }
+                    throw
+                }
+                Start-Sleep -Milliseconds 250
+            }
         }
     }
 
@@ -869,6 +894,7 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             $fetchCacheRoot = [string]$dependencyState.FetchCacheRoot
             Remove-TerminalBuildDirectory -Path $fetchCacheRoot
             [void](New-Item -ItemType Directory -Path $fetchCacheRoot -Force)
+            $fetchCompleted = $false
             try {
                 $actualPackageName = (Invoke-CheckedProcess `
                         -FilePath $zigExecutable `
@@ -895,9 +921,10 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
                 }
                 Copy-Item -LiteralPath $canonicalPackageArchive -Destination $temporaryPackageArchive
                 Move-Item -LiteralPath $temporaryPackageArchive -Destination $contentArchive
+                $fetchCompleted = $true
             }
             finally {
-                Remove-TerminalBuildDirectory -Path $fetchCacheRoot
+                Remove-TerminalBuildDirectory -Path $fetchCacheRoot -PreservePrimaryError:(-not $fetchCompleted)
             }
         }
 
