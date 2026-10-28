@@ -3474,7 +3474,7 @@ void BatchRenameWindow::CancelPendingPreviewRebuild() noexcept
 {
     _previewRebuildPending = false;
     _targetRebuildPending  = false;
-    UpdateTaskUi();
+    // Also used after host teardown: this timer/state cleanup must not touch controls.
     if (_hWnd)
     {
         static_cast<void>(KillTimer(_hWnd.get(), kPreviewRebuildTimerId));

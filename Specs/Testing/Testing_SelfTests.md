@@ -580,6 +580,9 @@ Environment variables may select alternate test inputs such as profile names, bu
   probing child exit. Child Commands isolation must still acquire real notified foreground input;
   the original scaled 12-second deadline, natural-exit requirement and contained-timeout handling
   remain unchanged. Record dispatched messages alongside exit/wait diagnostics.
+  Configure the child with the canonical child-only Unicode environment block, never temporary
+  parent environment overrides. Probe exact parent environment invariance while pumping and
+  after child exit, including missing versus present-empty values.
 - An empty Shortcuts grid copy follows DxUi's unhandled no-op contract. Retain the selected-copy
   positive control, then require the empty action to be unhandled and preserve the exact system
   clipboard text, fallback text and sequence; clearing the clipboard or reporting a handled
@@ -762,6 +765,14 @@ Environment variables may select alternate test inputs such as profile names, bu
   and retains the previous/new HWND and process witness when a handoff was needed.
   An unsuccessful handoff fails the case; an ignored `SetForegroundWindow` result cannot
   establish keyboard/capture ownership. The exact static documentation capture bypass remains unchanged.
+  When ordinary foreground requests are refused, the same warned helper may use a temporary
+  registered F24 hotkey on the owned UI-thread root to obtain foreground permission. Refuse
+  before input when the no-activation guard is active, the target is unowned, a modifier/key
+  is held or the registration is unavailable. Never attach a foreign input queue or change
+  system foreground-lock policy. Retire the registration and leave the synthetic key released;
+  the bounded handshake counts within the existing focus-acquisition budget. The native
+  `cmd_selftest_foreground_admission_hotkey_contract` exercises the forced handshake, exact
+  foreground proof, repeated registration cleanup and refusal controls.
   `cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection` creates a
   keyboard-opened menu, selects its last row before any message pump, and sends a stationary
   pointer event over that popup. It must retain keyboard selection; a subsequent real movement

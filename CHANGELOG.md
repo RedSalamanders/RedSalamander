@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Retain directory invalidations received during enumeration so an older snapshot cannot hide newly created archive files. Keep Batch Rename timer cleanup safe after host teardown, configure settings children without changing the pumping parent's environment, and qualify owned foreground handoff with a temporary registered hotkey. Add deterministic race, refusal and cleanup controls; full local and hosted qualification remains required.
 - Repair remaining hosted runtime causes: keep the private settings-child parent responsive within its existing deadline, admit Batch Rename mode switches only after current preview completion, and preserve empty-grid clipboard no-op semantics.
   Reduce transient theme-resolver graph/name allocation without changing graph results or performance guards; retire private rollback names through their owned handles, and recover a rejected native MFT enumeration through complete tracked-root traversal while malformed-data errors still fail.
   Native controls retain existing behavioral assertions and add blocked-provider, held-reader and enumeration-rejection negative controls. Current-source runtime and hosted qualification remains required.

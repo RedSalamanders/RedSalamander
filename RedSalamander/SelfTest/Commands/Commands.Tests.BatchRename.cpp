@@ -355,6 +355,12 @@ public:
         _readDirectoryInfoGate = gate;
     }
 
+    void SetReadDirectoryInfoSnapshotGate(const HANDLE ready, const HANDLE release) noexcept
+    {
+        _readDirectorySnapshotReady   = ready;
+        _readDirectorySnapshotRelease = release;
+    }
+
     void SetReadDirectoryInfoEmpty() noexcept
     {
         _returnEmptyReadDirectoryInfo = true;
@@ -478,7 +484,14 @@ public:
             return S_OK;
         }
 
-        return _base->ReadDirectoryInfo(path, ppFilesInformation);
+        const HRESULT result = _base->ReadDirectoryInfo(path, ppFilesInformation);
+        if (SUCCEEDED(result) && callIndex == 1u && _readDirectorySnapshotReady && _readDirectorySnapshotRelease)
+        {
+            SetEvent(_readDirectorySnapshotReady);
+            if (WaitForSingleObject(_readDirectorySnapshotRelease, static_cast<DWORD>(SelfTest::ScaleTimeout(5000u))) != WAIT_OBJECT_0)
+                return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        }
+        return result;
     }
 
     HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t* sourcePath,
@@ -954,10 +967,12 @@ private:
     bool _overrideCapabilities           = false;
     HRESULT _capabilitiesHr              = S_OK;
     std::string _capabilitiesJson;
-    bool _failReadDirectoryInfo         = false;
-    HRESULT _readDirectoryInfoFailureHr = E_FAIL;
-    HANDLE _readDirectoryInfoGate       = nullptr;
-    bool _returnEmptyReadDirectoryInfo  = false;
+    bool _failReadDirectoryInfo          = false;
+    HRESULT _readDirectoryInfoFailureHr  = E_FAIL;
+    HANDLE _readDirectoryInfoGate        = nullptr;
+    HANDLE _readDirectorySnapshotReady   = nullptr;
+    HANDLE _readDirectorySnapshotRelease = nullptr;
+    bool _returnEmptyReadDirectoryInfo   = false;
     std::atomic_uint32_t _readDirectoryInfoCalls{0u};
     uint32_t _admissionProviderDelayUs      = 0u;
     std::atomic_uint32_t* _capabilityCalls  = nullptr;

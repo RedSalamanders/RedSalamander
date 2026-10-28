@@ -263,6 +263,26 @@ handle and add a still-open-reader control. A driver-rejected native enumeration
 to complete root traversal, while a malformed-data negative control still fails.
 These latest changes are unbuilt and unqualified until fresh receipts pass.
 
+Source `5221736ddf217d8f7806771acd33c3e2d82bfee8` built x64 Debug with receipt
+`cec809bd7dee0926c4c50d931150403491bc01d32c18e4755eeef7e523af7f6a`.
+Focused run `20261028T175950Z-17620-8aed146ddc0745b2b4c8651eef16edf4` confirms all
+four settings child modes exit naturally within the unchanged deadline (4.936–6.594 seconds)
+and the 200 largest theme resolver samples are 4,585–10,402 us, mean 5,239.59 us.
+The process stops during blocked-provider Batch Rename before five remaining case results;
+its count-mismatch verdict is incomplete coverage, never a campaign pass. Review found
+timer cancellation touching freed controls after DxUi host teardown. Remove that late
+UI update and retain the existing blocked-provider close/recovery assertions.
+
+Review `4404286278` correctly identifies parent environment leakage during the pumping child
+wait. Use the canonical child-only Unicode block and assert exact parent environment values
+throughout the wait. Superseded hosted `4b094967d1f2` retains a stale cp437.zip pane snapshot
+(two displayed entries versus three disk entries) and ARM64 ASan foreground refusal against
+WWAHost. Retain both failures. An in-flight directory invalidation must survive publication;
+add a gated post-snapshot mutation control and retain the original archive test. Use a warned,
+owned registered-hotkey foreground handshake with refusal/cleanup controls, retaining actual
+foreground assertions and the existing focus deadline. These repairs require fresh native,
+hosted and local-remainder qualification; source-522 workflows are diagnostic until then.
+
 Source `c28ecab60db2586846908e2ef0593b97df670d36` passed its full-solution x64 Debug
 build in 5:19, receipt `0bda355e7897c6ca0ff748a14f7be52fd93f6b21cad848d244fe96f9ea413f83`,
 and all 282 focused tooling controls without skips in
