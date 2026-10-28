@@ -1,0 +1,18 @@
+{
+    "run_started_utc": "2026-07-03T12:33:01.549Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare",
+    "duration_ms": 82,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "worker_shutdown_joins_before_state_teardown",
+            "status": "passed",
+            "duration_ms": 70
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

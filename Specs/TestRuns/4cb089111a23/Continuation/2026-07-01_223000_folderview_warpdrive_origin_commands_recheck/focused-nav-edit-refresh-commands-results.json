@@ -1,0 +1,18 @@
+{
+    "run_started_utc": "2026-07-01T20:25:57.620Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 941,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigationView_edit_mode_survives_external_refresh",
+            "status": "passed",
+            "duration_ms": 935
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

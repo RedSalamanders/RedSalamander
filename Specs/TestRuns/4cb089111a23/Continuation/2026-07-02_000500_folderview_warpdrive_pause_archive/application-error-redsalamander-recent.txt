@@ -1,0 +1,28 @@
+
+TimeCreated : 01/07/2026 22:39:52
+Message     : Faulting application name: RedSalamander.exe, version: 7.0.1.0, time stamp: 0x6a457787
+              Faulting module name: textinputframework.dll, version: 10.0.26100.8521, time stamp: 0xcd3c8a25
+              Exception code: 0xc0000005
+              Fault offset: 0x000000000006a419
+              Faulting process id: 0x14220
+              Faulting application start time: 0x1DD0997EEDAA2DE
+              Faulting application path: Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+              Faulting module path: C:\WINDOWS\SYSTEM32\textinputframework.dll
+              Report Id: 3f3b80f9-1dbe-4b89-bf90-c86b5eb4382c
+              Faulting package full name: 
+              Faulting package-relative application ID: 
+
+TimeCreated : 01/07/2026 21:27:23
+Message     : Faulting application name: RedSalamander.exe, version: 7.0.1.0, time stamp: 0x6a45661c
+              Faulting module name: textinputframework.dll, version: 10.0.26100.8521, time stamp: 0xcd3c8a25
+              Exception code: 0xc0000005
+              Fault offset: 0x000000000006a419
+              Faulting process id: 0xACD4
+              Faulting application start time: 0x1DD098D5BDE6DDE
+              Faulting application path: Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+              Faulting module path: C:\WINDOWS\SYSTEM32\textinputframework.dll
+              Report Id: 6c69fcac-19a3-4df9-b9eb-c79e71a806fd
+              Faulting package full name: 
+              Faulting package-relative application ID: 
+
+

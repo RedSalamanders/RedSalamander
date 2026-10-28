@@ -1,0 +1,30 @@
+{
+    "run_started_utc": "2026-07-03T13:54:00.754Z",
+    "duration_ms": 1204,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_pane_navigationView_full_path_popup_edit_route",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 562,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "cases": [
+                {
+                    "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+                    "status": "passed",
+                    "duration_ms": 557
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

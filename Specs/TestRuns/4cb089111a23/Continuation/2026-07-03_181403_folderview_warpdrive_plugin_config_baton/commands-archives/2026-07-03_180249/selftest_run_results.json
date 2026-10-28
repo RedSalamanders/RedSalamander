@@ -1,0 +1,100 @@
+{
+    "run_started_utc": "2026-07-03T16:02:39.072Z",
+    "duration_ms": 10850,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_preferences_dialog_advanced_live_dx_interaction,cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction,cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file,cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file,cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction,cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface,cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics,cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes,cmd_preferences_dialog_file_operations_page_uses_dxui_controls,cmd_preferences_dialog_file_operations_live_dx_interaction,cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction,cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction,cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface\r\n",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 10130,
+            "passed": 15,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_preferences_dialog_advanced_live_dx_interaction,cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction,cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file,cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file,cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction,cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface,cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics,cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes,cmd_preferences_dialog_file_operations_page_uses_dxui_controls,cmd_preferences_dialog_file_operations_live_dx_interaction,cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction,cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible,cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction,cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface\r\n",
+            "cases": [
+                {
+                    "name": "cmd_preferences_dialog_advanced_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 1164
+                },
+                {
+                    "name": "cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible",
+                    "status": "passed",
+                    "duration_ms": 451
+                },
+                {
+                    "name": "cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 997
+                },
+                {
+                    "name": "cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file",
+                    "status": "passed",
+                    "duration_ms": 231
+                },
+                {
+                    "name": "cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file",
+                    "status": "passed",
+                    "duration_ms": 234
+                },
+                {
+                    "name": "cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 951
+                },
+                {
+                    "name": "cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface",
+                    "status": "passed",
+                    "duration_ms": 251
+                },
+                {
+                    "name": "cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics",
+                    "status": "passed",
+                    "duration_ms": 214
+                },
+                {
+                    "name": "cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes",
+                    "status": "passed",
+                    "duration_ms": 2371
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_page_uses_dxui_controls",
+                    "status": "passed",
+                    "duration_ms": 322
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 623
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 619
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible",
+                    "status": "passed",
+                    "duration_ms": 580
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 460
+                },
+                {
+                    "name": "cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface",
+                    "status": "passed",
+                    "duration_ms": 231
+                }
+            ]
+        }
+    ],
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0
+}

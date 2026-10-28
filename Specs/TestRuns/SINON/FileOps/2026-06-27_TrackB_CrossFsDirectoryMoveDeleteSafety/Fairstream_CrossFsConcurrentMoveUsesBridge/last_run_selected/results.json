@@ -1,0 +1,40 @@
+{
+    "run_started_utc": "2026-06-27T08:12:48.260Z",
+    "duration_ms": 3793,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "case_filter": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\Users\\PVB\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\fileops",
+            "duration_ms": 2485,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "case_filter": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1719
+                },
+                {
+                    "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+                    "status": "passed",
+                    "duration_ms": 625
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 141
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

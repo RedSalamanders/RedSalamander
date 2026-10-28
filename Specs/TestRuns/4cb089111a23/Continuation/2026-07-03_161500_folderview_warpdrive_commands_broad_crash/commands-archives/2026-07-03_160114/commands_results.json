@@ -1,0 +1,28 @@
+{
+    "run_started_utc": "2026-07-03T14:01:12.440Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 1165,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 398
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 357
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 398
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

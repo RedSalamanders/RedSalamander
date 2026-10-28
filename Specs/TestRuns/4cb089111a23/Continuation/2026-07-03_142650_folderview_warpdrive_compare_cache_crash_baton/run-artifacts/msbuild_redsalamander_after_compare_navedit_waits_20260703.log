@@ -1,0 +1,267 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.7.11822.327)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      Z:\src\RedSalamander\RedSalamander.sln
+  Target:        RedSalamander
+  Configuration: Debug
+  Platform:      x64
+  Version:       7.0.1 beta Debug (x64)
+  Build number:  1
+  Version state: Z:\src\RedSalamander\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Starting build...
+
+  DxUi.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\DxUi.lib
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  SettingsStore.cpp
+  Factory.cpp
+  Factory.cpp
+  RedSalamander-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\RedSalamander-fr-FR.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-ja-JP.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-fr-FR.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  ViewerText-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerText-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystem-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystem-ja-JP.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-fr-FR.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-ja-JP.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-ja-JP.dll
+  FileSystem-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystem-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerPE-fr-FR.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-ja-JP.dll
+  RedLauncher.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\RedLauncher.exe
+  ViewerWeb-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerText-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-sk-SK.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-cs-CZ.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Lang\ViewerPE-ja-JP.dll
+  FileSystemMicrosoftDrive.cpp
+  ViewerVLC.cpp
+  FileSystem7z.cpp
+  FileSystemGoogleDrive.cpp
+  FileSystemS3.Configuration.cpp
+  FileSystemDummy.cpp
+  Common.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Common.dll
+  FilesInformationGoogleDrive.cpp
+  Generating Code...
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  RedSalamanderMonitor.cpp
+  Generating Code...
+  RedSalamanderSearchService.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\RedSalamanderSearchService.exe
+  Generating Code...
+  FilesInformationMicrosoftDrive.cpp
+  FileSystem7z.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystem7z.dll
+  FileSystemDummy.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemDummy.dll
+  ViewerVLC.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerVLC.dll
+  0 File(s) copied
+  FileSystemS3.Core.cpp
+  Generating Code...
+  FileSystemMtp.Core.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.CopyMove.cpp
+  ViewerPE.cpp
+  Generating Code...
+  ViewerSqlite.Engine.cpp
+  FileSystemGoogleDrive.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemGoogleDrive.dll
+  ViewerText.Encoding.cpp
+  ViewerWeb.cpp
+  ViewerImgRaw.Decode.cpp
+  ViewerSpace.cpp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.dll
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  FileSystem.FileOps.cpp
+  ViewerSqlite.cpp
+  FileSystemS3.Directory.cpp
+  RedSalamanderMonitor.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\RedSalamanderMonitor.exe
+  FileSystemMtp.Device.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  ViewerText.Hex.cpp
+  ViewerImgRaw.Export.cpp
+  Generating Code...
+  Generating Code...
+  ViewerPE.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerPE.dll
+  Generating Code...
+  ViewerWeb.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.dll
+  0 File(s) copied
+  Generating Code...
+  FileSystemCurl.Imap.cpp
+  FileSystem.Menu.cpp
+  FileSystemMtp.FakeBackend.cpp
+  ViewerSpace.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerSpace.dll
+  ViewerSqlite.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerSqlite.dll
+  ViewerText.MenuTheme.cpp
+  FileSystemS3.DirectoryOps.cpp
+  ViewerImgRaw.cpp
+  FileSystem.Path.cpp
+  FileSystemCurl.Shared.cpp
+  FilesInformationMtp.cpp
+  ViewerText.Text.cpp
+  Generating Code...
+  FileSystemS3.DriveInfo.cpp
+  FileSystem.Search.cpp
+  Generating Code...
+  ViewerImgRaw.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerImgRaw.dll
+  Generating Code...
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  FileSystemMtp.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemMtp.dll
+  0 File(s) copied
+  ViewerText.cpp
+  FileSystemCurl.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemCurl.dll
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  FileSystem.Watch.cpp
+  FileSystemS3.IO.cpp
+  FileSystem.cpp
+  Generating Code...
+  ViewerText.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\ViewerText.dll
+  FileSystemS3.Menu.cpp
+  Generating Code...
+  FileSystem.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystem.dll
+  FileSystemS3.S3.cpp
+  FileSystemS3.S3Table.cpp
+  FileSystemS3.Shared.cpp
+  FilesInformationS3.cpp
+  dllmain.cpp
+  Generating Code...
+  FileSystemS3.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\Plugins\FileSystemS3.dll
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  0 File(s) copied
+  CompareDirectoriesEngine.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  CompareDirectoriesWindow.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  FindFilesWindow.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderView.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWindow.cpp
+  ManagePluginsDialog.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  NavigationView.cpp
+  Preferences.FileActions.cpp
+  Preferences.Internal.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Plugins.cpp
+  RedSalamander.cpp
+  Commands.SelfTest.cpp
+  SelfTestCommon.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  SettingsSchemaExport.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  RedSalamander.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+Captured log: Z:\src\RedSalamander\.build\logs\msbuild-20260703_141647_306.log
+Diagnostics: 0 warning(s), 0 error(s)
+
+========================================
+Build completed successfully!
+Configuration: Debug | Platform: x64
+Build time: 02:09
+========================================
+Output: .build\\x64\\Debug\\RedSalamander.exe (62.68 MB)

@@ -1,0 +1,46 @@
+{
+  "case": "folderView_perf_overlay_invalidation_stress",
+  "root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands\\work\\folder_overlay_invalidation_stress_{CBA3E5EE-6987-4C41-898C-408802A1ED42}",
+  "itemCount": 180,
+  "query": "overlay",
+  "metricQuality": {
+    "folderFrameTotal": { "count": 696 },
+    "folderFramePresent": { "count": 696 },
+    "minimumSamplesForP95": 200,
+    "minimumSamplesForP99": 1000,
+    "samplesEnoughForP95": true,
+    "samplesEnoughForP99": false,
+    "sampleMode": "animation-cadence-bounded",
+    "buildConfiguration": "Debug"
+  },
+  "folderOverlayMetricPresence": {
+    "allPresent": true,
+    "metrics": [
+      {
+        "metric": "folder.frame.total_us",
+        "present": true,
+        "count": 696
+      },
+      {
+        "metric": "folder.frame.present_us",
+        "present": true,
+        "count": 696
+      },
+      {
+        "metric": "folder.frame.overlay_animation_count",
+        "present": true,
+        "count": 696
+      },
+      {
+        "metric": "folder.frame.overlay_dirty_rect_area_px",
+        "present": true,
+        "count": 696
+      },
+      {
+        "metric": "render.incremental_search_effect_updates",
+        "present": true,
+        "count": 696
+      }
+    ]
+  }
+}

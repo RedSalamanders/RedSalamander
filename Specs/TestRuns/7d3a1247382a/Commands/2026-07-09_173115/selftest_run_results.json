@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-07-09T15:31:12.937Z",
+    "duration_ms": 2575,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "settings_file_operations_precalc_roundtrip",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260709T153112Z-59880-236e24407dad4b4dbe5a68ae755e5ee4\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 57,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "settings_file_operations_precalc_roundtrip",
+            "cases": [
+                {
+                    "name": "settings_file_operations_precalc_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 32,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

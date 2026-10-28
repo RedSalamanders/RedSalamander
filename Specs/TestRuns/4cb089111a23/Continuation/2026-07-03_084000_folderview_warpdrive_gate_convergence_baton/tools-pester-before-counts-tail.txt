@@ -1,0 +1,120 @@
+ [+] waits for runner-native self-test processes by direct process handle 10ms
+ [+] gives ViewerPETests nested shell churn its own timeout budget 8ms
+ [+] requires git identity before accepting self-test archive repo roots 9ms
+ [+] keeps self-test archive parent walking bounded by a named limit 23ms
+ [+] scopes the self-test run mutex to the isolated self-test root 28ms
+ [+] keeps Commands Preferences chunks namespace-self-contained 19ms
+ [+] keeps IconCache association LRU perf emission outside the association cache lock helper 10ms
+ [+] bounds DirectoryInfoCache eviction when protected entries exceed the cache budget 10ms
+ [+] keeps FolderView thumbnail WIC factory ownership local to the processing thread 10ms
+ [+] keeps IMAP summary repair budget exhaustion local to the current repair pass 11ms
+ [+] clears FolderView incremental-search layout effects over the visual label text 12ms
+ [+] matches FolderView incremental-search highlights against visual display names 12ms
+ [+] cleans stale FolderView incremental-search drawing effects when search is inactive 11ms
+ [+] exposes runner-native self-test case listing without executing case bodies 13ms
+ [+] uses shared self-test result emission for ad hoc and state-machine cases 11ms
+ [+] keeps CompareDirectories runner-listed case names unique 26ms
+ [+] keeps CompareDirectories literal RunCase names listed for runner coverage 111ms
+ [+] opens the file-operations custom speed-limit prompt asynchronously for self-tests 10ms
+ [+] keeps FileOperations self-test case prefixes runnable 10ms
+ [+] keeps FileOperations pre-calc perf counters race-free under worker concurrency 13ms
+ [+] keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded 16ms
+ [+] keeps cross-filesystem MOVE source deletion behind one bridge-copy completion helper 11ms
+ [+] keeps FileOperations conflict routing in one arbiter and one action-layout builder 18ms
+ [+] keeps Riptide low-risk hardening invariants wired 21ms
+ [+] keeps Floodgate data-safety invariants wired 62ms
+ [+] keeps Delta reverify file-system safety fixes wired 19ms
+ [+] keeps HostServices connection-secret lifecycle contracts wired 19ms
+ [+] keeps Riptide test-credibility gaps closed 14ms
+ [+] keeps native DxUi text hosts compatible with Win32 edit text and selection messages 11ms
+ [+] keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime 28ms
+Describing Test inventory helper
+ [-] counts the in-product self-test surfaces from source 243ms
+   RuntimeException: Commands static RunCase count drifted. Expected '663' but got '676'.
+   at Assert-RSEqual, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 22
+   at <ScriptBlock>, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 34
+ [-] counts standalone, performance, and script test surfaces from source 238ms
+   RuntimeException: NativeTextInput method count drifted. Expected '114' but got '117'.
+   at Assert-RSEqual, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 22
+   at <ScriptBlock>, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 43
+ [-] exports JSON that can be used as a manifest artifact 80ms
+   RuntimeException: JSON manifest should include Commands count. Expected '663' but got '676'.
+   at Assert-RSEqual, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 22
+   at <ScriptBlock>, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 55
+ [+] guards FileOperations Step enum values against phase-order drift 71ms
+ [-] keeps documented inventory counts aligned with the source manifest 115ms
+   RuntimeException: Coverage spec Commands count drifted from source. Expected '676' but got '663'.
+   at Assert-RSEqual, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 22
+   at <ScriptBlock>, Z:\src\RedSalamander\Tools\Tests\TestInventory.Tests.ps1: line 75
+Describing Vcpkg install safety helper
+ [+] accepts vcpkg triplet leaf names 68ms
+ [+] rejects triplet values that are paths 38ms
+ [+] resolves child paths under the intended root 22ms
+ [+] rejects child paths that escape the intended root 23ms
+  Performing lock-aware merge (test-triplet)...
+  Analyzing 1 file(s)...
+  Merge statistics for test-triplet:
+    Files analyzed: 1
+    Files copied:   1 (absent or changed)
+    Files skipped:  0 (unchanged, hash-verified)
+    Dirs created:   1
+    Errors:         0
+  Merge of 'test-triplet' completed successfully.
+ [+] merges a single source file while StrictMode is active 43ms
+Describing VerifyNoProductionGetCursorPos
+ [+] finds no production GetCursorPos() usage outside SelfTest/Tests sources 2.02s
+Describing Versioning helper
+ [+] reuses the saved local build number across ordinary local builds 100ms
+ [+] allocates a new local build number when the saved context is missing 25ms
+ [+] uses major minor build as the package version 16ms
+ [+] uses GITHUB_RUN_NUMBER as the CI build number 13ms
+Describing Viewer chrome keyboard contracts
+ [+] routes standalone file-combo keyboard handling through the shared helper 56ms
+ [+] does not persist OnCreate hwnd captures in viewer chrome callbacks 17ms
+ [+] documents the shared Escape focus-cancel-close contract 10ms
+Describing Launcher subsystem contracts
+ [+] uses one detached console-policy WinGet alias launcher for normal and foreground waits 30ms
+Describing Winget validation helper
+ [+] allows only the known winget 1.11 schema-header warning for 1.12 manifests 98ms
+ [+] rejects unrelated warnings 8ms
+ [+] does not suppress warnings from current winget validators 9ms
+ [+] fails clearly when the winget executable is unavailable 23ms
+winget.exe version:
+v1.12.0
+Manifest validation failed.
+Manifest Error: PackageVersion is required.
+ [+] propagates real validation failures with the winget exit code 83ms
+winget.exe version:
+v1.11.510
+Manifest validation failed.
+Manifest Error: InstallerSha256 is invalid.
+ [+] does not suppress unrelated validation failures from legacy winget validators 66ms
+Describing Winget release workflow
+ [+] enables local manifest installs before testing the generated manifest 51ms
+Describing Winget manifest template
+ [+] declares the dependency-free launcher aliases as portable alias targets on the Windows 11 build 22000.2600 floor 45ms
+ [+] marks the launcher executables as launch files in installation metadata 13ms
+ [+] copies RedLauncher.exe and its red.exe alias into the portable ZIP root 10ms
+ [+] preserves package subdirectories for plugins, language satellites, and themes 15ms
+Describing RedLauncher project
+ [+] is a first-party static-CRT detached console executable project for the WinGet alias 58ms
+ [+] resolves the WinGet alias symlink before launching RedSalamander.exe 15ms
+ [+] waits only for foreground self-test invocations 11ms
+Describing VC runtime ZIP helper
+ [+] selects the latest non-OneCore MSVC redist directory for the requested architecture 87ms
+ [+] copies app-local MSVC runtime DLLs and requires the core launch dependencies 44ms
+ [+] fails clearly when a required runtime DLL is missing 35ms
+Tests completed in 174.24s
+Passed: 111 Failed: 4 Skipped: 0 Pending: 0 Inconclusive: 0
+
+TagFilter        : {}
+ExcludeTagFilter : {}
+TestNameFilter   : 
+TotalCount       : 115
+PassedCount      : 111
+FailedCount      : 4
+SkippedCount     : 0
+PendingCount     : 0
+Time             : 00:02:54.2353315
+TestResult       : {@{Describe=Build project selection helper; Context=; Name=builds plugin projects directly from their vcxproj files; Result=Passed; Passed=True; Time=00:00:00.3736002; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Build project selection helper; Context=; Name=builds test projects directly from their vcxproj files; Result=Passed; Passed=True; Time=00:00:00.1213532; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Build project selection helper; Context=; Name=keeps RedSalamander on the solution build graph; Result=Passed; Passed=True; Time=00:00:00.0402008; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Build project selection helper; Context=; Name=uses the rebuild target directly for vcxproj rebuilds; Result=Passed; Passed=True; Time=00:00:00.0376716; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}…}
+

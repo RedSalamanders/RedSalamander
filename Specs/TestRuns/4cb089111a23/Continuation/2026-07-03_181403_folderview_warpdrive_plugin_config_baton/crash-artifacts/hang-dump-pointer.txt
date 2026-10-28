@@ -1,0 +1,5 @@
+
+FullName      : C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-hang-20260703-174154-p62052.dmp
+Length        : 1026938214
+LastWriteTime : 03/07/2026 17:41:05
+

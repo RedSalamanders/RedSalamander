@@ -1,0 +1,879 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index e01cd1a54..e42c4f3d6 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -8074,6 +8074,18 @@ bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitProm
+     return ok;
+ }
+ 
++[[nodiscard]] bool PostFileOperationsSpeedLimitPromptCloseDebugCommand(HWND hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand command) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++    {
++        return false;
++    }
++
++    // Confirm/Cancel tears down the modal DxUi/TSF prompt. Post the close action
++    // so selftest worker threads never destroy it inside a cross-thread SendMessage stack.
++    return PostMessageW(hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), 0) != FALSE;
++}
++
+ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+@@ -8092,16 +8104,12 @@ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
+ bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+-    return hwnd &&
+-           SendMessageW(
+-               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Confirm), 0) != FALSE;
++    return PostFileOperationsSpeedLimitPromptCloseDebugCommand(hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand::Confirm);
+ }
+ 
+ bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+-    return hwnd &&
+-           SendMessageW(
+-               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel), 0) != FALSE;
++    return PostFileOperationsSpeedLimitPromptCloseDebugCommand(hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel);
+ }
+ #endif
+diff --git a/RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp b/RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp
+index 748715d38..c967d47a6 100644
+--- a/RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp
++++ b/RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp
+@@ -3818,16 +3818,6 @@ struct SevenZipArchiveExports final
+ std::atomic<HWND> g_archivePackPromptWindow{nullptr};
+ std::atomic<HWND> g_archiveUnpackPromptWindow{nullptr};
+ 
+-void TraceArchivePackPrompt(std::wstring_view message) noexcept
+-{
+-    SelfTest::AppendSelfTestTrace(std::format(L"archive_pack_prompt: {}", message));
+-}
+-
+-void TraceArchivePackPromptHwnd(std::wstring_view message, HWND hwnd) noexcept
+-{
+-    SelfTest::AppendSelfTestTrace(std::format(L"archive_pack_prompt: {} hwnd=0x{:X}", message, reinterpret_cast<UINT_PTR>(hwnd)));
+-}
+-
+ enum class ArchivePackPromptDebugCommand : uintptr_t
+ {
+     GetSnapshot = 1u,
+@@ -3838,21 +3828,6 @@ enum class ArchivePackPromptDebugCommand : uintptr_t
+     Cancel,
+ };
+ 
+-std::wstring_view ArchivePackPromptDebugCommandName(ArchivePackPromptDebugCommand command) noexcept
+-{
+-    switch (command)
+-    {
+-        case ArchivePackPromptDebugCommand::GetSnapshot: return L"GetSnapshot";
+-        case ArchivePackPromptDebugCommand::SetPackerIndex: return L"SetPackerIndex";
+-        case ArchivePackPromptDebugCommand::SetArchivePath: return L"SetArchivePath";
+-        case ArchivePackPromptDebugCommand::SetDeleteAfter: return L"SetDeleteAfter";
+-        case ArchivePackPromptDebugCommand::Confirm: return L"Confirm";
+-        case ArchivePackPromptDebugCommand::Cancel: return L"Cancel";
+-    }
+-
+-    return L"Unknown";
+-}
+-
+ struct ArchivePackPromptArchivePathPayload final
+ {
+     std::wstring archivePath;
+@@ -4575,15 +4550,9 @@ public:
+ 
+     [[nodiscard]] std::optional<ArchivePackPromptResult> ShowModal() noexcept
+     {
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPrompt(L"ShowModal begin");
+-#endif
+         const HRESULT classHr = EnsureWindowClass();
+         if (FAILED(classHr))
+         {
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(std::format(L"ShowModal EnsureWindowClass failed hr=0x{:08X}", static_cast<unsigned int>(classHr)));
+-#endif
+             return std::nullopt;
+         }
+ 
+@@ -4617,9 +4586,6 @@ public:
+         });
+ 
+         const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_PACK);
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPrompt(L"CreateWindowEx begin");
+-#endif
+         const HWND hwnd            = CreateWindowExW(exStyle,
+                                                      kArchivePackPromptClassName,
+                                                      caption.c_str(),
+@@ -4634,48 +4600,23 @@ public:
+                                                      this);
+         if (! hwnd)
+         {
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(std::format(L"CreateWindowEx failed lastError={}", GetLastError()));
+-#endif
+             return std::nullopt;
+         }
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"CreateWindowEx returned", hwnd);
+-#endif
+         if (! _hWnd)
+         {
+             _hWnd.reset(hwnd);
+         }
+ 
+         CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"PrimeForShow begin", _hWnd.get());
+-#endif
+         static_cast<void>(_dxHost.PrimeForShow());
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"ShowWindow begin", _hWnd.get());
+-#endif
+         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+         UpdateWindow(_hWnd.get());
+         SetForegroundWindow(_hWnd.get());
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"message loop begin", _hWnd.get());
+-#endif
+ 
+         MSG msg{};
+         while (! _done)
+         {
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(L"ShowModal GetMessage begin");
+-#endif
+             const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(std::format(L"ShowModal GetMessage end result={} message=0x{:X} hwnd=0x{:X} done={}",
+-                                               getMessageResult,
+-                                               static_cast<unsigned int>(msg.message),
+-                                               reinterpret_cast<UINT_PTR>(msg.hwnd),
+-                                               _done ? 1 : 0));
+-#endif
+             if (getMessageResult == -1)
+             {
+                 return std::nullopt;
+@@ -4687,25 +4628,9 @@ public:
+             }
+ 
+             TranslateMessage(&msg);
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(std::format(L"ShowModal DispatchMessage begin message=0x{:X} hwnd=0x{:X} done={}",
+-                                               static_cast<unsigned int>(msg.message),
+-                                               reinterpret_cast<UINT_PTR>(msg.hwnd),
+-                                               _done ? 1 : 0));
+-#endif
+             DispatchMessageW(&msg);
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPrompt(std::format(L"ShowModal DispatchMessage end message=0x{:X} hwnd=0x{:X} done={}",
+-                                               static_cast<unsigned int>(msg.message),
+-                                               reinterpret_cast<UINT_PTR>(msg.hwnd),
+-                                               _done ? 1 : 0));
+-#endif
+         }
+ 
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPrompt(std::format(L"ShowModal loop exit done={}", _done ? 1 : 0));
+-        TraceArchivePackPrompt(L"ShowModal end");
+-#endif
+         return _result;
+     }
+ 
+@@ -4749,14 +4674,10 @@ public:
+             if (message == WM_NCDESTROY)
+             {
+ #ifdef ENABLE_TESTS
+-                TraceArchivePackPromptHwnd(L"WM_NCDESTROY handled path begin", hwnd);
+                 g_archivePackPromptWindow.store(nullptr);
+ #endif
+                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                 self->_dxHost.Detach();
+-#ifdef ENABLE_TESTS
+-                TraceArchivePackPromptHwnd(L"WM_NCDESTROY handled path detached", hwnd);
+-#endif
+                 if (self->_hWnd.get() == hwnd)
+                 {
+                     static_cast<void>(self->_hWnd.release());
+@@ -4796,20 +4717,13 @@ public:
+             case WM_ERASEBKGND: return 1;
+             case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+             case WM_CLOSE:
+-#ifdef ENABLE_TESTS
+-                TraceArchivePackPromptHwnd(L"WM_CLOSE", hwnd);
+-#endif
+                 self->Cancel();
+                 return 0;
+             case WM_NCDESTROY:
+ #ifdef ENABLE_TESTS
+-                TraceArchivePackPromptHwnd(L"WM_NCDESTROY switch path begin", hwnd);
+                 g_archivePackPromptWindow.store(nullptr);
+ #endif
+                 self->_dxHost.Detach();
+-#ifdef ENABLE_TESTS
+-                TraceArchivePackPromptHwnd(L"WM_NCDESTROY switch path detached", hwnd);
+-#endif
+                 if (self->_hWnd.get() == hwnd)
+                 {
+                     self->_hWnd.release();
+@@ -4845,45 +4759,24 @@ private:
+ 
+     [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+     {
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"OnCreate begin", hwnd);
+-#endif
+         if (! _dxHost.Attach(hwnd))
+         {
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPromptHwnd(L"OnCreate attach failed", hwnd);
+-#endif
+             return false;
+         }
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"OnCreate attached", hwnd);
+-#endif
+ 
+ #ifdef ENABLE_TESTS
+         g_archivePackPromptWindow.store(hwnd);
+ #endif
+         BuildUi();
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"OnCreate BuildUi complete", hwnd);
+-#endif
+         ApplyTheme();
+         ResetArchivePathForSelectedPacker();
+         Layout();
+         if (_archivePathCombo)
+         {
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPromptHwnd(L"OnCreate SetFocusControl archive path begin", hwnd);
+-#endif
+             _dxHost.SetFocusControl(_archivePathCombo);
+-#ifdef ENABLE_TESTS
+-            TraceArchivePackPromptHwnd(L"OnCreate SetFocusControl archive path end", hwnd);
+-#endif
+         }
+         _dxHost.SetDefaultButton(_okButton);
+         _dxHost.SetCancelButton(_cancelButton);
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"OnCreate end", hwnd);
+-#endif
+         return true;
+     }
+ 
+@@ -5136,34 +5029,22 @@ private:
+ 
+     void Confirm() noexcept
+     {
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"Confirm begin", _hWnd.get());
+-#endif
+         _result = ReadResultFromUi();
+         _done   = true;
+         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+         {
+             _hWnd.reset();
+         }
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPrompt(L"Confirm end");
+-#endif
+     }
+ 
+     void Cancel() noexcept
+     {
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPromptHwnd(L"Cancel begin", _hWnd.get());
+-#endif
+         _result.reset();
+         _done = true;
+         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+         {
+             _hWnd.reset();
+         }
+-#ifdef ENABLE_TESTS
+-        TraceArchivePackPrompt(L"Cancel end");
+-#endif
+     }
+ 
+     void SetPackerIndex(size_t index) noexcept
+@@ -5184,17 +5065,6 @@ private:
+ #ifdef ENABLE_TESTS
+     LRESULT OnDebugCommand(ArchivePackPromptDebugCommand command, LPARAM lParam) noexcept
+     {
+-        TraceArchivePackPrompt(std::format(L"DebugCommand begin command={} lParam=0x{:X}",
+-                                           ArchivePackPromptDebugCommandName(command),
+-                                           static_cast<UINT_PTR>(lParam)));
+-        const auto finish = [&](LRESULT result) noexcept -> LRESULT
+-        {
+-            TraceArchivePackPrompt(std::format(L"DebugCommand end command={} result={}",
+-                                               ArchivePackPromptDebugCommandName(command),
+-                                               static_cast<long long>(result)));
+-            return result;
+-        };
+-
+         switch (command)
+         {
+             case ArchivePackPromptDebugCommand::GetSnapshot:
+@@ -5202,7 +5072,7 @@ private:
+                 auto* snapshot = reinterpret_cast<ArchivePackPromptDebugSnapshot*>(lParam);
+                 if (! snapshot)
+                 {
+-                    return finish(FALSE);
++                    return FALSE;
+                 }
+ 
+                 const ArchivePackerDefinition& selectedPacker = SelectedPacker();
+@@ -5219,36 +5089,36 @@ private:
+                 snapshot->deleteAfterPacking                  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
+                 const D2D1_RECT_F client                      = _dxHost.GetClientBoundsDip();
+                 snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
+-                return finish(TRUE);
++                return TRUE;
+             }
+             case ArchivePackPromptDebugCommand::SetPackerIndex:
+                 SetPackerIndex(static_cast<size_t>(lParam));
+-                return finish(TRUE);
++                return TRUE;
+             case ArchivePackPromptDebugCommand::SetArchivePath:
+             {
+                 const auto* payload = reinterpret_cast<const ArchivePackPromptArchivePathPayload*>(lParam);
+                 if (! payload)
+                 {
+-                    return finish(FALSE);
++                    return FALSE;
+                 }
+                 SetArchivePathForDebug(payload->archivePath);
+-                return finish(TRUE);
++                return TRUE;
+             }
+             case ArchivePackPromptDebugCommand::SetDeleteAfter:
+                 if (_deleteAfterCheckbox)
+                 {
+                     _deleteAfterCheckbox->SetChecked(lParam != 0);
+                 }
+-                return finish(TRUE);
++                return TRUE;
+             case ArchivePackPromptDebugCommand::Confirm:
+                 Confirm();
+-                return finish(TRUE);
++                return TRUE;
+             case ArchivePackPromptDebugCommand::Cancel:
+                 Cancel();
+-                return finish(TRUE);
++                return TRUE;
+         }
+ 
+-        return finish(FALSE);
++        return FALSE;
+     }
+ #endif
+ 
+diff --git a/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp b/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
+index 59ed80682..6d9db4a21 100644
+--- a/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
++++ b/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
+@@ -850,6 +850,19 @@ HWND GetFolderViewPaneFilterPromptHandle() noexcept
+     return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+ }
+ 
++[[nodiscard]] bool PostFolderViewPromptCloseDebugCommand(HWND hwnd, UINT message, WPARAM command) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++    {
++        return false;
++    }
++
++    // Confirm/Cancel destroys the modal HWND. Post the close action so selftest
++    // worker threads do not destroy DxUi/TSF prompt windows inside a cross-thread
++    // synchronous SendMessage stack.
++    return PostMessageW(hwnd, message, command, 0) != FALSE;
++}
++
+ bool DebugGetFolderViewPaneFilterPromptSnapshot(FolderViewPaneFilterPromptDebugSnapshot& out) noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+@@ -924,15 +937,13 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
+ bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewPaneFilterPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel));
+ }
+ 
+ HWND GetFolderViewSelectionMaskPromptHandle() noexcept
+@@ -991,15 +1002,15 @@ bool DebugSetFolderViewSelectionMaskPromptText(std::wstring_view text) noexcept
+ bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewSelectionMaskPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel));
+ }
+ 
+ bool DebugGetFolderViewCreateDirectoryPromptSnapshot(FolderViewCreateDirectoryPromptDebugSnapshot& out) noexcept
+@@ -1040,17 +1051,15 @@ bool DebugSetFolderViewCreateDirectoryPromptText(std::wstring_view text) noexcep
+ bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm), 0) !=
+-               FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel), 0) !=
+-               FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel));
+ }
+ 
+ bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept
+@@ -1106,13 +1115,13 @@ bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexce
+ bool DebugConfirmFolderViewEditNewPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewEditNewPromptHandle();
+-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewEditNewPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewEditNewPromptHandle();
+-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel));
+ }
+ 
+ HWND GetFolderViewChangeCasePromptHandle() noexcept
+@@ -1158,15 +1167,13 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
+ bool DebugConfirmFolderViewChangeCasePrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewChangeCasePrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel));
+ }
+ #endif
+ 
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp
+index bc43d61af..28623d00d 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Dialogs.cpp
+@@ -195,10 +195,8 @@ template <typename WorkerFunc> void RunMakeFileListOptionsPromptModalCycle(HWND
+ 
+ template <typename WorkerFunc> void RunArchivePackPromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
+ {
+-    Trace(L"archive_pack_modal_cycle: worker start");
+     std::jthread worker([&](std::stop_token) noexcept
+     {
+-        Trace(L"archive_pack_modal_cycle: worker waiting for prompt");
+         const HWND prompt = WaitForWindow(
+             [mainWindow]() noexcept -> HWND
+         {
+@@ -210,36 +208,21 @@ template <typename WorkerFunc> void RunArchivePackPromptModalCycle(HWND mainWind
+             return dlg;
+         },
+             SelfTest::Scale(std::chrono::milliseconds{5000}));
+-        Trace(std::format(L"archive_pack_modal_cycle: worker wait complete prompt=0x{:X}", reinterpret_cast<UINT_PTR>(prompt)));
+         const auto cleanup = wil::scope_exit([&]() noexcept
+         {
+-            Trace(std::format(L"archive_pack_modal_cycle: cleanup enter prompt=0x{:X}", reinterpret_cast<UINT_PTR>(prompt)));
+             if (prompt && IsWindow(prompt) != FALSE)
+             {
+-                Trace(std::format(L"archive_pack_modal_cycle: cleanup close prompt=0x{:X}", reinterpret_cast<UINT_PTR>(prompt)));
+                 PostMessageW(prompt, WM_CLOSE, 0, 0);
+-                const bool closed = WaitForWindowClosed(prompt, SelfTest::Scale(std::chrono::milliseconds{3000}));
+-                Trace(std::format(L"archive_pack_modal_cycle: cleanup closed={}", closed ? 1 : 0));
+-            }
+-            else
+-            {
+-                Trace(L"archive_pack_modal_cycle: cleanup skipped prompt already closed");
++                static_cast<void>(WaitForWindowClosed(prompt, SelfTest::Scale(std::chrono::milliseconds{3000})));
+             }
+         });
+ 
+-        Trace(L"archive_pack_modal_cycle: worker func begin");
+         workerFunc(prompt);
+-        Trace(L"archive_pack_modal_cycle: worker func end");
+     });
+ 
+-    Trace(L"archive_pack_modal_cycle: focus folder pane begin");
+     FocusFolderViewPane(FolderWindow::Pane::Left);
+-    Trace(L"archive_pack_modal_cycle: focus folder pane end");
+-    Trace(L"archive_pack_modal_cycle: send IDM_PANE_PACK begin");
+     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_PACK, 0), 0);
+-    Trace(L"archive_pack_modal_cycle: send IDM_PANE_PACK returned");
+     worker.join();
+-    Trace(L"archive_pack_modal_cycle: worker joined");
+ }
+ 
+ template <typename WorkerFunc> void RunArchiveUnpackPromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
+@@ -6958,6 +6941,27 @@ void AutomateChangeCasePrompt(
+         L"taken.txt",
+     }};
+ 
++    const auto formatNameList = [](const std::vector<std::wstring>& names) noexcept -> std::wstring
++    {
++        if (names.empty())
++        {
++            return L"<none>";
++        }
++
++        std::wstring result;
++        for (const std::wstring& name : names)
++        {
++            if (! result.empty())
++            {
++                result.append(L", ");
++            }
++            result.push_back(L'\'');
++            result.append(name);
++            result.push_back(L'\'');
++        }
++        return result;
++    };
++
+     RunEditNewPromptModalCycle(mainWindow,
+                                [&](const HWND prompt) noexcept
+     {
+@@ -6977,7 +6981,28 @@ void AutomateChangeCasePrompt(
+             }
+ 
+             FolderViewEditNewPromptDebugSnapshot snapshot{};
+-            if (! DebugGetFolderViewEditNewPromptSnapshot(snapshot) || snapshot.validationText.empty())
++            bool captured = false;
++            const auto validationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
++            while (std::chrono::steady_clock::now() < validationDeadline)
++            {
++                if (IsWindow(prompt) == FALSE)
++                {
++                    break;
++                }
++
++                FolderViewEditNewPromptDebugSnapshot candidate{};
++                if (DebugGetFolderViewEditNewPromptSnapshot(candidate))
++                {
++                    snapshot = std::move(candidate);
++                    captured = true;
++                    if (! snapshot.validationText.empty())
++                    {
++                        break;
++                    }
++                }
++                std::this_thread::sleep_for(10ms);
++            }
++            if (! captured || snapshot.validationText.empty())
+             {
+                 probe.missingValidationForNames.push_back(nameText);
+             }
+@@ -6996,9 +7021,14 @@ void AutomateChangeCasePrompt(
+     });
+ 
+     state.Require(probe.sawPrompt, L"Edit New validation prompt did not open.");
+-    state.Require(probe.missingValidationForNames.empty(), L"Edit New should show a validation message for every invalid file name.");
+-    state.Require(probe.closedForNames.empty(), L"Edit New should keep the dialog open after invalid file names.");
+-    state.Require(probe.unfocusedForNames.empty(), L"Edit New should refocus the file-name field after invalid file names.");
++    state.Require(probe.missingValidationForNames.empty(),
++                  std::format(L"Edit New should show a validation message for every invalid file name; missing for: {}.",
++                              formatNameList(probe.missingValidationForNames)));
++    state.Require(probe.closedForNames.empty(),
++                  std::format(L"Edit New should keep the dialog open after invalid file names; closed for: {}.", formatNameList(probe.closedForNames)));
++    state.Require(probe.unfocusedForNames.empty(),
++                  std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.",
++                              formatNameList(probe.unfocusedForNames)));
+     state.Require(probe.cancelled, L"Failed to cancel Edit New validation prompt.");
+ 
+     ec.clear();
+@@ -7553,33 +7583,17 @@ void AutomateChangeCasePrompt(
+         }
+ 
+         probe.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
+-        Trace(L"archive_pack_test: first snapshot begin");
+         probe.capturedInitial   = DebugGetArchivePackPromptSnapshot(probe.initialSnapshot);
+-        Trace(std::format(L"archive_pack_test: first snapshot end ok={}", probe.capturedInitial ? 1 : 0));
+-        Trace(L"archive_pack_test: first uia stats begin");
+         probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
+-        Trace(std::format(L"archive_pack_test: first uia stats end ok={}", probe.uiaPatternStats.has_value() ? 1 : 0));
+         if (probe.capturedInitial && probe.initialSnapshot.packerCount > 1u)
+         {
+-            Trace(L"archive_pack_test: first set second packer begin");
+             probe.setSecondPacker = DebugSetArchivePackPromptPackerIndex(1u);
+-            Trace(std::format(L"archive_pack_test: first set second packer end ok={}", probe.setSecondPacker ? 1 : 0));
+-            Trace(L"archive_pack_test: first second-packer snapshot begin");
+             probe.capturedSecond  = DebugGetArchivePackPromptSnapshot(probe.secondPackerSnapshot);
+-            Trace(std::format(L"archive_pack_test: first second-packer snapshot end ok={}", probe.capturedSecond ? 1 : 0));
+         }
+-        Trace(L"archive_pack_test: first set delete-after begin");
+         probe.setDeleteAfter      = DebugSetArchivePackPromptDeleteAfter(true);
+-        Trace(std::format(L"archive_pack_test: first set delete-after end ok={}", probe.setDeleteAfter ? 1 : 0));
+-        Trace(L"archive_pack_test: first delete-after snapshot begin");
+         probe.capturedDeleteAfter = DebugGetArchivePackPromptSnapshot(probe.deleteAfterSnapshot);
+-        Trace(std::format(L"archive_pack_test: first delete-after snapshot end ok={}", probe.capturedDeleteAfter ? 1 : 0));
+-        Trace(L"archive_pack_test: first cancel begin");
+         probe.actionTriggered     = DebugCancelArchivePackPrompt();
+-        Trace(std::format(L"archive_pack_test: first cancel end ok={}", probe.actionTriggered ? 1 : 0));
+-        Trace(L"archive_pack_test: first wait closed begin");
+         probe.closed              = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
+-        Trace(std::format(L"archive_pack_test: first wait closed end closed={}", probe.closed ? 1 : 0));
+     });
+ 
+     state.Require(probe.sawPrompt, L"Pack prompt did not open.");
+@@ -7649,32 +7663,23 @@ void AutomateChangeCasePrompt(
+         }
+ 
+         ArchivePackPromptDebugSnapshot snapshot{};
+-        Trace(L"archive_pack_test: second initial snapshot begin");
+         if (! DebugGetArchivePackPromptSnapshot(snapshot))
+         {
+-            Trace(L"archive_pack_test: second initial snapshot failed");
+             return;
+         }
+-        Trace(std::format(L"archive_pack_test: second initial snapshot end packers={}", snapshot.packerCount));
+ 
+         for (size_t index = 0u; index < snapshot.packerCount; ++index)
+         {
+-            Trace(std::format(L"archive_pack_test: second set packer begin index={}", index));
+             if (! DebugSetArchivePackPromptPackerIndex(index))
+             {
+-                Trace(std::format(L"archive_pack_test: second set packer failed index={}", index));
+                 continue;
+             }
+-            Trace(std::format(L"archive_pack_test: second set packer end index={}", index));
+ 
+             ArchivePackPromptDebugSnapshot candidate{};
+-            Trace(std::format(L"archive_pack_test: second candidate snapshot begin index={}", index));
+             if (! DebugGetArchivePackPromptSnapshot(candidate))
+             {
+-                Trace(std::format(L"archive_pack_test: second candidate snapshot failed index={}", index));
+                 continue;
+             }
+-            Trace(std::format(L"archive_pack_test: second candidate snapshot end index={} ext={}", index, candidate.packerExtension));
+ 
+             if (candidate.packerExtension == L"7z")
+             {
+@@ -7685,12 +7690,8 @@ void AutomateChangeCasePrompt(
+             }
+         }
+ 
+-        Trace(std::format(L"archive_pack_test: second action begin found7z={}", confirm.found7zPacker ? 1 : 0));
+         confirm.actionTriggered = confirm.found7zPacker ? DebugConfirmArchivePackPrompt() : DebugCancelArchivePackPrompt();
+-        Trace(std::format(L"archive_pack_test: second action end ok={}", confirm.actionTriggered ? 1 : 0));
+-        Trace(L"archive_pack_test: second wait closed begin");
+         confirm.closed          = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
+-        Trace(std::format(L"archive_pack_test: second wait closed end closed={}", confirm.closed ? 1 : 0));
+     });
+ 
+     state.Require(confirm.sawPrompt, L"Pack prompt did not reopen for 7z creation.");
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
+index 326be13cd..5a66da266 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
+@@ -5633,13 +5633,44 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
+ 
+ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
+ {
++    using namespace std::chrono_literals;
++
+     g_folderWindow.SetActivePane(pane);
+ 
+     const HWND view = g_folderWindow.GetFolderViewHwnd(pane);
+-    if (view && IsWindow(view) != FALSE)
++    if (! view || IsWindow(view) == FALSE)
+     {
+-        SetFocus(view);
++        return;
++    }
++
++    const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
++    size_t stableSamples = 0u;
++    while (std::chrono::steady_clock::now() < deadline)
++    {
++        if (GetFocus() != view)
++        {
++            SetFocus(view);
++        }
++
++        PumpPendingMessages();
++        if (GetFocus() == view && g_folderWindow.GetFocusedFolderViewHwnd() == view && g_folderWindow.GetFocusedPane() == pane)
++        {
++            ++stableSamples;
++            if (stableSamples >= 2u)
++            {
++                return;
++            }
++        }
++        else
++        {
++            stableSamples = 0u;
++        }
++
++        std::this_thread::sleep_for(10ms);
+     }
++
++    SetFocus(view);
++    PumpPendingMessages();
+ }
+ 
+ [[nodiscard]] bool WaitForFolderViewPaneFocus(FolderWindow::Pane pane, HWND expectedFolderView, std::chrono::milliseconds timeout) noexcept
+diff --git a/Tests/DxUiTests/DxUiTests.Controls.cpp b/Tests/DxUiTests/DxUiTests.Controls.cpp
+index 9b53e0bbd..9e85c105b 100644
+--- a/Tests/DxUiTests/DxUiTests.Controls.cpp
++++ b/Tests/DxUiTests/DxUiTests.Controls.cpp
+@@ -1,11 +1,26 @@
+ #include "DxUiTestHelpers.h"
+ 
++#include <cctype>
+ #include <fstream>
+ #include <string>
+ 
+ namespace
+ {
+ 
++std::string RemoveAsciiWhitespace(const std::string& text)
++{
++    std::string normalized;
++    normalized.reserve(text.size());
++    for (const char ch : text)
++    {
++        if (std::isspace(static_cast<unsigned char>(ch)) == 0)
++        {
++            normalized.push_back(ch);
++        }
++    }
++    return normalized;
++}
++
+ void TestGroupedGridHeaderClickTogglesCollapsedStateAndRehomesSelection()
+ {
+     using namespace RedSalamander::DxUi;
+@@ -543,8 +558,10 @@ void TestMenuBarCachesItemLayoutRectsAndWidths()
+     Require(hitTestBlock.find("GetItemRect(host, index)") == std::string::npos, "MenuBar hit testing no longer asks each item to rebuild preceding geometry");
+ 
+     const std::string paintBlock = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
+-    Require(paintBlock.find("const MenuBarLayoutCache& layout = EnsureMenuBarLayoutCache(host)") != std::string::npos, "MenuBar paint reuses cached layout");
+-    Require(paintBlock.find("const std::optional<size_t> highlightedIndex = GetVisualHighlightIndex()") != std::string::npos,
++    const std::string normalizedPaintBlock = RemoveAsciiWhitespace(paintBlock);
++    Require(normalizedPaintBlock.find("constMenuBarLayoutCache&layout=EnsureMenuBarLayoutCache(host)") != std::string::npos,
++            "MenuBar paint reuses cached layout");
++    Require(normalizedPaintBlock.find("conststd::optional<size_t>highlightedIndex=GetVisualHighlightIndex()") != std::string::npos,
+             "MenuBar paint resolves the visual highlight once per frame");
+     Require(paintBlock.find("highlightedIndex == std::optional<size_t>{index}") != std::string::npos, "MenuBar paint uses the cached highlight index");
+     Require(paintBlock.find("GetVisualHighlightIndex() ==") == std::string::npos, "MenuBar paint no longer recomputes visual highlight inside the item loop");
+diff --git a/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp b/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
+index ab8182c72..0b3974d0f 100644
+--- a/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
++++ b/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
+@@ -209,6 +209,77 @@ void TestFolderViewDxUiPromptsDeactivateNativeTextInputBeforeDestroyWindow()
+         requireMessage(countOccurrences(classBlock, "_hWnd.reset()") == 1u,
+                        std::string(promptClasses[index]) + " avoids direct modal HWND reset outside the native-text-input close helper");
+     }
++
++    const std::filesystem::path navigationSourcePath =
++        FindRepoRootForDxUiTests() / L"RedSalamander" / L"FolderWindow.FileSystem.Navigation.Part.cpp";
++    std::ifstream navigationSourceInput(navigationSourcePath);
++    Require(navigationSourceInput.good(), "FolderWindow.FileSystem.Navigation.Part source is readable for DxUi prompt debug close guard");
++    const std::string navigationSource((std::istreambuf_iterator<char>(navigationSourceInput)), std::istreambuf_iterator<char>());
++
++    Require(navigationSource.find("PostFolderViewPromptCloseDebugCommand") != std::string::npos,
++            "FolderView prompt debug close actions share an asynchronous post helper");
++
++    const std::array<const char*, 10> closeDebugHelpers{
++        "bool DebugConfirmFolderViewPaneFilterPrompt() noexcept",
++        "bool DebugCancelFolderViewPaneFilterPrompt() noexcept",
++        "bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept",
++        "bool DebugCancelFolderViewSelectionMaskPrompt() noexcept",
++        "bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept",
++        "bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept",
++        "bool DebugConfirmFolderViewEditNewPrompt() noexcept",
++        "bool DebugCancelFolderViewEditNewPrompt() noexcept",
++        "bool DebugConfirmFolderViewChangeCasePrompt() noexcept",
++        "bool DebugCancelFolderViewChangeCasePrompt() noexcept",
++    };
++
++    for (const char* helper : closeDebugHelpers)
++    {
++        const size_t helperStart = navigationSource.find(helper);
++        requireMessage(helperStart != std::string::npos, std::string(helper) + " source block is found");
++        if (helperStart == std::string::npos)
++        {
++            continue;
++        }
++
++        const size_t helperEnd = navigationSource.find("\n}", helperStart);
++        requireMessage(helperEnd != std::string::npos && helperStart < helperEnd, std::string(helper) + " source block end is found");
++        const std::string_view helperBlock(navigationSource.data() + helperStart, helperEnd - helperStart);
++        requireMessage(helperBlock.find("PostFolderViewPromptCloseDebugCommand") != std::string_view::npos,
++                       std::string(helper) + " posts Confirm/Cancel close actions");
++        requireMessage(helperBlock.find("SendMessageW") == std::string_view::npos,
++                       std::string(helper) + " avoids synchronous cross-thread close SendMessage");
++    }
++
++    const std::filesystem::path fileOpsPopupSourcePath = FindRepoRootForDxUiTests() / L"RedSalamander" / L"FolderWindow.FileOperations.Popup.cpp";
++    std::ifstream fileOpsPopupSourceInput(fileOpsPopupSourcePath);
++    Require(fileOpsPopupSourceInput.good(), "FolderWindow.FileOperations.Popup source is readable for DxUi prompt debug close guard");
++    const std::string fileOpsPopupSource((std::istreambuf_iterator<char>(fileOpsPopupSourceInput)), std::istreambuf_iterator<char>());
++
++    Require(fileOpsPopupSource.find("PostFileOperationsSpeedLimitPromptCloseDebugCommand") != std::string::npos,
++            "FileOperations speed-limit prompt debug close actions share an asynchronous post helper");
++
++    const std::array<const char*, 2> fileOpsCloseDebugHelpers{
++        "bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept",
++        "bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept",
++    };
++
++    for (const char* helper : fileOpsCloseDebugHelpers)
++    {
++        const size_t helperStart = fileOpsPopupSource.find(helper);
++        requireMessage(helperStart != std::string::npos, std::string(helper) + " source block is found");
++        if (helperStart == std::string::npos)
++        {
++            continue;
++        }
++
++        const size_t helperEnd = fileOpsPopupSource.find("\n}", helperStart);
++        requireMessage(helperEnd != std::string::npos && helperStart < helperEnd, std::string(helper) + " source block end is found");
++        const std::string_view helperBlock(fileOpsPopupSource.data() + helperStart, helperEnd - helperStart);
++        requireMessage(helperBlock.find("PostFileOperationsSpeedLimitPromptCloseDebugCommand") != std::string_view::npos,
++                       std::string(helper) + " posts Confirm/Cancel close actions");
++        requireMessage(helperBlock.find("SendMessageW") == std::string_view::npos,
++                       std::string(helper) + " avoids synchronous cross-thread close SendMessage");
++    }
+ }
+ 
+ class NativeTextStoreTestSink final : public ITextStoreACPSink

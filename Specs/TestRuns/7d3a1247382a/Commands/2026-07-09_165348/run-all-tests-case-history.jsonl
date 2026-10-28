@@ -1,0 +1,1 @@
+{"schema":"red-salamander.case-history.v1","run_id":"20260709T145344Z-56820-8d4e7c456c9c416c8d90b1dfef7b5c96","run_started_utc":"2026-07-09T14:53:44.8535994Z","suite":"Commands","harness":"Commands","case":"cmd_pane_fileops_conflict_prompt_compacts_actions","duration_ms":1799,"status":"passed","reason":"","classification":"PASSED","seed":"","attempt":1,"source":"case","mode":""}

@@ -1,0 +1,21 @@
+ExceptionCode=0xC0000005
+ExceptionAddress=0x7ffd68315846
+ProcessId=73832
+ThreadId=64632
+
+Callstack:
+00 0x00007FFD68315846 RtlGetExtendedContextLength2+0x506
+01 0x00007FFD65528AE1 WideCharToMultiByte+0x261
+02 0x00007FFC1BC37BE2 Debug::detail::`anonymous namespace'::ConvertUtf8+0xB2 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:61(+102)
+03 0x00007FFC1BB9B6B2 Debug::detail::`anonymous namespace'::AppendJsonEscaped+0x82 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:75(+40)
+04 0x00007FFC1BB9C469 Debug::detail::`anonymous namespace'::AppendJsonStringField+0xB9 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:121(+43)
+05 0x00007FFC1BB9D7A4 Debug::detail::WritePerfJsonl+0x764 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:272(+164)
+06 0x00007FF7521AC846 Debug::Perf::Scope::~Scope+0x146 Z:\src\RedSalamander\Common\Helpers.h:1481(+121)
+07 0x00007FF753CD7948 FolderView::ProcessThumbnailLoadQueue+0x14C8 Z:\src\RedSalamander\RedSalamander\FolderView.Icons.cpp:1346(+22)
+08 0x00007FF753C5C8BB FolderView::EnumerationWorker+0x57B Z:\src\RedSalamander\RedSalamander\FolderView.Enumeration.cpp:338(+59)
+09 0x00007FF753C5857F `FolderView::EnsureEnumerationThread'::`2'::<lambda_1>::operator()+0x7F Z:\src\RedSalamander\RedSalamander\FolderView.Enumeration.cpp:223(+90)
+10 0x00007FF753C4C770 std::invoke<`FolderView::EnsureEnumerationThread'::`2'::<lambda_1>,std::stop_token>+0x60 C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\type_traits:1811(+59)
+11 0x00007FF753C42809 std::thread::_Invoke<std::tuple<`FolderView::EnsureEnumerationThread'::`2'::<lambda_1>,std::stop_token>,0,1>+0xA9 C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.51.36231\include\thread:60(+51)
+12 0x00007FFC76342EC5 register_onexit_function+0xF5
+13 0x00007FFD6703E957 BaseThreadInitThunk+0x17
+14 0x00007FFD682C7C1C RtlUserThreadStart+0x2C

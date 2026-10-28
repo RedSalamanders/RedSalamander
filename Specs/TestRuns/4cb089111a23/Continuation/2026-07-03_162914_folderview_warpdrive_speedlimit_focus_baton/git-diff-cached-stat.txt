@@ -1,0 +1,1292 @@
+ .../skills/red-salamander-crash-forensics/SKILL.md |     109 +
+ .../agents/openai.yaml                             |       4 +
+ Common/DxUi/DxUi.Accessibility.cpp                 |      59 +-
+ Common/DxUi/DxUi.ComboBox.cpp                      |       2 +
+ Common/DxUi/DxUi.Controls.cpp                      |      35 +-
+ Common/DxUi/DxUi.Grid.cpp                          |      18 +
+ Common/DxUi/DxUi.NativeTextInput.cpp               |     212 +-
+ Common/DxUi/DxUi.Tree.cpp                          |      16 +
+ Common/DxUi/DxUi.WindowHost.cpp                    |      12 +-
+ Common/DxUi/DxUi.cpp                               |      25 +-
+ Common/DxUi/DxUi.h                                 |       4 +
+ Common/Helpers.h                                   |      14 +-
+ Plugins/FileSystemDummy/FileSystemDummy.cpp        |      15 +-
+ Plugins/FileSystemDummy/FileSystemDummy.h          |       1 +
+ RedSalamander/CompareDirectoriesWindow.Internal.h  |       8 +
+ RedSalamander/CompareDirectoriesWindow.cpp         |      51 +-
+ RedSalamander/ConnectionManagerWindow.cpp          |      48 +-
+ RedSalamander/FolderView.FileOps.cpp               |      14 +-
+ RedSalamander/FolderView.Icons.cpp                 |      26 -
+ RedSalamander/FolderView.Rendering.cpp             |      12 -
+ RedSalamander/FolderViewInternal.h                 |      33 +-
+ .../FolderWindow.FileOperations.Dialog.cpp         |      10 +-
+ .../FolderWindow.FileOperations.IssuesPane.cpp     |      15 +
+ .../FolderWindow.FileOperations.Popup.cpp          |      11 +-
+ ...indow.FileOperations.State.Diagnostics.Part.cpp |      15 +
+ .../FolderWindow.FileOperations.State.cpp          |      15 +-
+ .../FolderWindow.FileSystem.Commands.Part.cpp      |      45 +-
+ RedSalamander/FolderWindow.FileSystem.cpp          |      55 +-
+ RedSalamander/FolderWindow.ItemProperties.cpp      |       4 +
+ RedSalamander/NavigationView.Menus.cpp             |      10 +
+ RedSalamander/Preferences.CompareDirectories.cpp   |      63 +
+ RedSalamander/Preferences.CompareDirectories.h     |       9 +
+ RedSalamander/Preferences.Dialog.cpp               |      12 +
+ RedSalamander/Preferences.HotPaths.cpp             |      36 +
+ RedSalamander/Preferences.HotPaths.h               |       1 +
+ RedSalamander/Preferences.Keyboard.cpp             |       2 +
+ RedSalamander/Preferences.Plugins.cpp              |       9 +
+ RedSalamander/Preferences.h                        |      10 +
+ .../Commands/Commands.SelfTest.CompareOptions.cpp  |     372 +-
+ .../Commands/Commands.SelfTest.Connections.cpp     |     264 +-
+ .../Commands/Commands.SelfTest.Dialogs.cpp         |      55 +-
+ .../Commands/Commands.SelfTest.FileOps.cpp         |     264 +-
+ .../Commands/Commands.SelfTest.Navigation.cpp      |     282 +-
+ .../Commands/Commands.SelfTest.PluginConfig.cpp    |     130 +-
+ ...mands.SelfTest.Preferences.ChromeAndPlugins.cpp |     160 +-
+ ....SelfTest.Preferences.FileOpsCompareAndTree.cpp |     208 +-
+ ...ds.SelfTest.Preferences.HotPathsAndKeyboard.cpp |      58 +-
+ ...nds.SelfTest.Preferences.ThemesGeneralPanes.cpp |     161 +-
+ ...elfTest.Preferences.ViewersAndKeyboardLists.cpp |     108 +-
+ .../Commands/Commands.SelfTest.Preferences.cpp     |       2 +-
+ .../SelfTest/Commands/Commands.SelfTest.Search.cpp |     190 +-
+ .../Commands/Commands.SelfTest.Settings.cpp        |     400 +-
+ .../Commands/Commands.SelfTest.ShellCommands.cpp   |     146 +-
+ .../Commands/Commands.SelfTest.Shortcuts.cpp       |      68 +-
+ .../Commands/Commands.SelfTest.ViewCommands.cpp    |     359 +-
+ .../SelfTest/Commands/Commands.SelfTest.cpp        |       3 +-
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    1530 +
+ .../CONTINUATION.md                                |      79 +
+ ...ocused-after-testverify-20260701_204858.out.log |   26271 +
+ ...ard-live-search-focused-20260701_205952.out.log |   26290 +
+ ...-pasteshortcut-longpath-20260701_204917.out.log |   28092 +
+ ...d-after-sourceguard-fix-20260701_202305.out.log |   27471 +
+ ...rce-guard-after-compact-20260701_202243.out.log |   26267 +
+ .../msbuild-20260701_201933_303.log                |     237 +
+ .../msbuild-20260701_203915_896.log                |     232 +
+ .../msbuild-20260701_204313_472.log                |     237 +
+ .../msbuild-20260701_204633_170.log                |     232 +
+ .../CONTINUATION.md                                |      46 +
+ .../application-error-redsalamander.txt            |      14 +
+ ...ad-after-keyboard-clean-20260701_211102.out.log |   26281 +
+ ...nds-keyboard-live-clean-20260701_211042.out.log |   26272 +
+ .../git-diff-cached-stat.txt                       |      72 +
+ .../git-diff-stat.txt                              |       0
+ .../git-status-short.txt                           |      75 +
+ .../last_run_trace.txt                             |     Bin 0 -> 1720048 bytes
+ .../msbuild-20260701_210811_496.log                |     232 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../run-all-tests-results.json                     |      33 +
+ .../CONTINUATION.md                                |      68 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3227 +
+ .../application-error-redsalamander-recent.txt     |      28 +
+ ...d-after-repaint-assertion-20260701_2240.err.log |       2 +
+ ...-after-repaint-assertion-20260701_2240.exit.txt |       1 +
+ ...d-after-repaint-assertion-20260701_2240.out.log |   26787 +
+ ...d-after-repaint-assertion-20260701_2240.pid.txt |       1 +
+ ...er-repaint-assertion-run-all-tests-results.json |      33 +
+ .../commands-broad-crash-commands-trace.txt        |     Bin 0 -> 289250 bytes
+ .../commands-broad-crash-last-run-trace.txt        |     Bin 0 -> 1852566 bytes
+ ...ands-prompt-slice-602-627-20260701_2250.out.log |   26789 +
+ ...ands-prompt-slice-602-627-commands-results.json |     143 +
+ ...prompt-slice-602-627-run-all-tests-results.json |     190 +
+ .../focused-device-loss-commands-results.json      |      18 +
+ .../focused-device-loss-run-all-tests-results.json |      40 +
+ .../focused-dpi-repaint-20260701_2230.out.log      |   26785 +
+ .../focused-dpi-repaint-commands-results.json      |      18 +
+ .../focused-dpi-repaint-run-all-tests-results.json |      40 +
+ ...sed-filter-prompt-live-dx-20260701_2245.out.log |   26789 +
+ ...sed-filter-prompt-live-dx-commands-results.json |      18 +
+ ...ilter-prompt-live-dx-run-all-tests-results.json |      40 +
+ .../focused-nav-edit-refresh-20260701_2235.out.log |   26785 +
+ .../focused-nav-edit-refresh-commands-results.json |      18 +
+ ...sed-nav-edit-refresh-run-all-tests-results.json |      40 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-stat-final.txt                 |      83 +
+ .../git-diff-stat-final.txt                        |       2 +
+ .../git-diff-stat-post-continuation.txt            |       3 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-only-after-stage.txt           |     125 +
+ .../git-status-short-after-stage.txt               |     129 +
+ .../git-status-short-before-final-broad.txt        |      86 +
+ .../git-status-short-final.txt                     |      86 +
+ .../git-status-short-post-continuation.txt         |      86 +
+ .../git-unstaged-name-only-after-stage.txt         |       1 +
+ .../msbuild-20260701_222239_273.log                |     232 +
+ .../origin-master-ahead-behind-final.txt           |       1 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../process-snapshot-final.txt                     |       6 +
+ .../prompt-slice-602-627.filter.txt                |       1 +
+ .../prompt-slice-commands-trace.txt                |     Bin 0 -> 14098 bytes
+ .../prompt-slice-last-run-trace.txt                |     Bin 0 -> 105380 bytes
+ .../staged-diff.patch                              |  197382 ++
+ ...-plan-viewcommands-diff-post-continuation.patch |     194 +
+ .../unstaged-viewcommands-diff.patch               |     137 +
+ .../untracked-wip-files-snapshotted.txt            |       3 +
+ .../DxUi_Uia_ContinuationBaton_2026-06-29.md       |     384 +
+ ...rView_WarpDrive_ContinuationBaton_2026-06-29.md |    1115 +
+ ...arpDrivePreMergeReviewRemediation_2026-06-30.md |     258 +
+ .../windows-error-reporting-recent.txt             |      72 +
+ .../CONTINUATION.md                                |      88 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3227 +
+ .../application-error-redsalamander-recent.txt     |      28 +
+ ...er-repaint-assertion-run-all-tests-results.json |      33 +
+ .../commands-broad-crash-commands-trace.txt        |     Bin 0 -> 289250 bytes
+ .../commands-broad-crash-last-run-trace.txt        |     Bin 0 -> 1852566 bytes
+ ...prompt-slice-602-627-run-all-tests-results.json |     190 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-stat.txt                       |     133 +
+ .../git-diff-stat.txt                              |       1 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-only.txt                       |     132 +
+ .../git-status-short.txt                           |     136 +
+ .../git-unstaged-name-only.txt                     |       1 +
+ .../git-untracked-name-only.txt                    |       3 +
+ .../msbuild-20260701_222239_273.log                |     232 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../process-snapshot-redsalamander.txt             |       1 +
+ .../prompt-slice-602-627.filter.txt                |       1 +
+ .../staged-diff.patch                              |  540582 ++++
+ .../unstaged-diff.patch                            |       0
+ .../DxUi_Uia_ContinuationBaton_2026-06-29.md       |     384 +
+ ...rView_WarpDrive_ContinuationBaton_2026-06-29.md |    1115 +
+ ...arpDrivePreMergeReviewRemediation_2026-06-30.md |     258 +
+ .../windows-error-reporting-recent.txt             |      72 +
+ .../CONTINUATION.md                                |     169 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3227 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     157 +
+ .../git-diff-cached-stat.txt                       |     158 +
+ .../git-diff-name-status.txt                       |       2 +
+ .../git-diff-stat.txt                              |       3 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     162 +
+ .../msbuild-20260702_081436_016.log                |     237 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../process-snapshot-redsalamander.txt             |       0
+ .../run-artifacts/postclose-case-filter.txt        |       2 +
+ .../run-artifacts/postclose-commands-results.json  |     498 +
+ .../run-artifacts/postclose-commands-trace.txt     |     Bin 0 -> 46216 bytes
+ .../postclose-run-all-tests-results.json           |     635 +
+ .../run-artifacts/postclose-run.out.log            |   26829 +
+ .../run-artifacts/tsf-repro-case-filter.txt        |       1 +
+ .../run-artifacts/tsf-repro-commands-trace.txt     |     Bin 0 -> 25862 bytes
+ .../tsf-repro-run-all-tests-results.json           |      33 +
+ .../run-artifacts/tsf-repro-run.out.log            |   26794 +
+ .../run-artifacts/tsf-trace-commands-results.json  |     493 +
+ .../tsf-trace-run-all-tests-results.json           |     610 +
+ .../run-artifacts/tsf-trace.log                    |     Bin 0 -> 2782468 bytes
+ .../unstaged-prompt-close-and-sourceguard.patch    |     169 +
+ .../DxUi_Uia_ContinuationBaton_2026-06-29.md       |     384 +
+ ...rView_WarpDrive_ContinuationBaton_2026-06-29.md |    1115 +
+ ...arpDrivePreMergeReviewRemediation_2026-06-30.md |     258 +
+ .../CONTINUATION.md                                |      97 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3227 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     185 +
+ .../git-diff-cached-stat.txt                       |     186 +
+ .../git-diff-name-status.txt                       |       4 +
+ .../git-diff-stat.txt                              |       5 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-after-archive-stage.txt             |     219 +
+ .../git-status-short.txt                           |     190 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../current-promptclose-focus-sourceguard.patch    |     293 +
+ .../patches/staged-diff.patch                      | 1144971 ++++++++
+ .../process-snapshot-redsalamander.txt             |       0
+ .../run-artifacts/case-filter.txt                  |       2 +
+ ...7_after_focus_and_fileop_postclose_20260702.log |   26791 +
+ ...ds_slice_532_627_after_focushelper_20260702.log |   26791 +
+ ...cused_select_all_after_focushelper_20260702.log |   26789 +
+ ...focused_select_all_after_postclose_20260702.log |   26789 +
+ ...ocused_switch_pane_after_postclose_20260702.log |   26789 +
+ .../run-artifacts/latest-commands-results.json     |     493 +
+ .../latest-run-all-tests-results.json              |     610 +
+ .../run-artifacts/msbuild-20260702_082649_559.log  |     232 +
+ .../run-artifacts/msbuild-20260702_083130_192.log  |     237 +
+ ...ll_prefix31_after_postclose_20260702.filter.txt |       1 +
+ ...selectall_prefix31_after_postclose_20260702.log |   26789 +
+ ...it_fourcase_after_fileop_postclose_20260702.log |   26789 +
+ ...it_prefix22_after_postclose_20260702.filter.txt |       1 +
+ ...peedlimit_prefix22_after_postclose_20260702.log |   26789 +
+ ...se_cluster_before_fileop_postclose_20260702.log |   26789 +
+ .../CONTINUATION.md                                |      71 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3227 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     215 +
+ .../git-diff-cached-stat.txt                       |     216 +
+ .../git-diff-name-status.txt                       |       5 +
+ .../git-diff-stat.txt                              |       6 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     221 +
+ .../latest-crash-dump-pointer.txt                  |       6 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../current-unstaged-focus-prompt-dxui.patch       |     337 +
+ .../patches/staged-diff.patch                      | 2537210 +++++++++++++++++
+ .../process-snapshot-redsalamander.txt             |       1 +
+ .../run-artifacts/commands-broad-av-case-order.txt |     775 +
+ .../commands-broad-av-last10.filter.txt            |      10 +
+ .../commands-broad-av-last20.filter.txt            |      20 +
+ .../commands-broad-av-run-all-tests-results.json   |      37 +
+ .../run-artifacts/commands-broad-av-trace.txt      |     Bin 0 -> 362268 bytes
+ ...after_focus_promptclose_dxui_guard_20260702.log |       8 +
+ .../commands-trace-at-hang.txt                     |     Bin 0 -> 200456 bytes
+ .../dump-command.out.txt                           |       0
+ .../process-details.txt                            |      71 +
+ .../run-wrapper.log                                |       8 +
+ .../window-snapshot.txt                            |      26 +
+ ...d_rerun_after_prefix456_green_20260702.exit.txt |       1 +
+ ..._broad_rerun_after_prefix456_green_20260702.log |     Bin 0 -> 6085054 bytes
+ ...ad_rerun_after_prefix456_green_20260702.pid.txt |       1 +
+ ...fix456_to_find_action_buttons_20260702.exit.txt |       1 +
+ ...x456_to_find_action_buttons_20260702.filter.txt |       1 +
+ ...s_prefix456_to_find_action_buttons_20260702.log |     Bin 0 -> 6029138 bytes
+ ...efix456_to_find_action_buttons_20260702.pid.txt |       1 +
+ ...ice_532_627_repeat_after_dxuitests_20260702.log |   26791 +
+ ...ts_after_fileop_prompt_sourceguard_20260702.log |       9 +
+ ...sts_after_menubar_guard_warningfix_20260702.log |    1746 +
+ ...ld_after_fileop_prompt_sourceguard_20260702.log |      60 +
+ ...ild_after_menubar_guard_warningfix_20260702.log |      41 +
+ ...ind_action_buttons_suffix15_20260702.filter.txt |       1 +
+ .../find_action_buttons_suffix15_20260702.log      |   26793 +
+ ...ind_action_buttons_suffix45_20260702.filter.txt |       1 +
+ .../find_action_buttons_suffix45_20260702.log      |   26793 +
+ ...find_action_buttons_suffix5_20260702.filter.txt |       1 +
+ .../find_action_buttons_suffix5_20260702.log       |   26793 +
+ .../focused-selection-invert.filter.txt            |       1 +
+ ...d_restored_combined_action_buttons_20260702.log |   26793 +
+ .../run-artifacts/msbuild-20260702_083731_971.log  |      25 +
+ .../run-artifacts/msbuild-20260702_084003_855.log  |       6 +
+ .../perf/archive_commands_metrics.json             |       7 +
+ .../folderView_column_widths_audit_metrics.json    |   20800 +
+ .../folderView_perf_cold_first_visit_metrics.json  |      45 +
+ ...erView_perf_directory_change_storm_metrics.json |      23 +
+ .../folderView_perf_huge_folder_scale_metrics.json |      55 +
+ ...rView_perf_icon_pipeline_cold_slow_metrics.json |      46 +
+ ...lderView_perf_iconcache_contention_metrics.json |      39 +
+ ...derView_perf_large_folder_baseline_metrics.json |      18 +
+ ...w_perf_overlay_invalidation_stress_metrics.json |      46 +
+ ...lderView_perf_refresh_preservation_metrics.json |      26 +
+ ...perf_relayout_churn_while_scrolled_metrics.json |      40 +
+ ...lderView_perf_scroll_render_stress_metrics.json |    1444 +
+ ...derView_perf_slow_virtual_provider_metrics.json |      38 +
+ ...folderView_perf_sort_toggle_stress_metrics.json |     108 +
+ ...folderView_thumbnail_scroll_stress_metrics.json |      12 +
+ .../perf/list_opened_files_metrics.json            |       5 +
+ .../run-artifacts/perf/make_file_list_metrics.json |       5 +
+ .../perf/pane_view_options_preview_metrics.json    |       8 +
+ .../perf/pane_view_options_thumbnails_metrics.json |      11 +
+ .../perf/pane_view_options_toggle_metrics.json     |       9 +
+ .../run-artifacts/perf/perf_metrics.jsonl          |  606638 ++++
+ .../perf/reread_associations_metrics.json          |       9 +
+ .../perf/shared_directories_metrics.json           |       5 +
+ ...iewer_space_perf_small_progressive_metrics.json |      33 +
+ .../perf/viewer_text_diff_perf_metrics.json        |      70 +
+ .../windows-error-reporting-recent.txt             |     737 +
+ .../CONTINUATION.md                                |     254 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3228 +
+ .../codex-runs-recent-files.txt                    |      81 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     288 +
+ .../git-diff-cached-stat.txt                       |     289 +
+ .../git-diff-name-status.txt                       |       5 +
+ .../git-diff-stat.txt                              |       6 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     294 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-diff.patch                      |     Bin 0 -> 1015971314 bytes
+ .../patches/unstaged-diff.patch                    |     337 +
+ .../process-snapshot-redsalamander.txt             |       0
+ .../recent-crash-dumps.txt                         |       9 +
+ ...t_after_connection_reductions_20260702.exit.txt |       1 +
+ ...ilfast_after_connection_reductions_20260702.log |     Bin 0 -> 6315696 bytes
+ ...st_after_selection_reductions_20260702.exit.txt |       1 +
+ ...ailfast_after_selection_reductions_20260702.log |     Bin 0 -> 6332134 bytes
+ .../commands-results.json                          |    4501 +
+ .../commands-trace.txt                             |     Bin 0 -> 73968 bytes
+ .../run-all-tests-results.json                     |    4709 +
+ .../run.exit.txt                                   |       1 +
+ .../run.log                                        |     Bin 0 -> 6332134 bytes
+ ...connection_churn_red_last35_20260702.filter.txt |      35 +
+ .../connection_churn_red_last35_20260702.log       |   27801 +
+ ...n_protocol_churn_immediate5_20260702.filter.txt |       1 +
+ ...nnection_protocol_churn_immediate5_20260702.log |   27801 +
+ ...ion_protocol_churn_after_broad_red_20260702.log |   27801 +
+ ...stom_paths_scroll_after_family_red_20260702.log |   27802 +
+ ...s_plugins_uia_grid_after_broad_red_20260702.log |   27802 +
+ ...ed_selection_invert_after_av_baton_20260702.log |   27301 +
+ ...onfig_plus_connection_churn_20260702.filter.txt |       1 +
+ ...lugin_config_plus_connection_churn_20260702.log |   27801 +
+ ...ily_failfast_after_plugins_uia_red_20260702.log |   28362 +
+ ...gins_uia_grid_predecessor14_20260702.filter.txt |       1 +
+ ...efs_plugins_uia_grid_predecessor14_20260702.log |   27802 +
+ ...ction_av_last10_after_baton_20260702.filter.txt |       1 +
+ .../selection_av_last10_after_baton_20260702.log   |   27301 +
+ ...ction_av_last20_after_baton_20260702.filter.txt |       1 +
+ .../selection_av_last20_after_baton_20260702.log   |   27800 +
+ ...refix_to_invert_after_baton_20260702.filter.txt |       1 +
+ ...on_av_prefix_to_invert_after_baton_20260702.log |     Bin 0 -> 93886 bytes
+ .../CONTINUATION.md                                |     144 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3230 +
+ .../archive-manifest-after-force-add.txt           |      31 +
+ .../archive-manifest-after-stage.txt               |      28 +
+ .../archive-manifest.txt                           |      25 +
+ .../codex-runs-recent-files.txt                    |      34 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     331 +
+ .../git-diff-cached-stat.txt                       |     332 +
+ .../git-diff-name-status.txt                       |       6 +
+ .../git-diff-stat.txt                              |       7 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-status-after-force-add.txt     |     359 +
+ .../git-staged-name-status-after-stage.txt         |     331 +
+ .../git-status-short-after-force-add.txt           |     365 +
+ .../git-status-short-after-stage.txt               |     337 +
+ .../git-status-short.txt                           |     337 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-diff.patch                      |     Bin 0 -> 2074859459 bytes
+ .../patches/unstaged-diff.patch                    |     349 +
+ .../process-snapshot-redsalamander-dxui.txt        |       0
+ ...g_family_rootleak_repro_before_fix_20260702.log |   28454 +
+ ...log_family_rootleak_repro_commands-results.json |    1038 +
+ ...dialog_family_rootleak_repro_commands-trace.txt |     Bin 0 -> 5800 bytes
+ ...amily_rootleak_repro_run-all-tests-results.json |    1079 +
+ .../prefs_dialog_family_rootleak_repro_trace.txt   |     Bin 0 -> 24692 bytes
+ ...fs_plugins_fourcase_rootleak_probe_20260702.log |   27802 +
+ ...mands.SelfTest.Preferences.ChromeAndPlugins.cpp |    7293 +
+ ...elfTest.Preferences.ViewersAndKeyboardLists.cpp |    8877 +
+ .../source-snapshots/Preferences.Dialog.cpp        |    7898 +
+ .../source-snapshots/Preferences.Plugins.cpp       |    2553 +
+ .../CONTINUATION.md                                |     144 +
+ ...ePerformance_2026-06-28.snapshot.post-status.md |    3231 +
+ ...cePerformance_2026-06-28.snapshot.pre-status.md |    3230 +
+ .../archive-manifest-after-stage.txt               |      43 +
+ .../archive-manifest.txt                           |      41 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     362 +
+ .../git-diff-cached-stat.txt                       |     363 +
+ .../git-diff-name-status.txt                       |       7 +
+ .../git-diff-stat.txt                              |       8 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-status-after-stage.txt         |     398 +
+ .../git-status-short-after-stage.txt               |     404 +
+ .../git-status-short.txt                           |     368 +
+ .../last-run/commands/results.json                 |    4160 +
+ .../last-run/commands/trace.txt                    |     Bin 0 -> 231050 bytes
+ .../last-run/results.json                          |    4170 +
+ .../last-run/run-all-tests-results.json            |    4709 +
+ .../last-run/trace.txt                             |     Bin 0 -> 1182936 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9009 +
+ .../patches/unstaged-diff.patch                    |     424 +
+ .../patches/unstaged-prefs-root-state-fix.patch    |      87 +
+ .../process-snapshot-redsalamander-dxui.txt        |       1 +
+ ...-broad-rerun-case-window-around-compare-tab.txt |      26 +
+ ...mands-broad-rerun-compare-tab-trace-excerpt.txt |       9 +
+ ...s_broad_after_prefs_root_state_fix_20260702.log |   30098 +
+ ...run_after_credential_cluster_green_20260702.log |   28850 +
+ ...focused_after_prefs_root_state_fix_20260702.log |   27806 +
+ ...essor16_after_prefs_root_state_fix_20260702.log |   27806 +
+ .../run-artifacts/msbuild-20260702_104317_912.log  |     233 +
+ ...dialog_family_after_root_state_fix_20260702.log |   27805 +
+ ...gins_fourcase_after_root_state_fix_20260702.log |   27802 +
+ ...s_live_search_after_root_state_fix_20260702.log |   27802 +
+ .../Commands.SelfTest.CompareOptions.cpp           |    4791 +
+ ...mands.SelfTest.Preferences.ChromeAndPlugins.cpp |    7327 +
+ .../CompareDirectoriesWindow.Internal.h            |     684 +
+ .../source-snapshots/CompareDirectoriesWindow.cpp  |    3142 +
+ .../source-snapshots/Preferences.Dialog.cpp        |    7899 +
+ .../CONTINUATION.md                                |     131 +
+ ...ePerformance_2026-06-28.snapshot.post-status.md |    3232 +
+ ...cePerformance_2026-06-28.snapshot.pre-status.md |    3231 +
+ .../archive-manifest-after-stage.txt               |      54 +
+ .../archive-manifest.txt                           |      52 +
+ .../editnew-repro-search-hits.txt                  |      14 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |      61 +
+ .../git-diff-cached-stat.txt                       |      62 +
+ .../git-diff-name-status.txt                       |       5 +
+ .../git-diff-stat.txt                              |       6 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-status-after-stage.txt         |      53 +
+ .../git-status-short-after-stage.txt               |     459 +
+ .../git-status-short.txt                           |     407 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../origin-master-head.txt                         |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9089 +
+ .../patches/unstaged-diff-no-testruns.patch        |     337 +
+ .../process-snapshot-redsalamander-dxui.txt        |       1 +
+ ...s_broad_after_compare_window_green_20260702.log |   30247 +
+ ...mmands_broad_after_prefix213_green_20260702.log |   28381 +
+ .../commands/results.json                          |    4041 +
+ .../commands/trace.txt                             |     Bin 0 -> 297456 bytes
+ .../results.json                                   |    4051 +
+ .../run-all-tests-results.json                     |    4709 +
+ .../trace.txt                                      |     Bin 0 -> 2010748 bytes
+ ...broad_after_prefix213_green_editnew_excerpt.txt |       5 +
+ ..._after_plugin_config_cluster_green_20260702.log |   30088 +
+ .../commands/results.json                          |    4469 +
+ .../commands/trace.txt                             |     Bin 0 -> 85864 bytes
+ .../results.json                                   |    4479 +
+ .../run-all-tests-results.json                     |    4709 +
+ .../trace.txt                                      |     Bin 0 -> 343004 bytes
+ ...focused_after_prefs_root_state_fix_20260702.log |   27810 +
+ ...cessor6_after_prefs_root_state_fix_20260702.log |   27810 +
+ ...506_522_after_prefs_root_state_fix_20260702.log |   27810 +
+ ..._focused_after_plugin_config_green_20260702.log |   27812 +
+ ...ecessor5_after_plugin_config_green_20260702.log |   27812 +
+ ...t_live_prefix0_213_after_broad_red_20260702.log |   27813 +
+ ...live_window178_213_after_broad_red_20260702.log |   27812 +
+ ...ew_invalid_focused_after_broad_red_20260702.log |   27835 +
+ .../commands/results.json                          |      20 +
+ .../commands/trace.txt                             |     Bin 0 -> 1086 bytes
+ .../run-all-tests-results.json                     |      47 +
+ .../editnew_invalid_focused_excerpt.txt            |       4 +
+ ...focused_after_compare_window_green_20260702.log |   27811 +
+ ...cessor7_after_compare_window_green_20260702.log |   27811 +
+ .../Commands.SelfTest.CompareOptions.cpp           |    4791 +
+ .../Commands.SelfTest.Connections.cpp              |    7105 +
+ .../source-snapshots/Commands.SelfTest.Dialogs.cpp |   10768 +
+ .../Commands.SelfTest.PluginConfig.cpp             |    5147 +
+ ...mands.SelfTest.Preferences.ChromeAndPlugins.cpp |    7327 +
+ .../FolderWindow.FileSystem.Commands.Part.cpp      |   13266 +
+ .../source-snapshots/Preferences.Dialog.cpp        |    7899 +
+ .../CONTINUATION.md                                |      59 +
+ ...ePerformance_2026-06-28.snapshot.post-status.md |    3233 +
+ ...cePerformance_2026-06-28.snapshot.pre-status.md |    3232 +
+ .../application-error-redsalamander-latest.txt     |      11 +
+ .../archive-manifest-after-force-add.txt           |      45 +
+ .../archive-manifest-after-stage.txt               |      42 +
+ .../archive-manifest.txt                           |      39 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status.txt                |     456 +
+ .../git-diff-cached-stat.txt                       |     457 +
+ .../git-diff-name-status.txt                       |       7 +
+ .../git-diff-stat.txt                              |       8 +
+ .../git-head.txt                                   |       1 +
+ .../git-staged-name-status-after-force-add.txt     |     494 +
+ .../git-staged-name-status-after-stage.txt         |     456 +
+ .../git-status-short-after-force-add.txt           |     501 +
+ .../git-status-short-after-stage.txt               |     463 +
+ .../git-status-short.txt                           |     463 +
+ .../last-run/commands/trace.txt                    |     Bin 0 -> 298454 bytes
+ .../last-run/run-all-tests-results.json            |      33 +
+ .../last-run/trace.txt                             |     Bin 0 -> 2021150 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9090 +
+ .../unstaged-code-and-spec-no-testruns.patch       |     879 +
+ .../process-snapshot-redsalamander-dxui.txt        |       0
+ .../recent-crash-dumps.txt                         |      12 +
+ ...d_after_editnew_async_confirm_wait_20260702.log |   28331 +
+ ...er_trace_cleanup_editnew_wait_20260702.exit.txt |       1 +
+ ...d_after_trace_cleanup_editnew_wait_20260702.log |   28331 +
+ .../commands_broad_tracecleanup_crash_summary.txt  |       5 +
+ .../run-artifacts/commands_trace_tail180.txt       |     180 +
+ ...d_focused_after_async_confirm_wait_20260702.log |   27817 +
+ .../editnew_invalid_focused_resume_20260702.log    |   27835 +
+ ...tnew_pair_after_async_confirm_wait_20260702.log |   27817 +
+ .../run-artifacts/last_run_trace_tail180.txt       |     180 +
+ .../run-artifacts/msbuild-20260702_115720_592.log  |     232 +
+ .../run-artifacts/msbuild-20260702_121851_319.log  |     237 +
+ ...prompt_focused_after_trace_cleanup_20260702.log |   28321 +
+ .../temp-diagnostics-source-search.txt             |       1 +
+ .../windows-error-reporting-latest.txt             |      33 +
+ .../windows-version.txt                            |       2 +
+ .../CONTINUATION.md                                |      96 +
+ ...ePerformance_2026-06-28.snapshot.post-status.md |    3234 +
+ .../archive-manifest.txt                           |      15 +
+ .../RedSalamander-20260702-100018-p73832.txt       |      21 +
+ .../RedSalamander-20260702-125817-p33336.txt       |      36 +
+ .../red-salamander-crashes-manifest.txt            |      15 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-stat.txt                              |       8 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     505 +
+ .../patches/unstaged-focused-diff.patch            |     144 +
+ .../commands_broad_after_perfscope_20260702.log    |   29937 +
+ ...olumn_widths_audit_after_perfscope_20260702.log |   28333 +
+ .../folderview_prefix_after_perfscope_20260702.log |   28836 +
+ .../run-artifacts/msbuild-20260702_134221_182.log  |     230 +
+ ...e_keyboard_focused_after_perfscope_20260702.log |   28836 +
+ .../CONTINUATION.md                                |      55 +
+ .../archive-manifest.txt                           |      64 +
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      16 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-name-status.txt                       |      29 +
+ .../git-diff-stat.txt                              |      30 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     542 +
+ .../last-run/commands/results.json                 |    3905 +
+ .../last-run/commands/trace.txt                    |     Bin 0 -> 357662 bytes
+ .../last-run/perf/archive_commands_metrics.json    |       7 +
+ .../folderView_column_widths_audit_metrics.json    |   20800 +
+ .../folderView_perf_cold_first_visit_metrics.json  |      45 +
+ ...erView_perf_directory_change_storm_metrics.json |      23 +
+ .../folderView_perf_huge_folder_scale_metrics.json |      55 +
+ ...rView_perf_icon_pipeline_cold_slow_metrics.json |      46 +
+ ...lderView_perf_iconcache_contention_metrics.json |      39 +
+ ...derView_perf_large_folder_baseline_metrics.json |      18 +
+ ...w_perf_overlay_invalidation_stress_metrics.json |      46 +
+ ...lderView_perf_refresh_preservation_metrics.json |      26 +
+ ...perf_relayout_churn_while_scrolled_metrics.json |      40 +
+ ...lderView_perf_scroll_render_stress_metrics.json |    1444 +
+ ...derView_perf_slow_virtual_provider_metrics.json |      38 +
+ ...folderView_perf_sort_toggle_stress_metrics.json |     108 +
+ ...folderView_thumbnail_scroll_stress_metrics.json |      12 +
+ .../last-run/perf/list_opened_files_metrics.json   |       5 +
+ .../last-run/perf/make_file_list_metrics.json      |       5 +
+ .../perf/pane_view_options_preview_metrics.json    |       8 +
+ .../perf/pane_view_options_thumbnails_metrics.json |      11 +
+ .../perf/pane_view_options_toggle_metrics.json     |       9 +
+ .../last-run/perf/perf_metrics.jsonl               |  573705 ++++
+ .../last-run/perf/reread_associations_metrics.json |       9 +
+ .../last-run/perf/shared_directories_metrics.json  |       5 +
+ ...iewer_space_perf_small_progressive_metrics.json |      33 +
+ .../perf/viewer_text_diff_perf_metrics.json        |      70 +
+ .../last-run/run-all-tests-results.json            |    4702 +
+ .../last-run/trace.txt                             |     Bin 0 -> 3272636 bytes
+ .../patches/focused-convergence-diff.patch         |    1442 +
+ ...reload_ready_prefs_wait_cleanbuild_20260702.log |   33419 +
+ ...road_after_nav_ime_diag_cleanbuild_20260702.log |   33905 +
+ ...er_tab_pair_after_prefs_wait_build_20260702.log |   32887 +
+ ...rse_keyboard_navigation_after_wait_20260702.log |   32887 +
+ ...ivation_after_broad_single_failure_20260702.log |   33391 +
+ ...board_activation_after_diagnostics_20260702.log |   33391 +
+ ..._after_nav_ime_failure_diagnostics_20260702.log |     267 +
+ ...uild_after_unused_raw_bool_cleanup_20260702.log |     272 +
+ ...l_slice_after_single_broad_failure_20260702.log |   33391 +
+ ...cluster_after_single_broad_failure_20260702.log |   33391 +
+ ...refs_reverse_nav_triple_after_wait_20260702.log |   32887 +
+ ...load_triple_after_prefs_wait_build_20260702.log |   32887 +
+ .../Commands.SelfTest.CompareOptions.cpp           |    4958 +
+ ....SelfTest.Preferences.FileOpsCompareAndTree.cpp |    8402 +
+ .../Commands.SelfTest.Settings.cpp                 |   12867 +
+ .../Commands.SelfTest.ViewCommands.cpp             |   23628 +
+ .../CompareDirectoriesWindow.Options.cpp           |    3108 +
+ .../source-snapshots/DxUi.Accessibility.cpp        |    7129 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3235 +
+ .../source-snapshots/SettingsHotReload.cpp         |     932 +
+ .../CONTINUATION.md                                |      79 +
+ .../archive-manifest.txt                           |      79 +
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      17 +
+ .../full-failure-summary.txt                       |      26 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      30 +
+ .../git-diff-stat-no-testruns.txt                  |      31 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     602 +
+ .../last-run/CrashHandlingTests.output.log         |      32 +
+ .../last-run/DxUiTests.output.log                  |    1746 +
+ .../last-run/FileSystemCurlTests.output.log        |       1 +
+ .../last-run/LocalizationTests.output.log          |      66 +
+ .../last-run/MonitorTest.output.log                |     Bin 0 -> 313651 bytes
+ .../last-run/PerformanceTests2.output.log          |      21 +
+ .../last-run/PluginContractTests.output.log        |     388 +
+ .../last-run/RedConfigureTests.output.log          |       2 +
+ .../RedSalamanderMonitorEtwLatency.output.log      |       0
+ .../last-run/SettingsSchemaTests.output.log        |      47 +
+ .../last-run/ViewerPETests.output.log              |    2682 +
+ .../last-run/ViewerSqliteTests.output.log          |     436 +
+ .../last-run/commands/plugin_config_live_step.txt  |       1 +
+ .../last-run/commands/results.json                 |    3905 +
+ .../last-run/commands/trace.txt                    |       1 +
+ .../last-run/compare/results.json                  |    1233 +
+ .../last-run/compare/trace.txt                     |       1 +
+ .../last-run/excluded-volatile-files.txt           |   23752 +
+ .../last-run/fileops/results.json                  |     643 +
+ .../last-run/fileops/trace.txt                     |     Bin 0 -> 106852 bytes
+ .../last-run/perf/archive_commands_metrics.json    |       7 +
+ .../folderView_column_widths_audit_metrics.json    |   20800 +
+ .../folderView_perf_cold_first_visit_metrics.json  |      45 +
+ ...erView_perf_directory_change_storm_metrics.json |      23 +
+ .../folderView_perf_huge_folder_scale_metrics.json |      55 +
+ ...rView_perf_icon_pipeline_cold_slow_metrics.json |      46 +
+ ...lderView_perf_iconcache_contention_metrics.json |      39 +
+ ...derView_perf_large_folder_baseline_metrics.json |      18 +
+ ...w_perf_overlay_invalidation_stress_metrics.json |      46 +
+ ...lderView_perf_refresh_preservation_metrics.json |      26 +
+ ...perf_relayout_churn_while_scrolled_metrics.json |      40 +
+ ...lderView_perf_scroll_render_stress_metrics.json |    1444 +
+ ...derView_perf_slow_virtual_provider_metrics.json |      38 +
+ ...folderView_perf_sort_toggle_stress_metrics.json |     108 +
+ ...folderView_thumbnail_scroll_stress_metrics.json |      12 +
+ .../last-run/perf/list_opened_files_metrics.json   |       5 +
+ .../last-run/perf/make_file_list_metrics.json      |       5 +
+ .../perf/pane_view_options_preview_metrics.json    |       8 +
+ .../perf/pane_view_options_thumbnails_metrics.json |      11 +
+ .../perf/pane_view_options_toggle_metrics.json     |       9 +
+ .../last-run/perf/reread_associations_metrics.json |       9 +
+ .../last-run/perf/shared_directories_metrics.json  |       5 +
+ ...iewer_space_perf_small_progressive_metrics.json |      33 +
+ .../perf/viewer_text_diff_perf_metrics.json        |      70 +
+ .../last-run/results.json                          |     653 +
+ .../last-run/run-all-tests-results.json            |    7103 +
+ .../last-run/trace.txt                             |     Bin 0 -> 176606 bytes
+ .../patches/staged-code-and-spec-no-testruns.patch |    8999 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4499 +
+ ...road_after_nav_ime_diag_cleanbuild_20260702.log |   33905 +
+ ...ull_skipbuild_after_commands_green_20260702.log |   42102 +
+ ..._after_nav_ime_failure_diagnostics_20260702.log |     267 +
+ .../Commands.SelfTest.CompareOptions.cpp           |    4958 +
+ ....SelfTest.Preferences.FileOpsCompareAndTree.cpp |    8402 +
+ .../Commands.SelfTest.Settings.cpp                 |   12867 +
+ .../Commands.SelfTest.ViewCommands.cpp             |   23628 +
+ .../source-snapshots/DxUi.Accessibility.cpp        |    7129 +
+ .../source-snapshots/Helpers.h                     |    2305 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3236 +
+ .../source-snapshots/SettingsHotReload.cpp         |     932 +
+ .../CONTINUATION.md                                |     166 +
+ .../archive-manifest.txt                           |      21 +
+ .../git-diff-name-status-no-testruns.txt           |      30 +
+ .../git-diff-stat-no-testruns.txt                  |      31 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     678 +
+ .../inventory/debug-test-exes.txt                  |       8 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/compare-red-gates-fix.patch            |     106 +
+ ...ve_progress_after_isolated_service_20260703.log |   34399 +
+ ...ompare_live_progress_focused_repro_20260703.log |   34417 +
+ ...d_gates_after_source_guard_compact_20260703.log |   34417 +
+ ...ed_gates_green_after_live_progress_20260703.log |   34399 +
+ .../compare_red_gates_repro_20260703.log           |   34431 +
+ ...after_compare_source_guard_compact_20260703.log |     267 +
+ ...ter_live_progress_isolated_service_20260703.log |     276 +
+ .../viewerpe_direct_repro_20260703.log             |    2601 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3236 +
+ .../viewerpe-direct-summary.txt                    |     120 +
+ .../viewerpe-direct-tail.txt                       |     120 +
+ .../CONTINUATION.md                                |     230 +
+ .../archive-manifest.txt                           |      49 +
+ .../RedSalamander-20260629-110056-p91740.txt       |     Bin 0 -> 12382 bytes
+ .../RedSalamander-20260629-110221-p27972.txt       |     Bin 0 -> 12384 bytes
+ .../RedSalamander-20260630-165229-p96776.txt       |     Bin 0 -> 3798 bytes
+ .../RedSalamander-20260701-081622-p37556.txt       |     Bin 0 -> 1128 bytes
+ .../RedSalamander-20260701-112104-p17112.txt       |     Bin 0 -> 2350 bytes
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      21 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      35 +
+ .../git-diff-stat-no-testruns.txt                  |      36 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     700 +
+ .../inventory/debug-test-exes.txt                  |      14 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/focused-current-staged.patch           |     163 +
+ .../patches/focused-current-unstaged.patch         |     274 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4739 +
+ .../monitor_etw_latency_direct_20260703.log        |       0
+ .../msbuild_redconfiguretests_20260703.log         |      78 +
+ ...configuretests_after_xmllite_order_20260703.log |      52 +
+ .../msbuild_viewerpe_focus_harness_20260703.log    |      38 +
+ ...configuretests_after_xmllite_order_20260703.log |       2 +
+ .../test_inventory_current_20260703.log            |      43 +
+ ...test_inventory_pester_after_counts_20260703.log |      25 +
+ .../run-artifacts/tools_pester_direct_20260703.log |     185 +
+ ...erpe_direct_after_vlc_focus_target_20260703.log |    2693 +
+ .../viewerpe_direct_repro_20260703.log             |    2601 +
+ .../viewerpe_vlc_focus_focused_20260703.log        |       1 +
+ .../viewerpe_vlc_focus_repeat10_20260703.log       |     165 +
+ ..._focus_repeat10_after_video_target_20260703.log |     200 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3237 +
+ .../source-snapshots/TestInventory.Tests.ps1       |      85 +
+ .../source-snapshots/Testing_TestCoverage.md       |    2414 +
+ .../source-snapshots/Tests_README.md               |     303 +
+ .../source-snapshots/ViewerPETests.cpp             |    5386 +
+ .../source-snapshots/WorkspaceDiscovery.cpp        |     367 +
+ .../red-salamander-crash-forensics.SKILL.md        |     111 +
+ .../test-inventory-after-counts-tail.txt           |      25 +
+ .../tools-pester-before-counts-tail.txt            |     120 +
+ .../viewerpe-vlc-focus-after-fix-summary.txt       |       1 +
+ .../viewerpe-vlc-focus-before-fix-summary.txt      |       6 +
+ .../CONTINUATION.md                                |     157 +
+ .../archive-manifest.txt                           |     110 +
+ .../RedSalamander-20260629-110056-p91740.txt       |     Bin 0 -> 12382 bytes
+ .../RedSalamander-20260629-110221-p27972.txt       |     Bin 0 -> 12384 bytes
+ .../RedSalamander-20260630-165229-p96776.txt       |     Bin 0 -> 3798 bytes
+ .../RedSalamander-20260701-081622-p37556.txt       |     Bin 0 -> 1128 bytes
+ .../RedSalamander-20260701-112104-p17112.txt       |     Bin 0 -> 2350 bytes
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      20 +
+ .../failure-summary.txt                            |      45 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      35 +
+ .../git-diff-stat-no-testruns.txt                  |      36 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |     750 +
+ .../last-run/CrashHandlingTests.output.log         |      32 +
+ .../last-run/DxUiTests.output.log                  |    1746 +
+ .../last-run/FileSystemCurlTests.output.log        |       1 +
+ .../last-run/LocalizationTests.output.log          |      66 +
+ .../last-run/MonitorTest.output.log                |     Bin 0 -> 314269 bytes
+ .../last-run/PerformanceTests2.output.log          |      21 +
+ .../last-run/PluginContractTests.output.log        |     388 +
+ .../last-run/RedConfigureTests.output.log          |       2 +
+ .../RedSalamanderMonitorEtwLatency.output.log      |       0
+ .../last-run/SettingsSchemaTests.output.log        |      47 +
+ .../last-run/ViewerPETests.output.log              |    2655 +
+ .../last-run/ViewerSqliteTests.output.log          |     436 +
+ .../last-run/commands/plugin_config_live_step.txt  |       1 +
+ .../last-run/commands/results.json                 |    3909 +
+ .../last-run/commands/trace.txt                    |       1 +
+ .../last-run/compare/results.json                  |    1230 +
+ .../last-run/compare/trace.txt                     |       1 +
+ .../last-run/fileops/results.json                  |     643 +
+ .../last-run/fileops/trace.txt                     |     Bin 0 -> 104918 bytes
+ .../last-run/perf/archive_commands_metrics.json    |       7 +
+ .../folderView_column_widths_audit_metrics.json    |   20800 +
+ .../folderView_perf_cold_first_visit_metrics.json  |      45 +
+ ...erView_perf_directory_change_storm_metrics.json |      23 +
+ .../folderView_perf_huge_folder_scale_metrics.json |      55 +
+ ...rView_perf_icon_pipeline_cold_slow_metrics.json |      46 +
+ ...lderView_perf_iconcache_contention_metrics.json |      39 +
+ ...derView_perf_large_folder_baseline_metrics.json |      18 +
+ ...w_perf_overlay_invalidation_stress_metrics.json |      46 +
+ ...lderView_perf_refresh_preservation_metrics.json |      26 +
+ ...perf_relayout_churn_while_scrolled_metrics.json |      40 +
+ ...lderView_perf_scroll_render_stress_metrics.json |    1444 +
+ ...derView_perf_slow_virtual_provider_metrics.json |      38 +
+ ...folderView_perf_sort_toggle_stress_metrics.json |     108 +
+ ...folderView_thumbnail_scroll_stress_metrics.json |      12 +
+ .../last-run/perf/list_opened_files_metrics.json   |       5 +
+ .../last-run/perf/make_file_list_metrics.json      |       5 +
+ .../perf/pane_view_options_preview_metrics.json    |       8 +
+ .../perf/pane_view_options_thumbnails_metrics.json |      11 +
+ .../perf/pane_view_options_toggle_metrics.json     |       9 +
+ .../last-run/perf/perf_metrics.jsonl               |   86937 +
+ .../last-run/perf/reread_associations_metrics.json |       9 +
+ .../last-run/perf/shared_directories_metrics.json  |       5 +
+ ...iewer_space_perf_small_progressive_metrics.json |      33 +
+ .../perf/viewer_text_diff_perf_metrics.json        |      70 +
+ .../last-run/results.json                          |     653 +
+ .../last-run/run-all-tests-results.json            |    7149 +
+ .../last-run/trace.txt                             |     Bin 0 -> 180172 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4739 +
+ .../run-artifacts/codex-runs-20260703-list.txt     |      31 +
+ ...ve_progress_after_isolated_service_20260703.log |   34399 +
+ ...ompare_live_progress_focused_repro_20260703.log |   34417 +
+ ...d_gates_after_source_guard_compact_20260703.log |   34417 +
+ ...ed_gates_green_after_live_progress_20260703.log |   34399 +
+ .../compare_red_gates_repro_20260703.log           |   34431 +
+ ...full_skipbuild_after_red_gates_20260703.err.log |       0
+ ...full_skipbuild_after_red_gates_20260703.out.log |   42346 +
+ ...full_skipbuild_after_red_gates_20260703.pid.txt |       1 +
+ ...pbuild_after_red_gates_20260703.stderr-path.txt |       1 +
+ ...pbuild_after_red_gates_20260703.stdout-path.txt |       1 +
+ .../monitor_etw_latency_direct_20260703.log        |       0
+ ...after_compare_source_guard_compact_20260703.log |     267 +
+ ...ter_live_progress_isolated_service_20260703.log |     276 +
+ ...after_viewerpe_redconfigure_pester_20260703.log |     380 +
+ .../msbuild_redconfiguretests_20260703.log         |      78 +
+ ...configuretests_after_xmllite_order_20260703.log |      52 +
+ .../msbuild_viewerpe_focus_harness_20260703.log    |      38 +
+ ...configuretests_after_xmllite_order_20260703.log |       2 +
+ .../test_inventory_current_20260703.log            |      43 +
+ ...test_inventory_pester_after_counts_20260703.log |      25 +
+ ...ools_pester_after_inventory_counts_20260703.log |     173 +
+ .../run-artifacts/tools_pester_direct_20260703.log |     185 +
+ ...erpe_direct_after_vlc_focus_target_20260703.log |    2693 +
+ .../viewerpe_direct_repro_20260703.log             |    2601 +
+ .../viewerpe_vlc_focus_focused_20260703.log        |       1 +
+ .../viewerpe_vlc_focus_repeat10_20260703.log       |     165 +
+ ..._focus_repeat10_after_video_target_20260703.log |     200 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ .../RedConfigure_Workspace_WorkspaceDiscovery.cpp  |     367 +
+ ...fTest_Commands_Commands.SelfTest.Navigation.cpp |    9653 +
+ ..._SelfTest_Commands_Commands.SelfTest.Search.cpp |   16101 +
+ ...est_Commands_Commands.SelfTest.ViewCommands.cpp |   23628 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3237 +
+ .../Specs_Testing_Testing_PerformanceValidation.md |     337 +
+ .../Specs_Testing_Testing_TestCoverage.md          |    2414 +
+ .../source-snapshots/Tests_README.md               |     303 +
+ .../Tests_ViewerPETests_ViewerPETests.cpp          |    5386 +
+ ...s_Tests_ResourceLocalizationContracts.Tests.ps1 |     476 +
+ .../Tools_Tests_TestInventory.Tests.ps1            |      85 +
+ .../CONTINUATION.md                                |     104 +
+ .../archive-manifest.txt                           |      61 +
+ .../RedSalamander-20260629-110056-p91740.txt       |     Bin 0 -> 12382 bytes
+ .../RedSalamander-20260629-110221-p27972.txt       |     Bin 0 -> 12384 bytes
+ .../RedSalamander-20260630-165229-p96776.txt       |     Bin 0 -> 3798 bytes
+ .../RedSalamander-20260701-081622-p37556.txt       |     Bin 0 -> 1128 bytes
+ .../RedSalamander-20260701-112104-p17112.txt       |     Bin 0 -> 2350 bytes
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      21 +
+ .../git-branch-head.txt                            |       2 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      36 +
+ .../git-diff-stat-no-testruns.txt                  |      37 +
+ .../git-status-short.txt                           |     862 +
+ .../last-run/DxUiTests.output.log                  |    1746 +
+ .../RedSalamanderMonitorEtwLatency.output.log      |       0
+ .../last-run/ViewerPETests.output.log              |    2655 +
+ .../last-run/commands/results.json                 |      18 +
+ .../last-run/commands/trace.txt                    |     Bin 0 -> 520 bytes
+ .../last-run/compare/results.json                  |      18 +
+ .../last-run/compare/trace.txt                     |       1 +
+ .../last-run/last-run-manifest.txt                 |      14 +
+ .../last-run/results.json                          |      30 +
+ .../last-run/trace.txt                             |     Bin 0 -> 24192 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4776 +
+ .../process-snapshot-redsalamander.txt             |       1 +
+ .../run-artifacts/codex-runs-latest-list.txt       |      85 +
+ ...r_without_live_cursor_switch_repro_20260703.log |       0
+ ...sort_cycles_and_search_rerun_repro_20260703.log |       0
+ ...eeps_navigation_shell_stable_repro_20260703.log |       0
+ .../commands_navigation_menu_repro_20260703.log    |       0
+ ...ompare_single_request_after_budget_20260703.log |       0
+ .../compare_single_request_repro_20260703.log      |       0
+ ...full_skipbuild_after_red_gates_20260703.err.log |       0
+ ...full_skipbuild_after_red_gates_20260703.out.log |   42346 +
+ .../monitor_etw_latency_direct_20260703.log        |       0
+ ...redsalamander_after_compare_budget_20260703.log |     267 +
+ ...ization_contracts_after_root_scope_20260703.log |      24 +
+ ...ource_localization_contracts_repro_20260703.log |      24 +
+ ...s_pester_after_resource_root_scope_20260703.log |     173 +
+ ...erpe_direct_after_vlc_focus_target_20260703.log |    2693 +
+ ..._focus_repeat10_after_video_target_20260703.log |     200 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ ...amander_SelfTest_Commands_Commands.SelfTest.cpp |     557 +
+ .../RedSalamander_SelfTest_Common_SelfTestCommon.h |     341 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3237 +
+ .../Specs_Testing_Testing_PerformanceValidation.md |     337 +
+ .../Specs_Testing_Testing_TestCoverage.md          |    2414 +
+ .../source-snapshots/Tests_README.md               |     303 +
+ .../Tests_ViewerPETests_ViewerPETests.cpp          |    5386 +
+ ...s_Tests_ResourceLocalizationContracts.Tests.ps1 |     489 +
+ .../CONTINUATION.md                                |     150 +
+ .../archive-manifest.txt                           |      47 +
+ .../crash-sidecars-latest.txt                      |      20 +
+ .../RedSalamander-20260629-110056-p91740.txt       |     Bin 0 -> 12382 bytes
+ .../RedSalamander-20260629-110221-p27972.txt       |     Bin 0 -> 12384 bytes
+ .../RedSalamander-20260630-165229-p96776.txt       |     Bin 0 -> 3798 bytes
+ .../RedSalamander-20260701-081622-p37556.txt       |     Bin 0 -> 1128 bytes
+ .../RedSalamander-20260701-112104-p17112.txt       |     Bin 0 -> 2350 bytes
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../git-branch-head.txt                            |       3 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      37 +
+ .../git-diff-stat-no-testruns.txt                  |      38 +
+ .../git-status-short.txt                           |     919 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4794 +
+ .../run-artifacts/codex-runs-latest-list.txt       |      84 +
+ ...find_action_buttons_wait_20260703.commands.json |    3908 +
+ ...oad_after_find_action_buttons_wait_20260703.log |   35946 +
+ ..._find_action_buttons_wait_20260703.run-all.json |    4715 +
+ ...ter_find_action_buttons_wait_20260703.trace.txt |     Bin 0 -> 358442 bytes
+ ..._broad_post_focused_20260703_1018.commands.json |    3907 +
+ .../commands_broad_post_focused_20260703_1018.log  |   35435 +
+ ...s_broad_post_focused_20260703_1018.run-all.json |    4709 +
+ ...ands_broad_post_focused_20260703_1018.trace.txt |     Bin 0 -> 357768 bytes
+ ...der_after_find_action_buttons_wait_20260703.log |     276 +
+ ...switches_popup_focused_after_broad_20260703.log |   35911 +
+ ...popup_focused_after_broad_20260703.run-all.json |      40 +
+ ..._tab_traversal_focused_after_broad_20260703.log |   35911 +
+ ...ersal_focused_after_broad_20260703.run-all.json |      40 +
+ ..._action_buttons_focused_after_wait_20260703.log |   35407 +
+ ...uttons_focused_after_wait_20260703.run-all.json |      40 +
+ ...ands_find_dialog_prefix_after_wait_20260703.log |   35407 +
+ ..._dialog_prefix_after_wait_20260703.run-all.json |     412 +
+ .../runall_commands_find_wait_summary_20260703.txt |       7 +
+ ...ommands_focused_three_summary_20260703_1016.txt |       8 +
+ ...mands_new_failures_focused_summary_20260703.txt |       7 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ ..._SelfTest_Commands_Commands.SelfTest.Search.cpp |   16108 +
+ ...est_Commands_Commands.SelfTest.ViewCommands.cpp |   23628 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3237 +
+ ...s_Tests_ResourceLocalizationContracts.Tests.ps1 |     489 +
+ .../CONTINUATION.md                                |      63 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3237 +
+ .../archive-manifest.txt                           |      62 +
+ .../RedSalamander-20260629-110056-p91740.txt       |     Bin 0 -> 12382 bytes
+ .../RedSalamander-20260629-110221-p27972.txt       |     Bin 0 -> 12384 bytes
+ .../RedSalamander-20260630-165229-p96776.txt       |     Bin 0 -> 3798 bytes
+ .../RedSalamander-20260701-081622-p37556.txt       |     Bin 0 -> 1128 bytes
+ .../RedSalamander-20260701-112104-p17112.txt       |     Bin 0 -> 2350 bytes
+ .../RedSalamander-20260701-114334-p90544.txt       |     Bin 0 -> 8284 bytes
+ .../RedSalamander-20260702-100018-p73832.txt       |     Bin 0 -> 3796 bytes
+ .../RedSalamander-20260702-125817-p33336.txt       |     Bin 0 -> 7660 bytes
+ .../red-salamander-crashes-latest.txt              |      21 +
+ .../failure-summary.txt                            |      25 +
+ .../git-branch-head.txt                            |       2 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      67 +
+ .../git-diff-stat-no-testruns.txt                  |      68 +
+ .../git-status-short.txt                           |     966 +
+ .../git-untracked-name-only.txt                    |       8 +
+ .../inventory/debug-test-exes.txt                  |      14 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4903 +
+ .../process-snapshot-redsalamander.txt             |       0
+ .../run-artifacts/codex-runs-latest-list.txt       |      85 +
+ ...oad_after_nav_menu_waits_20260703.commands.json |    3907 +
+ ...ommands_broad_after_nav_menu_waits_20260703.log |   36443 +
+ ...road_after_nav_menu_waits_20260703.run-all.json |    4709 +
+ ...s_broad_after_nav_menu_waits_20260703.trace.txt |     Bin 0 -> 358850 bytes
+ ...er_nav_menu_waits_rerun2_20260703.commands.json |    3907 +
+ ..._broad_after_nav_menu_waits_rerun2_20260703.log |   36947 +
+ ...ter_nav_menu_waits_rerun2_20260703.run-all.json |    4709 +
+ ..._after_nav_menu_waits_rerun2_20260703.trace.txt |     Bin 0 -> 357938 bytes
+ ...redsalamander_after_nav_menu_waits_20260703.log |     263 +
+ ...popup_focused_after_nav_menu_waits_20260703.log |   35911 +
+ ...used_after_nav_menu_waits_20260703.run-all.json |      40 +
+ ...ersal_focused_after_nav_menu_waits_20260703.log |   35911 +
+ ...used_after_nav_menu_waits_20260703.run-all.json |      40 +
+ ...used_after_nav_menu_waits_summary_20260703.json |      20 +
+ ...enuBar_prefix_after_nav_menu_waits_20260703.log |   35911 +
+ ...efix_after_nav_menu_waits_20260703.run-all.json |     136 +
+ ..._prefix_after_nav_menu_waits_20260703.trace.txt |     Bin 0 -> 11292 bytes
+ ...then_keyboard_pair_after_broad_red_20260703.log |   36415 +
+ ...oard_pair_after_broad_red_20260703.run-all.json |      46 +
+ ...eyboard_pair_after_broad_red_20260703.trace.txt |     Bin 0 -> 1100 bytes
+ ...n_keyboard_focused_after_broad_red_20260703.log |   36415 +
+ ...d_focused_after_broad_red_20260703.run-all.json |      40 +
+ ...oard_focused_after_broad_red_20260703.trace.txt |     Bin 0 -> 690 bytes
+ ...onView_prefix_after_nav_menu_waits_20260703.log |   35911 +
+ ...efix_after_nav_menu_waits_20260703.run-all.json |     130 +
+ ..._prefix_after_nav_menu_waits_20260703.trace.txt |     Bin 0 -> 6040 bytes
+ ...ixes_after_nav_menu_waits_summary_20260703.json |      22 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ .../source-snapshots/Common_Common_PerfJsonl.cpp   |     399 +
+ .../source-snapshots/Common_Helpers.h              |    2305 +
+ ...elfTest.Preferences.ViewersAndKeyboardLists.cpp |    8877 +
+ ...Test_Commands_Commands.SelfTest.Preferences.cpp |     478 +
+ ...est_Commands_Commands.SelfTest.ViewCommands.cpp |   23699 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3237 +
+ .../Specs_Testing_Testing_PerformanceValidation.md |     337 +
+ .../Specs_Testing_Testing_TestCoverage.md          |    2414 +
+ .../CONTINUATION.md                                |      98 +
+ .../archive-manifest.txt                           |      34 +
+ .../crash-sidecars-latest.txt                      |      12 +
+ .../created-at.txt                                 |       1 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-stat-no-testruns.txt                  |      40 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |    1027 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9002 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4999 +
+ .../run-artifacts/codex-runs-latest-list.txt       |      44 +
+ ...ommands_broad_after_nav_pref_waits_20260703.log |   37940 +
+ .../run-artifacts/commands_results.json            |    3905 +
+ .../run-artifacts/commands_trace.txt               |     Bin 0 -> 357262 bytes
+ .../run-artifacts/compare_results.json             |    1230 +
+ .../run-artifacts/compare_trace.txt                |     Bin 0 -> 69442 bytes
+ ...er_commands_viewerpe_monitor_green_20260703.log |   46096 +
+ ...r_etw_latency_after_commands_green_20260703.log |       0
+ .../msbuild_all_debug_before_full_20260703.log     |     346 +
+ ...alamander_after_nav_pref_waits_fix_20260703.log |     263 +
+ .../run-artifacts/results.json                     |      57 +
+ ...tatus_focused_after_nav_pref_waits_20260703.log |   37426 +
+ ..._nav_window11_after_nav_pref_waits_20260703.log |   37426 +
+ ...ndary_focused_after_nav_pref_waits_20260703.log |   37426 +
+ ...undary_window_after_nav_pref_waits_20260703.log |   37426 +
+ .../run-artifacts/trace.txt                        |       5 +
+ ...ewerpe_direct_after_commands_green_20260703.log |    2693 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ ...fTest_Commands_Commands.SelfTest.Navigation.cpp |    9666 +
+ ....SelfTest.Preferences.FileOpsCompareAndTree.cpp |    8424 +
+ ...ctoriesEngine.SelfTest.Cases.SearchAndIndex.cpp |   11327 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3238 +
+ .../source-snapshots/Tools_Run-AllTests.ps1        |     782 +
+ .../CONTINUATION.md                                |     133 +
+ ...yCircumstancePerformance_2026-06-28.snapshot.md |    3239 +
+ .../archive-manifest.txt                           |      37 +
+ .../RedSalamander-20260703-142049-p98100.dmp       |     Bin 0 -> 760266 bytes
+ .../RedSalamander-20260703-142049-p98100.txt       |     Bin 0 -> 5466 bytes
+ .../crash-artifacts/last_crash.txt                 |     Bin 0 -> 182 bytes
+ .../red-salamander-crashes-latest.txt              |      24 +
+ .../created-at.txt                                 |       1 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      39 +
+ .../git-diff-stat-no-testruns.txt                  |      40 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |    1065 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9222 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4763 +
+ .../run-artifacts/codex-runs-latest-list.txt       |      45 +
+ ...ommands_broad_after_nav_pref_waits_20260703.log |   37940 +
+ ...rd_nav_edit_focused_after_full_red_20260703.log |   38938 +
+ ..._focused_after_host_open_predicate_20260703.log |   38938 +
+ ...cision_cache_window_after_full_red_20260703.log |   38434 +
+ ...re_full_after_pending_window_green_20260703.log |   38556 +
+ .../compare_full_after_quiet_drain_20260703.log    |   38943 +
+ ...tree_focused_after_full_red_20260703_rerun2.log |   38434 +
+ ...ide_tree_focused_after_quiet_drain_20260703.log |   38938 +
+ ..._build_after_compare_monitor_green_20260703.log |   46937 +
+ .../run-artifacts/last_run_compare_trace.txt       |     Bin 0 -> 16392 bytes
+ ...st_run_run-all-tests-results.compare-crash.json |      33 +
+ ...mander_after_compare_navedit_waits_20260703.log |     267 +
+ ...ewerpe_direct_after_commands_green_20260703.log |    2693 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ ...st_Commands_Commands.SelfTest.ShellCommands.cpp |    3598 +
+ ...oriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp |    2837 +
+ ...rectories_CompareDirectoriesEngine.SelfTest.cpp |    5922 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3239 +
+ .../CONTINUATION.md                                |      99 +
+ .../archive-manifest.txt                           |      43 +
+ .../RedSalamander-20260703-142049-p98100.dmp       |     Bin 0 -> 760266 bytes
+ .../RedSalamander-20260703-142049-p98100.txt       |     Bin 0 -> 5466 bytes
+ .../red-salamander-crashes-latest.txt              |      23 +
+ .../created-at.txt                                 |       1 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      39 +
+ .../git-diff-stat-no-testruns.txt                  |      40 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |    1103 +
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9223 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    4909 +
+ ...ommands_2026-07-03_150248_commands_results.json |    3907 +
+ ...3_Commands_2026-07-03_150248_commands_trace.txt |     Bin 0 -> 358804 bytes
+ ...nds_2026-07-03_150248_selftest_run_results.json |    3917 +
+ ...mmands_2026-07-03_150248_selftest_run_trace.txt |     Bin 0 -> 3286386 bytes
+ ...ectories_2026-07-03_144451_compare_results.json |    1233 +
+ ...Directories_2026-07-03_144451_compare_trace.txt |     Bin 0 -> 69348 bytes
+ ...ies_2026-07-03_144451_selftest_run_results.json |    1243 +
+ ...tories_2026-07-03_144451_selftest_run_trace.txt |     Bin 0 -> 31328 bytes
+ .../run-artifacts/codex-runs-latest-list.txt       |      35 +
+ .../commands_broad_after_worker_join_20260703.log  |   39470 +
+ ..._nav_edit_window_after_worker_join_20260703.log |   38938 +
+ ...mpare_full_after_worker_join_20260703_rerun.log |   39060 +
+ ...ending_wide_tree_after_worker_join_20260703.log |   38938 +
+ ...compare_worker_shutdown_join_guard_20260703.log |   38938 +
+ ...er_after_compare_worker_join_20260703_rerun.log |     263 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ .../RedSalamander_CompareDirectoriesEngine.cpp     |    4663 +
+ .../RedSalamander_CompareDirectoriesEngine.h       |     578 +
+ ...fTest_Commands_Commands.SelfTest.Navigation.cpp |    9666 +
+ ...oriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp |    2953 +
+ ...rectories_CompareDirectoriesEngine.SelfTest.cpp |    5923 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3240 +
+ .../CONTINUATION.md                                |     134 +
+ .../archive-manifest.txt                           |     133 +
+ .../RedSalamander-20260703-142049-p98100.dmp       |     Bin 0 -> 760266 bytes
+ .../RedSalamander-20260703-142049-p98100.txt       |     Bin 0 -> 5466 bytes
+ .../red-salamander-crashes-latest.txt              |      12 +
+ .../created-at.txt                                 |       1 +
+ .../git-branch.txt                                 |       1 +
+ .../git-diff-cached-name-status-no-testruns.txt    |      64 +
+ .../git-diff-cached-stat-no-testruns.txt           |      65 +
+ .../git-diff-name-status-no-testruns.txt           |      40 +
+ .../git-diff-stat-no-testruns.txt                  |      41 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short.txt                           |    1141 +
+ .../git-untracked-name-only.txt                    |       8 +
+ .../last-run/commands_trace.txt                    |     Bin 0 -> 602 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9224 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    5104 +
+ .../process-snapshot-redsalamander-dxuitests.txt   |       1 +
+ ...ommands_2026-07-03_150814_commands_results.json |      18 +
+ ...3_Commands_2026-07-03_150814_commands_trace.txt |     Bin 0 -> 544 bytes
+ ...23_Commands_2026-07-03_150814_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_150814_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_150814_selftest_run_results.json |      30 +
+ ...mmands_2026-07-03_150814_selftest_run_trace.txt |     Bin 0 -> 24208 bytes
+ ...ommands_2026-07-03_150849_commands_results.json |      48 +
+ ...3_Commands_2026-07-03_150849_commands_trace.txt |     Bin 0 -> 2672 bytes
+ ...23_Commands_2026-07-03_150849_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_150849_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_150849_selftest_run_results.json |      60 +
+ ...mmands_2026-07-03_150849_selftest_run_trace.txt |     Bin 0 -> 56248 bytes
+ ...ommands_2026-07-03_152643_commands_results.json |    3907 +
+ ...3_Commands_2026-07-03_152643_commands_trace.txt |     Bin 0 -> 357940 bytes
+ ...23_Commands_2026-07-03_152643_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_152643_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_152643_selftest_run_results.json |    3917 +
+ ...mmands_2026-07-03_152643_selftest_run_trace.txt |     Bin 0 -> 3289530 bytes
+ ...ommands_2026-07-03_152737_commands_results.json |      18 +
+ ...3_Commands_2026-07-03_152737_commands_trace.txt |     Bin 0 -> 568 bytes
+ ...23_Commands_2026-07-03_152737_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_152737_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_152737_selftest_run_results.json |      30 +
+ ...mmands_2026-07-03_152737_selftest_run_trace.txt |     Bin 0 -> 23814 bytes
+ ...ommands_2026-07-03_152807_commands_results.json |      63 +
+ ...3_Commands_2026-07-03_152807_commands_trace.txt |     Bin 0 -> 3834 bytes
+ ...23_Commands_2026-07-03_152807_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_152807_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_152807_selftest_run_results.json |      75 +
+ ...mmands_2026-07-03_152807_selftest_run_trace.txt |     Bin 0 -> 74904 bytes
+ ...ommands_2026-07-03_153142_commands_results.json |      23 +
+ ...3_Commands_2026-07-03_153142_commands_trace.txt |     Bin 0 -> 958 bytes
+ ...23_Commands_2026-07-03_153142_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_153142_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_153142_selftest_run_results.json |      35 +
+ ...mmands_2026-07-03_153142_selftest_run_trace.txt |     Bin 0 -> 27064 bytes
+ ...ommands_2026-07-03_153211_commands_results.json |      63 +
+ ...3_Commands_2026-07-03_153211_commands_trace.txt |     Bin 0 -> 3834 bytes
+ ...23_Commands_2026-07-03_153211_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_153211_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_153211_selftest_run_results.json |      75 +
+ ...mmands_2026-07-03_153211_selftest_run_trace.txt |     Bin 0 -> 74904 bytes
+ ...ommands_2026-07-03_154914_commands_results.json |    3907 +
+ ...3_Commands_2026-07-03_154914_commands_trace.txt |     Bin 0 -> 364016 bytes
+ ...23_Commands_2026-07-03_154914_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_154914_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_154914_selftest_run_results.json |    3917 +
+ ...mmands_2026-07-03_154914_selftest_run_trace.txt |     Bin 0 -> 3284284 bytes
+ ...ommands_2026-07-03_155244_commands_results.json |      28 +
+ ...3_Commands_2026-07-03_155244_commands_trace.txt |     Bin 0 -> 1320 bytes
+ ...23_Commands_2026-07-03_155244_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_155244_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_155244_selftest_run_results.json |      40 +
+ ...mmands_2026-07-03_155244_selftest_run_trace.txt |     Bin 0 -> 33668 bytes
+ ...ommands_2026-07-03_155328_commands_results.json |     100 +
+ ...3_Commands_2026-07-03_155328_commands_trace.txt |     Bin 0 -> 7028 bytes
+ ...23_Commands_2026-07-03_155328_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_155328_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_155328_selftest_run_results.json |     112 +
+ ...mmands_2026-07-03_155328_selftest_run_trace.txt |     Bin 0 -> 105642 bytes
+ ...ommands_2026-07-03_155401_commands_results.json |      18 +
+ ...3_Commands_2026-07-03_155401_commands_trace.txt |     Bin 0 -> 504 bytes
+ ...23_Commands_2026-07-03_155401_compare_trace.txt |       1 +
+ ...23_Commands_2026-07-03_155401_fileops_trace.txt |       1 +
+ ...nds_2026-07-03_155401_selftest_run_results.json |      30 +
+ ...mmands_2026-07-03_155401_selftest_run_trace.txt |     Bin 0 -> 23756 bytes
+ ...irectories_2026-07-03_143301_commands_trace.txt |       1 +
+ ...ectories_2026-07-03_143301_compare_results.json |      18 +
+ ...Directories_2026-07-03_143301_compare_trace.txt |     Bin 0 -> 596 bytes
+ ...Directories_2026-07-03_143301_fileops_trace.txt |       1 +
+ ...ies_2026-07-03_143301_selftest_run_results.json |      30 +
+ ...tories_2026-07-03_143301_selftest_run_trace.txt |     Bin 0 -> 694 bytes
+ ...irectories_2026-07-03_143335_commands_trace.txt |       1 +
+ ...ectories_2026-07-03_143335_compare_results.json |      18 +
+ ...Directories_2026-07-03_143335_compare_trace.txt |     Bin 0 -> 616 bytes
+ ...Directories_2026-07-03_143335_fileops_trace.txt |       1 +
+ ...ies_2026-07-03_143335_selftest_run_results.json |      30 +
+ ...tories_2026-07-03_143335_selftest_run_trace.txt |     Bin 0 -> 704 bytes
+ ...irectories_2026-07-03_144451_commands_trace.txt |       1 +
+ ...ectories_2026-07-03_144451_compare_results.json |    1233 +
+ ...Directories_2026-07-03_144451_compare_trace.txt |     Bin 0 -> 69348 bytes
+ ...Directories_2026-07-03_144451_fileops_trace.txt |       1 +
+ ...ies_2026-07-03_144451_selftest_run_results.json |    1243 +
+ ...tories_2026-07-03_144451_selftest_run_trace.txt |     Bin 0 -> 31328 bytes
+ .../run-artifacts/codex-runs-latest-list.txt       |      40 +
+ ...ds_broad_after_nav_menu_focus_wait_20260703.log |   40478 +
+ ...ds_broad_after_status_window_green_20260703.log |   39974 +
+ ..._nav_edit_window_after_worker_join_20260703.log |   38938 +
+ ...dit_route_focused_after_window_red_20260703.log |   40450 +
+ ...eyboard_menu_focus_pair_after_wait_20260703.log |   39946 +
+ ...n_keyboard_focused_after_broad_red_20260703.log |   39946 +
+ ...eclick_triplet_after_surface_ready_20260703.log |   40450 +
+ ...board_menu_window_after_focus_wait_20260703.log |   39946 +
+ ...menu_region_window_after_broad_red_20260703.log |   39946 +
+ ...ter_path_doubleclick_surface_ready_20260703.log |   40468 +
+ ...av_shell_focused_after_worker_join_20260703.log |   39442 +
+ ...nav_shell_window_after_worker_join_20260703.log |   39442 +
+ ...mpare_full_after_worker_join_20260703_rerun.log |   39060 +
+ ...ending_wide_tree_after_worker_join_20260703.log |   38938 +
+ ...compare_worker_shutdown_join_guard_20260703.log |   38938 +
+ ...er_after_compare_worker_join_20260703_rerun.log |     263 +
+ ...lamander_after_nav_menu_focus_wait_20260703.log |     276 +
+ ...nav_path_doubleclick_surface_ready_20260703.log |     263 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ .../RedSalamander_CompareDirectoriesEngine.cpp     |    4663 +
+ .../RedSalamander_CompareDirectoriesEngine.h       |     578 +
+ ...der_FolderWindow.FileSystem.Navigation.Part.cpp |    1787 +
+ .../RedSalamander_NavigationView.Edit.cpp          |    3077 +
+ .../RedSalamander_NavigationView.Menus.cpp         |    2636 +
+ .../RedSalamander_NavigationView.cpp               |    1931 +
+ ...est_Commands_Commands.SelfTest.ViewCommands.cpp |   23772 +
+ ...oriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp |    2953 +
+ ...rectories_CompareDirectoriesEngine.SelfTest.cpp |    5923 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3293 +
+ .../CONTINUATION.md                                |     147 +
+ .../archive-manifest.txt                           |      52 +
+ .../2026-07-03_160054/commands_results.json        |      23 +
+ .../2026-07-03_160054/commands_trace.txt           |     Bin 0 -> 866 bytes
+ .../2026-07-03_160054/compare_trace.txt            |       1 +
+ .../commands-archives/2026-07-03_160054/env.txt    |      12 +
+ .../2026-07-03_160054/fileops_trace.txt            |       1 +
+ .../2026-07-03_160054/selftest.txt                 |       3 +
+ .../2026-07-03_160054/selftest_run_results.json    |      35 +
+ .../2026-07-03_160054/selftest_run_trace.txt       |     Bin 0 -> 33528 bytes
+ .../2026-07-03_160114/commands_results.json        |      28 +
+ .../2026-07-03_160114/commands_trace.txt           |     Bin 0 -> 1232 bytes
+ .../2026-07-03_160114/compare_trace.txt            |       1 +
+ .../commands-archives/2026-07-03_160114/env.txt    |      12 +
+ .../2026-07-03_160114/fileops_trace.txt            |       1 +
+ .../2026-07-03_160114/selftest.txt                 |       3 +
+ .../2026-07-03_160114/selftest_run_results.json    |      40 +
+ .../2026-07-03_160114/selftest_run_trace.txt       |     Bin 0 -> 40114 bytes
+ .../2026-07-03_160140/commands_results.json        |      98 +
+ .../2026-07-03_160140/commands_trace.txt           |     Bin 0 -> 6200 bytes
+ .../2026-07-03_160140/compare_trace.txt            |       1 +
+ .../commands-archives/2026-07-03_160140/env.txt    |      12 +
+ .../2026-07-03_160140/fileops_trace.txt            |       1 +
+ .../2026-07-03_160140/selftest.txt                 |       3 +
+ .../2026-07-03_160140/selftest_run_results.json    |     110 +
+ .../2026-07-03_160140/selftest_run_trace.txt       |     Bin 0 -> 104814 bytes
+ .../RedSalamander-20260703-161435-p81732.dmp       |     Bin 0 -> 8686169 bytes
+ .../RedSalamander-20260703-161435-p81732.txt       |     Bin 0 -> 8284 bytes
+ .../crash-artifacts/last_crash.txt                 |     Bin 0 -> 182 bytes
+ .../created-at.txt                                 |       1 +
+ .../git-branch.txt                                 |       1 +
+ .../git-head.txt                                   |       1 +
+ .../git-status-short-refresh.txt                   |    1274 +
+ .../git-status-short.txt                           |    1274 +
+ .../last-run/plugin_config_live_step.txt           |       1 +
+ .../last-run/trace.txt                             |     Bin 0 -> 262458 bytes
+ .../origin-master-ahead-behind.txt                 |       1 +
+ ...taged-code-and-spec-no-testruns.name-status.txt |      64 +
+ .../patches/staged-code-and-spec-no-testruns.patch |    9316 +
+ .../staged-code-and-spec-no-testruns.stat.txt      |      65 +
+ ...taged-code-and-spec-no-testruns.name-status.txt |      39 +
+ .../unstaged-code-and-spec-no-testruns.patch       |    5040 +
+ .../unstaged-code-and-spec-no-testruns.stat.txt    |      40 +
+ ...s_broad_after_nav_prefix17_recheck_20260703.log |   40458 +
+ ...s_nav_full_path_popup_predecessor2_20260703.log |   40450 +
+ ...s_nav_full_path_popup_predecessor3_20260703.log |   40450 +
+ ...commands_nav_view_prefix17_recheck_20260703.log |   40450 +
+ ..._skills_red-salamander-crash-forensics_SKILL.md |     111 +
+ ...alamander_FolderWindow.FileOperations.Popup.cpp |    8115 +
+ ...SelfTest_Commands_Commands.SelfTest.FileOps.cpp |    7219 +
+ ...est_Commands_Commands.SelfTest.ViewCommands.cpp |   23772 +
+ ...pDrive_AnyCircumstancePerformance_2026-06-28.md |    3332 +
+ Specs/Testing/Testing_PerformanceValidation.md     |       1 +
+ Specs/Testing/Testing_TestCoverage.md              |       4 +-
+ Tests/DxUiTests/DxUiTests.Accessibility.cpp        |     155 +-
+ Tests/DxUiTests/DxUiTests.NativeTextInput.cpp      |     148 +-
+ Tests/README.md                                    |       2 +-
+ .../Tests/RedSalamanderPluginDeployment.Tests.ps1  |       3 +
+ Tools/Tests/TestInventory.Tests.ps1                |       2 +-
+ 1291 files changed, 11779675 insertions(+), 722 deletions(-)

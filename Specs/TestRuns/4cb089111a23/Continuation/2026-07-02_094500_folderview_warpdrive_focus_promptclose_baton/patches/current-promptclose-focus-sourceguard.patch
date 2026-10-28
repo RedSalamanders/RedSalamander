@@ -1,0 +1,293 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index e01cd1a54..e42c4f3d6 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -8074,6 +8074,18 @@ bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitProm
+     return ok;
+ }
+ 
++[[nodiscard]] bool PostFileOperationsSpeedLimitPromptCloseDebugCommand(HWND hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand command) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++    {
++        return false;
++    }
++
++    // Confirm/Cancel tears down the modal DxUi/TSF prompt. Post the close action
++    // so selftest worker threads never destroy it inside a cross-thread SendMessage stack.
++    return PostMessageW(hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), 0) != FALSE;
++}
++
+ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+@@ -8092,16 +8104,12 @@ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
+ bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+-    return hwnd &&
+-           SendMessageW(
+-               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Confirm), 0) != FALSE;
++    return PostFileOperationsSpeedLimitPromptCloseDebugCommand(hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand::Confirm);
+ }
+ 
+ bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept
+ {
+     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+-    return hwnd &&
+-           SendMessageW(
+-               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel), 0) != FALSE;
++    return PostFileOperationsSpeedLimitPromptCloseDebugCommand(hwnd, FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel);
+ }
+ #endif
+diff --git a/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp b/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
+index 59ed80682..6d9db4a21 100644
+--- a/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
++++ b/RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
+@@ -850,6 +850,19 @@ HWND GetFolderViewPaneFilterPromptHandle() noexcept
+     return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+ }
+ 
++[[nodiscard]] bool PostFolderViewPromptCloseDebugCommand(HWND hwnd, UINT message, WPARAM command) noexcept
++{
++    if (! hwnd || IsWindow(hwnd) == FALSE)
++    {
++        return false;
++    }
++
++    // Confirm/Cancel destroys the modal HWND. Post the close action so selftest
++    // worker threads do not destroy DxUi/TSF prompt windows inside a cross-thread
++    // synchronous SendMessage stack.
++    return PostMessageW(hwnd, message, command, 0) != FALSE;
++}
++
+ bool DebugGetFolderViewPaneFilterPromptSnapshot(FolderViewPaneFilterPromptDebugSnapshot& out) noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+@@ -924,15 +937,13 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
+ bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewPaneFilterPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel));
+ }
+ 
+ HWND GetFolderViewSelectionMaskPromptHandle() noexcept
+@@ -991,15 +1002,15 @@ bool DebugSetFolderViewSelectionMaskPromptText(std::wstring_view text) noexcept
+ bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewSelectionMaskPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel));
+ }
+ 
+ bool DebugGetFolderViewCreateDirectoryPromptSnapshot(FolderViewCreateDirectoryPromptDebugSnapshot& out) noexcept
+@@ -1040,17 +1051,15 @@ bool DebugSetFolderViewCreateDirectoryPromptText(std::wstring_view text) noexcep
+ bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm), 0) !=
+-               FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel), 0) !=
+-               FALSE;
++    return PostFolderViewPromptCloseDebugCommand(
++        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel));
+ }
+ 
+ bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept
+@@ -1106,13 +1115,13 @@ bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexce
+ bool DebugConfirmFolderViewEditNewPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewEditNewPromptHandle();
+-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewEditNewPrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewEditNewPromptHandle();
+-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel));
+ }
+ 
+ HWND GetFolderViewChangeCasePromptHandle() noexcept
+@@ -1158,15 +1167,13 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
+ bool DebugConfirmFolderViewChangeCasePrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
+ }
+ 
+ bool DebugCancelFolderViewChangeCasePrompt() noexcept
+ {
+     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
+-    return hwnd &&
+-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel), 0) != FALSE;
++    return PostFolderViewPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel));
+ }
+ #endif
+ 
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
+index 326be13cd..5a66da266 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
+@@ -5633,13 +5633,44 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
+ 
+ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
+ {
++    using namespace std::chrono_literals;
++
+     g_folderWindow.SetActivePane(pane);
+ 
+     const HWND view = g_folderWindow.GetFolderViewHwnd(pane);
+-    if (view && IsWindow(view) != FALSE)
++    if (! view || IsWindow(view) == FALSE)
+     {
+-        SetFocus(view);
++        return;
++    }
++
++    const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
++    size_t stableSamples = 0u;
++    while (std::chrono::steady_clock::now() < deadline)
++    {
++        if (GetFocus() != view)
++        {
++            SetFocus(view);
++        }
++
++        PumpPendingMessages();
++        if (GetFocus() == view && g_folderWindow.GetFocusedFolderViewHwnd() == view && g_folderWindow.GetFocusedPane() == pane)
++        {
++            ++stableSamples;
++            if (stableSamples >= 2u)
++            {
++                return;
++            }
++        }
++        else
++        {
++            stableSamples = 0u;
++        }
++
++        std::this_thread::sleep_for(10ms);
+     }
++
++    SetFocus(view);
++    PumpPendingMessages();
+ }
+ 
+ [[nodiscard]] bool WaitForFolderViewPaneFocus(FolderWindow::Pane pane, HWND expectedFolderView, std::chrono::milliseconds timeout) noexcept
+diff --git a/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp b/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
+index ab8182c72..0b3974d0f 100644
+--- a/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
++++ b/Tests/DxUiTests/DxUiTests.NativeTextInput.cpp
+@@ -209,6 +209,77 @@ void TestFolderViewDxUiPromptsDeactivateNativeTextInputBeforeDestroyWindow()
+         requireMessage(countOccurrences(classBlock, "_hWnd.reset()") == 1u,
+                        std::string(promptClasses[index]) + " avoids direct modal HWND reset outside the native-text-input close helper");
+     }
++
++    const std::filesystem::path navigationSourcePath =
++        FindRepoRootForDxUiTests() / L"RedSalamander" / L"FolderWindow.FileSystem.Navigation.Part.cpp";
++    std::ifstream navigationSourceInput(navigationSourcePath);
++    Require(navigationSourceInput.good(), "FolderWindow.FileSystem.Navigation.Part source is readable for DxUi prompt debug close guard");
++    const std::string navigationSource((std::istreambuf_iterator<char>(navigationSourceInput)), std::istreambuf_iterator<char>());
++
++    Require(navigationSource.find("PostFolderViewPromptCloseDebugCommand") != std::string::npos,
++            "FolderView prompt debug close actions share an asynchronous post helper");
++
++    const std::array<const char*, 10> closeDebugHelpers{
++        "bool DebugConfirmFolderViewPaneFilterPrompt() noexcept",
++        "bool DebugCancelFolderViewPaneFilterPrompt() noexcept",
++        "bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept",
++        "bool DebugCancelFolderViewSelectionMaskPrompt() noexcept",
++        "bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept",
++        "bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept",
++        "bool DebugConfirmFolderViewEditNewPrompt() noexcept",
++        "bool DebugCancelFolderViewEditNewPrompt() noexcept",
++        "bool DebugConfirmFolderViewChangeCasePrompt() noexcept",
++        "bool DebugCancelFolderViewChangeCasePrompt() noexcept",
++    };
++
++    for (const char* helper : closeDebugHelpers)
++    {
++        const size_t helperStart = navigationSource.find(helper);
++        requireMessage(helperStart != std::string::npos, std::string(helper) + " source block is found");
++        if (helperStart == std::string::npos)
++        {
++            continue;
++        }
++
++        const size_t helperEnd = navigationSource.find("\n}", helperStart);
++        requireMessage(helperEnd != std::string::npos && helperStart < helperEnd, std::string(helper) + " source block end is found");
++        const std::string_view helperBlock(navigationSource.data() + helperStart, helperEnd - helperStart);
++        requireMessage(helperBlock.find("PostFolderViewPromptCloseDebugCommand") != std::string_view::npos,
++                       std::string(helper) + " posts Confirm/Cancel close actions");
++        requireMessage(helperBlock.find("SendMessageW") == std::string_view::npos,
++                       std::string(helper) + " avoids synchronous cross-thread close SendMessage");
++    }
++
++    const std::filesystem::path fileOpsPopupSourcePath = FindRepoRootForDxUiTests() / L"RedSalamander" / L"FolderWindow.FileOperations.Popup.cpp";
++    std::ifstream fileOpsPopupSourceInput(fileOpsPopupSourcePath);
++    Require(fileOpsPopupSourceInput.good(), "FolderWindow.FileOperations.Popup source is readable for DxUi prompt debug close guard");
++    const std::string fileOpsPopupSource((std::istreambuf_iterator<char>(fileOpsPopupSourceInput)), std::istreambuf_iterator<char>());
++
++    Require(fileOpsPopupSource.find("PostFileOperationsSpeedLimitPromptCloseDebugCommand") != std::string::npos,
++            "FileOperations speed-limit prompt debug close actions share an asynchronous post helper");
++
++    const std::array<const char*, 2> fileOpsCloseDebugHelpers{
++        "bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept",
++        "bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept",
++    };
++
++    for (const char* helper : fileOpsCloseDebugHelpers)
++    {
++        const size_t helperStart = fileOpsPopupSource.find(helper);
++        requireMessage(helperStart != std::string::npos, std::string(helper) + " source block is found");
++        if (helperStart == std::string::npos)
++        {
++            continue;
++        }
++
++        const size_t helperEnd = fileOpsPopupSource.find("\n}", helperStart);
++        requireMessage(helperEnd != std::string::npos && helperStart < helperEnd, std::string(helper) + " source block end is found");
++        const std::string_view helperBlock(fileOpsPopupSource.data() + helperStart, helperEnd - helperStart);
++        requireMessage(helperBlock.find("PostFileOperationsSpeedLimitPromptCloseDebugCommand") != std::string_view::npos,
++                       std::string(helper) + " posts Confirm/Cancel close actions");
++        requireMessage(helperBlock.find("SendMessageW") == std::string_view::npos,
++                       std::string(helper) + " avoids synchronous cross-thread close SendMessage");
++    }
+ }
+ 
+ class NativeTextStoreTestSink final : public ITextStoreACPSink

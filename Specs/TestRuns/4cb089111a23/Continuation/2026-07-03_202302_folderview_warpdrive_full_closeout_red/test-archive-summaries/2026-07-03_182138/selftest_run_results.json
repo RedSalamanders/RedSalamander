@@ -1,0 +1,30 @@
+{
+    "run_started_utc": "2026-07-03T16:21:37.435Z",
+    "duration_ms": 1377,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_plugin_configuration_dialog_tab_traversal_live_dx_interaction",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 691,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_plugin_configuration_dialog_tab_traversal_live_dx_interaction",
+            "cases": [
+                {
+                    "name": "cmd_plugin_configuration_dialog_tab_traversal_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 679
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

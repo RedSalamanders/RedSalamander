@@ -1,0 +1,36 @@
+ExceptionCode=0xC0000005
+ExceptionAddress=0x7ffd68315846
+ProcessId=33336
+ThreadId=47268
+
+Callstack:
+00 0x00007FFD68315846 RtlGetExtendedContextLength2+0x506
+01 0x00007FFD65528AE1 WideCharToMultiByte+0x261
+02 0x00007FFBCE447BE2 Debug::detail::`anonymous namespace'::ConvertUtf8+0xB2 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:61(+102)
+03 0x00007FFBCE3AB6B2 Debug::detail::`anonymous namespace'::AppendJsonEscaped+0x82 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:75(+40)
+04 0x00007FFBCE3AC469 Debug::detail::`anonymous namespace'::AppendJsonStringField+0xB9 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:121(+43)
+05 0x00007FFBCE3AD7A4 Debug::detail::WritePerfJsonl+0x764 Z:\src\RedSalamander\Common\Common\PerfJsonl.cpp:272(+164)
+06 0x00007FF7E42CB7C6 Debug::Perf::Scope::~Scope+0x146 Z:\src\RedSalamander\Common\Helpers.h:1481(+121)
+07 0x00007FF7E5DF8168 FolderView::ProcessThumbnailLoadQueue+0x14C8 Z:\src\RedSalamander\RedSalamander\FolderView.Icons.cpp:1346(+22)
+08 0x00007FF7E5D34D89 FolderView::DebugWarmRenderingForSelfTest+0x4A9 Z:\src\RedSalamander\RedSalamander\FolderView.cpp:1076(+41)
+09 0x00007FF7E628E780 FolderWindow::DebugWarmPaneRendering+0x80 Z:\src\RedSalamander\RedSalamander\FolderWindow.FileSystem.Commands.Part.cpp:10983(+0)
+10 0x00007FF7E5505EAB `anonymous namespace'::CaptureFolderViewColumnAuditSample+0x8B Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:13999(+14)
+11 0x00007FF7E552F565 `anonymous namespace'::DriveFolderViewColumnAuditScroll+0xA5 Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:14026(+0)
+12 0x00007FF7E55754D3 `anonymous namespace'::RunFolderViewColumnAuditForPath+0x8A3 Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:14331(+178)
+13 0x00007FF7E5803457 `anonymous namespace'::TestFolderViewColumnWidthsAudit+0x1BF7 Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:14482(+663)
+14 0x00007FF7E549F56B `RunViewCommandsCommandsSelfTestCases'::`2'::<lambda_86>::operator()+0x3B Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:23531(+22)
+15 0x00007FF7E4C7FBAB SelfTest::RunCase<`RunViewCommandsCommandsSelfTestCases'::`2'::<lambda_86> >+0x38B Z:\src\RedSalamander\RedSalamander\SelfTest\Common\SelfTestCommon.h:240(+19)
+16 0x00007FF7E558BF78 RunViewCommandsCommandsSelfTestCases+0x2F38 Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp:23530(+139)
+17 0x00007FF7E556C053 CommandsSelfTest::Run+0x2A3 Z:\src\RedSalamander\RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp:531(+23)
+18 0x00007FF7E6C53EB2 `anonymous namespace'::RunCommandsSelfTestAndRequestShutdown+0x1B2 Z:\src\RedSalamander\RedSalamander\RedSalamander.cpp:1728(+23)
+19 0x00007FF7E6C600E2 WndProc+0x222 Z:\src\RedSalamander\RedSalamander\RedSalamander.cpp:11098(+12)
+20 0x00007FFD67F1C396 CallWindowProcW+0x6A6
+21 0x00007FFD67F1A7ED IsWindowUnicode+0x3CD
+22 0x00007FF7E6C52ED4 RunApplication+0x3054 Z:\src\RedSalamander\RedSalamander\RedSalamander.cpp:7824(+13)
+23 0x00007FF7E6C7548D wWinMain+0x8D Z:\src\RedSalamander\RedSalamander\RedSalamander.cpp:7874(+18)
+24 0x00007FF7E6F71D22 invoke_main+0x32 D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:123(+0)
+25 0x00007FF7E6F71BD2 __scrt_common_main_seh+0x132 D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:288(+5)
+26 0x00007FF7E6F71A8E __scrt_common_main+0xE D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:331(+0)
+27 0x00007FF7E6F71DBE wWinMainCRTStartup+0xE D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_wwinmain.cpp:17(+0)
+28 0x00007FFD6703E957 BaseThreadInitThunk+0x17
+29 0x00007FFD682C7C1C RtlUserThreadStart+0x2C

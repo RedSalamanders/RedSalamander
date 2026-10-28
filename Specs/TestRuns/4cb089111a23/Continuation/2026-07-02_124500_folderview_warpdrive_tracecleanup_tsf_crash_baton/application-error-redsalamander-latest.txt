@@ -1,0 +1,11 @@
+Faulting application name: RedSalamander.exe, version: 7.0.1.0, time stamp: 0x6a463b84
+Faulting module name: textinputframework.dll, version: 10.0.26100.8521, time stamp: 0xcd3c8a25
+Exception code: 0xc0000005
+Fault offset: 0x000000000006a419
+Faulting process id: 0x120FC
+Faulting application start time: 0x1DD0A0C8529C672
+Faulting application path: Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+Faulting module path: C:\WINDOWS\SYSTEM32\textinputframework.dll
+Report Id: 75aa851f-4272-45cd-8712-bfdd035c13fa
+Faulting package full name: 
+Faulting package-relative application ID: 

@@ -1,0 +1,40 @@
+{
+    "run_started_utc": "2026-07-03T13:52:43.547Z",
+    "duration_ms": 1373,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_pane_navigationView_path_doubleClick_enters_edit_mode,cmd_pane_navigationView_path_doubleClick_ignores_stale_restore_focus,cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 835,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_pane_navigationView_path_doubleClick_enters_edit_mode,cmd_pane_navigationView_path_doubleClick_ignores_stale_restore_focus,cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "cases": [
+                {
+                    "name": "cmd_pane_navigationView_path_doubleClick_enters_edit_mode",
+                    "status": "passed",
+                    "duration_ms": 405
+                },
+                {
+                    "name": "cmd_pane_navigationView_path_doubleClick_ignores_stale_restore_focus",
+                    "status": "passed",
+                    "duration_ms": 138
+                },
+                {
+                    "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+                    "status": "passed",
+                    "duration_ms": 278
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

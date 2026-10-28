@@ -1,0 +1,106 @@
+diff --git a/RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp b/RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp
+index 7893fe4b3..4f967999e 100644
+--- a/RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp
++++ b/RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp
+@@ -2603,6 +2603,28 @@ SelfTest::RunCase(options,
+         const size_t afterOffset  = source.find(after);
+         return beforeOffset != std::string_view::npos && afterOffset != std::string_view::npos && beforeOffset < afterOffset;
+     };
++    const auto compactWhitespace = [](std::string_view source)
++    {
++        std::string compact;
++        compact.reserve(source.size());
++        for (const char ch : source)
++        {
++            if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
++            {
++                compact.push_back(ch);
++            }
++        }
++        return compact;
++    };
++    const auto containsBeforeCompact = [&](std::string_view source, std::string_view before, std::string_view after)
++    {
++        const std::string compactSourceText = compactWhitespace(source);
++        const std::string compactBefore     = compactWhitespace(before);
++        const std::string compactAfter      = compactWhitespace(after);
++        const size_t beforeOffset           = compactSourceText.find(compactBefore);
++        const size_t afterOffset            = compactSourceText.find(compactAfter);
++        return beforeOffset != std::string::npos && afterOffset != std::string::npos && beforeOffset < afterOffset;
++    };
+ 
+     const auto sourceBetween = [](std::string_view source, std::string_view beginMarker, std::string_view endMarker) noexcept -> std::string_view
+     {
+@@ -2764,7 +2786,7 @@ SelfTest::RunCase(options,
+                   L"Broker no-callback candidate accumulation must keep a configured count ceiling.");
+     state.Require(contains(brokerSource, "constexpr uint64_t kMaxClientBufferedCandidateBytes"),
+                   L"Broker no-callback candidate accumulation must keep a configured byte ceiling.");
+-    state.Require(containsBefore(queryBody, "CanAppendClientBufferedCandidates(outCandidates.size()", "outCandidates.insert("),
++    state.Require(containsBeforeCompact(queryBody, "CanAppendClientBufferedCandidates(outCandidates.size()", "outCandidates.insert("),
+                   L"Broker no-callback path must validate count/bytes before accumulating candidates.");
+     state.Require(contains(queryBody, "outCandidates.clear();") && contains(queryBody, "HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW)"),
+                   L"Broker no-callback overflow must clear buffered candidates and return ERROR_BUFFER_OVERFLOW.");
+@@ -2921,6 +2943,25 @@ SelfTest::RunCase(options,
+         const size_t afterPos  = source.find(after);
+         return beforePos != std::string_view::npos && afterPos != std::string_view::npos && beforePos < afterPos;
+     };
++    const auto compactWhitespace = [](std::string_view source)
++    {
++        std::string compact;
++        compact.reserve(source.size());
++        for (const char ch : source)
++        {
++            if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
++            {
++                compact.push_back(ch);
++            }
++        }
++        return compact;
++    };
++    const auto containsCompact = [&](std::string_view source, std::string_view needle)
++    {
++        const std::string compactSourceText = compactWhitespace(source);
++        const std::string compactNeedle     = compactWhitespace(needle);
++        return compactSourceText.find(compactNeedle) != std::string::npos;
++    };
+     const auto readSourceFile = [](const std::filesystem::path& path, std::string& outSource) noexcept
+     {
+         outSource.clear();
+@@ -3039,7 +3080,7 @@ SelfTest::RunCase(options,
+     state.Require(
+         contains(automaticMaintenance, "const bool shouldRewriteAutoVacuum") && contains(automaticMaintenance, "\"VACUUM;\"") &&
+             contains(automaticMaintenance, "RunQuickCheck(db.get(), L\"automatic auto-vacuum mode rewrite\")") &&
+-            contains(automaticMaintenance, "HRESULT_FROM_WIN32(ERROR_BUSY)") && contains(automaticMaintenance, "result.ranVacuum = true"),
++            contains(automaticMaintenance, "HRESULT_FROM_WIN32(ERROR_BUSY)") && containsCompact(automaticMaintenance, "result.ranVacuum = true"),
+         L"Automatic SQLite maintenance must rewrite legacy non-incremental auto_vacuum stores outside bootstrap after quick_check and defer busy checkpoints.");
+     const std::string_view manualMaintenance = sourceBetween(sqliteSource, "HRESULT RunManualMaintenance", "HRESULT RunAutomaticMaintenance");
+     state.Require(contains(manualMaintenance, "RunQuickCheck(db.get(), L\"manual maintenance\")") && contains(manualMaintenance, "\"VACUUM;\""),
+@@ -9148,6 +9189,7 @@ SelfTest::RunCase(options,
+     state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+     state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"beta.txt", "beta"), L"Failed to create beta.txt.");
+ 
++    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+     const std::wstring pipeName             = MakeUniquePipeName();
+     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+@@ -9159,7 +9201,8 @@ SelfTest::RunCase(options,
+ 
+     ForegroundSearchServiceProcess service;
+     std::wstring serviceError;
+-    state.Require(service.Start(pipeName, 2u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true), serviceError);
++    const std::wstring extraArgs = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
++    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+     if (! state.failure.empty())
+     {
+         return false;
+@@ -9199,6 +9242,10 @@ SelfTest::RunCase(options,
+         state.Require(enumerating->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Live-progress query should tag broker progress with the service backend.");
+     }
+ 
++    SearchServiceBroker::ServiceStatus status{};
++    const HRESULT statusHr = SearchServiceBroker::GetStatus(status);
++    state.Require(SUCCEEDED(statusHr), std::format(L"Final live-progress status request failed. hr=0x{:08X}", static_cast<unsigned long>(statusHr)));
++
+     std::string output;
+     state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+     if (! state.failure.empty())

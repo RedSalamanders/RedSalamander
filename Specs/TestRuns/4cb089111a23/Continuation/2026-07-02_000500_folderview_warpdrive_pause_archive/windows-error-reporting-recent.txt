@@ -1,0 +1,72 @@
+
+TimeCreated : 01/07/2026 22:39:57
+Message     : Fault bucket 1852035951594888751, type 4
+              Event Name: APPCRASH
+              Response: Not available
+              Cab Id: 0
+              
+              Problem signature:
+              P1: RedSalamander.exe
+              P2: 7.0.1.0
+              P3: 6a457787
+              P4: textinputframework.dll
+              P5: 10.0.26100.8521
+              P6: cd3c8a25
+              P7: c0000005
+              P8: 000000000006a419
+              P9: 
+              P10: 
+              
+              Attached files:
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.af8e806b-3db8-41ae-a93b-4a49c06bb0a0.tmp.dmp
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.0c905698-3cd8-4d16-8d90-4b4314fbab80.tmp.WERInternalMetadata.xml
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.b776eae1-ad1b-4f36-b85e-f4ccb6638669.tmp.csv
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4007c3ed-5412-4958-b371-c94003ce7aca.tmp.txt
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.fe7f9858-1560-44fd-ae3a-86907673fe24.tmp.xml
+              
+              These files may be available here:
+              \\?\C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_RedSalamander.ex_30e56b42385e20e7ee87989965bd2e32b766a154_78d81a95_987e277e-0fd3-499a-bec8-cf450c377684
+              
+              Analysis symbol: 
+              Rechecking for solution: 0
+              Report Id: 3f3b80f9-1dbe-4b89-bf90-c86b5eb4382c
+              Report Status: 268435456
+              Hashed bucket: ca61589dcc4dce4f59b3c0e2ae10de2f
+              Cab Guid: 0
+
+TimeCreated : 01/07/2026 21:27:29
+Message     : Fault bucket 2108186128828446980, type 4
+              Event Name: APPCRASH
+              Response: Not available
+              Cab Id: 0
+              
+              Problem signature:
+              P1: RedSalamander.exe
+              P2: 7.0.1.0
+              P3: 6a45661c
+              P4: textinputframework.dll
+              P5: 10.0.26100.8521
+              P6: cd3c8a25
+              P7: c0000005
+              P8: 000000000006a419
+              P9: 
+              P10: 
+              
+              Attached files:
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.167e1333-9335-48d5-b07e-552a38a7ec01.tmp.dmp
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.6f62cc93-5c41-4e63-93e5-8b5f5499da9f.tmp.WERInternalMetadata.xml
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.1c3fa5d7-2c55-4b82-8b73-96c9ee226c05.tmp.csv
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.ff351b9f-5991-4322-b8c5-de1c4ad4bdfd.tmp.txt
+              \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.22e47050-7989-4245-9a4a-f65885ed2f32.tmp.xml
+              
+              These files may be available here:
+              \\?\C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_RedSalamander.ex_5db9d3ca4df1345784a7af279393e96c2891ad2_c1cd7585_48ade707-c100-4a4e-897c-9f50f3ba15bc
+              
+              Analysis symbol: 
+              Rechecking for solution: 0
+              Report Id: 6c69fcac-19a3-4df9-b9eb-c79e71a806fd
+              Report Status: 268435456
+              Hashed bucket: 6dfd0226c245eac1cd41c81d5139b904
+              Cab Guid: 0
+
+

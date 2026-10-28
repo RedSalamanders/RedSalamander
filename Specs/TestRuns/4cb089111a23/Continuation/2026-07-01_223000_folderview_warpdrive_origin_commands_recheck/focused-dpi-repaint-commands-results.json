@@ -1,0 +1,18 @@
+{
+    "run_started_utc": "2026-07-01T20:25:37.726Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 360,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "folderView_dpi_change_repaints_both_panes",
+            "status": "passed",
+            "duration_ms": 343
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0
+}

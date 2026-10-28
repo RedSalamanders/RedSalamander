@@ -1,0 +1,40 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-01T20:24:46.1631088Z",
+  "run_ended_utc": "2026-07-01T20:24:47.9093408Z",
+  "duration_ms": 1746,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run",
+  "fail_fast": false,
+  "timeout_scale": 2.0,
+  "case_filter": "folderView_render_device_loss_recovers",
+  "exit_code": 0,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "total": 1,
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 1636,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "cases": [
+        {
+          "name": "folderView_render_device_loss_recovers",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 548
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

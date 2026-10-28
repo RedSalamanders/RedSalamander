@@ -1,0 +1,1079 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-02T08:33:41.0641901Z",
+  "run_ended_utc": "2026-07-02T08:34:25.3887749Z",
+  "duration_ms": 44325,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run",
+  "fail_fast": true,
+  "timeout_scale": 2.0,
+  "case_filter": "cmd_preferences_dialog_",
+  "exit_code": 1,
+  "passed": 14,
+  "failed": 1,
+  "skipped": 158,
+  "total": 173,
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 44179,
+      "passed": 14,
+      "failed": 1,
+      "skipped": 158,
+      "output_log_path": "",
+      "cases": [
+        {
+          "name": "cmd_preferences_dialog_category_tree_uses_dxui_host_without_visible_legacy_treeview",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 944
+        },
+        {
+          "name": "cmd_preferences_dialog_opens_with_french_satellite_resources",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 94
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_exposes_live_uia_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 366
+        },
+        {
+          "name": "cmd_preferences_dialog_shell_uses_dxui_header_footer_without_visible_legacy_shell_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 217
+        },
+        {
+          "name": "cmd_preferences_dialog_escape_prompts_before_dirty_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 301
+        },
+        {
+          "name": "cmd_preferences_dialog_page_host_uses_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 222
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_page_uses_dxui_combo_and_button_chrome",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 779
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_page_uses_dxui_shell_chrome",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 351
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_roundtrip_restores_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 12332
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_theme_cycle_keeps_surface_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6487
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_roundtrip_restores_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 12432
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_theme_cycle_keeps_surface_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 827
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_search_roundtrip_preserves_retained_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 342
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_search_action_updates_dxui_surface",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 304
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_live_search_dx_interaction",
+          "status": "failed",
+          "reason": "failed",
+          "duration_ms": 7173
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_remove_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reset_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_add_update_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_selection_survives_legacy_list_clear",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugin_tree_selection_keeps_single_visible_pane",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugin_tree_left_right_navigation_stays_on_dx_tree_path",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_search_roundtrip_preserves_retained_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_selection_roundtrip_preserves_retained_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_selection_survives_legacy_list_clear",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_selection_survives_legacy_list_clear",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_checkbox_survives_legacy_row_state_change",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_checkbox_space_toggles_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_checkbox_click_toggles_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_list_header_drag_reorders_columns_without_sort",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_main_list_header_resize_changes_visible_width",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_reordered_resized_columns_survive_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_page_exposes_live_uia_grid_selection",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_page_exposes_live_uia_grid_selection",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_long_run_list_scrolling_stays_bounded",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_long_run_list_scrolling_stays_bounded",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_long_run_list_scrolling_stays_bounded",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_long_run_list_scrolling_stays_bounded",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_editors_adaptive_list_height_uses_window_height",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_long_run_list_scrolling_stays_bounded",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_page_uses_dxui_shell_chrome",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_page_exposes_live_uia_grid_selection",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_tab_header_switches_quickly",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_pointer_click_selects_live_dx_row",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_header_drag_reorders_columns_without_sort",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_copy_follows_reordered_columns",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_header_resize_changes_visible_width",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_header_resize_survives_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_columns_survive_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_columns_survive_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_columns_survive_sort_cycles",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_exposes_live_uia_grid_selection",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_drag_reorders_columns_without_sort",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_header_resize_changes_visible_width",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_stay_stable",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_columns_survive_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_copy_follows_reordered_columns",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_search_roundtrip_preserves_retained_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_selection_survives_legacy_combo_clear",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_color_selection_survives_legacy_list_clear",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_page_exposes_live_uia_grid_selection",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_pointer_click_selects_live_dx_row",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_header_drag_reorders_columns_without_sort",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_header_resize_changes_visible_width",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reordered_resized_columns_survive_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_copy_follows_reordered_columns",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_page_uses_dxui_toggle_cards",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_dxui_customization_preview_and_cancel",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_window_backdrop_apply_updates_supported_windows",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_general_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_page_uses_dxui_statics_and_toggles",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_shell_footer_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_shell_footer_access_keys_route_expected_actions",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_history_size_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_panes_combo_then_toggle_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_page_uses_dxui_statics_and_toggles",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_open_prefs_toggle_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_browse_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_hot_paths_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_page_uses_dxui_shell_chrome",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_roundtrip_preserves_retained_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_search_action_updates_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_live_search_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_reset_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_export_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_import_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_remove_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_assign_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_commit_assign_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_capture_preview_and_assign_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_replace_assign_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_keyboard_swap_assign_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_search_action_updates_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_live_search_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_empty_custom_paths_placeholder",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_remove_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_custom_paths_add_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_configure_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_test_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_plugins_test_all_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_search_action_updates_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_live_search_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_reset_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_duplicate_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_clear_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_set_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_apply_temporarily_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_save_theme_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_themes_load_from_file_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_page_uses_dxui_statics_and_toggles",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_advanced_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_editors_and_mouse_pages_use_dxui_statics",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_editors_mouse_roundtrip_restore_dxui_notes",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_page_uses_dxui_controls",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_page_uses_dxui_statics",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_content_workers_ignore_files_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_tail_toggles_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_tab_traversal_live_dx_interaction",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_roundtrip_restores_dxui_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_compare_directories_theme_cycle_keeps_surface_legible",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_keyboard_navigation_updates_category",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_editors_mouse_live_dx_notes",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_editors_mouse_tab_skips_note_surface",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_viewers_editors_file_action_settings_apply",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_page_navigation_stays_on_dx_tree_path",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_accepts_wheel_scrolling_without_selection_churn",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_keyboard_expand_collapse_and_child_entry",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_tree_boundary_navigation_from_scrolled_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_category_switches_do_not_churn_tree_host",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_scroll_host_preserves_retained_page_state",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        },
+        {
+          "name": "cmd_preferences_dialog_rapid_switches_keep_page_specific_uia_subtrees",
+          "status": "skipped",
+          "reason": "not executed (fail-fast)",
+          "duration_ms": 0
+        }
+      ],
+      "failures": [
+        {
+          "name": "cmd_preferences_dialog_viewers_live_search_dx_interaction",
+          "status": "failed",
+          "reason": "failed",
+          "duration_ms": 7173
+        }
+      ]
+    }
+  ]
+}

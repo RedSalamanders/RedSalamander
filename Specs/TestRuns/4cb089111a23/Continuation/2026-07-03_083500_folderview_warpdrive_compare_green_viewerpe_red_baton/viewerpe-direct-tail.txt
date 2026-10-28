@@ -1,0 +1,120 @@
+[PASS] ViewerText can expand unchanged text from referenced files
+[PASS] ViewerText unchanged-text expansion reuses the parsed diff model instead of reparsing raw text
+[PASS] ViewerText reads referenced files when unchanged text expansion is requested
+[PASS] ViewerText can switch parsed diffs to inline mode
+[PASS] ViewerText switching between parsed diff layouts reuses the cached diff document
+[PASS] ViewerText switching expanded diff layouts reuses cached referenced-file content without rereading files
+[PASS] ViewerText returns canonical configuration after switching diff layout
+[PASS] ViewerText persists the inline diff layout after the menu command
+[PASS] ViewerText persists the unchanged-text expansion mode after the menu command
+[PASS] ViewerText routes parsed diffs back to raw text through the normal View / Text command
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-layout.diff'
+[PASS] ViewerText opens 'viewertext-layout.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-layout.diff'
+[PASS] ViewerText exposes a clickable hidden-context banner in hunks-only parsed diff mode
+[PASS] ViewerText clicking a hidden-context banner reveals unchanged text on demand
+[PASS] ViewerText hidden-context banner clicks trigger referenced-file reads only when unchanged text is revealed
+[PASS] ViewerText returns canonical configuration after hidden-context banner reveal
+[PASS] ViewerText hidden-context banner clicks persist the expanded unchanged-text mode through the normal configuration path
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-missing.diff'
+[PASS] ViewerText opens 'viewertext-missing.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-missing.diff'
+[PASS] ViewerText shows placeholder rows and background bands when referenced files cannot be resolved
+[PASS] ViewerText unresolved placeholder rows render subtle hatched gap treatment instead of flat empty fills
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-parser-cases.diff'
+[PASS] ViewerText opens 'viewertext-parser-cases.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-parser-cases.diff'
+[PASS] ViewerText parses multi-file diffs into separate file sections
+[PASS] ViewerText parsed diff text keeps create-file metadata visible
+[PASS] ViewerText parsed diff text keeps delete-file metadata visible
+[PASS] ViewerText parsed diff text keeps rename metadata visible
+[PASS] ViewerText diff section navigation can jump to later file sections
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-section-scoped.diff'
+[PASS] ViewerText opens 'viewertext-section-scoped.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-section-scoped.diff'
+[PASS] ViewerText expanded parsed diffs hydrate unchanged text only for the active file section on first open
+[PASS] ViewerText expanded parsed diff open reads referenced files for the initially active file section
+[PASS] ViewerText expanded parsed diff open defers referenced-file reads for later file sections
+[PASS] ViewerText hydrates the newly selected parsed diff section when section navigation changes in expanded mode
+[PASS] ViewerText section-scoped unchanged-text hydration reuses the cached parsed diff document
+[PASS] ViewerText reads referenced files when a later expanded diff section becomes active
+[PASS] ViewerText section-scoped expansion does not reread the previously hydrated section when switching sections
+[PASS] ViewerText keeps the active expanded diff section when switching layouts after section-scoped hydration
+[PASS] ViewerText layout switches reuse the active section's referenced-file cache after on-demand section hydration
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-viewport-lazy.diff'
+[PASS] ViewerText opens 'viewertext-viewport-lazy.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-viewport-lazy.diff'
+[PASS] ViewerText bounds expanded unchanged-text materialization to a viewport-sized logical window inside the active section
+[PASS] ViewerText viewport-lazy hydration keeps the initial logical hydration window bounded
+[PASS] ViewerText expanded unchanged-text snapshots expose semantic context-row counts while rendering unchanged rows on the base text background
+[PASS] ViewerText viewport-lazy open reads only a bounded prefix of large referenced files instead of loading them fully
+[PASS] ViewerText debug snapshot reports referenced-file bytes read for viewport-lazy hydration
+[PASS] ViewerText viewport-lazy hydration test locates the visible text child window
+[PASS] ViewerText scroll-driven viewport hydration rehydrates later unchanged rows when they enter view
+[PASS] ViewerText viewport-driven rehydration keeps far-away unchanged rows deferred after scrolling
+[PASS] ViewerText viewport-driven rehydration reads additional referenced-file bytes when the visible logical window advances
+[PASS] ViewerText viewport-driven rehydration still avoids full referenced-file reads when the viewport stays far from EOF
+[PASS] ViewerText can revisit earlier viewport-hydrated rows after scrolling back up
+[PASS] ViewerText revisiting an already hydrated viewport range reuses cached referenced-file content without rereading files
+[PASS] ViewerText debug snapshot keeps referenced-file byte counts stable when revisiting an already read viewport range
+[PASS] ViewerText can disable wrapping for expanded side-by-side diffs before horizontal scrolling
+[PASS] ViewerText exposes a live horizontal scrollbar page size for wrap-disabled side-by-side diffs
+[PASS] ViewerText horizontal scrolling advances the pane-local left column when wrapping is disabled
+[PASS] ViewerText side-by-side horizontal scrolling advances both diff panes together
+[PASS] ViewerText resets the horizontal scroll position when switching from side-by-side to inline diff mode
+[PASS] ViewerText refreshes the horizontal scrollbar page size when switching from side-by-side to inline diff mode
+[PASS] ViewerText horizontal scrolling advances inline diffs after switching presentation modes
+[PASS] ViewerText refreshes horizontal scrolling again when switching back to side-by-side diff mode
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText large buffered diff test file exceeds the old 4 MiB parsed-diff threshold
+[PASS] ViewerText accepts diff configuration for 'viewertext-large-buffered.diff'
+[PASS] ViewerText opens 'viewertext-large-buffered.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-large-buffered.diff'
+[PASS] ViewerText parses fully buffered extension-recognized diffs even when they exceed the normal text buffer size
+[PASS] ViewerText keeps path summary text when opening a fully buffered larger diff in parsed mode
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText accepts diff configuration for 'viewertext-large-sniffed.txt'
+[PASS] ViewerText opens 'viewertext-large-sniffed.txt'
+[PASS] ViewerText window becomes visible for 'viewertext-large-sniffed.txt'
+[PASS] ViewerText parses large diff-like text files detected by header sniff even when they exceed the normal text buffer size
+[PASS] ViewerText keeps path summary text when opening a header-sniffed fully buffered larger diff in parsed mode
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText large streamed multi-file diff test file exceeds the fully buffered parsed-diff cap
+[PASS] ViewerText accepts diff configuration for 'viewertext-large-streamed-multifile.diff'
+[PASS] ViewerText opens 'viewertext-large-streamed-multifile.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-large-streamed-multifile.diff'
+[PASS] ViewerText keeps a bounded file-section index for large streamed diffs that fall back to raw text
+[PASS] ViewerText raw streamed diff section index opens at the first indexed file section
+[PASS] ViewerText raw streamed diff section navigation can jump to later indexed file sections
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+[PASS] ViewerText can recreate a fresh viewer instance before malformed diff fallback validation
+[PASS] ViewerText recreated viewer instance exposes IInformations for malformed diff fallback validation
+[PASS] ViewerText accepts the normal theme on the recreated viewer before malformed diff fallback validation
+[PASS] ViewerText accepts diff configuration for 'viewertext-malformed.diff'
+[PASS] ViewerText opens 'viewertext-malformed.diff'
+[PASS] ViewerText window becomes visible for 'viewertext-malformed.diff'
+[PASS] ViewerText falls back to raw text when a diff hunk header is malformed
+[PASS] ViewerText raw-text fallback keeps the malformed hunk header visible for inspection
+[PASS] ViewerText diff runtime validation window closes cleanly
+[PASS] ViewerText diff runtime validation window is destroyed after close
+ViewerPETests passed.
+DiffModesAndPlaceholders fresh harness process joins the kill-on-close job
+[PASS] TestViewerTextDiffModesAndPlaceholders fresh harness process resumes
+[PASS] TestViewerTextDiffModesAndPlaceholders fresh harness process exits before timeout
+[PASS] TestViewerTextDiffModesAndPlaceholders fresh harness process reports an exit code
+[PASS] TestViewerTextDiffModesAndPlaceholders fresh harness run passes
+ViewerPETests failed.

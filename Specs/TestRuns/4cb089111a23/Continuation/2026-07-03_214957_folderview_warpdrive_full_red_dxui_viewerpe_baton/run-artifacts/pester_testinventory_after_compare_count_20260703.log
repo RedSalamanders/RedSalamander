@@ -1,0 +1,25 @@
+
+
+
+
+
+Describing Test inventory helper
+ [+] counts the in-product self-test surfaces from source 376ms
+ [+] counts standalone, performance, and script test surfaces from source 117ms
+ [+] exports JSON that can be used as a manifest artifact 81ms
+ [+] guards FileOperations Step enum values against phase-order drift 47ms
+ [+] keeps documented inventory counts aligned with the source manifest 88ms
+Tests completed in 711ms
+Passed: 5 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+TagFilter        : {}
+ExcludeTagFilter : {}
+TestNameFilter   : 
+TotalCount       : 5
+PassedCount      : 5
+FailedCount      : 0
+SkippedCount     : 0
+PendingCount     : 0
+Time             : 00:00:00.7116294
+TestResult       : {@{Describe=Test inventory helper; Context=; Name=counts the in-product self-test surfaces from source; Result=Passed; Passed=True; Time=00:00:00.3762713; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Test inventory helper; Context=; Name=counts standalone, performance, and script test surfaces from source; Result=Passed; Passed=True; Time=00:00:00.1175246; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Test inventory helper; Context=; Name=exports JSON that can be used as a manifest artifact; Result=Passed; Passed=True; Time=00:00:00.0818533; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Test inventory helper; Context=; Name=guards FileOperations Step enum values against phase-order drift; Result=Passed; Passed=True; Time=00:00:00.0476134; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}…}
+

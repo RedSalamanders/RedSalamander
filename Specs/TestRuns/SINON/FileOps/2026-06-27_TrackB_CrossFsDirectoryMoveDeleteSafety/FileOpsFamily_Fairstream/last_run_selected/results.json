@@ -1,0 +1,220 @@
+{
+    "run_started_utc": "2026-06-27T08:12:57.241Z",
+    "duration_ms": 57375,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "case_filter": "FileOpsFamily_Fairstream",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\Users\\PVB\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\fileops",
+            "duration_ms": 54984,
+            "passed": 39,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "case_filter": "FileOpsFamily_Fairstream",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1609
+                },
+                {
+                    "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+                    "status": "passed",
+                    "duration_ms": 360
+                },
+                {
+                    "name": "Riptide_ReparseMoveRollbackKeepsOverwrittenDestination",
+                    "status": "passed",
+                    "duration_ms": 109
+                },
+                {
+                    "name": "Fairstream_MoveFallbackPreservesUncopiedNewFiles",
+                    "status": "passed",
+                    "duration_ms": 15016
+                },
+                {
+                    "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+                    "status": "passed",
+                    "duration_ms": 219
+                },
+                {
+                    "name": "Fairstream_OverwriteGrantIsOneShot",
+                    "status": "passed",
+                    "duration_ms": 875
+                },
+                {
+                    "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+                    "status": "passed",
+                    "duration_ms": 437
+                },
+                {
+                    "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 328
+                },
+                {
+                    "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+                    "status": "passed",
+                    "duration_ms": 235
+                },
+                {
+                    "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 218
+                },
+                {
+                    "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+                    "status": "passed",
+                    "duration_ms": 16
+                },
+                {
+                    "name": "Fairstream_MovedTreeRetargetsInternalLinks",
+                    "status": "passed",
+                    "duration_ms": 141
+                },
+                {
+                    "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+                    "status": "passed",
+                    "duration_ms": 437
+                },
+                {
+                    "name": "Fairstream_RerunCopyIsResumeAware",
+                    "status": "passed",
+                    "duration_ms": 391
+                },
+                {
+                    "name": "Fairstream_MoveFallbackSameSizeCollisionPrompts",
+                    "status": "passed",
+                    "duration_ms": 234
+                },
+                {
+                    "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "Fairstream_MergeMoveRenamesChildren",
+                    "status": "passed",
+                    "duration_ms": 172
+                },
+                {
+                    "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 172
+                },
+                {
+                    "name": "Fairstream_CopyIntoSelfAliasRejected",
+                    "status": "passed",
+                    "duration_ms": 94
+                },
+                {
+                    "name": "Fairstream_StorageKindProbed",
+                    "status": "passed",
+                    "duration_ms": 12781
+                },
+                {
+                    "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+                    "status": "passed",
+                    "duration_ms": 140
+                },
+                {
+                    "name": "Fairstream_BridgePerFileConflictSkips",
+                    "status": "passed",
+                    "duration_ms": 297
+                },
+                {
+                    "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+                    "status": "passed",
+                    "duration_ms": 235
+                },
+                {
+                    "name": "Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly",
+                    "status": "passed",
+                    "duration_ms": 234
+                },
+                {
+                    "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+                    "status": "passed",
+                    "duration_ms": 250
+                },
+                {
+                    "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+                    "status": "passed",
+                    "duration_ms": 9438
+                },
+                {
+                    "name": "Fairstream_EarlyAdmissionOverlapsPreCalc",
+                    "status": "passed",
+                    "duration_ms": 5125
+                },
+                {
+                    "name": "Riptide_EarlyAdmissionThreadStartFailureFallsBack",
+                    "status": "passed",
+                    "duration_ms": 1015
+                },
+                {
+                    "name": "Riptide_EarlyAdmissionDisabledDoesNotStartThread",
+                    "status": "passed",
+                    "duration_ms": 453
+                },
+                {
+                    "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+                    "status": "passed",
+                    "duration_ms": 438
+                },
+                {
+                    "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+                    "status": "passed",
+                    "duration_ms": 297
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+                    "status": "passed",
+                    "duration_ms": 250
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+                    "status": "passed",
+                    "duration_ms": 109
+                },
+                {
+                    "name": "Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource",
+                    "status": "passed",
+                    "duration_ms": 375
+                },
+                {
+                    "name": "Floodgate_LocalWriterOverwriteIsStaged",
+                    "status": "passed",
+                    "duration_ms": 94
+                },
+                {
+                    "name": "Floodgate_LocalCopyOverwriteIsStaged",
+                    "status": "passed",
+                    "duration_ms": 78
+                },
+                {
+                    "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "passed",
+                    "duration_ms": 328
+                },
+                {
+                    "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "passed",
+                    "duration_ms": 344
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 1640
+                }
+            ]
+        }
+    ],
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0
+}

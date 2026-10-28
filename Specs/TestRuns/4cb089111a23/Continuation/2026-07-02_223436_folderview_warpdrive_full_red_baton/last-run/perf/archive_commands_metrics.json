@@ -1,0 +1,7 @@
+{
+  "scenario": "cmd/pane/archive",
+  "archive.pack_us": 59316,
+  "archive.unpack_us": 92414,
+  "entryCount": 16,
+  "bytesProcessed": 23
+}

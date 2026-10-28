@@ -1,0 +1,21 @@
+
+FullName                                                                                     Length LastWriteTime
+--------                                                                                     ------ -------------
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.dmp 10187894 02/07/2026 12:58:18
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-125817-p33336.txt     7660 02/07/2026 12:58:17
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.dmp 10798291 02/07/2026 10:00:20
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260702-100018-p73832.txt     3796 02/07/2026 10:00:19
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.dmp  8737016 01/07/2026 11:43:35
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-114334-p90544.txt     8284 01/07/2026 11:43:34
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.dmp  4297551 01/07/2026 11:21:04
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-112104-p17112.txt     2350 01/07/2026 11:21:04
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.dmp  4533506 01/07/2026 08:16:23
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260701-081622-p37556.txt     1128 01/07/2026 08:16:22
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260630-165229-p96776.dmp 10048505 30/06/2026 16:52:30
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260630-165229-p96776.txt     3798 30/06/2026 16:52:29
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260629-110221-p27972.dmp  3856055 29/06/2026 11:02:22
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260629-110221-p27972.txt    12384 29/06/2026 11:02:22
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260629-110056-p91740.dmp  4394386 29/06/2026 11:00:56
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260629-110056-p91740.txt    12382 29/06/2026 11:00:56
+
+

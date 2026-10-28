@@ -1,0 +1,412 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-03T08:35:43.2196199Z",
+  "run_ended_utc": "2026-07-03T08:37:42.0219314Z",
+  "duration_ms": 118802,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run",
+  "fail_fast": false,
+  "timeout_scale": 2.0,
+  "case_filter": "cmd_pane_find_dialog_",
+  "exit_code": 0,
+  "passed": 63,
+  "failed": 0,
+  "skipped": 0,
+  "total": 63,
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 118729,
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "cases": [
+        {
+          "name": "cmd_pane_find_dialog_search_ops",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4978
+        },
+        {
+          "name": "cmd_pane_find_dialog_active_close_does_not_join_ui",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 483
+        },
+        {
+          "name": "cmd_pane_find_dialog_drops_stale_search_epoch_payloads",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 857
+        },
+        {
+          "name": "cmd_pane_find_dialog_result_drains_respect_child_input_queue_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 50
+        },
+        {
+          "name": "cmd_pane_find_dialog_local_root_overrides_stale_context",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 498
+        },
+        {
+          "name": "cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 475
+        },
+        {
+          "name": "cmd_pane_find_dialog_recursive_local_search_and_index_availability",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 718
+        },
+        {
+          "name": "cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1445
+        },
+        {
+          "name": "cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6115
+        },
+        {
+          "name": "cmd_pane_find_dialog_large_local_search_uses_incremental_updates",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4541
+        },
+        {
+          "name": "cmd_pane_find_dialog_running_status_shows_phase_and_path",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 566
+        },
+        {
+          "name": "cmd_pane_find_dialog_service_status_shows_backend_diagnostics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 702
+        },
+        {
+          "name": "cmd_pane_find_dialog_service_unavailable_warning_is_distinct",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 970
+        },
+        {
+          "name": "cmd_pane_find_dialog_failure_status_is_readable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 523
+        },
+        {
+          "name": "cmd_pane_find_dialog_uses_dxui_host_without_visible_child_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 469
+        },
+        {
+          "name": "cmd_pane_find_dialog_exposes_live_uia_selection_and_inputs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1803
+        },
+        {
+          "name": "cmd_pane_find_dialog_long_run_scrolling_stays_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 830
+        },
+        {
+          "name": "cmd_pane_find_dialog_long_run_open_close_stays_stable",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7794
+        },
+        {
+          "name": "cmd_pane_find_dialog_directory_activation_navigates_into_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 611
+        },
+        {
+          "name": "cmd_pane_find_dialog_open_parent_keeps_directory_focused_in_parent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 607
+        },
+        {
+          "name": "cmd_pane_find_dialog_enter_from_checkbox_invokes_default_search",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1041
+        },
+        {
+          "name": "cmd_pane_find_dialog_pointer_click_toggles_recursive_checkbox",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 217
+        },
+        {
+          "name": "cmd_pane_find_dialog_escape_closes_popup_before_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 175
+        },
+        {
+          "name": "cmd_pane_find_dialog_escape_from_dx_control_closes_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 156
+        },
+        {
+          "name": "cmd_pane_find_dialog_access_keys_focus_expected_fields",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 221
+        },
+        {
+          "name": "cmd_pane_find_dialog_grid_enter_activates_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 610
+        },
+        {
+          "name": "cmd_pane_find_dialog_grid_doubleClick_activates_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 634
+        },
+        {
+          "name": "cmd_pane_find_dialog_tab_traversal_matches_expected_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1053
+        },
+        {
+          "name": "cmd_pane_find_dialog_editable_combo_keyboard_editing_keys",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 855
+        },
+        {
+          "name": "cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2581
+        },
+        {
+          "name": "cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1715
+        },
+        {
+          "name": "cmd_pane_find_dialog_action_buttons_activate_expected_commands",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3004
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_persisted_grid_layout",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 145
+        },
+        {
+          "name": "cmd_pane_find_dialog_header_drag_reorders_columns_without_sort",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1260
+        },
+        {
+          "name": "cmd_pane_find_dialog_copy_follows_reordered_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1069
+        },
+        {
+          "name": "cmd_pane_find_dialog_reordered_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1305
+        },
+        {
+          "name": "cmd_pane_find_dialog_header_resize_changes_visible_width",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 955
+        },
+        {
+          "name": "cmd_pane_find_dialog_reordered_columns_survive_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2891
+        },
+        {
+          "name": "cmd_pane_find_dialog_resized_columns_survive_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2571
+        },
+        {
+          "name": "cmd_pane_find_dialog_reordered_resized_columns_survive_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3158
+        },
+        {
+          "name": "cmd_pane_find_dialog_reordered_resized_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1597
+        },
+        {
+          "name": "cmd_pane_find_dialog_resized_columns_survive_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 972
+        },
+        {
+          "name": "cmd_pane_find_dialog_header_click_sorts_results",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1039
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_resized_grid_layout",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1061
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_reordered_grid_layout",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1103
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_reordered_layout_copy_follows_visible_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2082
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1878
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_reordered_sorted_grid_layout",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2201
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_combined_view_state",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2096
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2636
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_survives_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4155
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_survives_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2534
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2708
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_copy_follows_visible_columns_after_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4310
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2647
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2700
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_grid_enter_activates_selection_after_sort_cycles_and_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4298
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4350
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2739
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2802
+        },
+        {
+          "name": "cmd_pane_find_dialog_restored_combined_view_state_action_buttons_activate_selection_after_sort_cycles_and_search_rerun",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4480
+        },
+        {
+          "name": "cmd_pane_find_dialog_theme_cycle_keeps_grid_legible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1007
+        },
+        {
+          "name": "cmd_pane_find_dialog_compact_mode_shrinks_results_grid_metrics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 961
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

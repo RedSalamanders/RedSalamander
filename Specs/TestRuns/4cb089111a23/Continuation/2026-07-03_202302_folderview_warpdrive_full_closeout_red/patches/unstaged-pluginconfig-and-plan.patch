@@ -1,0 +1,96 @@
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp
+index 02b491eec..f487f3da6 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp
+@@ -4126,7 +4126,7 @@ private:
+                     return value.focusKind == expectedKind && value.focusLabel == expectedLabel && value.usesDxUiCommandButtons && value.usesDxUiFormSurface &&
+                            value.usesDxUiFormStatics && value.usesDxUiFormInputs && value.visibleDxCommandButtonHostCount == 2u &&
+                            value.visibleDxFormStaticHostCount > 0u && value.visibleDxFormInputHostCount > 0u && value.visibleLegacyCommandButtonCount == 0u &&
+-                           value.visibleLegacyFormControlCount == 0u && value.visibleLegacyFormStaticCount == 0u && value.panelScrollPosY == 0;
++                           value.visibleLegacyFormControlCount == 0u && value.visibleLegacyFormStaticCount == 0u;
+                 },
+                     workerResult.traversalSnapshot);
+             };
+diff --git a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+index 43c314b8a..f1cf5db05 100644
+--- a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
++++ b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+@@ -2695,6 +2695,78 @@ Do not move this plan to Done until broad Commands, FileOps, ViewerPE, Tools
+ Pester, Full skip-build, and final Debug plus test-enabled Release FolderView
+ perf matrices are green and cited.
+ 
++## 2026-07-03 20:23 Pause Archive Refresh
++
++Fresh archive:
++
++```text
++Specs\TestRuns\4cb089111a23\Continuation\2026-07-03_202302_folderview_warpdrive_full_closeout_red\
++```
++
++This supersedes the 18:14 baton as the resume pointer. It contains compact
++Full-suite evidence, selected green Commands/FileOps logs and archive summaries,
++source snapshots, current git status/diff stats, and `CONTINUATION.md`. The
++recursive `SelfTest\last_run\commands\work` fixture tree and raw dumps are
++intentionally excluded from this archive; the useful result JSON/log/trace files
++are preserved.
++
++Additional work completed after the 18:14 archive:
++
++- Root-caused the S3 plugin-configuration tab traversal red to a selftest wait
++  predicate: `sendTab(...)` required `panelScrollPosY == 0` at every step even
++  though the S3 form legitimately scrolls when focus reaches
++  `Use virtual-hosted style addressing`. The rejected good sample caused an
++  extra debug tab advance and the later `Max keys per request` sample.
++- Patched only
++  `RedSalamander\SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` to drop
++  that per-step `panelScrollPosY == 0` predicate while preserving the exact
++  focus kind/label and DxUi-vs-legacy host assertions.
++- Debug build passed:
++  `.build\codex-runs\msbuild_redsalamander_after_plugin_config_scroll_predicate_20260703.log`.
++- Focused plugin-config tab traversal passed at
++  `Specs\TestRuns\4cb089111a23\Commands\2026-07-03_182138`.
++- The first plugin-config local-window rerun at `2026-07-03_182158` ran zero
++  cases because the filter file path was accidentally passed as the filter text;
++  ignore it as a product/test result.
++- Correct plugin-config local-window rerun passed at
++  `Specs\TestRuns\4cb089111a23\Commands\2026-07-03_182308`.
++- Exact `0..370` prefix passed at
++  `Specs\TestRuns\4cb089111a23\Commands\2026-07-03_183006`.
++- Broad Commands is green at
++  `Specs\TestRuns\4cb089111a23\Commands\2026-07-03_184648`
++  (776 passed / 0 failed / 2 skipped).
++- Standalone FileOps is green at
++  `Specs\TestRuns\4cb089111a23\FileOps\2026-07-03_190019`
++  (102 passed / 0 failed / 20 skipped).
++- Full with build is still red:
++  `.build\codex-runs\full_after_commands_fileops_green_20260703.log`
++  / `last-run-top-level\run-all-tests-results.json` report 320 passed /
++  4 failed / 50 skipped / 374 total.
++
++Current Full blockers:
++
++- CompareDirectories:
++  `decision_cache_eviction_budget_pending_wide_tree` failed to drain pending
++  subtree/content updates, and
++  `search_service_sqlite_ntfs_traversal_seed_stays_degraded` did not finish
++  startup warmup.
++- ViewerPETests:
++  `TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly` and
++  `TestViewerShellComboHostsLongRunOpenCloseStayStable` failed inside their
++  fresh-harness child runs.
++- ToolsPesterTests:
++  CompareDirectories inventory drift is inconsistent across source/docs:
++  static RunCase expected 229 but found 230, while coverage spec expected 230
++  but found 229.
++
++Resume by running the two Compare failures focused, then the two ViewerPE
++filters directly, then fixing the CompareDirectories inventory count drift in
++`Tools\Tests\TestInventory.Tests.ps1`, `Tests\README.md`, and
++`Specs\Testing\Testing_TestCoverage.md` as needed. After focused fixes, rerun
++broad Compare, ViewerPETests, Tools Pester, and Full. Do not move this plan to
++Done until Full and the final Debug plus test-enabled Release FolderView perf
++matrices are green and cited.
++
+ ## 2026-07-03 18:14 Pause Archive Refresh
+ 
+ Fresh archive:

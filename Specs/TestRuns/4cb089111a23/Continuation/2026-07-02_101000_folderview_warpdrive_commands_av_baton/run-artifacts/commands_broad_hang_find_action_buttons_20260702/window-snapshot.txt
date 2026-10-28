@@ -1,0 +1,26 @@
+
+Kind  Hwnd      Parent    Visible Class                                Title
+----  ----      ------    ------- -----                                -----
+child 0x1281AE0 0x1661B44    True RedSalamanderFolderView              
+child 0x13610F8 0x1661B44    True RedSalamander.FolderWindow.StatusBar 
+child 0x1661B44 0x3316A6     True RedSalamander.FolderWindow           
+child 0x280CD2  0x3316A6     True RedSalamander.DxMainMenuBar          
+child 0x3122076 0x21B205E    True RedSalamander.NavigationView         
+child 0x331BF8  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0x3C1C70  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0x40FD0   0x1661B44    True RedSalamanderFolderView              
+child 0x50F22   0x1661B44    True RedSalamander.NavigationView         
+child 0x521C20  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0x580CDC  0x1661B44    True RedSalamander.NavigationView         
+child 0x791FE6  0x21B205E    True RedSalamander.NavigationView         
+child 0x7A0458  0x1661B44    True RedSalamander.FunctionBar            
+child 0xBB1780  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0xCD0CA0  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0xD61C42  0x1661B44    True RedSalamander.FolderWindow.StatusBar 
+child 0xF20CD6  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+child 0xF40CCC  0x1661B44   False RedSalamander.FolderWindow.DxHost    
+top   0x21B205E 0x0          True RedSalamander.FindFilesWindow        Find Files and Directories
+top   0x3316A6  0x0          True REDSALAMANDER                        RedSalamander
+top   0x3D1F7C  0x3316A6    False IME                                  Default IME
+top   0x901956  0x3D1F7C    False MSCTFIME UI                          MSCTFIME UI
+
