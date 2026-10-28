@@ -693,6 +693,8 @@ Describe 'Release workflow source contracts' {
         $flake = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/nightly-flake.yml') -Raw
         $flake | Should Match 'native_runner:\s*windows-2025-vs2026'
         $flake | Should Match 'runs-on:\s*windows-2025-vs2026'
+        $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeGreaterThan -1
+        $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeLessThan $flake.IndexOf('name: Verify and rebind portable build attestation')
         $flake | Should Match 'Initialize-RSTestSandboxRoot -TestRoot \$root -RepoRoot \$env:GITHUB_WORKSPACE -AllowExternalInitialization'
         $flake.IndexOf('Initialize-RSTestSandboxRoot') | Should BeLessThan $flake.IndexOf('name: Run nightly shuffle repeat lane')
         $flake | Should Match 'if:\s*\$\{\{ always\(\) && steps\.test-root\.outputs\.path != '''' \}\}'

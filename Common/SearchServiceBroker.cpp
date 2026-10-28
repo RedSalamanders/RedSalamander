@@ -1564,7 +1564,7 @@ HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
 
         // A caller may explicitly allow a longer missing-listener startup window.
         // It is independent of contention, but never exceeds its operation budget.
-        DWORD waitMs = (std::min)(kClientConnectTimeoutMs, (std::max)(1u, RemainingToDeadlineMs(deadline, ::GetTickCount64())));
+        DWORD waitMs = (std::min)(kClientConnectTimeoutMs, (std::max<DWORD>)(1u, RemainingToDeadlineMs(deadline, ::GetTickCount64())));
         if (context != nullptr)
             waitMs = (std::min)(waitMs, RemainingToDeadlineMs(context->operationDeadline, ::GetTickCount64()));
         if (waitMs == 0u)

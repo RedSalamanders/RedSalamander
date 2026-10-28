@@ -1783,10 +1783,67 @@ SelfTest::RunCase(options,
     }
 
     state.Require(replayStats.journalReplayApplied || replayStats.usedTraversalSeed,
-                  L"Replay indexed query should apply journal changes or rebuild from traversal when journal access is unavailable.");
+                  std::format(L"Replay indexed query should apply journal changes or rebuild from traversal when journal access is unavailable. "
+                              L"journal={} replay={} mft={} traversal={} initialUsn={} replayUsn={} candidates={}",
+                              replayStats.journalAvailable,
+                              replayStats.journalReplayApplied,
+                              replayStats.usedNtfsEnumeration,
+                              replayStats.usedTraversalSeed,
+                              initialStats.nextUsn,
+                              replayStats.nextUsn,
+                              replayCandidates.size()));
     state.Require(CollectIndexedCandidateNames(replayCandidates) == std::vector<std::wstring>{L"delta.txt", L"renamed.txt"},
                   L"Replay indexed query returned an unexpected candidate set.");
 
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_journal_unavailable_rebuild_is_root_scoped",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_no_journal", caseRoot), L"Failed to prepare the no-journal root.");
+    state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub") && SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha") &&
+                      SelfTest::WriteTextFile(caseRoot / L"sub" / L"gamma.txt", "gamma"),
+                  L"Failed to create the no-journal fixture.");
+    // Use the nonthrowing environment reader at this noexcept boundary. The
+    // exception-throwing ScopedEnvironmentVariable cannot report setup to CaseState.
+    constexpr std::wstring_view forceTraversalName = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+    const auto previous                            = RedSalamander::TestSupport::ReadEnvironmentValue(forceTraversalName);
+    state.Require(previous.error == ERROR_SUCCESS, L"Failed to read the inherited traversal override.");
+    if (! state.failure.empty())
+        return false;
+    const auto restore = wil::scope_exit([&]() noexcept
+    { static_cast<void>(SetEnvironmentVariableW(forceTraversalName.data(), previous.value.has_value() ? previous.value.value().c_str() : nullptr)); });
+    state.Require(SetEnvironmentVariableW(forceTraversalName.data(), L"0") != FALSE, L"Failed to leave native MFT seeding eligible for the regression.");
+    if (! state.failure.empty())
+        return false;
+    LocalSearchIndexCore::Repository repository;
+    const auto clearProbe          = wil::scope_exit([&]() noexcept { repository.ClearNextJournalStateForTests(); });
+    const auto queryWithoutJournal = [&](std::vector<std::wstring> expected) noexcept
+    {
+        repository.SetNextJournalStateForTests(0u, 0u, 0u, false);
+        LocalSearchIndexCore::QueryStats stats{};
+        std::vector<LocalSearchIndexCore::Candidate> candidates;
+        const HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", stats, candidates);
+        state.Require(SUCCEEDED(hr), std::format(L"No-journal query failed: 0x{:08X}.", static_cast<unsigned long>(hr)));
+        state.Require(! stats.journalAvailable && stats.usedTraversalSeed && ! stats.usedNtfsEnumeration && stats.nativeMftSeedAttempts == 0u,
+                      std::format(L"No-journal fallback must traverse only its tracked root: journal={} traversal={} nativeMft={} attempts={}.",
+                                  stats.journalAvailable,
+                                  stats.usedTraversalSeed,
+                                  stats.usedNtfsEnumeration,
+                                  stats.nativeMftSeedAttempts));
+        state.Require(CollectIndexedCandidateNames(candidates) == expected, L"No-journal fallback returned stale or unexpected candidates.");
+    };
+    queryWithoutJournal({L"alpha.txt", L"gamma.txt"});
+    std::error_code ec;
+    std::filesystem::rename(caseRoot / L"alpha.txt", caseRoot / L"renamed.txt", ec);
+    state.Require(! ec, L"Failed to rename the no-journal fixture file.");
+    std::filesystem::remove(caseRoot / L"sub" / L"gamma.txt", ec);
+    state.Require(! ec && SelfTest::WriteTextFile(caseRoot / L"delta.txt", "delta"), L"Failed to update the no-journal fixture.");
+    queryWithoutJournal({L"delta.txt", L"renamed.txt"});
     return state.failure.empty();
 });
 

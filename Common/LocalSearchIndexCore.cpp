@@ -1845,7 +1845,7 @@ HRESULT GetJournalState(std::wstring_view volumeDevicePath, JournalState& outSta
     {
         outState = g_nextJournalStateForTests.value();
         g_nextJournalStateForTests.reset();
-        return S_OK;
+        return outState.available ? S_OK : kNotSupportedHr;
     }
 #endif
 
@@ -2825,6 +2825,7 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
     {
         return SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress);
     }
+    ++stats.nativeMftSeedAttempts;
 #endif
 
     const auto seedStartedAt        = std::chrono::steady_clock::now();
@@ -6067,10 +6068,10 @@ void Repository::SetNextJournalReplayReadFailureForTests(DWORD error) noexcept
     g_nextJournalReplayReadFailureForTests = error;
 }
 
-void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept
+void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn, bool available) noexcept
 {
     g_nextJournalStateForTests = JournalState{
-        .available = true,
+        .available = available,
         .id        = id,
         .firstUsn  = firstUsn,
         .nextUsn   = nextUsn,

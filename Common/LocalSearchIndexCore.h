@@ -188,6 +188,8 @@ struct QueryStats final
     QueryExecutionMode queryExecutionMode = QueryExecutionMode::Unknown;
     FallbackReason fallbackReason         = FallbackReason::None;
 #ifdef ENABLE_TESTS
+    // Detect accidental whole-volume MFT work in root-scoped fallback fixtures.
+    uint32_t nativeMftSeedAttempts = 0u;
     // Cumulative probe count plus the last direct-route attempt. A retry that
     // cannot inspect a store or journal leaves those last-attempt facts unknown.
     // Diagnostics only, never a freshness override.
@@ -342,7 +344,7 @@ public:
     HRESULT CorruptSnapshotForTests(std::wstring_view rootPath, SnapshotCorruptionMode mode) noexcept;
     HRESULT ApplySyntheticJournalForTests(std::wstring_view rootPath, std::span<const SyntheticJournalRecordForTests> records, QueryStats* outStats) noexcept;
     HRESULT QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
-    void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept;
+    void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn, bool available = true) noexcept;
     void ClearNextJournalStateForTests() noexcept;
     void SetNextJournalReplayReadFailureForTests(DWORD error) noexcept;
 #endif

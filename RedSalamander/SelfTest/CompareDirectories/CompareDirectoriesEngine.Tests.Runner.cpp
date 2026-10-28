@@ -13,6 +13,7 @@
 #include "SearchTextHelpers.h"
 #include "SqliteIndexStore.h"
 #include "TestSupport/TestSupport.Tests.ChildProcess.h"
+#include "TestSupport/TestSupport.Tests.Runner.h"
 #include "YyjsonHelpers.h"
 
 #include <DxUi/DxUi.h>
