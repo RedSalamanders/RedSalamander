@@ -5449,6 +5449,102 @@ private:
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestKeyboardMenuStationaryPointerRetainsSelection(HWND mainWindow, CaseState& state) noexcept
+{
+    POINT originalCursor{};
+    MONITORINFO monitor{sizeof(MONITORINFO)};
+    state.Require(GetCursorPos(&originalCursor) != FALSE && GetMonitorInfoW(MonitorFromWindow(mainWindow, MONITOR_DEFAULTTONEAREST), &monitor) != FALSE &&
+                      DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow),
+                  L"Stationary-pointer menu coverage requires the notified owned foreground and current desktop geometry.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto restoreCursor = wil::scope_exit([&]() noexcept { SetCursorPos(originalCursor.x, originalCursor.y); });
+    const POINT anchor{monitor.rcWork.left + 80, monitor.rcWork.top + 80};
+    const POINT stationary{anchor.x + 30, anchor.y + 30};
+    state.Require(SetCursorPos(stationary.x, stationary.y) != FALSE, L"Failed to place the owned stationary-pointer fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::array<DxUi::MenuFlyoutItem, 3u> items{};
+    for (size_t index = 0u; index < items.size(); ++index)
+    {
+        items[index].text      = std::format(L"Keyboard item {}", index + 1u);
+        items[index].commandId = 100 + static_cast<int>(index);
+    }
+    struct CloseResult
+    {
+        bool closed = false;
+        std::optional<int> command;
+    };
+    const auto closeResult = std::make_shared<CloseResult>();
+    DxUi::ContextMenuSessionCallbacks callbacks{};
+    callbacks.focusFirstNavigableItem = true;
+    const bool shown                  = DxUi::ContextMenu::ShowAsync(mainWindow,
+                                                                     anchor,
+                                                                     items,
+                                                                     MakeAppThemeDxPalette(g_folderWindow.GetTheme()),
+                                                                     [closeResult](std::optional<int> command) noexcept
+    {
+        closeResult->closed  = true;
+        closeResult->command = command;
+    },
+                                                    callbacks);
+    const HWND popup                  = shown ? FindVisibleOwnedDxUiContextMenuWindow(mainWindow) : nullptr;
+    const auto closeMenu              = wil::scope_exit([&]() noexcept
+    {
+        if (popup && IsWindow(popup) != FALSE)
+        {
+            SendMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+        }
+        PumpPendingMessages();
+    });
+    state.Require(shown && popup && IsWindow(popup) != FALSE, L"The keyboard-opened popup must be visible before its first message pump.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    // No message pump runs between creation, keyboard selection and this stationary
+    // event. The initial pointer sample must already exist when the popup is shown.
+    SendMessageW(popup, WM_KEYDOWN, VK_END, 0);
+    DxUi::ContextMenuPopupDebugState keyboard{};
+    state.Require(DxUi::DebugGetContextMenuPopupState(popup, keyboard) && keyboard.keyboardIndex == items.size() - 1u &&
+                      PtInRect(&keyboard.surfaceRectPx, stationary) != FALSE,
+                  L"End must choose the final row while the stationary pointer lies over the popup.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    POINT client = stationary;
+    state.Require(ScreenToClient(popup, &client) != FALSE, L"The stationary pointer must map into the popup client.");
+    SendMessageW(popup, WM_MOUSEMOVE, 0, MAKELPARAM(client.x, client.y));
+    DxUi::ContextMenuPopupDebugState after{};
+    const bool captured = DxUi::DebugGetContextMenuPopupState(popup, after);
+    state.Require(captured && after.keyboardIndex == keyboard.keyboardIndex && ! after.hoveredIndex.has_value(),
+                  std::format(L"A stationary popup event must preserve keyboard selection: before={} after={} hovered={}.",
+                              keyboard.keyboardIndex.value_or(SIZE_MAX),
+                              after.keyboardIndex.value_or(SIZE_MAX),
+                              after.hoveredIndex.value_or(SIZE_MAX)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(SetCursorPos(stationary.x + 5, stationary.y) != FALSE, L"Failed to move the pointer for the real-movement control.");
+    SendMessageW(popup, WM_MOUSEMOVE, 0, MAKELPARAM(client.x + 5, client.y));
+    state.Require(DxUi::DebugGetContextMenuPopupState(popup, after) && ! after.keyboardIndex.has_value() && after.hoveredIndex.has_value(),
+                  L"A real pointer movement must still take selection from the keyboard.");
+    SendMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+    PumpPendingMessages();
+    state.Require(closeResult->closed && ! closeResult->command.has_value() && IsWindow(popup) == FALSE,
+                  L"Escape must dismiss the keyboard menu without invoking a row or retaining its popup.");
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestPaneNavigationViewHistoryDropdownKeyboardNavigation(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -34248,6 +34344,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
                       [=](CaseState& state) noexcept { return TestPaneNavigationViewDiskInfoRegionKeyboardActivationOpensMenu(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_history_dropdown_keyboard_navigation", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewHistoryDropdownKeyboardNavigation(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection", [=](CaseState& state) noexcept {
+        return TestKeyboardMenuStationaryPointerRetainsSelection(mainWindow, state);
     });
     SelfTest::RunCase(options,
                       suite,

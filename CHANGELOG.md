@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Add a deterministic keyboard-menu stationary-pointer regression against the unchanged DxUi pin, require the existing notified foreground handoff at Commands case boundaries, and register the repair plan in the machine-readable WIP index. Dependency repair and current-source qualification remain pending.
 - Integrate the concurrent formatter and tooling repair with the hosted runtime fixes, preserve both sets of generated release notes, and refresh the reviewed PR execution-input digest. Prior source-bound receipts remain retained; integrated native qualification is pending.
 - Keep plugin assertion diagnostics optional so standalone plugins retain their existing link boundary, while the FTP test component records exact failures through its existing metrics dependency. Preserve the failed build receipt and repeat native validation.
 - Restrict unavailable-journal index rebuilds to the tracked root and register a deterministic no-journal regression, retaining native MFT seeding for journaled paths. Preserve exact plugin assertion failures in captured JSONL evidence as well as stderr; hosted runtime qualification remains open.

@@ -731,6 +731,16 @@ Environment variables may select alternate test inputs such as profile names, bu
   its suite and input probes borrow that process-lifetime surface.
   Commands isolation excludes only the exact live, helper-owned warning HWND
   from product-window cleanup; unrelated STATIC/tool windows are not exempt.
+  Its case boundary reuses `TryActivateOwnedWindow` for the notified foreground handoff,
+  requires the exact owned root as foreground before case work and after input settling,
+  and retains the previous/new HWND and process witness when a handoff was needed.
+  An unsuccessful handoff fails the case; an ignored `SetForegroundWindow` result cannot
+  establish keyboard/capture ownership. The exact static documentation capture bypass remains unchanged.
+  `cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection` creates a
+  keyboard-opened menu, selects its last row before any message pump, and sends a stationary
+  pointer event over that popup. It must retain keyboard selection; a subsequent real movement
+  must still hand selection to the pointer. Escape, owned-popup teardown and cursor restoration
+  remain required. The fixture does not relax the original history-navigation case.
   A refused foreground acquisition MUST immediately end that interaction path after recording
   failure. Do not continue into cursor movement, keyboard input or owned UIA invocation merely
   because the failure is already recorded; restore the fixture through its existing scope guards.

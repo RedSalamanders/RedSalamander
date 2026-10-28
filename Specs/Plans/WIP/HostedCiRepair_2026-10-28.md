@@ -1,4 +1,13 @@
-# Hosted CI repair — 2026-10-28
+# I50 Hosted CI repair — 2026-10-28
+
+Status: ACTIVE. Priority: high. Planned at `fbcc9fc0ddd3b6890741f6bc350f2016c755614b`;
+integrated main baseline `8ea956a7e2e271368082a953f28efd2a58e1013f`.
+Drift check: `git log --oneline fbcc9fc0ddd3b6890741f6bc350f2016c755614b..origin/main`
+and inspect the affected workflow, source, tests, tooling and owning-contract diff before integration.
+Ownership: RedSalamander hosted/runtime repair; RedMonitor formatter closeout remains a separate merged record.
+Done criteria: causal fixes, unchanged acceptance gates, applicable local/hosted qualification and green main.
+Stop on an unowned process/path, unsupported required environment, missing source/artifact identity,
+or focus work outside the agreed time; retain the failed/incomplete receipt rather than bypass admission.
 
 - [x] Isolate this repair from unrelated primary-checkout work.
 - [x] Retain original nightly/ASan logs and all six validation artifact archives.
@@ -110,3 +119,17 @@ Resolve the changelog merge by reconstructing the six existing repair fragments 
 main's generated changelog. Refresh the reviewed PR execution digest after inspecting the complete
 combined workflow/module closure; this records reviewed inputs, not a CI pass. Integrated local and
 hosted qualification, plan closeout and main confirmation remain open.
+
+The integrated `b79613627d35ec1a84bc4722297d298797b4f20f` x64 Debug rebuild passed in 5:23,
+and 428 relevant tooling controls passed without skips. Inventory validation caught a missing
+machine-readable WIP table row; the repair is now indexed as unused rank I50, without an exemption.
+The retained hosted desktop log proves the real x64 display changed from 1024x768 (work area
+1024x720) to 1920x1080 (work area 1920x1032); its foreground owner was Windows Terminal.
+Commands isolation now reuses the existing warning-gated queue handoff and explicitly requires
+owned foreground, instead of ignoring raw activation return values.
+
+The pinned DxUi popup seeds its pointer sample only when it has no initial keyboard row. A
+keyboard-opened popup can therefore treat the first stationary event as movement and clear its
+keyboard row. Add a deterministic create/End/stationary-event regression before changing the pin,
+with a real-movement control and existing warning/lease/restoration. The suspected library cause
+is not yet a runtime-confirmed fix, and existing focused history success does not close it.

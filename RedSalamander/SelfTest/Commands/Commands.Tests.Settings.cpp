@@ -9436,12 +9436,33 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     DebugHideThemeCycleOverlay();
 
-    const HWND rootWindow  = GetAncestor(mainWindow, GA_ROOT);
-    const HWND inputWindow = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
-    ShowWindow(inputWindow, SW_SHOWNORMAL);
-    static_cast<void>(BringWindowToTop(inputWindow));
-    static_cast<void>(SetActiveWindow(inputWindow));
-    static_cast<void>(SetForegroundWindow(inputWindow));
+    const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
+    const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
+    const HWND foregroundBefore = GetForegroundWindow();
+    const bool activated        = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow);
+    DWORD foregroundProcess     = 0u;
+    const HWND foregroundAfter  = GetForegroundWindow();
+    static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
+    if (foregroundBefore != inputWindow)
+    {
+        Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={}",
+                          reinterpret_cast<uintptr_t>(foregroundBefore),
+                          reinterpret_cast<uintptr_t>(foregroundAfter),
+                          reinterpret_cast<uintptr_t>(inputWindow),
+                          foregroundProcess,
+                          GetCurrentProcessId(),
+                          activated));
+    }
+    state.Require(activated && foregroundAfter == inputWindow,
+                  std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}.",
+                              context,
+                              reinterpret_cast<uintptr_t>(foregroundAfter),
+                              foregroundProcess,
+                              reinterpret_cast<uintptr_t>(inputWindow)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     PumpPendingMessages();
 
     // Terminal and preview surfaces share the pane content host. Close terminal
@@ -9488,6 +9509,7 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1000))),
                   std::format(L"Main folder view focus was not stable after input settling before {}.", context));
+    state.Require(GetForegroundWindow() == inputWindow, std::format(L"Main foreground ownership changed during input settling before {}.", context));
     return state.failure.empty();
 }
 

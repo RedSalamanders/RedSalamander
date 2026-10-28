@@ -1,7 +1,5 @@
 # Active Work Index
 
-- **ACTIVE**: [Hosted CI repair](HostedCiRepair_2026-10-28.md). Preserve native assertions and budgets while repairing scheduled checkout, nightly runtime, ASan and hosted validation failures.
-
 - **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated native profiles, matching pinned-archive policy, all-profile qualification and retained size/performance comparisons.
 
 Priority review: 2026-09-08 against `3dcf7ab1`, including the uncommitted I18 proposal. The recommendations below reconcile the indexed work against current code and archived evidence; individual plans still require their own drift check before execution.
@@ -64,6 +62,7 @@ have no separate planning authority. Historical failed verdicts remain unchanged
 | ACTIVE | I46 | [Shared theme runtime (DxTheme)](Theme_SharedLibraryExtractionPlan_2026-10-19.md) | Revision 3.1, red-teamed 2026-10-19 after the owner reopened revision 2; the PR #126 review is folded in as decisions D-9 to D-19. Each host publishes one immutable, ref-counted theme snapshot that the exe, every plugin and every DxUi host read by reference. The engine and ABI live in a new `RedSalamanders/DxTheme` repository; `Common.dll` is RedSalamander's binary home, so there is no new theme DLL. Every RedXe plugin and RedPrism become fully themeable, and Rainbow becomes host-compiled tables. The owner accepted revision 3 (D-1 to D-8) on 2026-10-19 and scoped "no duplication" to data for now (§0.3). Next: P-1 (RedXe appearance refresh, independent) and T0 (RedSalamander characterization). No implementation has started. |
 | ACTIVE | I47 | [RedMonitor extraction](RedMonitor_Extraction_2026-10-21.md) | Native monitor ownership moves to RedSalamanders/RedMonitor; this consumer retains exact-pin, source-free compatibility staging. Launch/preferences/package/full qualification remains open; the canonical detailed plan lives in RedMonitor. |
 | ACTIVE | I48 | [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md) | Owns the compiler/Release policy, its merged-source repair and native-profile/performance qualification; prior failed Fulls and public dependency publication remain explicit gates. |
+| ACTIVE | I50 | [Hosted CI repair](HostedCiRepair_2026-10-28.md) | Repair scheduled checkout, nightly runtime, ASan and hosted validation failures with unchanged assertions and budgets; qualify the integrated source and confirm main. |
 <!-- spec-ia:wip-index:end -->
 <!-- I29 is the user-authorized qualification successor to the delivered File Operations safety implementation. -->
 
