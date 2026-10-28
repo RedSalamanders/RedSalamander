@@ -2743,6 +2743,58 @@ struct BatchRenameLocalStampParts final
     state.Require(CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") > collectRowsBeforeBlockedClose,
                   L"The blocked provider worker should finish safely after the closed window releases it.");
     PumpPendingMessages();
+
+    // A queued close must retire the original window while the synchronous test
+    // adapter is settling; its member predicate and post-wait UI work must stay safe.
+    for (const bool flushPreview : {false, true})
+    {
+        state.Require(ResetEvent(gate.get()) != FALSE, L"Queued-close settling must reset its owned provider gate.");
+        const uint32_t callsBefore = readDirectoryInfoCalls.load(std::memory_order_acquire);
+        const uint64_t rowsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+        BatchRenamePaneContext settlingContext{};
+        settlingContext.fileSystem      = gatedFileSystem;
+        settlingContext.pluginId        = L"builtin/file-system";
+        settlingContext.pluginShortId   = L"local";
+        settlingContext.instanceContext = L"batch-rename-queued-close-during-settling";
+        settlingContext.rootPluginPath  = root;
+        state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(settlingContext)),
+                      L"Batch Rename must reopen for queued closure during settling.");
+        const ULONGLONG readDeadline = GetTickCount64() + SelfTest::ScaleTimeout(2000u);
+        while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBefore && GetTickCount64() < readDeadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::yield();
+        }
+        state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > callsBefore,
+                      L"Queued-close settling must begin with the actual provider collection blocked.");
+        const HWND closingWindow = GetBatchRenameWindowHandle();
+        if (flushPreview)
+        {
+            state.Require(DebugSetBatchRenameWindowRuleFieldText(BatchRenameDebugRuleField::NameTemplate, L"queued-close"),
+                          L"The flush route must schedule an actual pending preview before closure.");
+            BatchRenameDebugSnapshot pending{};
+            state.Require(DebugGetBatchRenameWindowSnapshot(pending, false) && pending.previewRebuildPending,
+                          L"The flush route must prove that preview work is actually pending before its settling call.");
+        }
+        state.Require(closingWindow && PostMessageW(closingWindow, WM_CLOSE, 0u, 0u), L"Queued-close settling must post closure to its owned window.");
+        const ULONGLONG settlingStarted = GetTickCount64();
+        BatchRenameDebugSnapshot closedSnapshot{};
+        const bool settled = flushPreview ? DebugFlushBatchRenameWindowPendingPreview() : DebugGetBatchRenameWindowSnapshot(closedSnapshot);
+        state.Require(! settled && GetBatchRenameWindowHandle() == nullptr && IsWindow(closingWindow) == FALSE,
+                      L"A settling adapter must observe queued destruction and refuse a result for the retired window.");
+        state.Require(GetTickCount64() - settlingStarted < SelfTest::ScaleTimeout(1000u),
+                      L"Queued closure during settling must not wait for the blocked provider.");
+        static_cast<void>(SetEvent(gate.get()));
+        const ULONGLONG finishedDeadline = GetTickCount64() + SelfTest::ScaleTimeout(3000u);
+        while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == rowsBefore && GetTickCount64() < finishedDeadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::yield();
+        }
+        state.Require(CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") > rowsBefore,
+                      L"The queued-close provider must retire safely after explicit release.");
+        CloseBatchRenameWindowIfOpen();
+    }
     return state.failure.empty();
 }
 

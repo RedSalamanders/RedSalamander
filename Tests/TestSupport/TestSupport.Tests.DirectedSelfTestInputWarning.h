@@ -10,6 +10,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <commctrl.h>
+
+#pragma comment(lib, "comctl32")
 #include <windows.h>
 
 #pragma warning(push)

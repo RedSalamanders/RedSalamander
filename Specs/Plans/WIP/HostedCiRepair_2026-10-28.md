@@ -422,3 +422,22 @@ For the unreproduced rollback failure, record each disposition/delete Win32 outc
 the exact enumeration status, entry count and entry attributes without retries or relaxed
 cleanup assertions. No further causal rollback repair or foreground acceptance is claimed
 until new native/hosted evidence establishes it.
+
+Review comments `4405923108` and `4405923200` are valid. A queued close can delete
+BatchRenameWindow during its synchronous debug pump, before the next predicate or caller
+UI access. Reuse its existing dispatch-depth/deferred-delete scope for the pump and outer
+settling methods; reject post-close results and compare exact instance identity at global
+adapters. Extend the real blocked-provider case with queued closure during snapshot settling
+and a proven pending-preview flush, retaining the original close bounds and explicit release.
+Archive grandfathering is path-specific: disable rename detection at all six committed,
+worktree and index diff sites. A regression fixture enables rename detection, moves an old
+oversized blob, and requires both staged and committed new paths to fail the same limits.
+
+Source `986156585` fails its x64 Debug solution build on ViewerPE's missing common-control
+link dependency; its source/spec run `20261028T205942Z-81940-4d1e9260892b4503996d13f3cc900cc4`
+is 281 passed, one failed, zero skipped because inserting diagnostics separated the original
+fault-injection declaration from its unchanged source guard. Retain both failed receipts.
+Supply the test header's Comctl32 dependency and place diagnostics after the existing fault
+helpers; no guard is relaxed. A full Rebuild is required after that failed build.
+
+The reviewed execution binding after the archive rename controls is 84e767c50fbf91c1177ee8069c77581f56c86d347d14e4dd4eb34f087e5f4733. The enabled Suite PR and two native Debug profiles are unchanged; pending hosted work remains unaccepted.

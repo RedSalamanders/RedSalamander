@@ -353,6 +353,29 @@ Describe 'TestRuns archive contract' {
         @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 2
     }
 
+    It 'validates staged and committed moves of grandfathered blobs at their new paths' {
+        $fixture = New-RSArchiveMigrationFixture
+        & git -C $fixture.Root config diff.renames true
+        $moved = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-21_120000/moved.raw'
+        New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $fixture.Root $moved)) -Force | Out-Null
+        & git -C $fixture.Root mv -- $fixture.Legacy $moved
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to stage the legacy evidence move.' }
+        foreach ($phase in @('staged', 'committed')) {
+            if ($phase -eq 'committed') {
+                & git -C $fixture.Root commit --quiet -m 'moved legacy evidence fixture'
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the legacy evidence move.' }
+            }
+            $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+            $paths.Count | Should Be 2
+            ($paths -contains $moved) | Should Be $true
+            $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths -MaxFileBytes 2KB -MaxRunBytes 4KB)
+            @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 2
+            $changed = @(Get-RSChangedTestRunArchivePaths -RepoRoot $fixture.Root)
+            $changed.Count | Should Be 2
+            ($changed -contains $moved) | Should Be $true
+        }
+    }
+
     It 'fails closed when an imported baseline object is present but is not an ancestor' {
         $fixture = New-RSArchiveMigrationFixture
         $tree = (& git -C $fixture.Root rev-parse 'HEAD^{tree}').Trim()

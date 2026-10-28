@@ -493,10 +493,10 @@ function Get-RSChangedTestRunArchivePaths {
 
     $commands = [System.Collections.Generic.List[object]]::new()
     if ($null -ne $baseRef) {
-        $commands.Add(@('diff', '--name-only', '--diff-filter=AM', "$baseRef...HEAD", '--', 'Specs/TestRuns'))
+        $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', "$baseRef...HEAD", '--', 'Specs/TestRuns'))
     }
-    $commands.Add(@('diff', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
-    $commands.Add(@('diff', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
+    $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
+    $commands.Add(@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
 
     foreach ($arguments in $commands) {
         $output = & git -C $root @arguments 2>$null
@@ -548,9 +548,9 @@ function Get-RSTestRunArchiveInventoryPaths {
             if ($null -ne $contractRange) {
                 $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 $commands = @(
-                    @('diff', '--name-only', '--diff-filter=AM', $contractRange, '--', 'Specs/TestRuns'),
-                    @('diff', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'),
-                    @('diff', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
+                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', $contractRange, '--', 'Specs/TestRuns'),
+                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'),
+                    @('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
                 )
                 foreach ($arguments in $commands) {
                     $output = & git -C $root @arguments 2>$null

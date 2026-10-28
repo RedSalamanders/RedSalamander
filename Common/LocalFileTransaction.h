@@ -42,23 +42,6 @@ inline std::atomic<HRESULT> g_nextWriteFailure{S_OK};
 inline std::atomic<HRESULT> g_nextFlushFailure{S_OK};
 inline std::atomic<HRESULT> g_nextPublishFailure{S_OK};
 
-struct LocalFileTransactionRollbackSnapshot final
-{
-    bool ownedHandle         = false;
-    bool posixDisposition    = false;
-    DWORD posixError         = ERROR_SUCCESS;
-    bool legacyDisposition   = false;
-    DWORD legacyError        = ERROR_SUCCESS;
-    bool pathDeleteAttempted = false;
-    DWORD pathDeleteError    = ERROR_SUCCESS;
-};
-inline thread_local LocalFileTransactionRollbackSnapshot g_lastRollbackSnapshot{};
-
-[[nodiscard]] inline LocalFileTransactionRollbackSnapshot LastLocalFileTransactionRollback() noexcept
-{
-    return g_lastRollbackSnapshot;
-}
-
 inline void FailNextLocalFileTransactionWrite(HRESULT hr) noexcept
 {
     g_nextWriteFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
@@ -87,6 +70,23 @@ inline void FailNextLocalFileTransactionPublish(HRESULT hr) noexcept
 [[nodiscard]] inline HRESULT TakeNextLocalFileTransactionPublishFailure() noexcept
 {
     return g_nextPublishFailure.exchange(S_OK, std::memory_order_relaxed);
+}
+
+struct LocalFileTransactionRollbackSnapshot final
+{
+    bool ownedHandle         = false;
+    bool posixDisposition    = false;
+    DWORD posixError         = ERROR_SUCCESS;
+    bool legacyDisposition   = false;
+    DWORD legacyError        = ERROR_SUCCESS;
+    bool pathDeleteAttempted = false;
+    DWORD pathDeleteError    = ERROR_SUCCESS;
+};
+inline thread_local LocalFileTransactionRollbackSnapshot g_lastRollbackSnapshot{};
+
+[[nodiscard]] inline LocalFileTransactionRollbackSnapshot LastLocalFileTransactionRollback() noexcept
+{
+    return g_lastRollbackSnapshot;
 }
 } // namespace Testing
 #endif

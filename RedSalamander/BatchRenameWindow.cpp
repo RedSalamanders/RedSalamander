@@ -2179,7 +2179,7 @@ public:
 
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugGetSnapshot(BatchRenameDebugSnapshot& out) const noexcept;
-    void DebugSetRules(BatchRename::Rules rules) noexcept;
+    [[nodiscard]] bool DebugSetRules(BatchRename::Rules rules) noexcept;
     [[nodiscard]] bool DebugSetRuleControls(const BatchRename::Rules& rules) noexcept;
     [[nodiscard]] bool DebugSetScope(std::wstring_view mask, bool includeSubdirectories, bool includeFiles, bool includeFolders) noexcept;
     [[nodiscard]] bool DebugSetPreviewSort(std::wstring_view columnId, bool descending) noexcept;
@@ -2208,6 +2208,19 @@ public:
 #endif
 
 private:
+    // Direct debug calls pump the same queue as WndProc and need its existing
+    // deferred-delete ownership until every post-pump access has completed.
+    [[nodiscard]] auto HoldForDispatch() noexcept
+    {
+        ++_dispatchDepth;
+        return wil::scope_exit([this]() noexcept
+        {
+            --_dispatchDepth;
+            if (_dispatchDepth == 0u && _deletePending)
+                delete this;
+        });
+    }
+
     [[nodiscard]] static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
@@ -2496,18 +2509,7 @@ LRESULT CALLBACK BatchRenameWindow::WndProcThunk(HWND hwnd, UINT message, WPARAM
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    ++self->_dispatchDepth;
-    const auto finishDispatch = wil::scope_exit([self]() noexcept
-    {
-        if (self->_dispatchDepth > 0u)
-        {
-            --self->_dispatchDepth;
-        }
-        if (self->_dispatchDepth == 0u && self->_deletePending)
-        {
-            delete self;
-        }
-    });
+    const auto finishDispatch = self->HoldForDispatch();
 
     return self->WndProc(hwnd, message, wParam, lParam);
 }
@@ -5027,8 +5029,9 @@ bool BatchRenameWindow::DebugGetSnapshot(BatchRenameDebugSnapshot& out) const no
     return true;
 }
 
-void BatchRenameWindow::DebugSetRules(BatchRename::Rules rules) noexcept
+bool BatchRenameWindow::DebugSetRules(BatchRename::Rules rules) noexcept
 {
+    const auto dispatch = HoldForDispatch();
     ClearExecutionReport();
     _rules = std::move(rules);
     SyncRuleControls();
@@ -5036,11 +5039,15 @@ void BatchRenameWindow::DebugSetRules(BatchRename::Rules rules) noexcept
     // The production preview is asynchronous. Test callers need the same
     // settled contract the previous synchronous implementation exposed.
     DebugPumpWhileTasksActive(false);
+    if (! _hWnd || _deletePending)
+        return false;
     _dxHost.Invalidate();
+    return true;
 }
 
 bool BatchRenameWindow::DebugSetRuleControls(const BatchRename::Rules& rules) noexcept
 {
+    const auto dispatch = HoldForDispatch();
     if (! _nameTemplateField || ! _searchForField || ! _replaceWithField || ! _regexCheck || ! _caseSensitiveCheck || ! _wholeWordsCheck ||
         ! _replaceOnceCheck || ! _excludeExtensionCheck || ! _fileNameCaseCombo || ! _extensionCaseCombo)
     {
@@ -5062,6 +5069,8 @@ bool BatchRenameWindow::DebugSetRuleControls(const BatchRename::Rules& rules) no
     SyncRuleControls();
     RebuildPreview();
     DebugPumpWhileTasksActive(false);
+    if (! _hWnd || _deletePending)
+        return false;
     _dxHost.Invalidate();
     return true;
 }
@@ -5071,6 +5080,7 @@ bool BatchRenameWindow::DebugSetScope(const std::wstring_view mask,
                                       const bool includeFiles,
                                       const bool includeFolders) noexcept
 {
+    const auto dispatch = HoldForDispatch();
     if (! _maskField || ! _includeSubdirectoriesCheck || ! _includeFilesCheck || ! _includeFoldersCheck)
     {
         return false;
@@ -5090,6 +5100,8 @@ bool BatchRenameWindow::DebugSetScope(const std::wstring_view mask,
 
     RebuildTargetsFromScope();
     DebugPumpWhileTasksActive(false);
+    if (! _hWnd || _deletePending)
+        return false;
     _dxHost.Invalidate();
     return true;
 }
@@ -5271,6 +5283,7 @@ bool BatchRenameWindow::DebugCopyUndoPlan() const noexcept
 
 bool BatchRenameWindow::DebugFlushPendingPreview() noexcept
 {
+    const auto dispatch = HoldForDispatch();
     if (! _previewRebuildPending && ! _targetRebuildPending)
     {
         return false;
@@ -5278,11 +5291,12 @@ bool BatchRenameWindow::DebugFlushPendingPreview() noexcept
 
     OnPreviewRebuildTimer();
     DebugPumpWhileTasksActive(false);
-    return true;
+    return _hWnd && ! _deletePending;
 }
 
 HRESULT BatchRenameWindow::DebugExecute() noexcept
 {
+    const auto dispatch   = HoldForDispatch();
     const HRESULT startHr = ExecuteRename();
     if (! _executing)
     {
@@ -5292,6 +5306,8 @@ HRESULT BatchRenameWindow::DebugExecute() noexcept
     // Execution runs on a background worker; pump until the completion
     // payload arrives so test callers observe the terminal result.
     DebugPumpWhileTasksActive(true);
+    if (! _hWnd || _deletePending)
+        return E_ABORT;
     return _lastExecutionTerminalHr;
 }
 
@@ -5304,7 +5320,10 @@ HRESULT BatchRenameWindow::DebugStartExecution() noexcept
 
 HRESULT BatchRenameWindow::DebugWaitExecutionIdle() noexcept
 {
+    const auto dispatch = HoldForDispatch();
     DebugPumpWhileTasksActive(true);
+    if (! _hWnd || _deletePending)
+        return E_ABORT;
     return _lastExecutionTerminalHr;
 }
 
@@ -5343,6 +5362,7 @@ bool BatchRenameWindow::DebugInjectStaleExecutionPayload(std::filesystem::path s
 
 void BatchRenameWindow::DebugPumpWhileTasksActive(const bool waitForExecution) noexcept
 {
+    const auto dispatch      = HoldForDispatch();
     const ULONGLONG deadline = GetTickCount64() + 30000ull;
     const auto tasksActive   = [this, waitForExecution]() noexcept
     { return _hWnd && (waitForExecution ? (_executing || _collecting || _previewing) : (_collecting || _previewing)); };
@@ -5432,10 +5452,11 @@ bool DebugGetBatchRenameWindowSnapshot(BatchRenameDebugSnapshot& out, const bool
     }
     // Settle any in-flight background target collection first so snapshots
     // keep observing collected targets like the previous synchronous path.
-    const HWND before = g_batchRenameWindow->Hwnd();
+    auto* const instance = g_batchRenameWindow;
+    const HWND before    = instance->Hwnd();
     if (waitForTasks)
-        g_batchRenameWindow->DebugPumpWhileTasksActive(false);
-    return g_batchRenameWindow && g_batchRenameWindow->Hwnd() == before && g_batchRenameWindow->DebugGetSnapshot(out);
+        instance->DebugPumpWhileTasksActive(false);
+    return g_batchRenameWindow == instance && instance->Hwnd() == before && instance->DebugGetSnapshot(out);
 }
 
 bool DebugSetBatchRenameWindowRules(const BatchRename::Rules& rules) noexcept
@@ -5444,8 +5465,7 @@ bool DebugSetBatchRenameWindowRules(const BatchRename::Rules& rules) noexcept
     {
         return false;
     }
-    g_batchRenameWindow->DebugSetRules(rules);
-    return true;
+    return g_batchRenameWindow->DebugSetRules(rules);
 }
 
 bool DebugSetBatchRenameWindowRuleControls(const BatchRename::Rules& rules) noexcept
@@ -5490,15 +5510,16 @@ bool DebugSwitchBatchRenameWindowMode(const BatchRename::Mode mode, const bool w
     {
         return false;
     }
-    const HWND before = g_batchRenameWindow->Hwnd();
+    auto* const instance = g_batchRenameWindow;
+    const HWND before    = instance->Hwnd();
     if (waitForTasks)
     {
-        static_cast<void>(g_batchRenameWindow->DebugFlushPendingPreview());
-        if (! g_batchRenameWindow || g_batchRenameWindow->Hwnd() != before)
+        static_cast<void>(instance->DebugFlushPendingPreview());
+        if (g_batchRenameWindow != instance || instance->Hwnd() != before)
             return false;
-        g_batchRenameWindow->DebugPumpWhileTasksActive(false);
+        instance->DebugPumpWhileTasksActive(false);
     }
-    return g_batchRenameWindow && g_batchRenameWindow->Hwnd() == before && g_batchRenameWindow->DebugSwitchMode(mode);
+    return g_batchRenameWindow == instance && instance->Hwnd() == before && instance->DebugSwitchMode(mode);
 }
 
 bool DebugSetBatchRenameWindowManualText(std::wstring_view text) noexcept

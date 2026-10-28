@@ -15,6 +15,10 @@ This folder contains local build/test run logs used to validate critical fixes. 
 - Before force-adding a generated run, execute `Tools\Test-TestRunArchive.ps1 -RunPath <run-folder>`. This explicit pre-stage mode includes ignored raw files and must pass before the run can be accepted. The validator parses every nonblank JSONL row, not just the first row, and dispatches area/schema-specific checks when a governed evidence format is present.
 - `Tools\Test-TestRunArchive.ps1` remains the fast changed-set gate. Closeout must also execute `Tools\Test-TestRunArchive.ps1 -Inventory`, which validates every checked-in archive added or modified since the archive contract was introduced by commit `8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a`; older untouched evidence is grandfathered, but changing it brings it under the current contract. Validation failure is a red closeout and must never be summarized as green. Full Pester coverage exercises pre-stage rejection, unchanged contract-era inventory, exact limits, and this failure behavior.
 
+Rename detection is disabled in both changed-set and inventory diffs. A staged or committed
+move of a grandfathered blob is an addition at its new path and must pass the current
+contract; exact old path identity is part of grandfathering.
+
 The history-free source migration preserves the same boundary through parentless public baseline
 `4a9489e9cb2d1190528b8ec35971fba885fd7792` (tree `3fb1f79ac855236a8cc2e0bf9b348601ec8cd5f3`).
 It contains only 2,075 exact path/mode/blob matches between the pre-contract tree
