@@ -780,7 +780,7 @@ Windows CI enables Git `core.longpaths` before checkout: retained test evidence 
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
 
 CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
-`Build/requirements-format.txt`. It does not commit changes or format archived Specs/TestRuns source snapshots.
+`Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
 
 The reusable CI build step checks the native build exit status immediately, before
 any matrix validator or other native command can overwrite it. A compiler failure

@@ -2,6 +2,60 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "purpose": "Acquire the pinned native formatter without Python, with checksum and executable validation.",
+      "prerequisites": [
+        "PowerShell 7",
+        "HTTPS access for uncached downloads or an offline pinned wheel"
+      ],
+      "lifecycle": "active",
+      "kind": "command",
+      "tests": [
+        "Tools/Tests/ClangFormat.Tests.ps1"
+      ],
+      "path": "Tools/Install-ClangFormat.ps1",
+      "usage": "Run before CI formatting or use WheelPath for offline installation.",
+      "replacement": null,
+      "sideEffects": [
+        "Downloads and caches the verified wheel and stages the native executable beneath .build/format"
+      ],
+      "outputs": [
+        ".build/format/clang_format/data/bin/clang-format.exe",
+        ".build/format/clang-format-22.1.3.whl"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "visibility": "public",
+      "usedBy": [
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "kind": "module",
+      "outputs": [
+        "Verified native formatter path"
+      ],
+      "sideEffects": [
+        "Downloads and writes the selected repository-local formatter cache"
+      ],
+      "purpose": "Verify formatter package and executable bytes, preserve prior executable on failure, and reuse an authenticated package cache.",
+      "replacement": null,
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "prerequisites": [
+        "PowerShell 7",
+        "Build/clang-format.json"
+      ],
+      "usedBy": [
+        "Tools/Install-ClangFormat.ps1",
+        "Tools/Tests/ClangFormat.Tests.ps1"
+      ],
+      "visibility": "internal",
+      "path": "Tools/Modules/Build/ClangFormat.psm1",
+      "lifecycle": "active",
+      "tests": [
+        "Tools/Tests/ClangFormat.Tests.ps1"
+      ],
+      "usage": "Imported by the installer and exercised by offline/download/cache failure fixtures."
+    },
+    {
       "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
       "kind": "test",
       "visibility": "internal",
@@ -292,7 +346,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard documentation/schema/shortcut drift and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence.",
+      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift, and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence.",
       "usage": "Run with Pester or the current tooling aggregate after documentation, schema, shortcut or published capture changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -2632,7 +2686,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links.",
+      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links.",
       "usage": "Import through Get-SpecInventory.ps1 or focused specification tests.",
       "usedBy": [
         "Tools/Get-SpecInventory.ps1",
@@ -4617,7 +4671,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions.",
+      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions.",
       "usage": "Run through the current Tools Pester profile and Full; source guards complement native behavioral tests and do not replace them.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",

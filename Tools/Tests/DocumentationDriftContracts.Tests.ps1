@@ -12,6 +12,45 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Tooling\SpecInformationArchitecture.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
+Describe 'Agent guidance packages' {
+    It 'uses the canonical Markdown parser for balanced targets and inline code' {
+        $sample = '[Contract](contract(v1).md) and `[example](missing.md)`'
+        $links = @(Get-RSMarkdownLinks -Text $sample)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'contract(v1).md'
+    }
+
+    It 'keeps owned skill and agent references usable without loading other checkouts' {
+        $roots = @('.github/skills', '.agents/skills', '.github/agents')
+        $documents = [Collections.Generic.List[string]]::new()
+        foreach ($relativeRoot in $roots) {
+            $pending = [Collections.Generic.Stack[string]]::new()
+            $pending.Push((Join-Path $repoRoot $relativeRoot))
+            while ($pending.Count) {
+                foreach ($entry in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
+                    ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) | Should Be 0
+                    if ($entry.PSIsContainer) { $pending.Push($entry.FullName) }
+                    elseif ($entry.Extension -ieq '.md') { $documents.Add($entry.FullName) }
+                }
+            }
+        }
+        foreach ($document in $documents) {
+            $content = [IO.File]::ReadAllText($document, [Text.UTF8Encoding]::new($false, $true))
+            [string]::IsNullOrWhiteSpace($content) | Should Be $false
+            foreach ($link in Get-RSMarkdownLinks -Text $content) {
+                $target = [string]$link.Target
+                if ($target -match '^(?:https?:|mailto:|#|//)') { continue }
+                $file = [Uri]::UnescapeDataString(($target -split '#', 2)[0])
+                $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path $document) $file))
+                $relative = [IO.Path]::GetRelativePath($repoRoot, $resolved)
+                [IO.Path]::IsPathRooted($relative) | Should Be $false
+                ($relative -eq '..' -or $relative.StartsWith('../') -or $relative.StartsWith('..\')) | Should Be $false
+                (Test-Path -LiteralPath $resolved) | Should Be $true
+            }
+        }
+    }
+}
+
 Describe 'Specification information architecture integration' {
     # The protected Done history is measured from base commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853, which a squashed or
     # shallow clone (hosted runners check out one commit) does not carry.

@@ -96,7 +96,7 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 | Plugins | `Plugins/Plugins_PluginAPI.md`, `Plugins/Plugins_VirtualFileSystem.md`, `Plugins/Plugins_ViewerPlugins.md` |
 | Installer/release | `Installer/Installer_Msix.md`, `Installer/Installer_Msi.md`, `Installer/WingetIntegration.md` |
 | Terminal | `Terminal/Terminal_EmbeddedPlugin.md`, `Terminal/TerminalEngineDecision.md` |
-| Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
+| Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_AgentGuidance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
 
 ## Required validation
 

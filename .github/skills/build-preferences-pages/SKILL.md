@@ -61,14 +61,14 @@ Use existing shared UIA, settings-artifact backup, focus-wait, and TestSandbox h
 
 ## Validate
 
-Run, at minimum:
+Review the affected plan first, then use the relevant governed checks:
 
 ```powershell
 .\build.ps1 -ProjectName RedSalamander -Configuration Debug
 Invoke-Pester -Script .\Tools\Tests\ResourceLocalizationContracts.Tests.ps1
 Invoke-Pester -Script .\Tools\Tests\TestHarnessSourceContracts.Tests.ps1
-.\.build\x64\Debug\SettingsSchemaTests.exe
-.\.build\x64\Debug\RedSalamander.exe --commands-selftest --selftest-case=<focused-case>
+.\Test-Changes.ps1 -Explain
+.\Test-Changes.ps1 -Suite Commands -CaseFilter <focused-case>
 ```
 
-Run broader suites when the page changes shared shell, scrolling, theming, focus, or commit behavior.
+Run schema coverage and broader affected suites when the page changes shared shell, scrolling, theming, focus, or commit behavior. The runner owns sandbox/evidence setup. A focus-taking case remains pending until agreement to the time and explicit Interactive execution; do not bypass that boundary with a direct executable launch.

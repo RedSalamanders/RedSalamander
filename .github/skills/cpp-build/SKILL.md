@@ -60,8 +60,8 @@ consumer package contains only the client notice. See Specs/Core/Core_RedSalaman
 
 ## Visual Studio Build
 
-1. Open `RedSalamander.sln` in Visual Studio 2022+
-2. Select configuration (Debug/Release) and platform (x64)
+1. Open `RedSalamander.sln` in the Visual Studio toolchain required by `Specs/Build/Build_Toolchain.md`
+2. Select the configuration/platform declared by the current solution and its qualification contract
 3. Build → Build Solution (Ctrl+Shift+B)
 
 ## vcpkg Integration
@@ -104,8 +104,10 @@ receipt for the exact checkout/profile and verifies every artifact digest. CI/ni
 cross-job handoff must publish and verify the portable same-workflow attestation using
 the reusable workflow's attestation/toolchain outputs, then rebind paths locally. Never
 accept a local receipt's absolute diagnostic paths as portable authority. Fresh Full
-remains the default and mandatory CI/nightly/release/final-closeout mode. Explicit local
-exact Resume and Affected do not weaken build receipt verification.
+establishes complete execution/qualification where required by the owning acceptance
+contract; editing and PrePush follow scoped testing without duplicating equivalent
+obligations. Exact Resume and Affected never weaken receipt verification or turn
+pending/non-equivalent coverage into a complete pass.
 
 An artifact-writer re-attestation is a build, not only a digest refresh. Apply the same
 suite build environment used for the initial build and restore the caller environment
@@ -146,13 +148,13 @@ work and receipt publication. Every `Run:` line must remain copy/paste executabl
 ## Dependencies
 
 - **WIL** - Windows Implementation Library (RAII wrappers)
-- **fmt** - Modern C++ formatting library
+- **yyjson** - JSON/JSON5 parsing and serialization
 - **DirectX** - Graphics and multimedia APIs (D2D, D3D11, DXGI)
 - CI ARM64 builds install `Microsoft.VisualStudio.Component.VC.Tools.ARM64` with the Visual Studio 2026 VC++ workload and verify `Hostx64\arm64\cl.exe` before building.
 
 ## Build Script Features
 
-- Automatically locates MSBuild (VS 2022 or later)
+- Discovers the supported MSBuild/toolchain as specified by `Specs/Build/Build_Toolchain.md`
 - Builds entire solution when no ProjectName specified
 - Resolves most `-ProjectName` builds to the target `.vcxproj` directly; `RedSalamander` stays on the solution build graph so the solution can also build its bundled plugin/search-service outputs (`Plugins\*.dll`, `RedSalamanderSearchService.exe`)
 - Reuses the saved local beta build number by default, so ordinary repeated local builds stay incremental instead of forcing a fresh version stamp on every invocation

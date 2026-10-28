@@ -627,6 +627,36 @@ $sample = ']('
         (@($inventory.ProtectedDone.Unexpected) -contains $companionPath) | Should Be $true
     }
 
+    It 'admits only the reviewed PowerShell tooling closeout record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/PowerShellTooling_2026-10-28.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed tooling migration`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        foreach ($path in @('Specs/Plans/Done/PowerShellTooling_2026-10-29.md', 'Specs/Plans/Done/PowerShellTooling_2026-10-28/unreviewed.md')) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
+    }
+
+    It 'admits only the reviewed agent-skill remediation closeout record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-24.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed guidance remediation`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        foreach ($path in @('Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-25.md', 'Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-24/unreviewed.md')) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
+    }
+
     It 'admits only the reviewed completed waiting-card record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/FileOperations_WaitingCards_2026-10-20.md'

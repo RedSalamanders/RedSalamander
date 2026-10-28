@@ -1,6 +1,127 @@
 # I49 Agent and skill ecosystem audit and red-team report
 
-Date: 2026-10-24, Europe/Paris. Status: **DECISION**. The requested audit is complete; the recommendations have not been implemented. This document is non-normative and does not authorize changes in another repository.
+Audit baseline: 2026-10-24, Europe/Paris. Implementation authorized and completed on 2026-10-28.
+Status: **COMPLETE for the guidance, skill-package and developer-tooling findings A01-A20**.
+The original audit below is retained as historical evidence. Its original counts, line anchors, priorities and
+unimplemented wording describe that baseline, not the corrected files. This record is non-normative.
+
+## Implementation closeout - 2026-10-28
+
+- [x] Fix the seven High-priority guidance findings A01-A07.
+- [x] Resolve the remaining still-valid findings A08-A20, preserving deliberate product-specific differences.
+- [x] Consolidate overlapping personal workflows with compatible old entrypoints.
+- [x] Add meaningful package, boundary, lifecycle and command-signature regression coverage.
+- [x] Update authoritative contracts, agent routes, tooling ownership and changelogs together.
+- [x] Independently inspect delegated changes, challenge them with counterexamples, and rerun relevant checks.
+- [x] Preserve unrelated files and failed evidence; close and index the bounded implementation plans.
+
+All twenty findings have a concrete disposition below. No application source, native test source, dependency pin,
+UI screenshot or foreground-input behavior was changed by this remediation. No native/runtime/performance or
+whole-repository qualification is claimed. The six-core-project audit still covers 69 core skills; adding the one
+canonical personal executor makes 84 primary/personal entries including retained compatibility names. A smaller
+instruction layer and passing structural checks are not a measured general agent-success rate.
+
+Initial/current inspected heads remained RedSalamander `fbcc9fc0dd`, DxUi `881e5d5ff2`, RedXe `0281d6e148`,
+RedPrism `a1656702ed`, RedTilde `6079cd86be` and RedMonitor `8e96fc358f`, plus the working-tree changes described
+here. The alternate checkout remained `0f6cd8d`. The separate PowerShell-tooling chat changed formatter/metadata
+runtime, CI, environment identity and its own records concurrently; its work was preserved and combined checks
+were rerun. These are local changes: no real-project commit, push, merge or publication was performed. Cold forward fixtures contain only their documented synthetic local Git operations.
+
+### Per-finding resolution
+
+| ID | Implemented disposition | Evidence and durable owner |
+|---|---|---|
+| A01 | Plugin callback transfers the acquired DLL pin through `TransferModulePinToCallbackReturn` at entry, rejects acquisition/submission failure, and transfers context only on success. | Current helper declaration and callback-return source guard; preferred documentation example is now included in that guard. Instance quiescence remains a separate obligation. |
+| A02 | Replace raw scalar handle/default moves with a WIL owner. Correct instance IconCache/DPI/menu/conversion calls and the owned/shared icon example. | Actual `Common/Helpers.h` and IconCache declarations, current guidance checks, compatible old-checkout source checks. No compiled example/runtime claim. |
+| A03 | Merge skill resolves one target, captures immutable source/target identity, preserves other worktrees, stops dependent work after failure, and verifies authorized publication separately. | Independent owned-default, historical-merge and ambiguous-target forward fixtures. Correct blocked/unresolved cases remain incomplete tasks rather than false merge success. |
+| A04 | One executor separates implemented/reviewed/executed/blocked/qualified states; reasoned-through tests cannot close an execution gate. | Existing assertions actually executed in complete/blocked plan fixtures; unavailable compiler gate remained unchecked. |
+| A05 | Forensics resolves current runner/archive receipts, retains failed outcomes and exact process identity, forbids foreign-process termination and follows profile/desktop ownership. | `TestSandbox.psm1`, `Testing_SelfTests.md` and current forensic router; historical fallback paths are labeled. |
+| A06 | RedXe skills and normative Settings/Plugin owners preserve ordinary, opt-in, Debug-only and headless service template categories. | Catalog, deployed templates and unchanged native Settings test oracle inspected; declaration probe reports Debug 19 widgets/1 service and Release 18/1. Native tests were not rerun for this prose change. |
+| A07 | Replace the incomplete security skill with a self-contained maintained-capability/manual-review route and explicit secret exclusions for all outputs. | No missing supporting files remain required; cold forward fixture ignored malicious source instructions and reproduced no credential value. Static review is not a secure-product assertion. |
+| A08 | Add bounded package/header/reference/scoped-guidance checks and negative fixtures to RedXe, RedPrism, RedMonitor and RedTilde; inspect inputs before metadata reads and report actual validation scope. | Per-repository normative package/validation specs, public entrypoints and tests below. Local modules do not require a sibling checkout or execute example scripts. |
+| A09 | Repair RedXe's broken local routes, stale build-matrix prose and validator claims; mutable facts route to current owners. | Real ten-skill corpus validates forty local references; public metadata/package entrypoint passes. |
+| A10 | Improve resolves one existing indexed output destination, distinguishes trusted instructions from source evidence, and permits a later explicit implementation transition. | Main skill plus plan-template/closing-loop references agree; no competing root queue, hardcoded model or assumed agent API remains. |
+| A11 | Preserve RedPrism's deliberate fixed-buffer crash-formatting exception. | `modern-cpp-windows` routes to `Core_CrashHandling.md`; failure-context allocation policy remains explicit. |
+| A12 | Replace the old no-modal-state porting assumption with current eligibility and pending color/transform/brush/warp rules. | `legacy-compositor-oracle` and authoritative `Document_Tools.md`; no application editing state was rewritten. |
+| A13 | RedMonitor validates actual indexed active plans and accepts legitimate WIP-to-Done movement, without requiring one historic WIP filename forever. | Lifecycle and actual public-entrypoint controls include missing, duplicate and definition-only links, multiple rendered uses, unused declarations and completed-plan closeout. |
+| A14 | Four personal executors are thin routes to one `execute-plan` skill, preserving next-step versus until-complete intent. | Compatibility links resolve; cold forward tasks exercised complete, blocked and next-step behavior. Not every alias was separately benchmarked. |
+| A15 | Remove copied specification detail, delivery chronology, stale matrix/stage rules and generic ceremony from touched guidance; reconcile unconditional-test wording with owning scoped policy. | Repository/domain owners remain authoritative. Older checkout interfaces and intentional product policy differences are preserved rather than mechanically synchronized. |
+| A16 | PM and Coach use current spec/index authority, bounded handoffs and automated batch challenges; VS Code metadata stays explicitly host-specific. | Current agent files, source/package links and independent old-checkout assertions. No forced interview/cards, unrequested memory/hook/telemetry writes or generic token-savings claim. |
+| A17 | Repair CRAFT paths/formatter/pointer, llmfit ownership/test/data/build routes, Stewardship Vitest examples, glossary contradictions, Coach contribution routes and BioHazards context lookup. | Seven guidance files in six ancillary roots; parent link/manifest/syntax/formatter/hash checks below. Compositor had no valid change to make and remains clean. |
+| A18 | Skill discovery inspects candidate content, revision/license, host fit, scripts/dependencies and side effects; popularity is only a discovery signal. | Current self-contained personal discovery skill; no global install/update was performed. |
+| A19 | RedPrism's narrow skill checker is read-only; changelog behavior fixtures have a separate discoverable tooling test. | Byte/time/directory snapshots verify public narrow entrypoint behavior. Literal command signatures use PowerShell AST without running targets; broader workflow coverage remains. |
+| A20 | Legacy personal PDF name delegates to installed `pdf:pdf`, resolving its current catalog path, with appearance/form-value verification and an unavailable-capability fallback. | Thin compatibility skill has no version-pinned cache path or copied workflow. PDF runtime/form generation was not needed for this routing edit. |
+
+### Independent challenge and executed verification
+
+Sub-agents implemented bounded, disjoint slices. The parent inspected returned diffs/source/contracts and reran
+current tests rather than accepting reported passes. Cross-review and parent counterexamples found additional
+bugs in the first drafts: truncated balanced links, inline-code pseudo-links, absolute/file-URI references mistaken
+for external schemes, reparse inputs read too early, legitimate scope paths with spaces rejected, optional metadata
+shape gaps, valid aliases/ShouldProcess parameters rejected, and reference definitions mistaken for rendered WIP
+index occurrences. Each reproduced defect was corrected with positive/negative controls before closeout.
+Consecutive shortcut links must remain distinct when separated by whitespace; this boundary was checked against
+the [CommonMark reference-link rules](https://spec.commonmark.org/spec#full-reference-link).
+The parsers deliberately implement documented bounded subsets, not a universal Markdown/YAML conformance claim.
+
+| Parent-executed check | Result | Scope/limit |
+|---|---|---|
+| RedSalamander `DocumentationDriftContracts.Tests.ps1`, Describe `Agent guidance packages` | 2 passed | Canonical Markdown boundary and actual owned skill/agent references. |
+| RedSalamander `TestHarnessSourceContracts.Tests.ps1`, Describe `Test harness source contracts` | 183 passed | Source-contract suite includes corrected callback example. |
+| RedSalamander `SpecInformationArchitecture.Tests.ps1` | 64 passed | Exact I49 Done admission plus date-shifted sibling/companion rejection. |
+| RedSalamander tooling-governance and validation-impact suites | 25 passed | Current inventory/help/closure/impact contracts. |
+| Optional skill-authoring `quick_validate.py`, Python `-X utf8 -B` | 29 metadata packages passed | Nineteen repository plus ten personal entries; no Python runtime dependency added to repositories. |
+| RedXe package, metadata and scoped-planner scripts; public `validate-skills.ps1` | 22 / 58 / 31 passed; actual 10 packages/40 local references pass | Independent script and public-wrapper evidence; no product execution. |
+| RedPrism package/signature/read-only, metadata and planner scripts; public `validate-skills.ps1` | 39 / 58 / 26 passed; actual 15 packages/5 local links/10 literal signatures pass | Zero symbolic-link controls skipped; parameter values, example execution and C++ behavior remain outside the check. |
+| RedMonitor package/lifecycle suite and actual `validate.ps1` | 21 header / 44 package-lifecycle / 20 public controls passed | Header, reference/occurrence, no-follow, read-only and public lifecycle boundaries; seven actual skills pass. |
+| RedTilde package and planner scripts; full public `validate.ps1` | 48 / 40 passed; aggregate completed exit 0 | Actual 9 skills/6 inventoried AGENTS pass; zero link skips. Broader tooling success is distinct from native product qualification. |
+| Cold personal-workflow forward exercises; parent `Verify-Outcomes.ps1` | 36 outcome-integrity assertions passed | Six task groups include completed, correctly blocked and ambiguous outcomes; no universal agent-effectiveness inference. |
+| Alternate checkout `Check-Backport.ps1` | 103 static assertions passed | Fourteen compatible guidance files, nine metadata entries, five local links; old helper/payload/IconCache topology retained. Both diff checks pass. |
+| Ancillary source/route checks | 20 local links, 6 Coach scripts, 8 TSX snippets, 3 Rust packages/2 defaults, scoped gofmt and CSpell pass | TSX syntax only; no import/typecheck/Vitest runtime or product build. Twenty-three existing Coach website routes are outside local-file existence checks. |
+| Preservation checks | Six pre-existing user-file SHA256 values match | Four CRAFT data/history files plus glossary settings/PDF unchanged. |
+| Changes workflow | Test, Fold and Fold-Check pass in all five changed core repositories | No pending fragments; required generated entries retained. DxUi/ancillary roots have no new unrelated release entry. |
+
+Validation used the existing marked `Z:\RedSalamander.Perf` sandbox for RedSalamander/forward work, and the
+other repositories' own permitted unique `.build` fixtures. No new drive-root output was initialized. Root evidence
+and cold-forward scripts/results remain beneath
+`Z:\RedSalamander.Perf\runs\agent-guidance-20261028T074332Z-67104\scratch\AgentGuidance`.
+Monitor and Prism fixture receipts hash their tested source under their respective `.build` package-test roots. The parent also ran five independently constructed Monitor occurrence probes, and the peer evaluator reran ten separate lifecycle cases after the fixes.
+No fixture script was installed as a personal skill dependency.
+
+### Retained failures and qualification limits
+
+The first RedTilde aggregate failed because its restored ARM64 dependency identity differed from current compiler/
+SDK discovery. The separate tooling-migration owner subsequently restored that dependency; the parent then reran
+current `validate.ps1` to exit 0. The earlier failure remains recorded in the completed RedTilde plan. A repeat pass
+is not a causal performance claim or native product pass. Initial optional Python authoring validation hit the
+validator's platform-default text encoding; explicit UTF-8 passed. Two cold-fixture setup errors are preserved in
+that evaluator's setup-failures record. An initial ancillary link check mistook existing Coach website routes for
+filesystem links; the corrected check reports those excluded routes explicitly.
+
+RedSalamander `Test-Changes.ps1 -Explain` emitted its deterministic decision and exited 1 with four
+`PENDING_INTERACTIVE` entries. The combined working tree includes shared build/CI changes from the other chat;
+it widens native obligations. No affected/Full/native or foreground pass is claimed by this guidance remediation.
+The spec inventory after adding the new normative consistency entry has zero blocking findings and the same
+44 historical informational findings (43 missing targets, one missing anchor). They are preserved rather than
+reclassified as new defects or silently removed.
+
+### Durable owners and plan lifecycle
+
+RedSalamander's durable owner is [Testing_AgentGuidance](../../Testing/Testing_AgentGuidance.md), routed from
+AGENTS and the spec catalog, with its consistency-ledger evidence. Existing helper/lifetime, test-sandbox,
+validation-evidence and tooling-governance contracts remain authoritative. RedXe owns its package contract in
+`Specs/Build/Build_SkillPackages.md`; RedTilde in `Specs/Testing/Testing_SkillPackages.md`; RedPrism/RedMonitor in
+`Specs/Testing/Testing_Validation.md` and their current agent guidance. Their local regression entrypoints are
+wired into their existing tooling aggregates. Package-only scope exceptions name exact modules/fixtures;
+shared and unknown Build inputs retain conservative full fallback, and source fingerprints include module bytes.
+
+RedXe's `SkillGuidanceRemediation_2026-10-28.md` and RedTilde's `SkillPackageIntegrity_2026-10-28.md` are complete
+and indexed under Done. This I49 record has exact-file Done admission with sibling/companion guards; the active
+WIP row is removed. The alternate checkout receives only compatible guidance repairs: its old build/Monitor and
+single-LPARAM payload interfaces remain intact, and no absent scoped runner/changelog workflow was invented.
+Personal aliases preserve explicit callers. No changes were needed in DxUi or Compositor for these findings.
+
+## Original audit baseline - retained 2026-10-24
 
 ## Assessment
 
