@@ -369,3 +369,18 @@ before the legacy master fallback. Fetch complete public history in native CI so
 inventory test executes. Add regression controls for every boundary. Preserve the parentless
 baseline through a normal merge of PR146; squashing it out would lose the ancestry proof.
 The original failed inventory remains recorded and the corrected inventory is pending.
+
+Candidate `0906482f4ab41db6a9194db298febff421e5f582` builds the full x64 Debug solution
+without new warnings in 6:18, receipt
+`21a119e97980f2f65452c53b9c618feb85a93fbe6e065365e3f72fcb5e69c647`.
+Governed run `20261028T201034Z-69960-b26347c43c0645808ac2557407294993` passes all 300
+archive/source/specification checks with zero skips. The real complete archive inventory now
+executes and passes (299.84 seconds); the four new migration/rejection controls also pass.
+The explicit corrected Inventory entrypoint and focused MTP/native handoff/gallery checks remain.
+
+Review the enabled PR execution surface after complete-history checkout and archive helper/test
+changes. `ci.yml` still runs the existing noninteractive Suite PR in native x64 and ARM64 Debug;
+in-product suites, interactive viewers and build-toolchain work remain local obligations.
+Bind reviewed coverage to digest `9a4fe488ec02ae7a41a0549823b119c22e0a569206ba02a1ab8ce552b1a2cae2`.
+The changed binding is not hosted acceptance. Rebuild the final candidate, verify its scoped
+coverage explanation, and retain CI_PENDING until the matching PR checks actually pass.
