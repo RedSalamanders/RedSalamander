@@ -2109,18 +2109,24 @@ STA/MTA; COM-only initialization does not meet that API precondition. Capture ob
 event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
 record the API stage and the process's session, window station and desktop.
 
-Speed-dialog layout captures requested by the modal interaction worker MUST route through the
-prompt's synchronous test command on its owning UI thread. The canonical screenshot helper then
-prepares and restores capture admission itself; the worker MUST NOT change window styles.
-Every layout capture retains its success/geometry assertions and verifies the original extended
-style was restored. A missing/destroyed prompt or unhandled capture command is a failed capture.
+Speed-dialog layout captures requested by the modal interaction worker MUST prepare and restore
+the canonical admission scope through the prompt's synchronous test command on its owning UI.
+Only USER32 admission/restoration may run inside that input-synchronous handler: WGC/COM capture
+stays on the worker while the modal UI pumps. The worker MUST NOT change window styles.
+Every layout capture retains its success/geometry assertions, rejects direct worker admission,
+requires APPWINDOW eligibility with every other style bit preserved, and verifies exact restoration.
+A missing/destroyed prompt or unhandled admission command is a failed capture.
 
-Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned non-activating/tool
-fixture that lacks it. Windows Server otherwise rejects that HWND with `E_INVALIDARG`.
+Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned modal or non-activating/tool
+fixture that lacks it, including an ordinary owned dialog with neither NOACTIVATE nor TOOLWINDOW.
+Windows Server rejects an otherwise ineligible HWND with `E_INVALIDARG`.
 Only the owning UI thread may prepare or restore that admission scope, preserving
 `WS_EX_NOACTIVATE`. Direct UI capture restores the borrowed bit before frame capture;
-cross-thread capture requires the owner to prepare the scope, pump through worker
-retirement including bounded timeout cleanup, and then restore it. Restoration failure
+cross-thread capture requires the owner to prepare the scope and pump until capture objects
+are released and completion is acknowledged, then restore it. A UI-launched capture worker
+must retire through its joined/bounded timeout cleanup before that restoration. A modal
+interaction worker acknowledges capture completion only after the synchronous helper returns.
+Restoration failure
 fails the scenario. The helper never changes the console session. Lifecycle, documentation,
 in-flight and STA/MTA playback witnesses assert exact extended-style restoration; pixel,
 layer, foreground, ownership and timing assertions remain mandatory, including negative-color controls.

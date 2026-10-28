@@ -193,3 +193,15 @@ source/specification tooling checks without skips in governed run
 `20261028T151428Z-58492-137ea5fbcf314a119cd808528e8aa52c`. Its native build failed C1083:
 the application root needs the explicit repository-relative TestSupport header path rather
 than a bare include name. Correct that boundary and rebuild before native acceptance.
+
+Source `a9598b9c0262a572670976271110a337be24d1fa` rebuilt x64 Debug in 9:10, receipt
+`37725ddf63722bb6a5d46fc719a5ef1bf1331f29461410ffc9b4f260c89b5d19`. Its focused speed-dialog
+run `20261028T153154Z-60116-607957bed6824dd0b6af32ec1c6c2265` failed in 2.5 seconds, without
+skips or retries: the UI-thread capture bridge returned `0x8001010D` (the original signed-format
+diagnostic prints `0x-7FFEFEF3`). WGC cannot call out from that input-synchronous SendMessage
+handler. Keep COM capture on the interaction worker and route only canonical admission and
+restoration to the owner UI while it pumps. Extend the same admission policy to ordinary owned
+modal windows, which also lack a taskbar entry, and require the APPWINDOW bit while retaining
+all other bits. Add a worker-refusal control, exact restoration and unsigned HRESULT diagnostics.
+Use the existing `TestSupport/` include root to remove the new C4464 warning rather than suppress it.
+None of these candidate repairs is accepted until the new runtime and hosted receipts pass.

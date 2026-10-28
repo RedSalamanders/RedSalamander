@@ -19812,8 +19812,24 @@ namespace
                             geometry.clientBounds.bottom));
             const auto filename         = std::format(L"{}__fr-FR__{}dpi.png", name, GetDpiForWindow(prompt));
             const LONG_PTR captureStyle = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
-            const HRESULT captured      = DebugCaptureFileOperationsSpeedLimitPromptScreenshot(prompt, captures / filename);
-            state.Require(SUCCEEDED(captured), std::format(L"The governed harness could not capture speed-dialog {} layout: hr=0x{:08X}.", name, captured));
+            RedSalamander::TestSupport::ScopedWindowScreenshotAdmission refusedWorkerAdmission(prompt);
+            state.Require(refusedWorkerAdmission.Status() == E_INVALIDARG && GetWindowLongPtrW(prompt, GWL_EXSTYLE) == captureStyle,
+                          L"Capture admission must reject this interaction worker without changing the prompt style.");
+            const HRESULT prepared = DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(prompt, true);
+            state.Require(SUCCEEDED(prepared),
+                          std::format(L"Could not prepare speed-dialog {} capture on its owning UI: hr=0x{:08X}.", name, static_cast<uint32_t>(prepared)));
+            if (FAILED(prepared))
+                return;
+            const LONG_PTR admittedStyle = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
+            state.Require((admittedStyle & WS_EX_APPWINDOW) != 0 &&
+                              (admittedStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW)) == (captureStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW)),
+                          L"Owned-modal capture must borrow APPWINDOW while preserving all other extended-style bits.");
+            const HRESULT captured = RedSalamander::TestSupport::SaveWindowScreenshot(prompt, captures / filename);
+            const HRESULT restored = DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(prompt, false);
+            state.Require(SUCCEEDED(captured),
+                          std::format(L"The governed harness could not capture speed-dialog {} layout: hr=0x{:08X}.", name, static_cast<uint32_t>(captured)));
+            state.Require(SUCCEEDED(restored),
+                          std::format(L"Could not restore speed-dialog {} capture admission: hr=0x{:08X}.", name, static_cast<uint32_t>(restored)));
             state.Require(GetWindowLongPtrW(prompt, GWL_EXSTYLE) == captureStyle,
                           L"The governed speed-dialog capture must restore its original extended style.");
         };

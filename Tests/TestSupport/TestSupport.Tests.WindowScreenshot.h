@@ -27,9 +27,11 @@ struct WindowScreenshotColorProbe final
     bool wholeFrame = false;
 };
 
-// Prepare Server capture-item admission on the HWND's owning UI thread only.
+// Prepare Server capture-item admission for owned modals and non-activating/tool
+// fixtures on the HWND's owning UI thread only.
 // Borrows WS_EX_APPWINDOW when needed without clearing NOACTIVATE. Cross-thread
-// capture callers keep this scope on the owner until the joined worker retires.
+// capture callers keep this scope on the owner until capture objects are released
+// and completion is acknowledged; UI-launched capture workers retire through join.
 class ScopedWindowScreenshotAdmission final
 {
 public:
@@ -57,7 +59,7 @@ private:
 // so a hardware adapter is not a precondition for observing the actual composed HWND.
 // Initializes and balances the Windows Runtime while preserving an existing COM
 // STA/MTA; all capture objects are released before that initialization is balanced.
-// On the owner UI thread, non-activating/tool fixtures temporarily borrow
+// On the owner UI thread, owned modals and non-activating/tool fixtures temporarily borrow
 // WS_EX_APPWINDOW for Server admission and restore it before frame capture.
 // Optional probes reject missing render layers with ERROR_INVALID_DATA after saving the
 // diagnostic PNG. Rejected frames request a non-activating repaint while capture is active,
@@ -66,7 +68,9 @@ private:
 // Whole-frame probes may run on another owned-process thread; retries schedule
 // repaint asynchronously there and never block that thread in a synchronous paint.
 // Such callers prepare ScopedWindowScreenshotAdmission on the owner UI and keep
-// pumping through worker retirement, including timeout cleanup, before restoring it.
+// pumping through acknowledged capture completion before restoring it. UI-launched
+// workers must retire through joined/bounded timeout cleanup; a modal interaction
+// worker acknowledges completion only after this synchronous helper returns.
 // This helper never mutates another thread's window styles.
 [[nodiscard]] HRESULT SaveWindowScreenshot(HWND window, const std::filesystem::path& path, std::span<WindowScreenshotColorProbe> probes = {}) noexcept;
 } // namespace RedSalamander::TestSupport

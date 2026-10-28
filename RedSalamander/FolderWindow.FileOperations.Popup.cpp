@@ -17,8 +17,8 @@
 #include "WindowMaximizeBehavior.h"
 #include "WindowSizing.h"
 #ifdef ENABLE_TESTS
-#include "../Tests/TestSupport/TestSupport.Tests.WindowScreenshot.h"
 #include "Common.Tests.Runner.h"
+#include "TestSupport/TestSupport.Tests.WindowScreenshot.h"
 #endif
 #include <DxUi/DxUi.h>
 #include <DxUi/Typography.h>
@@ -2655,13 +2655,13 @@ public:
         Cancel,
         SetClientHeightLimit,
         SetSelection,
-        CaptureScreenshot,
+        SetScreenshotAdmission,
     };
 
-    struct DebugCaptureRequest
+    struct DebugCaptureAdmissionRequest
     {
-        const std::filesystem::path* path = nullptr; // Borrowed through synchronous SendMessage only.
-        HRESULT result                    = E_PENDING;
+        bool enabled   = false;
+        HRESULT result = E_PENDING;
     };
 #endif
 
@@ -3176,13 +3176,29 @@ private:
             }
             case DebugCommand::Confirm: RequestDeferredAction(DeferredAction::Confirm); return TRUE;
             case DebugCommand::Cancel: RequestDeferredAction(DeferredAction::Cancel); return TRUE;
-            case DebugCommand::CaptureScreenshot:
+            case DebugCommand::SetScreenshotAdmission:
             {
-                auto* request = reinterpret_cast<DebugCaptureRequest*>(payload);
-                if (! request || ! request->path)
+                auto* request = reinterpret_cast<DebugCaptureAdmissionRequest*>(payload);
+                if (! request)
                     return FALSE;
-                // Server capture admission changes styles only on the owning UI thread.
-                request->result = RedSalamander::TestSupport::SaveWindowScreenshot(_hWnd.get(), *request->path);
+                if (request->enabled)
+                {
+                    if (_debugScreenshotAdmission.has_value())
+                        request->result = HRESULT_FROM_WIN32(ERROR_BUSY);
+                    else
+                    {
+                        _debugScreenshotAdmission.emplace(_hWnd.get());
+                        request->result = _debugScreenshotAdmission.value().Status();
+                        if (FAILED(request->result))
+                            _debugScreenshotAdmission.reset();
+                    }
+                }
+                else
+                {
+                    request->result = _debugScreenshotAdmission.has_value() ? _debugScreenshotAdmission.value().Restore() : E_UNEXPECTED;
+                    if (SUCCEEDED(request->result))
+                        _debugScreenshotAdmission.reset();
+                }
                 return TRUE;
             }
         }
@@ -3257,6 +3273,9 @@ private:
             case kFileOperationsSpeedLimitPromptDebugMessage: return OnDebugCommand(static_cast<DebugCommand>(wParam), lParam);
 #endif
             case WM_NCDESTROY:
+#ifdef ENABLE_TESTS
+                _debugScreenshotAdmission.reset();
+#endif
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 _dxHost.Detach();
                 if (_hWnd.get() == hwnd)
@@ -3294,6 +3313,7 @@ private:
     bool _layingOut            = false;
 #ifdef ENABLE_TESTS
     std::optional<float> _debugClientHeightLimitDip;
+    std::optional<RedSalamander::TestSupport::ScopedWindowScreenshotAdmission> _debugScreenshotAdmission;
 #endif
     bool _resizingForLayout      = false;
     bool _showingValidationError = false;
@@ -17626,14 +17646,16 @@ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
                         reinterpret_cast<LPARAM>(payload.get())) != FALSE;
 }
 
-HRESULT DebugCaptureFileOperationsSpeedLimitPromptScreenshot(HWND prompt, const std::filesystem::path& path) noexcept
+HRESULT DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(HWND prompt, bool enabled) noexcept
 {
     if (! prompt || GetFileOperationsSpeedLimitPromptHandle() != prompt)
         return E_INVALIDARG;
-    FileOperationsSpeedLimitPromptWindow::DebugCaptureRequest request{&path, E_PENDING};
+    // Only USER32 admission/restoration runs inside this input-synchronous call.
+    // WGC/COM work stays on the caller while the modal UI continues pumping.
+    FileOperationsSpeedLimitPromptWindow::DebugCaptureAdmissionRequest request{enabled, E_PENDING};
     const bool handled = SendMessageW(prompt,
                                       kFileOperationsSpeedLimitPromptDebugMessage,
-                                      static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::CaptureScreenshot),
+                                      static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetScreenshotAdmission),
                                       reinterpret_cast<LPARAM>(&request)) != FALSE;
     return handled ? request.result : E_FAIL;
 }
