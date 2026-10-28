@@ -33,6 +33,7 @@ The delegated lifecycle preserves runtime identity schemaVersion = 5 and pairing
 Zig bootstrap, build, and fetch caches use explicit per-child repository-local environment paths, preserving caller variables.
 
 Owned temporary-cache cleanup retries I/O/access failures up to 20 attempts with 250 ms delays. A failed fetch retains its original error when cleanup also fails; independently owned processes are never terminated.
+Native-command and lease progress goes to the information stream, including periodic waits and post-exit output drainage. Captured native stdout/stderr stay separate and unchanged; progress does not print arbitrary URI arguments.
 
 .EXAMPLE
 .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform x64 -Offline -PassThru

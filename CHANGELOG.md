@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Ghostty builds report native command, lock and output-drain progress. The native ARM64 workflow can collect time-bounded build-only diagnostics under a separate check name without publishing qualification or starting product acceptance; ARM64 qualification remains open.
 - Keep successful Git stderr warnings out of Ghostty candidate metadata parsing,
   while displaying warnings and preserving diagnostics from failed commands.
   Real Git stream and nonzero-exit witnesses cover the CI long-path failure.

@@ -66,6 +66,42 @@ Describe 'Ghostty closed package directory' {
     }
 }
 
+Describe 'Ghostty native command output contract' {
+    It 'keeps both captured streams separate from process progress' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $commandFunction = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -ceq 'Invoke-CheckedProcess'
+        }, $true)
+        $invoke = [scriptblock]::Create(
+            'param($FilePath, $Arguments, $WorkingDirectory)' + "`n" +
+            $commandFunction.Extent.Text + "`n" +
+            'Invoke-CheckedProcess -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory')
+        $progressLog = Join-Path $TestDrive 'native-progress.txt'
+        $child = Join-Path $PSHOME 'pwsh.exe'
+        $childCode = "[Console]::Out.Write('exact-package-hash'); [Console]::Error.Write('captured-stderr'); exit 0"
+        $result = & $invoke $child @('-NoProfile', '-Command', $childCode) ([string]$TestDrive) 6> $progressLog
+        $result.Stdout | Should Be 'exact-package-hash'
+        $result.Stderr | Should Be 'captured-stderr'
+        $progress = Get-Content -LiteralPath $progressLog -Raw
+        $progress | Should Match '\[GhosttyRuntime\] started pid='
+        $progress | Should Match 'code=0; draining output'
+        $progress | Should Match '\[GhosttyRuntime\] completed'
+
+        $failure = ''
+        try {
+            $null = & $invoke $child @('-NoProfile', '-Command', "[Console]::Error.Write('expected-native-failure'); exit 7") ([string]$TestDrive) 6>> $progressLog
+        }
+        catch { $failure = $_.Exception.Message }
+        $failure | Should Match 'failed with exit code 7'
+        $failure | Should Match 'expected-native-failure'
+    }
+}
+
 Describe 'Ghostty owned cache cleanup' {
     Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1')
     $tokens = $null

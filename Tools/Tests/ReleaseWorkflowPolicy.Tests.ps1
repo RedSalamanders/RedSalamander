@@ -880,7 +880,7 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match 'test_zcu\.obj'
         $ghosttyNativeWorkflow | Should Match 'retryExitCode = \$retryExitCode'
         $ghosttyNativeWorkflow | Should Match 'ghostty-native-arm64-crash-\$\{\{ github\.run_id \}\}'
-        $ghosttyNativeWorkflow | Should Match 'if:\s*\$\{\{ failure\(\) && env\.RS_NATIVE_TEST_SCRATCH != '''' \}\}'
+        $ghosttyNativeWorkflow | Should Match 'if:\s*\$\{\{ failure\(\) && !inputs\.diagnostics_only && steps\.native_tests\.outcome == ''failure'' && env\.RS_NATIVE_TEST_SCRATCH != '''' \}\}'
         $ghosttyNativeWorkflow | Should Match 'codeFiveRetryExecutableSha256 ='
         $ghosttyNativeWorkflow | Should Not Match 'codeFiveRetryStatus = ''passed'''
         $ghosttyNativeWorkflow | Should Match 'windowsUnmaterializablePaths'
@@ -895,7 +895,7 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match 'Write-RSAtomicCanonicalJsonFile'
         $ghosttyNativeWorkflow | Should Match 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         $ghosttyNativeWorkflow | Should Match 'if-no-files-found:\s*error'
-        $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product \}\}.*?needs:\s*qualify-arm64'
+        $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product && !inputs\.diagnostics_only \}\}.*?needs:\s*qualify-arm64'
         $ghosttyNativeWorkflow | Should Match 'uses:\s*\./\.github/workflows/ghostty-runtime-product-qualification\.yml'
     }
 
@@ -1039,6 +1039,27 @@ Describe 'Release workflow source contracts' {
         $activePatch | Should Match 'lib\.use_llvm = true'
         $activePatch | Should Match 'lib\.use_lld = true'
         $activePatch | Should Match 'lib\.root_module\.strip = true'
+    }
+
+    It 'keeps build-only diagnostics outside native qualification and product continuation' {
+        $workflow = Get-Content (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $blocks = @([regex]::Split($workflow, '(?m)(?=^      - name: )'))
+        foreach ($name in @('Run upstream native ARM64 lib-vt targets', 'Publish canonical native qualification evidence', 'Upload native qualification evidence')) {
+            $block = @($blocks | Where-Object { $_.StartsWith("      - name: $name`n") -or $_.StartsWith("      - name: $name`r`n") })
+            $block.Count | Should Be 1
+            $block[0] | Should Match '(?m)^        if: \$\{\{ !inputs\.diagnostics_only \}\}\s*$'
+        }
+        $workflow | Should Match 'name: \$\{\{ inputs\.diagnostics_only && ''ARM64 build diagnostics \(not qualification\)'''
+        $workflow | Should Match '(?m)^    if: \$\{\{ inputs\.qualify_product && !inputs\.diagnostics_only \}\}'
+        $diagnostic = @($blocks | Where-Object { $_.StartsWith('      - name: Collect bounded native build diagnostics only') })[0]
+        $diagnostic | Should Match 'Invoke-RSStreamingProcess'
+        $diagnostic | Should Match '-TimeoutMilliseconds 1200000'
+        $diagnostic | Should Match 'qualification = \$false'
+        $upload = @($blocks | Where-Object { $_.StartsWith('      - name: Upload build-only diagnostic evidence') })[0]
+        $upload | Should Match 'always\(\) && inputs\.diagnostics_only && env\.RS_NATIVE_TEST_SCRATCH != '''''
+        $upload | Should Match 'ghostty-native-build-diagnostics-'
+        $workflow.IndexOf('- name: Select owned native test-data root') |
+            Should BeLessThan $workflow.IndexOf('- name: Build exact candidate natively')
     }
 
     It 'scopes Ghostty shared state by repository and takes the session drive lease only for rebuilds' {

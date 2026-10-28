@@ -181,6 +181,20 @@ and warning; acceptance remains pending their actual results.
   scoped-testing and governance checks passed 99/99 in
   `20261028T234753Z-75512-55b70c3d9559450e9039da9720a2a66a`.
 
+- Native ARM64 candidate run `40761642957` at `62d181cf4` reached the
+  120-minute job limit during the exact-candidate build; no upstream test ran
+  and admitted-product continuation was skipped. The terminal build in PR CI
+  `40761500830` also remained unfinished before the obsolete run was cancelled.
+  Neither establishes native qualification or a compiler crash. Build progress
+  now distinguishes repository/dependency/drive phases, running owned commands,
+  and output pipes remaining open after process exit. The optional build-only
+  diagnostic dispatch has a separate check name, a 20-minute contained watchdog
+  and an explicit `qualification=false` artifact; it cannot publish qualification
+  evidence or start product continuation. The workflow YAML, eight PowerShell
+  run blocks and generated worker parsed successfully. Focused lifecycle,
+  workflow and governance checks passed 85/85 in
+  `20261028T234817Z-90600-7717d6bb3cd34622b885d5f114db47d1`.
+
 - The standalone x64 Zig repeat `ghostty140-zig-x64-clean-exit-20261028a`
   passed 3,233 tests, skipped 36 and returned exit 0. Its record retains the
   executable and log hashes and verifies unchanged executable bytes. It closes
