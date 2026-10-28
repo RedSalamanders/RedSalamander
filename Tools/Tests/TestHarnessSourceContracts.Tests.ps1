@@ -477,7 +477,8 @@ Describe 'Test harness source contracts' {
             @{ Path = 'Plugins\ViewerText\ViewerText.cpp'; ExpectedCallbacks = 1 },
             @{ Path = 'Plugins\ViewerText\ViewerText.Text.cpp'; ExpectedCallbacks = 1 },
             @{ Path = 'Plugins\ViewerVLC\ViewerVLC.cpp'; ExpectedCallbacks = 2 },
-            @{ Path = 'Plugins\ViewerSqlite\ViewerSqlite.cpp'; ExpectedCallbacks = 1 }
+            @{ Path = 'Plugins\ViewerSqlite\ViewerSqlite.cpp'; ExpectedCallbacks = 1 },
+            @{ Path = '.github\skills\plugin-callbacks\SKILL.md'; ExpectedCallbacks = 1 }
         )
 
         foreach ($callbackFile in $callbackFiles) {

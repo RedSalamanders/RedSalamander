@@ -68,21 +68,29 @@ function Get-RSMarkdownCodeMask {
     foreach ($line in $lines) {
         $content = $line.TrimEnd("`r", "`n")
         $ending = $line.Substring($content.Length)
-        $fenceMatch = [regex]::Match($content, '^\s*(?<fence>`{3,}|~{3,})')
+        $fenceMatch = [regex]::Match($content, '^ {0,3}(?<fence>`{3,}|~{3,})(?<rest>.*)$')
         if ($fenceMatch.Success) {
             $run = $fenceMatch.Groups['fence'].Value
             $character = $run[0]
+            $rest = $fenceMatch.Groups['rest'].Value
+            $wasInFence = $inFence
             if (-not $inFence) {
-                $inFence = $true
-                $fenceCharacter = $character
-                $fenceLength = $run.Length
-            } elseif ($character -eq $fenceCharacter -and $run.Length -ge $fenceLength) {
+                # Backticks in the info tail make this an inline-code candidate.
+                # Tilde info may contain backticks; keep its existing fence behavior.
+                if ($character -ne '`' -or -not $rest.Contains('`')) {
+                    $inFence = $true
+                    $fenceCharacter = $character
+                    $fenceLength = $run.Length
+                }
+            } elseif ($character -eq $fenceCharacter -and $run.Length -ge $fenceLength -and [string]::IsNullOrWhiteSpace($rest)) {
                 $inFence = $false
                 $fenceCharacter = [char]0
                 $fenceLength = 0
             }
-            $maskedLines.Add((' ' * $content.Length) + $ending)
-            continue
+            if ($wasInFence -or $inFence) {
+                $maskedLines.Add((' ' * $content.Length) + $ending)
+                continue
+            }
         }
 
         if ($inFence) {
@@ -1093,6 +1101,9 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/UI_DebugSortPaintCpu_2026-10-20.md',
             # Exact waiting-card closeout; siblings and companions remain unreviewed.
             'Specs/Plans/Done/FileOperations_WaitingCards_2026-10-20.md',
+            'Specs/Plans/Done/PowerShellTooling_2026-10-28.md',
+            # Exact I49 guidance/package remediation record; no sibling admission or runtime qualification.
+            'Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-24.md',
             # Exact local test-run retention closeout; no sibling or companion admission.
             'Specs/Plans/Done/TestRunEvidenceArchival_2026-10-21.md',
             # Exact I42 closeout path; admission does not qualify the implementation or close its WIP gates.

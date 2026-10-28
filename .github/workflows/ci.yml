@@ -59,14 +59,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.14'
-
       - name: Install pinned formatter
         shell: pwsh
-        run: |
-          python -m pip install --require-hashes --only-binary=:all: --no-deps --target .build/format -r Build/requirements-format.txt
+        run: ./Tools/Install-ClangFormat.ps1
 
       - name: Check changed native sources
         shell: pwsh

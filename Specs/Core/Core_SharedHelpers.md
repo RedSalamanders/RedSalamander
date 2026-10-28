@@ -218,3 +218,9 @@ cleanup must reuse `RemovePathTreeNoFollow` rather than add another recursive tr
 The public rotation returns success only after cleanup, rename, directory creation and all four
 UTF-16 log initializations succeed. The application aborts selftest startup on failure; it never
 deletes the current last run as a fallback for a failed rename.
+
+## Build tooling helpers
+
+| Behavior | Canonical owner | Contract |
+| --- | --- | --- |
+| Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, provider-resolved offline input, WhatIf and failure-preserving publication under an exclusive cache lease. Reuses canonical ArtifactOperationLock guarded path/publication helpers. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |

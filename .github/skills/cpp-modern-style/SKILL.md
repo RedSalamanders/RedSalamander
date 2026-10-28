@@ -1,17 +1,17 @@
 ---
 name: cpp-modern-style
-description: Modern C++23 coding style and conventions for RedSalamander. Use when writing new code, reviewing style, using STL containers, smart pointers, std::format, std::optional, or following naming conventions.
+description: Apply RedSalamander C++ ownership, naming, formatting, header hygiene, and shared-helper conventions when writing or reviewing native code.
 metadata:
   author: RedSalamander
   version: "1.0"
 ---
 
-# Modern C++23 Style Guide
+# Modern C++ Style Guide
 
 ## Project Requirements
-- **C++23** standard
+- **MSVC stdcpplatest** mode
 - **Unicode UTF-16** encoding
-- **Windows 10/11** minimum
+- **Windows 11 build 22000.2600** minimum
 
 ## Smart Pointers
 
@@ -46,8 +46,7 @@ for (const auto& item : items) { }
 // ✅ Structured bindings
 auto [key, value] = GetPair();
 
-// ❌ NEVER fixed-size buffers for formatting
-wchar_t buf[256];  // BAD
+// Fixed buffers are reserved for boundaries that require bounded storage.
 ```
 
 ### Formatting Into Fixed Buffers (When Required)
@@ -102,21 +101,21 @@ Follow [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreG
 
 ## RAII Pattern
 
-Every resource should have an owner:
+Use the existing WIL owner rather than writing a raw-handle destructor and defaulting its moves:
 ```cpp
 class Resource 
 {
-    Handle _handle;
+    wil::unique_handle _handle;
 public:
-    Resource(Args args) : _handle(acquire(args)) {}
-    ~Resource() { release(_handle); }
-    // Rule of 5: Disable copy, implement move if needed
+    explicit Resource(wil::unique_handle handle) noexcept : _handle(std::move(handle)) {}
     Resource(const Resource&) = delete;
     Resource& operator=(const Resource&) = delete;
     Resource(Resource&&) noexcept = default;
     Resource& operator=(Resource&&) noexcept = default;
 };
 ```
+
+WIL move assignment releases the destination's previous owned handle and empties the source. A defaulted move of a scalar `HANDLE` does neither. Borrowed/shared Win32 handles are not adopted into an owning wrapper unless the acquisition API explicitly transfers ownership.
 
 ## File Organization
 

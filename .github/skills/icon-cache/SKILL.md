@@ -75,7 +75,7 @@ Never call `DestroyIcon` / `DeleteObject` manually.
 
 ```cpp
 // Transfer ownership to vector
-wil::unique_hbitmap bmp = IconCache::CreateMenuBitmapFromIconIndex(idx);
+wil::unique_hbitmap bmp = IconCache::GetInstance().CreateMenuBitmapFromIconIndex(idx, sizePx);
 _menuBitmaps.emplace_back(std::move(bmp));
 ```
 
@@ -83,7 +83,7 @@ _menuBitmaps.emplace_back(std::move(bmp));
 
 ```cpp
 // Call from DPI change handlers
-IconCache::SetDpi(newDpi);
+IconCache::GetInstance().SetDpi(static_cast<float>(newDpi));
 ```
 
 Menu bitmaps use physical pixels: `GetSystemMetrics(SM_CXSMICON)`

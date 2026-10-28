@@ -66,7 +66,7 @@ _d2dContext->DrawTextLayout(D2D1::Point2F(x, y), layout.get(), _brush.get());
 void OnDpiChanged(UINT dpi) 
 {
     _d2dContext->SetDpi(static_cast<float>(dpi), static_cast<float>(dpi));
-    IconCache::SetDpi(dpi);
+    IconCache::GetInstance().SetDpi(static_cast<float>(dpi));
     RecreateDeviceDependentResources();
 }
 ```

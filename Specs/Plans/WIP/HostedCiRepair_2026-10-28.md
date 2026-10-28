@@ -89,3 +89,24 @@ the GUI host did not preserve the FTP export's stderr, leaving only its opaque 1
 
 The shuffle artifact consumer now provisions the same pinned MSVC family before portable attestation
 rebind; matching runner labels alone do not ensure the producer-installed compiler is present.
+
+## Integrated qualification
+
+Candidate `6dd56d99c55db8f141570d165f305242f0b20cf2` built x64 Debug successfully with receipt
+`efe0fcd9c7540e2364791ac3de92ebfb8c097fa0e12ddae0e7dc828973b530e3`.
+Its six focused Search cases passed without skips or retries in
+`20261028T121410Z-76456-24af46693e4d43a2bd202be44ca51afd`; the no-journal regression took 40 ms.
+The exact history-menu and delete-focus cases passed in
+`20261028T122212Z-78288-979e5f220c8b4c9c8df9333f5227f3f3`. A mixed prefix/union filter selected
+only those two exact cases, so this is not animation coverage. The remediation-contract case and
+its Setup/Cleanup passed in `20261028T122824Z-67024-cde935e3e3584d538f127b589b9f3a51`.
+All 304 focused tooling controls passed before integration; they do not qualify the newer source.
+
+Main advanced concurrently through PR #145 to `8ea956a7e2e271368082a953f28efd2a58e1013f`,
+including the canonical PowerShell formatter installer and guidance/tooling corrections. Preserve both
+changes. The newly started local Full run was interrupted before native execution and remains incomplete.
+Earlier hosted runs remain tied to their original source; none is promoted to integrated acceptance.
+Resolve the changelog merge by reconstructing the six existing repair fragments and folding them over
+main's generated changelog. Refresh the reviewed PR execution digest after inspecting the complete
+combined workflow/module closure; this records reviewed inputs, not a CI pass. Integrated local and
+hosted qualification, plan closeout and main confirmation remain open.
