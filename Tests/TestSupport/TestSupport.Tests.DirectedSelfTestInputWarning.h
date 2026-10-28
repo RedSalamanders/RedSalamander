@@ -11,16 +11,13 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <commctrl.h>
-
-#pragma comment(lib, "comctl32")
-
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
 #include <wil/resource.h>
 #pragma warning(pop)
 
 #include "Common.Tests.WindowActivationGuard.h"
+#include "Win32CallbackHelpers.h"
 #include "WindowActivation.h"
 
 namespace RedSalamander::TestSupport
@@ -160,14 +157,25 @@ public:
         if (! hotkeyId || GetWindowThreadProcessId(warning, nullptr) != threadId)
             return false;
         request.id     = hotkeyId.get();
-        observed.stage = L"warning-subclass";
-        if (! SetWindowSubclass(warning, ForegroundHotkeyProc, request.id, reinterpret_cast<DWORD_PTR>(&request)))
+        observed.stage = L"warning-hook";
+        if (GetPropW(warning, kForegroundRequestProp) || Win32Callback::GetStoredWndProc(warning, kForegroundOriginalProcProp))
+            return false;
+        if (! Win32Callback::SetPropNoThrow(warning, kForegroundRequestProp, reinterpret_cast<HANDLE>(&request)))
         {
             observed.win32Error = GetLastError();
             return false;
         }
-        const auto removeSubclass = wil::scope_exit([&]() noexcept { RemoveWindowSubclass(warning, ForegroundHotkeyProc, request.id); });
-        observed.stage            = L"hotkey-registration";
+        const auto restoreHook = wil::scope_exit([&]() noexcept
+        {
+            Win32Callback::RestoreWndProcHook(warning, kForegroundOriginalProcProp, ForegroundHotkeyProc);
+            RemovePropW(warning, kForegroundRequestProp);
+        });
+        if (! Win32Callback::InstallWndProcHook(warning, kForegroundOriginalProcProp, ForegroundHotkeyProc))
+        {
+            observed.win32Error = GetLastError();
+            return false;
+        }
+        observed.stage = L"hotkey-registration";
         if (! RegisterHotKey(warning, static_cast<int>(request.id), MOD_NOREPEAT, VK_F24))
         {
             observed.win32Error = GetLastError();
@@ -217,6 +225,9 @@ public:
     }
 
 private:
+    static constexpr wchar_t kForegroundRequestProp[]      = L"RedSalamander.TestForeground.Request";
+    static constexpr wchar_t kForegroundOriginalProcProp[] = L"RedSalamander.TestForeground.OriginalWndProc";
+
     struct ForegroundHotkeyRequest final
     {
         HWND target    = nullptr;
@@ -243,16 +254,23 @@ private:
         }
     };
 
-    static LRESULT CALLBACK ForegroundHotkeyProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR reference) noexcept
+    static LRESULT CALLBACK ForegroundHotkeyProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
-        auto* const request = reinterpret_cast<ForegroundHotkeyRequest*>(reference);
+        auto* const request = reinterpret_cast<ForegroundHotkeyRequest*>(GetPropW(window, kForegroundRequestProp));
+        if (message == WM_NCDESTROY)
+        {
+            const auto original = Win32Callback::GetStoredWndProc(window, kForegroundOriginalProcProp);
+            RemovePropW(window, kForegroundRequestProp);
+            Win32Callback::RestoreWndProcHook(window, kForegroundOriginalProcProp, ForegroundHotkeyProc);
+            return original ? Win32Callback::CallWindowProcNoThrow(original, window, message, wParam, lParam) : DefWindowProcW(window, message, wParam, lParam);
+        }
         if (message == WM_HOTKEY && request && window == request->warning && wParam == request->id)
         {
             request->handled   = true;
             request->activated = request->Activate();
             return 0;
         }
-        return DefSubclassProc(window, message, wParam, lParam);
+        return Win32Callback::CallStoredWndProc(window, kForegroundOriginalProcProp, message, wParam, lParam);
     }
 
     static void CALLBACK TimerProc(HWND window, UINT, UINT_PTR, DWORD) noexcept

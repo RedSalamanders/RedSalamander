@@ -14,20 +14,59 @@
         state.Require(blocker.BlockedActivationCount() == 0u && blocker.BlockedFocusCount() == 0u,
                       L"No-activation admission must refuse before attempting a focus or activation change.");
     }
+    HWND warningWindow = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(),
+                      [](HWND window, LPARAM context) noexcept -> BOOL
+    {
+        if (! DirectedSelfTestInputWarning::IsWarningWindow(window))
+            return TRUE;
+        *reinterpret_cast<HWND*>(context) = window;
+        return FALSE;
+    },
+                      reinterpret_cast<LPARAM>(&warningWindow));
+    const auto warningProcedure = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC));
+    if (! state.Require(warningWindow && warningProcedure, L"The dispatch witness must identify the owned warning and its original procedure."))
+        return false;
+
     struct HotkeyDispatchWitness final
     {
         HWND window                = nullptr;
         unsigned int dispatchCount = 0u;
         DWORD installError         = ERROR_SUCCESS;
-        static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR reference) noexcept
+        bool retired               = false;
+        static const wchar_t* StateProp() noexcept
         {
-            auto* const witness = reinterpret_cast<HotkeyDispatchWitness*>(reference);
-            if (message == WM_HOTKEY)
-                ++witness->dispatchCount;
-            return DefSubclassProc(window, message, wParam, lParam);
+            return L"RedSalamander.TestForeground.DispatchWitness";
+        }
+        static const wchar_t* OriginalProcProp() noexcept
+        {
+            return L"RedSalamander.TestForeground.DispatchWitness.OriginalWndProc";
+        }
+        static void Remove(HWND window) noexcept
+        {
+            RedSalamander::Win32Callback::RestoreWndProcHook(window, OriginalProcProp(), Procedure);
+            RemovePropW(window, StateProp());
+        }
+        static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+        {
+            auto* const witness = reinterpret_cast<HotkeyDispatchWitness*>(GetPropW(window, StateProp()));
+            const auto original = RedSalamander::Win32Callback::GetStoredWndProc(window, OriginalProcProp());
+            if (message == WM_HOTKEY || message == WM_NCDESTROY)
+            {
+                if (witness && message == WM_HOTKEY)
+                    ++witness->dispatchCount;
+                Remove(window);
+                if (witness)
+                {
+                    witness->retired = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(window, GWLP_WNDPROC)) == original;
+                    if (witness->retired)
+                        witness->window = nullptr;
+                }
+            }
+            return original ? RedSalamander::Win32Callback::CallWindowProcNoThrow(original, window, message, wParam, lParam)
+                            : DefWindowProcW(window, message, wParam, lParam);
         }
     } witness;
-    constexpr UINT_PTR witnessSubclassId                     = 0x5F12u;
     static thread_local HotkeyDispatchWitness* activeWitness = nullptr;
     auto* const previousWitness                              = std::exchange(activeWitness, &witness);
     const auto restoreWitness                                = wil::scope_exit([&]() noexcept { activeWitness = previousWitness; });
@@ -38,12 +77,16 @@
     {
         const auto* const message = reinterpret_cast<const MSG*>(lParam);
         if (code >= 0 && wParam == PM_REMOVE && message->message == WM_HOTKEY && activeWitness &&
-            GetWindowThreadProcessId(message->hwnd, nullptr) == GetCurrentThreadId())
+            DirectedSelfTestInputWarning::IsWarningWindow(message->hwnd) && GetWindowThreadProcessId(message->hwnd, nullptr) == GetCurrentThreadId())
         {
-            if (SetWindowSubclass(message->hwnd, HotkeyDispatchWitness::Procedure, witnessSubclassId, reinterpret_cast<DWORD_PTR>(activeWitness)))
+            if (RedSalamander::Win32Callback::SetPropNoThrow(message->hwnd, HotkeyDispatchWitness::StateProp(), reinterpret_cast<HANDLE>(activeWitness)) &&
+                RedSalamander::Win32Callback::InstallWndProcHook(message->hwnd, HotkeyDispatchWitness::OriginalProcProp(), HotkeyDispatchWitness::Procedure))
                 activeWitness->window = message->hwnd;
             else
+            {
                 activeWitness->installError = GetLastError();
+                HotkeyDispatchWitness::Remove(message->hwnd);
+            }
         }
         return CallNextHookEx(nullptr, code, wParam, lParam);
     },
@@ -54,16 +97,17 @@
     const auto removeWitness    = wil::scope_exit([&]() noexcept
     {
         if (witness.window)
-            RemoveWindowSubclass(witness.window, HotkeyDispatchWitness::Procedure, witnessSubclassId);
+            HotkeyDispatchWitness::Remove(witness.window);
     });
     constexpr int probeHotkeyId = 0x5F11;
     for (unsigned int attempt = 0u; attempt < 2u; ++attempt)
     {
         const unsigned int dispatchBefore = witness.dispatchCount;
+        witness.retired                   = false;
         const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
-        const bool retiredWitness         = witness.window && RemoveWindowSubclass(witness.window, HotkeyDispatchWitness::Procedure, witnessSubclassId);
-        if (retiredWitness)
-            witness.window = nullptr;
+        const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
+                                    RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
+                                    reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC)) == warningProcedure;
         if (! state.Require(activated && GetForegroundWindow() == mainWindow, L"The warned hotkey handshake must acquire actual foreground ownership."))
             return false;
         state.Require(retiredWitness && witness.installError == ERROR_SUCCESS && witness.dispatchCount == dispatchBefore + 1u,

@@ -441,3 +441,20 @@ Supply the test header's Comctl32 dependency and place diagnostics after the exi
 helpers; no guard is relaxed. A full Rebuild is required after that failed build.
 
 The reviewed execution binding after the archive rename controls is 84e767c50fbf91c1177ee8069c77581f56c86d347d14e4dd4eb34f087e5f4733. The enabled Suite PR and two native Debug profiles are unchanged; pending hosted work remains unaccepted.
+
+Source `887a9b079` builds the full x64 Debug solution in 4:50, receipt
+`1fe9f0a7dd320aac4d25c9e5824fbfbc8513e61a7e3db8c84359ce13b7771a85`, with no new warnings.
+All 11 review threads are resolved; its latest review has no open findings, while native
+acceptance remains pending. The PrePush explanation still selects the six required local
+groups (about two hours), with only equivalent PR entries delegated and CI_PENDING.
+
+The hosted migration guard fails on the new native witness's retired comctl subclass APIs.
+Keep the guard unchanged and migrate both the permission handler and independent witness
+to the existing Win32Callback hook helpers. The witness must restore its outer hook before
+forwarding to the handler and prove the exact original procedure restored afterward.
+All three migration/surface guards pass locally after this correction; a new build and
+native qualification are required. Focused run
+`20261028T213339Z-93684-b8a598fcd023434584aeec2d1bf3add9` was interrupted while waiting
+for another worktree's desktop lease, before launching its native cases. Retain it as
+incomplete coverage. The person approved the remaining focus-taking tests overnight into
+29 October with the existing warning, desktop lease and focus/cursor restoration.

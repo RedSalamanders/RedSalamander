@@ -232,6 +232,12 @@ dispatch per forced handshake, actual foreground ownership, released input, regi
 cleanup and the existing conflict/no-activation/unowned-window refusals. This follows the
 [Windows hotkey activation contract](https://devblogs.microsoft.com/oldnewthing/20090226-00/?p=19013).
 
+Both temporary hooks reuse `Win32Callback::InstallWndProcHook` and
+`RestoreWndProcHook`; migrated code does not use the retired comctl subclass manager.
+The independent dispatch witness removes its outer hook before forwarding the real hotkey
+to the permission handler, and requires the exact original warning procedure and clean
+properties after admission. Hook state remains owned by the synchronous calling scope.
+
 ## Native selftest artifact rotation
 
 `SelfTest::RotateSelfTestRuns` in `RedSalamander/SelfTest/Common/Common.Tests.Runner.cpp`
