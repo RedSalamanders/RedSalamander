@@ -7,6 +7,7 @@
 #include "FluentIcons.h"
 #include "FolderWindow.FileOperations.PromptText.h"
 #include "FolderWindow.FileOperationsInternal.h"
+#include "Helpers.h"
 #include "HostServices.h"
 #include "LocalizationManager.h"
 #include "NavigationLocation.h"
@@ -586,6 +587,8 @@ struct PopupDisplayRow
 
 #ifdef ENABLE_TESTS
 constexpr UINT kFileOperationsSpeedLimitPromptDebugMessage = WM_APP + 0x73;
+std::atomic<uint64_t> g_speedPromptAdmissionDestroyRetirements{0u};
+std::atomic<uint64_t> g_speedPromptAdmissionDestroyFailures{0u};
 std::atomic<unsigned int> g_fileOperationsTaskbarListForcedFailures{0};
 std::atomic<unsigned int> g_fileOperationsDxUiHostAttachForcedFailures{0};
 std::atomic<unsigned int> g_fileOperationsD2DTargetForcedFailures{0};
@@ -2634,6 +2637,9 @@ public:
             }
 
             self->_hWnd.reset(hwnd);
+#ifdef ENABLE_TESTS
+            InitPostedPayloadWindow(hwnd);
+#endif
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
         }
 
@@ -2658,11 +2664,35 @@ public:
         SetScreenshotAdmission,
     };
 
-    struct DebugCaptureAdmissionRequest
+    struct DebugResponse
     {
-        bool enabled   = false;
-        HRESULT result = E_PENDING;
+        DebugResponse()                                = default;
+        DebugResponse(const DebugResponse&)            = delete;
+        DebugResponse& operator=(const DebugResponse&) = delete;
+        DebugResponse(DebugResponse&&)                 = delete;
+        DebugResponse& operator=(DebugResponse&&)      = delete;
+        FileOperationsSpeedLimitPromptDebugSnapshot snapshot;
+        std::atomic<HRESULT> result{E_PENDING};
     };
+
+    struct DebugRequest
+    {
+        explicit DebugRequest(DebugCommand operation) : command(operation), response(std::make_shared<DebugResponse>())
+        {
+        }
+        DebugCommand command;
+        std::shared_ptr<DebugResponse> response;
+        std::wstring text;
+        std::optional<float> heightLimit;
+        std::pair<size_t, size_t> selection{};
+        bool admissionEnabled = false;
+    };
+
+    static bool SendDebugRequest(HWND hwnd, std::unique_ptr<DebugRequest> request) noexcept
+    {
+        const auto command = request->command;
+        return SendMessagePayload(hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), std::move(request)) != FALSE;
+    }
 #endif
 
 private:
@@ -3073,16 +3103,47 @@ private:
     }
 
 #ifdef ENABLE_TESTS
-    LRESULT OnDebugCommand(DebugCommand command, LPARAM payload) noexcept
+    void RetireDebugStateBeforeDestroy(HWND hwnd) noexcept
     {
+        // Fence new requests before restoring; style notifications may reenter.
+        static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+        if (_debugScreenshotAdmission.has_value())
+        {
+            const HRESULT restored = _debugScreenshotAdmission.value().Restore();
+            _debugScreenshotAdmission.reset();
+            if (FAILED(restored))
+                g_speedPromptAdmissionDestroyFailures.fetch_add(1u, std::memory_order_release);
+            g_speedPromptAdmissionDestroyRetirements.fetch_add(1u, std::memory_order_release);
+        }
+    }
+
+    LRESULT OnDebugCommand(HWND hwnd, DebugCommand command, LPARAM payload) noexcept
+    {
+        // These two close commands explicitly have no payload. Every data-bearing
+        // command uses the canonical destination/type-checked opaque token protocol.
+        if (command == DebugCommand::Confirm || command == DebugCommand::Cancel)
+        {
+            if (payload != 0)
+                return FALSE;
+            RequestDeferredAction(command == DebugCommand::Confirm ? DeferredAction::Confirm : DeferredAction::Cancel);
+            return TRUE;
+        }
+        auto request = TakeMessagePayload<DebugRequest>(hwnd, kFileOperationsSpeedLimitPromptDebugMessage, payload);
+        if (! request || request->command != command || ! request->response)
+            return FALSE;
+        const auto finish = [&](HRESULT result) noexcept -> LRESULT
+        {
+            request->response->result.store(result, std::memory_order_release);
+            return TRUE;
+        };
         switch (command)
         {
             case DebugCommand::GetSnapshot:
             {
-                auto* snapshot = reinterpret_cast<FileOperationsSpeedLimitPromptDebugSnapshot*>(payload);
-                if (! snapshot)
+                auto* snapshot = &request->response->snapshot;
+                if (! _body || ! _field || ! _label || ! _hintLabel || ! _okButton || ! _cancelButton)
                 {
-                    return FALSE;
+                    return finish(E_UNEXPECTED);
                 }
 
                 snapshot->bodyBounds           = _body->GetViewportRect();
@@ -3139,67 +3200,63 @@ private:
                                                                             _hintLabel->GetText(),
                                                                             snapshot->hintBounds.right - snapshot->hintBounds.left,
                                                                             20.0f);
-                return TRUE;
+                return finish(S_OK);
             }
             case DebugCommand::SetText:
             {
-                auto* text = reinterpret_cast<const std::wstring*>(payload);
-                if (! text || ! _field)
+                if (! _field)
                 {
-                    return FALSE;
+                    return finish(E_UNEXPECTED);
                 }
 
-                _field->SetTextAndNotify(*text);
+                _field->SetTextAndNotify(request->text);
                 ClearValidation();
                 _dxHost.SetFocusControl(_field);
                 _dxHost.SyncTextInput(_field);
                 _dxHost.Invalidate();
-                return TRUE;
+                return finish(S_OK);
             }
             case DebugCommand::SetClientHeightLimit:
             {
-                const auto* limit = reinterpret_cast<const std::optional<float>*>(payload);
-                if (! limit || (limit->has_value() && (! std::isfinite(limit->value()) || limit->value() < 100.0f)))
-                    return FALSE;
-                _debugClientHeightLimitDip = *limit;
+                const auto limit = request->heightLimit;
+                if (limit.has_value() && (! std::isfinite(limit.value()) || limit.value() < 100.0f))
+                    return finish(E_INVALIDARG);
+                _debugClientHeightLimitDip = limit;
                 Layout();
-                return TRUE;
+                return finish(S_OK);
             }
             case DebugCommand::SetSelection:
             {
-                const auto* selection = reinterpret_cast<const std::pair<size_t, size_t>*>(payload);
-                if (! selection || ! _field)
-                    return FALSE;
-                _field->SetSelectionRange(selection->first, selection->second);
+                if (! _field)
+                    return finish(E_UNEXPECTED);
+                _field->SetSelectionRange(request->selection.first, request->selection.second);
                 _dxHost.SyncTextInput(_field);
-                return TRUE;
+                return finish(S_OK);
             }
-            case DebugCommand::Confirm: RequestDeferredAction(DeferredAction::Confirm); return TRUE;
-            case DebugCommand::Cancel: RequestDeferredAction(DeferredAction::Cancel); return TRUE;
+            case DebugCommand::Confirm:
+            case DebugCommand::Cancel: return FALSE; // Handled only by the explicit payload-less branch above.
             case DebugCommand::SetScreenshotAdmission:
             {
-                auto* request = reinterpret_cast<DebugCaptureAdmissionRequest*>(payload);
-                if (! request)
-                    return FALSE;
-                if (request->enabled)
+                HRESULT result = E_UNEXPECTED;
+                if (request->admissionEnabled)
                 {
                     if (_debugScreenshotAdmission.has_value())
-                        request->result = HRESULT_FROM_WIN32(ERROR_BUSY);
+                        result = HRESULT_FROM_WIN32(ERROR_BUSY);
                     else
                     {
                         _debugScreenshotAdmission.emplace(_hWnd.get());
-                        request->result = _debugScreenshotAdmission.value().Status();
-                        if (FAILED(request->result))
+                        result = _debugScreenshotAdmission.value().Status();
+                        if (FAILED(result))
                             _debugScreenshotAdmission.reset();
                     }
                 }
                 else
                 {
-                    request->result = _debugScreenshotAdmission.has_value() ? _debugScreenshotAdmission.value().Restore() : E_UNEXPECTED;
-                    if (SUCCEEDED(request->result))
+                    result = _debugScreenshotAdmission.has_value() ? _debugScreenshotAdmission.value().Restore() : E_UNEXPECTED;
+                    if (SUCCEEDED(result))
                         _debugScreenshotAdmission.reset();
                 }
-                return TRUE;
+                return finish(result);
             }
         }
 
@@ -3209,6 +3266,10 @@ private:
 
     LRESULT WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
+#ifdef ENABLE_TESTS
+        if (message == WM_NCDESTROY)
+            RetireDebugStateBeforeDestroy(hwnd);
+#endif
         if (message == WM_KEYDOWN && OnBodyKeyDown(static_cast<UINT>(wParam)))
             return 0;
         if (message == WM_THEMECHANGED || message == WM_SETTINGCHANGE)
@@ -3270,12 +3331,9 @@ private:
             case WM_ERASEBKGND: return 1;
             case WM_CLOSE: RequestDeferredAction(DeferredAction::Cancel); return 0;
 #ifdef ENABLE_TESTS
-            case kFileOperationsSpeedLimitPromptDebugMessage: return OnDebugCommand(static_cast<DebugCommand>(wParam), lParam);
+            case kFileOperationsSpeedLimitPromptDebugMessage: return OnDebugCommand(hwnd, static_cast<DebugCommand>(wParam), lParam);
 #endif
             case WM_NCDESTROY:
-#ifdef ENABLE_TESTS
-                _debugScreenshotAdmission.reset();
-#endif
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 _dxHost.Detach();
                 if (_hWnd.get() == hwnd)
@@ -17619,14 +17677,13 @@ bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitProm
         return false;
     }
 
-    auto snapshot = std::make_unique<FileOperationsSpeedLimitPromptDebugSnapshot>();
-    const bool ok = SendMessageW(hwnd,
-                                 kFileOperationsSpeedLimitPromptDebugMessage,
-                                 static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::GetSnapshot),
-                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
+    auto request        = std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::GetSnapshot);
+    const auto response = request->response;
+    const bool ok =
+        FileOperationsSpeedLimitPromptWindow::SendDebugRequest(hwnd, std::move(request)) && SUCCEEDED(response->result.load(std::memory_order_acquire));
     if (ok)
     {
-        out = std::move(*snapshot);
+        out = std::move(response->snapshot);
     }
     return ok;
 }
@@ -17639,11 +17696,10 @@ bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
         return false;
     }
 
-    auto payload = std::make_unique<std::wstring>(text);
-    return SendMessageW(hwnd,
-                        kFileOperationsSpeedLimitPromptDebugMessage,
-                        static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetText),
-                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
+    auto request        = std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetText);
+    request->text       = text;
+    const auto response = request->response;
+    return FileOperationsSpeedLimitPromptWindow::SendDebugRequest(hwnd, std::move(request)) && SUCCEEDED(response->result.load(std::memory_order_acquire));
 }
 
 HRESULT DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(HWND prompt, bool enabled) noexcept
@@ -17652,31 +17708,58 @@ HRESULT DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(HWND prompt, b
         return E_INVALIDARG;
     // Only USER32 admission/restoration runs inside this input-synchronous call.
     // WGC/COM work stays on the caller while the modal UI continues pumping.
-    FileOperationsSpeedLimitPromptWindow::DebugCaptureAdmissionRequest request{enabled, E_PENDING};
-    const bool handled = SendMessageW(prompt,
-                                      kFileOperationsSpeedLimitPromptDebugMessage,
-                                      static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetScreenshotAdmission),
-                                      reinterpret_cast<LPARAM>(&request)) != FALSE;
-    return handled ? request.result : E_FAIL;
+    auto request =
+        std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetScreenshotAdmission);
+    request->admissionEnabled = enabled;
+    const auto response       = request->response;
+    const bool handled        = FileOperationsSpeedLimitPromptWindow::SendDebugRequest(prompt, std::move(request));
+    return handled ? response->result.load(std::memory_order_acquire) : E_FAIL;
+}
+
+bool DebugProbeFileOperationsSpeedLimitPromptScreenshotAdmissionRequests(HWND prompt) noexcept
+{
+    if (! prompt || GetFileOperationsSpeedLimitPromptHandle() != prompt)
+        return false;
+    constexpr auto command = FileOperationsSpeedLimitPromptWindow::DebugCommand::SetScreenshotAdmission;
+    // Nonpositive tokens cannot be live registry entries. Wrong-type and
+    // wrong-operation controls also exercise valid registry ownership/reclamation.
+    const LRESULT empty  = SendMessageW(prompt, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), 0);
+    const LRESULT forged = SendMessageW(prompt, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), static_cast<LPARAM>(-1));
+    const LRESULT wrongType =
+        SendMessagePayload(prompt, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), std::make_unique<DWORD>(0u));
+    auto wrongOperation = std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetText);
+    const LRESULT wrongCommand =
+        SendMessagePayload(prompt, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(command), std::move(wrongOperation));
+    return empty == FALSE && forged == FALSE && wrongType == FALSE && wrongCommand == FALSE;
+}
+
+FileOperationsSpeedLimitPromptAdmissionDebugCounters DebugGetFileOperationsSpeedLimitPromptAdmissionCounters() noexcept
+{
+    return {.retiredOnDestroy   = g_speedPromptAdmissionDestroyRetirements.load(std::memory_order_acquire),
+            .failedRestorations = g_speedPromptAdmissionDestroyFailures.load(std::memory_order_acquire)};
 }
 
 bool DebugSetFileOperationsSpeedLimitPromptClientHeightLimit(std::optional<float> heightDip) noexcept
 {
     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
-    return hwnd && SendMessageW(hwnd,
-                                kFileOperationsSpeedLimitPromptDebugMessage,
-                                static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetClientHeightLimit),
-                                reinterpret_cast<LPARAM>(&heightDip)) != FALSE;
+    if (! hwnd)
+        return false;
+    auto request =
+        std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetClientHeightLimit);
+    request->heightLimit = heightDip;
+    const auto response  = request->response;
+    return FileOperationsSpeedLimitPromptWindow::SendDebugRequest(hwnd, std::move(request)) && SUCCEEDED(response->result.load(std::memory_order_acquire));
 }
 
 bool DebugSetFileOperationsSpeedLimitPromptSelection(size_t start, size_t end) noexcept
 {
     const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
-    const std::pair<size_t, size_t> selection{start, end};
-    return hwnd && SendMessageW(hwnd,
-                                kFileOperationsSpeedLimitPromptDebugMessage,
-                                static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetSelection),
-                                reinterpret_cast<LPARAM>(&selection)) != FALSE;
+    if (! hwnd)
+        return false;
+    auto request       = std::make_unique<FileOperationsSpeedLimitPromptWindow::DebugRequest>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetSelection);
+    request->selection = {start, end};
+    const auto response = request->response;
+    return FileOperationsSpeedLimitPromptWindow::SendDebugRequest(hwnd, std::move(request)) && SUCCEEDED(response->result.load(std::memory_order_acquire));
 }
 
 bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept

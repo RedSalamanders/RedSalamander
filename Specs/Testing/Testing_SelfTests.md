@@ -2116,6 +2116,16 @@ stays on the worker while the modal UI pumps. The worker MUST NOT change window 
 Every layout capture retains its success/geometry assertions, rejects direct worker admission,
 requires APPWINDOW eligibility with every other style bit preserved, and verifies exact restoration.
 A missing/destroyed prompt or unhandled admission command is a failed capture.
+All data-bearing speed-prompt test commands MUST use `SendMessagePayload` and
+`TakeMessagePayload` with the actual receiving HWND/message/type, plus an embedded
+operation check before accessing fields. Shared responses publish completion with
+release/acquire synchronization. Only Confirm/Cancel define a zero-payload close route.
+Initialize payload ownership during `WM_NCCREATE`, and fence/drain it and restore active
+admission before forwarding `WM_NCDESTROY` to DxUi: the host handles that message.
+The native speed-dialog case rejects empty, forged, wrong-type and wrong-operation
+requests without mutation, covers every capture path including the short locale view,
+and closes a prompt with admission active. Exactly one successful pre-destruction
+retirement and no failed restoration are required; existing modal lifetime gates remain.
 
 Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned modal or non-activating/tool
 fixture that lacks it, including an ordinary owned dialog with neither NOACTIVATE nor TOOLWINDOW.

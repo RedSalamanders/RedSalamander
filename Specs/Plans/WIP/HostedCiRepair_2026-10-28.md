@@ -205,3 +205,25 @@ modal windows, which also lack a taskbar entry, and require the APPWINDOW bit wh
 all other bits. Add a worker-refusal control, exact restoration and unsigned HRESULT diagnostics.
 Use the existing `TestSupport/` include root to remove the new C4464 warning rather than suppress it.
 None of these candidate repairs is accepted until the new runtime and hosted receipts pass.
+
+Source `4b094967d1f2175105b9c754aa81123d86d4e8e3` built x64 Debug in 8:01, receipt
+`6ab41572cfdce08c453086bd3aa7668dcd986db19b8bc2669637590c02d52678`, with no new warnings.
+All 282 focused source/specification controls passed without skips in governed tooling run
+`20261028T155818Z-72880-4c6c50d91ce3427f9888a23025ad83d5`. The exact speed case passed in
+3.983 seconds without skips/retries in `20261028T160422Z-86640-8f259136c2fa4dc892393ee46af198da`;
+initial and short French harness captures were inspected. These are focused results only.
+
+Review comments `4403208253` and `4403208365` identified valid request/teardown defects:
+the new WM_APP data was still a raw pointer, and DxUi handles WM_NCDESTROY before the
+late switch cleanup. Stop the local PrePush campaign (its BuildToolchain Pester entry was
+in progress), retain its incomplete record, and fix both before acceptance. Convert all
+data-bearing commands in this prompt channel to canonical typed tokens with an embedded
+operation and shared atomic response. Initialize/drain the payload window; retire admission
+before host dispatch. Add malformed-request and active-admission nested-shutdown controls.
+Source inspection also found the fifth short-locale capture bypassing setup; route all five
+through the same scenario-local capture helper, retaining every original assertion.
+
+The PrePush explanation verified the unchanged reviewed PR digest and six local obligations:
+BuildToolchain tooling, Compare/Search, Commands, FileOps and the two interactive viewer groups.
+The interrupted campaign is not a local remainder pass or a Full result. Current-source hosted
+qualification must follow the corrected code; earlier runs remain diagnostic source-bound records.

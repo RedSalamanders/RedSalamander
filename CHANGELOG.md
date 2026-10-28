@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Harden the speed-prompt test channel with typed message tokens, operation checks and synchronized shared responses. Reject malformed requests without mutation, retire admission before handled DxUi destruction, and cover active-admission shutdown and every short/normal layout capture without relaxing existing assertions.
 - Repair hosted native validation without reducing test coverage, assertions or performance gates.
   - Preserve short status/control and missing-pipe fallback while allowing cancellable Search queries to wait for a busy listener; count connection time in operation deadlines and rebuild unavailable-journal indexes only from tracked roots.
   - Reserve scheduler capacity separately from four-file transfer concurrency, seed deterministic animation/long-note fixtures, and admit only a validated test-owned alternate volume with the original byte, overlap and timing gates.
