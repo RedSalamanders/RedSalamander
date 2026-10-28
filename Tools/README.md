@@ -310,7 +310,7 @@ and focused tests.
 | `Modules/Testing/ValidationFingerprint.psm1` | Exact canonical JSON/digests, streaming read bounds, atomic replace or create-only record I/O, timed base/index/worktree snapshots, one-time receipt-closure binding, and versioned component-aware entry fingerprints. |
 | `Modules/Testing/ValidationEvidence.psm1` | Schema-validated normalized terminal results, atomic hashed/quota-bound result artifacts, immutable content-addressed decisions/evidence/promotions, one exact direct-child run resolver and semantic promotion loader shared by Resume/summary/history/prune provenance, crash-safe artifact epochs/read barriers, interruption repair, and identity-bound pruning. |
 | `Modules/Testing/ValidationImpact.psm1` | Governed impact-manifest/build-graph validation and deterministic shadow or enforced Affected decisions. |
-| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, link validation, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
+| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, canonical inline/fenced Markdown masking for links/headings, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
 | `Modules/Tooling/ToolInventory.psm1` | Tools manifest reconciliation, validation, and rendering. |
 
 ## Adding or changing a tool

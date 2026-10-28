@@ -68,21 +68,29 @@ function Get-RSMarkdownCodeMask {
     foreach ($line in $lines) {
         $content = $line.TrimEnd("`r", "`n")
         $ending = $line.Substring($content.Length)
-        $fenceMatch = [regex]::Match($content, '^\s*(?<fence>`{3,}|~{3,})')
+        $fenceMatch = [regex]::Match($content, '^ {0,3}(?<fence>`{3,}|~{3,})(?<rest>.*)$')
         if ($fenceMatch.Success) {
             $run = $fenceMatch.Groups['fence'].Value
             $character = $run[0]
+            $rest = $fenceMatch.Groups['rest'].Value
+            $wasInFence = $inFence
             if (-not $inFence) {
-                $inFence = $true
-                $fenceCharacter = $character
-                $fenceLength = $run.Length
-            } elseif ($character -eq $fenceCharacter -and $run.Length -ge $fenceLength) {
+                # Backticks in the info tail make this an inline-code candidate.
+                # Tilde info may contain backticks; keep its existing fence behavior.
+                if ($character -ne '`' -or -not $rest.Contains('`')) {
+                    $inFence = $true
+                    $fenceCharacter = $character
+                    $fenceLength = $run.Length
+                }
+            } elseif ($character -eq $fenceCharacter -and $run.Length -ge $fenceLength -and [string]::IsNullOrWhiteSpace($rest)) {
                 $inFence = $false
                 $fenceCharacter = [char]0
                 $fenceLength = 0
             }
-            $maskedLines.Add((' ' * $content.Length) + $ending)
-            continue
+            if ($wasInFence -or $inFence) {
+                $maskedLines.Add((' ' * $content.Length) + $ending)
+                continue
+            }
         }
 
         if ($inFence) {

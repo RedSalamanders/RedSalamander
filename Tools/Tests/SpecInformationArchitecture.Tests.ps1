@@ -356,6 +356,67 @@ $sample = ']('
         @(Get-RSMarkdownLinks -Text $text).Count | Should Be 0
     }
 
+    It 'keeps a missing link visible after line-leading triple-backtick inline code' {
+        $text = @'
+```literal```
+
+[Missing](MissingAfterInline.md)
+'@
+        $links = @(Get-RSMarkdownLinks -Text $text)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'MissingAfterInline.md'
+        $links[0].Line | Should Be 3
+        $inlineLink = $text.Replace('literal', '[fake](missing-inline.md)')
+        @(Get-RSMarkdownLinks -Text $inlineLink).Count | Should Be 1
+        (Get-RSMarkdownCodeMask -Text $text).Length | Should Be $text.Length
+
+        $root = New-RSSpecFixtureRepository
+        Add-Content -LiteralPath (Join-Path $root 'Specs/Core/Core_Example.md') -Value $text
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'LINK_MISSING_TARGET' -Severity 'Error') | Should Be 1
+    }
+
+    It 'keeps a real backtick fence open when a matching run has trailing nonwhitespace' {
+        $text = @'
+   ```markdown
+[Hidden](missing-interior.md)
+```not-a-closer
+[Still hidden](missing-after-false-closer.md)
+# Hidden heading
+   ````CLOSING_WHITESPACE
+# Visible heading
+[Shown](outside.md)
+'@
+        $text = $text.Replace('CLOSING_WHITESPACE', " `t")
+        $links = @(Get-RSMarkdownLinks -Text $text)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'outside.md'
+        $headings = @(Get-RSMarkdownHeadings -Text $text)
+        $headings.Count | Should Be 1
+        $headings[0].Title | Should Be 'Visible heading'
+        (Get-RSMarkdownCodeMask -Text $text).Length | Should Be $text.Length
+    }
+
+    It 'allows backticks in tilde fence info and requires a whitespace-only closing tail' {
+        $text = @'
+~~~example`info`
+[Hidden](missing-tilde-interior.md)
+~~~not-a-closer
+[Still hidden](missing-after-false-tilde-closer.md)
+# Hidden heading
+~~~CLOSING_WHITESPACE
+# Visible heading
+[Shown](outside.md)
+'@
+        $text = $text.Replace('CLOSING_WHITESPACE', " `t")
+        $links = @(Get-RSMarkdownLinks -Text $text)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'outside.md'
+        $headings = @(Get-RSMarkdownHeadings -Text $text)
+        $headings.Count | Should Be 1
+        $headings[0].Title | Should Be 'Visible heading'
+    }
+
     It 'rejects a repository-root escape attempt' {
         $root = New-RSSpecFixtureRepository
         Add-Content -LiteralPath (Join-Path $root 'Specs/Core/Core_Example.md') -Value "`n[Escape](../../../outside.md)"
@@ -1042,5 +1103,35 @@ if (Test-Path -LiteralPath $fixtureParent -PathType Container) {
     $expectedPrefix = [IO.Path]::GetFullPath((Join-Path $testRunContext.RunRoot 'scratch\tools-pester')) + [IO.Path]::DirectorySeparatorChar
     if ($resolvedFixtureParent.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         Remove-Item -LiteralPath $resolvedFixtureParent -Recurse -Force
+    }
+}
+
+Describe 'Markdown fence indentation boundaries' {
+    It 'keeps unindented prose visible after an opener prefixed by <Name>' -TestCases @(
+        @{Name='four spaces'; Indent='    '},
+        @{Name='a tab'; Indent="`t"}
+    ) {
+        param($Name, $Indent)
+        $text = $Indent + '```markdown' + "`n# Visible heading`n[Missing](missing-unindented.md)"
+        $links = @(Get-RSMarkdownLinks -Text $text)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'missing-unindented.md'
+        $headings = @(Get-RSMarkdownHeadings -Text $text)
+        $headings.Count | Should Be 1
+        $headings[0].Title | Should Be 'Visible heading'
+    }
+
+    It 'keeps a valid fence open across a closer prefixed by <Name>' -TestCases @(
+        @{Name='four spaces'; Indent='    '},
+        @{Name='a tab'; Indent="`t"}
+    ) {
+        param($Name, $Indent)
+        $text = '```markdown' + "`n" + $Indent + '```' + "`n[Hidden](missing-interior.md)`n# Hidden heading`n" + '```' + "`n[Shown](outside.md)`n# Visible heading"
+        $links = @(Get-RSMarkdownLinks -Text $text)
+        $links.Count | Should Be 1
+        $links[0].Target | Should Be 'outside.md'
+        $headings = @(Get-RSMarkdownHeadings -Text $text)
+        $headings.Count | Should Be 1
+        $headings[0].Title | Should Be 'Visible heading'
     }
 }

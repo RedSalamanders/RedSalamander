@@ -112,6 +112,16 @@ Invoke-Pester .\Tools\Tests\DocumentationDriftContracts.Tests.ps1 -PassThru
 
 `-FailOnFindings` requires every normative file to have a `VERIFIED_MATCH` consistency row, every direct WIP file to be indexed exactly once, WIP index ranks to be unique and not to reuse an ID claimed by an archived plan title, all current local links/anchors to resolve, normative plan markers to be explicitly reviewed, and the protected Done baseline to remain byte-identical.
 
+The canonical Markdown code mask in `Tools/Modules/Tooling/SpecInformationArchitecture.psm1`
+preserves text length and line endings for link and heading diagnostics. Its supported
+top-level fence opener/closer may have zero to three leading spaces; tabs or four spaces
+MUST NOT change fence state or hide following unindented prose. A backtick fence
+opening's info tail MUST contain no backticks; an invalid opener continues through inline-code
+masking and MUST NOT hide following prose. Tilde fence info may contain backticks. A closing
+fence MUST use the opening character with at least the opening run length and a whitespace-only
+tail. A fence-like line with trailing nonwhitespace stays inside its current fence.
+These checks do not expand the parser to general Markdown lists or indented code blocks.
+
 The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.
 
 The snapshot migration retains the original 133-file protected Done baseline as parentless commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853. Its Specs/Plans/Done tree is byte-identical to the former baseline. Both integrated master and the public source snapshot retain that commit in ancestry, so ordinary fresh clones can enforce the existing guard without importing DualTail history or changing completed documents.
