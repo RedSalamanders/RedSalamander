@@ -214,6 +214,8 @@ Describe 'Declarative runtime dependency graph' {
             'TerminalRuntime\ghostty-vt.dll'
             'TerminalRuntime\terminal-runtime-identity.json'
             'TerminalRuntime\LICENSE-Ghostty.txt'
+            'TerminalRuntime\LICENSE-Aro.txt'
+            'TerminalRuntime\LICENSE-Pixels.txt'
             'TerminalRuntime\LICENSE-uucode.txt'
             'TerminalRuntime\LICENSE-uucode-Bjoern-Hoehrmann.txt'
             'TerminalRuntime\LICENSE-Unicode.txt'

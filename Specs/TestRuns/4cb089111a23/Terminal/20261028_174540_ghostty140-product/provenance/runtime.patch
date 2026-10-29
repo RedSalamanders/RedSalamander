@@ -1,0 +1,627 @@
+diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_graphics.h
+index 99cee60ac92c713769d3c057d9ca8565f14e2f12..d039d8a454bf2e2dd23632b51594afc00f8f9194 100644
+--- a/include/ghostty/vt/kitty_graphics.h
++++ b/include/ghostty/vt/kitty_graphics.h
+@@ -162,8 +162,23 @@ typedef enum GHOSTTY_ENUM_TYPED {
+    * key caches on this value alone.
+    *
+    * Output type: uint64_t *
+-   */
++  */
+   GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION = 2,
++
++  /** Current number of retained placements. Output type: size_t * */
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT = 3,
++
++  /**
++   * Exact bytes allocated by the retained placement hash map for its header,
++   * metadata, keys, values, and alignment. Output type: size_t *
++   */
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ALLOCATED_BYTES = 4,
++
++  /** Configured retained-placement count limit. Output type: size_t * */
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT_LIMIT = 5,
++
++  /** Configured retained-placement allocation limit. Output type: size_t * */
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_BYTES_LIMIT = 6,
+   GHOSTTY_KITTY_GRAPHICS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsData;
+ 
+diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
+index 172674bf54dea6d0cb35c698d577299a2a8234ef..40635c5e09bf1925e64cfe8d9a0426948c701b24 100644
+--- a/include/ghostty/vt/terminal.h
++++ b/include/ghostty/vt/terminal.h
+@@ -1082,6 +1082,22 @@ typedef struct {
+   bool value;
+ } GhosttyTerminalModeConfig;
+ 
++/**
++ * Versioned Kitty placement-retention limits.
++ *
++ * Set `size` to `sizeof(GhosttyKittyPlacementLimits)`. Both limits must be
++ * non-zero and may only lower the private runtime's hard defaults. Applying
++ * limits is atomic across all initialized screens and fails when already
++ * retained placement state does not fit.
++ *
++ * @ingroup terminal
++ */
++typedef struct {
++  size_t size;
++  size_t maximum_count;
++  size_t maximum_bytes;
++} GhosttyKittyPlacementLimits;
++
+ /**
+  * Terminal option identifiers.
+  *
+@@ -1545,6 +1561,33 @@ typedef enum GHOSTTY_ENUM_TYPED {
+    * Input type: size_t*
+    */
+   GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE_MAX_BYTES = 39,
++
++  /**
++   * Set Kitty placement-retention limits for every initialized screen.
++   *
++   * A NULL value restores the private runtime's hard defaults. A non-NULL
++   * value must point to a complete GhosttyKittyPlacementLimits record whose
++   * limits are non-zero, do not exceed the hard defaults, and fit retained
++   * state on every initialized screen. Validation completes for all screens
++   * before any screen is changed.
++   *
++   * Input type: GhosttyKittyPlacementLimits*
++   */
++  GHOSTTY_TERMINAL_OPT_KITTY_PLACEMENT_LIMITS = 40,
++
++  /**
++   * Enable Kitty clipboard protocol (OSC 5522) write transactions.
++   *
++   * When false, a Kitty write is refused with ENOSYS before any transaction
++   * data is buffered and the clipboard-write callback is never invoked.
++   * OSC 52 and OSC 1337 clipboard writes are unaffected. A NULL value restores
++   * the default of true.
++   *
++   * This is a private Windows runtime option.
++   *
++   * Input type: bool*
++   */
++  GHOSTTY_TERMINAL_OPT_KITTY_CLIPBOARD_WRITE_ENABLED = 41,
+   GHOSTTY_TERMINAL_OPT_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyTerminalOption;
+ 
+diff --git a/src/build/GhosttyLibVt.zig b/src/build/GhosttyLibVt.zig
+index a97fdf78fd5cfa313134106ae50373b84daffaa2..77ec9b338b8c83ec0977e388e7b17df924f8891e 100644
+--- a/src/build/GhosttyLibVt.zig
++++ b/src/build/GhosttyLibVt.zig
+@@ -254,6 +254,12 @@ fn initLib(
+         // are incompatible with the MSVC linker (LNK4229).
+         lib.bundle_ubsan_rt = false;
+ 
++        // RedSalamander does not ship a PDB; keep debug-information emission
++        // from perturbing the private runtime's production layout.
++        lib.use_llvm = true;
++        lib.use_lld = true;
++        lib.root_module.strip = true;
++
+         if (kind == .static) {
+             if (target.result.abi == .msvc) {
+                 // Zig's compiler runtime doesn't provide MSVC's security
+diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.zig
+index 2bd5e8620dc4be1a84d82202c9725aefbe5b635f..ddf50d3fcf97687046ae8f71c498d147054d22a0 100644
+--- a/src/terminal/c/kitty_graphics.zig
++++ b/src/terminal/c/kitty_graphics.zig
+@@ -54,16 +54,37 @@ pub const Data = enum(c_int) {
+     invalid = 0,
+     placement_iterator = 1,
+     generation = 2,
++    placement_count = 3,
++    placement_allocated_bytes = 4,
++    placement_count_limit = 5,
++    placement_bytes_limit = 6,
+ 
+     pub fn OutType(comptime self: Data) type {
+         return switch (self) {
+             .invalid => void,
+             .placement_iterator => PlacementIterator,
+             .generation => u64,
++            .placement_count,
++            .placement_allocated_bytes,
++            .placement_count_limit,
++            .placement_bytes_limit,
++            => usize,
+         };
+     }
+ };
+ 
++comptime {
++    if (@intFromEnum(Data.placement_count) != 3 or
++        @intFromEnum(Data.placement_allocated_bytes) != 4 or
++        @intFromEnum(Data.placement_count_limit) != 5 or
++        @intFromEnum(Data.placement_bytes_limit) != 6)
++    {
++        @compileError("private Kitty graphics data values must match the C ABI");
++    }
++    if (@intFromEnum(Data.placement_count) <= @intFromEnum(Data.generation))
++        @compileError("private Kitty graphics data values must follow the public range");
++}
++
+ /// C: GhosttyKittyGraphicsPlacementData
+ pub const PlacementData = enum(c_int) {
+     invalid = 0,
+@@ -133,6 +154,10 @@ fn getTyped(
+             };
+         },
+         .generation => out.* = storage.generation,
++        .placement_count => out.* = storage.placementCount(),
++        .placement_allocated_bytes => out.* = storage.placementAllocatedBytes(),
++        .placement_count_limit => out.* = storage.placement_count_limit,
++        .placement_bytes_limit => out.* = storage.placement_bytes_limit,
+     }
+     return .success;
+ }
+diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
+index 70d7ab8490fd4dbbcf113a80601c437614b82bfe..4656450445a9a5e9a6fa737aa97affa3e516c93f 100644
+--- a/src/terminal/c/terminal.zig
++++ b/src/terminal/c/terminal.zig
+@@ -13,6 +13,7 @@ const ScreenSet = @import("../ScreenSet.zig");
+ const PageList = @import("../PageList.zig");
+ const apc = @import("../apc.zig");
+ const kitty = @import("../kitty/key.zig");
++const kitty_storage = @import("../kitty/graphics_storage.zig");
+ const kitty_gfx_c = @import("kitty_graphics.zig");
+ const modes = @import("../modes.zig");
+ const point = @import("../point.zig");
+@@ -1177,6 +1178,13 @@ pub fn compress(
+     return .success;
+ }
+ 
++/// C: GhosttyKittyPlacementLimits
++pub const KittyPlacementLimits = extern struct {
++    size: usize,
++    maximum_count: usize,
++    maximum_bytes: usize,
++};
++
+ /// C: GhosttyTerminalOption
+ pub const Option = enum(c_int) {
+     userdata = 0,
+@@ -1219,6 +1227,8 @@ pub const Option = enum(c_int) {
+     terminfo_name = 37,
+     clipboard_read = 38,
+     clipboard_write_max_bytes = 39,
++    kitty_placement_limits = 40,
++    kitty_clipboard_write_enabled = 41,
+ 
+     /// Input type expected for setting the option.
+     pub fn InType(comptime self: Option) type {
+@@ -1242,10 +1252,12 @@ pub const Option = enum(c_int) {
+             .color_foreground, .color_background, .color_cursor => ?*const color.RGB.C,
+             .color_palette => ?*const color.PaletteC,
+             .kitty_image_storage_limit => ?*const u64,
++            .kitty_placement_limits => ?*const KittyPlacementLimits,
+             .kitty_image_medium_file,
+             .kitty_image_medium_shared_mem,
+             .glyph_protocol,
+             .title_report,
++            .kitty_clipboard_write_enabled,
+             => ?*const bool,
+             .kitty_image_medium_temp_file => ?*const lib.String,
+             .apc_max_bytes,
+@@ -1264,6 +1276,17 @@ pub const Option = enum(c_int) {
+     }
+ };
+ 
++comptime {
++    if (@intFromEnum(Option.kitty_placement_limits) != 40)
++        @compileError("private Kitty placement option must match the C ABI value");
++    if (@intFromEnum(Option.kitty_placement_limits) <= @intFromEnum(Option.clipboard_write_max_bytes))
++        @compileError("private Kitty placement option must follow the complete public range");
++    if (@intFromEnum(Option.kitty_clipboard_write_enabled) != 41)
++        @compileError("private Kitty clipboard option must match the C ABI value");
++    if (@intFromEnum(Option.kitty_clipboard_write_enabled) <= @intFromEnum(Option.kitty_placement_limits))
++        @compileError("private Kitty clipboard option must follow the placement option");
++}
++
+ pub fn set(
+     terminal_: Terminal,
+     option: Option,
+@@ -1330,6 +1353,10 @@ fn setTyped(
+             ptr.*
+         else
+             false,
++        .kitty_clipboard_write_enabled => wrapper.stream.handler.kitty_clipboard_write_enabled = if (value) |ptr|
++            ptr.*
++        else
++            true,
+         .title => {
+             const str = if (value) |v| v.ptr[0..v.len] else "";
+             wrapper.terminal.setTitle(str) catch return .out_of_memory;
+@@ -1374,6 +1401,34 @@ fn setTyped(
+                 screen.kitty_images.setLimit(screen.io, screen.alloc, screen, limit);
+             }
+         },
++        .kitty_placement_limits => {
++            if (comptime !build_options.kitty_graphics) return .success;
++            if (value) |v| {
++                if (v.size < @sizeOf(KittyPlacementLimits)) return .invalid_value;
++            }
++            const count_limit = if (value) |v|
++                v.maximum_count
++            else
++                kitty_storage.ImageStorage.maximum_placement_count;
++            const bytes_limit = if (value) |v|
++                v.maximum_bytes
++            else
++                kitty_storage.ImageStorage.maximum_placement_bytes;
++
++            var validate_it = wrapper.terminal.screens.all.iterator();
++            while (validate_it.next()) |entry| {
++                const screen = entry.value.*;
++                if (!screen.kitty_images.canSetPlacementLimits(count_limit, bytes_limit)) {
++                    return .invalid_value;
++                }
++            }
++
++            var apply_it = wrapper.terminal.screens.all.iterator();
++            while (apply_it.next()) |entry| {
++                const screen = entry.value.*;
++                screen.kitty_images.setPlacementLimits(count_limit, bytes_limit);
++            }
++        },
+         .kitty_image_medium_file,
+         .kitty_image_medium_shared_mem,
+         => {
+@@ -5101,6 +5156,27 @@ test "set clipboard write max bytes" {
+     try testing.expectEqual(Result.success, set(t, .write_pty, @ptrCast(&S.writePty)));
+     try testing.expectEqual(Result.success, set(t, .clipboard_write, @ptrCast(&S.clipboardWrite)));
+ 
++    // A disabled Kitty clipboard write fails before buffering or callback,
++    // while legacy OSC 52 writes continue to use the callback.
++    const disabled = false;
++    try testing.expectEqual(Result.success, set(t, .kitty_clipboard_write_enabled, @ptrCast(&disabled)));
++    const disabled_begin = "\x1B]5522;type=write:id=disabled\x1B\\";
++    vt_write(t, disabled_begin, disabled_begin.len);
++    try testing.expectEqual(@as(usize, 0), S.write_count);
++    try testing.expectEqualStrings(
++        "\x1B]5522;type=write:status=ENOSYS:id=disabled\x1B\\",
++        S.responses[0..S.responses_len],
++    );
++    S.responses_len = 0;
++    const osc52 = "\x1B]52;c;aGVsbG8=\x1B\\";
++    vt_write(t, osc52, osc52.len);
++    try testing.expectEqual(@as(usize, 1), S.write_count);
++    try testing.expectEqual(@as(usize, 0), S.responses_len);
++    S.write_count = 0;
++
++    // A NULL value restores Kitty clipboard writes to enabled.
++    try testing.expectEqual(Result.success, set(t, .kitty_clipboard_write_enabled, null));
++
+     // The built-in default reads back.
+     var max: usize = 0;
+     try testing.expectEqual(Result.success, get(t, .clipboard_write_max_bytes, @ptrCast(&max)));
+diff --git a/src/terminal/kitty/graphics_storage.zig b/src/terminal/kitty/graphics_storage.zig
+index 897c8944aa0c236ad602f629846b380ddddcb068..ba1d71f1f83869e2cb0faab4b9ea62552ee079d3 100644
+--- a/src/terminal/kitty/graphics_storage.zig
++++ b/src/terminal/kitty/graphics_storage.zig
+@@ -73,6 +73,9 @@ pub const ImageStorage = struct {
+     const ImageMap = std.AutoHashMapUnmanaged(u32, Image);
+     const PlacementMap = std.AutoHashMapUnmanaged(PlacementKey, Placement);
+ 
++    pub const maximum_placement_count: usize = 4096;
++    pub const maximum_placement_bytes: usize = 1024 * 1024;
++
+     /// Dirty is set to true if placements or images change. This is
+     /// purely informational for the renderer and doesn't affect the
+     /// correctness of the program. The renderer must set this to false
+@@ -121,6 +124,11 @@ pub const ImageStorage = struct {
+     /// The set of placements for loaded images.
+     placements: PlacementMap = .{},
+ 
++    /// Hard-bounded retained placement-map policy. Callers may lower these
++    /// values through the private C ABI but may never raise them.
++    placement_count_limit: usize = maximum_placement_count,
++    placement_bytes_limit: usize = maximum_placement_bytes,
++
+     /// Non-null if there is an in-progress loading image.
+     loading: ?*LoadingImage = null,
+ 
+@@ -213,8 +221,14 @@ pub const ImageStorage = struct {
+         // Special case disabling by quickly deleting all
+         if (limit == 0) {
+             const image_limits = self.image_limits;
++            const placement_count_limit = self.placement_count_limit;
++            const placement_bytes_limit = self.placement_bytes_limit;
+             self.deinit(alloc, s);
+-            self.* = .{ .image_limits = image_limits };
++            self.* = .{
++                .image_limits = image_limits,
++                .placement_count_limit = placement_count_limit,
++                .placement_bytes_limit = placement_bytes_limit,
++            };
+             self.markMutated(io);
+         }
+ 
+@@ -230,6 +244,65 @@ pub const ImageStorage = struct {
+         self.total_limit = limit;
+     }
+ 
++    const PlacementMapHeader = struct {
++        values: [*]Placement,
++        keys: [*]PlacementKey,
++        capacity: PlacementMap.Size,
++    };
++
++    fn placementCapacityForSize(size_: usize) usize {
++        const placement_size: PlacementMap.Size = @intCast(size_);
++        var capacity: PlacementMap.Size = @intCast(
++            (@as(u64, placement_size) * 100) / std.hash_map.default_max_load_percentage + 1,
++        );
++        capacity = std.math.ceilPowerOfTwo(PlacementMap.Size, capacity) catch unreachable;
++        return capacity;
++    }
++
++    fn placementAllocatedBytesForCapacity(capacity: usize) usize {
++        if (capacity == 0) return 0;
++
++        const header_align = @alignOf(PlacementMapHeader);
++        const key_align = @alignOf(PlacementKey);
++        const value_align = @alignOf(Placement);
++        const maximum_align = @max(header_align, key_align, value_align);
++        const metadata_end = @sizeOf(PlacementMapHeader) + capacity;
++        const keys_start = std.mem.alignForward(usize, metadata_end, key_align);
++        const keys_end = keys_start + capacity * @sizeOf(PlacementKey);
++        const values_start = std.mem.alignForward(usize, keys_end, value_align);
++        const values_end = values_start + capacity * @sizeOf(Placement);
++        return std.mem.alignForward(usize, values_end, maximum_align);
++    }
++
++    pub fn placementCount(self: *const ImageStorage) usize {
++        return self.placements.count();
++    }
++
++    pub fn placementAllocatedBytes(self: *const ImageStorage) usize {
++        return placementAllocatedBytesForCapacity(self.placements.capacity());
++    }
++
++    pub fn canSetPlacementLimits(
++        self: *const ImageStorage,
++        count_limit: usize,
++        bytes_limit: usize,
++    ) bool {
++        return count_limit > 0 and count_limit <= maximum_placement_count and
++            bytes_limit > 0 and bytes_limit <= maximum_placement_bytes and
++            self.placementCount() <= count_limit and
++            self.placementAllocatedBytes() <= bytes_limit;
++    }
++
++    pub fn setPlacementLimits(
++        self: *ImageStorage,
++        count_limit: usize,
++        bytes_limit: usize,
++    ) void {
++        assert(self.canSetPlacementLimits(count_limit, bytes_limit));
++        self.placement_count_limit = count_limit;
++        self.placement_bytes_limit = bytes_limit;
++    }
++
+     /// Returns the next ID to automatically assign to an image that
+     /// was transmitted without an explicit ID (i=). The result is
+     /// never zero (zero means "no ID") and never an ID currently in
+@@ -372,46 +445,59 @@ pub const ImageStorage = struct {
+             p,
+         });
+ 
+-        // When we add a placement, take this opportunity to reap garbage.
+-        // Garbage are placements that disappeared off scrollback (were
+-        // pruned). We don't clear Kitty state in the hot path so we do
+-        // this opportunistically here.
+-        self.reapGarbagePlacements(io, s);
+-
+         // The important piece here is that the placement ID needs to
+         // be marked internal if it is zero. This allows multiple placements
+         // to be added for the same image. If it is non-zero, then it is
+         // an external placement ID and we can only have one placement
+         // per (image id, placement id) pair.
++        const internal_placement = placement_id == 0;
+         const key: PlacementKey = .{
+             .image_id = image_id,
+-            .placement_id = if (placement_id == 0) .{
++            .placement_id = if (internal_placement) .{
+                 .tag = .internal,
+-                .id = id: {
+-                    defer self.next_internal_placement_id +%= 1;
+-                    break :id self.next_internal_placement_id;
+-                },
++                .id = self.next_internal_placement_id,
+             } else .{
+                 .tag = .external,
+                 .id = placement_id,
+             },
+         };
+ 
+-        const gop = try self.placements.getOrPut(alloc, key);
+-        if (gop.found_existing) {
+-            gop.value_ptr.deinit(s);
+-        } else {
+-            const img = self.images.getPtr(image_id).?;
+-            img.metadata.placement_count = std.math.add(
+-                @TypeOf(img.metadata.placement_count),
+-                img.metadata.placement_count,
+-                1,
+-            ) catch {
+-                self.placements.removeByPtr(gop.key_ptr);
+-                return error.OutOfMemory;
+-            };
++        if (self.placements.getPtr(key)) |existing| {
++            existing.deinit(s);
++            existing.* = p;
++            self.markMutated(io);
++            return;
++        }
++
++        // Validate every bounded and fallible admission condition before
++        // reaping garbage or mutating IDs, generations, pins, or map entries.
++        const validated_next_count = self.placementCount() + 1;
++        if (validated_next_count > self.placement_count_limit) return error.OutOfMemory;
++        const validated_capacity = placementCapacityForSize(validated_next_count);
++        if (placementAllocatedBytesForCapacity(validated_capacity) > self.placement_bytes_limit) {
++            return error.OutOfMemory;
+         }
+-        gop.value_ptr.* = p;
++        const img = self.images.getPtr(image_id).?;
++        _ = std.math.add(
++            @TypeOf(img.metadata.placement_count),
++            img.metadata.placement_count,
++            1,
++        ) catch return error.OutOfMemory;
++
++        // Garbage are placements pruned from scrollback. Reap only after a
++        // new placement is known to be admissible so rejection is state-free.
++        self.reapGarbagePlacements(io, s);
++
++        const next_count = self.placementCount() + 1;
++        try self.placements.ensureTotalCapacity(alloc, @intCast(next_count));
++        assert(self.placementAllocatedBytes() <= self.placement_bytes_limit);
++        self.placements.putAssumeCapacityNoClobber(key, p);
++        img.metadata.placement_count = std.math.add(
++            @TypeOf(img.metadata.placement_count),
++            img.metadata.placement_count,
++            1,
++        ) catch unreachable;
++        if (internal_placement) self.next_internal_placement_id +%= 1;
+ 
+         // This always mutates
+         self.markMutated(io);
+@@ -2153,6 +2239,99 @@ test "storage: add placement with zero placement id" {
+     }) != null);
+ }
+ 
++test "storage: placement admission bounds count allocated bytes and rejection state" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++    const io = testing.io;
++    var t = try terminal.Terminal.init(io, alloc, .{ .cols = 4, .rows = 4 });
++    defer t.deinit(alloc);
++
++    var s: ImageStorage = .{};
++    defer s.deinit(alloc, t.screens.active);
++    try s.addImage(io, alloc, t.screens.active, .{ .id = 1, .width = 1, .height = 1 });
++
++    const first_allocation = ImageStorage.placementAllocatedBytesForCapacity(
++        ImageStorage.placementCapacityForSize(1),
++    );
++    s.setPlacementLimits(ImageStorage.maximum_placement_count, first_allocation - 1);
++    const generation_before_rejection = s.generation;
++    const next_id_before_rejection = s.next_internal_placement_id;
++    const tracked_before_rejection = t.screens.active.pages.countTrackedPins();
++    const rejected: ImageStorage.Placement = .{
++        .location = .{ .pin = try trackPin(&t, .{ .x = 0, .y = 0 }) },
++    };
++    try testing.expectError(
++        error.OutOfMemory,
++        s.addPlacement(io, alloc, t.screens.active, 1, 0, rejected),
++    );
++    try testing.expectEqual(@as(usize, 0), s.placementCount());
++    try testing.expectEqual(@as(usize, 0), s.placementAllocatedBytes());
++    try testing.expectEqual(generation_before_rejection, s.generation);
++    try testing.expectEqual(next_id_before_rejection, s.next_internal_placement_id);
++    try testing.expectEqual(
++        tracked_before_rejection + 1,
++        t.screens.active.pages.countTrackedPins(),
++    );
++    rejected.deinit(t.screens.active);
++    try testing.expectEqual(
++        tracked_before_rejection,
++        t.screens.active.pages.countTrackedPins(),
++    );
++
++    s.setPlacementLimits(
++        ImageStorage.maximum_placement_count,
++        ImageStorage.maximum_placement_bytes,
++    );
++    for (1..ImageStorage.maximum_placement_count + 1) |placement_id| {
++        try s.addPlacement(
++            io,
++            alloc,
++            t.screens.active,
++            1,
++            @intCast(placement_id),
++            .{ .location = .{ .virtual = {} } },
++        );
++    }
++    try testing.expectEqual(ImageStorage.maximum_placement_count, s.placementCount());
++    const retained_bytes = s.placementAllocatedBytes();
++    const retained_generation = s.generation;
++    const retained_next_id = s.next_internal_placement_id;
++    try testing.expect(retained_bytes > 0);
++    try testing.expect(retained_bytes <= ImageStorage.maximum_placement_bytes);
++    try testing.expectError(
++        error.OutOfMemory,
++        s.addPlacement(
++            io,
++            alloc,
++            t.screens.active,
++            1,
++            @intCast(ImageStorage.maximum_placement_count + 1),
++            .{ .location = .{ .virtual = {} } },
++        ),
++    );
++    try testing.expectEqual(ImageStorage.maximum_placement_count, s.placementCount());
++    try testing.expectEqual(retained_bytes, s.placementAllocatedBytes());
++    try testing.expectEqual(retained_generation, s.generation);
++    try testing.expectEqual(retained_next_id, s.next_internal_placement_id);
++}
++
++test "storage: disabling image data preserves private placement limits" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++    const io = testing.io;
++    var t = try terminal.Terminal.init(io, alloc, .{ .cols = 4, .rows = 4 });
++    defer t.deinit(alloc);
++
++    var s: ImageStorage = .{};
++    defer s.deinit(alloc, t.screens.active);
++    const count_limit = 128;
++    const bytes_limit = ImageStorage.maximum_placement_bytes / 2;
++    s.setPlacementLimits(count_limit, bytes_limit);
++    s.setLimit(io, alloc, t.screens.active, 0);
++    try testing.expectEqual(@as(usize, count_limit), s.placement_count_limit);
++    try testing.expectEqual(@as(usize, bytes_limit), s.placement_bytes_limit);
++}
++
+ test "storage: replacing placement releases tracked pin" {
+     const testing = std.testing;
+     const alloc = testing.allocator;
+diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
+index 61172423a61764e3fe3e89c3ba2d75e24c039c64..50e6e994f2f2e7501dd817eded9243941dc01945 100644
+--- a/src/terminal/stream_terminal.zig
++++ b/src/terminal/stream_terminal.zig
+@@ -91,6 +91,10 @@ pub const Handler = struct {
+     /// with EFBIG.
+     kitty_clipboard_write_max_bytes: usize = kitty_clipboard.max_write_size,
+ 
++    /// Whether Kitty clipboard protocol (OSC 5522) write transactions are
++    /// accepted. Disabling this does not affect OSC 52 or OSC 1337 writes.
++    kitty_clipboard_write_enabled: bool = true,
++
+     /// Called for sequence identifiers not supported by this library.
+     /// Currently, only APC is reported. Content is borrowed and only valid
+     /// for the duration of the callback. Set `apc_handler.unknown_max_bytes`
+@@ -1022,6 +1026,18 @@ pub const Handler = struct {
+         // A new write silently replaces any in-flight transaction.
+         self.kittyClipboardAbort();
+ 
++        // Embedders that cannot answer the synchronous Kitty write contract
++        // can disable the protocol without disabling legacy clipboard writes.
++        if (!self.kitty_clipboard_write_enabled) {
++            self.kittyClipboardRespond(&.{
++                .op = .write,
++                .status = .ENOSYS,
++                .id = meta.id,
++                .terminator = terminator,
++            });
++            return;
++        }
++
+         // Without a clipboard_write effect a commit can never succeed,
+         // so fail the transaction up front instead of spooling data
+         // we'd only throw away. Later wdata packets are ignored.

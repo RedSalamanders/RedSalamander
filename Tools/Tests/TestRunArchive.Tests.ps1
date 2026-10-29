@@ -42,12 +42,62 @@ function New-RSTerminalVtArchiveFixture {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'Specs\Terminal\TerminalVtUpgradeEvidence.schema.json') `
         -Destination $schemaDestination
 
-    $baselineRelative = 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071812_pair2-product'
-    $candidateRelative = 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071820_pair2-candidate'
+    # Synthetic evidence keeps contract tests executable in fresh/shallow clones;
+    # historical local benchmark archives are never prerequisites for unit tests.
+    $baselineRelative = 'Specs/TestRuns/0123456789ab/Terminal/20261028_120000_baseline'
+    $candidateRelative = 'Specs/TestRuns/0123456789ab/Terminal/20261028_120001_candidate'
     foreach ($relative in @($baselineRelative, $candidateRelative)) {
         $destination = Join-Path $root $relative
-        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination -Recurse
+        New-Item -ItemType Directory -Path (Join-Path $destination 'perf') -Force | Out-Null
+        $isBaseline = $relative -eq $baselineRelative
+        $runId = Split-Path $relative -Leaf
+        $results = [ordered]@{
+            schema = 'red-salamander.terminal-vt-upgrade-evidence.v1'
+            runId = $runId; createdUtc = '2026-10-28T12:00:00Z'
+            repositoryCommit = 'a' * 40; repositoryBranch = 'ej/synthetic-vt-fixture'
+            machineHash = '0123456789ab'; configuration = 'Release'
+            buildReceiptId = $(if ($isBaseline) { 'b' * 64 } else { 'c' * 64 })
+            runtimeIdentitySha256 = $(if ($isBaseline) { 'd' * 64 } else { 'e' * 64 })
+            environment = [ordered]@{
+                windowsBuild='26100'; cpu='Synthetic CPU'; architecture='AMD64'
+                compiler='MSVC synthetic'; windowsSdk='10.0.26100.0'
+                zig='0.16.0'; vcpkgCommit='f' * 40
+            }
+            corpus = [ordered]@{
+                formatId='red-salamander-terminal-vt-upgrade-corpus'; version=1
+                sha256='1' * 64; inputByteCount=1234
+            }
+            behavior = [ordered]@{
+                ptyOutputSha256='2' * 64; snapshotSha256='3' * 64
+                withoutExpectedDeltas = @{ ptyOutputSha256='2' * 64; snapshotSha256='3' * 64 }
+                expectedDeltas = @(@{ id='dcs-high-byte-preservation'; disposition='candidate-only-if-reviewed' })
+            }
+            measurements = [ordered]@{ sampleCount=200; percentileRule='nearest-rank' }
+            kitty = @{ placementCount=1 }; memory = @{ peakPrivateBytes=1024 }
+            assertionCount=1; outcome='pass'
+        }
+        $rows = [Collections.Generic.List[string]]::new()
+        foreach ($entry in @(
+                @{ name='vtWrite'; metric='vt_write_us'; offset=$(if($isBaseline){100}else{50}) },
+                @{ name='snapshot'; metric='snapshot_us'; offset=$(if($isBaseline){2000}else{1980}) },
+                @{ name='hostedRender'; metric='hosted_render_us'; offset=$(if($isBaseline){7194}else{7000}) })) {
+            $samples = @(1..200 | ForEach-Object { [long]($entry.offset + $_) })
+            $results.measurements[$entry.name] = @{
+                unit='us'; p50=$entry.offset + 100; p95=$entry.offset + 190
+                candidateMaximumP95=[long][Math]::Ceiling([decimal]($entry.offset + 190) * [decimal]'1.10')
+                samples=$samples
+            }
+            foreach ($sample in $samples) {
+                $rows.Add((@{
+                            metric="terminal.vt_upgrade.$($entry.metric)"; value=$sample; unit='us'
+                            machineHash=$results.machineHash; runId=$runId; build='Release'
+                            commit=$results.repositoryCommit; scenario='terminal-vt-upgrade-corpus-v1'
+                        } | ConvertTo-Json -Compress))
+            }
+        }
+        $results | ConvertTo-Json -Depth 15 | Set-Content (Join-Path $destination 'results.json') -Encoding UTF8
+        [IO.File]::WriteAllLines((Join-Path $destination 'perf/perf_metrics.jsonl'), $rows)
+        'Synthetic Terminal VT archive fixture' | Set-Content (Join-Path $destination 'trace.txt') -Encoding UTF8
     }
 
     return [pscustomobject]@{
@@ -94,6 +144,7 @@ function Invoke-RSArchiveValidatorProcess {
 
     $process = Start-Process `
         -FilePath (Get-Process -Id $PID).Path `
+        -WindowStyle Hidden `
         -ArgumentList $arguments `
         -Wait `
         -PassThru `
@@ -113,16 +164,11 @@ Describe 'TestRuns archive contract' {
     # squashed or shallow clone (hosted runners check out one commit) does not carry; there
     # Get-RSTestRunArchiveInventoryPaths returns every tracked file, grandfathered evidence included.
     # Skip those cases there instead of failing every clone (Testing_SelfTests.md).
-    $terminalVtArchivePresent = (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071812_pair2-product') -PathType Container) -and
-        (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071820_pair2-candidate') -PathType Container)
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
     $archiveContractCommit = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveContractCommit }
     & git -C $repoRoot merge-base --is-ancestor $archiveContractCommit HEAD *> $null
     $archiveContractInHistory = ($LASTEXITCODE -eq 0)
     $checkedInInventoryPresent = $archiveContractInHistory -and @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
-    if (-not $terminalVtArchivePresent) {
-        Write-Host 'Skipping the Terminal VT archive contracts: Specs\TestRuns\4cb089111a23\Terminal pair2 evidence is not present (gitignored archive).'
-    }
     if (-not $fileOpsSummaryArchivePresent) {
         Write-Host 'Skipping the FileOps summary archive contract: Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550 is not present (gitignored archive).'
     }
@@ -208,7 +254,7 @@ Describe 'TestRuns archive contract' {
         $violations.Count | Should Be 0
     }
 
-    It 'validates every Terminal VT JSONL row and requires its schema-owned artifacts' -Skip:(-not $terminalVtArchivePresent) {
+    It 'validates every Terminal VT JSONL row and requires its schema-owned artifacts' {
         $fixture = New-RSTerminalVtArchiveFixture
         $candidateRoot = Join-Path $fixture.Root $fixture.Candidate
         Add-Content -LiteralPath (Join-Path $candidateRoot 'perf\perf_metrics.jsonl') -Value '{not-json'
@@ -220,7 +266,7 @@ Describe 'TestRuns archive contract' {
         @($violations | Where-Object Kind -eq 'RequiredArtifact').Count | Should Be 1
     }
 
-    It 'rejects Terminal VT results that do not satisfy the area schema' -Skip:(-not $terminalVtArchivePresent) {
+    It 'rejects Terminal VT results that do not satisfy the area schema' {
         $fixture = New-RSTerminalVtArchiveFixture
         $resultsPath = Join-Path (Join-Path $fixture.Root $fixture.Candidate) 'results.json'
         $results = Get-Content -LiteralPath $resultsPath -Raw | ConvertFrom-Json
@@ -232,7 +278,7 @@ Describe 'TestRuns archive contract' {
         @($violations | Where-Object Kind -in @('EvidenceSchema', 'EvidenceJson')).Count | Should BeGreaterThan 0
     }
 
-    It 'recomputes the admitted Terminal VT pair and rejects a candidate beyond baseline x1.10' -Skip:(-not $terminalVtArchivePresent) {
+    It 'recomputes a Terminal VT pair and rejects a candidate beyond baseline x1.10' {
         $fixture = New-RSTerminalVtArchiveFixture
         $passing = Compare-RSTerminalVtUpgradeEvidence `
             -RepoRoot $fixture.Root `
@@ -255,6 +301,49 @@ Describe 'TestRuns archive contract' {
             -CandidateRunPath $fixture.Candidate
         $failing.Outcome | Should Be 'fail'
         ($failing.Violations.Message -join "`n") | Should Match 'candidate p95 9000 exceeds baseline ceiling 8123'
+    }
+
+    It 'accepts only the exact reviewed Zig transition and otherwise requires equal versions' {
+        $fixture = New-RSTerminalVtArchiveFixture
+        $paths = @(Get-RSTestRunArchivePathsForRuns -RepoRoot $fixture.Root -RunPath @($fixture.Baseline, $fixture.Candidate))
+        @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths).Count | Should Be 0
+        $resultsPath = Join-Path (Join-Path $fixture.Root $fixture.Candidate) 'results.json'
+        $results = Get-Content $resultsPath -Raw | ConvertFrom-Json
+        $results.environment.zig = '0.17.0'
+        $results | ConvertTo-Json -Depth 15 | Set-Content $resultsPath -Encoding UTF8
+        $arguments = @{ RepoRoot=$fixture.Root; BaselineRunPath=$fixture.Baseline; CandidateRunPath=$fixture.Candidate }
+        $strict = Compare-RSTerminalVtUpgradeEvidence @arguments
+        $strict.Outcome | Should Be 'fail'
+        ($strict.Violations.Message -join " ") | Should Match "Environment identity 'zig'"
+        $reviewed = Compare-RSTerminalVtUpgradeEvidence @arguments -ZigToolchainTransition @('0.16.0','0.17.0')
+        $reviewed.Outcome | Should Be 'pass'
+        ($reviewed.ZigToolchainTransition -join ',') | Should Be '0.16.0,0.17.0'
+        $mismatch = Compare-RSTerminalVtUpgradeEvidence @arguments -ZigToolchainTransition @('0.16.0','0.18.0')
+        $mismatch.Outcome | Should Be 'fail'
+        ($mismatch.Violations.Message -join " ") | Should Match 'exact reviewed'
+        { Compare-RSTerminalVtUpgradeEvidence @arguments -ZigToolchainTransition @('0.17.0') } | Should Throw 'exactly two'
+        { Compare-RSTerminalVtUpgradeEvidence @arguments -ZigToolchainTransition @('0.17.0','0.17.0') } | Should Throw 'distinct'
+    }
+
+    It 'retains environment, behavior, and p95 rejection during a reviewed Zig transition' {
+        $fixture = New-RSTerminalVtArchiveFixture
+        $resultsPath = Join-Path (Join-Path $fixture.Root $fixture.Candidate) 'results.json'
+        $results = Get-Content $resultsPath -Raw | ConvertFrom-Json
+        $results.environment.zig = '0.17.0'
+        $results.environment.cpu = 'Different synthetic CPU'
+        $results.behavior.withoutExpectedDeltas.snapshotSha256 = '9' * 64
+        $results.measurements.hostedRender.samples = @(9000) * 200
+        $results.measurements.hostedRender.p50 = 9000
+        $results.measurements.hostedRender.p95 = 9000
+        $results.measurements.hostedRender.candidateMaximumP95 = 9900
+        $results | ConvertTo-Json -Depth 15 | Set-Content $resultsPath -Encoding UTF8
+        $comparison = Compare-RSTerminalVtUpgradeEvidence -RepoRoot $fixture.Root -BaselineRunPath $fixture.Baseline `
+            -CandidateRunPath $fixture.Candidate -ZigToolchainTransition @('0.16.0','0.17.0')
+        $comparison.Outcome | Should Be 'fail'
+        $messages = $comparison.Violations.Message -join " "
+        $messages | Should Match "Environment identity 'cpu'"
+        $messages | Should Match 'Control behavior digests differ'
+        $messages | Should Match 'candidate p95 9000 exceeds baseline ceiling 8123'
     }
 
     It 'finds an unchanged historical violation only in whole-inventory mode' {
