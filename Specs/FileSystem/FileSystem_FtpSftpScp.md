@@ -655,6 +655,13 @@ This diagnostic changes no transport behavior, timeout, listener-creation cap or
 qualification predicate. An extra announcement's origin must be established before
 changing the native Copy fixture's passive-listener accounting contract.
 
+The fixture's LIST serializer appends its fixed grammar and converts the decimal
+size directly, avoiding a general formatter for each repeated row. Its exact-byte
+oracles cover empty/nested directories, UTF-8/literal names, unknown/overridden and
+maximum 64-bit sizes, custom payloads and 64 complete 4,097-file listings. This
+changes fixture cost only: the large Copy corpus, deadlines, accepted-transfer
+counts and passive-retirement assertions remain unchanged.
+
 ## Permanent Delete by name (C10)
 
 FTP, SFTP and SCP name no object identity, so the plugin does not implement

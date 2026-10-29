@@ -35,6 +35,14 @@ an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
 
+The diagnostic-only `edb2af23` direct Curl run exhausts the existing six-minute
+ASan Wide/CopyItem/concurrency1 deadline after 3952/4097 publications, without
+reproducing C11's pending passive retirement. Its listing-build metrics show
+75.6 seconds in repeated destination serialization. Replace per-row general
+formatting with fixed grammar and decimal conversion, preserving exact byte
+oracles and adding the maximum-size boundary. This does not establish or waive
+the separate C11 origin; native/focused/Full validation remains open.
+
 Baseline audit: E:/DxUi.Perf/flag-coherence-20261028-aea0f188.
 Current task evidence: E:/DxUi.Perf/build-policy-evidence-20261028.
 RedTilde ARM64 restore and required policy/lease logs are under that task's
