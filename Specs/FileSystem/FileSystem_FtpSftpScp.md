@@ -655,6 +655,13 @@ This diagnostic changes no transport behavior, timeout, listener-creation cap or
 qualification predicate. An extra announcement's origin must be established before
 changing the native Copy fixture's passive-listener accounting contract.
 
+A controlled entry-lookup fixture announces an exclusively owned bound-only data
+port once. The real pinned libcurl cursor must capture that exact refused port,
+send EPSV then PASV before one LIST, and return the exact file row and terminal
+status. The server must count two passive creations, one retired announcement and
+one accepted first use. This is a protocol-origin witness, not permission to
+ignore unexplained retirements in the large Copy fixture.
+
 The fixture's LIST serializer appends its fixed grammar and converts the decimal
 size directly, avoiding a general formatter for each repeated row. Its exact-byte
 oracles cover empty/nested directories, UTF-8/literal names, unknown/overridden and

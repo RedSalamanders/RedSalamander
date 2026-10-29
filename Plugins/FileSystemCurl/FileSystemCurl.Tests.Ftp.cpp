@@ -403,6 +403,18 @@ public:
     FakeFtpEndpoint(FakeFtpEndpoint&&)                 = delete;
     FakeFtpEndpoint& operator=(FakeFtpEndpoint&&)      = delete;
 
+    void RefuseNextPassiveAnnouncement()
+    {
+        std::scoped_lock lock(_stateMutex);
+        _refuseNextPassiveAnnouncement = true;
+    }
+
+    [[nodiscard]] unsigned short RefusedPassivePort() const
+    {
+        std::scoped_lock lock(_stateMutex);
+        return _refusedPassivePort;
+    }
+
     void SeedFile(std::string path, std::vector<uint8_t> bytes)
     {
         const std::string normalizedPath = NormalizeFtpPath(path, "/");
@@ -1281,7 +1293,13 @@ private:
         }
         if (! passiveListener.socket)
         {
-            const HRESULT hr = CreateLoopbackEndpoint(passiveListener.socket, passiveListener.port);
+            bool refuse = false;
+            {
+                std::scoped_lock lock(_stateMutex);
+                refuse = std::exchange(_refuseNextPassiveAnnouncement, false);
+            }
+            const HRESULT hr = CreateLoopbackEndpoint(
+                passiveListener.socket, passiveListener.port, refuse ? LoopbackEndpointMode::BoundOnly : LoopbackEndpointMode::Listening);
             if (FAILED(hr))
             {
                 static_cast<void>(SendAll(control, "425 Cannot enter passive mode.\r\n"));
@@ -1289,6 +1307,10 @@ private:
             }
             std::scoped_lock lock(_stateMutex);
             ++_passiveListenerCreations;
+            if (refuse)
+            {
+                _refusedPassivePort = passiveListener.port;
+            }
             passiveListener.used = false;
         }
         else
@@ -1768,6 +1790,8 @@ private:
     size_t _passiveListenerCreations           = 0u;
     size_t _passiveListenerReuses              = 0u;
     size_t _passivePendingRetirements          = 0u;
+    bool _refuseNextPassiveAnnouncement        = false;
+    unsigned short _refusedPassivePort         = 0u;
     size_t _idleControlClosures                = 0u;
     std::array<DataTransferCounts, static_cast<size_t>(DataTransferKind::Count)> _dataTransfers{};
     uint64_t _listPayloadBuildUs = 0u;
@@ -6483,6 +6507,60 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                                   correct ? S_OK : E_FAIL);
                 DebugCheck(correct, L"connection trace retains only reviewed numeric loopback fields", *passed, *failed);
             }
+        }
+        {
+            FakeFtpEndpoint fallback(UploadRetention::Complete);
+            fallback.SeedFile("/probe/known.bin", {1u, 2u, 3u, 4u});
+            fallback.RefuseNextPassiveAnnouncement();
+            HRESULT hr = fallback.Start();
+            ResolvedLocation resolved{};
+            if (SUCCEEDED(hr))
+            {
+                hr = ResolveLocation(
+                    Protocol::Ftp, FileSystemCurl::Settings{}, std::format(L"//anonymous@127.0.0.1:{}/probe", fallback.Port()), nullptr, true, resolved);
+            }
+            if (! DebugCheck(SUCCEEDED(hr), L"EPSV fallback fixture starts with an exclusively bound refusal port", *passed, *failed))
+            {
+                return E_FAIL;
+            }
+            resolved.connection.ftpUseEpsv = true;
+            CurlDirectoryCursor cursor;
+            hr = cursor.Open(resolved.connection, L"/probe", []() noexcept { return S_OK; });
+            FilesInformationCurl::Entry entry{};
+            if (SUCCEEDED(hr))
+            {
+                hr = cursor.Next(entry);
+            }
+            const bool exact             = hr == S_OK && entry.name == L"known.bin" && entry.sizeBytes == 4u;
+            const HRESULT terminal       = SUCCEEDED(hr) ? cursor.Next(entry) : hr;
+            const auto failedPorts       = cursor.FailedConnectPortsForSelfTest();
+            const EndpointSnapshot after = fallback.Snapshot();
+            const auto& uses             = after.dataTransfers[static_cast<size_t>(DataTransferKind::List)];
+            bool epsvThenPasv            = false;
+            for (size_t index = 1u; index < after.commands.size(); ++index)
+            {
+                epsvThenPasv = epsvThenPasv || (after.commands[index - 1u].verb == "EPSV" && after.commands[index].verb == "PASV");
+            }
+            DebugCheck(exact && terminal == S_FALSE, L"real libcurl falls back from refused EPSV and publishes the exact listing", *passed, *failed);
+            DebugCheck(failedPorts.has_value() && failedPorts.value().remote == fallback.RefusedPassivePort() && fallback.RefusedPassivePort() != 0u,
+                       L"fallback captures the exact fixture-owned refused data port",
+                       *passed,
+                       *failed);
+            DebugCheck(epsvThenPasv && CountCommands(after, "EPSV") == 1u && CountCommands(after, "PASV") == 1u && CountCommands(after, "LIST") == 1u,
+                       L"libcurl connection fallback issues a second passive announcement before one LIST",
+                       *passed,
+                       *failed);
+            DebugCheck(after.passivePendingRetirements == 1u && after.passiveListenerCreations == 2u && after.passiveListenerReuses == 0u &&
+                           uses.firstUse == 1u && uses.reuse == 0u && SUCCEEDED(after.serverHr),
+                       L"refused EPSV consumes one announcement without an accepted data transfer",
+                       *passed,
+                       *failed);
+            Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.EpsvFallbackProof",
+                              L"owned-refused-EPSV;libcurl-PASV;one-complete-LIST",
+                              0u,
+                              fallback.RefusedPassivePort(),
+                              after.passivePendingRetirements,
+                              exact && terminal == S_FALSE ? S_OK : E_FAIL);
         }
         {
             FakeFtpEndpoint known(UploadRetention::Complete);

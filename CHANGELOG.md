@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Add an exclusively owned data-port refusal fixture that exercises real libcurl EPSV-to-PASV fallback, exact listing output and passive-announcement/accepted-transfer accounting. Keep the large Copy fixture's existing limits and assertions while investigating C11's original extra announcement.
 - Remove per-row general formatting from the fake FTP server's repeated directory listings while retaining the exact LIST/NLST byte oracles, 4,097-file corpus, passive-listener assertions and existing deadlines. This addresses measured fixture overhead; the separate intermittent C11 passive announcement remains under investigation.
 - Add bounded, session-specific FTP fixture command traces for the unresolved extra passive announcement in native Copy traversal qualification; preserve all listener, content, completion and deadline checks. Native reproduction and repair qualification remain pending.
 - Resolve the installer mirror test through the shared short DxUi source locator and verify its full Git HEAD before importing tool modules. Document the real pinned source/version-database prerequisites, preserving the strict Full skip gate and the existing history-dependent archive exception. Candidate qualification will serialize complete Full profiles after retained overlapping MSBuild fixtures were correctly refused.

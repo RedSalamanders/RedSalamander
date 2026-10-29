@@ -35,6 +35,15 @@ an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
 
+The original C11 route also records a cursor data-connect failure at 07:26:12.165 UTC,
+inside its 07:22:52--07:26:39 window. Add a controlled real-libcurl EPSV refusal/PASV
+fallback witness with exclusive port ownership and exact command/transfer counts.
+This must pass before attributing a pending announcement to fallback; the large
+Copy fixture's existing predicates remain unchanged. The second `1c1da3629`
+diagnostic still exhausts the unchanged Wide ASan deadline after 4017/4097
+publications under concurrent build/test activity. Both this failure and the
+preceding 142/0 diagnostic are preserved; neither erases historical C11.
+
 The diagnostic-only `edb2af23` direct Curl run exhausts the existing six-minute
 ASan Wide/CopyItem/concurrency1 deadline after 3952/4097 publications, without
 reproducing C11's pending passive retirement. Its listing-build metrics show
