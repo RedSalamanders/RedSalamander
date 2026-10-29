@@ -157,6 +157,36 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Native run `40810497954` at `7152e3823` completed all three upstream targets
+  on the first execution, without a code-5 retry: the ARM64 C-ABI suite passed
+  3,720 with 36 skips, the Zig suite passed 3,233 with 36 skips, and the ABI
+  manifest validated 187 types. The canonical report step also passed and
+  bound the expected `fb1ba734...` runtime. The job then failed during artifact
+  upload: combining workspace and external-sandbox files yielded a drive-relative
+  common ancestor, which the artifact client resolved to the workspace and
+  rejected. Product continuation was skipped; the overall job remains failed.
+  Complete logs are preserved in
+  `20261029T043734Z-36808-395bdefc2d454998bafe862392c2d784`.
+  The report printed by the successful canonical step was recovered and locally
+  schema-validated, with source-log hashes and explicit missing-original-artifact
+  provenance, in `20261029T044531Z-12496-b601263634bd4dcc86c94a6fa905e6ea`.
+  This is a recovered structured record, not a downloaded original artifact.
+  Publication now stages a byte-verified identity copy beside the report and
+  native output, rejecting existing or mismatched destinations; all uploaded
+  files share that owned root. The actual staging block and focused workflow,
+  governance and scoped checks passed 60/60 in
+  `20261029T044341Z-79576-5aa7efc2b4c54729a6afcd59f429a0e9`.
+  Admitted-product run `40819043691` was dispatched separately at application
+  commit `dd3f5a732`, preserving the successful upstream execution while the
+  publication correction is verified independently.
+- Combined-head x64 PR CI `40814412271` passed at `dd3f5a732`: 1,062
+  PowerShell checks and all eleven native entries passed, including the loaded
+  Terminal's 162 selftests, with two historical-evidence skips. The complete
+  log is preserved in `20261029T043522Z-41352-3f2727b5a70544ac87bc06a5df8f2806`.
+  Its ARM64 job remains in progress. At `3f2b0f1ce`, the local Commands entry
+  has now passed its coverage check and promoted its result; File Operations
+  is queued for execution and both interactive viewer entries remain pending.
+
 - Combined workflow, candidate-review, scheduler, governance and scoped checks
   passed 138/138 in
   `20261029T034752Z-96224-e7af37b690674067aa963c3769376e9d`, excluding the

@@ -901,6 +901,9 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match "test\\\.exe"
         $ghosttyNativeWorkflow | Should Match 'GhosttyRuntimeNativeQualification\.schema\.json'
         $ghosttyNativeWorkflow | Should Match 'Write-RSAtomicCanonicalJsonFile'
+        $nativeEvidence = [regex]::Match($ghosttyNativeWorkflow, '(?s)- name: Upload native qualification evidence(.*?)(?=\r?\n  qualify-product:)').Groups[1].Value
+        $nativeEvidence | Should Not Match '\.build/'
+        ([regex]::Matches($nativeEvidence, '\$\{\{ env\.RS_NATIVE_TEST_SCRATCH \}\}/')).Count | Should Be 3
         $ghosttyNativeWorkflow | Should Match 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         $ghosttyNativeWorkflow | Should Match 'if-no-files-found:\s*error'
         $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product && !inputs\.diagnostics_only \}\}.*?needs:\s*qualify-arm64'
@@ -1096,6 +1099,32 @@ Describe 'Release workflow source contracts' {
             $match = [regex]::Match($path, '^(.+)$')
             { & $invoke $sourceRoot $nativeLocalCache $match } | Should Throw 'escaped the candidate cache'
         }
+    }
+
+    It 'stages the native identity byte-for-byte beside the report and rejects stale or mismatched evidence' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $staging = [regex]::Match($workflow, '(?ms)^ {10}\$identityEvidencePath =.*?(?=^ {10}Write-RSAtomicCanonicalJsonFile)')
+        $staging.Success | Should Be $true
+        $invoke = [scriptblock]::Create('param($identityPath,$report)' + "`n" + $staging.Value)
+        $identity = Join-Path $TestDrive 'workspace/terminal-runtime-identity.json'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $identity))
+        [IO.File]::WriteAllText($identity, '{"runtime":"fixture"}', [Text.UTF8Encoding]::new($false))
+        $report = [pscustomobject]@{ runtime = [pscustomobject]@{ identitySha256 = (Get-FileHash -LiteralPath $identity -Algorithm SHA256).Hash.ToLowerInvariant() } }
+        $previousScratch = $env:RS_NATIVE_TEST_SCRATCH
+        try {
+            $env:RS_NATIVE_TEST_SCRATCH = Join-Path $TestDrive 'native-evidence'
+            [void][IO.Directory]::CreateDirectory($env:RS_NATIVE_TEST_SCRATCH)
+            & $invoke $identity $report
+            $copy = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'terminal-runtime-identity.json'
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes($copy)) | Should Be ([Convert]::ToBase64String([IO.File]::ReadAllBytes($identity)))
+            { & $invoke $identity $report } | Should Throw 'identity evidence already exists'
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes($copy)) | Should Be ([Convert]::ToBase64String([IO.File]::ReadAllBytes($identity)))
+            $env:RS_NATIVE_TEST_SCRATCH = Join-Path $TestDrive 'mismatched-evidence'
+            [void][IO.Directory]::CreateDirectory($env:RS_NATIVE_TEST_SCRATCH)
+            $report.runtime.identitySha256 = '0' * 64
+            { & $invoke $identity $report } | Should Throw 'does not match the tested runtime'
+        }
+        finally { $env:RS_NATIVE_TEST_SCRATCH = $previousScratch }
     }
 
     It 'keeps build-only diagnostics outside native qualification and product continuation' {

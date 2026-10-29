@@ -712,6 +712,15 @@ jobs:
               [ordered]@{ target = 'test-lib-vt-schema'; status = 'passed' }
             )
           }
+          $identityEvidencePath = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'terminal-runtime-identity.json'
+          if (Test-Path -LiteralPath $identityEvidencePath) {
+            throw 'Native qualification identity evidence already exists.'
+          }
+          Copy-Item -LiteralPath $identityPath -Destination $identityEvidencePath -ErrorAction Stop
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityEvidencePath).Hash.ToLowerInvariant() -cne
+              [string]$report.runtime.identitySha256) {
+            throw 'Native qualification identity evidence does not match the tested runtime.'
+          }
           Write-RSAtomicCanonicalJsonFile `
             -LiteralPath $reportPath `
             -InputObject $report `
@@ -727,7 +736,7 @@ jobs:
           path: |
             ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-arm64-qualification.json
             ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-output.txt
-            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/candidate-native-arm64/terminal-runtime-identity.json
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/terminal-runtime-identity.json
           if-no-files-found: error
           retention-days: 30
 

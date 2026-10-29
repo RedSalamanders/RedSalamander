@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Publish native Ghostty qualification evidence from one owned sandbox root,
+  with a byte-verified copy of the tested runtime identity. Reject stale or
+  mismatched evidence before upload. ARM64 upstream execution passed cleanly;
+  its first upload failed because the artifact mixed workspace and sandbox paths.
 - Interactive PrePush validation continues when PR delegation leaves no early standalone entries. Empty, interactive-only and mixed scheduler remainders are covered by regression checks.
 - Keep successful Git stderr warnings out of Ghostty candidate metadata parsing,
   while displaying warnings and preserving diagnostics from failed commands.

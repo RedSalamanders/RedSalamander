@@ -873,6 +873,11 @@ and the same hash-verified `--system` package staging as runtime builds. Native
 test processes run in owned TestSandbox scratch with upstream snapshot fixtures
 copied into their expected relative location. Logs, dumps and the qualification
 report stay in that marked sandbox; build inputs remain under `.build`.
+Successful qualification copies the tested runtime identity beside the report
+and native output, rejects an existing destination, and verifies the copied
+bytes against the report's identity SHA-256 before publication. All three
+uploaded files share that owned evidence root; an upload must not combine
+workspace build outputs with the external test sandbox into a drive-root ancestor.
 The native local cache is the absolute `native-local-cache` directory beneath
 the exact candidate root, outside the source checkout. This keeps Zig 0.17's
 generated executable paths absolute when a package changes its working
