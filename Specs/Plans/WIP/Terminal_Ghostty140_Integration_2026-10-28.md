@@ -169,6 +169,11 @@ and warning; acceptance remains pending their actual results.
   from the real producer helper; focused workflow, governance and scoped checks
   passed 61/61 in `20261029T050250Z-52904-fcdd228b4f7c466db64215025f95000e`.
   No product execution was discarded or counted as accepted by that cancellation.
+  The complete cancelled-job log is retained in
+  `20261029T050439Z-57212-cc6ddb60798546d6a4cb16b1ca9f9c50`.
+  Replacement product run `40821309490` uses commit `17058e31f`; the separate
+  native publication verification `40819647447` uses `9a46463e8` and does not
+  duplicate the product run.
 
 - Native run `40810497954` at `7152e3823` completed all three upstream targets
   on the first execution, without a code-5 retry: the ARM64 C-ABI suite passed
@@ -192,11 +197,14 @@ and warning; acceptance remains pending their actual results.
   Admitted-product run `40819043691` was dispatched separately at application
   commit `dd3f5a732`, preserving the successful upstream execution while the
   publication correction is verified independently.
-- Combined-head x64 PR CI `40814412271` passed at `dd3f5a732`: 1,062
-  PowerShell checks and all eleven native entries passed, including the loaded
-  Terminal's 162 selftests, with two historical-evidence skips. The complete
-  log is preserved in `20261029T043522Z-41352-3f2727b5a70544ac87bc06a5df8f2806`.
-  Its ARM64 job remains in progress. At `3f2b0f1ce`, the local Commands entry
+- Combined-head PR CI `40814412271` passed on x64 and native ARM64 at
+  `dd3f5a732`. Each platform passed 1,062 PowerShell checks and all eleven
+  native entries, including the loaded Terminal's 162 selftests, with two
+  historical-evidence skips and zero blocking classifications or quarantine
+  entries. Complete logs are preserved in
+  `20261029T043522Z-41352-3f2727b5a70544ac87bc06a5df8f2806` (x64) and
+  `20261029T051210Z-84604-1b041457a32f4208a5335b53dcc08be8` (ARM64).
+  At `3f2b0f1ce`, the local Commands entry
   has now passed its coverage check and promoted its result; File Operations
   is queued for execution and both interactive viewer entries remain pending.
 
