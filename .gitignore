@@ -66,6 +66,10 @@ node_modules/
 .omc
 .gitnexus
 
+# Changes workflow fold lease and staged changelog, removed when a fold finishes
+/.changelog-fold.lock
+/.changelog-*.tmp
+
 # Editor/OS junk
 ~$*
 *~

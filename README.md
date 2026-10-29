@@ -524,6 +524,6 @@ Affected iteration, full local coverage, exact reuse and pending PR obligations 
 
 ## Recording changes
 
-Follow the [Changes workflow](Changes/README.md): validate while editing, then fold before PrePush/final handoff and immediately after integration, even for one fragment.
+Follow the [Changes workflow](Changes/README.md): each change adds one fragment under `Changes/` and never edits `CHANGELOG.md`; after merges, `Tools/Submit-ChangelogFold.ps1` folds the fragments on `main` through a pull request of its own.
 
 Builds require default MSVC **14.52.x** (v145). Release C++ uses /Gy /GL with /OPT:REF and full /LTCG at final links. Exact tools and WPO are forwarded to the existing DxUi pin and included in a separate archive-output identity; see the build toolchain contract.

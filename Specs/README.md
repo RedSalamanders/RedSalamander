@@ -122,6 +122,6 @@ fence MUST use the opening character with at least the opening run length and a 
 tail. A fence-like line with trailing nonwhitespace stays inside its current fence.
 These checks do not expand the parser to general Markdown lists or indented code blocks.
 
-The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.
+The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and folding on the default branch after merge; a change keeps its fragment and never edits `CHANGELOG.md`.
 
 The snapshot migration retains the original 133-file protected Done baseline as parentless commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853. Its Specs/Plans/Done tree is byte-identical to the former baseline. Both integrated master and the public source snapshot retain that commit in ancestry, so ordinary fresh clones can enforce the existing guard without importing DualTail history or changing completed documents.
