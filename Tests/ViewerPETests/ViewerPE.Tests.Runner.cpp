@@ -839,6 +839,9 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     return false;
 }
 
+// The fresh-child parent has a different ownership boundary from the read-only
+// shared desktop observer: it must distinguish exact observation from permission
+// to write restoration state. These values are identity tokens, never HWND owners.
 struct ViewerHarnessDesktopIdentity final
 {
     uintptr_t foregroundWindow = 0u;
@@ -849,26 +852,110 @@ struct ViewerHarnessDesktopIdentity final
     DWORD focusThread          = 0u;
 };
 
-[[nodiscard]] constexpr bool ViewerHarnessFocusSharesForegroundThread(const ViewerHarnessDesktopIdentity& saved) noexcept
+[[nodiscard]] constexpr bool IsViewerHarnessDesktopIdentityStable(const ViewerHarnessDesktopIdentity& captured,
+                                                                  const ViewerHarnessDesktopIdentity& observed,
+                                                                  bool focusBelongsToForeground) noexcept
 {
-    return ! saved.focusWindow || (saved.focusPid == saved.foregroundPid && saved.focusThread == saved.foregroundThread);
+    if (! captured.foregroundWindow || ! captured.foregroundPid || ! captured.foregroundThread || captured.foregroundWindow != observed.foregroundWindow ||
+        captured.foregroundPid != observed.foregroundPid || captured.foregroundThread != observed.foregroundThread)
+    {
+        return false;
+    }
+    if (! captured.focusWindow)
+    {
+        return ! captured.focusPid && ! captured.focusThread && ! observed.focusWindow && ! observed.focusPid && ! observed.focusThread;
+    }
+    return focusBelongsToForeground && captured.focusPid && captured.focusThread && captured.focusWindow == observed.focusWindow &&
+           captured.focusPid == observed.focusPid && captured.focusThread == observed.focusThread;
 }
 
-// Exact observation never grants permission to change a foreign input queue.
-// A legitimate saved child focus can belong to a different thread or process.
-[[nodiscard]] constexpr bool IsViewerHarnessDesktopAlreadyRestored(const ViewerHarnessDesktopIdentity& saved,
+[[nodiscard]] constexpr bool ViewerHarnessFocusSharesForegroundThread(const ViewerHarnessDesktopIdentity& captured) noexcept
+{
+    return ! captured.focusWindow || (captured.focusPid == captured.foregroundPid && captured.focusThread == captured.foregroundThread);
+}
+
+[[nodiscard]] constexpr bool IsViewerHarnessDesktopAlreadyRestored(const ViewerHarnessDesktopIdentity& captured,
                                                                    const ViewerHarnessDesktopIdentity& observed,
                                                                    bool focusBelongsToForeground,
                                                                    uintptr_t currentForeground,
                                                                    uintptr_t currentFocus,
                                                                    bool guiAvailable) noexcept
 {
-    const bool sameForeground = saved.foregroundWindow && saved.foregroundPid && saved.foregroundThread &&
-                                saved.foregroundWindow == observed.foregroundWindow && saved.foregroundPid == observed.foregroundPid &&
-                                saved.foregroundThread == observed.foregroundThread;
-    const bool sameFocus      = saved.focusWindow == observed.focusWindow && saved.focusPid == observed.focusPid && saved.focusThread == observed.focusThread &&
-                                (saved.focusWindow ? saved.focusPid && saved.focusThread && focusBelongsToForeground : ! saved.focusPid && ! saved.focusThread);
-    return sameForeground && sameFocus && guiAvailable && currentForeground == saved.foregroundWindow && currentFocus == saved.focusWindow;
+    // Observation does not grant restoration authority. A hosted control can
+    // legitimately belong to another process/thread; require its independently
+    // captured identity and exact current GUI state without writing either.
+    return IsViewerHarnessDesktopIdentityStable(captured, observed, focusBelongsToForeground) && guiAvailable &&
+           currentForeground == captured.foregroundWindow && currentFocus == captured.focusWindow;
+}
+
+[[nodiscard]] bool TestViewerHarnessDesktopObservationDoesNotGrantRestoration() noexcept
+{
+    bool success = true;
+    constexpr ViewerHarnessDesktopIdentity crossProcess{1u, 2u, 100u, 1000u, 200u, 2000u};
+    const auto observe = [](const ViewerHarnessDesktopIdentity& captured, const ViewerHarnessDesktopIdentity& observed) noexcept
+    { return IsViewerHarnessDesktopAlreadyRestored(captured, observed, true, captured.foregroundWindow, captured.focusWindow, true); };
+    Check(observe(crossProcess, crossProcess), L"Exact stable cross-process child focus qualifies for read-only desktop observation", success);
+    Check(! ViewerHarnessFocusSharesForegroundThread(crossProcess), L"Cross-process observation grants no desktop restoration write permission", success);
+
+    auto sameProcessDifferentThread     = crossProcess;
+    sameProcessDifferentThread.focusPid = sameProcessDifferentThread.foregroundPid;
+    Check(
+        observe(sameProcessDifferentThread, sameProcessDifferentThread), L"Exact stable cross-thread child focus qualifies for read-only observation", success);
+    Check(! ViewerHarnessFocusSharesForegroundThread(sameProcessDifferentThread), L"Cross-thread observation grants no restoration write permission", success);
+
+    auto sameThread        = sameProcessDifferentThread;
+    sameThread.focusThread = sameThread.foregroundThread;
+    Check(observe(sameThread, sameThread), L"Exact saved same-thread focus remains observable", success);
+    Check(ViewerHarnessFocusSharesForegroundThread(sameThread), L"Same-thread focus retains its existing restoration restriction", success);
+
+    const auto rejectIdentityChange = [&](const ViewerHarnessDesktopIdentity& changed, std::wstring_view message) noexcept
+    { Check(! observe(crossProcess, changed), message, success); };
+    auto changed             = crossProcess;
+    changed.foregroundWindow = 3u;
+    rejectIdentityChange(changed, L"Changed foreground HWND invalidates the saved observation");
+    changed = crossProcess;
+    ++changed.foregroundPid;
+    rejectIdentityChange(changed, L"Reused foreground HWND with another process invalidates observation");
+    changed = crossProcess;
+    ++changed.foregroundThread;
+    rejectIdentityChange(changed, L"Reused foreground HWND with another thread invalidates observation");
+    changed             = crossProcess;
+    changed.focusWindow = 3u;
+    rejectIdentityChange(changed, L"Changed focus HWND invalidates the saved observation");
+    changed = crossProcess;
+    ++changed.focusPid;
+    rejectIdentityChange(changed, L"Reused focus HWND with another process invalidates observation");
+    changed = crossProcess;
+    ++changed.focusThread;
+    rejectIdentityChange(changed, L"Reused focus HWND with another thread invalidates observation");
+    changed             = crossProcess;
+    changed.focusThread = 0u;
+    rejectIdentityChange(changed, L"Destroyed focus window invalidates observation");
+    changed                  = crossProcess;
+    changed.foregroundThread = 0u;
+    rejectIdentityChange(changed, L"Destroyed foreground window invalidates observation");
+    Check(! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, false, 1u, 2u, true),
+          L"Focus outside the saved foreground root cannot qualify observation",
+          success);
+    Check(! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 3u, 2u, true),
+          L"An unrelated current foreground cannot qualify observation",
+          success);
+    Check(! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 1u, 3u, true),
+          L"A different current keyboard focus cannot qualify observation",
+          success);
+    Check(! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 1u, 2u, false),
+          L"Unavailable current GUI information cannot qualify observation",
+          success);
+
+    auto noFocus        = crossProcess;
+    noFocus.focusWindow = 0u;
+    noFocus.focusPid    = 0u;
+    noFocus.focusThread = 0u;
+    Check(observe(noFocus, noFocus), L"An exact saved absence of keyboard focus remains observable", success);
+    changed          = noFocus;
+    changed.focusPid = 1u;
+    Check(! observe(changed, changed), L"Incoherent absent-focus identity is rejected", success);
+    return success;
 }
 
 constexpr std::wstring_view kViewerHarnessBlockedChild{L"__Internal_ViewerHarnessBlockedChild"};
@@ -930,8 +1017,8 @@ struct ViewerHarnessTimeoutProbe final
         if (captured && previousGui.hwndFocus)
         {
             previousFocusThread = GetWindowThreadProcessId(previousGui.hwndFocus, &previousFocusPid);
-            captured            = previousFocusThread && previousFocusPid && IsWindow(previousGui.hwndFocus) != FALSE &&
-                                  GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground;
+            captured =
+                previousFocusThread && previousFocusPid && IsWindow(previousGui.hwndFocus) && GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground;
         }
         if (! Check(captured, std::format(L"{} parent captures the desktop restoration boundary", testName), success))
         {
@@ -1159,43 +1246,45 @@ struct ViewerHarnessTimeoutProbe final
         DWORD savedPid          = 0u;
         const DWORD savedThread = IsWindow(previousForeground) ? GetWindowThreadProcessId(previousForeground, &savedPid) : 0u;
         DWORD focusPid          = 0u;
-        const DWORD focusThread = previousGui.hwndFocus ? GetWindowThreadProcessId(previousGui.hwndFocus, &focusPid) : previousThread;
-        const bool savedIdentityValid =
-            savedThread == previousThread && savedPid == previousPid &&
-            (! previousGui.hwndFocus || (IsWindow(previousGui.hwndFocus) && focusThread == previousThread && focusPid == previousPid &&
-                                         GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground));
-        const HWND foreground = GetForegroundWindow();
-        GUITHREADINFO alreadyRestoredGui{};
-        alreadyRestoredGui.cbSize = sizeof(alreadyRestoredGui);
-        // Real directed keyboard input changes LASTINPUTINFO. If Windows has
-        // already restored the exact saved foreground and focus after child exit,
-        // observe that boundary without writing any foreign desktop state.
+        const DWORD focusThread = previousGui.hwndFocus ? GetWindowThreadProcessId(previousGui.hwndFocus, &focusPid) : 0u;
         const ViewerHarnessDesktopIdentity capturedIdentity{reinterpret_cast<uintptr_t>(previousForeground),
                                                             reinterpret_cast<uintptr_t>(previousGui.hwndFocus),
                                                             previousPid,
                                                             previousThread,
                                                             previousFocusPid,
                                                             previousFocusThread};
-        const ViewerHarnessDesktopIdentity observedIdentity{reinterpret_cast<uintptr_t>(previousForeground),
-                                                            reinterpret_cast<uintptr_t>(previousGui.hwndFocus),
-                                                            savedPid,
-                                                            savedThread,
-                                                            previousGui.hwndFocus ? focusPid : 0u,
-                                                            previousGui.hwndFocus ? focusThread : 0u};
-        const bool focusBelongsToForeground = ! previousGui.hwndFocus || GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground;
-        const bool guiAvailable             = GetGUIThreadInfo(previousThread, &alreadyRestoredGui) != FALSE;
+        const ViewerHarnessDesktopIdentity observedIdentity{
+            reinterpret_cast<uintptr_t>(previousForeground), reinterpret_cast<uintptr_t>(previousGui.hwndFocus), savedPid, savedThread, focusPid, focusThread};
+        const bool focusBelongsToForeground =
+            ! previousGui.hwndFocus || (IsWindow(previousGui.hwndFocus) && GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground);
+        const bool savedObservationIdentityValid = IsViewerHarnessDesktopIdentityStable(capturedIdentity, observedIdentity, focusBelongsToForeground);
+        const bool savedIdentityValid            = savedObservationIdentityValid && ViewerHarnessFocusSharesForegroundThread(capturedIdentity);
+        const HWND foreground                    = GetForegroundWindow();
+        GUITHREADINFO alreadyRestoredGui{};
+        alreadyRestoredGui.cbSize = sizeof(alreadyRestoredGui);
+        // Real directed keyboard input changes LASTINPUTINFO. If Windows has
+        // already restored the exact saved foreground and focus after child exit,
+        // observe that boundary without writing any foreign desktop state.
+        const bool alreadyRestoredGuiAvailable =
+            savedObservationIdentityValid && foreground == previousForeground && GetGUIThreadInfo(previousThread, &alreadyRestoredGui) != FALSE;
         if (IsViewerHarnessDesktopAlreadyRestored(capturedIdentity,
                                                   observedIdentity,
                                                   focusBelongsToForeground,
                                                   reinterpret_cast<uintptr_t>(foreground),
                                                   reinterpret_cast<uintptr_t>(alreadyRestoredGui.hwndFocus),
-                                                  guiAvailable))
+                                                  alreadyRestoredGuiAvailable))
         {
-            Check(true,
-                  std::format(L"{} parent observes exact saved foreground and "
-                              L"keyboard focus without restoration writes",
-                              testName),
-                  success);
+            Check(true, std::format(L"{} parent observes exact saved foreground and keyboard focus without restoration writes", testName), success);
+            if (! ViewerHarnessFocusSharesForegroundThread(capturedIdentity))
+            {
+                std::wcout << std::format(L"[INFO] {} observes independent foreground/focus owners without desktop writes: foregroundPid={} foregroundTid={} "
+                                          L"focusPid={} focusTid={}\n",
+                                          testName,
+                                          previousPid,
+                                          previousThread,
+                                          previousFocusPid,
+                                          previousFocusThread);
+            }
             if (desktopBoundaryIntact)
             {
                 *desktopBoundaryIntact = true;
@@ -18006,6 +18095,7 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
 
     std::vector<IsolatedViewerTest> isolatedTests{
         {L"TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerHarnessDesktopObservationDoesNotGrantRestoration", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
         {L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
         {L"TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
         {L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
@@ -18267,6 +18357,10 @@ int wmain(int argc, wchar_t** argv)
     if (shouldRun(L"TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput"))
     {
         success = TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput() && success;
+    }
+    if (shouldRun(L"TestViewerHarnessDesktopObservationDoesNotGrantRestoration"))
+    {
+        success = TestViewerHarnessDesktopObservationDoesNotGrantRestoration() && success;
     }
     if (shouldRun(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo"))
     {

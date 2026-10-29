@@ -10,6 +10,257 @@ function Copy-RSGhosttyRuntimeLockFixture {
         ConvertFrom-Json -Depth 100 -NoEnumerate -DateKind String
 }
 
+function New-RSGhosttyLockedPackageFixture {
+    # A nested canonical root covers transports whose wrapper directory differs
+    # from the final Zig hash-named package directory.
+    $owner = Join-Path $TestDrive ('packages-' + [guid]::NewGuid().ToString('N'))
+    $source = Join-Path $owner '.build/source/fixture-pkg/wrapper'
+    $downloads = Join-Path $owner '.build/downloads'
+    [void](New-Item -ItemType Directory -Path $source, $downloads -Force)
+    'Synthetic package license' | Set-Content (Join-Path $source 'LICENSE') -Encoding utf8NoBOM
+    '.{ .name = .fixture, .version = "0.0.0" }' | Set-Content (Join-Path $source 'build.zig.zon') -Encoding utf8NoBOM
+    $archive = Join-Path $downloads 'fixture-pkg.tar.gz'
+    & tar.exe -czf $archive -C (Join-Path $owner '.build/source') fixture-pkg/wrapper/LICENSE fixture-pkg/wrapper/build.zig.zon
+    if ($LASTEXITCODE -ne 0) { throw 'Canonical package fixture creation failed.' }
+    $lock = [pscustomobject]@{ dependencies = @([pscustomobject]@{
+                id='fixture'; packageName='fixture-pkg'; licenseArchiveRelativePath='LICENSE'
+                contentArchive=[pscustomobject]@{ fileName='fixture-pkg.tar.gz'; internalRoot='fixture-pkg/wrapper'
+                    sha256=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() }
+            }) }
+    return [pscustomobject]@{
+        Owner=$owner; Source=$source; Downloads=$downloads; Lock=$lock
+        Destination=(Join-Path $owner '.build/closed-packages')
+    }
+}
+
+Describe 'Ghostty closed package directory' {
+    It 'stages verified nested archive contents directly beneath their Zig package name' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        $root = Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+            -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination
+        (Get-Content (Join-Path $root 'fixture-pkg/LICENSE') -Raw) |
+            Should Be (Get-Content (Join-Path $fixture.Source 'LICENSE') -Raw)
+        Test-Path (Join-Path $root 'fixture-pkg/build.zig.zon') | Should Be $true
+        Test-Path (Join-Path $root 'fixture-pkg/wrapper') | Should Be $false
+    }
+
+    It 'rejects changed archives before package publication' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        Add-Content (Join-Path $fixture.Downloads 'fixture-pkg.tar.gz') -Value 'changed'
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination } | Should Throw 'SHA-256 mismatch'
+        Test-Path (Join-Path $fixture.Destination 'fixture-pkg') | Should Be $false
+    }
+
+    It 'preserves occupied destinations and rejects an escaped package name' {
+        $fixture = New-RSGhosttyLockedPackageFixture
+        [void](New-Item -ItemType Directory -Path $fixture.Destination)
+        'preserve' | Set-Content (Join-Path $fixture.Destination 'owner.txt')
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot $fixture.Destination } | Should Throw 'absent or empty'
+        Get-Content (Join-Path $fixture.Destination 'owner.txt') | Should Be 'preserve'
+        $fixture.Lock.dependencies[0].packageName = '../escape'
+        { Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $fixture.Owner -RuntimeLock $fixture.Lock `
+                -DownloadsRoot $fixture.Downloads -DestinationRoot (Join-Path $fixture.Owner '.build/other-packages') } |
+            Should Throw 'package name escapes'
+    }
+}
+
+Describe 'Ghostty native command output contract' {
+    It 'keeps both captured streams separate from process progress' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $commandFunction = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -ceq 'Invoke-CheckedProcess'
+        }, $true)
+        $invoke = [scriptblock]::Create(
+            'param($FilePath, $Arguments, $WorkingDirectory)' + "`n" +
+            $commandFunction.Extent.Text + "`n" +
+            'Invoke-CheckedProcess -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory')
+        $progressLog = Join-Path $TestDrive 'native-progress.txt'
+        $child = Join-Path $PSHOME 'pwsh.exe'
+        $childCode = "[Console]::Out.Write('exact-package-hash'); [Console]::Error.Write('captured-stderr'); exit 0"
+        $result = & $invoke $child @('-NoProfile', '-Command', $childCode) ([string]$TestDrive) 6> $progressLog
+        $result.Stdout | Should Be 'exact-package-hash'
+        $result.Stderr | Should Be 'captured-stderr'
+        $progress = Get-Content -LiteralPath $progressLog -Raw
+        $progress | Should Match '\[GhosttyRuntime\] started pid='
+        $progress | Should Match 'code=0; draining output'
+        $progress | Should Match '\[GhosttyRuntime\] completed'
+
+        $failure = ''
+        try {
+            $null = & $invoke $child @('-NoProfile', '-Command', "[Console]::Error.Write('expected-native-failure'); exit 7") ([string]$TestDrive) 6>> $progressLog
+        }
+        catch { $failure = $_.Exception.Message }
+        $failure | Should Match 'failed with exit code 7'
+        $failure | Should Match 'expected-native-failure'
+    }
+}
+
+Describe 'Ghostty owned cache cleanup' {
+    Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1')
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$tokens, [ref]$parseErrors)
+    $functions = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -in @('Test-PathInsideTerminalBuildRoot', 'Remove-TerminalBuildDirectory')
+    }, $true) | ForEach-Object { $_.Extent.Text })
+    $script:ghosttyCleanupInvocation = [scriptblock]::Create(
+        'param($repoRoot, $terminalBuildRoot, $Path, [switch]$PreservePrimaryError)' + "`n" +
+        ($functions -join "`n") + "`n" +
+        'Remove-TerminalBuildDirectory -Path $Path -PreservePrimaryError:$PreservePrimaryError')
+
+    BeforeEach {
+        $cleanupRepo = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        $terminalRoot = Join-Path $cleanupRepo '.build/TerminalEngine'
+        $cache = Join-Path $terminalRoot 'Cache/fetch'
+        [void](New-Item -ItemType Directory -Path $cache -Force)
+        $marker = Join-Path $cache 'maker.exe'
+        'owned harmless fixture' | Set-Content -LiteralPath $marker
+    }
+
+    It 'waits for an owned open file to close before removing its cache' {
+        if (-not ('RSGhosttyCleanupProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+public static class RSGhosttyCleanupProbe {
+    public static System.Threading.Tasks.Task ReleaseAfter(System.IDisposable owned) {
+        return System.Threading.Tasks.Task.Run(() => {
+            System.Threading.Thread.Sleep(1000);
+            owned.Dispose();
+        });
+    }
+}
+'@
+        }
+        $stream = [IO.File]::Open($marker, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        $release = [RSGhosttyCleanupProbe]::ReleaseAfter($stream)
+        try {
+            & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache
+            $release.Wait(5000) | Should Be $true
+            Test-Path -LiteralPath $cache | Should Be $false
+        } finally {
+            $stream.Dispose()
+        }
+    }
+
+    It 'bounds permanent lock retries and preserves the remaining locked input' {
+        Mock Remove-Item { throw [UnauthorizedAccessException]::new('still mapped') }
+        Mock Start-Sleep {}
+        { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache } | Should Throw 'still mapped'
+        Assert-MockCalled Remove-Item -Times 20 -Exactly -Scope It
+        Assert-MockCalled Start-Sleep -Times 19 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+
+    It 'preserves the original fetch error when bounded cleanup also fails' {
+        Mock Remove-Item { throw [IO.IOException]::new('cleanup locked') }
+        Mock Start-Sleep {}
+        Mock Write-Warning {}
+        $message = ''
+        try {
+            try { throw [InvalidOperationException]::new('primary fetch failure') }
+            finally { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot $cache -PreservePrimaryError }
+        } catch { $message = $_.Exception.Message }
+        $message | Should Be 'primary fetch failure'
+        Assert-MockCalled Remove-Item -Times 20 -Exactly -Scope It
+        Assert-MockCalled Write-Warning -Times 1 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+
+    It 'rejects an escaped path before any removal attempt' {
+        Mock Remove-Item {}
+        { & $script:ghosttyCleanupInvocation $cleanupRepo $terminalRoot (Join-Path $cleanupRepo 'outside') } | Should Throw 'outside the terminal build root'
+        Assert-MockCalled Remove-Item -Times 0 -Exactly -Scope It
+        Test-Path -LiteralPath $marker | Should Be $true
+    }
+}
+
+Describe 'Ghostty fetch session cache ownership' {
+    Import-Module (Join-Path $repoRoot 'Tools/TerminalEngine/TerminalEngineArchive.psm1') -Force
+    Import-Module (Join-Path $repoRoot 'Tools/TerminalEngine/TerminalEngineTextIdentity.psm1') -Force
+    $source = Get-Content -LiteralPath $modulePath -Raw
+    $start = $source.IndexOf('$fetchCacheRoot = Join-Path $cacheRoot ("dependency-fetch-{0}"', [StringComparison]::Ordinal)
+    $end = $source.IndexOf('$privateRuntimeOverlayCanApply =', $start, [StringComparison]::Ordinal)
+    $session = $source.Substring($start, $end - $start)
+    # Run the real bootstrap control flow with a synthetic compiler. Its maker
+    # marker is an independent witness for reuse; real archive/hash/license and
+    # guarded cleanup helpers still run.
+    $script:ghosttyFetchSessionInvocation = [scriptblock]::Create(@'
+param($context, $dependencyStates)
+$repoRoot = $context.Fixture.Owner
+$terminalBuildRoot = Join-Path $repoRoot '.build/TerminalEngine'
+$cacheRoot = Join-Path $terminalBuildRoot 'Cache'
+$zigVersion = 'fixture'
+$zigExecutable = 'fixture-zig'
+$sourceRoot = $context.Fixture.Source
+$tarCommand = [pscustomobject]@{ Source='fixture-tar' }
+function Remove-TerminalBuildDirectory {
+    param($Path, [switch]$PreservePrimaryError)
+    $context.CleanupFlags.Add([bool]$PreservePrimaryError)
+    & $script:ghosttyCleanupInvocation $repoRoot $terminalBuildRoot $Path -PreservePrimaryError:$PreservePrimaryError
+}
+function Invoke-CheckedProcess {
+    param($FilePath, $ArgumentList, $WorkingDirectory, $Environment)
+    if ($FilePath -ceq 'fixture-tar') {
+        return [pscustomobject]@{ Stdout=[IO.File]::ReadAllText((Join-Path $sourceRoot 'LICENSE')) }
+    }
+    if ($FilePath -cne 'fixture-zig') { throw 'Unexpected compiler fixture command.' }
+    $context.FetchCount++
+    $maker = Join-Path $Environment.ZIG_GLOBAL_CACHE_DIR 'maker-witness'
+    if (-not [IO.File]::Exists($maker)) {
+        $context.BootstrapCount++
+        [IO.File]::WriteAllText($maker, 'one owned compiler bootstrap')
+    }
+    if ($dependency.id -ceq $context.FailPackage) { throw 'Synthetic second fetch failure.' }
+    $packages = Join-Path $Environment.ZIG_GLOBAL_CACHE_DIR 'p'
+    [void][IO.Directory]::CreateDirectory($packages)
+    Copy-Item -LiteralPath $context.TemplateArchive -Destination (Join-Path $packages "$($dependency.packageName).tar.gz")
+    return [pscustomobject]@{ Stdout=$dependency.packageName }
+}
+'@ + "`n" + $session)
+
+    foreach ($scenario in @('cold', 'warm', 'second-fetch-failure')) {
+        It "retains one owned compiler cache across packages and cleans the $scenario session" {
+            $fixture = New-RSGhosttyLockedPackageFixture
+            $template = Join-Path $fixture.Downloads 'fixture-pkg.tar.gz'
+            $archiveHash = (Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash.ToLowerInvariant()
+            $licenseHash = (Get-RSTerminalLfStringIdentity -Text ([IO.File]::ReadAllText((Join-Path $fixture.Source 'LICENSE')))).Sha256
+            $states = @('one','two' | ForEach-Object {
+                $target = Join-Path $fixture.Downloads "$_-canonical.tar.gz"
+                if ($scenario -ceq 'warm') { Copy-Item -LiteralPath $template -Destination $target }
+                [pscustomobject]@{ Id=$_; SourceArchive=$template; ContentArchive=$target; Lock=[pscustomobject]@{
+                    id=$_; packageName="$_-pkg"; licenseArchiveRelativePath='LICENSE'; licenseSha256=$licenseHash
+                    sourceArchive=[pscustomobject]@{ sha256=$archiveHash; internalRoot='fixture-pkg/wrapper' }
+                    contentArchive=[pscustomobject]@{ sha256=$archiveHash; internalRoot='fixture-pkg/wrapper' }
+                } }
+            })
+            $context = [pscustomobject]@{
+                Fixture=$fixture; TemplateArchive=$template; FetchCount=0; BootstrapCount=0
+                FailPackage=$(if ($scenario -ceq 'second-fetch-failure') { 'two' } else { '' })
+                CleanupFlags=[Collections.Generic.List[bool]]::new()
+            }
+            if ($scenario -ceq 'second-fetch-failure') {
+                { & $script:ghosttyFetchSessionInvocation $context $states } | Should Throw 'Synthetic second fetch failure'
+                $context.CleanupFlags[$context.CleanupFlags.Count-1] | Should Be $true
+                Test-Path -LiteralPath $states[0].ContentArchive | Should Be $true
+                Test-Path -LiteralPath $states[1].ContentArchive | Should Be $false
+            } else {
+                & $script:ghosttyFetchSessionInvocation $context $states
+                @($states | Where-Object { -not [IO.File]::Exists($_.ContentArchive) }).Count | Should Be 0
+            }
+            $context.FetchCount | Should Be $(if ($scenario -ceq 'warm') { 0 } else { 2 })
+            $context.BootstrapCount | Should Be $(if ($scenario -ceq 'warm') { 0 } else { 1 })
+            Test-Path -LiteralPath (Join-Path $fixture.Owner '.build/TerminalEngine/Cache/dependency-fetch-fixture') | Should Be $false
+        }
+    }
+}
+
 function Assert-RSInvalidGhosttyRuntimeLock {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Mutate,
@@ -181,9 +432,9 @@ Describe 'Ghostty active product runtime lock' {
             -SchemaPath $schemaPath `
             -RepoRoot $repoRoot
 
-        $first.upstream.commit | Should Be '9c3ec931d64561a8407dde7ac984ce156ae91539'
-        $first.upstream.tree | Should Be '359872ab74fe1ecc96428133c0546be3cb969fdd'
-        @($first.abi.exports).Count | Should Be 191
+        $first.upstream.commit | Should Be '83fb95624b0439ee660c2679b43b38c8b63769cd'
+        $first.upstream.tree | Should Be '4dbd485a3b72c6ced65ad7ea447644a5967e382e'
+        @($first.abi.exports).Count | Should Be 207
         (Get-RSGhosttyRuntimeLockDigest -Lock $first) | Should Be (Get-RSGhosttyRuntimeLockDigest -Lock $second)
     }
 
@@ -201,6 +452,25 @@ Describe 'Ghostty active product runtime lock' {
             Sort-Object -Unique -CaseSensitive)
         $expected = [string[]]@($lock.abi.loaderRequiredExports)
         ($actual -join "`0") | Should Be ($expected -join "`0")
+    }
+
+    It 'keeps changed canonical representations separate from retained pre-upgrade downloads' {
+        $legacyPath = Join-Path $repoRoot 'Specs/TestRuns/4cb089111a23/Terminal/20261028_174540_ghostty140-product/provenance/runtime.lock.json'
+        $legacy = Get-Content -LiteralPath $legacyPath -Raw | ConvertFrom-Json -Depth 100
+        $current = Copy-RSGhosttyRuntimeLockFixture
+        $oldDownloads = @{}
+        foreach ($dependency in $legacy.dependencies) {
+            foreach ($archive in @($dependency.sourceArchive, $dependency.contentArchive)) {
+                $oldDownloads[$archive.fileName] = $archive.sha256
+            }
+        }
+        foreach ($dependency in $current.dependencies) {
+            foreach ($archive in @($dependency.sourceArchive, $dependency.contentArchive)) {
+                if ($oldDownloads.ContainsKey($archive.fileName)) {
+                    $archive.sha256 | Should Be $oldDownloads[$archive.fileName]
+                }
+            }
+        }
     }
 
     It 'keeps the product builder lock-driven without duplicated active identities' {
@@ -487,7 +757,7 @@ Describe 'Ghostty active product runtime lock' {
             -SchemaPath $schemaPath `
             -RepoRoot $repoRoot
 
-        @($lock.dependencies.id) | Should Be @('a-test', 'translate-c', 'uucode', 'wuffs')
+        (@($lock.dependencies.id) -join ',') | Should Be 'a-test,aro,pixels,translate-c,uucode,wuffs'
         (@($lock.notices.id) -contains 'a-test') | Should Be $true
     }
 

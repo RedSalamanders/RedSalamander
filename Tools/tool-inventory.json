@@ -380,7 +380,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence and packaging contracts.",
+      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence, absolute native generator-cache paths with matching diagnostic boundaries, byte-verified identity staging beneath one artifact root, canonical native product profile receipt artifacts, complete native seed argv elements, fresh-profile WER parent initialization without replacing existing settings, and packaging contracts.",
       "usage": "Run with Pester or the current tooling aggregate after artifact action, release, packaging or qualification workflow changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -554,12 +554,13 @@
       "purpose": "Validate the clean public DxUi pin and its API revision, restore it under the dependency lease with Git long paths and a sparse checkout, render its bounded update advisory with severity and a product action, and bind and stage linked module provenance.",
       "usage": "Import through build, snapshot and dependency restore entrypoints.",
       "usedBy": [
-        "Tools/Tests/DxUiDependency.Tests.ps1",
-        "Installer/zip/build-zip.ps1",
         "build.ps1",
-        "Tools/Restore-DxUi.ps1",
+        "Installer/zip/build-zip.ps1",
         "Tools/Modules/Build/BuildEvidence.psm1",
-        "Tools/Modules/Testing/ValidationFingerprint.psm1"
+        "Tools/Modules/Testing/ValidationFingerprint.psm1",
+        "Tools/Restore-DxUi.ps1",
+        "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/DxUiDependency.Tests.ps1"
       ],
       "consumerClosure": "derived-references",
       "prerequisites": [
@@ -773,7 +774,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle.",
+      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle, sharing one disposable compiler cache across authenticated dependency fetches while preserving every hash check and success/failure cleanup.",
       "usage": "Invoked without candidate arguments by product builds; reviewed upgrades supply both candidate paths below .build/TerminalEngineUpgrade.",
       "usedBy": [
         "Directory.Build.targets",
@@ -1214,7 +1215,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Validate one rederived Ghostty candidate overlay, concern map, every newly added private ABI allocation, and descriptor binding.",
-      "usage": "Run after rederiving the single candidate patch in isolated pristine and applied worktrees below the exact candidate .build root.",
+      "usage": "Run after rederiving the single candidate patch in isolated pristine and applied worktrees below the exact candidate .build root. After regenerating a legacy descriptor, choose an unused -Phase4DescriptorPath below that same root to preserve the old snapshot.",
       "usedBy": [
         "terminal runtime upgrade maintainers"
       ],
@@ -1227,12 +1228,12 @@
         "Reviewer-authored complete concern disposition input"
       ],
       "sideEffects": [
-        "Creates or replaces candidate overlay review and descriptor evidence only below .build/TerminalEngineUpgrade/<commit>"
+        "Creates or replaces candidate overlay review and mutable descriptor evidence only below .build/TerminalEngineUpgrade/<commit>; validates or creates the selected immutable P4 snapshot without overwriting existing snapshots"
       ],
       "outputs": [
         "Schema-validated candidate overlay review",
         "Overlay-bound candidate descriptor",
-        "Preserved P4 descriptor snapshot"
+        "Preserved schema-2 P4 descriptor snapshot and its selected path"
       ],
       "ownerSpec": "Specs/Terminal/Terminal_EmbeddedPlugin.md",
       "tests": [
@@ -1246,7 +1247,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Freeze one explicit Ghostty commit into canonical provenance, change-inventory, ABI, security-review, and candidate-descriptor evidence.",
+      "purpose": "Freeze one explicit Ghostty commit into canonical provenance, change-inventory, ABI, range-bound security review, and schema-2 descriptor evidence with every canonical dependency identity.",
       "usage": "Run after Candidate status observation with a pristine official checkout and two independently downloaded matching official archives below the exact candidate .build root.",
       "usedBy": [
         "terminal runtime upgrade maintainers"
@@ -1640,8 +1641,8 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Validate changed, explicitly staged, complete, or paired Terminal VT TestRuns evidence against area schemas and identity/performance bindings.",
-      "usage": "Run before committing Specs/TestRuns evidence; use BaselineRunPath plus CandidateRunPath for the machine-enforced Terminal VT admission comparison.",
+      "purpose": "Validate changed, staged, complete, or paired Terminal VT evidence with strict identity/performance bindings and an optional exact reviewed Zig toolchain transition.",
+      "usage": "Use BaselineRunPath plus CandidateRunPath for Terminal VT comparison; declare ZigToolchainTransition only for an exact reviewed baseline,candidate compiler transition.",
       "usedBy": [
         "Performance validation workflow",
         "test evidence reviewers",
@@ -1798,19 +1799,20 @@
       "usage": "Import from artifact-mutating orchestration and pass explicit configuration/platform plus the narrow reviewed coordination scope; delegation requires a one-use token, verified immediate parent, and kill-on-close containment; use guarded path/publication helpers for caller-selected repository outputs.",
       "usedBy": [
         "build.ps1",
-        "vcpkg-install.ps1",
-        "Tools/Run-AllTests.ps1",
-        "Tools/Invoke-SanitizedMsbuild.ps1",
-        "Installer/msi/build-msi.ps1",
         "Installer/msi/build-msi-symbols.ps1",
+        "Installer/msi/build-msi.ps1",
         "Installer/msix/build-msix.ps1",
         "Installer/msix/GenerateAssets.ps1",
         "Installer/msix/UpdateManifestVersion.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
-        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
+        "Tools/Invoke-SanitizedMsbuild.ps1",
         "Tools/Modules/Build/ClangFormat.psm1",
-        "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
+        "Tools/Run-AllTests.ps1",
+        "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
+        "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
+        "vcpkg-install.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -1863,7 +1865,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -2348,7 +2350,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, bindings, paired VT thresholds and unchanged pre-contract inventory boundaries across the source-snapshot migration.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds and unchanged pre-contract inventory boundaries across the source-snapshot migration, with identical environments except an explicitly matched reviewed Zig transition.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
@@ -2426,6 +2428,7 @@
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/TerminalEngine/GhosttyRuntimeStatus.psm1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/GhosttyCandidateOverlay.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
@@ -3025,7 +3028,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and descriptor rebinding.",
+      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and schema-2 descriptor rebinding from a validated immutable P4 snapshot distinct from both mutable outputs, preserving every dependency identity.",
       "usage": "Import through New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1; focused tests may call the pure candidate ABI comparison.",
       "usedBy": [
         "Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1",
@@ -3040,7 +3043,7 @@
         "Candidate descriptor and overlay-review schemas"
       ],
       "sideEffects": [
-        "Creates or replaces only candidate-descriptor.p4.json, candidate-overlay-review.json, and candidate-descriptor.json below the exact .build candidate root"
+        "Creates or reuses the selected immutable P4 snapshot and replaces candidate-overlay-review.json and candidate-descriptor.json below the exact .build candidate root; legacy snapshots remain untouched"
       ],
       "outputs": [
         "Measured candidate overlay identity",
@@ -3060,7 +3063,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Authenticate and classify one explicit Ghostty runtime candidate into strict review and input-bound descriptor evidence.",
+      "purpose": "Authenticate and classify one explicit Ghostty runtime candidate into range-bound review and schema-2 descriptor evidence with the complete canonical dependency closure, invocation-local Windows long-path Git support, and stderr diagnostics kept out of parsed metadata.",
       "usage": "Import through New-GhosttyTerminalRuntimeCandidateReview.ps1; focused tests may invoke deterministic path, inventory, ABI, and security-review functions.",
       "usedBy": [
         "Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1",
@@ -3095,9 +3098,10 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks with field-specific rejection diagnostics even when Test-Json omits nested errors; execute contained Product or isolated candidate restore, complete dependency/notice closure, build, inspection, identity, and publication lifecycles.",
+      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
+        ".github/workflows/ghostty-runtime-native-qualification.yml",
         "Tools/Build-GhosttyTerminalRuntime.ps1",
         "Tools/TerminalEngine/GhosttyCandidateOverlay.psm1",
         "Tools/TerminalEngine/GhosttyCandidateReview.psm1",
@@ -3975,7 +3979,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation.",
+      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock. Verify transient/open-file cleanup, bounded permanent-lock failure and original-error preservation.",
       "usage": "Run after any Ghostty product lock, schema, lifecycle, builder, overlay, notice, or loader-export change.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -3984,7 +3988,8 @@
       ],
       "prerequisites": [
         "PowerShell with Pester",
-        "Repository-owned Ghostty lock inputs"
+        "Repository-owned Ghostty lock inputs",
+        "Archived pre-upgrade runtime lock fixture"
       ],
       "sideEffects": [
         "Creates bounded JSON fixtures beneath Pester TestDrive",

@@ -534,7 +534,7 @@ Describe 'Embedded Terminal plugin source contracts' {
             '(?s)\[\[nodiscard\]\] bool DecodePng\(.*?\r?\n\}\r?\n\r?\n\[\[nodiscard\]\] std::wstring GetRuntimePath').Value
         $decodePng | Should Match 'g_pngDecodeWicFactory'
         $decodePng | Should Not Match 'CoInitializeEx|CoCreateInstance'
-        $runtimeOverlay | Should Match 'GHOSTTY_TERMINAL_OPT_KITTY_PLACEMENT_LIMITS\s*=\s*40'
+        $runtimeOverlay | Should Match 'GHOSTTY_TERMINAL_OPT_KITTY_PLACEMENT_LIMITS\s*=\s*48'
         foreach ($dataKey in @(
                 'GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT = 3',
                 'GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ALLOCATED_BYTES = 4',
@@ -806,12 +806,13 @@ Describe 'Embedded Terminal plugin source contracts' {
     }
 
     It 'supports offline reproduction and stages the complete private-runtime notice closure' {
-        $terminalSpec | Should Match 'all\s+six notices as one\s+atomic\s+manifest unit'
+        $terminalSpec | Should Match 'all\s+eight notices as one\s+atomic\s+manifest unit'
         $runtimeBuilder | Should Match '\[switch\]\$Offline'
         $runtimeBuilder | Should Match 'Offline verification requires the pinned Zig archive cache'
         $runtimeBuilder | Should Match 'Offline verification requires the pinned Ghostty source checkout'
         $runtimeBuilder | Should Match 'deps\.files\.ghostty\.org serves source tarballs'
-        $runtimeBuilder | Should Match 'ArgumentList @\(''fetch'', ''--global-cache-dir'', \$fetchCacheRoot, \$sourceArchive\)'
+        $runtimeBuilder | Should Match 'ArgumentList @\(''fetch'', \$sourceArchive\)'
+        $runtimeBuilder | Should Match 'Environment @\{ ZIG_GLOBAL_CACHE_DIR = \$fetchCacheRoot \}'
         $runtimeBuilder | Should Match '\$actualPackageName\s+-cne\s+\$packageName'
         $runtimeBuilder | Should Match '\$dependencyId package content hash mismatch'
         $runtimeBuilder | Should Match '\$dependencyId canonical package archive SHA-256 mismatch'

@@ -1,4 +1,4 @@
-# I51 Hosted CI repair — 2026-10-28
+# I52 Hosted CI repair — 2026-10-28
 
 Status: ACTIVE. Priority: high. Planned at `fbcc9fc0ddd3b6890741f6bc350f2016c755614b`;
 integrated main baseline `8ea956a7e2e271368082a953f28efd2a58e1013f`.
@@ -925,3 +925,7 @@ reviewer approval. GitHub main rules require no reviewer approvals or status
 checks; the user's explicit normal-merge request remains subject to fresh native
 CI on the final published head. Main push, nightly, ASan, flake and Ghostty
 acceptance remains open, and this plan stays ACTIVE until those results exist.
+
+### Integration of newly merged Ghostty main
+
+Main advanced to `0ed4d6ff1f4316e727b7e238727ee19bb8d6a48e` through PR #148 while the previous source was being qualified. Its Ghostty 1.4/Zig 0.17 runtime, reviewed candidate recovery, workflow prerequisites and additional desktop-observation counterfactuals remain intact. Main owns rank I51 for that integration, so this repair takes unused rank I52; the prior I51 references describe historical checkpoints. Checkpoint `1aa1ca7b5f5330240376953c2a58841ffb662f43` preserves all prior receipts and their actual source/dependency identities. They do not qualify the new runtime combination. Resolve overlapping identity helpers without removing any original contract case, retain both immutable archive baseline admissions, and refresh the reviewed execution digest only after inspecting the combined workflow/tooling closure. Fresh builds, affected terminal/plugin and harness checks, and hosted acceptance remain pending for the integrated candidate.

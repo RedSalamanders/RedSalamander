@@ -141,6 +141,14 @@ before releasing the job and restoring the saved foreground; restoration never
 attaches a foreign input queue or focuses a foreign control. The private blocked-child
 fixture checks timeout containment without activating a window. Actual interactive
 restoration remains a separate native qualification requirement.
+Its private desktop identity predicates capture foreground and focus HWND/PID/TID
+independently. They may observe Windows' exact automatic restoration of a stable
+cross-process or cross-thread child without writing desktop state. This read-only
+result never grants restoration authority: the write path still requires focus
+owned by the saved foreground window's process/thread, unchanged input and
+permitted foreground ownership.
+The noninteractive counterfactual case covers changed/reused identities, root
+membership, GUI availability and independent write refusal.
 
 `TryMakeOwnedVirtualDiskOperationPath` in `TestSupport.Tests.OwnedVirtualDisk.h` extends the
 existing owned-mount validator for product operation arguments that must avoid traversing a
@@ -261,4 +269,5 @@ deletes the current last run as a fallback for a failed rename.
 
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
+| Ghostty locked package directory | Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1, Expand-RSGhosttyRuntimeLockedPackages | Assembles Zig 0.17 hash-named packages from a validated Ghostty lock beneath a dedicated guarded .build child. Reuses Resolve-RSGuardedRepositoryPath and bounded canonical archive extraction; refuses nonempty destinations, escaped package names, changed archives and reparse output chains. Runtime builds and native qualification share this policy. See the Terminal runtime contract. |
 | Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, provider-resolved offline input, WhatIf and failure-preserving publication under an exclusive cache lease. Reuses canonical ArtifactOperationLock guarded path/publication helpers. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |

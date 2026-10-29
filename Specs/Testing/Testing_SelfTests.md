@@ -2447,4 +2447,19 @@ The provider matrix must agree with FileSystem7z's existing dual-separator route
 The synthetic deferred-consent matrix establishes Move context when it requests source retention. A separate EFS Copy control must withhold and reject that Move-only action, retain the pending prompt after rejection, and accept its published Continue action. The fake-MTP discovery fixture binds a unique marked-sandbox profile before loading its backend, retains that environment lease through copy/cancellation, and verifies exact restoration; it must not replay the caller's journal.
 
 Viewer child-process waits must service the parent's bounded message queue so an owned warning stays responsive while the child runs. The existing contained-timeout fixture also uses a hidden message-only timer to prove queue servicing without acquiring focus or changing its 100 ms child timeout. Artifact rotation must unlink disposable prior links without following them, remove read-only disposable entries, and preserve the current last run when cleanup or rename fails. A guarded fixture entrypoint rejects unmarked/drive/active roots; native controls retain exact outside-target bytes and a locked-file failure canary. A regression's expected failing receipt does not qualify the implementation.
+
+The ViewerPE fresh-child parent captures the saved foreground and keyboard-focus
+window identities independently, including each HWND, PID and thread ID. A focused
+child may legitimately belong to another process or input thread beneath the
+saved foreground root. After owned children are quiet, an exact stable foreground
+and GUI-focus observation may satisfy restoration without desktop writes; it
+requires live unchanged identities, root membership and available GUI information.
+It does not relax the write path's focus-owner restrictions: the focused window
+must still share the saved foreground window's process and thread. The write path
+also requires unchanged input and permitted foreground ownership, rechecks
+ownership immediately before writing, and never attaches foreign input queues
+or focuses foreign controls.
+TestViewerHarnessDesktopObservationDoesNotGrantRestoration is noninteractive:
+its independent identity, root, unavailable-GUI and unrelated-desktop
+counterfactuals must preserve cross-process/thread write refusal.
 RedMonitor viewer/model/file/ETW tests and viewer latency fixtures belong to its standalone project. Consumer validation owns the offline pinned-client controls, actual app producer probes, installed-helper absence/discovery, Preferences compatibility and app-only packaging. No consumer test plan builds, stages or launches a bundled viewer.

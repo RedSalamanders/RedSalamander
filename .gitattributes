@@ -135,6 +135,11 @@ Specs/TestRuns/4cb089111a23/Commands/2026-09-08_180534_i12_terminal_closeout/** 
 
 # Reproducible Terminal runtime text inputs have semantic LF identity.
 Tools/TerminalEngine/Patches/*.patch text eol=lf
+External/TerminalEngine/GhosttyRuntimeLock.v1.json text eol=lf
+
+# Ghostty 1.4 paired samples and their exact input/receipt bytes.
+Specs/TestRuns/4cb089111a23/Terminal/20261028_174540_ghostty140-product/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Terminal/20261028_190224_ghostty140-candidate/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 External/TerminalEngine/Notices/*.txt text eol=lf
 
 # Terminal-engine governance stores raw SHA-256 identities for this exact

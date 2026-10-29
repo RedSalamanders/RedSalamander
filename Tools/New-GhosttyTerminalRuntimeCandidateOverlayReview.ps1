@@ -4,6 +4,7 @@ Validates and records one rederived Ghostty candidate overlay.
 
 .DESCRIPTION
 Proves that one normalized candidate patch applies to a pristine exact Ghostty commit, exactly reproduces an independently applied source diff, stays within review-size and concern limits, maps every current overlay concern, and allocates every newly added private C/Zig enum value after the complete candidate public ranges. Publishes a strict overlay review and updates only the untracked candidate descriptor below the exact candidate .build root.
+Consumes descriptor schema 2 and preserves the complete ordered canonical dependency identity closure during overlay rebinding.
 
 .PARAMETER CandidateCommit
 The exact lowercase full Ghostty candidate commit.
@@ -23,6 +24,9 @@ The candidate-descriptor.json produced by the candidate-freeze workflow.
 .PARAMETER ConcernReviewPath
 A reviewer-authored JSON file mapping every current concern to one of at most five ordered candidate concerns.
 
+.PARAMETER Phase4DescriptorPath
+Optional immutable P4 snapshot below the exact candidate root; defaults to candidate-descriptor.p4.json. To recover a legacy snapshot, regenerate the schema-2 DescriptorPath and select an unused path such as candidate-descriptor.p4.v2.json. Existing snapshots are validated and never overwritten. Neither mutable output (DescriptorPath or candidate-overlay-review.json) may be selected.
+
 .PARAMETER GeneratedUtc
 Overrides the evidence timestamp for deterministic tests. Production callers omit it.
 
@@ -30,7 +34,7 @@ Overrides the evidence timestamp for deterministic tests. Production callers omi
 A PSCustomObject containing patch/review/descriptor identities and measured overlay size.
 
 .NOTES
-Prerequisites: PowerShell 7.4 or newer, Git, the exact candidate freeze descriptor, pristine and applied candidate worktrees, and the single candidate patch. Side effects are confined to candidate-descriptor.p4.json, candidate-overlay-review.json, and candidate-descriptor.json below .build/TerminalEngineUpgrade/<commit>. Product, the canonical lock, and tracked patch remain unchanged.
+Prerequisites: PowerShell 7.4 or newer, Git, the exact candidate freeze descriptor, pristine and applied candidate worktrees, and the single candidate patch. Side effects are confined to the selected create-only P4 snapshot, candidate-overlay-review.json, and candidate-descriptor.json below .build/TerminalEngineUpgrade/<commit>. Product, the canonical lock, tracked patch and existing P4 snapshots remain unchanged.
 
 .EXAMPLE
 .\Tools\New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1 -CandidateCommit 9c3ec931d64561a8407dde7ac984ce156ae91539 -PristineSourcePath .build\TerminalEngineUpgrade\9c3ec931d64561a8407dde7ac984ce156ae91539\source-review -AppliedSourcePath .build\TerminalEngineUpgrade\9c3ec931d64561a8407dde7ac984ce156ae91539\overlay-source -PatchPath .build\TerminalEngineUpgrade\9c3ec931d64561a8407dde7ac984ce156ae91539\Ghostty-WindowsPrivateRuntime.patch -DescriptorPath .build\TerminalEngineUpgrade\9c3ec931d64561a8407dde7ac984ce156ae91539\candidate-descriptor.json -ConcernReviewPath .build\TerminalEngineUpgrade\9c3ec931d64561a8407dde7ac984ce156ae91539\candidate-overlay-concerns.json
@@ -43,7 +47,8 @@ param(
     [Parameter(Mandatory = $true)][string]$PatchPath,
     [Parameter(Mandatory = $true)][string]$DescriptorPath,
     [Parameter(Mandatory = $true)][string]$ConcernReviewPath,
-    [DateTime]$GeneratedUtc = [DateTime]::UtcNow
+    [DateTime]$GeneratedUtc = [DateTime]::UtcNow,
+    [string]$Phase4DescriptorPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -60,4 +65,5 @@ New-RSGhosttyRuntimeCandidateOverlayReview `
     -PatchPath $PatchPath `
     -DescriptorPath $DescriptorPath `
     -ConcernReviewPath $ConcernReviewPath `
+    -Phase4DescriptorPath $Phase4DescriptorPath `
     -GeneratedUtc $GeneratedUtc

@@ -12,6 +12,8 @@
       4. Displays a color-coded summary with pass/fail/skip counts, timing, and failure details.
       5. Returns a typed exit code: 0 PASSED, 1 FAILED, 2 NOT_EVALUATED,
          3 invalid CLI/plan, 4 blocked attestation, or 5 corrupt evidence.
+    PR delegation may leave only interactive standalone entries; an empty
+    early scheduling set remains a valid plan.
 
     Self-test artifacts are written under:
       REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\

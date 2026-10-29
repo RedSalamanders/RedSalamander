@@ -77,6 +77,30 @@ The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.j
 Ghostty lock rejection retains field-specific schema diagnostics when PowerShell's `Test-Json`
 returns false without nested error records. The fallback uses the shipped schema engine with
 reference fetching disabled and cannot admit a rejected lock.
+Ghostty candidate descriptor schema 2 retains every canonical dependency identity separately,
+and overlay rebinding preserves the complete ordered closure. Regenerate schema-1 descriptors.
+Historical review findings require all supporting commits to occur inside the exact candidate
+range; an empty generated findings list still requires manual candidate source review.
+The Ghostty lifecycle sets Zig cache paths on each child process before compiler bootstrap.
+This supports Zig 0.16 and 0.17 without selecting global user caches or changing caller variables.
+Owned temporary-cache cleanup rechecks containment and retries transient I/O/access failures
+at most 20 times with 250 ms delays. Failed-fetch cleanup preserves the original failure;
+it never terminates an independently owned compiler process.
+Zig 0.17 builds additionally use the shared locked-package staging helper and `--system`:
+undeclared transitive/lazy dependencies fail instead of downloading during compilation.
+Terminal VT pair validation requires identical Zig versions unless the caller supplies the
+exact reviewed `-ZigToolchainTransition <baseline>,<candidate>`. All other comparison gates
+remain enforced; the result describes the complete runtime/toolchain upgrade. Contract tests
+generate synthetic 200-sample pairs and do not depend on ignored historical benchmark archives.
+Candidate overlay review validates saved P4 descriptors before reuse. To recover a legacy
+schema-1 snapshot, regenerate the schema-2 descriptor and repeat the overlay command with
+`-Phase4DescriptorPath` pointing to an unused file below the exact candidate root (for example
+`candidate-descriptor.p4.v2.json` there). The old snapshot is preserved; the new snapshot is
+created once and its candidate identity, complete binding digest and schema are checked on reuse.
+Regenerating changed frozen inputs also requires a new snapshot path; repeated overlay rebinding
+can change only the overlay portion of an existing frozen binding.
+The selected P4 path must differ from both mutable outputs: the descriptor and
+`candidate-overlay-review.json`. Comparison is case-insensitive after path normalization.
 Artifact action upgrades also update `ReleaseWorkflowPolicy.Tests.ps1` pin
 assertions and verify build, release, nightly, and qualification consumers together.
 The exact-byte historical Gate0 workflow is excluded from Dependabot updates. Its older artifact
@@ -244,7 +268,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Audit-ComctlReportSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for list-view/tooltip surfaces. |
 | `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject remaining Win32/GDI UI dependencies. |
 | `Audit-VisibleNativeSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for visible native controls. |
-| `Build-GhosttyTerminalRuntime.ps1` | Public active runtime builder | Thin stable entrypoint for canonical Product builds and explicit isolated candidate builds; delegates validation, restore, build, and attestation to `GhosttyRuntimeLifecycle.psm1`. |
+| `Build-GhosttyTerminalRuntime.ps1` | Public active runtime builder | Thin stable entrypoint for canonical Product builds and explicit isolated candidate builds; delegates validation, restore, build, and attestation to `GhosttyRuntimeLifecycle.psm1`, with native-command/lease progress separate from captured streams and one disposable compiler cache shared across authenticated dependency fetches. |
 | `Build-TerminalEngine.ps1` | Dormant generic lifecycle compatibility command | Stable facade for `External/TerminalEngine/TerminalEngine.proj` and reviewed future-upgrade evidence; not the product builder. |
 | `Clean-TestSandbox.ps1` | Public maintenance command | Lists or explicitly removes one exact run directory beneath marked `X:\RedSalamander.Perf`; it never touches historical outside-root locations. Apply protects live owners using the runner's PID-reuse policy. Preview/WhatIf/success exit 0; a failed removal returns `Status: Failed`, warns and exits 1. Review manually named runs and verify evidence preservation first. Removal never follows reparse points: junctions and directory symlinks are unlinked, and a run containing a volume mount point is refused whole (an administrator must remove the mount). A run that records a test-owned VHDX receipt is torn down first when elevated; unelevated, a VHDX kept detached after a failed FileOps suite is deleted with the run and any other receipt refuses the whole run with the receipt path and the exact recovery commands; a dry run warns. |
 | `CompareTestRuns.ps1` | Public report command | Compares two archived self-test runs. |
@@ -264,7 +288,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Measure-SourceLines.ps1` | Public metrics command | Produces the categorized repository source-line report. |
 | `New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` | Public candidate-overlay command | Proves clean apply, exact diff reproduction, review bounds, complete concern disposition, every newly added private ABI value's separation/parity, and candidate-descriptor binding below `.build`. |
 | `New-TerminalEngineNotices.ps1` | Public packaging command | Generates deterministic terminal third-party notices. |
-| `New-GhosttyTerminalRuntimeCandidateReview.ps1` | Public candidate-review command | Authenticates and freezes one explicit Ghostty commit into canonical provenance, inventory, ABI, security-review, and input-bound descriptor evidence below `.build`. |
+| `New-GhosttyTerminalRuntimeCandidateReview.ps1` | Public candidate-review command | Authenticates and freezes one explicit Ghostty commit into canonical provenance, inventory, ABI, security-review, and input-bound descriptor evidence below `.build`; Git queries permit long Windows paths within checkouts per invocation and preserve stderr separately from parsed metadata. |
 | `Prepare-TerminalEngineUpgrade.ps1` | Dormant generic lifecycle command | Collects/finalizes explicit-lock future-upgrade evidence on a disposable runner. |
 | `README.md` | Human inventory | This navigation and safety guide. |
 | `remove-ads.ps1` | Public filesystem command | Canonical explicit NTFS alternate-stream removal. |
@@ -275,7 +299,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Verify-RedMonitorClient.ps1` | Public client verifier | Read-only local header and MIT hash verification. |
 | `Update-RedMonitorClient.ps1` | Explicit dependency update | Fetches only the header and MIT notice at one full commit; writes their lock. |
 | `Restore-TerminalEngineInputs.ps1` | Dormant generic lifecycle command | Downloads or verifies inputs only for an explicit reviewed generic lock. |
-| `Run-AllTests.ps1` | Public canonical test command | CI/Full execution with profile-scoped build inputs and all test-generated local data beneath exact `X:\RedSalamander.Perf` on a selected fixed local drive. First initialization and alternate-volume FileOps roots require explicit opt-in; `path.local.alternate` can pin cross-volume coverage to one exact second-drive root. Optional per-machine resources come from `config\machine-resources.json` beneath the primary root. |
+| `Run-AllTests.ps1` | Public canonical test command | CI/Full execution with profile-scoped build inputs and all test-generated local data beneath exact `X:\RedSalamander.Perf` on a selected fixed local drive. PR delegation may leave only late interactive standalone work. First initialization and alternate-volume FileOps roots require explicit opt-in; `path.local.alternate` can pin cross-volume coverage to one exact second-drive root. Optional per-machine resources come from `config\machine-resources.json` beneath the primary root. |
 | `Run-MtpLiveCloseout.ps1` | Public opt-in device command | Runs MTP/PTP live-device closeout smoke and archives all local evidence beneath the selected `X:\RedSalamander.Perf` run. |
 | `SanitizedEnvironment.ps1` | Internal compatibility loader | Preserves the frozen Terminal tooling path; current callers import `Modules/Build/SanitizedEnvironment.psm1`. |
 | `Show-PerfRuns.ps1` | Public performance report command | Lists, compares, and trends archived performance evidence; the FolderView preset separates `folder.sort_product_paint_us`, legacy `folder.sort_toggle_us` and inclusive writer attribution `folder.sort_jsonl_write_us`. |

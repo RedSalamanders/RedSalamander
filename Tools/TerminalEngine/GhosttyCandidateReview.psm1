@@ -28,12 +28,21 @@ function Invoke-RSGhosttyCandidateGit {
         [switch]$AllowFailure
     )
 
-    $output = @(& git.exe -C $RepositoryPath @Arguments 2>&1)
+    # Candidate file/metadata paths can exceed MAX_PATH; keep this override local
+    # to the metadata query rather than changing repository or machine settings.
+    $output = @(& git.exe -c core.longpaths=true -C $RepositoryPath @Arguments 2>&1)
     $exitCode = $LASTEXITCODE
+    # PowerShell preserves redirected native stderr as ErrorRecord objects.
+    # Metadata parsers consume stdout only; successful Git warnings still surface.
+    $diagnostics = @($output | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object ToString)
+    $lines = @($output | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] })
     if (-not $AllowFailure -and $exitCode -ne 0) {
         throw "${Context} failed with git exit ${exitCode}: $($output -join "`n")"
     }
-    return [pscustomobject]@{ ExitCode = $exitCode; Lines = [string[]]$output }
+    if ($exitCode -eq 0 -and $diagnostics.Count -gt 0) {
+        Write-Warning "${Context}: $($diagnostics -join "`n")"
+    }
+    return [pscustomobject]@{ ExitCode = $exitCode; Lines = [string[]]$lines; Diagnostics = [string[]]$diagnostics }
 }
 
 function Get-RSGhosttyCandidatePathCategory {
@@ -299,6 +308,13 @@ function Get-RSGhosttyCandidateSecurityReview {
             disposition = 'regression-coverage-required'
             summary = 'Snapshot decoding changes bounds and reference release behavior; malformed/truncated snapshot and continuation coverage must remain fail-closed.'
         })
+    # Historical dispositions apply only when this range contains all supporting
+    # commits; never carry an earlier upgrade's findings into a later review.
+    $rangeCommits = [Collections.Generic.HashSet[string]]::new(
+        [string[]]@($commits | ForEach-Object { $_.commit }), [StringComparer]::Ordinal)
+    $findings = @($findings | Where-Object {
+            @($_.commits | Where-Object { -not $rangeCommits.Contains($_) }).Count -eq 0
+        })
     return [ordered]@{
         claimPolicy = 'primary-source-review-without-independent-vulnerability-labels'
         reviewedCommitCount = $commits.Count
@@ -468,12 +484,14 @@ function New-RSGhosttyRuntimeCandidateReview {
                     [ordered]@{ hostPlatform = [string]$_.hostPlatform; fileName = [string]$_.fileName; sha256 = [string]$_.sha256; executableSha256 = [string]$_.executableSha256 }
                 })
         }
-        dependency = [ordered]@{
-            id = [string]$lock.dependencies.id
-            sourceArchiveSha256 = [string]$lock.dependencies.sourceArchive.sha256
-            contentArchiveSha256 = [string]$lock.dependencies.contentArchive.sha256
-            licenseSha256 = [string]$lock.dependencies.licenseSha256
-        }
+        dependencies = @($lock.dependencies | ForEach-Object {
+                [ordered]@{
+                    id = [string]$_.id
+                    sourceArchiveSha256 = [string]$_.sourceArchive.sha256
+                    contentArchiveSha256 = [string]$_.contentArchive.sha256
+                    licenseSha256 = [string]$_.licenseSha256
+                }
+            })
         overlay = [ordered]@{
             path = [string]$lock.overlay.path
             normalizedTextSha256 = [string]$lock.overlay.normalizedTextSha256
@@ -481,7 +499,7 @@ function New-RSGhosttyRuntimeCandidateReview {
         }
     }
     $descriptor = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         generatedUtc = $generatedText
         sourceBinding = $binding.sourceBinding
         canonicalLock = $binding.canonicalLock
@@ -490,7 +508,7 @@ function New-RSGhosttyRuntimeCandidateReview {
         observation = $binding.observation
         review = $binding.review
         toolchain = $binding.toolchain
-        dependency = $binding.dependency
+        dependencies = $binding.dependencies
         overlay = $binding.overlay
         inputDigest = Get-RSCanonicalJsonDigest -InputObject $binding
     }

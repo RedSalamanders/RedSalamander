@@ -45,6 +45,22 @@
       <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
       <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Ghostty.txt</Source><OutputName>TerminalRuntime\LICENSE-Ghostty.txt</OutputName><Required>true</Required>
     </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-aro-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Aro.txt</Source><OutputName>TerminalRuntime\LICENSE-Aro.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-aro-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Aro.txt</Source><OutputName>TerminalRuntime\LICENSE-Aro.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-pixels-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Pixels.txt</Source><OutputName>TerminalRuntime\LICENSE-Pixels.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-pixels-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Pixels.txt</Source><OutputName>TerminalRuntime\LICENSE-Pixels.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
     <RSRuntimeDependency Include="ghostty-vt-license-uucode-x64">
       <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
       <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-uucode.txt</Source><OutputName>TerminalRuntime\LICENSE-uucode.txt</OutputName><Required>true</Required>

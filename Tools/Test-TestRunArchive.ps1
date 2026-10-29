@@ -22,6 +22,9 @@
 .PARAMETER CandidateRunPath
     Selects the candidate Terminal VT run for paired admission comparison. BaselineRunPath is required.
 
+.PARAMETER ZigToolchainTransition
+    Declares two distinct reviewed Zig versions in baseline,candidate order for a complete-upgrade comparison. Both recorded versions must match exactly. All other gates remain mandatory. Requires paired comparison; omission requires identical Zig versions.
+
 .PARAMETER MaxFileBytes
     Sets the maximum allowed size for one archived file.
 
@@ -41,6 +44,10 @@
     .\Tools\Test-TestRunArchive.ps1 -Inventory
 
 .EXAMPLE
+    ./Tools/Test-TestRunArchive.ps1 -BaselineRunPath <baseline-run> -CandidateRunPath <candidate-run> -ZigToolchainTransition 0.16.0,0.17.0
+    Compares a complete reviewed compiler/runtime upgrade; both recorded Zig versions must match exactly.
+
+.EXAMPLE
     .\Tools\Test-TestRunArchive.ps1 -BaselineRunPath .\Specs\TestRuns\4cb089111a23\Terminal\20260826_071812_pair2-product -CandidateRunPath .\Specs\TestRuns\4cb089111a23\Terminal\20260826_071820_pair2-candidate
 #>
 
@@ -51,6 +58,7 @@ param(
     [switch]$Inventory,
     [string]$BaselineRunPath = '',
     [string]$CandidateRunPath = '',
+    [string[]]$ZigToolchainTransition = @(),
     [long]$MaxFileBytes = 2MB,
     [long]$MaxRunBytes = 5MB
 )
@@ -65,6 +73,9 @@ $pairRequested = -not [string]::IsNullOrWhiteSpace($BaselineRunPath) -or
 if ($pairRequested -and ([string]::IsNullOrWhiteSpace($BaselineRunPath) -or
         [string]::IsNullOrWhiteSpace($CandidateRunPath))) {
     throw '-BaselineRunPath and -CandidateRunPath must be supplied together.'
+}
+if (-not $pairRequested -and $ZigToolchainTransition.Count -ne 0) {
+    throw '-ZigToolchainTransition requires paired Terminal VT comparison.'
 }
 if (($Inventory -and $RunPath.Count -ne 0) -or ($pairRequested -and ($Inventory -or $RunPath.Count -ne 0))) {
     throw '-Inventory, -RunPath, and paired Terminal VT comparison are mutually exclusive.'
@@ -97,7 +108,8 @@ if ($pairRequested -and $violations.Count -eq 0) {
     $comparison = Compare-RSTerminalVtUpgradeEvidence `
         -RepoRoot $RepoRoot `
         -BaselineRunPath $BaselineRunPath `
-        -CandidateRunPath $CandidateRunPath
+        -CandidateRunPath $CandidateRunPath `
+        -ZigToolchainTransition $ZigToolchainTransition
     $violations = @($comparison.Violations)
 }
 
@@ -109,6 +121,10 @@ if ($violations.Count -ne 0) {
 }
 
 if ($null -ne $comparison) {
+    if ($comparison.ZigToolchainTransition.Count -eq 2) {
+        Write-Host ("Reviewed Zig toolchain transition: {0} -> {1}; results compare the complete upgrade." -f
+            $comparison.ZigToolchainTransition[0], $comparison.ZigToolchainTransition[1])
+    }
     foreach ($measurement in $comparison.Measurements) {
         Write-Host ("{0}: baseline p95={1}us, candidate p95={2}us, ceiling={3}us" -f `
             $measurement.Name, $measurement.BaselineP95, $measurement.CandidateP95, $measurement.CandidateMaximumP95)
