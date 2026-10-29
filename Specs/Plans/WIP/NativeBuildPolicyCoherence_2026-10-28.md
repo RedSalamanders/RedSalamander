@@ -1,4 +1,4 @@
-# I51 Native build policy, terminal results and short DxUi paths
+# I53 Native build policy, terminal results and short DxUi paths
 
 Status: ACTIVE
 Date: 2026-10-28
@@ -183,3 +183,14 @@ regression executes the exact workflow block from a foreign directory against th
 all 37 workflow-policy cases pass. The unstarted noninteractive waiter was stopped before launching a child so
 runtime qualification can use this newer tooling source. The ongoing six native builds and receipt preservation
 remain unchanged at76; this follow-up changes no native/compiler/linker input.
+
+Current main advanced to0ed4d6ff1 through the separate Ghostty 1.4 merge. Its runtime lock, staging declaration,
+builder/qualification tooling and ViewerPE runner require renewed integration qualification; earlier1.3 images
+and native receipts retain their original identities. The local integration preserves both parents' changelog
+entries through normal fragments and all open plans. This plan takes I53, keeping main's Ghostty I51 and the
+parallel CI repair's I52 separate. Combined-source tooling/spec inventories have zero blocking findings, and
+85 focused checks pass (19 build-evidence, one real warning-policy compiler control, 42 workflow-policy,
+eight candidate-review and15 candidate-overlay cases). A retained first attempt found the failed-build guard
+test still extracted through the removed legacy `$pin` line; its boundary now uses the following verified-source
+import, retaining both executed build-exit controls. The admitted859 noninteractive run remains on its captured
+source. Integration and updated native/runtime/performance qualification are still open.

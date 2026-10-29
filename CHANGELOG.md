@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep the executed CI failed-build exit guard test aligned with the verified-source matrix invocation; check extraction bounds and retain both failure and success controls during Ghostty integration.
+- Assign the native build-policy follow-up I53 after the parallel CI repair claimed I52, preserving Ghostty's published I51 and all three plans' independent qualification gates.
 - Resolve the post-build CI matrix validator through the verified short DxUi source identity; execute the actual workflow gate from a foreign directory in a regression test instead of rebuilding a legacy full-hash path.
 - Classify CI's injected vcpkg include path as external in pinned DxUi builds while preserving compiler/SDK include defaults and the zero-warning gate for first-party code; add real native compilation controls in the governed sandbox.
 - Repair Full tooling checks for Pester 3 collection membership and ordinary compiler/linker profile isolation from the ambient Embedded recovery format; preserve the caller environment and independent negative controls.
@@ -35,7 +37,71 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 - Bring the FlipSequentialDiscard, ls2 and ls3 diagnostic samples under the zero-warning /Wall policy with canonical includes, explicit configuration guards and reviewed ntdll ABI casts. Production and sample build qualification remains tracked in the build-policy plan.
 - Unify native builds on /Wall without /WX and require zero diagnostics before accepting success; align Debug /ZI and ASan /Zi, enable Release-only /OPT:ICF, print green artifact/log links with quoted launch commands, and shorten consumer DxUi source/output folders while preserving complete collision-checked identities. Native qualification remains tracked in the active build-policy plan.
 - Retain the independently published I50 main-review plan and index the native build-policy follow-up as I51 when synchronizing current main documentation; preserve both plans and all changelog entries.
+- Preserve the published Ghostty 1.4 plan at I51 and move the native build-policy follow-up to unused rank I52 while integrating current main; both qualification plans retain their open gates.
+- Reject Ghostty P4 snapshot paths that alias either mutable output before any
+  publication. Cover the previously accepted overlay-review path and its
+  normalized case variant, preserving both descriptor and snapshot evidence.
+- Validate saved Ghostty P4 descriptors before overlay rebinding. Add an explicit
+  replacement snapshot path for regenerated schema-2 descriptors while preserving
+  legacy evidence; reject wrong candidate identities, changed dependency bindings,
+  mutable-path aliases and paths outside the candidate root. Cover the original
+  schema-1 failure and recovery with behavioral regression tests.
+- Reconcile Ghostty 1.4 qualification and main's documentation changes under
+  the distinct I51 integration record. Record native platform and portable
+  evidence, preserve failed initial local results, and keep individual suite
+  qualification separate from complete repository Full and release approval.
 - Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
+- Correct ViewerPE qualification's read-only desktop check for hosted controls
+  owned by another process or thread. Capture root and focus identities
+  independently and accept exact automatic restoration without granting any
+  additional restoration-write authority. Add noninteractive counterfactuals
+  and a source-contract guard; retain the original failed run separately.
+- Verify the Ghostty 1.4 runtime on native ARM64: clean first-run upstream C-ABI,
+  Zig and ABI-manifest qualification, Debug Terminal and command contracts,
+  production Release and portable smoke all passed with original reports,
+  receipt histories and package identities retained. Both current PR platforms
+  passed; separate local viewer coverage and failure follow-ups remain open.
+- Retain the native Ghostty product's Debug and Release receipt pointers,
+  immutable receipt records and toolchain identities from their canonical profile
+  directories. Keep external test-root evidence in its separate artifact.
+- Publish native Ghostty qualification evidence from one owned sandbox root,
+  with a byte-verified copy of the tested runtime identity. Reject stale or
+  mismatched evidence before upload. ARM64 upstream execution passed cleanly;
+  its first upload failed because the artifact mixed workspace and sandbox paths.
+- Interactive PrePush validation continues when PR delegation leaves no early standalone entries. Empty, interactive-only and mixed scheduler remainders are covered by regression checks.
+- Keep successful Git stderr warnings out of Ghostty candidate metadata parsing,
+  while displaying warnings and preserving diagnostics from failed commands.
+  Real Git stream and nonzero-exit witnesses cover the CI long-path failure.
+- Keep Ghostty native qualification's local cache outside its source checkout so
+  Zig 0.17 launches generated tools with absolute paths from external package
+  directories. A captured-output reproduction fails with the prior layout and
+  passes with this layout; ARM64 upstream qualification still requires a clean
+  successful run.
+- Keep the Ghostty native qualification seed as complete command-line arguments
+  across both Zig versions. A real child-process argv check covers the modern
+  single-option branch and the legacy two-argument form.
+- Initialize the native Ghostty qualification crash-dump registry parent on
+  fresh runners without replacing existing settings. Keep per-executable keys
+  exclusive and clean up only keys created by the run.
+- Reuse Zig's compiler bootstrap within one authenticated Ghostty dependency-fetch
+  session, then remove its owned cache on success or failure. Preserve every
+  package, archive and license check, with cold, warm and failed-fetch coverage.
+- Ghostty builds report native command, lock and output-drain progress. The native ARM64 workflow can collect time-bounded build-only diagnostics under a separate check name without publishing qualification or starting product acceptance; ARM64 qualification remains open.
+- Ghostty candidate review handles long Windows paths within checkouts without changing Git configuration; runtime staging checks cover the Aro and Pixels notices added by the 1.4 upgrade. Qualification remains pending native ARM64 and repository gates.
+- Retry bounded, guarded Ghostty compiler-cache cleanup after transient file
+  locks, preserving the original bootstrap error when cleanup also fails.
+  Keep native failure uploads within acquired scratch and pass the fixed seed
+  explicitly to both upstream test runners.
+- Preserve existing Ghostty dependency caches across the Zig 0.17 upgrade by
+  giving its canonical archives distinct filenames. Add a regression guard
+  against cross-generation download-name collisions; source and content hash
+  checks remain strict.
+- Integrate libghostty-vt from Ghostty 1.4.0 with Zig 0.17.0, a complete locked
+  dependency closure, eight staged notices, and a rederived Windows overlay
+  preserving clipboard and placement limits. Update candidate evidence, closed
+  package staging, paired performance checks and native ARM64 qualification.
+  Local validation is recorded in I50; native ARM64 and shipping qualification
+  remain required before release approval.
 - Align the PR formatter-policy regression with the checksum-pinned PowerShell installer, retaining ARM64, suite, permission and native formatting gates while keeping legitimate Python requirements outside the formatter job independent.
 - Correct canonical Markdown fence recognition so line-leading triple-backtick inline code and tab/four-space indentation cannot hide following unindented missing links; real backtick and tilde fences close only with whitespace after the matching delimiter run. Add link, heading and inventory regression controls, preserve zero-to-three-space top-level admission and retain tilde info containing backticks.
 - Reject reparse points at owned guidance roots and their ancestors before enumeration by reusing the canonical repository path guard; cover ordinary discovery and three junction boundaries with unchanged target witnesses and owned-link teardown.

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://red-salamander.local/schemas/ghostty-runtime-candidate-descriptor-v1.json",
+  "$id": "https://red-salamander.local/schemas/ghostty-runtime-candidate-descriptor-v2.json",
   "title": "RedSalamander Ghostty runtime candidate descriptor",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "generatedUtc", "sourceBinding", "canonicalLock", "candidate", "ancestry", "observation", "review", "toolchain", "dependency", "overlay", "inputDigest"],
+  "required": ["schemaVersion", "generatedUtc", "sourceBinding", "canonicalLock", "candidate", "ancestry", "observation", "review", "toolchain", "dependencies", "overlay", "inputDigest"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "generatedUtc": { "type": "string", "format": "date-time", "maxLength": 40 },
     "sourceBinding": {
       "type": "object",
@@ -74,15 +74,20 @@
         }
       }
     },
-    "dependency": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "sourceArchiveSha256", "contentArchiveSha256", "licenseSha256"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "sourceArchiveSha256": { "$ref": "#/$defs/sha256" },
-        "contentArchiveSha256": { "$ref": "#/$defs/sha256" },
-        "licenseSha256": { "$ref": "#/$defs/sha256" }
+    "dependencies": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "sourceArchiveSha256", "contentArchiveSha256", "licenseSha256"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "sourceArchiveSha256": { "$ref": "#/$defs/sha256" },
+          "contentArchiveSha256": { "$ref": "#/$defs/sha256" },
+          "licenseSha256": { "$ref": "#/$defs/sha256" }
+        }
       }
     },
     "overlay": {

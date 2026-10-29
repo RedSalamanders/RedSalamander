@@ -4,6 +4,9 @@ RedSalamander's Terminal plugin provides shells inside the file-manager panes
 and in a separate window. Open **Commands -> Command Shell**, **Ctrl+Alt+T** or
 **Alt+7** to open or reuse the Terminal opposite the active folder.
 
+The terminal engine uses libghostty-vt from Ghostty 1.4.0. RedSalamander keeps
+its existing clipboard policy and bounded image/placement storage.
+
 ## Start a shell at a folder
 
 Navigate a file pane to the folder you want, then open Command Shell. A live

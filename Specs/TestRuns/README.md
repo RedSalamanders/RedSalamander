@@ -17,6 +17,13 @@ This folder contains local build/test run logs used to validate critical fixes. 
 
 ### Composite validation evidence
 
+Terminal VT pairs require identical environment metadata by default. A reviewed
+compiler upgrade may declare `-ZigToolchainTransition <baseline>,<candidate>`
+to `Tools/Test-TestRunArchive.ps1`; the two distinct exact versions must match
+the recorded Zig values. Every other environment field, behavior digest, raw
+sample binding, and baseline x1.10 gate remains enforced. Describe these results
+as a comparison of the complete runtime/toolchain upgrade.
+
 Only a fresh Full run provides final closeout evidence. An explicit exact Resume can
 provide a complete repository verdict for local continuation, but it must be described as
 composite evidence with direct origin provenance. A local ledger, provisional result,

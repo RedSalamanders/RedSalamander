@@ -207,6 +207,8 @@ The reusable-build Terminal cache key MUST include the thin runtime wrapper, the
 Ghostty lifecycle module and its complete direct/indirect helper closure, the
 canonical Ghostty product lock and schema, the current private-runtime patch, the
 complete notice-input set, and `RuntimeDependencies.props`.
+This includes `ArtifactOperationLock.psm1` for closed-package path guards and
+`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation.
 `Get-RSGhosttyRuntimeIdentityInputPaths` owns that exact closure and
 `ReleaseWorkflowPolicy.Tests.ps1` compares it with the workflow key; adding or
 removing a behavioral input

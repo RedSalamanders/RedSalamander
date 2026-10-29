@@ -839,7 +839,20 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match '(?s)Build-GhosttyTerminalRuntime\.ps1.*?-Platform ARM64.*?-CandidateLockPath.*?-CandidateOutputRoot.*?-Force'
         $ghosttyNativeWorkflow | Should Match 'test-lib-vt test-lib-vt-build test-lib-vt-schema'
         $ghosttyNativeWorkflow | Should Match "RS_TEST_SEED: '0x97d35bc7'"
-        $ghosttyNativeWorkflow | Should Match 'build --color off --seed \$env:RS_TEST_SEED -j1 test-lib-vt'
+        $ghosttyNativeWorkflow | Should Match 'build --color off @seedArguments -j1 test-lib-vt'
+        $ghosttyNativeWorkflow | Should Match 'use_repository_lock:'
+        $ghosttyNativeWorkflow | Should Match 'RS_USE_REPOSITORY_LOCK -ceq ''true'''
+        $ghosttyNativeWorkflow | Should Match 'External/TerminalEngine/GhosttyRuntimeLock.v1.json'
+        $ghosttyNativeWorkflow | Should Match 'ZIG_GLOBAL_CACHE_DIR'
+        $ghosttyNativeWorkflow | Should Match 'Expand-RSGhosttyRuntimeLockedPackages'
+        $ghosttyNativeWorkflow | Should Match '@\(''--system'', \$packages\)'
+        $ghosttyNativeWorkflow | Should Match 'Initialize-RSTestSandboxRoot'
+        $ghosttyNativeWorkflow | Should Match 'New-RSTestSandboxScratchDirectory'
+        $ghosttyNativeWorkflow | Should Match 'setCwd'
+        $ghosttyNativeWorkflow | Should Match 'addArg\(`"--seed=\$env:RS_TEST_SEED'
+        $ghosttyNativeWorkflow | Should Match 'src/terminal/snapshot/testdata'
+        $ghosttyNativeWorkflow | Should Match 'RS_NATIVE_TEST_SCRATCH.*native-arm64-qualification.json'
+        $ghosttyNativeWorkflow | Should Not Match 'runner.temp.*ghostty-native-crash'
         $ghosttyNativeWorkflow | Should Match 'Dtarget=aarch64-windows-msvc'
         $ghosttyNativeWorkflow | Should Match 'Push-Location -LiteralPath \$sourceRoot'
         $ghosttyNativeWorkflow | Should Match 'lib\\compiler\\test_runner\.zig'
@@ -857,15 +870,25 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match 'Retry passed only as diagnostic evidence; qualification requires a clean first execution'
         $ghosttyNativeWorkflow | Should Match 'schemaSummaries\.Count -eq 1'
         $ghosttyNativeWorkflow | Should Match 'reportedTestFailures\.Count -eq 0'
-        $ghosttyNativeWorkflow | Should Match 'Join-Path \$sourceRoot ''\.zig-cache'''
+        $ghosttyNativeWorkflow | Should Match '\$nativeLocalCache = \[IO\.Path\]::GetFullPath\(\(Join-Path \$candidateRoot ''native-local-cache''\)\)'
+        $ghosttyNativeWorkflow | Should Match '\$env:ZIG_LOCAL_CACHE_DIR = \$nativeLocalCache'
+        $ghosttyNativeWorkflow | Should Match '\$allowedCacheRoot = \$nativeLocalCache \+ \[IO\.Path\]::DirectorySeparatorChar'
+        $ghosttyNativeWorkflow | Should Match '\.Message\.Contains\(\$nativeLocalCache, \[StringComparison\]::OrdinalIgnoreCase\)'
+        $ghosttyNativeWorkflow | Should Not Match 'Join-Path \$sourceRoot ''\.zig-cache'''
         $ghosttyNativeWorkflow | Should Match 'Start-Sleep -Seconds 2'
         $ghosttyNativeWorkflow | Should Match '& \$failedTestPath "--seed=\$env:RS_TEST_SEED"'
-        $ghosttyNativeWorkflow | Should Match 'Windows Error Reporting\\LocalDumps\\test\.exe'
+        $ghosttyNativeWorkflow | Should Match 'Windows Error Reporting\\LocalDumps\\\$_'
+        $ghosttyNativeWorkflow | Should Match "@\('test.exe', 'ghostty-vt-test.exe', 'ghostty-vt-c-test.exe'\)"
+        $ghosttyNativeWorkflow | Should Match 'Existing WER configuration must be preserved'
+        $ghosttyNativeWorkflow | Should Match '\[Microsoft\.Win32\.Registry\]::CurrentUser\.CreateSubKey\('
+        $ghosttyNativeWorkflow | Should Match '\$dumpParent\.Dispose\(\)'
+        $ghosttyNativeWorkflow | Should Match 'New-Item -Path \$localDumpKey\)'
+        $ghosttyNativeWorkflow | Should Not Match 'New-Item -Path \$localDumpKey -Force'
         $ghosttyNativeWorkflow | Should Match 'DumpType'
         $ghosttyNativeWorkflow | Should Match 'test_zcu\.obj'
         $ghosttyNativeWorkflow | Should Match 'retryExitCode = \$retryExitCode'
         $ghosttyNativeWorkflow | Should Match 'ghostty-native-arm64-crash-\$\{\{ github\.run_id \}\}'
-        $ghosttyNativeWorkflow | Should Match 'if:\s*\$\{\{ failure\(\) \}\}'
+        $ghosttyNativeWorkflow | Should Match 'if:\s*\$\{\{ failure\(\) && !inputs\.diagnostics_only && steps\.native_tests\.outcome == ''failure'' && env\.RS_NATIVE_TEST_SCRATCH != '''' \}\}'
         $ghosttyNativeWorkflow | Should Match 'codeFiveRetryExecutableSha256 ='
         $ghosttyNativeWorkflow | Should Not Match 'codeFiveRetryStatus = ''passed'''
         $ghosttyNativeWorkflow | Should Match 'windowsUnmaterializablePaths'
@@ -878,9 +901,12 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match "test\\\.exe"
         $ghosttyNativeWorkflow | Should Match 'GhosttyRuntimeNativeQualification\.schema\.json'
         $ghosttyNativeWorkflow | Should Match 'Write-RSAtomicCanonicalJsonFile'
+        $nativeEvidence = [regex]::Match($ghosttyNativeWorkflow, '(?s)- name: Upload native qualification evidence(.*?)(?=\r?\n  qualify-product:)').Groups[1].Value
+        $nativeEvidence | Should Not Match '\.build/'
+        ([regex]::Matches($nativeEvidence, '\$\{\{ env\.RS_NATIVE_TEST_SCRATCH \}\}/')).Count | Should Be 3
         $ghosttyNativeWorkflow | Should Match 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         $ghosttyNativeWorkflow | Should Match 'if-no-files-found:\s*error'
-        $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product \}\}.*?needs:\s*qualify-arm64'
+        $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product && !inputs\.diagnostics_only \}\}.*?needs:\s*qualify-arm64'
         $ghosttyNativeWorkflow | Should Match 'uses:\s*\./\.github/workflows/ghostty-runtime-product-qualification\.yml'
     }
 
@@ -944,6 +970,24 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Match '\.build/TerminalEngine/Product/ARM64/terminal-runtime-identity\.json'
         $ghosttyProductWorkflow | Should Match 'if-no-files-found:\s*error'
         $ghosttyProductWorkflow | Should Not Match '\.build/ARM64/(Debug|Release)/terminal-runtime-identity\.json'
+    }
+
+    It 'archives native product receipt pointers and immutable records from the canonical profile stores' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-product-qualification.yml') -Raw
+        $upload = [regex]::Match($workflow, '(?s)- name: Upload native product qualification evidence(.*?)(?=\r?\n      # The test root)').Groups[1].Value
+        $paths = @([regex]::Matches($upload, '(?m)^ {12}(\.build/[^\r\n]+)') | ForEach-Object { $_.Groups[1].Value })
+        $module = Get-Module | Where-Object Path -EQ $buildEvidenceModule | Select-Object -First 1
+        ($null -ne $module) | Should Be $true
+        foreach ($configuration in @('Debug','Release')) {
+            $profile = Join-Path $TestDrive ('.build/ARM64/' + $configuration)
+            $store = & $module { param($directory) Get-RSBuildReceiptStore -BuildOutputDir $directory } $profile
+            $pointer = [IO.Path]::GetRelativePath($TestDrive, $store.PointerPath).Replace('\','/')
+            $records = [IO.Path]::GetRelativePath($TestDrive, $store.ReceiptDirectory).Replace('\','/') + '/'
+            ($paths -ccontains $pointer) | Should Be $true
+            ($paths -ccontains $records) | Should Be $true
+            ($paths -ccontains ('.build/ARM64/' + $configuration + '/toolchain-identity.json')) | Should Be $true
+        }
+        $upload | Should Not Match '\.build/BuildReceipts/'
     }
 
     It 'runs a source-and-lock-bound Ghostty preflight before release artifact builds' {
@@ -1058,6 +1102,102 @@ Describe 'Release workflow source contracts' {
         $activePatch | Should Match 'lib\.use_llvm = true'
         $activePatch | Should Match 'lib\.use_lld = true'
         $activePatch | Should Match 'lib\.root_module\.strip = true'
+    }
+
+    It 'passes each native test seed option as complete argv elements in both Zig branches' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $assignment = [regex]::Match($workflow, '(?m)^[ \t]*(?:\[string\[\]\][ \t]*)?\$seedArguments[ \t]*=[ \t]*if[^\r\n]+')
+        $assignment.Success | Should Be $true
+        $echo = Join-Path $TestDrive 'echo-native-seed.ps1'
+        '[Console]::WriteLine((ConvertTo-Json -InputObject @($args) -Compress))' | Set-Content -LiteralPath $echo -Encoding utf8NoBOM
+        $invoke = [scriptblock]::Create('param($child,$echo,[bool]$modernZig)' + "`n" + $assignment.Value + "`n" +
+            '& $child -NoLogo -NoProfile -NonInteractive -File $echo build --color off @seedArguments -j1')
+        $previousSeed = $env:RS_TEST_SEED
+        try {
+            $env:RS_TEST_SEED = '0x97d35bc7'
+            foreach ($modern in @($true, $false)) {
+                $json = & $invoke (Join-Path $PSHOME 'pwsh.exe') $echo $modern
+                $LASTEXITCODE | Should Be 0
+                $actual = @($json | ConvertFrom-Json)
+                $expected = if ($modern) {
+                    @('build','--color','off','--seed=0x97d35bc7','-j1')
+                } else {
+                    @('build','--color','off','--seed','0x97d35bc7','-j1')
+                }
+                ($actual -join '|') | Should Be ($expected -join '|')
+            }
+        }
+        finally { $env:RS_TEST_SEED = $previousSeed }
+    }
+
+    It 'admits absolute and relative diagnostic executables only inside the exact native cache' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $guard = [regex]::Match($workflow, '(?ms)^ {16}\$failedTestPath =.*?(?=^ {16}# Zig truncates)')
+        $guard.Success | Should Be $true
+        $invoke = [scriptblock]::Create('param($sourceRoot,$nativeLocalCache,$failedCommandMatch)' + "`n" + $guard.Value + "`n$" + 'failedTestPath')
+        $sourceRoot = Join-Path $TestDrive 'source'
+        $nativeLocalCache = Join-Path $TestDrive 'native-local-cache'
+        $image = Join-Path $nativeLocalCache 'o/object/ghostty-vt-c-test.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $image))
+        [IO.File]::WriteAllText($image, 'diagnostic path fixture')
+        foreach ($path in @($image, [IO.Path]::GetRelativePath($sourceRoot, $image))) {
+            $match = [regex]::Match($path, '^(.+)$')
+            (& $invoke $sourceRoot $nativeLocalCache $match) | Should Be $image
+        }
+        $sibling = Join-Path $TestDrive 'native-local-cache-other/test.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $sibling))
+        [IO.File]::WriteAllText($sibling, 'outside fixture')
+        foreach ($path in @($sibling, (Join-Path $nativeLocalCache 'missing.exe'), '../native-local-cache-other/test.exe')) {
+            $match = [regex]::Match($path, '^(.+)$')
+            { & $invoke $sourceRoot $nativeLocalCache $match } | Should Throw 'escaped the candidate cache'
+        }
+    }
+
+    It 'stages the native identity byte-for-byte beside the report and rejects stale or mismatched evidence' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $staging = [regex]::Match($workflow, '(?ms)^ {10}\$identityEvidencePath =.*?(?=^ {10}Write-RSAtomicCanonicalJsonFile)')
+        $staging.Success | Should Be $true
+        $invoke = [scriptblock]::Create('param($identityPath,$report)' + "`n" + $staging.Value)
+        $identity = Join-Path $TestDrive 'workspace/terminal-runtime-identity.json'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $identity))
+        [IO.File]::WriteAllText($identity, '{"runtime":"fixture"}', [Text.UTF8Encoding]::new($false))
+        $report = [pscustomobject]@{ runtime = [pscustomobject]@{ identitySha256 = (Get-FileHash -LiteralPath $identity -Algorithm SHA256).Hash.ToLowerInvariant() } }
+        $previousScratch = $env:RS_NATIVE_TEST_SCRATCH
+        try {
+            $env:RS_NATIVE_TEST_SCRATCH = Join-Path $TestDrive 'native-evidence'
+            [void][IO.Directory]::CreateDirectory($env:RS_NATIVE_TEST_SCRATCH)
+            & $invoke $identity $report
+            $copy = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'terminal-runtime-identity.json'
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes($copy)) | Should Be ([Convert]::ToBase64String([IO.File]::ReadAllBytes($identity)))
+            { & $invoke $identity $report } | Should Throw 'identity evidence already exists'
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes($copy)) | Should Be ([Convert]::ToBase64String([IO.File]::ReadAllBytes($identity)))
+            $env:RS_NATIVE_TEST_SCRATCH = Join-Path $TestDrive 'mismatched-evidence'
+            [void][IO.Directory]::CreateDirectory($env:RS_NATIVE_TEST_SCRATCH)
+            $report.runtime.identitySha256 = '0' * 64
+            { & $invoke $identity $report } | Should Throw 'does not match the tested runtime'
+        }
+        finally { $env:RS_NATIVE_TEST_SCRATCH = $previousScratch }
+    }
+
+    It 'keeps build-only diagnostics outside native qualification and product continuation' {
+        $workflow = Get-Content (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $blocks = @([regex]::Split($workflow, '(?m)(?=^      - name: )'))
+        foreach ($name in @('Run upstream native ARM64 lib-vt targets', 'Publish canonical native qualification evidence', 'Upload native qualification evidence')) {
+            $block = @($blocks | Where-Object { $_.StartsWith("      - name: $name`n") -or $_.StartsWith("      - name: $name`r`n") })
+            $block.Count | Should Be 1
+            $block[0] | Should Match '(?m)^        if: \$\{\{ !inputs\.diagnostics_only \}\}\s*$'
+        }
+        $workflow | Should Match 'name: \$\{\{ inputs\.diagnostics_only && ''ARM64 build diagnostics \(not qualification\)'''
+        $workflow | Should Match '(?m)^    if: \$\{\{ inputs\.qualify_product && !inputs\.diagnostics_only \}\}'
+        $diagnostic = @($blocks | Where-Object { $_.StartsWith('      - name: Collect bounded native build diagnostics only') })[0]
+        $diagnostic | Should Match 'Invoke-RSStreamingProcess'
+        $diagnostic | Should Match '-TimeoutMilliseconds 1200000'
+        $diagnostic | Should Match 'qualification = \$false'
+        $upload = @($blocks | Where-Object { $_.StartsWith('      - name: Upload build-only diagnostic evidence') })[0]
+        $upload | Should Match 'always\(\) && inputs\.diagnostics_only && env\.RS_NATIVE_TEST_SCRATCH != '''''
+        $upload | Should Match 'ghostty-native-build-diagnostics-'
+        $workflow.IndexOf('- name: Select owned native test-data root') |
+            Should BeLessThan $workflow.IndexOf('- name: Build exact candidate natively')
     }
 
     It 'scopes Ghostty shared state by repository and takes the session drive lease only for rebuilds' {
