@@ -1,0 +1,1 @@
+Debug Entry lookup passes all 299 internal checks, including every original oracle, the new maximum-size literal and all 4097-file/64-render exact bytes. Setup and Cleanup pass. Focused acceptance, not Full or a performance trend claim.

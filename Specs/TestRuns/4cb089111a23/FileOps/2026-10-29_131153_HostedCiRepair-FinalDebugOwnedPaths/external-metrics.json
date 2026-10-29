@@ -1,0 +1,7 @@
+{
+  "schema": "hosted-ci-repair.external-metrics.v1",
+  "sha256": "6674526485a168677a5b37964633c335a882213f2323ed728db1a23d8e18de9e",
+  "bytes": 10687149,
+  "runId": "20261029T131153Z-38720-7bc2aa11faec456887d3da0fbeb9a5cc",
+  "retention": "Full raw input remains in the completed-run archive. This functional packet makes no performance trend or non-regression claim."
+}

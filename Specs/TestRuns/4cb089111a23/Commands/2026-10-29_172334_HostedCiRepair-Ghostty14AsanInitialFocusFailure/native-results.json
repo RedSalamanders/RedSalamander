@@ -1,0 +1,196 @@
+{
+    "run_started_utc": "2026-10-29T17:24:16.292Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261029T172334Z-66476-df919bedae1e4bfda85ddce09d655196\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 43736,
+    "passed": 29,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Main folder view did not regain stable focus before Commands case 'settings_viewer_text_plugin_roundtrip'.",
+    "cases": [
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "failed",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "reason": "Main folder view did not regain stable focus before Commands case 'settings_viewer_text_plugin_roundtrip'."
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 404,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2821,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 10,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 440,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2958,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 3
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 457,
+            "repeat_index": 3
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2946,
+            "repeat_index": 3
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 10,
+            "repeat_index": 4
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 450,
+            "repeat_index": 4
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 3218,
+            "repeat_index": 4
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 5
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 390,
+            "repeat_index": 5
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2295,
+            "repeat_index": 5
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 6
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 333,
+            "repeat_index": 6
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2164,
+            "repeat_index": 6
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 7
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 298,
+            "repeat_index": 7
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2291,
+            "repeat_index": 7
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 8
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 330,
+            "repeat_index": 8
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2190,
+            "repeat_index": 8
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 9
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 318,
+            "repeat_index": 9
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2300,
+            "repeat_index": 9
+        },
+        {
+            "name": "settings_viewer_text_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 10
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 315,
+            "repeat_index": 10
+        },
+        {
+            "name": "settings_deferred_plugin_disabled_state_tracks_settings",
+            "status": "passed",
+            "duration_ms": 2188,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

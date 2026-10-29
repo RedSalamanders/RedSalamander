@@ -1444,6 +1444,14 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
 [[nodiscard]] bool TestSettingsStoreUnsupportedFutureSchemaNeverOverwritesSource(CaseState& state) noexcept
 {
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestFutureSchemaSaveBlock";
+    // Deleting/reseeding this owned fixture starts a separate settings lifecycle.
+    // Retire the previous invocation's coordinator lineage before fixture setup;
+    // every same-case stale-source and explicit-replacement guard stays active.
+    const bool priorSavesRetired = SettingsHotReload::FlushQueuedSettingsSaves(static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count()));
+    state.Require(priorSavesRetired && SettingsHotReload::DebugResetSettingsSaveLineageForSelfTest(kTestAppId),
+                  L"The independent future-schema fixture requires a quiet, fresh test-app lineage before seeding.");
+    if (! state.failure.empty())
+        return false;
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup                         = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
     const std::filesystem::path settingsPath   = Common::Settings::GetSettingsPath(kTestAppId);
@@ -5222,125 +5230,58 @@ enum class SettingsSaveChildMode : uint8_t
     if (! state.failure.empty())
         return false;
 
-    const DWORD previousLength = GetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, nullptr, 0u);
-    std::wstring previousValue;
-    if (previousLength > 0u)
-    {
-        previousValue.resize(previousLength);
-        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, previousValue.data(), previousLength);
-        if (copied == 0u || copied >= previousLength)
-        {
-            previousValue.clear();
-        }
-        else
-        {
-            previousValue.resize(copied);
-        }
-    }
-    const bool hadPreviousValue   = ! previousValue.empty();
-    const auto restoreEnvironment = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, hadPreviousValue ? previousValue.c_str() : nullptr)); });
-    const std::wstring childModeText(childMode);
-    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, childModeText.c_str()) != FALSE,
-                  L"Failed to configure the settings-save child process.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const DWORD previousTestRootLength = GetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, nullptr, 0u);
-    std::wstring previousTestRootValue;
-    if (previousTestRootLength > 0u)
-    {
-        previousTestRootValue.resize(previousTestRootLength);
-        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, previousTestRootValue.data(), previousTestRootLength);
-        if (copied == 0u || copied >= previousTestRootLength)
-        {
-            previousTestRootValue.clear();
-        }
-        else
-        {
-            previousTestRootValue.resize(copied);
-        }
-    }
-    const bool hadPreviousTestRootValue = ! previousTestRootValue.empty();
-
-    const std::filesystem::path childSelfTestRoot = hadPreviousTestRootValue ? std::filesystem::path(previousTestRootValue) : std::filesystem::path{};
+    const auto parentTestRoot = RedSalamander::TestSupport::ReadEnvironmentValue(kSettingsSaveTeardownTestRootEnv);
+    state.Require(parentTestRoot.error == ERROR_SUCCESS, L"Could not read the exact parent test root for the settings-save child.");
+    const bool hadPreviousTestRootValue           = parentTestRoot.value.has_value() && ! parentTestRoot.value.value().empty();
+    const std::filesystem::path childSelfTestRoot = hadPreviousTestRootValue ? std::filesystem::path(parentTestRoot.value.value()) : std::filesystem::path{};
     state.Require(! childSelfTestRoot.empty(), L"Could not resolve the exact test root for the settings-save child process.");
-    if (childSelfTestRoot.empty())
-    {
+    if (! state.failure.empty())
         return false;
-    }
+
     const std::wstring childTestRunId        = std::format(L"ss-{}-{}", GetCurrentProcessId(), GetTickCount64());
     const std::filesystem::path childRunRoot = childSelfTestRoot / L"runs" / childTestRunId;
     state.Require(SelfTest::EnsureDirectory(childRunRoot), L"Could not create the isolated settings-save teardown child run root.");
     if (! state.failure.empty())
-    {
         return false;
-    }
-    bool childQuiet             = true;
-    bool keepChildArtifacts     = false;
-    const auto cleanupChildRoot = wil::scope_exit([&]() noexcept
+    bool childQuiet                                       = true;
+    bool keepChildArtifacts                               = false;
+    const auto cleanupChildRoot                           = wil::scope_exit([&]() noexcept
     {
         if (childQuiet && ! keepChildArtifacts)
             static_cast<void>(SelfTest::RemoveAll(childRunRoot));
     });
-
-    const DWORD previousRootLength = GetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, nullptr, 0u);
-    std::wstring previousRootValue;
-    if (previousRootLength > 0u)
-    {
-        previousRootValue.resize(previousRootLength);
-        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, previousRootValue.data(), previousRootLength);
-        if (copied == 0u || copied >= previousRootLength)
-        {
-            previousRootValue.clear();
-        }
-        else
-        {
-            previousRootValue.resize(copied);
-        }
-    }
-    const bool hadPreviousRootValue        = ! previousRootValue.empty();
-    const auto restoreChildRootEnvironment = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, hadPreviousRootValue ? previousRootValue.c_str() : nullptr)); });
-    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, childSelfTestRoot.c_str()) != FALSE,
-                  L"Failed to isolate the settings-save teardown child self-test root.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const auto restoreTestRootEnvironment = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, hadPreviousTestRootValue ? previousTestRootValue.c_str() : nullptr)); });
-    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, childSelfTestRoot.c_str()) != FALSE,
-                  L"Failed to isolate the settings-save teardown child unified test root.");
-
-    const DWORD previousTestRunIdLength = GetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, nullptr, 0u);
-    std::wstring previousTestRunIdValue;
-    if (previousTestRunIdLength > 0u)
-    {
-        previousTestRunIdValue.resize(previousTestRunIdLength);
-        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, previousTestRunIdValue.data(), previousTestRunIdLength);
-        if (copied == 0u || copied >= previousTestRunIdLength)
-        {
-            previousTestRunIdValue.clear();
-        }
-        else
-        {
-            previousTestRunIdValue.resize(copied);
-        }
-    }
-    const bool hadPreviousTestRunIdValue   = ! previousTestRunIdValue.empty();
-    const auto restoreTestRunIdEnvironment = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, hadPreviousTestRunIdValue ? previousTestRunIdValue.c_str() : nullptr)); });
-    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, childTestRunId.c_str()) != FALSE,
-                  L"Failed to isolate the settings-save teardown child unified test run.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
     const std::filesystem::path childSelfTestArtifactRoot = childSelfTestRoot / L"runs" / childTestRunId / L"artifacts" / L"selftest";
+
+    const std::array<const wchar_t*, 4u> environmentKeys{
+        kSettingsSaveTeardownChildEnv, kSettingsSaveTeardownChildRootEnv, kSettingsSaveTeardownTestRootEnv, kSettingsSaveTeardownTestRunIdEnv};
+    std::vector<std::pair<std::wstring, std::optional<std::wstring>>> parentEnvironment;
+    for (const auto key : environmentKeys)
+    {
+        const auto value = RedSalamander::TestSupport::ReadEnvironmentValue(key);
+        state.Require(value.error == ERROR_SUCCESS, L"Could not capture the pumping parent's environment.");
+        parentEnvironment.emplace_back(key, value.value);
+    }
+    if (! state.failure.empty())
+        return false;
+    const auto parentEnvironmentMatches = [&]() noexcept
+    {
+        return std::ranges::all_of(parentEnvironment,
+                                   [](const auto& expected) noexcept
+        {
+            const auto value = RedSalamander::TestSupport::ReadEnvironmentValue(expected.first);
+            return value.error == ERROR_SUCCESS && value.value == expected.second;
+        });
+    };
+    std::vector<wchar_t> childEnvironment;
+    DWORD environmentError = ERROR_SUCCESS;
+    const std::vector<std::pair<std::wstring, std::wstring>> overrides{{kSettingsSaveTeardownChildEnv, std::wstring(childMode)},
+                                                                       {kSettingsSaveTeardownChildRootEnv, childSelfTestRoot.native()},
+                                                                       {kSettingsSaveTeardownTestRootEnv, childSelfTestRoot.native()},
+                                                                       {kSettingsSaveTeardownTestRunIdEnv, childTestRunId}};
+    const bool capturedEnvironment = RedSalamander::TestSupport::ChildProcessDetail::CaptureEnvironmentBlock(overrides, childEnvironment, environmentError);
+    state.Require(capturedEnvironment, std::format(L"Could not build the canonical child-only Unicode environment. error={}", environmentError));
+    if (! state.failure.empty())
+        return false;
 
     const std::wstring executable(modulePath.data(), modulePathLength);
     std::wstring commandLine = std::format(
@@ -5351,7 +5292,16 @@ enum class SettingsSaveChildMode : uint8_t
     startupInfo.dwFlags     = STARTF_USESHOWWINDOW;
     startupInfo.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION processInfo{};
-    const BOOL created = CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo);
+    const BOOL created = CreateProcessW(nullptr,
+                                        commandLine.data(),
+                                        nullptr,
+                                        nullptr,
+                                        FALSE,
+                                        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                                        childEnvironment.data(),
+                                        nullptr,
+                                        &startupInfo,
+                                        &processInfo);
     state.Require(created != FALSE, std::format(L"Failed to launch the settings-save teardown child process. error={}", GetLastError()));
     if (created == FALSE)
     {
@@ -5375,8 +5325,23 @@ enum class SettingsSaveChildMode : uint8_t
     const DWORD deadlineMs        = static_cast<DWORD>(SelfTest::ScaleTimeout(12'000u));
     const uint64_t launchedTickMs = GetTickCount64();
     const auto waitStarted        = std::chrono::steady_clock::now();
-    const DWORD waitResult        = WaitForSingleObject(process.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(12'000u)));
-    const DWORD waitError         = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    DWORD waitResult              = WAIT_TIMEOUT;
+    DWORD waitError               = ERROR_SUCCESS;
+    // The child must acquire foreground input from this parent during Commands
+    // isolation. Keep this UI queue responsive while retaining the same deadline.
+    bool parentEnvironmentStable = parentEnvironmentMatches();
+    const auto childWait         = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        parentEnvironmentStable = parentEnvironmentMatches() && parentEnvironmentStable;
+        waitResult              = WaitForSingleObject(process.get(), 0u);
+        if (waitResult == WAIT_FAILED)
+            waitError = GetLastError();
+        return waitResult != WAIT_TIMEOUT;
+    },
+        {.timeout = std::chrono::milliseconds{deadlineMs}, .operationName = L"settings-save child exit"});
+    state.Require(parentEnvironmentStable && parentEnvironmentMatches(),
+                  L"Pumped parent callbacks must retain the exact parent environment during private child execution.");
     const uint64_t waitedMs =
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - waitStarted).count());
     if (waitResult == WAIT_OBJECT_0)
@@ -5407,15 +5372,17 @@ enum class SettingsSaveChildMode : uint8_t
                               waitError));
     SelfTest::AppendSuiteTrace(
         SelfTest::SelfTestSuite::Commands,
-        std::format(L"Settings-save child mode={} pid={} phase=wait-return launchedTickMs={} deadlineMs={} result={} elapsedMs={} error={} quiet={}",
-                    childMode,
-                    processInfo.dwProcessId,
-                    launchedTickMs,
-                    deadlineMs,
-                    waitResult,
-                    waitedMs,
-                    waitError,
-                    childQuiet));
+        std::format(
+            L"Settings-save child mode={} pid={} phase=wait-return launchedTickMs={} deadlineMs={} result={} elapsedMs={} error={} quiet={} dispatched={}",
+            childMode,
+            processInfo.dwProcessId,
+            launchedTickMs,
+            deadlineMs,
+            waitResult,
+            waitedMs,
+            waitError,
+            childQuiet,
+            childWait.dispatchedMessageCount));
     if (! childQuiet)
     {
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
@@ -5540,7 +5507,11 @@ enum class SettingsSaveChildMode : uint8_t
     }
 
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSerializedSettingsSave";
-    static_cast<void>(SettingsHotReload::FlushQueuedSettingsSaves(INFINITE));
+    const bool priorSavesRetired           = SettingsHotReload::FlushQueuedSettingsSaves(INFINITE);
+    state.Require(priorSavesRetired && SettingsHotReload::DebugResetSettingsSaveLineageForSelfTest(kTestAppId),
+                  L"The independent save-queue fixture requires a quiet, fresh test-app lineage before seeding.");
+    if (! state.failure.empty())
+        return false;
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup = wil::scope_exit([&]
     {
@@ -9436,12 +9407,41 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     DebugHideThemeCycleOverlay();
 
-    const HWND rootWindow  = GetAncestor(mainWindow, GA_ROOT);
-    const HWND inputWindow = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
-    ShowWindow(inputWindow, SW_SHOWNORMAL);
-    static_cast<void>(BringWindowToTop(inputWindow));
-    static_cast<void>(SetActiveWindow(inputWindow));
-    static_cast<void>(SetForegroundWindow(inputWindow));
+    const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
+    const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
+    const HWND foregroundBefore = GetForegroundWindow();
+    DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
+    const auto handoffStarted  = std::chrono::steady_clock::now();
+    const bool activated       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
+    const auto handoffElapsed  = std::chrono::steady_clock::now() - handoffStarted;
+    DWORD foregroundProcess    = 0u;
+    const HWND foregroundAfter = GetForegroundWindow();
+    static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
+    if (foregroundBefore != inputWindow)
+    {
+        Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={} stage={} error={} "
+                          L"heldKey={} sent={}",
+                          reinterpret_cast<uintptr_t>(foregroundBefore),
+                          reinterpret_cast<uintptr_t>(foregroundAfter),
+                          reinterpret_cast<uintptr_t>(inputWindow),
+                          foregroundProcess,
+                          GetCurrentProcessId(),
+                          activated,
+                          admission.stage,
+                          admission.win32Error,
+                          admission.heldKey,
+                          admission.sentInputCount));
+    }
+    state.Require(activated && foregroundAfter == inputWindow,
+                  std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}.",
+                              context,
+                              reinterpret_cast<uintptr_t>(foregroundAfter),
+                              foregroundProcess,
+                              reinterpret_cast<uintptr_t>(inputWindow)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     PumpPendingMessages();
 
     // Terminal and preview surfaces share the pane content host. Close terminal
@@ -9466,7 +9466,10 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Left);
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
     const HWND leftFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1500))),
+    // Preview/terminal retirement above has its own deadline. Only the foreground
+    // handshake consumes the existing focus-acquisition budget.
+    const auto remainingFocusTime = std::chrono::duration_cast<std::chrono::milliseconds>(SelfTest::Scale(std::chrono::milliseconds(1500)) - handoffElapsed);
+    state.Require(remainingFocusTime.count() > 0 && WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, remainingFocusTime),
                   std::format(L"Main folder view did not regain stable focus before {}.", context));
     if (! state.failure.empty())
     {
@@ -9488,6 +9491,7 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1000))),
                   std::format(L"Main folder view focus was not stable after input settling before {}.", context));
+    state.Require(GetForegroundWindow() == inputWindow, std::format(L"Main foreground ownership changed during input settling before {}.", context));
     return state.failure.empty();
 }
 

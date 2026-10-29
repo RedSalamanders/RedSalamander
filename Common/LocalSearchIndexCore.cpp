@@ -289,6 +289,7 @@ struct JournalState final
 
 #ifdef ENABLE_TESTS
 thread_local std::optional<JournalState> g_nextJournalStateForTests;
+thread_local DWORD g_nextNtfsEnumerationFailureForTests = ERROR_SUCCESS;
 #endif
 
 struct Entry final
@@ -1845,7 +1846,7 @@ HRESULT GetJournalState(std::wstring_view volumeDevicePath, JournalState& outSta
     {
         outState = g_nextJournalStateForTests.value();
         g_nextJournalStateForTests.reset();
-        return S_OK;
+        return outState.available ? S_OK : kNotSupportedHr;
     }
 #endif
 
@@ -2816,6 +2817,15 @@ HRESULT SeedTraversalIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void*
     return S_OK;
 }
 
+[[nodiscard]] constexpr bool IsNtfsEnumerationTraversalFallbackError(DWORD error) noexcept
+{
+    // The request and continuation cursor are owned here (the latter comes from
+    // the kernel). A driver rejecting that optimization must not expose a partial
+    // graph as a complete index. Malformed record/data failures remain errors.
+    return error == ERROR_ACCESS_DENIED || error == ERROR_PRIVILEGE_NOT_HELD || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED ||
+           error == ERROR_INVALID_PARAMETER;
+}
+
 HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* cancelCookie, QueryStats& stats, RepositoryProgressState& progress) noexcept
 {
     volume.entries.clear();
@@ -2824,6 +2834,14 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
     if (IsForcedNtfsTraversalSeedEnabled())
     {
         return SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress);
+    }
+    ++stats.nativeMftSeedAttempts;
+    if (g_nextNtfsEnumerationFailureForTests != ERROR_SUCCESS)
+    {
+        const DWORD error                    = g_nextNtfsEnumerationFailureForTests;
+        g_nextNtfsEnumerationFailureForTests = ERROR_SUCCESS;
+        return IsNtfsEnumerationTraversalFallbackError(error) ? SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress)
+                                                              : HRESULT_FROM_WIN32(error);
     }
 #endif
 
@@ -2918,7 +2936,13 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
                 break;
             }
 
-            if (error == ERROR_ACCESS_DENIED || error == ERROR_PRIVILEGE_NOT_HELD || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
+            Debug::Perf::Emit(L"search.ntfs.seed_mft.enumeration_failure",
+                              volume.normalizedRootPath,
+                              Debug::Perf::ElapsedUs(seedStartedAt),
+                              enumData.StartFileReferenceNumber,
+                              static_cast<uint64_t>(allEntries.size()),
+                              HRESULT_FROM_WIN32(error));
+            if (IsNtfsEnumerationTraversalFallbackError(error))
             {
                 return SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress);
             }
@@ -3372,7 +3396,7 @@ HRESULT EnsureReady(VolumeIndex& volume,
                 return rebuildProgressHr;
             }
 
-            HRESULT rebuildHr = BuildIndex(volume, cancelCheck, cancelCookie, stats, progress);
+            HRESULT rebuildHr = SeedTraversalIndex(volume, cancelCheck, cancelCookie, stats, progress);
             if (FAILED(rebuildHr))
             {
                 return rebuildHr;
@@ -6067,10 +6091,10 @@ void Repository::SetNextJournalReplayReadFailureForTests(DWORD error) noexcept
     g_nextJournalReplayReadFailureForTests = error;
 }
 
-void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept
+void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn, bool available) noexcept
 {
     g_nextJournalStateForTests = JournalState{
-        .available = true,
+        .available = available,
         .id        = id,
         .firstUsn  = firstUsn,
         .nextUsn   = nextUsn,
@@ -6080,6 +6104,11 @@ void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uin
 void Repository::ClearNextJournalStateForTests() noexcept
 {
     g_nextJournalStateForTests.reset();
+}
+
+void Repository::SetNextNtfsEnumerationFailureForTests(DWORD error) noexcept
+{
+    g_nextNtfsEnumerationFailureForTests = error;
 }
 
 HRESULT Repository::QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept

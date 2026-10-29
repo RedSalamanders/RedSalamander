@@ -768,6 +768,13 @@ The protected resolver scenario contains 128 palette entries and 512 semantic so
 
 Instrumentation uses `theme.resolve_us`, `theme.resolve.node_count`, `theme.resolve.edge_count`, `theme.dynamic.evaluate_us`, `theme.dynamic.evaluate_count`, and `redconfigure.theme.preview_resolve_us`. The deterministic selftest records at least 200 resolver samples and 250 dynamic batches so p95 is meaningful. Release guards are 16.667 ms for the worst allowed graph and 5 ms for a batch of 2,000 dynamic evaluations; Debug guards are 100 ms and 50 ms respectively. Changes to the resolver, compiled programs, preview recomputation, or dynamic paint consumption require same-machine archived evidence under `Specs/TestRuns/`.
 
+Resolver graph scratch is bounded by the authored nodes and dependency depth. It may borrow
+immutable input-node identities and active traversal names only during the synchronous call;
+no borrowed node/name escapes into the returned colors, dependency graph or compiled programs.
+Completed palette output is the palette cache. Reserving per-call containers and avoiding
+duplicate traversal-name ownership must preserve missing-reference, cycle, depth-32, event
+and dynamic-source results and every existing performance guard.
+
 ### Color keys (recommended set)
 
 Color keys are dot-separated identifiers. Unknown keys are ignored.

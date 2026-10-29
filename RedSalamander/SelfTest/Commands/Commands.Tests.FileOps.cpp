@@ -19789,6 +19789,33 @@ namespace
         std::error_code captureError;
         std::filesystem::create_directories(captures, captureError);
         state.Require(! captureError, L"Could not create the speed-dialog capture directory.");
+        const LONG_PTR styleBeforeProbe = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
+        state.Require(DebugProbeFileOperationsSpeedLimitPromptScreenshotAdmissionRequests(prompt) && GetWindowLongPtrW(prompt, GWL_EXSTYLE) == styleBeforeProbe,
+                      L"Empty, forged, wrong-type and wrong-operation admission messages must be rejected without changing the prompt.");
+        const auto capturePromptLayout = [&](std::wstring_view name, const std::filesystem::path& output) noexcept
+        {
+            const LONG_PTR captureStyle = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
+            RedSalamander::TestSupport::ScopedWindowScreenshotAdmission refusedWorkerAdmission(prompt);
+            state.Require(refusedWorkerAdmission.Status() == E_INVALIDARG && GetWindowLongPtrW(prompt, GWL_EXSTYLE) == captureStyle,
+                          L"Capture admission must reject this interaction worker without changing the prompt style.");
+            const HRESULT prepared = DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(prompt, true);
+            state.Require(SUCCEEDED(prepared),
+                          std::format(L"Could not prepare speed-dialog {} capture on its owning UI: hr=0x{:08X}.", name, static_cast<uint32_t>(prepared)));
+            if (FAILED(prepared))
+                return;
+            const LONG_PTR admittedStyle = GetWindowLongPtrW(prompt, GWL_EXSTYLE);
+            state.Require((admittedStyle & WS_EX_APPWINDOW) != 0 &&
+                              (admittedStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW)) == (captureStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW)),
+                          L"Owned-modal capture must borrow APPWINDOW while preserving all other extended-style bits.");
+            const HRESULT captured = RedSalamander::TestSupport::SaveWindowScreenshot(prompt, output);
+            const HRESULT restored = DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(prompt, false);
+            state.Require(SUCCEEDED(captured),
+                          std::format(L"The governed harness could not capture speed-dialog {} layout: hr=0x{:08X}.", name, static_cast<uint32_t>(captured)));
+            state.Require(SUCCEEDED(restored),
+                          std::format(L"Could not restore speed-dialog {} capture admission: hr=0x{:08X}.", name, static_cast<uint32_t>(restored)));
+            state.Require(GetWindowLongPtrW(prompt, GWL_EXSTYLE) == captureStyle,
+                          L"The governed speed-dialog capture must restore its original extended style.");
+        };
         const auto checkAndCaptureLayout = [&](std::wstring_view name) noexcept
         {
             for (size_t batch = 0u; batch < 5u; ++batch)
@@ -19811,8 +19838,7 @@ namespace
                             geometry.okBounds.top,
                             geometry.clientBounds.bottom));
             const auto filename = std::format(L"{}__fr-FR__{}dpi.png", name, GetDpiForWindow(prompt));
-            state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(prompt, captures / filename)),
-                          L"The governed harness could not capture the speed-dialog layout.");
+            capturePromptLayout(name, captures / filename);
         };
         checkAndCaptureLayout(L"initial");
         const UINT promptDpi = GetDpiForWindow(prompt);
@@ -20016,8 +20042,7 @@ namespace
                           static_cast<uint64_t>(finalShort.bodyContentHeightDip),
                           static_cast<uint64_t>(finalShort.bodyBounds.bottom - finalShort.bodyBounds.top),
                           S_OK);
-        state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(prompt, captures / L"short-validation-locale__fr-FR.png")),
-                      L"Could not retain the short validation/locale harness capture.");
+        capturePromptLayout(L"short-validation-locale", captures / L"short-validation-locale__fr-FR.png");
         state.Require(DebugSetFileOperationsSpeedLimitPromptClientHeightLimit(std::nullopt), L"Could not release this prompt's growth cap.");
         if (! state.failure.empty())
             return;
@@ -20043,6 +20068,7 @@ namespace
     std::atomic<bool> shutdownPromptObserved = false;
     HWND shutdownPrompt                      = nullptr;
     const HWND folderWindow                  = g_folderWindow.GetHwnd();
+    const auto admissionBeforeShutdown       = DebugGetFileOperationsSpeedLimitPromptAdmissionCounters();
     const auto shutdownStartedAt             = std::chrono::steady_clock::now();
     const bool shutdownInvoked               = RunFileOperationsSpeedLimitPromptModalCycle(popup,
                                                                                            openPrompt,
@@ -20057,11 +20083,17 @@ namespace
 
         state.Require(folderWindow != nullptr && IsWindow(folderWindow) != FALSE,
                       L"Folder-window handle unavailable for nested speed-limit prompt shutdown validation.");
+        state.Require(SUCCEEDED(DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(prompt, true)),
+                      L"Nested shutdown must retire an active UI-owned screenshot admission scope.");
         state.Require(PostMessageW(folderWindow, WndMsg::kFileOperationShutdownForSelfTest, taskId.value(), 0) != FALSE,
                       L"Failed to queue File Operations shutdown inside the custom speed-limit prompt pump.");
         state.Require(WaitForWindowClosed(prompt, SelfTest::Scale(3000ms)), L"Custom speed-limit prompt did not unwind after nested File Operations shutdown.");
     });
     HostResetPromptShutdown();
+    const auto admissionAfterShutdown = DebugGetFileOperationsSpeedLimitPromptAdmissionCounters();
+    state.Require(admissionAfterShutdown.retiredOnDestroy == admissionBeforeShutdown.retiredOnDestroy + 1u &&
+                      admissionAfterShutdown.failedRestorations == admissionBeforeShutdown.failedRestorations,
+                  L"Prompt destruction must restore active admission exactly once before the handled DxUi teardown releases its HWND.");
     const bool retainedDuringShutdown = g_folderWindow.DebugWasFileOperationStateRetainedDuringNestedPromptShutdown();
     auto* const freshFileOps          = g_folderWindow.DebugGetFileOperationState();
     Debug::Perf::Emit(L"FileOps.SelfTest.SpeedLimitPromptNestedShutdownUs",

@@ -230,15 +230,18 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
-    {
-        return HRESULT_FROM_WIN32(ERROR_BUSY);
-    }
-
-    if (entry->type != PluginType::Viewer || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
+    if (entry->type != PluginType::Viewer || entry->disabled)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        const HRESULT loadHr = EnsureLoaded(*entry);
+        if (FAILED(loadHr))
+            return loadHr;
+    }
+    if (! entry->loadable || ! entry->module || ! entry->createFactory)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 
     FactoryOptions options{};
     options.debugLevel = DEBUG_LEVEL_NONE;
@@ -277,14 +280,18 @@ HRESULT ViewerPluginManager::CreateTerminalInstance(std::wstring_view pluginId,
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
-    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
-    {
-        return HRESULT_FROM_WIN32(ERROR_BUSY);
-    }
-    if (entry->type != PluginType::Terminal || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
+    if (entry->type != PluginType::Terminal || entry->disabled)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        const HRESULT loadHr = EnsureLoaded(*entry);
+        if (FAILED(loadHr))
+            return loadHr;
+    }
+    if (! entry->loadable || ! entry->module || ! entry->createFactory)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 
     FactoryOptions options{};
     options.debugLevel = DEBUG_LEVEL_NONE;
@@ -822,6 +829,8 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     for (const PluginEntry& deferredEntry : _deferredUnloadEntries)
     {
         AddDeferredPlaceholder(deferredEntry);
+        // Retained module metadata predates this refresh; current settings govern new creation.
+        _plugins.back().disabled = ! deferredEntry.id.empty() && disabledIds.contains(ToLowerInvariant(deferredEntry.id));
         if (! deferredEntry.id.empty())
         {
             seenIds.insert(ToLowerInvariant(deferredEntry.id));

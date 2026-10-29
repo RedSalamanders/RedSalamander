@@ -1,4 +1,16 @@
 # Repository tooling
+
+Hosted CI/Full and nightly shuffle UI runs wrap native validation in
+`Invoke-RSWithHostedTestDesktop` from `Modules/Testing/HostedTestDesktop.psm1`.
+It selects a supported sufficient display mode, reports work-area/session/foreground facts,
+and restores the original mode on failure or success. It refuses local invocation; native
+focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
+
+The nightly shuffle consumer restores the exact pinned DxUi source before importing its portable
+attestation; receipt use still verifies that source identity and every attested output byte.
+Protected native actions check child exit status at the call site and throw on failure. A workflow
+reports success only after that check and display restoration complete.
+
 RedMonitor shares one vendored client header/license. Verify-RedMonitorClient.ps1 checks local hashes
 without Git/network/viewer work. Update-RedMonitorClient.ps1 -Commit FULL_SHA is the explicit dependency
 update operation. Restore-RedMonitor.ps1 is a compatibility alias for local verification only.
@@ -48,6 +60,14 @@ PR delegation uses `Get-ScopedPrWorkflowDigest` over reusable workflows, local a
 contents, tooling, scripts and build/test policy inputs. Changing a delegated test runner
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
+
+The standalone scheduler accepts empty cheap-work selections, including the real deferred
+Full remainder consisting of interactive viewer entries. It retains every later entry in
+its original order and does not turn deferred coverage into Full acceptance.
+
+Case inventory uses the native early-exit `--selftest-list-cases` protocol without
+acquiring the desktop lease. It performs no UI startup or case execution; actual native
+test processes retain their entry's warning, desktop admission and restoration.
 
 The PR build-policy guard checks the formatter job's PowerShell installer wiring and rejects
 Python/pip bootstrap only within that job. Formatter acquisition integrity is covered separately
@@ -325,6 +345,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
+| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only supported display selection, work-area/session/foreground diagnostics, and restoration around native qualification. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters plus result classification. |
@@ -443,3 +464,11 @@ the full output chain, including `.build`, cache files and executable parents. R
 the same open stream. An exclusive `.build/format/.install.lock` lease covers cache mutation
 and publication, fails immediately on contention and leaves an empty lock file after closing.
 `-WhatIf` creates neither the cache nor its lease file.
+
+## Archive inventory after source migration
+
+Archive inventory preserves unchanged pre-contract evidence through immutable Git ancestors, including
+the parentless import baseline documented in [the archive contract](../Specs/TestRuns/README.md).
+New or edited evidence retains the size, schema and identity gates; unavailable ancestry validates all
+tracked files. Hosted native checkout keeps complete public history so this inventory check executes.
+Changed evidence uses public origin/main before the legacy origin/master fallback.

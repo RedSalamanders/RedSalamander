@@ -2401,7 +2401,9 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         task.lastDiagnosticMessage += L"\n" + std::wstring(160u, L'W') + L"\n日本語 — été — final paragraph.";
                     if (scene == 29u)
                     {
-                        for (unsigned line = 0u; line < 260u; ++line)
+                        // Keep the overflow fixture taller than 4096 physical pixels even at
+                        // 96 DPI and the wide viewport, where each note uses only one line.
+                        for (unsigned line = 0u; line < 520u; ++line)
                             task.lastDiagnosticMessage += L"\n" + LoadStringResource(nullptr, IDS_FILEOPS_DIAG_IDENTITY_UNAVAILABLE);
                         task.lastDiagnosticMessage += L"\nEnd of long note.";
                     }
@@ -2584,7 +2586,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                     GetClientRect(popup.get(), &client);
                     const bool scrollFits = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), bottom) && bottom.taskLastNoteFits &&
                                             bottom.taskLastNotePrecedesProgress && bottom.taskLastNoteText == expectedNote &&
-                                            bottom.taskLastNoteLineCount > 260u && bottom.taskLastNoteRect.bottom - bottom.taskLastNoteRect.top > 4096.0f &&
+                                            bottom.taskLastNoteLineCount > 520u && bottom.taskLastNoteRect.bottom - bottom.taskLastNoteRect.top > 4096.0f &&
                                             bottom.taskLastNoteRect.top < 0.0f && bottom.taskLastNoteRect.bottom > 0.0f &&
                                             bottom.taskPaintedActionRowRect.bottom <= static_cast<float>(client.bottom);
                     passed                = scrollFits &&

@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-29T07:03:18.240Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261029T065644Z-83484-edc90692a8724fcdb79c716693275808\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 2230,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Captured service probes must run without allocating or inheriting an interactive console.",
+    "cases": [
+        {
+            "name": "test_support_child_process_runner_contract",
+            "status": "failed",
+            "duration_ms": 2155,
+            "repeat_index": 1,
+            "reason": "Captured service probes must run without allocating or inheriting an interactive console."
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

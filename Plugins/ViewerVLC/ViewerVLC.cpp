@@ -2149,6 +2149,15 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 return FALSE;
             }
+            if (state->presentHudForKeyboardFixture)
+            {
+                // Optional libVLC availability must not race the retained HUD's
+                // keyboard fixture. All async UI producers must have retired first.
+                if (_pendingLoadWorkCount != 0u || _pendingCloseCleanupCount != 0u || _closePending || _mediaSwitchInFlight)
+                    return FALSE;
+                SetLoadingUiVisible(false);
+                SetMissingUiVisible(false, {});
+            }
             _hudLengthMs            = std::max<int64_t>(0, state->lengthMs);
             _hudTimeMs              = (_hudLengthMs > 0) ? std::clamp<int64_t>(state->timeMs, 0, _hudLengthMs) : std::max<int64_t>(0, state->timeMs);
             _hudDragTimeMs          = _hudTimeMs;

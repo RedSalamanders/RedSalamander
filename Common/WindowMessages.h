@@ -668,6 +668,8 @@ struct ViewerVlcDebugPlaybackState
     int64_t lengthMs = 0;
     int volume       = 100;
     bool muted       = false;
+    // Present the real HUD after loader retirement; never changes keyboard focus.
+    bool presentHudForKeyboardFixture = false;
 };
 
 struct ViewerVlcDebugWheel

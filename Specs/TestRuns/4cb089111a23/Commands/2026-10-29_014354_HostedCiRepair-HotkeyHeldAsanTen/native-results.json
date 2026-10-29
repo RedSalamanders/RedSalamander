@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-10-29T01:59:03.790Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261029T014354Z-41464-bed122fc907c49c68180897a1c1d61f9\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3673,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 34,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 39,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_selftest_foreground_admission_hotkey_contract",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

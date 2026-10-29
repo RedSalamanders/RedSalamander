@@ -1,0 +1,72 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134932Z-103736-876b0d73b3214faeb4efb3c9ab18f642\scratch\viewer-pe\webview2-84852-111003031
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo parent captures the desktop restoration boundary
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo harness path resolves
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness owns captured output pipes (error=0)
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness owns noninteractive standard input
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo inherited-handle attribute size resolves
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo inherited-handle attribute list initializes
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo restricts inherited handles to its three standard streams
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness kill-on-close job object is created
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness kill-on-close job object is configured
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process launches
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process joins the kill-on-close job
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process resumes
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process exits before timeout
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness process reports an exit code
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo fresh harness run passes (exit=0x00000000)
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo parent terminates only its remaining owned descendants
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo owned job has no active processes before desktop restoration
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo parent observes exact saved foreground and keyboard focus without restoration writes
+[PASS] TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo retains complete bounded stdout and stderr
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134932Z-103736-876b0d73b3214faeb4efb3c9ab18f642\scratch\viewer-pe\webview2-100444-111003046
+[PASS] ViewerWeb test executable path resolves
+[PASS] ViewerWeb.dll is present for runtime validation
+[PASS] ViewerWeb.dll loads successfully
+[PASS] ViewerWeb factory export is available
+[PASS] ViewerWeb combo fixture requires the production shutdown and unload gates
+[PASS] ViewerWeb factory creates an IViewer instance
+[PASS] ViewerWeb fixture TestSandbox root is available
+[PASS] ViewerWeb window open succeeds
+[PASS] ViewerWeb window becomes visible
+[PASS] ViewerWeb exposes visible child host content when alternate files exist
+[PASS] ViewerWeb does not expose a visible legacy ComboBox child
+[PASS] ViewerWeb detaches the native window menu after attaching the DxUi menu bar
+[PASS] ViewerWeb exposes a visible DxUi menu bar host child
+[PASS] ViewerWeb answers the hidden menu-model debug contract
+[PASS] ViewerWeb keeps a hidden HMENU model for DxUi menu conversion
+[PASS] ViewerWeb hidden HMENU model keeps zero owner-draw items after DxUi menu migration
+[PASS] ViewerWeb exposes a DxUi combo host child
+[PASS] ViewerWeb DxUi combo host is visible
+[PASS] ViewerWeb DxUi combo host uses SS_NOTIFY so mouse clicks reach the shared host
+[PASS] ViewerWeb DxUi combo host activates on mouse click
+[PASS] ViewerWeb DxUi combo host expands to show its popup rows on click
+[PASS] ViewerWeb DxUi combo host collapses back to header height after Escape
+[PASS] ViewerWeb stays open when Escape leaves the file combo chrome
+[PASS] ViewerWeb DxUi combo host returns keyboard focus after Escape
+[PASS] ViewerWeb DxUi combo host returns keyboard focus after Tab wraps
+[PASS] ViewerWeb exposes a visible combo host for compact chrome validation
+[PASS] ViewerWeb file combo chrome uses a compact 28 DIP control height (height=28, max=30)
+[PASS] ViewerWeb exposes a DxUi combo host child for UIA checks
+[PASS] ViewerWeb DxUi combo host answers WM_GETOBJECT
+[PASS] ViewerWeb DxUi combo host exposes a traversable UIA subtree
+[PASS] ViewerWeb DxUi combo host exposes visible UIA elements
+[PASS] ViewerWeb DxUi combo host exposes a visible UIA ComboBox descendant
+[PASS] ViewerWeb DxUi combo host exposes live combo UIA patterns
+[PASS] ViewerWeb DxUi combo host exposes the current selection text through UIA
+[PASS] ViewerWeb window close succeeds
+[PASS] ViewerWeb window closes cleanly
+[PASS] ViewerWeb factory creates an embedded IViewer instance
+[PASS] ViewerWeb embedded host window is created
+[PASS] ViewerWeb embedded viewer open succeeds
+[PASS] ViewerWeb embedded child window becomes visible
+[PASS] ViewerWeb embedded viewer hides the standalone filename combo host
+[PASS] ViewerWeb embedded viewer has no visible legacy ComboBox child
+[PASS] ViewerWeb embedded viewer has no top-level native menu
+[PASS] ViewerWeb embedded viewer close succeeds
+[PASS] ViewerWeb embedded child window closes cleanly
+[PASS] ViewerWeb combo fixture retires all COM callbacks before releasing its module
+ViewerPETests passed.
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

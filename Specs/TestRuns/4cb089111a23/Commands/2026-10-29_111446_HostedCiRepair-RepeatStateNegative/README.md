@@ -1,0 +1,1 @@
+Original repeated-fixture ASan control: settings future-schema and immutable-save cases and thumbnail size transition pass once, then each fails repetitions two and three; all three isolated theme performance invocations pass. No skipped cases. Keep this failed control; it is not qualified acceptance.

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include "ViewerSpace.Hosts.h"
 
 #include <array>
 #include <cstddef>
@@ -13,8 +13,6 @@
 #include <string_view>
 
 #include <DxUi/DxUi.h>
-
-#include "ViewerSpace.Hosts.h"
 
 namespace ViewerSpaceAnalysis
 {

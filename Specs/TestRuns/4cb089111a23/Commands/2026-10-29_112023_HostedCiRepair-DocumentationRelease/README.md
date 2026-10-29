@@ -1,0 +1,1 @@
+Test-enabled Release static gallery: all Unicode, arm-consumption, no-shell, synthetic-data and foreground-observer assertions pass. 45 harness captures remain in the local run; Terminal Find and File Operations preferences were visually inspected. This is focused runtime acceptance, not Full or performance trend evidence.

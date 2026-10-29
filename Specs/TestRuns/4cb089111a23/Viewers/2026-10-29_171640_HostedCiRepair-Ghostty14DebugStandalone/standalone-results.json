@@ -1,0 +1,26 @@
+[
+  {
+    "batch": "viewer-containment",
+    "configuration": "Debug",
+    "exit_code": 0,
+    "run_id": "20261029T171640Z-52724-0fed140039ea4545a7aed6ff934a82f3",
+    "receipt_id": "333e985662480e39ff9c40b6a2074c74d5dc4df06260cbf325f24b1684d498bd",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  },
+  {
+    "batch": "viewer-observation",
+    "configuration": "Debug",
+    "exit_code": 0,
+    "run_id": "20261029T171640Z-52724-0fed140039ea4545a7aed6ff934a82f3",
+    "receipt_id": "333e985662480e39ff9c40b6a2074c74d5dc4df06260cbf325f24b1684d498bd",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  },
+  {
+    "batch": "terminal-selftests",
+    "configuration": "Debug",
+    "exit_code": 0,
+    "run_id": "20261029T171640Z-52724-0fed140039ea4545a7aed6ff934a82f3",
+    "receipt_id": "333e985662480e39ff9c40b6a2074c74d5dc4df06260cbf325f24b1684d498bd",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  }
+]

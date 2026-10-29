@@ -215,6 +215,7 @@ private:
         Key key{};
         wil::com_ptr<IFilesInformation> info;
         uint64_t bytes           = 0;
+        uint64_t dirtyVersion    = 1;
         bool dirty               = true;
         bool refreshPosted       = false;
         bool loading             = false;

@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-10-29T08:31:45.777Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261029T082549Z-64564-753e0db2692341aeaffabccdf77946cd\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 5616,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 292,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 281,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 280,
+            "repeat_index": 3
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 4
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 285,
+            "repeat_index": 5
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 282,
+            "repeat_index": 6
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 282,
+            "repeat_index": 7
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 283,
+            "repeat_index": 8
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 283,
+            "repeat_index": 9
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 277,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

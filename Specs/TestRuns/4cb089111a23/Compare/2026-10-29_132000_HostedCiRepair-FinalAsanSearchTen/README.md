@@ -1,0 +1,1 @@
+Exact committed candidate x64 ASan Debug: three captured-runner, second-instance service and resource-scoped writer cases repeated ten times; 30 passed with no skips or retries. Console absence, exact captured bytes, duplicate exit and primary liveness are retained.

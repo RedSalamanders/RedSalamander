@@ -15,6 +15,43 @@ function New-RSArchiveContractRoot {
             -Case ("test-run-archive-" + [guid]::NewGuid().ToString('N')))
 }
 
+function New-RSArchiveMigrationFixture {
+    $root = New-RSArchiveContractRoot
+    & git -C $root init --quiet --initial-branch=main
+    & git -C $root config core.longpaths true
+    & git -C $root config user.email 'archive-contract@example.invalid'
+    & git -C $root config user.name 'Archive Contract'
+    $legacy = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-01_120000/legacy.raw'
+    $new = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-20_120000/new.raw'
+    foreach ($path in @($legacy, $new)) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $root $path)) -Force | Out-Null
+    }
+    [IO.File]::WriteAllBytes((Join-Path $root $legacy), [byte[]]::new(2049))
+    & git -C $root add -- $legacy
+    & git -C $root commit --quiet -m 'immutable pre-contract fixture'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to create the legacy archive baseline fixture.' }
+    $baseline = (& git -C $root rev-parse HEAD).Trim()
+    & git -C $root update-ref refs/remotes/origin/main $baseline
+    & git -C $root switch --quiet -c ej/archive-contract
+    [IO.File]::WriteAllBytes((Join-Path $root $new), [byte[]]::new(2049))
+    & git -C $root add -- $new
+    & git -C $root commit --quiet -m 'new governed invalid fixture'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to create the post-contract archive fixture.' }
+    return [pscustomobject]@{ Root = $root; Baseline = $baseline; Legacy = $legacy; New = $new }
+}
+
+function Get-RSArchiveMigrationFixtureInventory {
+    param([string]$Root, [string]$Baseline)
+    return @(& (Get-Module TestRunArchive) {
+        param($FixtureRoot, $FixtureBaseline)
+        $previous = $script:RSTestRunArchiveImportedBaselineCommit
+        try {
+            $script:RSTestRunArchiveImportedBaselineCommit = $FixtureBaseline
+            Get-RSTestRunArchiveInventoryPaths -RepoRoot $FixtureRoot
+        } finally { $script:RSTestRunArchiveImportedBaselineCommit = $previous }
+    } $Root $Baseline)
+}
+
 function Write-RSMetricFile {
     param(
         [Parameter(Mandatory = $true)]
@@ -161,19 +198,23 @@ function Invoke-RSArchiveValidatorProcess {
 Describe 'TestRuns archive contract' {
     # Specs/TestRuns is gitignored evidence: the archives these contracts inspect exist only on the
     # machines that produced them. The inventory is governed from the archive contract commit, which a
-    # squashed or shallow clone (hosted runners check out one commit) does not carry; there
+    # squashed or shallow clone without either immutable ancestor does not carry; there
     # Get-RSTestRunArchiveInventoryPaths returns every tracked file, grandfathered evidence included.
     # Skip those cases there instead of failing every clone (Testing_SelfTests.md).
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
     $archiveContractCommit = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveContractCommit }
     & git -C $repoRoot merge-base --is-ancestor $archiveContractCommit HEAD *> $null
     $archiveContractInHistory = ($LASTEXITCODE -eq 0)
-    $checkedInInventoryPresent = $archiveContractInHistory -and @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
+    $importedBaseline = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveImportedBaselineCommit }
+    & git -C $repoRoot merge-base --is-ancestor $importedBaseline HEAD *> $null
+    $importedBaselineInHistory = ($LASTEXITCODE -eq 0)
+    $hasInventoryBaseline = $archiveContractInHistory -or $importedBaselineInHistory
+    $checkedInInventoryPresent = $hasInventoryBaseline -and @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
     if (-not $fileOpsSummaryArchivePresent) {
         Write-Host 'Skipping the FileOps summary archive contract: Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550 is not present (gitignored archive).'
     }
-    if (-not $archiveContractInHistory) {
-        Write-Host "Skipping the archive inventory contract: contract commit $($archiveContractCommit.Substring(0, 9)) is not in this (squashed or shallow) clone."
+    if (-not $hasInventoryBaseline) {
+        Write-Host 'Skipping the real archive inventory contract: neither immutable baseline is in this clone; explicit Inventory still validates all files.'
     } elseif (-not $checkedInInventoryPresent) {
         Write-Host 'Skipping the archive inventory contract: no Specs\TestRuns archive is present (gitignored archive).'
     }
@@ -370,6 +411,77 @@ Describe 'TestRuns archive contract' {
         $result.ExitCode | Should Be 1
         $result.Output | Should Match 'FileSize:.*perf_metrics\.jsonl:.*maximum is 2048 bytes'
         $result.Output | Should Not Match 'archive contract passed'
+    }
+
+    It 'retains the imported pre-contract boundary while rejecting new committed archives' {
+        $fixture = New-RSArchiveMigrationFixture
+        $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+        $paths.Count | Should Be 1
+        $paths[0] | Should Be $fixture.New
+        $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths -MaxFileBytes 2KB -MaxRunBytes 4KB)
+        @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 1
+        $violations.Path | Should Match 'new\.raw'
+        $explicit = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths @($fixture.Legacy) -MaxFileBytes 2KB -MaxRunBytes 4KB)
+        @($explicit | Where-Object Kind -eq 'FileSize').Count | Should Be 1
+    }
+
+    It 'rejects committed and uncommitted edits to imported legacy evidence' {
+        $fixture = New-RSArchiveMigrationFixture
+        [IO.File]::WriteAllBytes((Join-Path $fixture.Root $fixture.Legacy), [byte[]]::new(2050))
+        $dirty = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+        $dirty.Count | Should Be 2
+        & git -C $fixture.Root add -- $fixture.Legacy
+        $staged = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+        $staged.Count | Should Be 2
+        & git -C $fixture.Root commit --quiet -m 'edited legacy fixture'
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the edited legacy fixture.' }
+        $committed = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+        $committed.Count | Should Be 2
+        $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $committed -MaxFileBytes 2KB -MaxRunBytes 4KB)
+        @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 2
+    }
+
+    It 'validates staged and committed moves of grandfathered blobs at their new paths' {
+        $fixture = New-RSArchiveMigrationFixture
+        & git -C $fixture.Root config diff.renames true
+        $moved = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-21_120000/moved.raw'
+        New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $fixture.Root $moved)) -Force | Out-Null
+        & git -C $fixture.Root mv -- $fixture.Legacy $moved
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to stage the legacy evidence move.' }
+        foreach ($phase in @('staged', 'committed')) {
+            if ($phase -eq 'committed') {
+                & git -C $fixture.Root commit --quiet -m 'moved legacy evidence fixture'
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the legacy evidence move.' }
+            }
+            $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
+            $paths.Count | Should Be 2
+            ($paths -contains $moved) | Should Be $true
+            $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths -MaxFileBytes 2KB -MaxRunBytes 4KB)
+            @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 2
+            $changed = @(Get-RSChangedTestRunArchivePaths -RepoRoot $fixture.Root)
+            $changed.Count | Should Be 2
+            ($changed -contains $moved) | Should Be $true
+        }
+    }
+
+    It 'fails closed when an imported baseline object is present but is not an ancestor' {
+        $fixture = New-RSArchiveMigrationFixture
+        $tree = (& git -C $fixture.Root rev-parse 'HEAD^{tree}').Trim()
+        $unrelated = (& git -C $fixture.Root commit-tree $tree -m 'unrelated parentless fixture').Trim()
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to create the unrelated baseline object.' }
+        $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $unrelated)
+        $paths.Count | Should Be 2
+        $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths -MaxFileBytes 2KB -MaxRunBytes 4KB)
+        @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 2
+    }
+
+    It 'checks committed branch evidence against origin main in a history-free import' {
+        $fixture = New-RSArchiveMigrationFixture
+        $paths = @(Get-RSChangedTestRunArchivePaths -RepoRoot $fixture.Root)
+        $paths.Count | Should Be 1
+        $paths[0] | Should Be $fixture.New
+        $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths -MaxFileBytes 2KB -MaxRunBytes 4KB)
+        @($violations | Where-Object Kind -eq 'FileSize').Count | Should Be 1
     }
 
     It 'rejects a newly produced oversized run before staging and never prints a green closeout' {

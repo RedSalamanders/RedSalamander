@@ -48,6 +48,9 @@ namespace FileSystemInternal
 const int kFileSystemModuleAnchor = 0;
 std::atomic<uint64_t> g_copyTempPathCounter{0};
 
+constexpr unsigned int kFileOpsMaxTransferWorkers   = 16u;
+constexpr unsigned int kFileOpsSchedulerWorkerSlots = kFileOpsMaxTransferWorkers + 1u;
+
 // Result of one step of a dynamic (self-feeding) job. Dynamic jobs replace the old
 // long-lived `for(;;)` consumer loops: a worker processes ONE unit per dispatch and
 // returns to the pool between units, so concurrent jobs round-robin fairly instead of
@@ -162,6 +165,7 @@ public:
 
         {
             std::scoped_lock lock(_mutex);
+            job->maxConcurrency = std::min(job->maxConcurrency, transferCapacity());
             _jobs.push_back(job);
         }
 
@@ -200,8 +204,8 @@ public:
 
         if (_workers.empty())
         {
-            // No worker pool: drain on the calling thread. The job is self-feeding, so
-            // a single drainer makes progress until the step reports Finished.
+            // No worker pool: drain on the calling thread. The job is self-feeding,
+            // so a single drainer makes progress until the step reports Finished.
             if (job->processDynamic)
             {
                 for (;;)
@@ -224,6 +228,7 @@ public:
 
         {
             std::scoped_lock lock(_mutex);
+            job->maxConcurrency = std::min(job->maxConcurrency, transferCapacity());
             _jobs.push_back(job);
         }
 
@@ -396,6 +401,15 @@ private:
     static inline thread_local const SharedFileOpsJobScheduler* tls_scheduler = nullptr;
     static inline thread_local uint64_t tls_workerStreamId                    = 0;
 
+    [[nodiscard]] unsigned int transferCapacity() const noexcept
+    {
+        // Producers stop before ShutdownAndJoin mutates the initialized pool.
+        // Base the reserve on successfully created workers, including a partial
+        // pool.
+        const size_t capacity = _workers.size() > 1u ? _workers.size() - 1u : 1u;
+        return static_cast<unsigned int>(std::min(capacity, static_cast<size_t>(kFileOpsMaxTransferWorkers)));
+    }
+
     void ensureWorkers()
     {
         std::scoped_lock lock(_initMutex);
@@ -410,17 +424,21 @@ private:
             workerCount = 4;
         }
 
-        constexpr unsigned int kMaxWorkers = 16u;
-        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+        // A single transfer job must leave one worker available for another job's
+        // first unit. Round robin alone cannot preempt four throttled file copies.
+        workerCount = std::clamp(workerCount, 4u, kFileOpsMaxTransferWorkers) + 1u;
 
         _workers.reserve(workerCount);
         for (unsigned int i = 0; i < workerCount; ++i)
         {
-            // Pin the module so the DLL cannot be unloaded while worker threads are running.
+            // Pin the module so the DLL cannot be unloaded while worker threads are
+            // running.
             wil::unique_hmodule modulePin = AcquireModuleReferenceFromAddress(&kFileSystemModuleAnchor);
             if (! modulePin)
             {
-                Debug::Error(L"FileSystem: Failed to pin module for job scheduler worker thread {}", i);
+                Debug::Error(L"FileSystem: Failed to pin module for job scheduler "
+                             L"worker thread {}",
+                             i);
                 break;
             }
 
@@ -987,7 +1005,7 @@ namespace
 #pragma warning(push)
 // C4625 (copy ctor deleted), C4626 (copy assign deleted)
 #pragma warning(disable : 4625 4626)
-constexpr size_t kMaxBandwidthThrottleWorkers = 16u;
+constexpr size_t kMaxBandwidthThrottleWorkers = kFileOpsSchedulerWorkerSlots;
 
 #if defined(ENABLE_TESTS)
 constexpr std::wstring_view kAbortOwnedStageUnknownPathEnvVar       = L"REDSALAMANDER_FILEOPS_ABORT_OWNED_STAGE_UNKNOWN_PATH";
@@ -7925,7 +7943,7 @@ struct RecursiveCopyWorkItem
     // happens to run, so progress-stream ids (and therefore bandwidth-graph colours)
     // stay stable per stream. A worker stream never runs two steps at once, so a slot
     // is only ever touched by one thread; the mutex just serialises lazy init.
-    constexpr size_t kStreamContextSlots = kMaxWorkers;
+    constexpr size_t kStreamContextSlots = kFileOpsSchedulerWorkerSlots;
     std::array<std::optional<OperationContext>, kStreamContextSlots> streamContexts{};
     std::mutex streamContextsMutex;
     const auto getStreamContext = [&](uint64_t streamId) -> OperationContext&

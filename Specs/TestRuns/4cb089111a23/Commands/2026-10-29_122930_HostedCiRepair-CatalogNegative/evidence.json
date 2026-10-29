@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "ca9b88a0f173b382588f7792d98a3dbc9235195b1a97950a872020f2d7c867a3",
+  "buildReceiptId": "6469c207e5569054b1bc45abb3f0c573a3b5ab32f3e337f89fa4a9f0a4414103",
+  "profile": "x64 Debug",
+  "runId": "20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c",
+  "passed": 9,
+  "failed": 3,
+  "skipped": 0,
+  "nativeDurationMs": 78863,
+  "scope": "Independent original-loop catalog control: a real 16-theme catalog rejects the unchanged System end-state assertion on all three 240-command invocations. The settings and thumbnail fixture repairs pass all nine corresponding invocations. Retain this deliberate negative control. No assertion, resource or time limit is relaxed; no performance comparison is claimed.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "4978c53dc64bacdd979d8a4234e43e051aaceb9960af9636dfd0ab8a6bf32f17"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 378,
+      "sha256": "6592175cdce7b788f80808230fe81b35caa2c590c14e98e453be5a7cb708ad79"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 67610,
+      "sha256": "8297e76073929c480a557cc3c2c42af709aa70dd944a6bba18201ab3e641967f"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 132566,
+      "sha256": "db00c2d7f2877ce704157b61e0c98801a1440413c71b0fec9022a86e94d17e6e"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 3041,
+      "sha256": "52f4e7e190e35bce906ff8deb2f109125bb53bd76f0e42205b79997ed7305fd0"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 367,
+      "sha256": "f1afb92120726756d8ae52962b90d7d29fea41fae569bf4659f88fd9056a2c83"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 7019,
+      "sha256": "5ec9b60731d4a62b253675ec27f76561325dcf1c81d2a3c041b774cf5aac8393"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 26294,
+      "sha256": "47b49c031ca57418f98ed10454408471d4e782d6389d00c0ff45f5c13f0d7d5d"
+    }
+  ]
+}

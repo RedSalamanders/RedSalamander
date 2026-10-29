@@ -71,6 +71,23 @@ inline void FailNextLocalFileTransactionPublish(HRESULT hr) noexcept
 {
     return g_nextPublishFailure.exchange(S_OK, std::memory_order_relaxed);
 }
+
+struct LocalFileTransactionRollbackSnapshot final
+{
+    bool ownedHandle         = false;
+    bool posixDisposition    = false;
+    DWORD posixError         = ERROR_SUCCESS;
+    bool legacyDisposition   = false;
+    DWORD legacyError        = ERROR_SUCCESS;
+    bool pathDeleteAttempted = false;
+    DWORD pathDeleteError    = ERROR_SUCCESS;
+};
+inline thread_local LocalFileTransactionRollbackSnapshot g_lastRollbackSnapshot{};
+
+[[nodiscard]] inline LocalFileTransactionRollbackSnapshot LastLocalFileTransactionRollback() noexcept
+{
+    return g_lastRollbackSnapshot;
+}
 } // namespace Testing
 #endif
 
@@ -83,7 +100,7 @@ inline void FailNextLocalFileTransactionPublish(HRESULT hr) noexcept
 class LocalFileTransaction final
 {
 public:
-    LocalFileTransaction() noexcept = default;
+    LocalFileTransaction() noexcept                              = default;
     LocalFileTransaction(const LocalFileTransaction&)            = delete;
     LocalFileTransaction& operator=(const LocalFileTransaction&) = delete;
 
@@ -138,10 +155,8 @@ public:
         }
 
         const std::filesystem::path parent = normalizedTarget.parent_path();
-        const std::filesystem::path extendedParent(
-            Common::Paths::ToExtendedWin32Path(parent.native()));
-        const std::filesystem::path extendedTarget(
-            Common::Paths::ToExtendedWin32Path(normalizedTarget.native()));
+        const std::filesystem::path extendedParent(Common::Paths::ToExtendedWin32Path(parent.native()));
+        const std::filesystem::path extendedTarget(Common::Paths::ToExtendedWin32Path(normalizedTarget.native()));
         if (createParentDirectories)
         {
             std::filesystem::create_directories(extendedParent, ec);
@@ -228,8 +243,7 @@ public:
         return Write(bytes.data(), bytes.size());
     }
 
-    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize = std::nullopt,
-                                 BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr) noexcept
+    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize = std::nullopt, BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr) noexcept
     {
         if (! _file || _temporaryPath.empty() || _targetPath.empty() || _committed)
         {
@@ -287,7 +301,7 @@ public:
             {
                 return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
             }
-            const size_t fileNameBytes = targetNative.size() * sizeof(wchar_t);
+            const size_t fileNameBytes    = targetNative.size() * sizeof(wchar_t);
             constexpr size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
             if (fileNameBytes > (std::numeric_limits<DWORD>::max)() - kHeaderBytes - sizeof(wchar_t) ||
                 fileNameBytes > (std::numeric_limits<size_t>::max)() - kHeaderBytes - sizeof(wchar_t))
@@ -295,13 +309,12 @@ public:
                 return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
             }
             std::vector<std::byte> renameStorage(kHeaderBytes + fileNameBytes + sizeof(wchar_t));
-            auto* const rename = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
-            rename->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
-            rename->RootDirectory = nullptr;
+            auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
+            rename->Flags          = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+            rename->RootDirectory  = nullptr;
             rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
             std::memcpy(rename->FileName, targetNative.data(), fileNameBytes);
-            if (SetFileInformationByHandle(
-                    _file.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) != FALSE)
+            if (SetFileInformationByHandle(_file.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) != FALSE)
             {
                 _file.reset();
                 _temporaryPath.clear();
@@ -313,25 +326,19 @@ public:
                 return S_OK;
             }
             handleRenameError = GetLastError();
-            if (handleRenameError != ERROR_INVALID_PARAMETER &&
-                handleRenameError != ERROR_INVALID_FUNCTION &&
-                handleRenameError != ERROR_NOT_SUPPORTED &&
-                handleRenameError != ERROR_CALL_NOT_IMPLEMENTED &&
-                handleRenameError != ERROR_ACCESS_DENIED)
+            if (handleRenameError != ERROR_INVALID_PARAMETER && handleRenameError != ERROR_INVALID_FUNCTION && handleRenameError != ERROR_NOT_SUPPORTED &&
+                handleRenameError != ERROR_CALL_NOT_IMPLEMENTED && handleRenameError != ERROR_ACCESS_DENIED)
             {
                 return HRESULT_FROM_WIN32(handleRenameError == ERROR_SUCCESS ? ERROR_WRITE_FAULT : handleRenameError);
             }
         }
 
         _file.reset();
-        const DWORD moveFlags = MOVEFILE_WRITE_THROUGH |
-                                (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
+        const DWORD moveFlags = MOVEFILE_WRITE_THROUGH | (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
         if (MoveFileExW(_temporaryPath.c_str(), _targetPath.c_str(), moveFlags) == FALSE)
         {
             const DWORD error = GetLastError();
-            return HRESULT_FROM_WIN32(
-                error != ERROR_SUCCESS ? error
-                                       : (handleRenameError != ERROR_SUCCESS ? handleRenameError : ERROR_WRITE_FAULT));
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : (handleRenameError != ERROR_SUCCESS ? handleRenameError : ERROR_WRITE_FAULT));
         }
 
         _temporaryPath.clear();
@@ -355,11 +362,46 @@ public:
 
     void Abort() noexcept
     {
-        _file.reset();
-        if (! _committed && ! _temporaryPath.empty())
+#ifdef ENABLE_TESTS
+        Testing::LocalFileTransactionRollbackSnapshot rollback{.ownedHandle = static_cast<bool>(_file)};
+        const bool observedRollback = ! _committed && ! _temporaryPath.empty();
+#endif
+        bool markedForDeletion = false;
+        if (_file && ! _committed && ! _temporaryPath.empty())
         {
-            static_cast<void>(DeleteFileW(_temporaryPath.c_str()));
+            // Retire the private entry through its owned DELETE-capable handle.
+            // Closing first opens a race with a reader that denies a path delete.
+            FILE_DISPOSITION_INFO_EX disposition{.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS};
+            markedForDeletion = SetFileInformationByHandle(_file.get(), FileDispositionInfoEx, &disposition, sizeof(disposition)) != FALSE;
+#ifdef ENABLE_TESTS
+            rollback.posixDisposition = markedForDeletion;
+            rollback.posixError       = markedForDeletion ? ERROR_SUCCESS : GetLastError();
+#endif
+            if (! markedForDeletion)
+            {
+                FILE_DISPOSITION_INFO legacyDisposition{.DeleteFile = TRUE};
+                markedForDeletion = SetFileInformationByHandle(_file.get(), FileDispositionInfo, &legacyDisposition, sizeof(legacyDisposition)) != FALSE;
+#ifdef ENABLE_TESTS
+                rollback.legacyDisposition = markedForDeletion;
+                rollback.legacyError       = markedForDeletion ? ERROR_SUCCESS : GetLastError();
+#endif
+            }
         }
+        _file.reset();
+        if (! markedForDeletion && ! _committed && ! _temporaryPath.empty())
+        {
+            const BOOL removed = DeleteFileW(_temporaryPath.c_str());
+#ifdef ENABLE_TESTS
+            rollback.pathDeleteAttempted = true;
+            rollback.pathDeleteError     = removed != FALSE ? ERROR_SUCCESS : GetLastError();
+#else
+            static_cast<void>(removed);
+#endif
+        }
+#ifdef ENABLE_TESTS
+        if (observedRollback)
+            Testing::g_lastRollbackSnapshot = rollback;
+#endif
         _temporaryPath.clear();
         _targetPath.clear();
         _committed = false;

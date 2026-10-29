@@ -1,0 +1,202 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-29T17:15:25.7156719Z",
+  "run_ended_utc": "2026-10-29T17:16:23.2743884Z",
+  "duration_ms": 57559,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "E:\\RedSalamander.Perf\\ci-repair-20261028\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261029T171454Z-52724-fa56420cfe7a467ba0694300e3c73708\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "20261029T171454Z-52724-fa56420cfe7a467ba0694300e3c73708",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_pane_find_dialog_restores_persisted_sort_order,terminal_shortcut_floating_singleton_tabs_restore_and_close,cmd_terminal_session_menu_floating_dispatch,cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+  "exit_code": 0,
+  "passed": 15,
+  "failed": 0,
+  "skipped": 0,
+  "total": 15,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 5,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "20261029T171454Z-52724-fa56420cfe7a467ba0694300e3c73708",
+    "allowed_run_ids": [
+      "20261029T171454Z-52724-fa56420cfe7a467ba0694300e3c73708"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\changes-workflow-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr119-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr120-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\loc-20261010125413",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\pester-20261010125254",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 35083,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 3,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1666,
+          "attempt": 1
+        },
+        {
+          "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1417,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_terminal_session_menu_floating_dispatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 634,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1058,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 166,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1692,
+          "attempt": 2
+        },
+        {
+          "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5032,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_terminal_session_menu_floating_dispatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 804,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3713,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 328,
+          "attempt": 2
+        },
+        {
+          "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1704,
+          "attempt": 3
+        },
+        {
+          "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1480,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_terminal_session_menu_floating_dispatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 760,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5083,
+          "attempt": 3
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 302,
+          "attempt": 3
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

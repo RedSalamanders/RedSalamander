@@ -1,0 +1,1 @@
+Exact committed candidate x64 Debug ordinary remediation entry. Directly executes owned-volume operation-path acceptance and root/sibling/relative/traversal/foreign GUID/drive-letter/bus/mount/NTFS refusal controls, without mounting a disk or taking focus; original remediation checks retained.

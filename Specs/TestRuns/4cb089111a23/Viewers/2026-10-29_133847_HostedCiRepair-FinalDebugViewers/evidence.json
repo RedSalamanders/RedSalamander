@@ -1,0 +1,59 @@
+{
+  "schema": "hosted-ci-repair.viewer-regressions.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "853ff02833077cdc5dfa273f730dbfb96a80ec327036ba78c109603530886609",
+  "profile": "x64 Debug",
+  "runId": "20261029T133847Z-100876-d7541d7490234b47a56d10693d0e24eb",
+  "selected": 5,
+  "passed": 5,
+  "failed": 0,
+  "scope": "Five supported x64 Debug focused ViewerPE cases pass: containment and exact read-only desktop identity controls, applied TIFF/fallback orientation, bounded Text close, Web combo quiet teardown and actual VLC HUD Tab routing. Parent desktop guards pass. Focused coverage only, not Full.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "4fe7f9d45ac83f22ed378ec4482c13d1ff83ed1e7576cd805114c7188af4b863"
+    },
+    {
+      "path": "final-v6-debug-viewers-containment.txt",
+      "byteCount": 5617,
+      "sha256": "fc29745da9667233a1693f8331449234082b56a6da83a4847d1af87400fb3826"
+    },
+    {
+      "path": "final-v6-debug-viewers-image-orientation.txt",
+      "byteCount": 19712,
+      "sha256": "2c9eca41d5ddbf79cae55f15c77786819399fd0b3c955c3c08dccb785d9205d5"
+    },
+    {
+      "path": "final-v6-debug-viewers-text-close.txt",
+      "byteCount": 13114,
+      "sha256": "49121aae3eb96de56030e08cf11977aaddc2196f0ca97b8e2223165489f4565f"
+    },
+    {
+      "path": "final-v6-debug-viewers-vlc-focus.txt",
+      "byteCount": 4165,
+      "sha256": "2183c080de72cc51d1e63e5a03ca52ba4bd474397c4b3f00b5bf66c06eb26900"
+    },
+    {
+      "path": "final-v6-debug-viewers-web-combo.txt",
+      "byteCount": 5639,
+      "sha256": "e5af890fb452faad9d0190caa70b4745a4c9b8b46581e1d85aace5f25791d2ec"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 287,
+      "sha256": "e71bf5f9b2229d6fe2bcef356d9ded56ee4878ed8dae6228ee5ff8f20281e50e"
+    },
+    {
+      "path": "runtime-results.json",
+      "byteCount": 2489,
+      "sha256": "683e9606ceca78ff63a8dea2cd90d861786eff42fc9d8574b5b762a25505d132"
+    }
+  ]
+}

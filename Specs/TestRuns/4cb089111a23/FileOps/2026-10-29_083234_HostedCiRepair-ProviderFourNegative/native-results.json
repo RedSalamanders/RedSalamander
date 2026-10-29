@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-10-29T08:45:53.324Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261029T083234Z-72968-860900ab169e4aedb613d98f265324aa\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 6047,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "R4-A19 independent-volume control failed: hrA=0x00000000 hrB=0x00000000 overlap=0 bytesA=16777216/16777216 bytesB=16777216/16777216 isolatedC=1188000 isolatedD=1125000 concurrent=2234000 gate=1603800.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1219,
+            "repeat_index": 1
+        },
+        {
+            "name": "R4A19_DiscoveryIndependentVolumes",
+            "status": "failed",
+            "duration_ms": 4734,
+            "repeat_index": 1,
+            "reason": "R4-A19 independent-volume control failed: hrA=0x00000000 hrB=0x00000000 overlap=0 bytesA=16777216/16777216 bytesB=16777216/16777216 isolatedC=1188000 isolatedD=1125000 concurrent=2234000 gate=1603800."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "hosted-ci-repair.standalone-followup.v1",
+  "sourceCommit": "cc6e19d5f736a784aa5f3b4ff99b5fea185aa097",
+  "sourceSnapshotId": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb",
+  "buildReceiptId": "ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T173136Z-65900-8bad79207e0a4ffbb52c07f017ee7458",
+  "accepted_commands": 3,
+  "internal_terminal_passed": 162,
+  "scope": "Three selected noninteractive standalone commands pass at integrated source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097: captured-child containment with original console/output/identity controls, the independent read-only desktop-observation counterfactuals, and Terminal selftests (162 internal assertions passed). Exact receipt/profile/source identities are retained. No Full or performance non-regression claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 91079,
+      "sha256": "30d8efde06d5a7014644b9139cace5412e42c276b07060bb5cf77206efe9c001"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 338402,
+      "sha256": "7ddfa9013ba9757e253a163bf2457c84aa92852acf4e85863a46fe299c9b2811"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 413,
+      "sha256": "d8a9cafbed675e53d9a82b54f8446999ff127e8d4574ef4813f79cab049b17a7"
+    },
+    {
+      "path": "standalone-results.json",
+      "byteCount": 1082,
+      "sha256": "44f05b181ac4a15789a673bc9422a9eaca9615f2a716e75fd40d6c2a1ee64fb9"
+    },
+    {
+      "path": "terminal-selftests.log",
+      "byteCount": 4875,
+      "sha256": "f8339060866002703caf42a584bdae9b79941dcb9e4dc47dd558b3b92295b8f2"
+    },
+    {
+      "path": "viewer-containment.log",
+      "byteCount": 5615,
+      "sha256": "55abaefbbe5ba01dcef927def717e4f896936189f5ce6ac06f95a91fda019dd2"
+    },
+    {
+      "path": "viewer-observation.log",
+      "byteCount": 3770,
+      "sha256": "b3d920b5835bd0e0b3a8a77f2a2cf15ba5bde10d116a5a4ac1e0e64882ecb227"
+    }
+  ]
+}

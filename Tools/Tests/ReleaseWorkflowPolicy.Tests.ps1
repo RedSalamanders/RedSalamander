@@ -656,6 +656,65 @@ Describe 'Distributable test surface (ENABLE_TESTS) policy' {
 }
 
 Describe 'Release workflow source contracts' {
+    It 'restores exact tracked bytes through a deep checkout with Git long paths enabled' {
+        $fixture = New-RSReleasePolicyTestRoot
+        $relative = ((@('a', 'b', 'c', 'd') | ForEach-Object { 'deep-path-' + ($_ * 70) }) -join '/') + '/proof.txt'
+        $relative.Length | Should BeGreaterThan 260
+        $file = Join-Path $fixture $relative
+        $file.Length | Should BeGreaterThan 260
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $file))
+        [IO.File]::WriteAllText($file, 'tracked deep-path fixture', [Text.UTF8Encoding]::new($false))
+        $expectedHash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+        & git -c core.longpaths=true -C $fixture init --quiet
+        $LASTEXITCODE | Should Be 0
+        & git -c core.longpaths=true -C $fixture add -- $relative
+        $LASTEXITCODE | Should Be 0
+        [IO.File]::Delete($file)
+        $directory = Split-Path -Parent $file
+        foreach ($level in 1..4) {
+            [IO.Directory]::Delete($directory, $false)
+            $directory = Split-Path -Parent $directory
+        }
+        [IO.File]::Exists($file) | Should Be $false
+        & git -c core.longpaths=true -C $fixture checkout -- $relative
+        $LASTEXITCODE | Should Be 0
+        (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash | Should Be $expectedHash
+    }
+
+    It 'configures long paths before the scheduled Windows checkouts and bounds flake evidence uploads' {
+        foreach ($relative in @('.github/workflows/nightly-flake.yml', '.github/workflows/ghostty-runtime-status.yml')) {
+            $workflow = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
+            $setup = $workflow.IndexOf('git config --global core.longpaths true')
+            $checkout = $workflow.IndexOf('uses: actions/checkout@')
+            $setup | Should BeGreaterThan -1
+            $checkout | Should BeGreaterThan $setup
+            $workflow | Should Not Match 'continue-on-error:\s*true'
+        }
+        $flake = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/nightly-flake.yml') -Raw
+        $flake | Should Match 'native_runner:\s*windows-2025-vs2026'
+        $flake | Should Match 'runs-on:\s*windows-2025-vs2026'
+        $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeGreaterThan -1
+        $flake.IndexOf('uses: ./.github/actions/setup-msvc') | Should BeLessThan $flake.IndexOf('name: Verify and rebind portable build attestation')
+          $flake.IndexOf('./Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug') | Should BeGreaterThan -1
+          $flake.IndexOf('./Tools/Restore-DxUi.ps1 -Platform x64 -Configuration Debug') | Should BeLessThan $flake.IndexOf('Import-RSPortableBuildAttestation')
+        $flake | Should Match 'Initialize-RSTestSandboxRoot -TestRoot \$root -RepoRoot \$env:GITHUB_WORKSPACE -AllowExternalInitialization'
+        $flake.IndexOf('Initialize-RSTestSandboxRoot') | Should BeLessThan $flake.IndexOf('name: Run nightly shuffle repeat lane')
+        $flake | Should Match 'if:\s*\$\{\{ always\(\) && steps\.test-root\.outputs\.path != '''' \}\}'
+        $flake | Should Match 'if-no-files-found:\s*error'
+        $flake | Should Match 'Import-RSPortableBuildAttestation'
+        $flake | Should Match '-ExpectedAttestationId'
+        $flake | Should Match '-SelfTestRepeat 5 -SelfTestShuffleSeed \$seed -ClassifyFailures'
+        $flake | Should Match '-AllowExternalTestRoot -AllowAlternateVolumeTestRoot'
+        $flake | Should Match 'Invoke-RSWithHostedTestDesktop -Action'
+          $flake | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \{\s*\.\\Tools\\Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Nightly shuffle suite failed'
+    }
+
+      It 'checks native exit status inside the protected action before reporting success' {
+          $build = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+          $build | Should Match '(?s)\$runTests = \{\s*\./Tools/Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Native'
+          $build | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \$runTests.*?exit 0'
+      }
+
     It 'keeps current artifact downloaders pinned and the exact sealed Gate0 workflow intact' {
         $downloaders = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -Filter '*.yml' |
             Select-String -Pattern 'uses:\s*actions/download-artifact@(\S+)')

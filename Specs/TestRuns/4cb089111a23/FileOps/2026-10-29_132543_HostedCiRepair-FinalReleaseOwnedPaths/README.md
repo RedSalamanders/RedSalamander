@@ -1,0 +1,1 @@
+Exact committed candidate x64 Release. Ordinary remediation directly executes the owned-volume operation-path acceptance and refusal controls, without mounting a disk or taking focus; original remediation checks remain. Focused coverage only, not Full. No skips or automatic retries.

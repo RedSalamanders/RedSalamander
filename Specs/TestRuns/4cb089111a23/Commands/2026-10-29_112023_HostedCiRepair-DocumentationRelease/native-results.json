@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-29T11:21:00.649Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261029T112023Z-9060-989b7e4a90eb4b02b6f25c4162661341\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 42703,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_product_documentation_gallery",
+            "status": "passed",
+            "duration_ms": 42680,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

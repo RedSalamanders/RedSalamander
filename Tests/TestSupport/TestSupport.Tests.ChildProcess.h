@@ -433,7 +433,9 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     }
 
     std::vector<wchar_t> environmentBlock;
-    DWORD creationFlags      = CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT;
+    // Captured console children must neither create a desktop console nor share
+    // their parent's console-control lifetime. GUI children ignore this flag.
+    DWORD creationFlags      = CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT;
     void* environmentPointer = nullptr;
     if (! options.environmentOverrides.empty())
     {

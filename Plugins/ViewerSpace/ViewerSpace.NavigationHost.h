@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include "ViewerSpace.Hosts.h"
 
 #include <array>
 #include <cstdint>
@@ -12,8 +12,6 @@
 #include <vector>
 
 #include <DxUi/DxUi.h>
-
-#include "ViewerSpace.Hosts.h"
 
 namespace ViewerSpaceNavigation
 {
