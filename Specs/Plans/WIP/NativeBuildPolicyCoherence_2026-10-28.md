@@ -14,7 +14,7 @@ Five repositories implement the same policy without implicitly advancing DxUi pi
 
 - [x] Preserve the pre-change effective-profile audit and isolate changes from concurrent tooling work.
 - [x] Restore RedTilde ARM64 through its normal entrypoint and pass the required policy/lease checks.
-- [ ] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
+- [x] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
 - [x] Unify green zero-warning build results, diagnostic/log links and opt-in terminal executable hyperlinks, preserving plain text and existing build/run semantics.
 - [x] Shorten source-commit and output-fingerprint folders to 16 hex characters with full identity validation and collision refusal; retain existing data without cleanup.
 - [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
@@ -76,3 +76,15 @@ The focused scoped-testing suite passes all9 cases with zero failures/skips, inc
 wrapper combinations. Its first attempt reached all four forwarding assertions but failed fixture cleanup by
 calling a private helper directly; that failed receipt remains, and the corrected test uses its owning module
 without expanding the production export surface. The canonical PR execution digest is refreshed and verified.
+
+
+## Local qualification checkpoint, 2026-10-29
+
+The current five-repository audit passes 504 native profiles and 73,502 evaluated setting groups. All four consumers
+pass their 24 required pinned-archive profiles; the additional Tilde lease profiles and negative controls pass.
+Exact source identities, raw metadata and field differences are retained under the task's final-audit-20261029
+evidence. Ordinary Debug and ASan formats remain separate from the recorded RedSalamander Full Embedded recovery mode.
+
+Source 6acf passes six native builds and all three focused recovery profiles with independently verified held/publication/action facts. Debug, ASan and the normal Release retry are active. The first concurrent Release Full attempt is retained as BLOCKED_ATTESTATION: another profile owned the shared-dependency scope. The retry was admitted after both other profiles completed their front-loaded artifact-mutating entries and re-attestation; runtime readers may overlap under the existing desktop lease.
+
+The ASan Commands run found an additional first-frame test failure: Find help had synchronous layout/backdrop state but no dispatched paint when inspected. The test used one Commands pump turn, which deliberately yields after 10 ms. The candidate test now waits at most two scaled seconds for the actual first paint with the shared bounded helper, records elapsed time/message count on failure, and retains every visibility, opacity, scrim and chrome assertion. It neither forces a paint nor injects input. The original failed trace and source/executable hashes are preserved under the task's `Sal-6acf-ASan-Find-help-first-frame-failure1` evidence. Candidate native/focused/Full qualification remains pending; this timing diagnosis is not a claim that the old product renderer was defective.

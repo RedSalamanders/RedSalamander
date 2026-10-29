@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Wait for the Find help overlay's actual first paint in its command selftest, within a bounded shared message-pump wait, before checking first-frame opacity and scrim. A single 10 ms pump turn could finish before paint dispatch; all visual assertions remain intact, with elapsed/message diagnostics added. The original ASan failure is retained and candidate qualification remains pending.
+- Record the current native profile and pinned-archive policy audit, qualified native builds and explicit remaining runtime, performance and integration gates.
+- Update the active shared-theme extraction plan to follow the common /Wall, /WX-disabled, zero-warning policy while retaining its SDL, external-header and analysis checks.
 - Register the build-policy follow-up as I50 in the machine-readable WIP table and record the console/path contract's reviewed implementation and test anchors. Keep current-source native/runtime/performance qualification separate from this specification alignment check.
 - Forward explicit alternate-volume File Operations opt-in through the scoped Full and focused entrypoints, preserving the disabled default, exact configured sandbox restriction and separate authorization for new drive-root initialization. Exercise the real wrapper in child processes with and without the flag.
 - Supply the real native and pinned-archive policy files to the compiler-host restore fixture and verify their identity fields, keeping the long Git path, explicit host overrides, API/toolchain refusals and caller-environment restoration checks.
