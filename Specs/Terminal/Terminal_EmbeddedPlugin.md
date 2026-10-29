@@ -1066,7 +1066,9 @@ before publishing review or rebound evidence. Repeat with an unused
 `candidate-descriptor.p4.v2.json` there. The command creates that snapshot from
 the validated regenerated descriptor, retains the legacy file byte-for-byte,
 and returns the selected `BaseDescriptorPath`. Repeated review reuses that
-validated snapshot; it never overwrites it or aliases the mutable descriptor.
+validated snapshot; it never overwrites it. Before any publication, its normalized
+path must differ case-insensitively from both mutable outputs: the descriptor
+and `candidate-overlay-review.json`.
 
 Overlay rederivation remains isolated until manual Product admission.
 `Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` accepts the single

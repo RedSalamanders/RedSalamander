@@ -231,13 +231,15 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
 
     $abi = Get-RSGhosttyCandidateOverlayAbiReview -PristineSourcePath $pristineSourcePath -AppliedSourcePath $appliedSourcePath
     $descriptorSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeCandidateDescriptor.schema.json'
+    $reviewPath = Join-Path $candidateRoot 'candidate-overlay-review.json'
     $descriptorBackupPath = if ([string]::IsNullOrWhiteSpace($Phase4DescriptorPath)) {
         Join-Path $candidateRoot 'candidate-descriptor.p4.json'
     } else {
         Assert-RSGhosttyCandidateOverlayPath -CandidateRoot $candidateRoot -Path $Phase4DescriptorPath -Field 'Phase4DescriptorPath'
     }
-    if ([string]::Equals($descriptorBackupPath, $descriptorPath, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Phase4DescriptorPath must differ from the mutable DescriptorPath.'
+    if ([string]::Equals($descriptorBackupPath, $descriptorPath, [StringComparison]::OrdinalIgnoreCase) -or
+        [string]::Equals($descriptorBackupPath, $reviewPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Phase4DescriptorPath must differ from the mutable DescriptorPath and overlay review output.'
     }
     $hasBackup = Test-Path -LiteralPath $descriptorBackupPath
     $basePath = if ($hasBackup) { $descriptorBackupPath } else { $descriptorPath }
@@ -305,7 +307,6 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
         }
     }
     $reviewSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeCandidateOverlayReview.schema.json'
-    $reviewPath = Join-Path $candidateRoot 'candidate-overlay-review.json'
     Write-RSAtomicCanonicalJsonFile -LiteralPath $reviewPath -InputObject $review -SchemaPath $reviewSchemaPath -AllowedRoot $candidateRoot
 
     $binding = [ordered]@{

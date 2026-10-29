@@ -2997,7 +2997,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and schema-2 descriptor rebinding from a validated immutable P4 snapshot that preserves every dependency identity.",
+      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and schema-2 descriptor rebinding from a validated immutable P4 snapshot distinct from both mutable outputs, preserving every dependency identity.",
       "usage": "Import through New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1; focused tests may call the pure candidate ABI comparison.",
       "usedBy": [
         "Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1",

@@ -79,6 +79,8 @@ schema-1 snapshot, regenerate the schema-2 descriptor and repeat the overlay com
 created once and its candidate identity, complete binding digest and schema are checked on reuse.
 Regenerating changed frozen inputs also requires a new snapshot path; repeated overlay rebinding
 can change only the overlay portion of an existing frozen binding.
+The selected P4 path must differ from both mutable outputs: the descriptor and
+`candidate-overlay-review.json`. Comparison is case-insensitive after path normalization.
 Artifact action upgrades also update `ReleaseWorkflowPolicy.Tests.ps1` pin
 assertions and verify build, release, nightly, and qualification consumers together.
 The exact-byte historical Gate0 workflow is excluded from Dependabot updates. Its older artifact

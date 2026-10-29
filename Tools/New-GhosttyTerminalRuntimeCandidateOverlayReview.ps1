@@ -25,7 +25,7 @@ The candidate-descriptor.json produced by the candidate-freeze workflow.
 A reviewer-authored JSON file mapping every current concern to one of at most five ordered candidate concerns.
 
 .PARAMETER Phase4DescriptorPath
-Optional immutable P4 snapshot below the exact candidate root; defaults to candidate-descriptor.p4.json. To recover a legacy snapshot, regenerate the schema-2 DescriptorPath and select an unused path such as candidate-descriptor.p4.v2.json. Existing snapshots are validated and never overwritten.
+Optional immutable P4 snapshot below the exact candidate root; defaults to candidate-descriptor.p4.json. To recover a legacy snapshot, regenerate the schema-2 DescriptorPath and select an unused path such as candidate-descriptor.p4.v2.json. Existing snapshots are validated and never overwritten. Neither mutable output (DescriptorPath or candidate-overlay-review.json) may be selected.
 
 .PARAMETER GeneratedUtc
 Overrides the evidence timestamp for deterministic tests. Production callers omit it.

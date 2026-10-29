@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Reject Ghostty P4 snapshot paths that alias either mutable output before any
+  publication. Cover the previously accepted overlay-review path and its
+  normalized case variant, preserving both descriptor and snapshot evidence.
 - Validate saved Ghostty P4 descriptors before overlay rebinding. Add an explicit
   replacement snapshot path for regenerated schema-2 descriptors while preserving
   legacy evidence; reject wrong candidate identities, changed dependency bindings,

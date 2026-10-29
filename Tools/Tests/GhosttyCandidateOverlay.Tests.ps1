@@ -312,4 +312,22 @@ Describe 'Ghostty candidate P4 descriptor migration' {
         $message | Should Match 'Phase4DescriptorPath must remain below the exact candidate root'
         (Test-Path -LiteralPath $outside) | Should Be $false
     }
+
+    It 'rejects the mutable overlay-review output as a P4 path: <Alias>' -TestCases @(
+        @{ Alias = 'candidate-overlay-review.json' },
+        @{ Alias = './CANDIDATE-OVERLAY-REVIEW.JSON' }
+    ) {
+        param($Alias)
+        $fixture = New-RSGhosttyCandidateOverlayDescriptorFixture
+        $before = (Get-FileHash -LiteralPath $fixture.DescriptorPath).Hash
+        $output = Join-Path $fixture.Root 'candidate-overlay-review.json'
+        $arguments = $fixture.Arguments
+        $message = ''
+        try { New-RSGhosttyRuntimeCandidateOverlayReview @arguments -Phase4DescriptorPath (Join-Path $fixture.Root $Alias) | Out-Null }
+        catch { $message = $_.Exception.Message }
+        $message | Should Match 'Phase4DescriptorPath must differ from.*overlay review output'
+        (Test-Path -LiteralPath $output) | Should Be $false
+        (Test-Path -LiteralPath $fixture.BackupPath) | Should Be $false
+        (Get-FileHash -LiteralPath $fixture.DescriptorPath).Hash | Should Be $before
+    }
 }

@@ -26,6 +26,30 @@ merge-review record. Earlier Ghostty references to I50 describe this same record
 
 ## Progress
 
+### 2026-10-29 merge authorization and final alias review
+
+The user requested merging PR #148 after receiving the three failed Commands
+case explanations. That authorizes integration with those known local failures;
+their `REGRESSION` verdict, unresolved causes and qualification follow-up remain
+unchanged. This request does not turn pending CI or failed local evidence into
+an accepting Full result. I51 remains active for that qualification work.
+
+Review `4414648962` then identified a valid output-alias defect: a new P4 path
+equal to `candidate-overlay-review.json` was accepted and subsequently replaced
+by the mutable review. Two behavioral controls reproduced that unsafe success
+on `30d151700` (13 passed, two failed), preserved in
+`20261029T161423Z-11816-ce6a8195fca8465786f8347b737ba7ac`.
+The guard now rejects normalized, case-insensitive aliases of both mutable
+outputs before publishing anything. All 52 overlay/review, governance and
+inventory checks passed in
+`20261029T161447Z-38560-fbbf08e7afdd4b6498b0950318ad1705`, including both
+alias variants; all eight scoped/delegation guards passed in
+`20261029T161840Z-95044-0ba03aa414cf4797a38a24cbdaae4fdd`.
+The reviewed execution digest is
+`8d3e6af0ed71739f85f987b823c10f4cc4c204561f0dbb6158b2c540bf53b26d`.
+The runtime lock, overlay and native implementation/test sources are unchanged
+by this final tooling repair. Final exact-head CI remains separate and pending.
+
 - [x] Create and attach an isolated clean worktree from refreshed `origin/main`.
 - [x] Resolve the official annotated tag and collect an exact Candidate status.
 - [x] Freeze authenticated source/archive/ABI/security inventory and descriptor.
