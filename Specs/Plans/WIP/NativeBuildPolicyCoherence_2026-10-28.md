@@ -20,6 +20,7 @@ Five repositories implement the same policy without implicitly advancing DxUi pi
 - [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
 - [x] Publish zero-warning guidance and normative build/path/terminal contracts, with meaningful tooling tests.
 - [ ] Execute affected tests, evaluated profiles, required native builds and applicable runtime qualification; retain every failed result and distinguish cross-builds from runtime tests.
+- [ ] Resolve the reproduced historical C11 extra passive announcement from bounded per-session protocol evidence, retaining the current native Copy fixture's listener, contents, completion and deadline predicates until the origin is proved.
 - [ ] Fold/check the changelog; validate formatting/specs/tooling and close this plan only after all required gates pass.
 
 ## Decisions and limits

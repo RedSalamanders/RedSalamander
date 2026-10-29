@@ -643,6 +643,18 @@ Authentication failure retry policy (Connection Manager profiles only):
   - On login/auth failures, the plugin clears the session cache (`IHostConnections::ClearCachedConnectionSecret`) and retries once (which triggers a reprompt on the next resolve).
 
 
+## Native transport fixture diagnostics
+
+The owned FTP fixture records `FileOps.Curl.FakeFtp.PendingRetirement` when a new
+passive command must retire an earlier unconsumed announcement. Its diagnostic
+binds the endpoint/listener ports and at most eight recent commands from that
+same control session. Path/offset arguments are bounded to96 UTF-8 bytes;
+authentication arguments are omitted. The fixture reuses indices into its
+existing command inventory rather than copying request strings on every command.
+This diagnostic changes no transport behavior, timeout, listener-creation cap or
+qualification predicate. An extra announcement's origin must be established before
+changing the native Copy fixture's passive-listener accounting contract.
+
 ## Permanent Delete by name (C10)
 
 FTP, SFTP and SCP name no object identity, so the plugin does not implement

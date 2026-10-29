@@ -659,6 +659,11 @@ private:
         unsigned short port = 0u;
         bool pending        = false;
         bool used           = false;
+        // Indices into the fixture's existing command inventory, scoped to this
+        // control session. Retain no extra command strings on the request path.
+        std::array<size_t, 8u> recentCommands{};
+        size_t recentCommandCount = 0u;
+        size_t nextCommandSlot    = 0u;
     };
 
     void SetServerFailure(HRESULT hr) noexcept
@@ -670,10 +675,11 @@ private:
         }
     }
 
-    void RecordCommand(std::string verb, std::string argument)
+    [[nodiscard]] size_t RecordCommand(std::string verb, std::string argument)
     {
         std::scoped_lock lock(_stateMutex);
         _commands.push_back(CommandRecord{.verb = std::move(verb), .argument = std::move(argument)});
+        return _commands.size() - 1u;
     }
 
     void AddDirectoryWithParentsLocked(std::string_view path)
@@ -1230,8 +1236,34 @@ private:
             // as the next command's data channel.
             passiveListener.socket.reset();
             passiveListener.pending = false;
-            std::scoped_lock lock(_stateMutex);
-            ++_passivePendingRetirements;
+            std::wstring detail;
+            {
+                std::scoped_lock lock(_stateMutex);
+                ++_passivePendingRetirements;
+                detail = std::format(L"endpointPort={};listenerPort={};previouslyConsumed={};commands=", _port, passiveListener.port, passiveListener.used);
+                const size_t first = passiveListener.recentCommandCount == passiveListener.recentCommands.size() ? passiveListener.nextCommandSlot : 0u;
+                for (size_t offset = 0u; offset < passiveListener.recentCommandCount; ++offset)
+                {
+                    const size_t slot            = (first + offset) % passiveListener.recentCommands.size();
+                    const CommandRecord& command = _commands[passiveListener.recentCommands[slot]];
+                    if (offset != 0u)
+                    {
+                        detail.append(L" -> ");
+                    }
+                    detail.append(Utf16FromUtf8(command.verb));
+                    // Authentication arguments never enter the diagnostic. The
+                    // bounded tail contains only fixture-generated path/offset
+                    // arguments, enough to distinguish probes from transfers.
+                    if (! command.argument.empty() && (command.verb == "SIZE" || command.verb == "MDTM" || command.verb == "CWD" || command.verb == "RETR" ||
+                                                       command.verb == "STOR" || command.verb == "LIST" || command.verb == "NLST" || command.verb == "RNFR" ||
+                                                       command.verb == "RNTO" || command.verb == "TYPE" || command.verb == "REST"))
+                    {
+                        detail.push_back(L' ');
+                        detail.append(Utf16FromUtf8(std::string_view(command.argument).substr(0u, 96u)));
+                    }
+                }
+            }
+            Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.PendingRetirement", detail.c_str(), 0u, _port, passiveListener.port, S_OK);
         }
         if (! passiveListener.socket)
         {
@@ -1306,7 +1338,9 @@ private:
             const size_t separator     = line.find(' ');
             const std::string verb     = UpperAscii(separator == std::string::npos ? std::string_view(line) : std::string_view(line).substr(0u, separator));
             const std::string argument = separator == std::string::npos ? std::string{} : line.substr(separator + 1u);
-            RecordCommand(verb, argument);
+            passiveListener.recentCommands[passiveListener.nextCommandSlot] = RecordCommand(verb, argument);
+            passiveListener.nextCommandSlot                                 = (passiveListener.nextCommandSlot + 1u) % passiveListener.recentCommands.size();
+            passiveListener.recentCommandCount = (std::min)(passiveListener.recentCommandCount + 1u, passiveListener.recentCommands.size());
 
             {
                 unsigned int stallMs = 0u;
