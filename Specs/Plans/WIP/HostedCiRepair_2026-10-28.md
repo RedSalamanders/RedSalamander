@@ -1,4 +1,4 @@
-# I50 Hosted CI repair — 2026-10-28
+# I51 Hosted CI repair — 2026-10-28
 
 Status: ACTIVE. Priority: high. Planned at `fbcc9fc0ddd3b6890741f6bc350f2016c755614b`;
 integrated main baseline `8ea956a7e2e271368082a953f28efd2a58e1013f`.
@@ -122,7 +122,7 @@ hosted qualification, plan closeout and main confirmation remain open.
 
 The integrated `b79613627d35ec1a84bc4722297d298797b4f20f` x64 Debug rebuild passed in 5:23,
 and 428 relevant tooling controls passed without skips. Inventory validation caught a missing
-machine-readable WIP table row; the repair is now indexed as unused rank I50, without an exemption.
+machine-readable WIP table row; the repair was indexed as rank I50; integrating main on 29 October allocated unused rank I51 because the separately merged main review owns I50. No frozen rank is reused.
 The retained hosted desktop log proves the real x64 display changed from 1024x768 (work area
 1024x720) to 1920x1080 (work area 1920x1032); its foreground owner was Windows Terminal.
 Commands isolation now reuses the existing warning-gated queue handoff and explicitly requires

@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
 - Make repeated CI fixtures preserve their original behavior and acceptance gates across independent invocations.
   - Flush and reset only the owned test app's coordinator lineage before deleting or seeding a fresh settings fixture; retain every same-case stale-source, backup, coalescing and immutable-snapshot check. Establish a 48-DIP thumbnail baseline before the original 96-DIP transition and restore its original size.
   - Retain an independent real 16-theme catalog control that fails the original loop. Pair each theme burst with its inverse and balance the tail: all 240 commands, resource limits, animation assertions and the System end-state assertion remain, with an added 120/120 direction count.
