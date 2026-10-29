@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Require all 310 expanded Curl Entry checks in the native FileOps host while retaining Copy's 142-check expectation; keep interrupted-profile recovery governed by a matching full-solution rebuild.
 - Synchronize the performance contract with proved passive-fallback conservation and its refusal/corruption controls, and document the pinned registry history required by normal vcpkg restoration.
 - Account only for proved same-session EPSV-to-PASV fallback announcements, retain zero unexplained retirements and complete accepted-transfer conservation, and add refusal/corruption/cap controls. Remove implicit small-reply pacing on owned fake FTP control sockets while preserving the complete corpus, explicit stalls, contents, statuses and deadlines; native/Full requalification remains required.
 - Add an exclusively owned data-port refusal fixture that exercises real libcurl EPSV-to-PASV fallback, exact listing output and passive-announcement/accepted-transfer accounting. Keep the large Copy fixture's existing limits and assertions while investigating C11's original extra announcement.

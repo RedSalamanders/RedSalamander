@@ -35,6 +35,13 @@ an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
 
+The expanded Entry export passes 310 checks; the native FileOps caller's fixed
+expectation must advance from 298 to 310 with those additions. Preserve Copy's
+142-check expectation. A cancelled old-source queued test conservatively marked
+the x64/ASan artifacts interrupted; the normal guard refuses reuse until a full
+solution `build.ps1 -Rebuild` in exactly that profile clears the marker. Keep the
+guard and marker intact and use that governed recovery before final runtime work.
+
 The controlled `ae990475a` ASan Entry export passes 304/0. Its exact owned refused
 port 60143 appears in both the libcurl failed-connect row and the same-session
 `USER -> PASS -> PWD -> CWD probe -> EPSV -> PASV` retirement tail, followed by one

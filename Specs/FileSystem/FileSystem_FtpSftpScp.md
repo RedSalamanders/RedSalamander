@@ -668,6 +668,10 @@ missing/invented accepts, an unclassified retirement, missing retirement account
 and a 65th creation. The original 64-creation cap, 4,097 payload transfers, exact
 contents, truthful completion and deadlines remain unchanged.
 
+The native FileOps host must require all 310 Entry-lookup checks, including the
+maximum-size serializer boundary, five real fallback facts and six accounting
+controls. The separate Copy-traversal export retains its 142-check expectation.
+
 The fixture's LIST serializer appends its fixed grammar and converts the decimal
 size directly, avoiding a general formatter for each repeated row. Its exact-byte
 oracles cover empty/nested directories, UTF-8/literal names, unknown/overridden and
