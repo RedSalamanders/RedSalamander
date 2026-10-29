@@ -154,3 +154,23 @@ from the original foreign working directory passes all 19 build-evidence cases a
 policy audit, including independent negative controls and caller-environment preservation. Its records are
 `Sal-tooling-repair3-results.json` and the two `*-repair3.log` files in the task evidence root. This is focused
 repair evidence; changed workspace identity requires fresh Full qualification rather than exact Resume reuse.
+
+The a94a68 Debug Full passed CompareDirectories (260 passed, zero failed, 21 environment skips). Commands later
+failed the path-detail foreground boundary: Zoom PID86768 owned the foreground rather than the test popup.
+At the human's request to continue noninteractive work only, the verified owned Full process tree was stopped.
+The interrupted native record retains 910 passed, one failed and six skipped cases; it is not a Full verdict.
+Automatic interactive continuation exited, and focus qualification remains pending. Forced cancellation does
+not claim verified native RAII foreground/pointer restoration; the interrupted artifact markers are retained
+for normal governed Rebuild recovery. No independently launched application was targeted.
+
+PR149 head 3b6eb4170 also exposed a real CI-only zero-warning failure: compilation completed with zero errors
+but emitted 920 WIL diagnostics from pinned DxUi. CI prepends its application vcpkg include through `CL=/I`,
+which can precede the SDK's isolated dependency include. The pinned-project binding now appends that exact
+declared CI dependency root to evaluated `ExternalIncludePath`, retaining the existing MSVC/SDK roots and
+every first-party warning. The real compiler regression passes dependency-warning before/after and first-party
+negative controls; all 36 release-workflow policy checks pass. The first fixture attempt's duplicate empty
+imports emitted three MSB4011 warnings and is retained; four distinct empty imports correct the fixture
+without suppressing diagnostics. A tested environment-property prototype was discarded because it replaced
+the default compiler/SDK external roots. Current implementation changes only the pinned binding, its tests
+and documentation; the five shared native policy implementations remain identical. Hosted confirmation and
+current-source noninteractive qualification remain pending.

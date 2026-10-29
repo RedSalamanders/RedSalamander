@@ -34,6 +34,9 @@ Missing prerequisites remain incomplete Full coverage; they are not new environm
 The compiler/linker policy audit queries ordinary profiles with an explicit child debug-format
 property, so Full's ambient Embedded recovery mode cannot change the expected Debug `/ZI` policy.
 It preserves the caller's environment and retains the broken compiler/linker controls.
+The pinned-project binding also classifies CI's injected application vcpkg include directory
+as external, retaining MSVC/SDK defaults. `CiDependencyWarnings.Tests.ps1` compiles contained
+before/after and first-party negative controls; it launches no application or desktop input.
 `Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
 CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
 product validation already passed in another environment; neither form creates a commit.

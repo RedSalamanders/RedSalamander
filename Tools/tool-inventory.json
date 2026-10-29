@@ -92,6 +92,21 @@
       "replacement": null
     },
     {
+      "path": "Tools/Tests/CiDependencyWarnings.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Compile real dependency-header and first-party warning controls through the pinned DxUi CI binding while retaining default MSVC/SDK external roots.",
+      "usage": "Run through the current tooling Pester profile in the governed test sandbox.",
+      "usedBy": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
+      "prerequisites": ["PowerShell 7 with Pester", "Windows MSVC 14.52", "Existing marked test sandbox and run context"],
+      "sideEffects": ["Compiles isolated static-library fixtures beneath the current run scratch directory; restores caller environment and uses a private compiler PDB endpoint"],
+      "outputs": ["Pester result and retained native warning-control logs"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": ["self"],
+      "replacement": null
+    },
+    {
       "path": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "kind": "test",
       "visibility": "internal",

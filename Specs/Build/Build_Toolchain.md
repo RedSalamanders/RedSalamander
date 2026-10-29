@@ -285,6 +285,14 @@ calling Full runner has `RSBuildCompilerDebugInformation=Embedded`. This query i
 MUST preserve the caller's environment and retain the independent broken-profile controls;
 it does not change the receipt-bound format of the actual Full build.
 
+CI's process-local `CL=/I...` injection applies to pinned DxUi project references as
+well as application projects. The pinned-policy binding MUST append the matching
+`VCPKG_INSTALLED_DIR` / `VCPKG_DEFAULT_TRIPLET` include root to evaluated
+`ExternalIncludePath`, preserving the existing MSVC/SDK roots. It MUST NOT suppress
+the corresponding warning codes in first-party sources. Real compiler controls prove
+the dependency-header warning before classification, its removal afterward, and continued
+rejection of a first-party warning by the zero-warning build gate.
+
 When `RSBuildEnableTests` is false, projects beneath `Tests/` are evaluated as
 no-output utility nodes so a production Release solution build does not compile a test
 executable against production libraries that intentionally omit test hooks. When the

@@ -1,4 +1,10 @@
 <Project>
+  <!-- CI prepends this dependency root through CL=/I for every project. Keep
+       that real include classified external in the pinned archive too, without
+       replacing MSBuild's existing compiler/SDK external include directories. -->
+  <PropertyGroup Condition="'$(VCPKG_INSTALLED_DIR)'!='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">
+    <ExternalIncludePath>$(ExternalIncludePath);$([MSBuild]::EnsureTrailingSlash('$(VCPKG_INSTALLED_DIR)'))$(VCPKG_DEFAULT_TRIPLET)\include</ExternalIncludePath>
+  </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)NativeBuildPolicy.targets"
           Condition="'$(NativeBuildPolicyImported)'!='true'" />
 </Project>
