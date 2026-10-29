@@ -1,0 +1,45 @@
+{
+  "passed": 10,
+  "schema": "hosted-ci-repair.hotkey-order-positive.v1",
+  "files": [
+    {
+      "sha256": "00a0df6867e39f15ea4a517c5b8af2e3534e93db37ca7ce8b387dbe8021532d4",
+      "byteCount": 84872,
+      "path": "build-receipt.json"
+    },
+    {
+      "sha256": "927e49c25889d3d11a7c4ea33a3e39963c6a39490ba9fd3509c9dfa1b512c15c",
+      "byteCount": 2272,
+      "path": "native-results.json"
+    },
+    {
+      "sha256": "f47a860b295c62f65e989890a8333621721d1c416cb5a7571a7c39b2bdb36612",
+      "byteCount": 1004,
+      "path": "README.md"
+    },
+    {
+      "sha256": "0440b1be837c35c2e85b284a3556dd9d58c35aaa306ce605df063060fafc32f0",
+      "byteCount": 16295,
+      "path": "runner-results.json"
+    },
+    {
+      "sha256": "64c19f7713dc01e77c49f980629f8b83220550c828d266aaa8d5202267b2b342",
+      "byteCount": 7692,
+      "path": "trace.txt"
+    }
+  ],
+  "failed": 0,
+  "profile": "x64 Debug",
+  "hooksRetired": 20,
+  "runId": "20261029T012509Z-80644-3b552289dff84eab9a82370f80162b0d",
+  "sourceCommit": "7a3a7057669c5cd9d2ae5c629133f6cdebd23875",
+  "realDispatches": 20,
+  "case": "cmd_selftest_foreground_admission_hotkey_contract",
+  "exit": 0,
+  "skipped": 0,
+  "nativeDurationMs": 3613,
+  "retries": 0,
+  "buildReceiptId": "008c86712d1d58b549cbd4e206a53b2b0cca8d9eea2ab99e76d008548a9d3bb6",
+  "keyDownAtDispatch": 20,
+  "compilerDebugInformation": "Embedded"
+}

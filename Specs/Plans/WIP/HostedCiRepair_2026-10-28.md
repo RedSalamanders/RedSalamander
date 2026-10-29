@@ -578,3 +578,48 @@ activation attempt. Keep scoped release on every failure, require successful key
 and verify actual foreground after release. Do not attach input queues, alter foreground-lock
 policy, relax the 500 ms deadline or change the original ownership/refusal/restoration gates.
 The unchanged stronger witness and fresh native/hosted qualification must pass before merge.
+
+### Captured console isolation and duplicate writers
+
+The local remainder at `7a3a70576` passes all 29 build-toolchain checks, then stops
+Compare at 226 passed, one duplicate-instance failure and 56 fail-fast omissions.
+The duplicate child exits zero; retain that failure. The original helper subsequently
+passes the same case in isolation, with second exit 1, the primary still alive and
+the expected already-running output. That retry is diagnostic, not a causal repair.
+
+The canonical captured-child helper omits the existing required `CREATE_NO_WINDOW`
+flag. Its independent console-state control at the same public HEAD plus the retained
+test-only patch fails: child exit zero, console present, zero passed/one failed/no skips.
+Keep the [original helper control](../../TestRuns/4cb089111a23/Compare/2026-10-29_065644_HostedCiRepair-ConsoleNegative/evidence.json).
+Add the flag without changing restricted handles, suspended Job assignment, independent
+bounded drains, exit-code handling, descendant containment, cancellation or deadlines.
+
+The corrected uncommitted native candidate passes ten repetitions of each existing
+runner, duplicate-instance and resource-scoped writer case in both profiles:
+
+- [x64 Debug](../../TestRuns/4cb089111a23/Compare/2026-10-29_071025_HostedCiRepair-ConsoleDebugTen/evidence.json):
+  30 passed, zero failed/skipped/retries, wrapper exit zero, native 26,319 ms.
+- [x64 ASan Debug](../../TestRuns/4cb089111a23/Compare/2026-10-29_071701_HostedCiRepair-ConsoleAsanTen/evidence.json):
+  30 passed, zero failed/skipped/retries, wrapper exit zero, native 28,518 ms.
+
+Both full builds pass with Embedded compiler debug information and final PDBs;
+ASan stays enabled. All twenty console observations have no console, and all twenty
+duplicate probes return exit 1 while the primary remains alive. Raw build receipts,
+native input patches, full native/wrapper results and traces retain the exact dirty
+source identities. These focused results prove the console-isolation correction;
+they do not alone prove the precise cause of the earlier broad exit-zero failure.
+Fresh broad and hosted/native ARM64 acceptance remains required.
+
+The existing tooling source guard now requires all three launch flags and the actual
+console probe. Review of that execution-closure change yields PR digest
+`c12ab6b16cac10b9493ac6d1c70b4f9d8b49a40ef66f81e6ee6daab3bdf12e20`;
+native suite membership, limits and the two enabled PR profiles are unchanged.
+
+The passing ten-repeat Debug and ASan held-hotkey packets at source `7a3a70576` are
+also retained beside the earlier red ordering control. Hosted PR checks at that
+source pass x64/ARM64 Debug, while longer runtime qualification remains red:
+Viewer harness/blocked-close, Release FileOps disclosure/quiescence/independent-volume
+and ARM64 foreground/mounted-volume cases, plus shuffle viewer/Terminal deferred
+creation failures and its retained timeout. Keep the draft open and these gates
+explicit. The focused ViewerText diagnostic was interrupted before launching any
+child while waiting for the shared desktop lease; it supplies no runtime acceptance.

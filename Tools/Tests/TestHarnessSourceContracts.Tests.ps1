@@ -2268,7 +2268,7 @@ Specs\TestRuns\local_scratch
 
         $header | Should Match 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'
         $header | Should Match 'PROC_THREAD_ATTRIBUTE_HANDLE_LIST'
-        $header | Should Match 'CREATE_SUSPENDED \| EXTENDED_STARTUPINFO_PRESENT'
+        $header | Should Match 'CREATE_SUSPENDED \| CREATE_NO_WINDOW \| EXTENDED_STARTUPINFO_PRESENT'
         $header | Should Match 'AssignProcessToJobObject[\s\S]*ResumeThread'
         $header | Should Match 'std::jthread stdoutDrain'
         $header | Should Match 'std::jthread stderrDrain'
@@ -2281,6 +2281,9 @@ Specs\TestRuns\local_scratch
         $cases | Should Match 'ChildProcessStatus::TimedOut'
         $cases | Should Match 'ChildProcessStatus::Cancelled'
         $cases | Should Match 'HANDLE_CLOSED'
+        $cases | Should Match '--test-support-child-probe=console-state'
+        $cases | Should Match 'consoleState\.stdoutBytes == "N"'
+        $probe | Should Match 'GetConsoleWindow\(\) == nullptr'
         $probe | Should Match '--test-support-child-probe=delayed-marker'
         $probe | Should Match '#ifdef ENABLE_TESTS[\s\S]*TryRunTestSupportChildProbe'
     }

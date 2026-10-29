@@ -6789,6 +6789,17 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    const TestSupport::ChildProcessResult consoleState = TestSupport::RunChildProcess({.executablePath = servicePath,
+                                                                                       .arguments      = {L"--test-support-child-probe=console-state"},
+                                                                                       .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000))});
+    state.Require(consoleState.Completed(), consoleState.diagnostic);
+    AppendCompareSelfTestTraceLine(std::format(L"Captured child console probe: exitCode={} noConsole={} outputBytes={}",
+                                               consoleState.exitCode,
+                                               consoleState.stdoutBytes == "N",
+                                               consoleState.stdoutBytes.size()));
+    state.Require(consoleState.exitCode == 0u && consoleState.stdoutBytes == "N" && consoleState.stderrBytes.empty(),
+                  L"Captured service probes must run without allocating or inheriting an interactive console.");
+
     const TestSupport::ChildProcessResult largeStreams = TestSupport::RunChildProcess({.executablePath = servicePath,
                                                                                        .arguments      = {L"--test-support-child-probe=streams"},
                                                                                        .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(10'000))});
@@ -10683,6 +10694,16 @@ SelfTest::RunCase(options,
     }
 
     const std::wstring primaryExitSummary = service.TryCaptureExitedOutputForFailure();
+    const std::filesystem::path duplicateOutputPath =
+        SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::CompareDirectories, L"search-service-duplicate-child-output.txt");
+    state.Require(SelfTest::WriteTextFile(duplicateOutputPath, result.output), L"The duplicate-instance probe must preserve its captured child output.");
+    AppendCompareSelfTestTraceLine(
+        std::format(L"Duplicate foreground service probe: secondExitCode={} primaryAlive={} storeRoot='{}' outputBytes={} output='{}'",
+                    result.exitCode,
+                    primaryExitSummary.empty(),
+                    caseRoot.native(),
+                    result.output.size(),
+                    duplicateOutputPath.native()));
     state.Require(primaryExitSummary.empty(),
                   std::format(L"The primary foreground service exited before the duplicate probe completed.{}", primaryExitSummary));
 
