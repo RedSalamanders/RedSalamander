@@ -536,3 +536,45 @@ The reviewed execution digest after the inventory admission correction is
 `ee8d355646a112b6de1fba8e5d06b67a2e6dccdfc418c5d4e488d1c69a8995e8`.
 Native case execution, suite/filter contracts and the two enabled PR profiles are unchanged;
 the modified runner and its explicit admission controls require fresh matching CI evidence.
+
+### Rollback repetition passes; hotkey key-up ordering
+
+Source `5cd2fa704` passes its full x64 Debug Embedded build in 7:05, receipt
+`3346a3f6913a55352c6983a980b6fde2ba43b586c29c3f341ceb67189eaf81b7`, and
+its full x64 ASan Debug Embedded build in 7:00, receipt
+`17c476946019b095a4167c22881574aa522ebc9684f1c350231113291171a91d`.
+Supported Embedded compiler debug information avoids a shared compiler-PDB RPC failure;
+final linker PDBs and ASan instrumentation remain enabled. No PDB service is terminated.
+
+The corrected ASan rollback run `20261029T002919Z-75984-99949c75645748b09c0025e4a1391519`
+passes all ten invocations with zero failed/skipped/retries and canonical wrapper exit zero.
+Native duration is 15,897 ms. All ten unused owned GUID children report successful POSIX
+rollback and immediate enumeration of exactly `record.json`. Keep the complete
+[source/build-bound receipt and trace](../../TestRuns/4cb089111a23/Commands/2026-10-29_004026_HostedCiRepair-RollbackAsanTen/evidence.json).
+This is focused local acceptance; current hosted qualification remains required.
+
+Retained hosted source `16d07ae35` diagnostics also enumerate `oversized.json` beside the
+original record, with successful POSIX deletion. Its ARM64 isolated Commands retries still
+refuse foreground activation after receiving the real hotkey (`sent=2`, no held key).
+The helper queues key-down and key-up together before dispatch. Windows routes ordinary
+keyboard messages to the foreground thread and restricts foreground activation using last
+input ownership ([keyboard input](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input),
+[foreground activation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)).
+An early key-up can therefore return input to the previous foreground process before the
+hotkey handler attempts activation; this is the candidate explanation for those refusals,
+not a claim of completed ARM64 acceptance.
+
+Add a key-state oracle to the existing independent hotkey dispatch witness before changing
+the helper. Its original-helper control
+`20261029T005019Z-52116-167656286d44465996a9b126bd26471d` fails exactly the new assertion:
+both real dispatches see `keyDownAtDispatch=false`, while foreground acquisition, exact hook
+retirement, key release, repeated registration cleanup and refusal checks remain successful.
+The full Debug build receipt is `90ac8bed6ebfcb26a301bd6d97b53eccbfc5b0b3536e2e5fa4263455b1a4141e`;
+the retained test-only patch identifies its uncommitted test input precisely. Keep the
+[failed control](../../TestRuns/4cb089111a23/Commands/2026-10-29_005019_HostedCiRepair-HotkeyReleaseOrdering/evidence.json).
+
+Send key-down alone, dispatch through the existing owned handler, then release after the
+activation attempt. Keep scoped release on every failure, require successful key-up injection,
+and verify actual foreground after release. Do not attach input queues, alter foreground-lock
+policy, relax the 500 ms deadline or change the original ownership/refusal/restoration gates.
+The unchanged stronger witness and fresh native/hosted qualification must pass before merge.

@@ -771,15 +771,23 @@ Environment variables may select alternate test inputs such as profile names, bu
   An unsuccessful handoff fails the case; an ignored `SetForegroundWindow` result cannot
   establish keyboard/capture ownership. The exact static documentation capture bypass remains unchanged.
   When ordinary foreground requests are refused, the same warned helper may use a temporary
-  registered F24 hotkey on the owned UI-thread root to obtain foreground permission. Refuse
+  registered F24 hotkey on the owned warning's UI thread to obtain foreground permission. Refuse
   before input when the no-activation guard is active, the target is unowned, a modifier/key
   is held or the registration is unavailable. Never attach a foreign input queue or change
-  system foreground-lock policy. Retire the registration and leave the synthetic key released;
+  system foreground-lock policy. Send key-down alone, dispatch the real hotkey through the owned
+  window procedure, and release the key after the handler's activation attempt. Do not batch key-up
+  before that dispatch: it can return input to the previous foreground process before the handoff.
+  Every exit after accepted key-down must release it, including timeout and failed activation;
+  failed key-release injection fails admission and retains a scoped final cleanup attempt.
+  Retire the registration and leave the synthetic key released;
   the bounded handshake counts within the existing focus-acquisition budget.
   Terminal/preview retirement retains its separate deadline; deduct only the handshake's
   elapsed time when beginning the later 1.5-second focus wait.
   The native `cmd_selftest_foreground_admission_hotkey_contract` exercises the forced handshake, exact
-  foreground proof, repeated registration cleanup and refusal controls.
+  foreground proof, repeated registration cleanup and refusal controls. Its independent dispatch
+  witness must observe F24 still depressed before forwarding to the activation handler, in addition
+  to proving the exact original window procedure and properties restored. Actual key release remains
+  a separate postcondition. The handshake deadline stays 500 ms.
   `cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection` creates a
   keyboard-opened menu, selects its last row before any message pump, and sends a stationary
   pointer event over that popup. It must retain keyboard selection; a subsequent real movement

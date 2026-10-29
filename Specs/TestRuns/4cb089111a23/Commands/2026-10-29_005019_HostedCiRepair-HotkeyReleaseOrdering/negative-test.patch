@@ -1,0 +1,41 @@
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
+index cac1ca6ee..44bf315da 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
+@@ -34,6 +34,7 @@
+         unsigned int dispatchCount = 0u;
+         DWORD installError         = ERROR_SUCCESS;
+         bool retired               = false;
++        bool keyDownAtDispatch     = false;
+         static const wchar_t* StateProp() noexcept
+         {
+             return L"RedSalamander.TestForeground.DispatchWitness";
+@@ -54,7 +55,10 @@
+             if (message == WM_HOTKEY || message == WM_NCDESTROY)
+             {
+                 if (witness && message == WM_HOTKEY)
++                {
+                     ++witness->dispatchCount;
++                    witness->keyDownAtDispatch = (GetAsyncKeyState(VK_F24) & 0x8000) != 0;
++                }
+                 Remove(window);
+                 if (witness)
+                 {
+@@ -104,6 +108,7 @@
+     {
+         const unsigned int dispatchBefore = witness.dispatchCount;
+         witness.retired                   = false;
++        witness.keyDownAtDispatch         = false;
+         const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
+         const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
+                                     RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
+@@ -112,6 +117,9 @@
+             return false;
+         state.Require(retiredWitness && witness.installError == ERROR_SUCCESS && witness.dispatchCount == dispatchBefore + 1u,
+                       L"Foreground admission must dispatch exactly one real hotkey through its window procedure and retire the independent witness.");
++        Trace(std::format(
++            L"Foreground hotkey witness: keyDownAtDispatch={} dispatchCount={} retired={}", witness.keyDownAtDispatch, witness.dispatchCount, retiredWitness));
++        state.Require(witness.keyDownAtDispatch, L"The hotkey must remain depressed until its handler completes the foreground handoff.");
+         const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+             return (GetAsyncKeyState(VK_F24) & 0x8000) == 0;
+         }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});

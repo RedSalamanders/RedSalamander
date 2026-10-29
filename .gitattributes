@@ -433,3 +433,5 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/Compare/2026-10-29_001519_HostedCiRepair-MtpAsanFocused/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-StaticGallery/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-RollbackRepeatFailure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-29_004026_HostedCiRepair-RollbackAsanTen/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-29_005019_HostedCiRepair-HotkeyReleaseOrdering/** -text -whitespace

@@ -183,22 +183,29 @@ public:
         }
         const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(warning, static_cast<int>(request.id)); });
         std::array<INPUT, 2u> input{};
-        input[0].type           = INPUT_KEYBOARD;
-        input[0].ki.wVk         = VK_F24;
-        input[1]                = input[0];
-        input[1].ki.dwFlags     = KEYEVENTF_KEYUP;
-        const UINT sent         = SendInput(static_cast<UINT>(input.size()), input.data(), sizeof(INPUT));
+        input[0].type       = INPUT_KEYBOARD;
+        input[0].ki.wVk     = VK_F24;
+        input[1]            = input[0];
+        input[1].ki.dwFlags = KEYEVENTF_KEYUP;
+        // Keep the hotkey depressed until its receiving handler has attempted
+        // the handoff. An earlier key-up can be routed to the previous foreground
+        // process before WM_HOTKEY is dispatched, losing last-input permission.
+        const UINT sent         = SendInput(1u, input.data(), sizeof(INPUT));
         observed.sentInputCount = sent;
         observed.stage          = L"hotkey-input";
-        if (sent != input.size())
+        if (sent != 1u)
         {
             observed.win32Error = GetLastError();
-            if (sent == 1u)
-                static_cast<void>(SendInput(1u, &input[1], sizeof(INPUT)));
             return false;
         }
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
-        observed.stage      = L"hotkey-dispatch-timeout";
+        bool keyReleased      = false;
+        const auto releaseKey = wil::scope_exit([&]() noexcept
+        {
+            if (! keyReleased)
+                observed.sentInputCount += SendInput(1u, &input[1], sizeof(INPUT));
+        });
+        const auto deadline   = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
+        observed.stage        = L"hotkey-dispatch-timeout";
         while (std::chrono::steady_clock::now() < deadline)
         {
             MSG message{};
@@ -210,13 +217,25 @@ public:
                 DispatchMessageW(&message);
                 if (request.handled)
                 {
-                    observed.stage = request.activated ? L"hotkey-activation" : L"hotkey-activation-refused";
-                    return request.activated;
+                    break;
                 }
             }
             static_cast<void>(MsgWaitForMultipleObjectsEx(0u, nullptr, 10u, QS_HOTKEY, MWMO_INPUTAVAILABLE));
         }
-        return false;
+        const UINT released = SendInput(1u, &input[1], sizeof(INPUT));
+        observed.sentInputCount += released;
+        keyReleased = released == 1u;
+        if (! keyReleased)
+        {
+            observed.stage      = L"hotkey-key-release";
+            observed.win32Error = GetLastError();
+            return false;
+        }
+        if (! request.handled)
+            return false;
+        const bool activated = request.activated && GetForegroundWindow() == target;
+        observed.stage       = activated ? L"hotkey-activation" : L"hotkey-activation-refused";
+        return activated;
     }
 
     [[nodiscard]] static bool IsWarningWindow(HWND window) noexcept
