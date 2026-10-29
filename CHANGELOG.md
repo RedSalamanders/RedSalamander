@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Resolve the post-build CI matrix validator through the verified short DxUi source identity; execute the actual workflow gate from a foreign directory in a regression test instead of rebuilding a legacy full-hash path.
 - Classify CI's injected vcpkg include path as external in pinned DxUi builds while preserving compiler/SDK include defaults and the zero-warning gate for first-party code; add real native compilation controls in the governed sandbox.
 - Repair Full tooling checks for Pester 3 collection membership and ordinary compiler/linker profile isolation from the ambient Embedded recovery format; preserve the caller environment and independent negative controls.
 - Record the final zero-warning six-build matrix, preserve the interrupted-profile Rebuild and Curl diagnostic limits, and keep actual application focused/Full qualification and measurements explicit.

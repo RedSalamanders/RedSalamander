@@ -293,6 +293,13 @@ the corresponding warning codes in first-party sources. Real compiler controls p
 the dependency-header warning before classification, its removal afterward, and continued
 rejection of a first-party warning by the zero-warning build gate.
 
+Post-build CI matrix validation MUST resolve the pinned SDK through
+`Get-RSDxUiSourceIdentity` before executing its validator. The 16-character source
+directory is only a locator; the existing resolver verifies the complete Git HEAD,
+clean checkout and public-header tree. CI MUST NOT reconstruct a 40-character folder
+from the lock. A real child-process regression executes the workflow's gate from a
+foreign working directory against the normally restored source.
+
 When `RSBuildEnableTests` is false, projects beneath `Tests/` are evaluated as
 no-output utility nodes so a production Release solution build does not compile a test
 executable against production libraries that intentionally omit test hooks. When the

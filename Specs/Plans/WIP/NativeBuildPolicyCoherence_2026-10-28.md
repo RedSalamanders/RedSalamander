@@ -174,3 +174,12 @@ without suppressing diagnostics. A tested environment-property prototype was dis
 the default compiler/SDK external roots. Current implementation changes only the pinned binding, its tests
 and documentation; the five shared native policy implementations remain identical. Hosted confirmation and
 current-source noninteractive qualification remain pending.
+
+The next hosted head76bf0358 confirms the header-classification repair: its real solution build and attestation
+pass with zero warnings and errors. The CI step then fails because its validator invocation still reconstructs
+the legacy 40-character source folder. The invocation now uses the existing `Get-RSDxUiSourceIdentity` resolver,
+which locates the 16-character folder and verifies the full clean pin before any SDK script runs. A child-process
+regression executes the exact workflow block from a foreign directory against the normally restored source;
+all 37 workflow-policy cases pass. The unstarted noninteractive waiter was stopped before launching a child so
+runtime qualification can use this newer tooling source. The ongoing six native builds and receipt preservation
+remain unchanged at76; this follow-up changes no native/compiler/linker input.

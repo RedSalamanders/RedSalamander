@@ -37,6 +37,8 @@ It preserves the caller's environment and retains the broken compiler/linker con
 The pinned-project binding also classifies CI's injected application vcpkg include directory
 as external, retaining MSVC/SDK defaults. `CiDependencyWarnings.Tests.ps1` compiles contained
 before/after and first-party negative controls; it launches no application or desktop input.
+Post-build CI uses `Get-RSDxUiSourceIdentity` to locate and verify the short SDK checkout
+before executing its native matrix validator. The workflow must not construct a full-hash source path.
 `Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
 CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
 product validation already passed in another environment; neither form creates a commit.
