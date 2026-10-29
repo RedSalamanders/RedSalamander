@@ -1,0 +1,16 @@
+{
+  "role": "Diagnostic-only direct native export; not Full repository or performance qualification",
+  "source": "ae990475a482b188417044f3d5f8da922bf143ba",
+  "run": "20261029T100741Z-97664-698f1531cd5c45b5abd819d01e038792",
+  "dll": "E:\\RedSalamander.Perf\\bi28\\.build\\x64\\ASan Debug\\Plugins\\FileSystemCurl.dll",
+  "dllSha256": "0B8DA994ACD6C9F3D51792FEB82888B1A0297EFBBF8FEB56C845A9859F9A2837",
+  "commonSha256": "47B8D7760CB667F64B32C2FD695DC74C3F779A1484D2C6D30C10F228F646DAC5",
+  "passed": 304,
+  "failed": 0,
+  "hresult": 0,
+  "elapsedMs": 28800,
+  "metrics": "E:\\RedSalamander.Perf\\runs\\20261029T100741Z-97664-698f1531cd5c45b5abd819d01e038792\\artifacts\\curl-metrics.jsonl",
+  "expectedChecks": null,
+  "probe": "Entry",
+  "recordedUtc": "2026-10-29T10:08:10.4517918Z"
+}

@@ -423,3 +423,4 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_192709_PublicFocusedClosure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_201045_CiArmBrowserProfileFailure/** -text -whitespace
+/Specs/TestRuns/Local-x64/CurlFixture/** -text -whitespace

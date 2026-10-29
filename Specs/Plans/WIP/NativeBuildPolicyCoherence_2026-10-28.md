@@ -35,6 +35,12 @@ an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
 
+The [curated Curl diagnostics](../../TestRuns/Local-x64/CurlFixture/2026-10-29_101838/README.md)
+retain complete original metric streams, result records and digest/size/row-count
+bindings for the real fallback witness, 310-check Entry run and managed-host Copy
+timeout. Explicit pre-stage archive validation passes all eight files. These are
+diagnostics, not fresh Full application evidence or a paired timing result.
+
 The expanded Entry export passes 310 checks; the native FileOps caller's fixed
 expectation must advance from 298 to 310 with those additions. Preserve Copy's
 142-check expectation. A cancelled old-source queued test conservatively marked
