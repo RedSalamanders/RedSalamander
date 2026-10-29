@@ -829,6 +829,8 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     for (const PluginEntry& deferredEntry : _deferredUnloadEntries)
     {
         AddDeferredPlaceholder(deferredEntry);
+        // Retained module metadata predates this refresh; current settings govern new creation.
+        _plugins.back().disabled = ! deferredEntry.id.empty() && disabledIds.contains(ToLowerInvariant(deferredEntry.id));
         if (! deferredEntry.id.empty())
         {
             seenIds.insert(ToLowerInvariant(deferredEntry.id));

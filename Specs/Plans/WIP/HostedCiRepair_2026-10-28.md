@@ -850,3 +850,34 @@ The handoff after this runtime candidate changes only explanatory comment placem
 evidence/documentation; it does not turn these focused results into Full qualification.
 PrePush selected obligations and fresh hosted x64/ARM64 PR/main workflow acceptance
 remain explicit gates. Keep this plan ACTIVE until the main workflows actually pass.
+
+### Deferred disabled-state review follow-up
+
+PR review thread `PRRT_kwDORLlRgc6xmpqM` identifies a valid settings-admission bug:
+the initial deferred-entry discovery loop copied an older module's disabled flag,
+whereas loaded entries used the current case-insensitive disabled-ID settings.
+Reconcile each deferred placeholder with the current settings after copying its
+metadata. Preserve plugin kind, the live-owner unload gate and ordinary factory
+refusal/recovery behavior. Configuration and metadata factories keep their existing
+admission rules. This change has no visual surface or gallery output change.
+
+The new `settings_deferred_plugin_disabled_state_tracks_settings` case exercises
+ViewerImgRaw and Terminal in both directions, checks their real optional unload
+probe before rediscovery, retains a callable old owner, and proves disabled refusal
+and enabled recovery after retirement without an extra Refresh. Cleanup restores
+settings and proves both ordinary catalog entries are loadable again. Existing
+roundtrip assertions and five-second lifecycle budgets remain unchanged.
+
+Diagnostic `20261029T150019Z-81188-65955f6acc41449e8908a8151935e7c1` used
+ViewerText, which has no optional unload probe, and crashed after crossing Refresh
+with an unsupported retained legacy interface. Retain that failed fixture as such;
+it is not a runtime reproduction of the disabled-state bug. The corrected fixture
+explicitly admits only plugins whose live instances hold their real unload gate.
+The second before-fix diagnostic, run
+`20261029T151839Z-54156-881d85e1b846432db60268274eb38c94`, completed its Debug
+Rebuild but waited over twenty minutes for the shared desktop lease. Its owned
+controller was stopped only after verifying that no native child had launched.
+It is retained as interrupted and NOT_EVALUATED, with no disabled-state runtime
+failure claim. Fresh full-solution Rebuilds precede positive qualification in
+Debug, ASan Debug and test-enabled Release. All local and hosted gates for this
+follow-up remain open until their actual results are recorded.

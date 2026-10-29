@@ -1271,6 +1271,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   state. After the work and owning UI are quiescent, the case must refresh the
   manager again and prove required built-in entries are loadable before it
   returns; unusable deferred placeholders must not leak into later cases.
+- `settings_deferred_plugin_disabled_state_tracks_settings` uses ViewerImgRaw and
+  Terminal, which hold their real unload gates for live interface instances. Verify
+  that probe before crossing rediscovery; a legacy plugin without the optional
+  unload probe cannot establish a deferred-state fixture. Cover disable and enable
+  transitions while the old owner lives, disabled refusal after retirement, and
+  ordinary re-enabled recovery without an extra Refresh. Keep the existing busy
+  and not-supported results, then restore settings and the ordinary catalog.
 - Tests for retained process-owned windows must obtain the HWND from an owning
   debug hook or another process-scoped lookup. A class-only `FindWindowW(...)`
   result is not valid teardown or identity evidence because another running app
