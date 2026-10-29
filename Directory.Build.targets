@@ -330,4 +330,5 @@
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
     <ClCompile><AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)ThirdParty\RedMonitor\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
   </ItemDefinitionGroup>
+  <Import Project="$(MSBuildThisFileDirectory)Build/NativeBuildPolicy.targets" />
 </Project>

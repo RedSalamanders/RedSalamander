@@ -1,0 +1,244 @@
+# I53 Native build policy, terminal results and short DxUi paths
+
+Status: ACTIVE
+Date: 2026-10-28
+Owner: build maintainers
+
+The user's agreed policy is /Wall with /WX disabled and zero warnings accepted;
+Debug uses EditAndContinue, ASan Debug uses ProgramDatabase. Release enables
+explicit COMDAT folding (/OPT:ICF); Debug and ASan Debug disable it.
+The owning build contract is [the toolchain contract](../../Build/Build_Toolchain.md).
+Five repositories implement the same policy without implicitly advancing DxUi pins.
+
+## Checklist
+
+- [x] Preserve the pre-change effective-profile audit and isolate changes from concurrent tooling work.
+- [x] Restore RedTilde ARM64 through its normal entrypoint and pass the required policy/lease checks.
+- [x] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
+- [x] Unify green zero-warning build results, diagnostic/log links and automatic terminal executable hyperlinks where supported, preserving plain text and existing build/run semantics.
+- [x] Shorten source-commit and output-fingerprint folders to 16 hex characters with full identity validation and collision refusal; retain existing data without cleanup.
+- [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
+- [x] Publish zero-warning guidance and normative build/path/terminal contracts, with meaningful tooling tests.
+- [ ] Execute affected tests, evaluated profiles, required native builds and applicable runtime qualification; retain every failed result and distinguish cross-builds from runtime tests.
+- [ ] Resolve the reproduced historical C11 extra passive announcement from bounded per-session protocol evidence, retaining the current native Copy fixture's listener, contents, completion and deadline predicates until the origin is proved.
+- [ ] Fold/check the changelog; validate formatting/specs/tooling and close this plan only after all required gates pass.
+
+## Decisions and limits
+
+Source pins and full SHA256 identities remain authoritative; folder prefixes are
+locators. No source clone is reset for a prefix collision. Existing historical
+output is retained in place. Build success is green only after successful
+native exit, zero diagnostics and required attestation. Hyperlinks never launch
+an application automatically and fall back to quoted launch commands.
+The existing explicit RedSalamander Embedded compiler-debug recovery mode remains
+an attested exception; ordinary Debug/ASan profiles use the shared defaults.
+
+## Evidence
+
+The [curated Curl diagnostics](../../TestRuns/Local-x64/CurlFixture/2026-10-29_101838/README.md)
+retain complete original metric streams, result records and digest/size/row-count
+bindings for the real fallback witness, 310-check Entry run and managed-host Copy
+timeout. Explicit pre-stage archive validation passes all eight files. These are
+diagnostics, not fresh Full application evidence or a paired timing result.
+
+The expanded Entry export passes 310 checks; the native FileOps caller's fixed
+expectation must advance from 298 to 310 with those additions. Preserve Copy's
+142-check expectation. A cancelled old-source queued test conservatively marked
+the x64/ASan artifacts interrupted; the normal guard refuses reuse until a full
+solution `build.ps1 -Rebuild` in exactly that profile clears the marker. Keep the
+guard and marker intact and use that governed recovery before final runtime work.
+
+The controlled `ae990475a` ASan Entry export passes 304/0. Its exact owned refused
+port 60143 appears in both the libcurl failed-connect row and the same-session
+`USER -> PASS -> PWD -> CWD probe -> EPSV -> PASV` retirement tail, followed by one
+successful LIST. Candidate accounting now conserves accepted transfers and only
+these classified fallback announcements; six additional controls preserve rejection
+of unexplained retirements, missing/invented accepts and excess creations. The
+original large-corpus deadline and content/completion predicates are unchanged.
+Disable Nagle only on the fake FTP server's accepted control sockets to remove
+implicit small-reply pacing; production networking and explicit fixture stalls are
+unchanged. Fresh native/Full qualification and matched timing evidence remain open.
+
+The original C11 route also records a cursor data-connect failure at 07:26:12.165 UTC,
+inside its 07:22:52--07:26:39 window. Add a controlled real-libcurl EPSV refusal/PASV
+fallback witness with exclusive port ownership and exact command/transfer counts.
+This must pass before attributing a pending announcement to fallback; the large
+Copy fixture's existing predicates remain unchanged. The second `1c1da3629`
+diagnostic still exhausts the unchanged Wide ASan deadline after 4017/4097
+publications under concurrent build/test activity. Both this failure and the
+preceding 142/0 diagnostic are preserved; neither erases historical C11.
+
+The diagnostic-only `edb2af23` direct Curl run exhausts the existing six-minute
+ASan Wide/CopyItem/concurrency1 deadline after 3952/4097 publications, without
+reproducing C11's pending passive retirement. Its listing-build metrics show
+75.6 seconds in repeated destination serialization. Replace per-row general
+formatting with fixed grammar and decimal conversion, preserving exact byte
+oracles and adding the maximum-size boundary. This does not establish or waive
+the separate C11 origin; native/focused/Full validation remains open.
+
+Baseline audit: E:/DxUi.Perf/flag-coherence-20261028-aea0f188.
+Current task evidence: E:/DxUi.Perf/build-policy-evidence-20261028.
+RedTilde ARM64 restore and required policy/lease logs are under that task's
+RedTilde-ARM64-restore folder; both exited zero before implementation.
+Candidate dependency: `1f385ee013189e967ad5298f2311801a066de2c7` (API4). Its six native builds, all three ordinary x64 profiles and all three focus profiles passed; focus runs recorded zero capability skips and verified restoration. Task logs `cs28-*-qualification3.log`, `cs28-*-full2.log` and `cs28-*-focus6.log` retain those separate gates. Product validation still requires its normal restore, matching headers/archive, six builds and Fresh Full execution.
+
+The unfiltered Fresh Full Debug Commands run on9a73 completed963 cases with one failure in
+`cmd_pane_fileops_retained_source_and_mixed_journeys`. Its original compound recovery assertion had no per-field
+diagnostics; the failed trace is preserved under this project's `Commands-retained-source-failure1` evidence.
+Source review establishes that a live popup may show worker-finished before the completed summary is published.
+The fixture now waits, within its existing deadline, for the exact summary before reading the completed popup
+projection, then retains all original clipboard/identity/disposition/action assertions and traces their values.
+No production behavior changes and no original runtime cause is claimed from the passing-source analysis alone.
+Focused Debug/Release/ASan and final unfiltered Full qualification remain required; the current older-source Full
+continues collecting its remaining entries before any build/output replacement.
+
+The existing post-finished/pre-summary worker pause point now forces this boundary in the same real Move journey.
+The test requires a finished live snapshot with no exact summary and no recovery action while the worker is held,
+releases the existing pause through RAII on every exit, then waits for actual publication and preserves every
+original identity assertion. This is a deterministic control of the premature-read condition, not a timing sleep
+or a synthetic completed-summary substitute. The original uninstrumented failure's exact field remains unknown.
+
+The same older-source Full run reported two tooling failures: the long-path restore fixture's fixed padding
+produced only247 characters after source locators shortened, and the tooling README lacked the new path module.
+The fixture now sizes its padding from the actual16-character locator and still requires a metadata path above260
+characters; the README module table again covers the path helper. Final Full validation remains pending.
+The first focused retry then reached the new policy identity and exposed missing policy files in this synthetic
+restore root. The fixture now supplies the two actual first-party policy inputs and verifies their identity fields
+alongside all original compiler-host/environment/API-mismatch checks; the failed retry is retained.
+The repaired dependency and tooling-governance suites each pass12 cases with zero failures or skips in a new marked
+sandbox run. This qualifies those tooling repairs; the native recovery case and final Full matrix remain pending.
+
+The older-source Full FileOps run also failed its mandatory R4-A19 independent-volume control because the caller
+omitted `-AllowAlternateVolumeTestRoot`. The selected primary sandbox already has an enabled resource naming
+the existing marked C:/RedSalamander.Perf, on a different fixed NTFS volume. No new drive-root initialization is
+needed. The scoped entrypoint now exposes and forwards the canonical opt-in without changing its disabled default.
+Behavior tests execute the real wrapper for Full/focused FileOps with and without the flag. Final native and Full
+qualification will use the normal explicit opt-in and the existing exact-root registry restriction.
+The focused scoped-testing suite passes all9 cases with zero failures/skips, including four actual child-process
+wrapper combinations. Its first attempt reached all four forwarding assertions but failed fixture cleanup by
+calling a private helper directly; that failed receipt remains, and the corrected test uses its owning module
+without expanding the production export surface. The canonical PR execution digest is refreshed and verified.
+
+
+## Local qualification checkpoint, 2026-10-29
+
+The current five-repository audit passes 504 native profiles and 73,502 evaluated setting groups. All four consumers
+pass their 24 required pinned-archive profiles; the additional Tilde lease profiles and negative controls pass.
+Exact source identities, raw metadata and field differences are retained under the task's final-audit-20261029
+evidence. Ordinary Debug and ASan formats remain separate from the recorded RedSalamander Full Embedded recovery mode.
+
+Source 6acf passes six native builds and all three focused recovery profiles with independently verified held/publication/action facts. Debug, ASan and the normal Release retry are active. The first concurrent Release Full attempt is retained as BLOCKED_ATTESTATION: another profile owned the shared-dependency scope. The retry was admitted after both other profiles completed their front-loaded artifact-mutating entries and re-attestation; runtime readers may overlap under the existing desktop lease.
+
+The ASan Commands run found an additional first-frame test failure: Find help had synchronous layout/backdrop state but no dispatched paint when inspected. The test used one Commands pump turn, which deliberately yields after 10 ms. The candidate test now waits at most two scaled seconds for the actual first paint with the shared bounded helper, records elapsed time/message count on failure, and retains every visibility, opacity, scrim and chrome assertion. It neither forces a paint nor injects input. The original failed trace and source/executable hashes are preserved under the task's `Sal-6acf-ASan-Find-help-first-frame-failure1` evidence. Candidate native/focused/Full qualification remains pending; this timing diagnosis is not a claim that the old product renderer was defective.
+
+The sealed terminal audit also found `tooling.pester` failed in all three profiles despite 1043 passed, zero failed and three skipped tests. The archive-inventory skip is already an allowed history-dependent contract. The two unallowed skips were the installer mirror test's stale full-commit source path and the missing `.build/vcpkg-tool` prerequisite. The mirror test now uses the shared source locator and checks the complete Git HEAD before import; normal DxUi restore and the exact pinned tool checkout provide the required real inputs. The strict skip policy is unchanged.
+
+ASan's build-toolchain fixture also collided with another profile's still-active MSBuild property query in general Pester. Its guard correctly refused the overlap; the first front-loaded artifact-writer admission was insufficient because general tooling can evaluate MSBuild too. Preserve this failed receipt and run the next Full profiles serially. This is an orchestration repair, not a reason to weaken process or shared-dependency guards.
+
+The repaired mirror/version-database suite executes all 29 cases with zero failures or skips after normal DxUi restore and exact pinned tool-source materialization. The isolated shared-runtime Clean suite passes all ten cases with explicit x64/ASan Debug context. Tool inventory validation and specification inventory pass, with zero blocking spec findings. A broader direct-Pester diagnostic in the unbuilt integration checkout is retained as failed setup: six reparse/link fixtures correctly refused its ambient TEMP/TestDrive outside the marked sandbox, and ProductUiTests was not built there. Final complete tooling must use the canonical runner's contained environment and attested native products; no guard or skip-policy change is justified by that diagnostic.
+
+## Current Curl and native qualification, 2026-10-29
+
+Source a94a68b5 incorporates the controlled pinned-libcurl EPSV/PASV origin witness, narrowly classified listener conservation and the native caller's corrected 310 Entry total (Copy remains 142). Only immediate same-session EPSV-to-PASV retirement is classified; unexplained retirements still fail, cap 64 and exact 4,097 payloads/status/deadlines remain. Entry's direct diagnostic passes 310/0. The managed-host Copy diagnostic still fails its unchanged six-minute serial deadline; it is not a native application or Full pass. The curated raw archive and its scope limits are linked above.
+
+The intentionally cancelled old-source C0 queue was unstarted but correctly marked the ASan artifact operation interrupted. Its marker is preserved; a normal full-solution Rebuild, rather than marker deletion, clears it and passes with zero warnings. All six final native profiles pass with zero warnings (Sal-a94a68-native-six-verified1.json). Actual native-host focused first-paint/C0 followed by fresh serial Full three remain pending. Each build uses an invocation-private compiler PDB endpoint after retained C1090/RPC failures; no compiler/linker or artifact-containment guard is weakened.
+
+Changed archive validation passes all eight new files. A voluntary whole-inventory check reports 213 historical over-size files and 32 over-size runs; none is in this change's archive. Their original diagnostics are retained externally without deleting history or raising archive limits.
+
+Actual native-host focused Entry and Copy pass with 310 and 142 checks respectively, and first-paint passes in
+all three x64 profiles. The unchanged a94a68 Debug Full subsequently reports 1,043 passed, two failed and one
+allowed skip in general Pester. One check used Pester 3's file-content `Contain` assertion for collection
+membership; the other inherited Full's Embedded override while asserting ordinary Debug `/ZI`. Both test-only
+repairs are isolated in the integration checkout while the original Full continues. A contained Pester 3 run
+from the original foreign working directory passes all 19 build-evidence cases and the complete real-profile
+policy audit, including independent negative controls and caller-environment preservation. Its records are
+`Sal-tooling-repair3-results.json` and the two `*-repair3.log` files in the task evidence root. This is focused
+repair evidence; changed workspace identity requires fresh Full qualification rather than exact Resume reuse.
+
+The a94a68 Debug Full passed CompareDirectories (260 passed, zero failed, 21 environment skips). Commands later
+failed the path-detail foreground boundary: Zoom PID86768 owned the foreground rather than the test popup.
+At the human's request to continue noninteractive work only, the verified owned Full process tree was stopped.
+The interrupted native record retains 910 passed, one failed and six skipped cases; it is not a Full verdict.
+Automatic interactive continuation exited, and focus qualification remains pending. Forced cancellation does
+not claim verified native RAII foreground/pointer restoration; the interrupted artifact markers are retained
+for normal governed Rebuild recovery. No independently launched application was targeted.
+
+PR149 head 3b6eb4170 also exposed a real CI-only zero-warning failure: compilation completed with zero errors
+but emitted 920 WIL diagnostics from pinned DxUi. CI prepends its application vcpkg include through `CL=/I`,
+which can precede the SDK's isolated dependency include. The pinned-project binding now appends that exact
+declared CI dependency root to evaluated `ExternalIncludePath`, retaining the existing MSVC/SDK roots and
+every first-party warning. The real compiler regression passes dependency-warning before/after and first-party
+negative controls; all 36 release-workflow policy checks pass. The first fixture attempt's duplicate empty
+imports emitted three MSB4011 warnings and is retained; four distinct empty imports correct the fixture
+without suppressing diagnostics. A tested environment-property prototype was discarded because it replaced
+the default compiler/SDK external roots. Current implementation changes only the pinned binding, its tests
+and documentation; the five shared native policy implementations remain identical. Hosted confirmation and
+current-source noninteractive qualification remain pending.
+
+The next hosted head76bf0358 confirms the header-classification repair: its real solution build and attestation
+pass with zero warnings and errors. The CI step then fails because its validator invocation still reconstructs
+the legacy 40-character source folder. The invocation now uses the existing `Get-RSDxUiSourceIdentity` resolver,
+which locates the 16-character folder and verifies the full clean pin before any SDK script runs. A child-process
+regression executes the exact workflow block from a foreign directory against the normally restored source;
+all 37 workflow-policy cases pass. The unstarted noninteractive waiter was stopped before launching a child so
+runtime qualification can use this newer tooling source. The ongoing six native builds and receipt preservation
+remain unchanged at76; this follow-up changes no native/compiler/linker input.
+
+Current main advanced to0ed4d6ff1 through the separate Ghostty 1.4 merge. Its runtime lock, staging declaration,
+builder/qualification tooling and ViewerPE runner require renewed integration qualification; earlier1.3 images
+and native receipts retain their original identities. The local integration preserves both parents' changelog
+entries through normal fragments and all open plans. This plan takes I53, keeping main's Ghostty I51 and the
+parallel CI repair's I52 separate. Combined-source tooling/spec inventories have zero blocking findings, and
+85 focused checks pass (19 build-evidence, one real warning-policy compiler control, 42 workflow-policy,
+eight candidate-review and15 candidate-overlay cases). A retained first attempt found the failed-build guard
+test still extracted through the removed legacy `$pin` line; its boundary now uses the following verified-source
+import, retaining both executed build-exit controls. The admitted859 noninteractive run remains on its captured
+source. Integration and updated native/runtime/performance qualification are still open.
+
+## Current main integration and measurement checkpoint, 2026-10-29
+
+Published2920df6b passes all six ordinary native profiles with zero warnings/errors, including the
+Ghostty1.4 runtime. Its hosted x64 Debug build, attestation and short-source matrix validator also pass.
+Immutable per-profile receipts/toolchain/runtime identities are retained externally. The last ARM64
+ASan invocation was unstarted at a20GiB capacity guard; lossless filesystem compression of inactive
+intermediates preserved file bytes and allowed its normal build to pass. Historical test evidence and
+frozen images remain intact.
+
+Four prespecified quiet studies completed250 native samples across Xe, DxUi, Prism and Tilde, with no
+observed concurrent compilation/validation. Fourteen of19 metrics have unstable same-side controls;
+the remaining five detect no significant fixture change. No measured regression or improvement is
+established. No run is repeated to select a passing result, and the public performance policy is not
+self-qualified. Sal's current shipping study remains open.
+
+Main then merged PR146 as28e70e694, changing product C++ and upgrading its API4 DxUi pin to881e5d5f.
+That pin contains substantial control/semantic-document changes absent from the older1f385ee0
+maintenance pin. The integration deliberately selects published4cdf1ce5: it includes that newer
+control surface and this task's warning/ICF repairs. Its native inputs match24aafbc5, already qualified
+in six library builds,57 ordinary suite executions and three default focus profiles. Its six hosted
+native jobs also pass. API revision4 and the single DxUi.lib boundary remain unchanged. Library
+qualification does not qualify this product adoption. Normal product restore, native/selected runtime
+gates and a new shipping closure remain required. The older2920 noninteractive run remains bound to
+its source while its active writer drains. The human's noninteractive-only instruction remains in force.
+
+## Explicit merge handoff, 2026-10-29
+
+The developer requested merging all five repositories after the outstanding validation and CI limits
+were identified. The resolved integration preserves main `28e70e6940619f1c82eb07958da762de34c04b4e`
+and task source `2920df6b48028f3b74ea718b6466c14a80a45142`. It retains both parent changelogs,
+the I51/I52/I53 plans, the FTP listener-conservation controls and the 310-check Entry fixture expectation.
+The listing formatter emits one prefix and suffix; the maximum-size case remains portable across size_t widths.
+
+Both architectures restore API4 DxUi `4cdf1ce52c7785446698e346b8aec058ed6a9283` successfully through
+the normal entrypoint. The resolved source passes 88 focused tooling tests (19 build-evidence, one
+warning-policy compiler control, 45 workflow-policy, eight candidate-review and 15 candidate-overlay),
+format checks for the two conflict-resolved C++ files, the canonical PR execution digest check, and the
+specification inventory with zero blocking findings. Required native-policy evaluation includes the
+new pin rather than relabeling evidence from the previous dependency.
+
+This merge does not establish complete product qualification for the newly combined source and pin.
+Earlier six-profile native results remain bound to 2920df6b and its previous DxUi dependency; the old
+noninteractive coordinator was stopped at a verified writer-free boundary as superseded, not passed.
+Current product native/runtime qualification and the new shipping size/performance closure remain open.
+Further focus-taking execution is paused by the developer. DxUi's failed paired CI preflight, private
+repository billing failures, and inconclusive quiet studies retain their original verdicts. WIP remains
+active for those outstanding gates after integration.

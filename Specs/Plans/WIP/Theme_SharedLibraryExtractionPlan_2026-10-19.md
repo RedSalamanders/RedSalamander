@@ -588,7 +588,9 @@ The r2 contract still holds, plus the ABI headers.
   - **link mode** for host binaries: a ProjectReference that passes through the configuration, the annotation policy, `PreferredToolArchitecture` and WholeProgramOptimization, re-adds the include path, and checks the pin through a stamp file;
   - **include-only mode** for plugin and test projects that need only the ABI headers.
 - RedSalamander, RedXe and RedPrism bind the DxTheme lock and module into their build evidence and receipts. In RedSalamander that is `BuildEvidence.psm1:675, 756, 1000` and `ValidationFingerprint.psm1:604-606`, plus an impact rule that makes a lock change trigger Full.
-- The warning profiles from r2 §4.3 apply: RedSalamander `/Wall` with `/external`; RedXe and RedPrism `/W4 /WX /sdl`; RedPrism analysis; Windows.h permutations.
+- The shared native policy supersedes r2 §4.3's former warning profiles: RedSalamander, RedXe and RedPrism use
+  `/Wall` with `/WX` disabled and require zero emitted warnings. Preserve reviewed external-header boundaries,
+  SDL, RedPrism analysis and Windows.h permutations.
 
 ## 5. Extraction procedure
 

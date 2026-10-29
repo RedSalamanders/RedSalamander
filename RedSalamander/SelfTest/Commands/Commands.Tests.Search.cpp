@@ -4570,18 +4570,31 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                                   immediateOverlay.paintCount));
         state.Require(immediateOverlay.hasBackdropBitmap,
                       L"Find result actions help should capture the owner backdrop before first paint so the modal scrim does not render over black.");
-        PumpPendingMessages();
         RedSalamander::Ui::AlertOverlayWindowDebugSnapshot overlayPaint{};
-        state.Require(RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(helpOverlay, overlayPaint),
-                      L"Find result actions help should expose alert overlay debug paint state.");
+        // The Commands pump yields after 10 ms; another window can consume that
+        // turn before WM_PAINT reaches this overlay. Observe its actual first
+        // frame without forcing a paint or supplying another input event.
+        const auto firstPaint = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(helpOverlay, overlayPaint) && overlayPaint.paintCount > 0u;
+        }, {.timeout = SelfTest::Scale(2000ms), .operationName = L"Find result actions help first frame"});
+        Trace(std::format(L"find_help_first_frame: ready={} waitMs={} dispatchedMessages={} paints={} minimumOpacity={:.3f} scrimOpacity={:.3f}",
+                          firstPaint.conditionMet ? 1 : 0,
+                          firstPaint.elapsed.count(),
+                          firstPaint.dispatchedMessageCount,
+                          overlayPaint.paintCount,
+                          overlayPaint.minimumDrawOpacity,
+                          overlayPaint.lastDrawScrimOpacity));
+        state.Require(firstPaint.conditionMet, std::format(L"Find result actions help should publish its first paint; {}", firstPaint.timeoutDiagnostic));
         state.Require(overlayPaint.visible && overlayPaint.hasLayout && overlayPaint.paintCount > 0u && overlayPaint.minimumDrawOpacity >= 0.95f,
                       std::format(L"Find result actions help should render a visible first frame without mouse movement; visible={}, hasLayout={}, paints={}, "
-                                  L"opacity={:.3f}, minimumOpacity={:.3f}.",
+                                  L"opacity={:.3f}, minimumOpacity={:.3f}, waitMs={}, dispatchedMessages={}.",
                                   overlayPaint.visible ? 1 : 0,
                                   overlayPaint.hasLayout ? 1 : 0,
                                   overlayPaint.paintCount,
                                   overlayPaint.lastDrawOpacity,
-                                  overlayPaint.minimumDrawOpacity));
+                                  overlayPaint.minimumDrawOpacity,
+                                  firstPaint.elapsed.count(),
+                                  firstPaint.dispatchedMessageCount));
         state.Require(overlayPaint.lastDrawScrimOpacity >= 0.45f,
                       std::format(L"Find result actions help should apply a real modal scrim opacity; saw {:.3f}.", overlayPaint.lastDrawScrimOpacity));
         state.Require(overlayPaint.usesSharedCloseChrome,

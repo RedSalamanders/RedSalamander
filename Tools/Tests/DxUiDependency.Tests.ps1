@@ -91,7 +91,7 @@ Describe 'Exact DxUi consumer dependency' {
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $rejected=$false; try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $rejected=$true }; $rejected | Should Be $true
         Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing | Should BeNullOrEmpty
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated source fixture.' }
@@ -120,7 +120,7 @@ Describe 'Exact DxUi consumer dependency' {
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
-        $source = Join-Path $dependency "source/$head"
+        $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated provenance fixture.' }
@@ -219,7 +219,7 @@ Describe 'Lighter DxUi source restore' {
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         (Join-Path $source "$deepDirectory/Deep.psm1").Length | Should BeGreaterThan 260
 
         & (Get-Module DxUiDependency) { param($Root, $Origin, $Commit, $Checkout)
@@ -244,7 +244,7 @@ Describe 'Lighter DxUi source restore' {
         # Without include/ the sparse checkout lacks a path the build reads.
         $head = New-RSDxUiRestoreOrigin -Path $origin -DeepDirectory 'Tools/deep' -Omit @('include')
         $root = Join-Path $TestDrive 'failing-restore'
-        $source = Join-Path $root ".build/dependencies/DxUi/source/$head"
+        $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         $install = { param($Root, $Repository, $Commit, $Checkout)
             Install-RSDxUiPinnedSource -RepoRoot $Root -Repository $Repository -Commit $Commit -Source $Checkout }
         { & (Get-Module DxUiDependency) $install $root $origin $head $source } | Should Throw "lacks 'include'"
@@ -264,12 +264,19 @@ Describe 'Lighter DxUi source restore' {
 Describe 'DxUi consumer profile evaluation' {
     It 'uses the first-party host during restore and restores the caller environment after success or failure' {
         $root = Join-Path $TestDrive 'host-restore'
-        # Full uses a deeper sandbox than focused Pester runs. Exercise that path length in both entrypoints.
-        if ($root.Length -lt 160) { $root = Join-Path $root ('x' * (160 - $root.Length)) }
+        # Exercise a genuinely long Git metadata path in both focused and deeper Full sandboxes.
+        # Size the padding from the shortened source locator rather than the old 40-character folder.
+        $metadataSuffix = '.build/dependencies/DxUi/source/' + ('0' * 16) + '/.git/hooks/fsmonitor-watchman.sample'
+        $metadataPath = Join-Path $root $metadataSuffix
+        if ($metadataPath.Length -lt 280) { $root = Join-Path $root ('x' * (280 - $metadataPath.Length)) }
         $origin = Join-Path $root 'fixture-origin'
-        foreach ($relative in @('RedSalamander','Dependencies','fixture-origin/include','fixture-origin/Tools')) {
+        foreach ($relative in @('RedSalamander','Dependencies','Build','fixture-origin/include','fixture-origin/Tools')) {
             [void](New-Item -ItemType Directory -Path (Join-Path $root $relative) -Force)
         }
+        foreach ($relative in @('Build/NativeBuildPolicy.targets','Build/PinnedDxUiPolicy.targets')) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination (Join-Path $root $relative)
+        }
+        $expectedPolicy = & (Get-Module DxUiDependency) { param($Root) Get-DxUiNativePolicyFields -RepoRoot $Root } $root
         '<Project><PropertyGroup><RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion></PropertyGroup></Project>' |
             Set-Content -LiteralPath (Join-Path $root 'Directory.Build.props')
         # A real MSBuild evaluation with profile-dependent first-party policy; no compilation or SDK fixture is needed.
@@ -305,7 +312,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
-        $source = Join-Path $dependency "source/$head"
+        $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         (Join-Path $source '.git/hooks/fsmonitor-watchman.sample').Length | Should BeGreaterThan 260
         & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
@@ -325,6 +332,8 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                         $expected = if ($requestedHost -or $configuration -eq 'Release') { 'x86' } else { 'x64' }
                         $resolved.Identity.preferredToolArchitecture | Should Be $expected
                         $resolved.Identity.releaseOptimizationPolicy | Should Be 'Gy-REF-GL-LTCG-full-v1'
+                        $resolved.Identity.nativeBuildPolicy | Should Be $expectedPolicy.nativeBuildPolicy
+                        $resolved.Identity.nativeBuildPolicySha256 | Should Be $expectedPolicy.nativeBuildPolicySha256
                         $resolved.Fingerprint | Should Not Be ('a' * 64)
                         [string]$env:PreferredToolArchitecture | Should Be $requestedHost
                     }

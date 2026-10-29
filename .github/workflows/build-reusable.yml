@@ -515,9 +515,10 @@ jobs:
 
           & $buildScript @buildArgs
           if ($LASTEXITCODE -ne 0) { throw "Solution build failed with exit code $LASTEXITCODE." }
-          $pin = Get-Content Dependencies/DxUi.lock.json -Raw | ConvertFrom-Json
           # DxUi API revision 3 replaced its Python build-matrix validator with this script of its consumer interface.
-          & pwsh -NoProfile -NonInteractive -File ".build/dependencies/DxUi/source/$($pin.commit)/validate-build-matrix.ps1" -Root .
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Build/DxUiDependency.psm1') -ErrorAction Stop
+          $dxUiSourceIdentity = Get-RSDxUiSourceIdentity -RepoRoot $env:GITHUB_WORKSPACE
+          & pwsh -NoProfile -NonInteractive -File (Join-Path $dxUiSourceIdentity.Source 'validate-build-matrix.ps1') -Root $env:GITHUB_WORKSPACE
           if ($LASTEXITCODE -ne 0) { throw 'First-party six-profile matrix validation failed.' }
 
       - name: Save pinned Terminal runtime cache

@@ -104,7 +104,7 @@ Describe 'Ghostty build evidence identity closure' {
             'RuntimeDependencies.props')
         $actual = [string[]]@(Get-RSGhosttyRuntimeIdentityInputPaths)
         ($actual -join "`0") | Should Be ($expected -join "`0")
-        $actual | Should Not Contain 'TerminalEngine.lock.json'
+        ($actual -contains 'TerminalEngine.lock.json') | Should Be $false
         foreach ($relativePath in $actual) {
             Test-Path -LiteralPath (Join-Path $repoRoot $relativePath) -PathType Leaf | Should Be $true
         }
@@ -561,7 +561,9 @@ Describe 'Operation Startrail build receipt records' {
     It 'stops the workflow after a failed build before another native command can replace its exit status' {
         $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $start = $workflow.IndexOf('& $buildScript @buildArgs', [StringComparison]::Ordinal)
-        $end = $workflow.IndexOf('$pin = Get-Content Dependencies/DxUi.lock.json', $start, [StringComparison]::Ordinal)
+        $start | Should BeGreaterThan -1
+        $end = $workflow.IndexOf('Import-Module (Join-Path $env:GITHUB_WORKSPACE ''Tools/Modules/Build/DxUiDependency.psm1'')', $start, [StringComparison]::Ordinal)
+        $end | Should BeGreaterThan $start
         $invocation = [scriptblock]::Create($workflow.Substring($start, $end - $start))
         $buildScript = Join-Path $TestDrive 'failed-build.ps1'
         [IO.File]::WriteAllText($buildScript, 'exit 23')

@@ -1,0 +1,57 @@
+<Project>
+  <PropertyGroup><NativeBuildPolicyImported>true</NativeBuildPolicyImported></PropertyGroup>
+  <!-- Shared first-party policy. Full identities remain in dependency receipts.
+       Owner: repository build maintainers; review by 2027-01-31.
+       4514/4710/4711 are optimizer-dependent inline remarks, 4820 is ABI padding,
+       and 5045 is the reviewed optional Spectre mitigation notice. These five
+       non-actionable diagnostics do not justify suppressing other warnings. -->
+  <!-- ExternalIncludePath is an evaluated and attested MSBuild input, unlike
+       opaque path-bearing AdditionalOptions. Keep dependency paths enumerable. -->
+  <PropertyGroup>
+    <ExternalIncludePath Condition="'$(DxUiOutputRoot)'!='' and '$(DxUiTriplet)'!=''">$(ExternalIncludePath);$(DxUiOutputRoot)vcpkg_installed\$(Platform)\$(DxUiTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(DxUiConsumerOutputRoot)'!='' and '$(DxUiConsumerTriplet)'!=''">$(ExternalIncludePath);$(DxUiConsumerOutputRoot)vcpkg_installed\$(Platform)\$(DxUiConsumerTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(DxUiResolvedRoot)'!='' and '$(DxUiRepositoryRoot)'==''">$(ExternalIncludePath);$(DxUiResolvedRoot)include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(VcpkgInstalledDir)'!='' and '$(VcpkgTriplet)'!=''">$(ExternalIncludePath);$(VcpkgInstalledDir)$(VcpkgTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(VcpkgInstalledDir)'!='' and '$(RedXeVcpkgTriplet)'!=''">$(ExternalIncludePath);$(VcpkgInstalledDir)$(RedXeVcpkgTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(VcpkgInstalledDir)'!='' and '$(RedPrismVcpkgTriplet)'!=''">$(ExternalIncludePath);$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="'$(VcpkgInstalledDir)'!='' and '$(RSVcpkgTriplet)'!=''">$(ExternalIncludePath);$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include</ExternalIncludePath>
+    <ExternalIncludePath Condition="Exists('$(MSBuildThisFileDirectory)..\ThirdParty\RedMonitor\include')">$(ExternalIncludePath);$(MSBuildThisFileDirectory)..\ThirdParty\RedMonitor\include</ExternalIncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DisableSpecificWarnings>4514;4710;4711;4820;5045;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <!-- MSVC 14.52 ARM64 LTCG re-emits C4746 from inlined SDK WRL and reviewed
+           rounding, ICF/benchmark observation, crash/ASan and page-prefault probes,
+           bypassing definition-local warning pragmas. This notice describes the
+           unchanged target volatile model; synchronization uses interlocked/atomic
+           operations. Keep this exception to ARM64 Release, not other diagnostics.
+           Owner: repository build maintainers; review by 2027-01-31. -->
+      <DisableSpecificWarnings Condition="'$(Platform)'=='ARM64' and '$(Configuration)'=='Release'">4746;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <ExternalDirectoriesEnv>EXTERNAL_INCLUDE;%(ExternalDirectoriesEnv)</ExternalDirectoriesEnv>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding Condition="'$(Configuration)'=='Release'">true</EnableCOMDATFolding>
+      <EnableCOMDATFolding Condition="'$(Configuration)'!='Release'">false</EnableCOMDATFolding>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Update explicit per-file metadata too: a project-local /Zi or /W4
+       must not silently replace the agreed configuration policy. -->
+  <ItemGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile Update="@(ClCompile)">
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <!-- Explicit per-file warning lists must retain the scoped LTCG notice exception. -->
+      <DisableSpecificWarnings Condition="'$(Platform)'=='ARM64' and '$(Configuration)'=='Release'">4746;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DebugInformationFormat Condition="'$(Configuration)'=='Debug' and '$(RSBuildCompilerDebugInformation)'!='Embedded'">EditAndContinue</DebugInformationFormat>
+      <DebugInformationFormat Condition="'$(Configuration)'=='ASan Debug' and '$(RSBuildCompilerDebugInformation)'!='Embedded'">ProgramDatabase</DebugInformationFormat>
+      <!-- Classify only dependency headers. Canonical SDK translation units still
+           compile their own public/implementation code under /Wall. -->
+      <!-- Only the six owned SDK targets get its private root. Public consumer
+           examples and application adapters keep the public include boundary. -->
+      <AdditionalIncludeDirectories Condition="'$(MSBuildProjectName)'=='DxUi' or '$(MSBuildProjectName)'=='DxUi.ControlTests' or '$(MSBuildProjectName)'=='DxUi.EmbeddedTests' or '$(MSBuildProjectName)'=='DxUi.FoundationTests' or '$(MSBuildProjectName)'=='DxUi.InteractiveLease' or '$(MSBuildProjectName)'=='DxUi.EmbeddedControls'">$(DxUiRepositoryRoot)src;$(DxUiRepositoryRoot)Tests\Support;$(DxUiRepositoryRoot)Tests\Embedded;$(DxUiRepositoryRoot)Samples\EmbeddedControls;$(DxUiRepositoryRoot)Samples\ComplexUi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemGroup>
+</Project>

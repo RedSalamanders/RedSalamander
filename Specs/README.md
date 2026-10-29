@@ -125,3 +125,5 @@ These checks do not expand the parser to general Markdown lists or indented code
 The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and folding on the default branch after merge; a change keeps its fragment and never edits `CHANGELOG.md`.
 
 The snapshot migration retains the original 133-file protected Done baseline as parentless commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853. Its Specs/Plans/Done tree is byte-identical to the former baseline. Both integrated master and the public source snapshot retain that commit in ancestry, so ordinary fresh clones can enforce the existing guard without importing DualTail history or changing completed documents.
+
+Common native build policy, zero-warning acceptance, terminal output and short consumer paths: [Build_ConsoleAndPaths](Build/Build_ConsoleAndPaths.md).

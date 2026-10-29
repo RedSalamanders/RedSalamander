@@ -84,6 +84,13 @@ The validator fails for unclassified tracked files, stale manifest paths,
 duplicate classifications, invalid lifecycle/visibility combinations, missing
 required metadata, or a public command whose help contract is incomplete.
 
+Tooling assertions MUST preserve their meaning across the supported Pester versions.
+Under Pester 3, `Should Contain` inspects file contents rather than collection membership.
+Identity-input inventories therefore use PowerShell collection operators and assert their
+Boolean result, retaining exact ordered-input equality and real-file existence checks.
+They MUST work from a foreign caller directory without treating relative identity paths
+as files in that directory.
+
 ## Public command contract
 
 New public commands use the canonical `Verb-Noun.ps1` form. Existing noncanonical

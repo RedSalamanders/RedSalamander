@@ -66,7 +66,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
-      "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes.",
+      "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes. Restore the pinned DxUi source and materialize .build/vcpkg-tool at its locked commit for the required integration checks.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
         "Tools/Run-AllTests.ps1"
@@ -74,7 +74,9 @@
       "prerequisites": [
         "PowerShell with Pester",
         "Visual Studio MSBuild and CMake/Ninja",
-        "Initialized marked test root"
+        "Initialized marked test root",
+        "Restored pinned DxUi source for the module mirror check",
+        "Pinned .build/vcpkg-tool checkout for the manifest version-database check"
       ],
       "sideEffects": [
         "Creates owned sandbox/configuration fixtures",
@@ -90,11 +92,26 @@
       "replacement": null
     },
     {
+      "path": "Tools/Tests/CiDependencyWarnings.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Compile real dependency-header and first-party warning controls through the pinned DxUi CI binding while retaining default MSVC/SDK external roots.",
+      "usage": "Run through the current tooling Pester profile in the governed test sandbox.",
+      "usedBy": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
+      "prerequisites": ["PowerShell 7 with Pester", "Windows MSVC 14.52", "Existing marked test sandbox and run context"],
+      "sideEffects": ["Compiles isolated static-library fixtures beneath the current run scratch directory; restores caller environment and uses a private compiler PDB endpoint"],
+      "outputs": ["Pester result and retained native warning-control logs"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": ["self"],
+      "replacement": null
+    },
+    {
       "path": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate real MSVC 14.52 compiler/linker and pinned DxUi Release policy in all supported profiles with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
       "prerequisites": [
@@ -119,7 +136,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate real MSVC 14.52 compiler/linker and pinned DxUi Release policy in all supported profiles with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "prerequisites": [
@@ -4882,7 +4899,10 @@
         "Tools/Tests/BuildReproducibility.Tests.ps1"
       ],
       "replacement": null
-    }
+    },
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Locate short dependency folders, refuse full-identity collisions and bind native compiler-policy file digests.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Modules/Build/DxUiPaths.psm1","kind":"module","usedBy":["Tools/Modules/Build/DxUiDependency.psm1","Tools/Tests/BuildConsoleCheck.ps1","Tools/Tests/VcpkgInstallSafety.Tests.ps1"]},
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Exercise zero-warning results, terminal links, launch-command quoting and short dependency identity collision refusal.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsoleCheck.ps1","kind":"test","usedBy":["Tools/Tests/BuildConsole.Tests.ps1"]},
+    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Run the owned build-console and dependency-path behavior checks through Pester.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsole.Tests.ps1","kind":"test","usedBy":["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1","Tools/Run-AllTests.ps1"]}
   ],
   "rules": [
     {

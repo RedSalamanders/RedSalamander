@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cctype>
 #include <charconv>
 #include <chrono>
@@ -117,12 +118,25 @@ struct EndpointSnapshot final
     size_t passiveListenerCreations           = 0u;
     size_t passiveListenerReuses              = 0u;
     size_t passivePendingRetirements          = 0u;
+    size_t passiveFallbackCreations           = 0u;
+    size_t passiveFallbackReuses              = 0u;
     size_t idleControlClosures                = 0u;
     std::array<DataTransferCounts, static_cast<size_t>(DataTransferKind::Count)> dataTransfers{};
     uint64_t listPayloadBuildUs = 0u;
     uint64_t listPayloadBytes   = 0u;
     HRESULT serverHr            = S_OK;
 };
+
+[[nodiscard]] bool PassiveAnnouncementsAccounted(const EndpointSnapshot& endpoint, uint64_t firstUses, uint64_t reuses) noexcept
+{
+    // Failed EPSV data connects cause pinned libcurl to send PASV before a
+    // transfer command. Count that retired announcement, never invent an accept.
+    return endpoint.passiveListenerCreations <= 64u && endpoint.passiveFallbackCreations <= endpoint.passiveListenerCreations &&
+           endpoint.passiveFallbackReuses <= endpoint.passiveListenerReuses && endpoint.passivePendingRetirements >= endpoint.passiveFallbackCreations &&
+           endpoint.passivePendingRetirements - endpoint.passiveFallbackCreations == endpoint.passiveFallbackReuses &&
+           firstUses == endpoint.passiveListenerCreations - endpoint.passiveFallbackCreations &&
+           reuses == endpoint.passiveListenerReuses - endpoint.passiveFallbackReuses;
+}
 
 [[nodiscard]] HRESULT SocketErrorToHResult() noexcept
 {
@@ -408,6 +422,18 @@ public:
     FakeFtpEndpoint(FakeFtpEndpoint&&)                 = delete;
     FakeFtpEndpoint& operator=(FakeFtpEndpoint&&)      = delete;
 
+    void RefuseNextPassiveAnnouncement()
+    {
+        std::scoped_lock lock(_stateMutex);
+        _refuseNextPassiveAnnouncement = true;
+    }
+
+    [[nodiscard]] unsigned short RefusedPassivePort() const
+    {
+        std::scoped_lock lock(_stateMutex);
+        return _refusedPassivePort;
+    }
+
     void SeedFile(std::string path, std::vector<uint8_t> bytes)
     {
         const std::string normalizedPath = NormalizeFtpPath(path, "/");
@@ -641,6 +667,8 @@ public:
             .passiveListenerCreations           = _passiveListenerCreations,
             .passiveListenerReuses              = _passiveListenerReuses,
             .passivePendingRetirements          = _passivePendingRetirements,
+            .passiveFallbackCreations           = _passiveFallbackCreations,
+            .passiveFallbackReuses              = _passiveFallbackReuses,
             .idleControlClosures                = _idleControlClosures,
             .dataTransfers                      = _dataTransfers,
             .listPayloadBuildUs                 = _listPayloadBuildUs,
@@ -665,6 +693,11 @@ private:
         unsigned short port = 0u;
         bool pending        = false;
         bool used           = false;
+        // Indices into the fixture's existing command inventory, scoped to this
+        // control session. Retain no extra command strings on the request path.
+        std::array<size_t, 8u> recentCommands{};
+        size_t recentCommandCount = 0u;
+        size_t nextCommandSlot    = 0u;
     };
 
     void SetServerFailure(HRESULT hr) noexcept
@@ -676,10 +709,11 @@ private:
         }
     }
 
-    void RecordCommand(std::string verb, std::string argument)
+    [[nodiscard]] size_t RecordCommand(std::string verb, std::string argument)
     {
         std::scoped_lock lock(_stateMutex);
         _commands.push_back(CommandRecord{.verb = std::move(verb), .argument = std::move(argument)});
+        return _commands.size() - 1u;
     }
 
     void AddDirectoryWithParentsLocked(std::string_view path)
@@ -1252,12 +1286,56 @@ private:
             // as the next command's data channel.
             passiveListener.socket.reset();
             passiveListener.pending = false;
-            std::scoped_lock lock(_stateMutex);
-            ++_passivePendingRetirements;
+            std::wstring detail;
+            {
+                std::scoped_lock lock(_stateMutex);
+                ++_passivePendingRetirements;
+                const size_t previousSlot =
+                    (passiveListener.nextCommandSlot + passiveListener.recentCommands.size() - 2u) % passiveListener.recentCommands.size();
+                const bool fallback =
+                    ! extended && passiveListener.recentCommandCount >= 2u && _commands[passiveListener.recentCommands[previousSlot]].verb == "EPSV";
+                if (fallback)
+                {
+                    ++(passiveListener.used ? _passiveFallbackReuses : _passiveFallbackCreations);
+                }
+                detail             = std::format(L"endpointPort={};listenerPort={};previouslyConsumed={};kind={};commands=",
+                                                 _port,
+                                                 passiveListener.port,
+                                                 passiveListener.used,
+                                                 fallback ? L"epsv-fallback" : L"unexplained");
+                const size_t first = passiveListener.recentCommandCount == passiveListener.recentCommands.size() ? passiveListener.nextCommandSlot : 0u;
+                for (size_t offset = 0u; offset < passiveListener.recentCommandCount; ++offset)
+                {
+                    const size_t slot            = (first + offset) % passiveListener.recentCommands.size();
+                    const CommandRecord& command = _commands[passiveListener.recentCommands[slot]];
+                    if (offset != 0u)
+                    {
+                        detail.append(L" -> ");
+                    }
+                    detail.append(Utf16FromUtf8(command.verb));
+                    // Authentication arguments never enter the diagnostic. The
+                    // bounded tail contains only fixture-generated path/offset
+                    // arguments, enough to distinguish probes from transfers.
+                    if (! command.argument.empty() && (command.verb == "SIZE" || command.verb == "MDTM" || command.verb == "CWD" || command.verb == "RETR" ||
+                                                       command.verb == "STOR" || command.verb == "LIST" || command.verb == "NLST" || command.verb == "RNFR" ||
+                                                       command.verb == "RNTO" || command.verb == "TYPE" || command.verb == "REST"))
+                    {
+                        detail.push_back(L' ');
+                        detail.append(Utf16FromUtf8(std::string_view(command.argument).substr(0u, 96u)));
+                    }
+                }
+            }
+            Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.PendingRetirement", detail.c_str(), 0u, _port, passiveListener.port, S_OK);
         }
         if (! passiveListener.socket)
         {
-            const HRESULT hr = CreateLoopbackEndpoint(passiveListener.socket, passiveListener.port);
+            bool refuse = false;
+            {
+                std::scoped_lock lock(_stateMutex);
+                refuse = std::exchange(_refuseNextPassiveAnnouncement, false);
+            }
+            const HRESULT hr = CreateLoopbackEndpoint(
+                passiveListener.socket, passiveListener.port, refuse ? LoopbackEndpointMode::BoundOnly : LoopbackEndpointMode::Listening);
             if (FAILED(hr))
             {
                 static_cast<void>(SendAll(control, "425 Cannot enter passive mode.\r\n"));
@@ -1265,6 +1343,10 @@ private:
             }
             std::scoped_lock lock(_stateMutex);
             ++_passiveListenerCreations;
+            if (refuse)
+            {
+                _refusedPassivePort = passiveListener.port;
+            }
             passiveListener.used = false;
         }
         else
@@ -1291,6 +1373,13 @@ private:
         if (FAILED(hr))
         {
             return hr;
+        }
+        // These fixture control replies are complete small protocol messages.
+        // Do not add Nagle/delayed-ACK pacing to the bounded 4,097-file oracle.
+        const BOOL noDelay = TRUE;
+        if (setsockopt(control, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), static_cast<int>(sizeof(noDelay))) != 0)
+        {
+            return SocketErrorToHResult();
         }
         hr = SendAll(control, "220 RedSalamander deterministic FTP fixture ready.\r\n");
         if (FAILED(hr))
@@ -1328,7 +1417,9 @@ private:
             const size_t separator     = line.find(' ');
             const std::string verb     = UpperAscii(separator == std::string::npos ? std::string_view(line) : std::string_view(line).substr(0u, separator));
             const std::string argument = separator == std::string::npos ? std::string{} : line.substr(separator + 1u);
-            RecordCommand(verb, argument);
+            passiveListener.recentCommands[passiveListener.nextCommandSlot] = RecordCommand(verb, argument);
+            passiveListener.nextCommandSlot                                 = (passiveListener.nextCommandSlot + 1u) % passiveListener.recentCommands.size();
+            passiveListener.recentCommandCount = (std::min)(passiveListener.recentCommandCount + 1u, passiveListener.recentCommands.size());
 
             {
                 unsigned int stallMs = 0u;
@@ -1742,6 +1833,10 @@ private:
     size_t _passiveListenerCreations           = 0u;
     size_t _passiveListenerReuses              = 0u;
     size_t _passivePendingRetirements          = 0u;
+    size_t _passiveFallbackCreations           = 0u;
+    size_t _passiveFallbackReuses              = 0u;
+    bool _refuseNextPassiveAnnouncement        = false;
+    unsigned short _refusedPassivePort         = 0u;
     size_t _idleControlClosures                = 0u;
     std::array<DataTransferCounts, static_cast<size_t>(DataTransferKind::Count)> _dataTransfers{};
     uint64_t _listPayloadBuildUs = 0u;
@@ -6459,6 +6554,87 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
             }
         }
         {
+            FakeFtpEndpoint fallback(UploadRetention::Complete);
+            fallback.SeedFile("/probe/known.bin", {1u, 2u, 3u, 4u});
+            fallback.RefuseNextPassiveAnnouncement();
+            HRESULT hr = fallback.Start();
+            ResolvedLocation resolved{};
+            if (SUCCEEDED(hr))
+            {
+                hr = ResolveLocation(
+                    Protocol::Ftp, FileSystemCurl::Settings{}, std::format(L"//anonymous@127.0.0.1:{}/probe", fallback.Port()), nullptr, true, resolved);
+            }
+            if (! DebugCheck(SUCCEEDED(hr), L"EPSV fallback fixture starts with an exclusively bound refusal port", *passed, *failed))
+            {
+                return E_FAIL;
+            }
+            resolved.connection.ftpUseEpsv = true;
+            CurlDirectoryCursor cursor;
+            hr = cursor.Open(resolved.connection, L"/probe", []() noexcept { return S_OK; });
+            FilesInformationCurl::Entry entry{};
+            if (SUCCEEDED(hr))
+            {
+                hr = cursor.Next(entry);
+            }
+            const bool exact             = hr == S_OK && entry.name == L"known.bin" && entry.sizeBytes == 4u;
+            const HRESULT terminal       = SUCCEEDED(hr) ? cursor.Next(entry) : hr;
+            const auto failedPorts       = cursor.FailedConnectPortsForSelfTest();
+            const EndpointSnapshot after = fallback.Snapshot();
+            const auto& uses             = after.dataTransfers[static_cast<size_t>(DataTransferKind::List)];
+            bool epsvThenPasv            = false;
+            for (size_t index = 1u; index < after.commands.size(); ++index)
+            {
+                epsvThenPasv = epsvThenPasv || (after.commands[index - 1u].verb == "EPSV" && after.commands[index].verb == "PASV");
+            }
+            DebugCheck(exact && terminal == S_FALSE, L"real libcurl falls back from refused EPSV and publishes the exact listing", *passed, *failed);
+            DebugCheck(failedPorts.has_value() && failedPorts.value().remote == fallback.RefusedPassivePort() && fallback.RefusedPassivePort() != 0u,
+                       L"fallback captures the exact fixture-owned refused data port",
+                       *passed,
+                       *failed);
+            DebugCheck(epsvThenPasv && CountCommands(after, "EPSV") == 1u && CountCommands(after, "PASV") == 1u && CountCommands(after, "LIST") == 1u,
+                       L"libcurl connection fallback issues a second passive announcement before one LIST",
+                       *passed,
+                       *failed);
+            DebugCheck(after.passivePendingRetirements == 1u && after.passiveListenerCreations == 2u && after.passiveListenerReuses == 0u &&
+                           uses.firstUse == 1u && uses.reuse == 0u && SUCCEEDED(after.serverHr),
+                       L"refused EPSV consumes one announcement without an accepted data transfer",
+                       *passed,
+                       *failed);
+            DebugCheck(after.passiveFallbackCreations == 1u && after.passiveFallbackReuses == 0u &&
+                           PassiveAnnouncementsAccounted(after, uses.firstUse, uses.reuse),
+                       L"real fallback conserves creations and accepts without an unexplained retirement",
+                       *passed,
+                       *failed);
+            EndpointSnapshot unclassified         = after;
+            unclassified.passiveFallbackCreations = 0u;
+            DebugCheck(! PassiveAnnouncementsAccounted(unclassified, 1u, 0u), L"an unclassified retired announcement still fails accounting", *passed, *failed);
+            EndpointSnapshot missingRetirement          = after;
+            missingRetirement.passivePendingRetirements = 0u;
+            DebugCheck(! PassiveAnnouncementsAccounted(missingRetirement, 1u, 0u), L"a fallback label cannot hide a missing retirement", *passed, *failed);
+            EndpointSnapshot reused;
+            reused.passiveListenerCreations  = 2u;
+            reused.passiveListenerReuses     = 2u;
+            reused.passivePendingRetirements = 1u;
+            reused.passiveFallbackReuses     = 1u;
+            DebugCheck(PassiveAnnouncementsAccounted(reused, 2u, 1u),
+                       L"a reused announcement fallback conserves two real sessions and one accepted reuse",
+                       *passed,
+                       *failed);
+            DebugCheck(! PassiveAnnouncementsAccounted(reused, 2u, 0u) && ! PassiveAnnouncementsAccounted(reused, 2u, 2u),
+                       L"fallback accounting rejects missing and invented accepted reuse",
+                       *passed,
+                       *failed);
+            reused.passiveListenerCreations = 65u;
+            DebugCheck(
+                ! PassiveAnnouncementsAccounted(reused, 65u, 1u), L"classified fallback never increases the original listener creation cap", *passed, *failed);
+            Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.EpsvFallbackProof",
+                              L"owned-refused-EPSV;libcurl-PASV;one-complete-LIST",
+                              0u,
+                              fallback.RefusedPassivePort(),
+                              after.passivePendingRetirements,
+                              exact && terminal == S_FALSE ? S_OK : E_FAIL);
+        }
+        {
             FakeFtpEndpoint known(UploadRetention::Complete);
             FakeFtpEndpoint unknown(UploadRetention::Complete, true, false);
             for (FakeFtpEndpoint* endpoint : std::array<FakeFtpEndpoint*, 2u>{{&known, &unknown}})
@@ -7657,21 +7833,21 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                                 // reuses, not necessarily N-1. Require complete accounting
                                 // and the unchanged creation cap instead of one-session math.
                                 const bool accounted = commandCountsMatch && payload.firstUse + payload.reuse == 4'097u &&
-                                                       CountCommands(endpoint, "NLST") == 0u && endpoint.passivePendingRetirements == 0u &&
-                                                       firstUses == endpoint.passiveListenerCreations && reuses == endpoint.passiveListenerReuses &&
-                                                       endpoint.passiveListenerCreations <= 64u;
+                                                       CountCommands(endpoint, "NLST") == 0u && PassiveAnnouncementsAccounted(endpoint, firstUses, reuses);
                                 boundedFixture       = boundedFixture && accounted;
-                                boundedDetail += std::format(
-                                    L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};firstUses={};creations={};reuses={};listenerReuses={}]",
-                                    sourceEndpoint ? L"source" : L"destination",
-                                    commandCountsMatch,
-                                    payload.firstUse + payload.reuse,
-                                    CountCommands(endpoint, "NLST"),
-                                    endpoint.passivePendingRetirements,
-                                    firstUses,
-                                    endpoint.passiveListenerCreations,
-                                    reuses,
-                                    endpoint.passiveListenerReuses);
+                                boundedDetail += std::format(L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};fallbackCreations={};fallbackReuses="
+                                                             L"{};firstUses={};creations={};reuses={};listenerReuses={}]",
+                                                             sourceEndpoint ? L"source" : L"destination",
+                                                             commandCountsMatch,
+                                                             payload.firstUse + payload.reuse,
+                                                             CountCommands(endpoint, "NLST"),
+                                                             endpoint.passivePendingRetirements,
+                                                             endpoint.passiveFallbackCreations,
+                                                             endpoint.passiveFallbackReuses,
+                                                             firstUses,
+                                                             endpoint.passiveListenerCreations,
+                                                             reuses,
+                                                             endpoint.passiveListenerReuses);
                                 Debug::Perf::Emit(L"FileOps.Curl.NativeCopy.EndpointPassiveListeners",
                                                   endpointDetail.c_str(),
                                                   0u,

@@ -281,6 +281,27 @@ not permission to serialize the profile or disjoint worktrees.
 Unknown values fail before MSBuild, and the selected value participates in receipt
 compatibility.
 
+The ordinary-profile policy auditor explicitly selects `ProgramDatabase` in each child
+MSBuild metadata query. It MUST still require Debug `/ZI` and ASan Debug `/Zi` when the
+calling Full runner has `RSBuildCompilerDebugInformation=Embedded`. This query isolation
+MUST preserve the caller's environment and retain the independent broken-profile controls;
+it does not change the receipt-bound format of the actual Full build.
+
+CI's process-local `CL=/I...` injection applies to pinned DxUi project references as
+well as application projects. The pinned-policy binding MUST append the matching
+`VCPKG_INSTALLED_DIR` / `VCPKG_DEFAULT_TRIPLET` include root to evaluated
+`ExternalIncludePath`, preserving the existing MSVC/SDK roots. It MUST NOT suppress
+the corresponding warning codes in first-party sources. Real compiler controls prove
+the dependency-header warning before classification, its removal afterward, and continued
+rejection of a first-party warning by the zero-warning build gate.
+
+Post-build CI matrix validation MUST resolve the pinned SDK through
+`Get-RSDxUiSourceIdentity` before executing its validator. The 16-character source
+directory is only a locator; the existing resolver verifies the complete Git HEAD,
+clean checkout and public-header tree. CI MUST NOT reconstruct a 40-character folder
+from the lock. A real child-process regression executes the workflow's gate from a
+foreign working directory against the normally restored source.
+
 When `RSBuildEnableTests` is false, projects beneath `Tests/` are evaluated as
 no-output utility nodes so a production Release solution build does not compile a test
 executable against production libraries that intentionally omit test hooks. When the
@@ -504,7 +525,11 @@ the executable identity check and pass the registry checkout through vcpkg's
 explicit `--vcpkg-root` option. Setting `VCPKG_ROOT` does not satisfy this contract
 because vcpkg ignores that environment variable when its executable is already
 inside a valid checkout. An explicit registry root must contain both `ports` and
-`versions` before dependency mutation begins. Before bootstrapping or installing,
+`versions` before dependency mutation begins. Its Git history must also contain
+the versioned port trees referenced by the selected baseline/overrides; having
+those directories in a shallow checkout alone is insufficient. Materialize the
+required history (or unshallow that exact pinned checkout) and retain its locked
+HEAD before retrying the normal installer. Before bootstrapping or installing,
 CI MUST read `scripts/vcpkg-tools.json` from both pinned commits and require the
 executable commit's positive `schema-version` to be at least the registry
 baseline's positive `schema-version`. A manifest-baseline update that raises this
@@ -739,6 +764,11 @@ still uses its recorded source and toolchain identity. The current ASan Debug co
 compiler instrumentation in every translation unit, `/MDd`, `/Od`, and compatible debug information;
 a missing app-local sanitizer runtime fails the build. The existing PluginContractTests
 `--asan-seed-heap-overflow` child remains the detection probe. Native ARM64 execution is required.
+
+The seeded probe's two intentional volatile accesses retain the selected ARM64 volatile model.
+Their C4746 annotation surrounds the isolated noinline probe definition; MSVC's ARM64 ASan
+compiler does not honor a statement-only annotation for these accesses. It does not suppress diagnostics in ordinary tests
+or replace the required expected-failure sanitizer detection check.
 Toolchain receipts identify the MSBuild-selected compiler host and its matching SDK resource compiler,
 rather than assuming Hostx64 on every machine.
 
@@ -833,3 +863,7 @@ Active Windows compilation/tooling workflows use the local setup-msvc composite 
 ARM64 dependency installation selects Build/vcpkg-ports/aws-c-common, preserving aws-c-common 1.0.0, its upstream SHA512 and existing CRT patch. A compiler/architecture-scoped CMake helper applies /Ob1 only to source/hash_table.c under the exact MSVC C compiler 19.52.37025.0, retaining /O2 elsewhere. The exact 14.52.37025 command crashes in lookup3.inl:640 with C1001; removing /MP, using /Zi, or /O1 does not repair it, while /Ob1 and /Ob0 compile. Canonical package/product builds remain required. This ARM64-only dependency change has no effect on the x64 size/performance experiment. Native ARM64/S3 performance remains unmeasured. The CMake regression checks affected and other compiler/architecture/file combinations; retained repros live under .build/msvc1452/compiler-repro-attempt2/3.
 
 Workflow-selected MSBuild paths may use a custom or hosted temporary installation root. Discovery validates the executable's VS18-or-newer version, invariant MSBuild.exe binary identity and standard MSBuild/Current/Bin host layout; it must not require a Microsoft Visual Studio parent-directory name. Required MSVC14.52/compiler/SDK checks remain independent and mandatory.
+
+The [native policy, console and dependency-path contract](Build_ConsoleAndPaths.md) owns /Wall without /WX, zero-warning acceptance, Debug/ASan symbols, Release-only ICF, common terminal results and verified short dependency folders.
+
+The native build-policy candidate locks DxUi API4 at `1f385ee013189e967ad5298f2311801a066de2c7`. It preserves this consumer's existing API adoption while repairing native warning diagnostics and stable payload type identity under Release COMDAT folding. Restore and compile matching headers/archive from this exact lock. The indexed NativeBuildPolicyCoherence plan records outstanding product and desktop-focus qualification; this pin selection alone is not a green product receipt.
