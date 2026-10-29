@@ -10240,7 +10240,7 @@ case SelfTestState::Step::C0_CurlImapTransportTruth:
     state.c0CurlModule.reset();
     const unsigned int expectedChecks = imapTransport     ? 15u
                                         : imapListing     ? 369u
-                                        : entryLookup     ? 299u
+                                        : entryLookup     ? 310u
                                         : copyTraversal   ? 142u
                                         : movePreflight   ? 256u
                                         : directorySize   ? 85u

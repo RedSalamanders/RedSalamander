@@ -26,6 +26,10 @@ Allows focus-taking entries after the person agrees to the time. Without this sw
 those entries remain pending and the repository verdict is NOT_EVALUATED.
 .PARAMETER TestRoot
 Existing marked X:\RedSalamander.Perf sandbox. This parameter does not authorize creation.
+.PARAMETER AllowAlternateVolumeTestRoot
+Explicitly opt in to the canonical runner's alternate-volume File Operations coverage.
+The selected sandbox's enabled path.local.alternate resource restricts the exact root.
+The default remains disabled; this switch does not authorize initializing a new drive-root workspace.
 .PARAMETER Suite
 Optional focused Commands, Compare or FileOps suite; valid only in Affected mode.
 .PARAMETER CaseFilter
@@ -45,6 +49,8 @@ through the canonical runner; no second evidence cache or desktop lease is intro
 ./Test-Changes.ps1 -Suite Commands -CommandsFamily file-operations -SkipBuild
 .EXAMPLE
 ./Test-Changes.ps1 -Mode PrePush -Configuration Debug
+.EXAMPLE
+./Test-Changes.ps1 -Mode Full -Interactive -AllowAlternateVolumeTestRoot -TestRoot E:\RedSalamander.Perf
 #>
 [CmdletBinding()]
 param(
@@ -57,6 +63,7 @@ param(
     [string]$ResumeFrom='',
     [switch]$Interactive,
     [string]$TestRoot=$env:REDSALAMANDER_TEST_ROOT,
+    [switch]$AllowAlternateVolumeTestRoot,
     [ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
     [string]$CaseFilter='',
     [string]$CommandsFamily=''
@@ -68,7 +75,7 @@ Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/ScopedTesting.psm1
 Write-Host "Native test naming: $(Assert-ScopedTestNames $PSScriptRoot) files checked."
 if ($Suite -and $Mode -ne 'Affected') {throw 'Focused Suite is valid only for Affected iteration.'}
 if ($ResumeFrom -and ($Mode -ne 'Full' -or -not $Interactive)) {throw 'Exact Full Resume requires Mode Full and the same interactive coverage as its origin.'}
-$arguments=@{Suite='Full';Configuration=$Configuration;Platform=$Platform;ImpactBase=$BaseRef;SkipBuild=$SkipBuild;NonInteractive=(-not $Interactive);ValidationMode='Fresh';TestRoot=$TestRoot}
+$arguments=@{Suite='Full';Configuration=$Configuration;Platform=$Platform;ImpactBase=$BaseRef;SkipBuild=$SkipBuild;NonInteractive=(-not $Interactive);ValidationMode='Fresh';TestRoot=$TestRoot;AllowAlternateVolumeTestRoot=$AllowAlternateVolumeTestRoot}
 if ($Mode -eq 'Affected') {$arguments.ValidationMode='Affected'}
 if ($Suite) {$arguments.Suite=$Suite;$arguments.ValidationMode='Fresh';$arguments.CaseFilter=$CaseFilter;$arguments.CommandsFamily=$CommandsFamily}
 elseif ($CaseFilter -or $CommandsFamily) {throw 'CaseFilter and CommandsFamily require a focused Suite.'}

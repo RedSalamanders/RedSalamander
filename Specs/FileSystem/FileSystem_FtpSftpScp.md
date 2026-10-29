@@ -643,6 +643,45 @@ Authentication failure retry policy (Connection Manager profiles only):
   - On login/auth failures, the plugin clears the session cache (`IHostConnections::ClearCachedConnectionSecret`) and retries once (which triggers a reprompt on the next resolve).
 
 
+## Native transport fixture diagnostics
+
+The owned FTP fixture records `FileOps.Curl.FakeFtp.PendingRetirement` when a new
+passive command must retire an earlier unconsumed announcement. Its diagnostic
+binds the endpoint/listener ports and at most eight recent commands from that
+same control session. Path/offset arguments are bounded to96 UTF-8 bytes;
+authentication arguments are omitted. The fixture reuses indices into its
+existing command inventory rather than copying request strings on every command.
+This diagnostic changes no transport behavior, timeout, listener-creation cap or
+qualification predicate. An extra announcement's origin must be established before
+changing the native Copy fixture's passive-listener accounting contract.
+
+A controlled entry-lookup fixture announces an exclusively owned bound-only data
+port once. The real pinned libcurl cursor must capture that exact refused port,
+send EPSV then PASV before one LIST, and return the exact file row and terminal
+status. The server must count two passive creations, one retired announcement and
+one accepted first use. The large Copy fixture classifies a retirement only when
+the same control session receives PASV immediately after EPSV with no intervening
+transfer command. Every other retirement remains a failure. Accepted first uses
+plus classified unused creations must equal creations; accepted reuses plus
+classified unused reuses must equal reuse announcements. Negative controls reject
+missing/invented accepts, an unclassified retirement, missing retirement accounting
+and a 65th creation. The original 64-creation cap, 4,097 payload transfers, exact
+contents, truthful completion and deadlines remain unchanged.
+
+The native FileOps host must require all 310 Entry-lookup checks, including the
+maximum-size serializer boundary, five real fallback facts and six accounting
+controls. The separate Copy-traversal export retains its 142-check expectation.
+
+The fixture's LIST serializer appends its fixed grammar and converts the decimal
+size directly, avoiding a general formatter for each repeated row. Its exact-byte
+oracles cover empty/nested directories, UTF-8/literal names, unknown/overridden and
+maximum 64-bit sizes, custom payloads and 64 complete 4,097-file listings. This
+changes fixture cost only: the large Copy corpus, deadlines, accepted-transfer
+counts and complete passive-announcement accounting remain required. Accepted
+fixture FTP control sockets use TCP_NODELAY so small complete replies do not add
+Nagle/delayed-ACK pacing to that bounded corpus. Explicit stall/refusal modes are
+unchanged; no production socket option is changed.
+
 ## Permanent Delete by name (C10)
 
 FTP, SFTP and SCP name no object identity, so the plugin does not implement

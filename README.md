@@ -527,3 +527,9 @@ Affected iteration, full local coverage, exact reuse and pending PR obligations 
 Follow the [Changes workflow](Changes/README.md): validate while editing, then fold before PrePush/final handoff and immediately after integration, even for one fragment.
 
 Builds require default MSVC **14.52.x** (v145). Release C++ uses /Gy /GL with /OPT:REF and full /LTCG at final links. Exact tools and WPO are forwarded to the existing DxUi pin and included in a separate archive-output identity; see the build toolchain contract.
+
+Native builds use the [shared build policy](Specs/Build/Build_ConsoleAndPaths.md):
+/Wall without /WX, zero-warning validation, Debug /ZI and ASan /Zi, and
+Release-only /OPT:ICF. A passing build prints a green result with artifact/log
+links and a quoted launch command. OSC 8 capable terminals can open the local
+file links. Cross-built ARM64 applications still need ARM64 Windows to run.

@@ -791,13 +791,22 @@ on the replacement/reused listener. Empty idle control sessions close with 421;
 partial command and active data timeouts remain failures. Wide Copy additionally
 requires at most 64 listener creations per endpoint, exactly 4,097 accepted RETR
 transfers at the source and STOR transfers at the destination, no NLST fallback
-or abandoned passive request, and complete data-command accounting. For each
-endpoint, accepted first-use/reuse totals must equal listener creation/reuse totals;
+or unexplained abandoned passive request, and complete data-command accounting. Only
+PASV immediately following EPSV in the same control session can classify an unused
+announcement as libcurl data-connect fallback. The owned bound-only-port control
+must correlate the exact refused port with that command tail and a successful
+single LIST. For each endpoint, accepted first uses plus classified unused creation
+announcements must equal listener creations; accepted reuses plus classified unused
+reuse announcements must equal listener reuses. All other retirements fail;
 every LIST/NLST/RETR/STOR command must have one corresponding accepted transfer.
 Multiple healthy sessions legitimately have fewer than 4,096 payload reuses:
 N transfers over K sessions have N-K reuses. Do not hard-code one-session math.
 `.PassiveListeners` reports aggregate creations/reuses and `.PassiveRetirements`
-reports abandoned listeners/idle closures. These are fixture resource checks,
+reports all retired announcements/idle closures. The per-retirement diagnostic
+distinguishes `epsv-fallback` from `unexplained`, binding endpoint/listener ports to
+the bounded same-session command tail. Refusal/corruption controls reject missing
+or invented accepts, absent classification/retirement accounting and a 65th
+creation. These are fixture resource checks,
 not production connection quotas; corpus, operation deadline and bytes stay fixed.
 `.EndpointPassiveListeners` separates both endpoints and `.DataTransferUses`
 separates LIST/NLST/RETR/STOR first uses (`value0`) and reuses (`value1`). The refused

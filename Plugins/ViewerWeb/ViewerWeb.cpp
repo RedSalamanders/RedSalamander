@@ -4,7 +4,7 @@
 #include "ViewerDxUiTheme.h"
 
 #ifdef ENABLE_TESTS
-#include "../../Tests/TestSupport/TestSupport.Tests.Runner.h"
+#include "Tests/TestSupport/TestSupport.Tests.Runner.h"
 #endif
 
 #include <algorithm>

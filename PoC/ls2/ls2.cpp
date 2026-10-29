@@ -209,6 +209,9 @@ static void WalkTree_NtQuery(const std::wstring& startInput)
         ntdll = LoadLibrary(L"ntdll.dll");
     if (! ntdll)
         return;
+// The ntdll export is bound to the existing NTAPI declaration; GetProcAddress returns erased FARPROC.
+// Owner: RedSalamander maintainers; review: 2027-01-31.
+#pragma warning(suppress : 4191)
     auto NtQueryDirectoryFile = reinterpret_cast<NtQueryDirectoryFile_t>(GetProcAddress(ntdll, "NtQueryDirectoryFile"));
     if (! NtQueryDirectoryFile)
         return;

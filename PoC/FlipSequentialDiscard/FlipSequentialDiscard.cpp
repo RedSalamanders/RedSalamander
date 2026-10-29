@@ -1,4 +1,4 @@
-﻿// SwapChainPartialInvalidation.cpp
+// SwapChainPartialInvalidation.cpp
 // Minimal demo: toggle between FLIP_SEQUENTIAL (dirty rects) and FLIP_DISCARD (full redraw).
 // - Normal run: sequential (partial invalidation enabled)
 // - Run with "--discard": discard (partial invalidation disabled)
@@ -26,14 +26,13 @@
 #include <string_view>
 #include <vector>
 
-
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 
 #include <windowsx.h>
 
-#include "../../Common/WindowSizing.h"
+#include "Common/WindowSizing.h"
 
 #pragma warning(push)
 // WRL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -58,6 +57,10 @@ enum class SwapMode : uint8_t
     Discard
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct App
 {
     // Win32
@@ -249,7 +252,7 @@ struct App
         }
     }
 
-    ID2D1SolidColorBrush* AcquireBackgroundBrush(size_t& indexOut)
+    ID2D1SolidColorBrush* AcquireBackgroundBrush(size_t& /*indexOut*/)
     {
         return _brushBgPalette[_activeBgBrushIndex + 1].Get();
 
@@ -576,7 +579,7 @@ struct App
                                       scrollRect.right <= backbufferW && scrollRect.bottom <= backbufferH;
             const bool sourceValid  = sourceTop >= 0 && sourceTop < sourceBottom && sourceBottom <= backbufferH;
 
-#if _DEBUG
+#ifdef _DEBUG
             {
                 const std::wstring msg =
                     std::format(L"[PartialPresent] attempt dy={} dest=({},{}-{},{}), src=({},{}-{},{}), dirty=({},{}-{},{}), destValid={}, srcValid={}\n",
@@ -611,7 +614,7 @@ struct App
                 const HRESULT hr     = _swapChain->Present1(1, 0, &params);
                 if (FAILED(hr))
                 {
-#if _DEBUG
+#ifdef _DEBUG
                     const std::wstring msg = std::format(L"[PartialPresent] Present1 failed hr=0x{:08X}\n", static_cast<unsigned long>(hr));
                     OutputDebugStringW(msg.c_str());
 #endif
@@ -619,7 +622,7 @@ struct App
                 }
                 else
                 {
-#if _DEBUG
+#ifdef _DEBUG
                     const std::wstring msg = std::format(L"[PartialPresent] dy={} dest=({},{}-{},{}), src=({},{}-{},{}), dirty=({},{}-{},{}), hr=0x{:08X}\n",
                                                          scrollAmount,
                                                          scrollRect.left,
@@ -644,7 +647,7 @@ struct App
             {
                 DXGI_PRESENT_PARAMETERS pp{};
                 _swapChain->Present1(1, 0, &pp);
-#if _DEBUG
+#ifdef _DEBUG
                 const std::wstring msg = std::format(L"[PartialPresent] fallback full present (destValid={}, srcValid={})\n", destValid, sourceValid);
                 OutputDebugStringW(msg.c_str());
 #endif
@@ -707,7 +710,7 @@ struct App
     void CreateD3D()
     {
         UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-#if _DEBUG
+#ifdef _DEBUG
         flags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
         D3D_FEATURE_LEVEL fls[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0};
@@ -723,7 +726,7 @@ struct App
     void CreateD2D()
     {
         D2D1_FACTORY_OPTIONS opts = {};
-#if _DEBUG
+#ifdef _DEBUG
         opts.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
 #endif
         HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, __uuidof(ID2D1Factory1), &opts, reinterpret_cast<void**>(_d2dFactory.GetAddressOf()));
@@ -1028,6 +1031,7 @@ struct App
         _lastRenderedLineCount = _lines.size();
     }
 };
+#pragma warning(pop)
 
 static App g_app;
 

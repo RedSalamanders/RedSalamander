@@ -326,9 +326,14 @@ int wmain(int argc, wchar_t** argv)
         ntdll = LoadLibrary(L"ntdll.dll");
     if (! ntdll)
         return 1;
-
+// The ntdll export is bound to the existing NTAPI declaration; GetProcAddress returns erased FARPROC.
+// Owner: RedSalamander maintainers; review: 2027-01-31.
+#pragma warning(suppress : 4191)
     auto NtQueryDirectoryFile = reinterpret_cast<NtQueryDirectoryFile_t>(GetProcAddress(ntdll, "NtQueryDirectoryFile"));
-    auto NtCreateFile         = reinterpret_cast<NtCreateFile_t>(GetProcAddress(ntdll, "NtCreateFile"));
+// The ntdll export is bound to the existing NTAPI declaration; GetProcAddress returns erased FARPROC.
+// Owner: RedSalamander maintainers; review: 2027-01-31.
+#pragma warning(suppress : 4191)
+    auto NtCreateFile = reinterpret_cast<NtCreateFile_t>(GetProcAddress(ntdll, "NtCreateFile"));
     if (! NtQueryDirectoryFile || ! NtCreateFile)
         return 2;
 

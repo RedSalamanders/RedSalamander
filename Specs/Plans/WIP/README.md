@@ -1,5 +1,7 @@
 # Active Work Index
 
+- **ACTIVE**: [Native build policy, terminal results and short DxUi paths](NativeBuildPolicyCoherence_2026-10-28.md). Shared /Wall without /WX, zero-warning validation, Debug/ASan symbols, Release-only ICF, terminal results and verified short dependency folders.
+
 - **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated native profiles, matching pinned-archive policy, all-profile qualification and retained size/performance comparisons.
 
 Priority review: 2026-09-08 against `3dcf7ab1`, including the uncommitted I18 proposal. The recommendations below reconcile the indexed work against current code and archived evidence; individual plans still require their own drift check before execution.
@@ -65,6 +67,7 @@ have no separate planning authority. Historical failed verdicts remain unchanged
 | ACTIVE | I50 | [Main merges review 2026-10-28](CodeReview_MainMerges_2026-10-28.md) | Verified review of `0f6cd8ddb..8ea956a7e` (PR #142 source snapshot, #143-#145): main is not production-ready. 4 High (host services silently no-op off the UI thread, MSIX build always fails, long evidence paths break default Windows checkout, nightly restoration predicate), 34 Medium, 49 Low, simplifications, ordered remediation slices and owner questions. Nothing implemented; CI items route to the in-flight hosted CI repair. |
 | ACTIVE | I51 | [Ghostty 1.4.0 integration](Terminal_Ghostty140_Integration_2026-10-28.md) | Runtime/overlay admission, paired VT evidence, native ARM64 and portable gates are recorded. Close the failed local Commands readiness/order qualification and accepting PrePush outcome; preserve original failures and source-bound passing scopes. Renumbered from I50 after main's merge-review record took that rank. I15 retains its older remediation evidence obligation. |
 | ACTIVE | I52 | [Hosted CI repair](HostedCiRepair_2026-10-28.md) | Repair scheduled checkout, nightly runtime, ASan and hosted validation failures with unchanged assertions and budgets; qualify the integrated source and confirm main. |
+| ACTIVE | I53 | [Native build policy, terminal results and short DxUi paths](NativeBuildPolicyCoherence_2026-10-28.md) | Follow-up warning/debug/ICF, terminal and dependency-path coherence; retain I48's original compiler study separately and finish current-profile native, Full, size/performance and publication gates. |
 <!-- spec-ia:wip-index:end -->
 <!-- I29 is the user-authorized qualification successor to the delivered File Operations safety implementation. -->
 

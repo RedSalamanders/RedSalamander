@@ -1600,6 +1600,11 @@ aborts the action and shows a warning. The current `CF_HDROP` Cut-again action i
 Local file provider. Cut-again publishes a new cut payload as an explicit user action; it never
 simulates restoration of the old clipboard sequence.
 
+A live card may render its worker's final status before the completed summary is published. Recovery
+readiness requires that exact task's published summary and its completed popup projection. Validation MUST wait
+for that publication boundary before checking the original retained identities and terminal facts; the card's
+`finished` flag alone does not establish recovery eligibility.
+
 If any source disposition is Unknown, the card says that some source states are unknown and that a
 successfully cleared cut list was not restored. `Open source`/destination remains available where a
 qualified path is known, but Select retained and Cut-again are withheld until a later operation has

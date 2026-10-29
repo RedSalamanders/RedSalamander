@@ -39,6 +39,18 @@ managed source rejects build/test reuse. The optional newer-version notice never
 is yellow and prints the normal update command plus its `-UpdateOnly` alternative. A candidate without a successful
 completed DxUi validation is red and must remain pinned.
 New managed clones enable Git long paths for metadata creation and persist them locally before checkout; user/global Git settings are unchanged.
+The required vcpkg safety integration checks need that normal DxUi restore and the exact
+`vcpkg-tool.json` checkout at `.build/vcpkg-tool`, including its `versions` database.
+The mirror check uses the shared short source locator and verifies the full Git HEAD before importing modules.
+Missing prerequisites remain incomplete Full coverage; they are not new environment-skip exceptions.
+The compiler/linker policy audit queries ordinary profiles with an explicit child debug-format
+property, so Full's ambient Embedded recovery mode cannot change the expected Debug `/ZI` policy.
+It preserves the caller's environment and retains the broken compiler/linker controls.
+The pinned-project binding also classifies CI's injected application vcpkg include directory
+as external, retaining MSVC/SDK defaults. `CiDependencyWarnings.Tests.ps1` compiles contained
+before/after and first-party negative controls; it launches no application or desktop input.
+Post-build CI uses `Get-RSDxUiSourceIdentity` to locate and verify the short SDK checkout
+before executing its native matrix validator. The workflow must not construct a full-hash source path.
 `Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
 CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
 product validation already passed in another environment; neither form creates a commit.
@@ -60,6 +72,11 @@ PR delegation uses `Get-ScopedPrWorkflowDigest` over reusable workflows, local a
 contents, tooling, scripts and build/test policy inputs. Changing a delegated test runner
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
+
+`Test-Changes.ps1 -Mode Full -Interactive -AllowAlternateVolumeTestRoot` passes the explicit cross-volume opt-in to
+the canonical runner, including focused FileOps runs. The default stays disabled. The primary sandbox's enabled
+`path.local.alternate` resource restricts selection to its exact marked root; new drive-root initialization still
+requires separate authorization.
 
 The standalone scheduler accepts empty cheap-work selections, including the real deferred
 Full remainder consisting of interactive viewer entries. It retains every later entry in
@@ -330,6 +347,7 @@ and focused tests.
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
 | `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation, exclusive cache lease and guarded atomic executable publication without Python. |
 | `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
+| `Modules/Build/DxUiPaths.psm1` | Short source/output locators with full-identity collision refusal and native compiler-policy digests. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |

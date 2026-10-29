@@ -1116,6 +1116,40 @@ Describe 'Release workflow source contracts' {
         $buildWorkflow | Should Match 'ToolchainIdentity\.schema\.json'
     }
 
+    It 'executes the CI matrix gate through the verified short source from a foreign directory' {
+        $workflowLines = @(Get-Content (Join-Path $repoRoot '.github/workflows/build-reusable.yml'))
+        $start = @(for ($index = 0; $index -lt $workflowLines.Count; $index++) {
+            if ($workflowLines[$index] -match "^\s+Import-Module .*'Tools/Modules/Build/DxUiDependency[.]psm1'") { $index }
+        })
+        $start.Count | Should Be 1
+        $block = ($workflowLines[$start[0]..($start[0] + 3)] -replace '^          ', '') -join "`n"
+        $block | Should Match 'Get-RSDxUiSourceIdentity'
+        $block | Should Match 'validate-build-matrix[.]ps1'
+        $fixture = New-RSReleasePolicyTestRoot
+        $script = Join-Path $fixture 'Invoke-CiMatrixGate.ps1'
+        [IO.File]::WriteAllText($script, ("`$ErrorActionPreference = 'Stop'`n" + $block + "`nif ((Split-Path -Leaf `$dxUiSourceIdentity.Source).Length -ne 16) { throw 'CI did not use the short source locator.' }`n"))
+        $startInfo = [Diagnostics.ProcessStartInfo]::new((Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })))
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.WorkingDirectory = $fixture
+        $startInfo.Environment['GITHUB_WORKSPACE'] = $repoRoot
+        foreach ($argument in @('-NoProfile', '-NonInteractive', '-File', $script)) { $startInfo.ArgumentList.Add($argument) }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        try {
+            [void]$process.Start()
+            $stdout = $process.StandardOutput.ReadToEndAsync()
+            $stderr = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit(30000)) { $process.Kill($true); throw 'Owned read-only CI matrix gate timed out.' }
+            $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+            [IO.File]::WriteAllText((Join-Path $fixture 'matrix-gate.log'), $output)
+            $process.ExitCode | Should Be 0
+            $output | Should Match '0 six-configuration mapping errors'
+        } finally { $process.Dispose() }
+    }
+
     It 'keeps one Ghostty Windows overlay with the reviewed private-runtime linker policy' {
         $activePatchPath = Join-Path $repoRoot 'Tools\TerminalEngine\Patches\Ghostty-WindowsPrivateRuntime.patch'
         $supersededPatchPath = Join-Path $repoRoot 'Tools\TerminalEngine\Patches\Ghostty-WindowsARM64-SharedOnly.patch'

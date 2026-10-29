@@ -19169,18 +19169,67 @@ namespace
                   L"The admitted collision must retain the exact nested source and destination.");
     if (! state.failure.empty())
         return false;
-    state.Require(
-        DirectedSelfTestInputWarning::TryActivateOwnedWindow(fixture.popup) &&
-            InvokeExactFileOperationsActionForSelfTest(
-                fixture.popup, Hit::TaskConflictAction, moveId.value(), static_cast<uint32_t>(Task::ConflictAction::Skip), IDS_FILEOPS_CONFLICT_BTN_SKIP),
-        L"Choose Skip through the real retained Move decision.");
-    if (! state.failure.empty())
-        return false;
-    state.Require(waitFor([&]() noexcept { return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, moveId.value(), move) && move.finished; }),
-                  L"Wait for the actual source-retained terminal Move.");
+    SetFileOpsPostFinishedCompletionPauseForSelfTest(true);
+    {
+        auto releaseCompletion = wil::scope_exit([]() noexcept
+        {
+            ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
+            SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
+        });
+        state.Require(
+            DirectedSelfTestInputWarning::TryActivateOwnedWindow(fixture.popup) &&
+                InvokeExactFileOperationsActionForSelfTest(
+                    fixture.popup, Hit::TaskConflictAction, moveId.value(), static_cast<uint32_t>(Task::ConflictAction::Skip), IDS_FILEOPS_CONFLICT_BTN_SKIP),
+            L"Choose Skip through the real retained Move decision.");
+        if (! state.failure.empty())
+            return false;
+        state.Require(waitFor(
+                          [&]() noexcept
+        {
+            return HasFileOpsPostFinishedCompletionPauseEnteredForSelfTest() && DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, moveId.value(), move) &&
+                   move.finished;
+        }),
+                      L"Observe the real worker's held finished-before-summary boundary.");
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> unpublished;
+        fileOps->CollectCompletedTasks(unpublished);
+        const bool summaryAbsent =
+            std::ranges::find(unpublished, moveId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId) == unpublished.end();
+        Trace(std::format(L"RetainedRecoveryBoundary: task={} held={} finished={} summaryAbsent={} action={}",
+                          moveId.value(),
+                          HasFileOpsPostFinishedCompletionPauseEnteredForSelfTest(),
+                          move.finished,
+                          summaryAbsent,
+                          move.exactRetainedSourceActionAvailable));
+        state.Require(summaryAbsent && ! move.exactRetainedSourceActionAvailable,
+                      L"A finished live card must not offer exact recovery before its real terminal summary is published.");
+        if (! state.failure.empty())
+            return false;
+    }
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
-    fileOps->CollectCompletedTasks(completed);
-    const auto completedMove = std::ranges::find(completed, moveId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+    state.Require(waitFor(
+                      [&]() noexcept
+    {
+        // A live card may show the worker's final status before its completed summary is published.
+        // Observe the exact published record first; then read recovery eligibility from that same projection.
+        fileOps->CollectCompletedTasks(completed);
+        return std::ranges::find(completed, moveId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId) != completed.end() &&
+               DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, moveId.value(), move) && move.finished;
+    }),
+                  L"Wait for the real retained Move's published terminal summary and completed popup projection.");
+    const auto completedMove    = std::ranges::find(completed, moveId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+    const bool summaryPublished = completedMove != completed.end();
+    Trace(std::format(
+        L"RetainedRecoveryEligibility: task={} finished={} summary={} admitted={} consumed={} retained={} unknown={} exact={} pathMatches={} action={}",
+        moveId.value(),
+        move.finished,
+        summaryPublished,
+        summaryPublished && completedMove->clipboardMoveAdmission,
+        summaryPublished && completedMove->clipboardMoveConsumed,
+        summaryPublished ? completedMove->retainedSourceCount : 0u,
+        summaryPublished ? completedMove->unknownSourceCount : 0u,
+        summaryPublished ? completedMove->exactRetainedSourceItems.size() : 0u,
+        summaryPublished && completedMove->exactRetainedSourceItems.size() == 1u && completedMove->exactRetainedSourceItems.front().providerPath == sourcePath,
+        move.exactRetainedSourceActionAvailable));
     state.Require(completedMove != completed.end() && completedMove->clipboardMoveAdmission && completedMove->clipboardMoveConsumed &&
                       completedMove->retainedSourceCount == 1u && completedMove->unknownSourceCount == 0u &&
                       completedMove->exactRetainedSourceItems.size() == 1u && completedMove->exactRetainedSourceItems.front().providerPath == sourcePath &&

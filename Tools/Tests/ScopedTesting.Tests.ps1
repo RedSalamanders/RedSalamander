@@ -3,6 +3,50 @@ Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.psm1') -Fo
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
 Describe 'Scoped testing and PR coverage contracts' {
+    It 'forwards explicit alternate-volume opt-in through Full and focused FileOps without enabling it by default' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('alternate-forwarding-'+[guid]::NewGuid().ToString('N'))
+        $succeeded=$false
+        try {
+            $moduleDirectory=Join-Path $fixture 'Tools/Modules/Testing'
+            [void](New-Item -ItemType Directory -Path $moduleDirectory -Force)
+            Copy-Item -LiteralPath (Join-Path $repoRoot 'Test-Changes.ps1') -Destination (Join-Path $fixture 'Test-Changes.ps1')
+            @'
+function Assert-ScopedTestNames { param($Root) return 1 }
+Export-ModuleMember -Function Assert-ScopedTestNames
+'@ | Set-Content -LiteralPath (Join-Path $moduleDirectory 'ScopedTesting.psm1')
+            @'
+param($Suite,$Configuration,$Platform,$ImpactBase,[switch]$SkipBuild,[switch]$NonInteractive,$ValidationMode,$TestRoot,
+      [switch]$AllowAlternateVolumeTestRoot,$CaseFilter='',$CommandsFamily='')
+[ordered]@{suite=$Suite;mode=$ValidationMode;testRoot=$TestRoot;caseFilter=$CaseFilter;alternate=[bool]$AllowAlternateVolumeTestRoot} |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot '../captured.json')
+$global:LASTEXITCODE=2
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'Tools/Run-AllTests.ps1')
+            foreach($focused in @($false,$true)) {
+                foreach($optIn in @($false,$true)) {
+                    $arguments=@('-NoProfile','-File',(Join-Path $fixture 'Test-Changes.ps1'),'-TestRoot',$env:REDSALAMANDER_TEST_ROOT)
+                    if($focused){$arguments+=@('-Suite','FileOps','-CaseFilter','FileOps_IndependentVolumes')}
+                    else{$arguments+=@('-Mode','Full')}
+                    if($optIn){$arguments+='-AllowAlternateVolumeTestRoot'}
+                    & (Join-Path $PSHOME 'pwsh.exe') @arguments *> (Join-Path $fixture "child-$focused-$optIn.log")
+                    $LASTEXITCODE | Should Be 2
+                    $captured=Get-Content -LiteralPath (Join-Path $fixture 'captured.json') -Raw | ConvertFrom-Json
+                    $captured.alternate | Should Be $optIn
+                    $captured.suite | Should Be $(if($focused){'FileOps'}else{'Full'})
+                    $captured.mode | Should Be 'Fresh'
+                    $captured.caseFilter | Should Be $(if($focused){'FileOps_IndependentVolumes'}else{''})
+                    $captured.testRoot | Should Be $env:REDSALAMANDER_TEST_ROOT
+                }
+            }
+            $succeeded=$true
+        } finally {
+            if($succeeded) {
+                [void](Assert-RSTestSandboxContainedPath -TestRoot $env:REDSALAMANDER_TEST_ROOT -Path $fixture -RequireDescendant)
+                $refusals=@(& (Get-Module TestSandbox) { param($Path) Remove-RSTestSandboxTreeWithoutFollowingLinks -Path $Path } $fixture)
+                if($refusals.Count){throw 'Scoped-wrapper fixture cleanup was refused.'}
+            }
+            $global:LASTEXITCODE=0
+        }
+    }
     It 'accounts for all active native sources with contextual test names' {(Assert-ScopedTestNames $repoRoot) | Should BeGreaterThan 0}
     It 'defers only complete equal PR contracts and retains changed arguments, writers and selftests' {
         $same=New-RSTestRunPlanEntry -Id standalone.example -Name Example -Kind Executable -Path (Join-Path $repoRoot '.build/x64/Debug/example.exe')
