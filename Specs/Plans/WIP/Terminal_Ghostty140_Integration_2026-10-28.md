@@ -160,6 +160,50 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- The original approved local run completed at application source 3f2b0f1ce
+  and is canonically archived as
+  20261029T012426Z-93224-2b01e80f5a6341bcb1d0691d944ae606:
+  1,539 passed, three failed and 55 skipped. Commands and interactive SQLite
+  passed. The three failures are the initial search-service warmup timeout,
+  the mandatory independent-volume control without its opt-in, and the
+  interactive PE parent harness's saved-desktop identity check. Its 49 disk-audit
+  issues remain recorded; this failed broad run is never relabeled as passed.
+- On the same unchanged application source and Debug receipt, the isolated
+  warmup repeat passed in 58,067 ms (one passed, no failures/skips), run
+  20261029T081219Z-63824-c15eece088984e45922715cf0039d481, wrapper evidence
+  20261029T081219Z-63824-5983646682544d67af818c5c64440404. This passing repeat
+  neither establishes the original timeout's cause nor repairs its verdict.
+  The independent-volume repeat with the explicit opt-in passed its requested
+  case in 3,625 ms (three including setup, no failures/skips), run
+  20261029T082424Z-4548-2a3de1c003064d54934d0b20098e0ac0, wrapper
+  20261029T082424Z-4548-e284800eb77e4028a1f692d14daca287. It reused the
+  already declared, marked C:\RedSalamander.Perf without initializing a new root.
+  These focused repeats are not complete Compare or File Operations acceptance.
+- The PE child passed its UI assertions, exited zero and left its owned job
+  quiet; the parent then refused restoration because the saved focus window's
+  process/thread differed from the foreground root. Exact logs, source snapshots,
+  plan and build receipt were preserved with verified hashes in
+  20261029T080657Z-58752-fc166cf4667d46aab6bdd86b68cf34a5. Read-only native
+  observation in 20261029T081333Z-92508-9a1d8bf2d99c46e08e005c4da4f11eea
+  confirmed that both saved handles retained those identities and the focus
+  window was a legitimate cross-process child beneath that root. It performed
+  no desktop writes and does not prove the GUI-focus state at the earlier failure.
+- The PE parent now captures foreground and focus identities independently.
+  Exact automatic foreground/focus restoration can pass through observation
+  alone; the write path retains its focus-owner, unchanged-input and foreground
+  restrictions. The new noninteractive native counterfactual failed exactly its
+  two cross-process/thread positive controls with the old restriction in
+  20261029T083456Z-90376-eb59dea6c6184a2ca8d789c8078bca1c, then passed all
+  twenty identity/permission checks after repair in
+  20261029T084444Z-91992-d6e5f1d8aa3248519d31d5f2c676e6a9. Both runs retain
+  exact source, executable hashes, project-build receipts and output; they are
+  targeted dirty-tree checks at bd0c27040, not final Full qualification.
+  The harness, scoped-testing and tooling-governance checks passed 232/232 in
+  20261029T085613Z-45924-147137bbafcf405fb9ab1210c007c7e9. The preceding
+  invocation used an unsupported Pester option and failed before test execution;
+  it remains interrupted evidence 20261029T085148Z-98700-76d9e35365764193a90688c33aed2bc9.
+  Full interactive PE qualification and matching CI for this repair remain open.
+
 These are source-bound execution checkpoints. Statements about a run still
 being queued or pending describe that checkpoint; later successful records do
 not erase earlier failures. The live status is maintained in draft PR #148.

@@ -4,6 +4,11 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Correct ViewerPE qualification's read-only desktop check for hosted controls
+  owned by another process or thread. Capture root and focus identities
+  independently and accept exact automatic restoration without granting any
+  additional restoration-write authority. Add noninteractive counterfactuals
+  and a source-contract guard; retain the original failed run separately.
 - Verify the Ghostty 1.4 runtime on native ARM64: clean first-run upstream C-ABI,
   Zig and ABI-manifest qualification, Debug Terminal and command contracts,
   production Release and portable smoke all passed with original reports,

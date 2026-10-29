@@ -362,6 +362,21 @@ Describe 'Test harness source contracts' {
         $ci | Should Not Match 'selftest-artifacts-nightly-shuffle'
     }
 
+    It 'separates ViewerPE read-only desktop observation from restoration write authority' {
+        $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $observation = [regex]::Match($source,
+            '(?ms)^\[\[nodiscard\]\] constexpr bool IsViewerHarnessDesktopAlreadyRestored\b.*?^\}')
+
+        $observation.Success | Should Be $true
+        $observation.Value | Should Match 'IsViewerHarnessDesktopIdentityStable'
+        $observation.Value | Should Not Match 'SetForegroundWindow|SetFocus|AttachThreadInput'
+        $source | Should Match 'GetWindowThreadProcessId\(previousGui\.hwndFocus,\s*&previousFocusPid\)'
+        $source | Should Match 'savedIdentityValid\s*=\s*savedObservationIdentityValid\s*&&\s*ViewerHarnessFocusSharesForegroundThread\(capturedIdentity\)'
+        $source | Should Match 'savedIdentityValid\s*&&\s*inputUnchanged\s*&&\s*permittedForeground'
+        $source | Should Not Match 'AttachThreadInput\s*\('
+        $source | Should Match '\{L"TestViewerHarnessDesktopObservationDoesNotGrantRestoration", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive\}'
+    }
+
     It 'gives ViewerPETests nested shell churn its own timeout budget' {
         $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 

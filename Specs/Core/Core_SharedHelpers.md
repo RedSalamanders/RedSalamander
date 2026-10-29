@@ -138,6 +138,14 @@ before releasing the job and restoring the saved foreground; restoration never
 attaches a foreign input queue or focuses a foreign control. The private blocked-child
 fixture checks timeout containment without activating a window. Actual interactive
 restoration remains a separate native qualification requirement.
+Its private desktop identity predicates capture foreground and focus HWND/PID/TID
+independently. They may observe Windows' exact automatic restoration of a stable
+cross-process or cross-thread child without writing desktop state. This read-only
+result never grants restoration authority: the write path still requires focus
+owned by the saved foreground window's process/thread, unchanged input and
+permitted foreground ownership.
+The noninteractive counterfactual case covers changed/reused identities, root
+membership, GUI availability and independent write refusal.
 
 These entries document deliberate local ownership under the mandatory-reuse rule;
 they are not Common APIs. A second compatible consumer requires a fresh review
