@@ -195,8 +195,10 @@ function Get-ChangelogFoldProblems([Parameter(Mandatory)][string] $Root, [Parame
             }
         }
         # The exact fold, built as Fold-Changelog.ps1 builds it: newest fragment name first, renamed fragments left out.
-        # Line endings never count.
-        $names = [string[]]@($folded.Keys | Where-Object { -not $presentTexts.Contains($folded[$_]) })
+        # Line endings never count. A removed fragment is a rename only when its text survives in another fragment AND
+        # its entry is absent: the default branch may have gained a different fragment with the same text while the
+        # fold of this one was open, and that fold still publishes its entry.
+        $names = [string[]]@($folded.Keys | Where-Object { -not ($presentTexts.Contains($folded[$_]) -and $after.Entries -cnotcontains $folded[$_]) })
         [Array]::Sort($names, [StringComparer]::Ordinal)
         [Array]::Reverse($names)
         $expected = Merge-ChangelogFragments $baseText @($names | ForEach-Object { [pscustomobject]@{ Name = $_; Text = $folded[$_] } })

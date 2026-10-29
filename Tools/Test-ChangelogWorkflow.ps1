@@ -341,6 +341,24 @@ Case 'CHANGELOG.md changes only by an exact fold of fragments the merge base hol
     Reset-FixtureBase $r
     Refuses { & $validate -Root $r -Base refs/heads/no-such-base }
 }
+Case 'a fold stays exact when the default branch meanwhile gains a fragment with the same text' {
+    param($r)
+    New-FixtureRepository $r
+    Put $r 'Changes/2026-10-20-first.md' '- Same text.'
+    Put $r 'Changes/2026-10-21-second.md' '- Same text.'
+    Save-FixtureBase $r
+    # The fold of the first fragment, merged after the second one reached the default branch: the survivor is not a
+    # rename, so the published entry is the exact fold.
+    Remove-Item -LiteralPath (Join-Path $r 'Changes/2026-10-20-first.md')
+    Edit-Fixture $r 'CHANGELOG.md' "## Unreleased`n`n" "## Unreleased`n`n- Same text.`n"
+    $problems = Get-ChangelogFoldProblems $r 'origin/main'
+    Assert ($problems.Count -eq 0) "A valid fold was refused because another fragment has the same text: $($problems -join ' | ')"
+    # Without the entry the same removal is still a rename.
+    Reset-FixtureBase $r
+    Remove-Item -LiteralPath (Join-Path $r 'Changes/2026-10-20-first.md')
+    $problems = Get-ChangelogFoldProblems $r 'origin/main'
+    Assert ($problems.Count -eq 0) "A rename beside an identical fragment was refused: $($problems -join ' | ')"
+}
 Case 'fold submission pushes one exact fold branch and leaves the caller checkout untouched' {
     param($r)
     $fixture = New-FoldFixture $r
