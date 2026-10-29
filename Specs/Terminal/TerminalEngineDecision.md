@@ -110,8 +110,11 @@ The 2026-10-28 integration branch selects libghostty-vt from Ghostty `v1.4.0`
 dynamic boundary and exact plugin/runtime pairing remain the decision. The
 rebased five-concern overlay retains clipboard rejection and placement bounds;
 new public APIs do not automatically enable new host features. I51 records
-current validation and open native ARM64/shipping gates. Earlier evidence does
-not qualify these new bytes.
+native ARM64 upstream and admitted-product qualification, x64 production
+Release and portable smoke, and paired x64 VT evidence for these exact inputs.
+The failed initial local aggregates remain failed; their recorded scope and
+later individual suite results do not establish a complete repository Full
+or release approval. Earlier evidence does not qualify these new bytes.
 
 <!-- current-executive-summary:end -->
 

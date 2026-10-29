@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Reconcile Ghostty 1.4 qualification and main's documentation changes under
+  the distinct I51 integration record. Record native platform and portable
+  evidence, preserve failed initial local results, and keep individual suite
+  qualification separate from complete repository Full and release approval.
 - Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
 - Correct ViewerPE qualification's read-only desktop check for hosted controls
   owned by another process or thread. Capture root and focus identities

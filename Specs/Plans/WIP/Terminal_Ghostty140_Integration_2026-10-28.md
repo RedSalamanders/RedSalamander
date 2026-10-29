@@ -43,8 +43,10 @@ merge-review record. Earlier Ghostty references to I50 describe this same record
 - [x] Complete the admitted-product native ARM64 gate, including Debug Terminal
       contracts, representative Commands, production Release, portable smoke
       and original receipt/artifact publication.
-- [ ] Admit the reviewed lock/overlay, update authoritative specs/documentation,
-      and complete applicable affected and PrePush obligations.
+- [x] Admit the reviewed lock/overlay and update authoritative specs/documentation.
+- [ ] Close the initial local Commands readiness failures and complete accepting
+      PrePush closeout. Later passing scopes retain their own identities and
+      do not relabel the original failed aggregate.
 - [ ] Fold/check the changelog, reconcile remaining gates, and move this record
       to Done only when the required outcome is qualified.
 
@@ -137,6 +139,38 @@ and warning; acceptance remains pending their actual results.
   after preserving this task's two older paired runs. Earlier wording treating
   those diagnostics alone as a Full acceptance blocker was incorrect.
   This checkpoint still makes no complete repository Full or release claim.
+
+## 2026-10-29 14:50 UTC Commands classification checkpoint
+
+- The complete normal-order Commands attempt in
+  `20261029T135851Z-95996-75f5e460bf094a7e83b6cd6ab91b9b3a` finished all
+  963 case records in 2,090,114 ms at timeout scale 1: 953 passed, three failed,
+  and seven skipped. All eighteen terminal-related cases passed, including
+  lifecycle (6,050 ms) and shell-exit (1,040 ms). This does not explain the
+  earlier readiness failures or establish a green Commands scope.
+- The failures are `folderView_drop_integrity_guards` (same-volume default MOVE),
+  `cmd_compare_directories_options_enter_and_escape_route_default_cancel`
+  (default Enter routing), and `cmd_pane_fileops_popup_throughput_disclosure`
+  (Space did not toggle its focused disclosure). Six skips are opt-in cases;
+  the additional Preferences category-churn case observed foreground instability.
+  Original initial-attempt archives and the five relevant source/runner files
+  were independently hash-verified and preserved as thirteen files in
+  `20261029T144723Z-8420-7dbd7b017a4545cfbf467e5ebef687a1`.
+- All three exact-case diagnostic retries passed. The canonical classifier
+  continues its three complete shuffle seeds under the existing Commands lease.
+  Seed `1621399242` stopped when the UIA ValuePattern read for the Compare
+  baseline options edit exceeded its client timeout and ignored COM cancellation;
+  the harness watchdog terminated its own process without a final native
+  aggregate. Its trace and relevant source files were preserved before the next
+  attempt in `20261029T144922Z-60920-d9385fa82da94257836369fb7efb5f10`.
+  No causal link to the Ghostty upgrade is established. Classification and the
+  final source/artifact barrier are still pending at this checkpoint; the live
+  disposition remains in draft PR #148. No timeout or assertion was weakened.
+- Main's documentation conflicts are resolved. The canonical specification
+  inventory reports zero blocking findings in
+  `20261029T143241Z-101312-1c2c9906d99844edad6989e20f60732c`.
+  Runtime qualification remains bound to frozen `f72618d62`; subsequent
+  documentation commits are not presented as new native execution.
 
 ## Evidence and decisions
 
