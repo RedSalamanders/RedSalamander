@@ -1,0 +1,70 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "3a54a2c0b97907ccdbbe29964b4f7d24c8934870",
+  "sourceSnapshotId": "f01c9b67d786d65b6764a6bac740354047eb46aa83033b737eed4e4e6e31ce03",
+  "buildReceiptId": "ad83b0e813683301324eed12aba5434cf9db9f796dd1252bf650291a65cd7fe6",
+  "profile": "x64 Debug",
+  "runId": "20261029T150019Z-81188-65955f6acc41449e8908a8151935e7c1",
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "nativeDurationMs": 0,
+  "scope": "Invalid diagnostic fixture, not disabled-state runtime bug proof. The first test held a legacy ViewerText interface across Refresh without an optional unload probe, then recorded an access violation. No acceptance is claimed. The corrected ImgRaw/Terminal fixture checks a real live-object unload probe before rediscovery. A second before-fix controller was cancelled only while queued, with no native child; retain its NOT_EVALUATED and verified archive records separately from all positive qualification.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "1d7ca7b6af6a1fd648913e74d1e6914fbe6b3b70a12c1c0a10a4b50826261d08"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 31554,
+      "sha256": "cf104ffb5deea69cc41808a16c502285cb3584ea0aa2918189aca0f5fca4c1e0"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 10091,
+      "sha256": "dd7831bdb620b8106024decfac9ccbf8be4c52310a9fca305a714cc346d84daa"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 776,
+      "sha256": "098ea626c721907fc5ea41d75432922a9d6f28b15ffb213e59886f73898c1707"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 110461,
+      "sha256": "089d37f7c552a18ed0eed0ba05775f3ea0b1e843eb315d75a8a2c7f081476902"
+    },
+    {
+      "path": "queued-control-archive-complete.json",
+      "byteCount": 399,
+      "sha256": "d4aca908857f2e9dbc2c73c688aeae7a3b2535b9e53c461d7d03f5f4416084ff"
+    },
+    {
+      "path": "queued-control-not-evaluated.json",
+      "byteCount": 324,
+      "sha256": "0e91a4c8666c25df15bd119eafab2888c84b92ad8ba42877bf6a859c49930cce"
+    },
+    {
+      "path": "queued-control-process-tree.json",
+      "byteCount": 2438,
+      "sha256": "6cd2e961e730b3729ebe831e0bf853a5f02046da603fafa1d2895f13ede40226"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 508,
+      "sha256": "3ffa47488fa41f2b8234714957cbc19745ba9ab7fbf8fb370565054ad5fb9980"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 4242,
+      "sha256": "00b04959a02d1f3db41eded54989a341f2678b833794feeb19bf2efd0b024923"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 1800,
+      "sha256": "b109e3237f77794cefdcd0da7cf8535050ec2b2e3adee8b54ae4d18c6a3a082c"
+    }
+  ]
+}

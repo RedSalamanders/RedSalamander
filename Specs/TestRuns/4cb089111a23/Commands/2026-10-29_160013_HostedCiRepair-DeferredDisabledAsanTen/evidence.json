@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "13f8448ff05d4663dcc44211a73f605751d4daf0",
+  "sourceSnapshotId": "d56236829ccf43dd6e05ac55446103213b640ff9a0ebf3d42f181c11ed735bdd",
+  "buildReceiptId": "c02da8dfcecde0a7361f694c351e818637a9380501d4e36f034e542ccdb5a049",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T160013Z-32188-3ecbd9ed1b76442f96de0d9ae016b1ba",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 37317,
+  "scope": "x64 ASan Debug at committed runtime source 13f8448ff05d4663dcc44211a73f605751d4daf0: three selected plugin configuration/lifecycle cases, ten repetitions, 30 passed and zero failures/skips. The new case admits real ViewerImgRaw and Terminal live-object unload gates, then checks both disabled/enabled policy transitions, retained callable owners, disabled refusal after retirement, ordinary enabled recovery without another Refresh, and catalog cleanup. Existing roundtrip assertions and lifecycle budgets remain. Focused functional evidence, not Full or a paired performance claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "dc78f7edb4d5c5d055ff21cd884fadb4f19b4c5d45223f73f89f3e1a236c6b4e"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 1268260,
+      "sha256": "dbb762aa1151c3aa7c7044e5993da0b965f2b4261ea9369fa816c716d3041067"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 12616,
+      "sha256": "66fe4ca0bb324729ea08852fb83230ac14a519bbddcd41f188831391f1e63ae3"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 5827,
+      "sha256": "ce29e04281be8a0578a0ca609fe57145ac29c4d7d5f69cd7226ef76ec6837ca9"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 819325,
+      "sha256": "21824a829d04fce201a08f6d1285f20fe988673e2b43870c2efe073f0ad18ccd"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 584,
+      "sha256": "ce412223ce9218c527178ccd58797a64dbddd7efddb6c0c1aa0aa28cae292760"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9409,
+      "sha256": "6549ffa01b176b4ace5f8c679e454b3978e745d48a9e4f06384d8120dc06042c"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 20190,
+      "sha256": "9363eeefd244c6002bd2d696ef2be32a4081ffa37466304ac3f20724bc9830dd"
+    }
+  ]
+}

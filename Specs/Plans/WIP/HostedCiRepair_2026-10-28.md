@@ -881,3 +881,47 @@ It is retained as interrupted and NOT_EVALUATED, with no disabled-state runtime
 failure claim. Fresh full-solution Rebuilds precede positive qualification in
 Debug, ASan Debug and test-enabled Release. All local and hosted gates for this
 follow-up remain open until their actual results are recorded.
+
+Committed disabled-state candidate `13f8448ff05d4663dcc44211a73f605751d4daf0`
+passes fresh full-solution, test-enabled x64 Rebuilds in all three profiles, with
+the same existing C4464 warning and no errors. Debug, ASan Debug and Release
+receipts are respectively
+`042a502cf8a84342d9ea2e5681be806534de4a36bb7f035921a60b07d330a0c0`,
+`c02da8dfcecde0a7361f694c351e818637a9380501d4e36f034e542ccdb5a049`
+and `c8a87aa1f4613f1982826aebff7797dec731775fd06eb99b2db185aec0bfcc54`.
+
+| Plugin lifecycle scope, ten repetitions | Passed | Failed | Skipped | Native ms |
+|---|---:|---:|---:|---:|
+| [Debug](../../TestRuns/4cb089111a23/Commands/2026-10-29_155459_HostedCiRepair-DeferredDisabledDebugTen/README.md) | 30 | 0 | 0 | 32,168 |
+| [ASan Debug](../../TestRuns/4cb089111a23/Commands/2026-10-29_160013_HostedCiRepair-DeferredDisabledAsanTen/README.md) | 30 | 0 | 0 | 37,317 |
+| [Release](../../TestRuns/4cb089111a23/Commands/2026-10-29_160639_HostedCiRepair-DeferredDisabledReleaseTen/README.md) | 30 | 0 | 0 | 23,947 |
+
+Each batch includes the two existing configuration roundtrips and the new
+two-plugin admission case. All twenty admission trace rows per profile report
+the expected not-supported/busy results and successful recovery. No assertions,
+repeat counts, lifecycle budgets or required unload probes were removed.
+The [invalid legacy fixture packet](../../TestRuns/4cb089111a23/Commands/2026-10-29_150019_HostedCiRepair-DeferredFixtureInvalid/README.md)
+retains its raw crash and the second control's queued process/archive records;
+neither diagnostic supplies accepted runtime bug proof. Four bounded packets
+preserve exact source patches, build receipts, raw results and traces.
+
+At the same committed source, governed run
+`20261029T154922Z-87672-40daab99b24149fa81cad8582c0aa87f` passes all 384
+checks with zero failures/skips/pending results. PrePush run
+`20261029T160657Z-38648-fcb44755364a428c934c8e579a372b5c` passes all 29
+build-toolchain checks and 256 Compare cases, with 27 existing capability skips.
+Its re-attested Debug artifact receipt is
+`231c1e54a158370f7010f4ab70221878ad66061edbac4acf2c26545c5e54e93d`.
+Both selected entries are promoted; zero entries are incomplete or invalidated.
+The canonical exit is 2: filtered scope, repository NOT_EVALUATED, twelve exact
+PR entry contracts delegated and four broader interactive Full entries pending.
+This result does not claim Full repository coverage. Evidence publication adds
+only archive/documentation inputs after the qualified runtime source.
+
+PR CI run `40893123327` and CodeQL run `40893119862` pass on preceding head
+`3a54a2c0b97907ccdbbe29964b4f7d24c8934870`; they do not qualify this new fix.
+Entire's preceding-head check reports CI and findings passed but lacks a trail
+reviewer approval. GitHub main rules require no reviewer approvals or status
+checks; the user's explicit normal-merge request remains subject to fresh native
+CI on the final published head. Main push, nightly, ASan, flake and Ghostty
+acceptance remains open, and this plan stays ACTIVE until those results exist.
