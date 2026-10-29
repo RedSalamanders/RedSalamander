@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Retain the native Ghostty product's Debug and Release receipt pointers,
+  immutable receipt records and toolchain identities from their canonical profile
+  directories. Keep external test-root evidence in its separate artifact.
 - Publish native Ghostty qualification evidence from one owned sandbox root,
   with a byte-verified copy of the tested runtime identity. Reject stale or
   mismatched evidence before upload. ARM64 upstream execution passed cleanly;

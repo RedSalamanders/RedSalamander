@@ -972,6 +972,24 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Not Match '\.build/ARM64/(Debug|Release)/terminal-runtime-identity\.json'
     }
 
+    It 'archives native product receipt pointers and immutable records from the canonical profile stores' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-product-qualification.yml') -Raw
+        $upload = [regex]::Match($workflow, '(?s)- name: Upload native product qualification evidence(.*?)(?=\r?\n      # The test root)').Groups[1].Value
+        $paths = @([regex]::Matches($upload, '(?m)^ {12}(\.build/[^\r\n]+)') | ForEach-Object { $_.Groups[1].Value })
+        $module = Get-Module | Where-Object Path -EQ $buildEvidenceModule | Select-Object -First 1
+        ($null -ne $module) | Should Be $true
+        foreach ($configuration in @('Debug','Release')) {
+            $profile = Join-Path $TestDrive ('.build/ARM64/' + $configuration)
+            $store = & $module { param($directory) Get-RSBuildReceiptStore -BuildOutputDir $directory } $profile
+            $pointer = [IO.Path]::GetRelativePath($TestDrive, $store.PointerPath).Replace('\','/')
+            $records = [IO.Path]::GetRelativePath($TestDrive, $store.ReceiptDirectory).Replace('\','/') + '/'
+            ($paths -ccontains $pointer) | Should Be $true
+            ($paths -ccontains $records) | Should Be $true
+            ($paths -ccontains ('.build/ARM64/' + $configuration + '/toolchain-identity.json')) | Should Be $true
+        }
+        $upload | Should Not Match '\.build/BuildReceipts/'
+    }
+
     It 'runs a source-and-lock-bound Ghostty preflight before release artifact builds' {
         $releaseWorkflow | Should Match '(?ms)^  ghostty-runtime-preflight:.*?Get-GhosttyTerminalRuntimeStatus\.ps1.*?-Mode Online.*?-ExpectedSourceCommit \$env:GITHUB_SHA'
         $releaseWorkflow | Should Match '(?ms)^  ghostty-runtime-preflight:.*?Get-FileHash.*?canonicalLock\.sha256.*?security-review.*?required-manual.*?unreachable'

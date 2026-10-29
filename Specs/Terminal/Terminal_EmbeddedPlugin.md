@@ -960,7 +960,12 @@ the native `windows-11-vs2026-arm` runner it offline-validates the canonical
 runtime, runs all Terminal plugin contracts, runs the representative
 `terminal_`, `cmd_pane_embedded_terminal_`, and command-shell Commands filters,
 then creates the ARM64 portable ZIP and executes its clean-extraction package
-smoke natively. Every Commands filter uses a distinct runner-owned TestSandbox
+smoke natively. Product evidence includes each canonical
+`.build/ARM64/<Configuration>/build-receipt.json` pointer, its immutable
+`receipts/` history and toolchain identity for both Debug and Release, alongside
+the runtime identity, logs and portable archive. Test-root evidence is uploaded
+separately, preserving one ancestor root per artifact.
+Every Commands filter uses a distinct runner-owned TestSandbox
 root so a completed earlier filter cannot appear as residue in a later filter's
 disk audit. The embedded lifecycle proof treats app-root foreground ownership as
 an explicit capability: it requires pointer-follow success when foreground is

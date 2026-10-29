@@ -157,6 +157,19 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Product run `40819043691` was cancelled during dependency installation,
+  before application build or product tests, after verifying that its artifact
+  list referenced obsolete `.build/BuildReceipts/`. The canonical producer
+  `Get-RSBuildReceiptStore` retains pointers and immutable records beneath each
+  actual output profile instead. The pre-cancellation state and interruption
+  reason are preserved in
+  `20261029T050127Z-81836-042b4d74e0cc4cce8ef45c04d950f577`.
+  Product artifacts now retain both ARM64 profiles' receipt pointers, immutable
+  histories and toolchain identities. The regression derives expected paths
+  from the real producer helper; focused workflow, governance and scoped checks
+  passed 61/61 in `20261029T050250Z-52904-fcdd228b4f7c466db64215025f95000e`.
+  No product execution was discarded or counted as accepted by that cancellation.
+
 - Native run `40810497954` at `7152e3823` completed all three upstream targets
   on the first execution, without a code-5 retry: the ARM64 C-ABI suite passed
   3,720 with 36 skips, the Zig suite passed 3,233 with 36 skips, and the ABI
