@@ -157,6 +157,25 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- At `8a0e89a02`, local PrePush run
+  `20261028T235142Z-81748-2cdfeb7bf8454498b806bdbf8b5f7a95` passed its
+  Debug build, all 29 toolchain checks, profile refresh (receipt
+  `fc0510ee949ad8d19860301629c4c74247dd6e9565fba22775d57bbca84e1dac`)
+  and 260 Compare Directories cases with 21 environment skips. Commands then
+  waited for the shared desktop mutex, owned by a separate DxUi validation.
+  A read-only native owner query is retained in
+  `20261029T010300Z-91732-d528a87c9f7d444e83e395e7fcdd7fef`.
+  No desktop suite from this run launched. Its exact owned runner was stopped
+  before integrating the cache fix, and the complete run was preserved with
+  an interruption record. These results remain bound to `8a0e89a02`; the
+  integrated source still requires qualification.
+- PR CI `40790194244` passed its x64 job at `8a0e89a02`: 1,057 tooling checks
+  and all eleven native entries passed, with two historical-evidence skips.
+  The complete x64 log is preserved in
+  `20261029T003709Z-86740-f7e4744d19cf4bbb929760ebe4ae0d92`.
+  Fresh native candidate/product qualification of the cache fix is running as
+  `40796626342` at `a7f11e810`; no passing result is inferred yet.
+
 - The approved interactive PrePush at `ec6ad6c11`, run
   `20261028T224447Z-93944-65b4e072bbd7461399d2ba61becfd44b`, passed its
   Embedded-symbol Debug build, all 29 toolchain checks and profile refresh
@@ -180,6 +199,31 @@ and warning; acceptance remains pending their actual results.
   exit cover both boundaries. The combined candidate-review, scheduler,
   scoped-testing and governance checks passed 99/99 in
   `20261028T234753Z-75512-55b70c3d9559450e9039da9720a2a66a`.
+
+- Diagnostic run `40790104792` at `8149476b4` exhausted its 20-minute
+  contained build limit during the `translate-c` fetch. Aro and Pixels fetches
+  had completed in 191 and 187 seconds; the third Zig parent was still running
+  after 660 seconds. No output-drain stall was observed. Its explicit
+  `qualification=false` record and complete logs are preserved in
+  `20261029T002335Z-80328-9cb3b1ae17a2483eb64a12ace14079ff`.
+  Each fetch previously deleted its compiler cache, repeating Zig 0.17 maker
+  compilation. One repository-serialized, disposable fetch-session cache now
+  spans the dependency closure; all package/archive/license checks remain.
+  Cold/warm/second-fetch-failure ownership checks passed with the lifecycle
+  suite, 39/39, in
+  `20261029T003210Z-83120-67aaadf3eeb44a19afc3230afde187f8`.
+  A cold x64 build passed in 399,025 ms, reproduced the exact locked DLL and
+  removed the cache, in
+  `20261029T003622Z-89180-65cfc0e461644515b6b647bd29826f24`.
+  Its first fetch took 106 seconds and each later fetch less than one second.
+  The record binds lifecycle SHA-256
+  `335880ddfbd03844ca36dac906ba816c53eea031f040717debdadddcbe6e8ae4`;
+  subsequent indentation cleanup does not change the executed statements.
+  This local result does not establish the native timeout's underlying cause
+  or native ARM64 acceptance; a fresh native qualification remains required.
+  The final cache implementation passed lifecycle, workflow, scoped-testing
+  and tooling-governance checks, 96/96, in
+  `20261029T004714Z-90328-752ebfc3157d4edeb715fcb4265ee46e`.
 
 - Native ARM64 candidate run `40761642957` at `62d181cf4` reached the
   120-minute job limit during the exact-candidate build; no upstream test ran

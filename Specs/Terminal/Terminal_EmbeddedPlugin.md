@@ -778,7 +778,12 @@ Product closure.
 The lifecycle derives Zig's global and local caches from its guarded repository
 state root and supplies them through per-child `ZIG_GLOBAL_CACHE_DIR` and
 `ZIG_LOCAL_CACHE_DIR` values before compiler bootstrap. Fetch uses its separate
-disposable repository cache. Neither caller variables nor a default user cache
+disposable repository cache shared by the authenticated fetches of one
+repository-serialized bootstrap. The cache is initialized only for a missing
+canonical archive and removed once the dependency closure succeeds or fails.
+This reuses Zig 0.17's compiled maker between packages; package-content hashes,
+canonical archive hashes and license checks still run for every dependency.
+Neither caller variables nor a default user cache
 may select build inputs; this contract applies to both Zig 0.16 and 0.17.
 
 Zig 0.17 builds use `Expand-RSGhosttyRuntimeLockedPackages` to materialize a

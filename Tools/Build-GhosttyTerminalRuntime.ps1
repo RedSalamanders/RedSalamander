@@ -4,6 +4,7 @@ Builds and verifies the locked Ghostty private Terminal runtime.
 
 .DESCRIPTION
 Invokes the lock-driven Ghostty lifecycle module. Product mode consumes the canonical tracked lock and alone may publish .build\TerminalEngine\Product plus its generated pairing header. Candidate mode requires an explicit lock and output below .build\TerminalEngineUpgrade and cannot write Product or a pairing header.
+Authenticated dependency fetches share one disposable bootstrap cache; each package remains hash-verified and the session cache is removed on success or failure.
 
 .PARAMETER Platform
 Selects the x64 or ARM64 runtime architecture.

@@ -773,7 +773,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle.",
+      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle, sharing one disposable compiler cache across authenticated dependency fetches while preserving every hash check and success/failure cleanup.",
       "usage": "Invoked without candidate arguments by product builds; reviewed upgrades supply both candidate paths below .build/TerminalEngineUpgrade.",
       "usedBy": [
         "Directory.Build.targets",
