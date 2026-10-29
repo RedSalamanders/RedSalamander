@@ -65,6 +65,30 @@ typedef enum {
 }
 
 Describe 'Ghostty exact candidate review' {
+    It 'keeps successful Git stderr out of metadata and retains nonzero diagnostics' {
+        $fixture = New-RSGhosttyCandidateReviewRepository
+        $module = Get-Module GhosttyCandidateReview
+        $result = & $module {
+            param($root)
+            Invoke-RSGhosttyCandidateGit -RepositoryPath $root -Context 'Synthetic stream witness' -Arguments @(
+                '-c', 'alias.rs-review-streams=!echo synthetic-result && echo synthetic-warning 1>&2', 'rs-review-streams')
+        } $fixture.Root
+        $result.ExitCode | Should Be 0
+        ($result.Lines -join ',') | Should Be 'synthetic-result'
+        ($result.Diagnostics -join ',') | Should Be 'synthetic-warning'
+        $failure = $null
+        try {
+            & $module {
+                param($root)
+                Invoke-RSGhosttyCandidateGit -RepositoryPath $root -Context 'Synthetic failure witness' -Arguments @(
+                    '-c', 'alias.rs-review-failure=!echo synthetic-failure 1>&2 && exit 7', 'rs-review-failure')
+            } $fixture.Root
+        }
+        catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Match 'git exit 7: synthetic-failure'
+    }
+
     It 'classifies every review category deterministically' {
         Get-RSGhosttyCandidatePathCategory 'include/ghostty/vt/terminal.h' | Should Be 'public-abi'
         Get-RSGhosttyCandidatePathCategory 'build.zig' | Should Be 'build-toolchain'

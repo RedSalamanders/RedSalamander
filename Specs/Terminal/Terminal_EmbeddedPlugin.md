@@ -901,6 +901,18 @@ upstream execution and canonical qualification publication, and cannot continue
 into admitted-product qualification. A successful diagnostic build never
 establishes native runtime or product acceptance.
 
+The builder reports native command, repository/drive-lease and dependency phases
+on PowerShell's information stream. A long command reports its owned PID and
+elapsed wait periodically; an exited process whose redirected streams remain
+open reports that distinct drain phase. Native stdout/stderr remain separate
+for package-hash and Git parsing, and progress omits arbitrary URI arguments.
+The native workflow acquires owned scratch before starting the candidate build.
+Its optional `diagnostics_only` dispatch has a separate job/check name and a
+20-minute contained build watchdog. It uploads only build diagnostics, skips
+upstream execution and canonical qualification publication, and cannot continue
+into admitted-product qualification. A successful diagnostic build never
+establishes native runtime or product acceptance.
+
 Native Windows ARM64 has reproducibly returned process code 5 on the first
 launch of the newly linked, larger Debug C-ABI test executable while the
 sibling suite and ABI schema target pass. No test failure or matching Windows
@@ -993,7 +1005,9 @@ stops the review.
 Candidate Git metadata queries enable long paths within the checkout with an
 invocation-local `-c core.longpaths=true`. They do not change repository or
 machine Git configuration, and deep source paths retain the same provenance
-and ancestry requirements.
+and ancestry requirements. Metadata parsers consume stdout only. Successful
+Git stderr remains visible as warnings; a nonzero exit retains its diagnostics
+and fails the review.
 
 The complete review scope is `build.zig`, `build.zig.zon`,
 `include/ghostty/vt/**`, `src/build/GhosttyLibVt.zig`, `src/lib_vt.zig`, and

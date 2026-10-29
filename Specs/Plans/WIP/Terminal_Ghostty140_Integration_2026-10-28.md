@@ -157,6 +157,49 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Combined workflow, candidate-review, scheduler, governance and scoped checks
+  passed 138/138 in
+  `20261029T034752Z-96224-e7af37b690674067aa963c3769376e9d`, excluding the
+  tagged native build-toolchain lane. The preceding direct invocation included
+  that lane without an explicit built validation profile and failed its setup
+  guard; all 138 other checks passed. That failed invocation remains preserved
+  in `20261029T034442Z-93132-5d1004b9d6084f0c8ee26ee94fffb6ca`.
+  The real primary profile's 29 toolchain checks are recorded below, separately.
+  Integration is prepared through the diagnostic worktree while the ongoing
+  application run keeps commit `3f2b0f1ce` frozen. Its independently recomputed
+  workspace snapshot still equals its starting snapshot
+  `ae31f655059018eedd3fa02a6ba98eb34022b8a6eb7fbfe703d06a4c34488230`.
+
+- Qualification at application commit `3f2b0f1ce` is recorded separately from
+  the later native-workflow corrections. PR CI `40798928378` passed on x64 and
+  native ARM64: each job passed 1,060 PowerShell checks and eleven native
+  entries, with two historical-evidence skips. Both actual loaded Terminal
+  plugins passed 162 deterministic selftests; the ARM64 runtime reproduced the
+  locked raw DLL hash. Complete logs are preserved in
+  `20261029T022034Z-96736-640b462155354373b5948006c647eeda` (x64) and
+  `20261029T030424Z-95880-86eec96a24ab4eb799c5bc15e1e63675` (ARM64).
+  Local run `20261029T012426Z-93224-2b01e80f5a6341bcb1d0691d944ae606`
+  passed all 29 build/toolchain checks and refreshed its Debug receipt to
+  `1d997c49ed7c7c55114a0682a2343bd4028cea440a606fad4b4c9569259a6fd5`.
+  Commands execution completed with 957 passed, zero failed and six declared
+  opt-in skips, including all 17 Terminal cases. Its coverage-list check and
+  the three remaining interactive suites still await the shared desktop lease.
+  Compare Directories recorded 259 passed, one failed and 21 environment skips:
+  `search_service_sqlite_cold_start_stale_root_refreshes_before_query` timed
+  out waiting for initial service warmup. Failed results remain intact; the
+  empty SQLite store and input were preserved with verified hashes in
+  `20261029T023504Z-38628-8a8656333db44f17a38b3371ef24c861`.
+  No cause or successful retry is inferred. This run is not repository acceptance.
+- The tests-disabled full x64 Release rebuild and portable clean-extraction
+  smoke passed at `3f2b0f1ce` with zero warnings/errors, receipt
+  `abfb4e76bf7318bb33baeef86fb1d7379582425348475a4a62918506921da11c`.
+  The packaged runtime loaded natively and all built-in plugin contracts passed.
+  `RedSalamander-7.0.1-x64-Portable.zip` is 25,228,838 bytes, SHA-256
+  `77b79f55bc84a268e37abfd3587cbfdb9efc3a258d8b059705d383c57714eb19`.
+  The complete build/package record is preserved in
+  `20261029T032623Z-94028-75eae22297f4467e9c6dc90660881e18`.
+  This shipping-profile result retains its original application source identity.
+
 - Native run `40805550221` at `5e721727a` completed the ARM64 candidate build
   and seed/WER setup, then failed while launching `uucode_generate.exe` from
   the external locked package directory. No upstream test had executed. The
@@ -201,6 +244,48 @@ and warning; acceptance remains pending their actual results.
   YAML/PowerShell parsing and focused workflow, governance and scoped-testing
   checks passed 57/57 in
   `20261029T012734Z-92760-ffe72c07a2174b788837901e68b7c82f`.
+- At `8a0e89a02`, local PrePush run
+  `20261028T235142Z-81748-2cdfeb7bf8454498b806bdbf8b5f7a95` passed its
+  Debug build, all 29 toolchain checks, profile refresh (receipt
+  `fc0510ee949ad8d19860301629c4c74247dd6e9565fba22775d57bbca84e1dac`)
+  and 260 Compare Directories cases with 21 environment skips. Commands then
+  waited for the shared desktop mutex, owned by a separate DxUi validation.
+  A read-only native owner query is retained in
+  `20261029T010300Z-91732-d528a87c9f7d444e83e395e7fcdd7fef`.
+  No desktop suite from this run launched. Its exact owned runner was stopped
+  before integrating the cache fix, and the complete run was preserved with
+  an interruption record. These results remain bound to `8a0e89a02`; the
+  integrated source still requires qualification.
+- PR CI `40790194244` passed its x64 job at `8a0e89a02`: 1,057 tooling checks
+  and all eleven native entries passed, with two historical-evidence skips.
+  The complete x64 log is preserved in
+  `20261029T003709Z-86740-f7e4744d19cf4bbb929760ebe4ae0d92`.
+  Fresh native candidate/product qualification of the cache fix is running as
+  `40796626342` at `a7f11e810`; no passing result is inferred yet.
+
+- The approved interactive PrePush at `ec6ad6c11`, run
+  `20261028T224447Z-93944-65b4e072bbd7461399d2ba61becfd44b`, passed its
+  Embedded-symbol Debug build, all 29 toolchain checks and profile refresh
+  (receipt `8a3a6ab5ca7e0d9d1d349beed5ae6129ba2a3adae044bf05b57e6b6105430c67`).
+  The runner then exited before Compare or any interactive entry. Direct
+  execution of its scheduler against the two canonical deferred viewer entries
+  reproduced strict-mode `The property 'Id' cannot be found` on an empty early
+  set. Scheduling now projects early IDs through the pipeline; regression
+  scenarios cover empty, late-only and mixed inputs. Interactive acceptance
+  remains pending the corrected run. The focused scheduler, scoped-testing and
+  governance regression passed 91/91 in
+  `20261028T233856Z-78424-b76fb160d3b74359990865796b2af6f7`.
+
+- PR CI `40779610989` at `ec6ad6c11` passed the x64 solution build and all
+  eleven runtime entries, but tooling reported 1,052 passed, one failed and two
+  historical skips. Its long-path Git regression received a successful Git
+  stderr warning about `.git/objects/info/alternates`; combining stderr with
+  stdout made that warning look like an inventory row. Metadata now consumes
+  stdout only, with successful diagnostics still visible and failed-command
+  diagnostics retained. Real Git aliases emitting both streams and a nonzero
+  exit cover both boundaries. The combined candidate-review, scheduler,
+  scoped-testing and governance checks passed 99/99 in
+  `20261028T234753Z-75512-55b70c3d9559450e9039da9720a2a66a`.
 
 - Diagnostic run `40790104792` at `8149476b4` exhausted its 20-minute
   contained build limit during the `translate-c` fetch. Aro and Pixels fetches
@@ -327,7 +412,8 @@ and warning; acceptance remains pending their actual results.
   The initial native dispatch was cancelled while queued to qualify the final
   cache-namespaced lock instead. PrePush planning delegates matching PR entries
   as pending CI and retains the build-toolchain and Compare Directories local
-  obligations. Four focus-taking suites remain pending agreement on timing.
+  obligations. The four focus-taking suites are authorized; acceptance remains
+  pending their actual results.
 
 - Required loader prototypes remain present; no host-required API needs a
   signature adapter. New search, render-image and animation APIs are not wired

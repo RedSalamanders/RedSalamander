@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Interactive PrePush validation continues when PR delegation leaves no early standalone entries. Empty, interactive-only and mixed scheduler remainders are covered by regression checks.
+- Keep successful Git stderr warnings out of Ghostty candidate metadata parsing,
+  while displaying warnings and preserving diagnostics from failed commands.
+  Real Git stream and nonzero-exit witnesses cover the CI long-path failure.
 - Keep Ghostty native qualification's local cache outside its source checkout so
   Zig 0.17 launches generated tools with absolute paths from external package
   directories. A captured-output reproduction fails with the prior layout and

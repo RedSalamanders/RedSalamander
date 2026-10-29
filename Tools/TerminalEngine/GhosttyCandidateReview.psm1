@@ -32,10 +32,17 @@ function Invoke-RSGhosttyCandidateGit {
     # to the metadata query rather than changing repository or machine settings.
     $output = @(& git.exe -c core.longpaths=true -C $RepositoryPath @Arguments 2>&1)
     $exitCode = $LASTEXITCODE
+    # PowerShell preserves redirected native stderr as ErrorRecord objects.
+    # Metadata parsers consume stdout only; successful Git warnings still surface.
+    $diagnostics = @($output | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object ToString)
+    $lines = @($output | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] })
     if (-not $AllowFailure -and $exitCode -ne 0) {
         throw "${Context} failed with git exit ${exitCode}: $($output -join "`n")"
     }
-    return [pscustomobject]@{ ExitCode = $exitCode; Lines = [string[]]$output }
+    if ($exitCode -eq 0 -and $diagnostics.Count -gt 0) {
+        Write-Warning "${Context}: $($diagnostics -join "`n")"
+    }
+    return [pscustomobject]@{ ExitCode = $exitCode; Lines = [string[]]$lines; Diagnostics = [string[]]$diagnostics }
 }
 
 function Get-RSGhosttyCandidatePathCategory {
