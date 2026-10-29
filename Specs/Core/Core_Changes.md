@@ -20,12 +20,13 @@ does not migrate their history.
 
 [`Tools/Test-Changelog.ps1`](../../Tools/Test-Changelog.ps1) is the read-only validator. It rejects invalid
 names/dates, empty or multiple bullets, unindented continuation lines, unexpected entries under `Changes/`, reparse
-paths inside the repository, invalid UTF-8, missing `Changes/README.md`, and a missing or duplicate `## Unreleased`
-heading in `CHANGELOG.md`. With `-Base <ref>` it also compares the checkout with its merge base with that ref:
-fragments may be added, edited or renamed, and `CHANGELOG.md` may change only by folding fragments that the merge
-base holds and the checkout no longer has. Hand edits, entries folded from fragments the same change adds, edited or
-removed entries, any other change outside the Unreleased entries, and fragments removed without their entry are
-refused; line endings never count. PrePush entrypoints run it with `-Base origin/main` and CI with `-Base HEAD^1`
+paths inside the repository, invalid UTF-8 (only a UTF-8 byte order mark is accepted; a UTF-16 or UTF-32 one is not
+honored), missing `Changes/README.md`, and a missing or duplicate `## Unreleased` heading in `CHANGELOG.md`. With
+`-Base <ref>` it also compares the checkout with its merge base with that ref: fragments may be added, edited or
+renamed, and `CHANGELOG.md` must equal the exact fold `Fold-Changelog.ps1` would write of the fragments that the merge
+base holds and the checkout no longer has. Hand edits, entries folded from fragments the same change adds, edited,
+removed, reordered or duplicated entries, any other change outside the Unreleased entries, and fragments removed
+without their entry are refused; line endings never count. PrePush entrypoints run it with `-Base origin/main` and CI with `-Base HEAD^1`
 from a two-commit checkout; repositories without PrePush run the same command before handoff. Existing
 validation/tooling entrypoints invoke it or its shared module. Explanation-only runs never mutate files.
 
@@ -45,10 +46,12 @@ that same checkout.
 [`Tools/Submit-ChangelogFold.ps1`](../../Tools/Submit-ChangelogFold.ps1) fetches the default branch, folds it in a
 temporary worktree outside the caller's checkout, checks the result with `Test-Changelog.ps1 -Base`, commits with the
 repository's own identity, signing and hooks, pushes `changelog/fold-<commit>` and opens its pull request with `gh`
-(`-PushOnly` leaves the pull request to the caller). It removes only its own temporary worktree, never pruning other
-registrations, and changes nothing in the caller's checkout. It pushes nothing when
-there is nothing to fold, reuses a branch already pushed for the same commit, and reports an open fold pull request
-instead of opening a second, conflicting one. `-WhatIf` folds and commits only in the temporary worktree. GitHub
+(`-PushOnly` leaves the pull request to the caller). The temporary worktree goes under `-WorktreeParent` (the user's
+temporary folder by default; test harnesses pass a folder in their sandbox). It removes only its own temporary
+worktree, never pruning other registrations, and changes nothing in the caller's checkout. It pushes nothing when
+there is nothing to fold, reuses a branch already pushed for the same commit, and reports an open fold pull request,
+looking through every open pull request, instead of opening a second, conflicting one. `-WhatIf` folds and commits
+only in the temporary worktree and never pushes or opens a pull request, also for a fold branch pushed earlier. GitHub
 Actions never fold: they cannot open pull requests in these repositories, and private repositories' hosted jobs are
 not always available.
 
@@ -60,8 +63,9 @@ not always available.
 ```
 
 The shared behavior suite is [`Tools/Test-ChangelogWorkflow.ps1`](../../Tools/Test-ChangelogWorkflow.ps1). It uses
-local Git fixture repositories with a fixed identity and none of the person's hooks or signing, and a local bare
-remote for the submission. Repository-specific adapters supply their existing test scratch root and register the
-suite with normal tooling validation. The runner bounds its owned child and pipe waits and terminates its child tree
+local Git fixture repositories with a fixed identity and none of the person's hooks or signing, a local bare remote
+and a stand-in `gh` for the submission, and keeps every temporary worktree inside its scratch root. Controls that need
+Windows (junctions, delete sharing) report SKIP on other hosts. Repository-specific adapters supply their existing
+test scratch root and register the suite with normal tooling validation. The runner bounds its owned child and pipe waits and terminates its child tree
 on timeout before fixture cleanup. This tooling-only workflow does not establish native runtime, platform, rendering
 or performance qualification.

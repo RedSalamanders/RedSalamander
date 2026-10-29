@@ -67,7 +67,7 @@ function New-FixtureRepository([string] $Path, [switch] $Bare) {
     [void][IO.Directory]::CreateDirectory($Path)
     [void](Invoke-FixtureGit $Path @(@('init', '-q') + $(if ($Bare) { @('--bare') } else { @() }) + @('-b', 'main')))
     foreach ($setting in @(@('user.name', 'Changelog fixture'), @('user.email', 'changelog@fixture.invalid'), @('commit.gpgsign', 'false'),
-            @('tag.gpgsign', 'false'), @('core.autocrlf', 'false'), @('core.hooksPath', (Join-Path $Path '.no-hooks')))) {
+            @('tag.gpgsign', 'false'), @('core.autocrlf', 'false'), @('core.longpaths', 'true'), @('core.hooksPath', (Join-Path $Path '.no-hooks')))) {
         [void](Invoke-FixtureGit $Path (@('config') + $setting))
     }
 }
@@ -95,7 +95,15 @@ function New-FoldFixture([string] $Root) {
     [void](Invoke-FixtureGit $clone @('remote', 'add', 'origin', '../origin.git'))
     [void](Invoke-FixtureGit $clone @('push', '-q', 'origin', 'main'))
     $head = (Invoke-FixtureGit $clone @('rev-parse', 'HEAD'))[0].Trim()
-    return [pscustomobject]@{ Origin = $origin; Clone = $clone; Head = $head; FoldBranch = 'changelog/fold-' + $head.Substring(0, 12) }
+    # The submission's temporary worktrees stay inside this fixture, never in the person's temporary folder. A short
+    # name and long-path support keep a deep scratch root within Windows path limits.
+    $worktrees = Join-Path $Root 'wt'
+    [void][IO.Directory]::CreateDirectory($worktrees)
+    return [pscustomobject]@{ Origin = $origin; Clone = $clone; Head = $head; FoldBranch = 'changelog/fold-' + $head.Substring(0, 12); WorktreeParent = $worktrees }
+}
+function Assert-NoFoldWorktree($Fixture) {
+    $left = @(Get-ChildItem -LiteralPath $Fixture.WorktreeParent -Force | ForEach-Object { $_.Name })
+    Assert ($left.Count -eq 0) "A temporary fold worktree was left behind: $($left -join ', ')"
 }
 function Save-FixtureBase([string] $Root) {
     # Commit everything as the default branch the comparisons and the runner read as origin/main.
@@ -297,6 +305,7 @@ Case 'Unreleased heading at EOF is supported' {
 Case 'CHANGELOG.md changes only by an exact fold of fragments the merge base holds' {
     param($r)
     New-FixtureRepository $r
+    Put $r 'CHANGELOG.md' "# Changelog`n`n## Unreleased`n`n- Existing.`n- Second existing.`n`n## 1.0`n`n- Released.`n"
     Put $r 'Changes/2026-10-20-merged.md' "- Merged earlier.`n  With detail.`n"
     Save-FixtureBase $r
     # A feature change adds a fragment and leaves CHANGELOG.md alone.
@@ -320,7 +329,9 @@ Case 'CHANGELOG.md changes only by an exact fold of fragments the merge base hol
         @{ Name = 'an edited entry'; Expect = 'was edited or removed'; Change = { param($c) Edit-Fixture $c 'CHANGELOG.md' '- Existing.' '- Existing, edited.' } },
         @{ Name = 'a released-history edit'; Expect = 'changed outside its Unreleased entries'; Change = { param($c) Edit-Fixture $c 'CHANGELOG.md' '- Released.' '- Released, edited.' } },
         @{ Name = 'an Unreleased paragraph'; Expect = 'changed outside its Unreleased entries'; Change = { param($c) Edit-Fixture $c 'CHANGELOG.md' "## Unreleased`n`n" "## Unreleased`n`nA note.`n`n" } },
-        @{ Name = 'an unfolded removal'; Expect = 'was removed since origin/main without its entry'; Change = { param($c) Remove-Item -LiteralPath (Join-Path $c 'Changes/2026-10-20-merged.md') } })) {
+        @{ Name = 'an unfolded removal'; Expect = 'was removed since origin/main without its entry'; Change = { param($c) Remove-Item -LiteralPath (Join-Path $c 'Changes/2026-10-20-merged.md') } },
+        @{ Name = 'a duplicated folded entry'; Expect = 'is not the exact fold'; Change = { param($c) & $fold -Root $c; Edit-Fixture $c 'CHANGELOG.md' "- Merged earlier.`n  With detail.`n" "- Merged earlier.`n  With detail.`n- Merged earlier.`n  With detail.`n" } },
+        @{ Name = 'reordered entries'; Expect = 'is not the exact fold'; Change = { param($c) Edit-Fixture $c 'CHANGELOG.md' "- Existing.`n- Second existing.`n" "- Second existing.`n- Existing.`n" } })) {
         Reset-FixtureBase $r
         & $bad.Change $r
         $problems = Get-ChangelogFoldProblems $r 'origin/main'
@@ -344,9 +355,10 @@ Case 'fold submission pushes one exact fold branch and leaves the caller checkou
     $before = Snapshot $clone
     $head = $fixture.Head
     $foldBranch = $fixture.FoldBranch
-    & $submit -Root $clone -PushOnly -WhatIf
+    $output = (& $submit -Root $clone -WorktreeParent $fixture.WorktreeParent -PushOnly -WhatIf 6>&1) -join "`n"
+    Assert ($output.Contains(" in $(Join-Path $fixture.WorktreeParent 'changelog-fold-')")) "The fold worktree was not created in the sandbox folder it was given: $output"
     Assert ((Get-FixtureGitLines $origin @('branch', '--list', 'changelog/fold-*')).Count -eq 0) 'WhatIf pushed a fold branch'
-    & $submit -Root $clone -PushOnly
+    & $submit -Root $clone -WorktreeParent $fixture.WorktreeParent -PushOnly
     $changelog = (Invoke-FixtureGit $origin @('show', "${foldBranch}:CHANGELOG.md")) -join "`n"
     Assert ($changelog.Contains("## Unreleased`n`n- Second.`n  Detail.`n- First.`n- Existing.")) "The fold branch does not hold the exact fold: $changelog"
     $files = Get-FixtureGitLines $origin @('ls-tree', '--name-only', "${foldBranch}:Changes")
@@ -356,13 +368,14 @@ Case 'fold submission pushes one exact fold branch and leaves the caller checkou
     Assert ((Get-FixtureGitLines $clone @('status', '--porcelain')).Count -eq 0) 'Submission left the caller checkout dirty'
     $after = Get-FixtureGitLines $clone @('worktree', 'list', '--porcelain') 'worktree *'
     Assert (($after -join "`n") -ceq ($registrations -join "`n")) "Submission left a temporary worktree or pruned another registration: $($after -join ', ')"
-    & $submit -Root $clone -PushOnly
+    & $submit -Root $clone -WorktreeParent $fixture.WorktreeParent -PushOnly
     $branches = Get-FixtureGitLines $origin @('branch', '--list', 'changelog/fold-*')
     Assert ($branches.Count -eq 1) "A repeated submission pushed a second fold branch: $($branches -join ', ')"
     # Once the fold is merged, the default branch has nothing left to fold.
     [void](Invoke-FixtureGit $origin @('update-ref', 'refs/heads/main', "refs/heads/$foldBranch"))
-    $output = (& $submit -Root $clone -PushOnly 6>&1) -join "`n"
+    $output = (& $submit -Root $clone -WorktreeParent $fixture.WorktreeParent -PushOnly 6>&1) -join "`n"
     Assert ($output.Contains('has no changelog fragments to fold')) "A folded default branch was folded again: $output"
+    Assert-NoFoldWorktree $fixture
 }
 Case 'fold submission opens one pull request; WhatIf writes to neither the remote nor GitHub' {
     param($r)
@@ -377,20 +390,24 @@ Case 'fold submission opens one pull request; WhatIf writes to neither the remot
         elseif ($args[0] -ceq 'pr' -and $args[1] -ceq 'create') { 'https://github.com/fixture/example/pull/7' }
     }
     $creates = { @($calls | Where-Object { $_.StartsWith('pr create', [StringComparison]::Ordinal) }) }
-    & $submit -Root $fixture.Clone -Repository fixture/example -WhatIf
+    & $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -Repository fixture/example -WhatIf
     Assert (@(& $creates).Count -eq 0) 'WhatIf opened a pull request'
     Assert ((Get-FixtureGitLines $fixture.Origin @('branch', '--list', 'changelog/fold-*')).Count -eq 0) 'WhatIf pushed a fold branch'
     # A fold branch pushed earlier skips the fold itself, and WhatIf still opens nothing.
-    & $submit -Root $fixture.Clone -PushOnly
-    & $submit -Root $fixture.Clone -Repository fixture/example -WhatIf
+    & $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -PushOnly
+    & $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -Repository fixture/example -WhatIf
     Assert (@(& $creates).Count -eq 0) 'WhatIf opened a pull request for a fold branch pushed earlier'
-    & $submit -Root $fixture.Clone -Repository fixture/example
+    & $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -Repository fixture/example
     $created = @(& $creates)
     Assert ($created.Count -eq 1 -and $created[0].Contains("--base main --head $($fixture.FoldBranch)") -and $created[0].EndsWith('--repo fixture/example')) "The fold pull request was not opened once against main: $($created -join ' | ')"
     # An open fold pull request is reported instead of opening a second, conflicting one.
     $openUrls.Add('https://github.com/fixture/example/pull/7')
-    $output = (& $submit -Root $fixture.Clone -Repository fixture/example 6>&1) -join "`n"
+    $output = (& $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -Repository fixture/example 6>&1) -join "`n"
     Assert (@(& $creates).Count -eq 1 -and $output.Contains('already open')) "A second fold pull request was opened: $output"
+    # The open-PR query asks for every open pull request, not gh's default first 30.
+    $lists = @($calls | Where-Object { $_.StartsWith('pr list', [StringComparison]::Ordinal) })
+    Assert ($lists.Count -gt 0 -and @($lists | Where-Object { -not $_.Contains('--limit 1000') }).Count -eq 0) "An open-PR query was limited to gh's default page: $($lists -join ' | ')"
+    Assert-NoFoldWorktree $fixture
 }
 Case 'invalid UTF-8 in CHANGELOG.md is refused without mutation' {
     param($r)
@@ -402,6 +419,13 @@ Case 'invalid UTF-8 in CHANGELOG.md is refused without mutation' {
     Assert ($message.Contains('is not valid UTF-8')) "Invalid UTF-8 was not named: $message"
     Refuses { & $validate -Root $r }
     Assert ((Snapshot $r) -ceq $before) 'Invalid UTF-8 input was rewritten'
+    # A UTF-16 byte order mark is not honored as another encoding: the file is still read as UTF-8 and refused.
+    [IO.File]::WriteAllText((Join-Path $r 'CHANGELOG.md'), "# Changelog`n`n## Unreleased`n`n- Wide.`n", [Text.UnicodeEncoding]::new($false, $true))
+    $before = Snapshot $r
+    $message = ''
+    try { & $fold -Root $r } catch { $message = $_.Exception.Message }
+    Assert ($message.Contains('is not valid UTF-8')) "A UTF-16 changelog was not refused as UTF-8: $message"
+    Assert ((Snapshot $r) -ceq $before) 'A UTF-16 changelog was rewritten'
 }
 Case 'links inside the checkout are refused; a junction above it is accepted' {
     param($r)
@@ -428,6 +452,8 @@ Case 'links inside the checkout are refused; a junction above it is accepted' {
 }
 Case 'an interrupted cleanup names the fragment and a rerun finishes it' {
     param($r)
+    # Only Windows refuses to delete a file that another handle holds open without delete sharing.
+    if (-not $IsWindows) { Write-Host 'SKIP changelog interrupted-cleanup control: Windows file sharing semantics required.'; return }
     $held = Join-Path $r 'Changes/2026-10-21-held.md'
     Put $r 'Changes/2026-10-21-held.md' '- Held.'
     # Another reader without delete sharing makes the removal fail after publication.
@@ -457,15 +483,18 @@ Case 'the public PrePush runner validates the changelog against origin/main befo
         $start.RedirectStandardError = $true
         foreach ($argument in @('-NoProfile','-File',(Join-Path $r $runnerName))) { $start.ArgumentList.Add($argument) }
         if ($scoped) { $start.ArgumentList.Add('-Mode'); $start.ArgumentList.Add('PrePush') }
-        Invoke-FixtureProcess $start
+        $outcome = Invoke-FixtureProcess $start
+        # One line: a host without a console wraps a long error message, continuing it on " | " lines.
+        $outcome | Add-Member -NotePropertyName Flat -NotePropertyValue ((($outcome.Output -replace '\r?\n\s*\|\s?', ' ') -replace '\s+', ' '))
+        $outcome
     }
     Edit-Fixture $r 'CHANGELOG.md' '- Existing.' "- Hand edit.`n- Existing."
     $result = & $run
-    Assert ($result.ExitCode -ne 0 -and $result.Output.Contains('added by hand')) "The runner did not refuse a hand-edited changelog: $($result.Output)"
+    Assert ($result.ExitCode -ne 0 -and $result.Flat.Contains('added by hand')) "The runner did not refuse a hand-edited changelog: $($result.Output)"
     Reset-FixtureBase $r
     Put $r 'Changes/2026-10-21-pending.md' '- Pending until the fold on main.'
     $result = & $run
-    Assert ($result.Output.Contains('Changelog valid: 1 pending fragment(s); CHANGELOG.md changes since origin/main are exact folds')) "The runner refused a pending fragment: $($result.Output)"
+    Assert ($result.Flat.Contains('Changelog valid: 1 pending fragment(s); CHANGELOG.md changes since origin/main are exact folds')) "The runner refused a pending fragment: $($result.Output)"
 }
 Case 'a timed-out fixture child is terminated before fixture cleanup' {
     param($r)

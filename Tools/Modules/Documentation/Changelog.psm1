@@ -22,8 +22,11 @@ function Assert-ChangelogPath([string] $Path, [string] $Root) {
 }
 
 function Read-ChangelogText([string] $Path) {
-    # Strict UTF-8 (a BOM is accepted): invalid bytes stop the command instead of becoming U+FFFD in a rewritten file.
-    try { return [IO.File]::ReadAllText($Path, $script:StrictUtf8) }
+    # Strict UTF-8 from the raw bytes, accepting only a UTF-8 BOM: ReadAllText would honor a UTF-16 or UTF-32 byte order
+    # mark even when given UTF-8, and invalid bytes must stop the command instead of becoming U+FFFD in a rewritten file.
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $offset = if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { 3 } else { 0 }
+    try { return $script:StrictUtf8.GetString($bytes, $offset, $bytes.Length - $offset) }
     catch [Text.DecoderFallbackException] { throw "$Path is not valid UTF-8: $($_.Exception.Message)" }
 }
 
@@ -140,8 +143,10 @@ function Read-ChangelogGit([Parameter(Mandatory)][string] $Root, [Parameter(Mand
 
 function Get-ChangelogFoldProblems([Parameter(Mandatory)][string] $Root, [Parameter(Mandatory)][string] $Base) {
     # Since this checkout's merge base with $Base, Changes/ may gain fragments, and CHANGELOG.md may change only by
-    # folding fragments that the merge base holds and this checkout no longer has: the fold on the default branch.
-    # Hand edits, entries folded from fragments this change adds, edited entries and unfolded removals are refused.
+    # folding fragments that the merge base holds and this checkout no longer has: the fold on the default branch. The
+    # changelog must equal that exact fold; the checks below name what differs (a hand edit, an entry folded from a
+    # fragment this change adds, an edited entry, an unfolded removal), and anything else, such as reordered or
+    # duplicated entries, is refused as not the exact fold.
     $problems = [Collections.Generic.List[string]]::new()
     try {
         $Root = [IO.Path]::GetFullPath($Root)
@@ -151,8 +156,9 @@ function Get-ChangelogFoldProblems([Parameter(Mandatory)][string] $Root, [Parame
         if ($null -eq $baseText) { return , $problems.ToArray() }
         $changelog = Join-Path $Root 'CHANGELOG.md'
         Assert-ChangelogPath $changelog $Root
+        $headText = Read-ChangelogText $changelog
         $before = Split-Changelog $baseText
-        $after = Split-Changelog (Read-ChangelogText $changelog)
+        $after = Split-Changelog $headText
         if ($before.Before -cne $after.Before -or $before.Other -cne $after.Other -or $before.After -cne $after.After) {
             $problems.Add("CHANGELOG.md changed outside its Unreleased entries since $Base; only folding fragments may change it")
         }
@@ -187,6 +193,15 @@ function Get-ChangelogFoldProblems([Parameter(Mandatory)][string] $Root, [Parame
             if ($after.Entries -cnotcontains $folded[$name] -and -not $presentTexts.Contains($folded[$name])) {
                 $problems.Add("Changes/$name was removed since $Base without its entry reaching CHANGELOG.md; restore it, since merged fragments are folded on the default branch")
             }
+        }
+        # The exact fold, built as Fold-Changelog.ps1 builds it: newest fragment name first, renamed fragments left out.
+        # Line endings never count.
+        $names = [string[]]@($folded.Keys | Where-Object { -not $presentTexts.Contains($folded[$_]) })
+        [Array]::Sort($names, [StringComparer]::Ordinal)
+        [Array]::Reverse($names)
+        $expected = Merge-ChangelogFragments $baseText @($names | ForEach-Object { [pscustomobject]@{ Name = $_; Text = $folded[$_] } })
+        if (($expected -replace '\r\n', "`n") -cne ($headText -replace '\r\n', "`n") -and $problems.Count -eq 0) {
+            $problems.Add("CHANGELOG.md is not the exact fold of the fragments removed since $Base (entries reordered, duplicated or reformatted); only Tools/Fold-Changelog.ps1 may change it")
         }
     } catch { $problems.Add($_.Exception.Message) }
     return , $problems.ToArray()

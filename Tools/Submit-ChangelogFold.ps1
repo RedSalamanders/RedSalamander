@@ -18,6 +18,9 @@ Default branch to fold; main by default.
 GitHub repository (owner/name) of the pull request; read from the remote's URL by default.
 .PARAMETER PushOnly
 Pushes the fold branch without opening its pull request, for a remote gh cannot reach.
+.PARAMETER WorktreeParent
+Existing folder that receives the temporary fold worktree; the user's temporary folder by default. Test harnesses
+pass a folder inside their own sandbox.
 .OUTPUTS
 Console summary naming the fold branch and pull request. WhatIf folds and commits only in the temporary
 worktree, prints that commit, and neither pushes nor opens a pull request, also for a fold branch pushed earlier.
@@ -31,7 +34,7 @@ the GitHub API. Commits with the repository's own Git identity, signing and hook
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param([string] $Root = (Split-Path $PSScriptRoot -Parent), [string] $Remote = 'origin', [string] $Branch = 'main',
-    [string] $Repository = '', [switch] $PushOnly)
+    [string] $Repository = '', [switch] $PushOnly, [string] $WorktreeParent = [IO.Path]::GetTempPath())
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Root = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Root)
@@ -57,7 +60,8 @@ $short = $commit.Substring(0, 12)
 $foldBranch = "changelog/fold-$short"
 if (-not $PushOnly) {
     # Assigned before filtering: piping the comma-wrapped array a helper returns would make it one item.
-    $listed = Invoke-FoldGh @('pr', 'list', '--state', 'open', '--base', $Branch, '--json', 'url,headRefName',
+    # Every open pull request, not gh's default first 30: --jq filters only what was fetched.
+    $listed = Invoke-FoldGh @('pr', 'list', '--state', 'open', '--base', $Branch, '--limit', '1000', '--json', 'url,headRefName',
         '--jq', '.[] | select(.headRefName | startswith("changelog/fold-")) | .url')
     $open = @($listed | Where-Object { $_ })
     if ($open.Count) { Write-Host "A fold pull request is already open; merge or close it, then run this again: $($open -join ', ')"; return }
@@ -67,8 +71,11 @@ if (@($pushed | Where-Object { $_ }).Count) {
     Write-Host "$foldBranch is already pushed for $Branch at $short."
 } else {
     # A short name: Git keeps this worktree's administration under .git/worktrees/<name>, within Windows path limits.
-    $worktree = Join-Path ([IO.Path]::GetTempPath()) ('changelog-fold-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $WorktreeParent = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorktreeParent)
+    if (-not [IO.Directory]::Exists($WorktreeParent)) { throw "The fold worktree parent does not exist: $WorktreeParent" }
+    $worktree = Join-Path $WorktreeParent ('changelog-fold-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     [void](Invoke-FoldGit $Root @('worktree', 'add', '--quiet', '--detach', $worktree, $commit))
+    Write-Host "Folding $Remote/$Branch at $short in $worktree"
     try {
         $changes = Join-Path $worktree 'Changes'
         $fragments = @(if ([IO.Directory]::Exists($changes)) { Get-ChildItem -LiteralPath $changes -Filter '*.md' -File | Where-Object Name -cne 'README.md' | Sort-Object Name -Descending })
