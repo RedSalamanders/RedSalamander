@@ -430,3 +430,6 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/FileOps/2026-10-28_191809_HostedCiRepair-CurlCopyTruth/** -text -whitespace
 
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-28_200100_ArchiveContractBaseline/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Compare/2026-10-29_001519_HostedCiRepair-MtpAsanFocused/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-StaticGallery/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-RollbackRepeatFailure/** -text -whitespace

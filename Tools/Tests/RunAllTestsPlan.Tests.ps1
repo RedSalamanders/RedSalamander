@@ -51,8 +51,8 @@ $durationEstimates = $Durations
             [pscustomobject]@{ Id = 'cheap.a'; ResourceClasses = @('artifact-read-only') }
         )
         $actual = & $schedule $entries @{'cheap.a' = 10; 'cheap.b' = 10}
-        @($actual.Early | ForEach-Object Id) | Should Be @('cheap.a', 'cheap.b', 'cheap.unknown')
-        @($actual.Late | ForEach-Object Id) | Should Be @('late.first', 'late.second')
+        Assert-RSSequenceEqual -Actual @($actual.Early | ForEach-Object Id) -Expected @('cheap.a', 'cheap.b', 'cheap.unknown') -Message 'Cheap work retains exact cost/identity ordering.'
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('late.first', 'late.second') -Message 'Late work retains exact input ordering.'
         $scheduled = @($actual.Early) + @($actual.Late)
         $scheduled.Count | Should Be $entries.Count
         @($scheduled | ForEach-Object Id | Sort-Object -Unique).Count | Should Be $entries.Count
@@ -70,10 +70,72 @@ $durationEstimates = $Durations
         $pr = @(Get-RSTestRunPlan -Suite PR @arguments)
         $deferred = @(Get-RSPrDeferredTestPlan -FullPlan $full -PrPlan $pr -RepoRoot $repoRoot)
         $readers = @($deferred | Where-Object { $_.Kind -ne 'SelfTest' -and @($_.ArtifactWriteIds).Count -eq 0 })
-        @($readers | ForEach-Object Id) | Should Be @('viewer-pe.interactive', 'viewer-sqlite.interactive')
+        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The real deferred reader selection keeps both interactive viewers.'
         $actual = & $schedule $readers @{}
         $actual.Early.Count | Should Be 0
-        @($actual.Late | ForEach-Object Id) | Should Be @('viewer-pe.interactive', 'viewer-sqlite.interactive')
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real deferred viewers in order.'
+    }
+}
+
+Describe 'Run-AllTests inventory desktop admission' {
+    It 'keeps native execution leased and lists inventory without desktop admission' {
+        Import-Module $helperModule -ErrorAction Stop
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        & {
+            foreach ($name in @('Invoke-RSSelfTestProcess', 'Invoke-RSSelfTestCaseList')) {
+                $function = $ast.Find({ param($node)
+                    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+                }, $true)
+                if (-not $function) { throw "Missing actual runner function: $name" }
+                . ([scriptblock]::Create($function.Extent.Text))
+            }
+            $admissions = [Collections.Generic.List[bool]]::new()
+            $children = [Collections.Generic.List[object]]::new()
+            $closed = [Collections.Generic.List[object]]::new()
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) return $Entry.RequiresInteractiveDesktop }
+            function Invoke-RSInteractiveDesktopOperation {
+                param([bool]$RequiresInteractiveDesktop, $Operation)
+                $admissions.Add($RequiresInteractiveDesktop)
+                & $Operation
+            }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $children.Add($ProcessStartInfo)
+                $process = [pscustomobject]@{
+                    ExitCode = 0
+                    StandardOutput = [IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":["cmd_inventory_fixture"]}]}')
+                    StandardError = [IO.StringReader]::new('')
+                }
+                $process | Add-Member ScriptMethod WaitForExit { }
+                return $process
+            }
+            function Close-RSContainedProcess {
+                param($Process)
+                $closed.Add($Process)
+                $Process.StandardOutput.Dispose()
+                $Process.StandardError.Dispose()
+            }
+            $entry = [pscustomobject]@{
+                Path = 'fixture.exe'; WorkingDirectory = $TestDrive
+                Arguments = @('--commands-selftest', '--selftest-case=cmd_inventory_fixture')
+                RequiresInteractiveDesktop = $true
+            }
+            Invoke-RSSelfTestProcess -Entry $entry -Arguments $entry.Arguments | Should Be 0
+            $inventory = Invoke-RSSelfTestCaseList -Entry $entry
+            $inventory.suites[0].cases[0] | Should Be 'cmd_inventory_fixture'
+            $children.Count | Should Be 2
+            $closed.Count | Should Be 2
+            ($children[0].ArgumentList -contains '--selftest-list-cases') | Should Be $false
+            ($children[1].ArgumentList -contains '--selftest-list-cases') | Should Be $true
+            ($children[1].ArgumentList -contains '--selftest-case=cmd_inventory_fixture') | Should Be $true
+            $admissions.Count | Should Be 2
+            $admissions[0] | Should Be $true
+            $admissions[1] | Should Be $false
+        }
     }
 }
 

@@ -26,6 +26,8 @@
     Each FileOperations child process, including classification retries, receives
     a fresh LOCALAPPDATA directory under the selected run's scratch root so fake
     MTP recovery journals cannot reuse or change the caller's profile state.
+    Case inventory uses the early-exit, nonactivating --selftest-list-cases path
+    without a desktop lease. Actual native execution retains its entry's desktop admission.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -931,8 +933,9 @@ function Invoke-RSSelfTestCaseList {
         $startInfo.Arguments = (($arguments | ForEach-Object { ConvertTo-RSStreamingQuotedArgument $_ }) -join ' ')
     }
 
+    # Inventory exits before UI startup; native test execution keeps its entry's lease.
     $processResult = Invoke-RSInteractiveDesktopOperation `
-        -RequiresInteractiveDesktop (Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry) `
+        -RequiresInteractiveDesktop $false `
         -Operation {
             $process = $null
             try {

@@ -415,6 +415,12 @@ interactive standalone readers. Empty cheap-work selection MUST retain every lat
 exactly once in its original order under strict-mode PowerShell. Nonempty cheap selections
 retain duration/identity ordering. Scheduling does not change entry contracts or verdicts.
 
+Native case inventory uses the early-exit `--selftest-list-cases` protocol. This read-only,
+nonactivating query MUST NOT acquire the interactive desktop lease, including coverage
+verification after a completed native entry. It retains contained-process ownership, exact
+suite/filter arguments, exit/JSON validation and artifact coordination. Actual test execution
+and repair attempts retain their declared desktop admission and restoration requirements.
+
 ## Exit categories
 
 Startrail-owned exits are stable and are mapped once from the terminal state after summary

@@ -65,6 +65,10 @@ The standalone scheduler accepts empty cheap-work selections, including the real
 Full remainder consisting of interactive viewer entries. It retains every later entry in
 its original order and does not turn deferred coverage into Full acceptance.
 
+Case inventory uses the native early-exit `--selftest-list-cases` protocol without
+acquiring the desktop lease. It performs no UI startup or case execution; actual native
+test processes retain their entry's warning, desktop admission and restoration.
+
 The PR build-policy guard checks the formatter job's PowerShell installer wiring and rejects
 Python/pip bootstrap only within that job. Formatter acquisition integrity is covered separately
 by `Tests/ClangFormat.Tests.ps1`; other build dependencies retain their own prerequisites.

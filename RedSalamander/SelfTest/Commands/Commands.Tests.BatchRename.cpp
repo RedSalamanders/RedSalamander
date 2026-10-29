@@ -1193,11 +1193,21 @@ private:
 
 [[nodiscard]] bool TestFileOperationDurableStoreSafeMechanics(CaseState& state) noexcept
 {
-    std::filesystem::path root;
-    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"fileops_durable_store", root))
+    std::filesystem::path sandboxRoot;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"fileops_durable_store", sandboxRoot))
     {
         return false;
     }
+    // Keep each invocation's intentional oversized/rejected records as evidence,
+    // without letting repeated or replayed cases inherit the previous fixture.
+    const std::filesystem::path root = sandboxRoot / (L"invocation_" + NewGuidText());
+    std::error_code fixtureError;
+    if (! state.Require(! std::filesystem::exists(root, fixtureError) && ! fixtureError,
+                        L"Each durable-store invocation must start with an unused owned fixture path."))
+    {
+        return false;
+    }
+    Trace(std::format(L"Durable-store fixture invocation: root='{}'", root.native()));
     const std::filesystem::path storeRoot  = root / L"missing-parent" / L"state";
     const std::filesystem::path recordPath = storeRoot / L"record.json";
     constexpr uint64_t kMaximumBytes       = 1024u;

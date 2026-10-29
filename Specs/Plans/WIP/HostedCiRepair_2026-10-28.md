@@ -487,3 +487,52 @@ execution digest is now `b34cc09f8a684a2cebb3978a75af9174907b8cc66f213a28bf944f1
 The PR still runs the same two native Debug profiles and unchanged Suite PR contracts;
 the runner fix changes their dependency binding and requires fresh matching CI evidence.
 Tool inventory validation has zero blocking findings and the changelog is folded.
+
+### 29 October focused qualification and fixture isolation
+
+Candidate `29615cf6f` builds x64 ASan Debug in 7:15 (receipt
+`068959a40c7c07b019febd23c10e05fd4195d22dadeaa930b00a9ebc829f95c3`)
+and x64 Debug in 7:33 (receipt
+`19e836edd66ab817c6c2e9efd5eb995bbfc2c383cc4d5cd72f80ced6bf8a121a`),
+without new warnings. Governed run `20261028T225721Z-94716-3f6fcf547c804311bb3027cd94d1f624`
+passes 364 source/specification/scoped/run-plan controls with zero skips.
+
+ASan run `20261028T230612Z-72492-fdfe8ff6df644a73a1ca2c0d95b0274e` passes the two MTP
+cases ten times: 20 passed, zero failed/skipped/retries. All ten 4,096-object recovery samples
+remain below the unchanged 2,000,000 us cap: min 930,844; median 1,464,865.5; max 1,504,989 us.
+Keep the [complete raw metric stream and source/build-bound receipt](../../TestRuns/4cb089111a23/Compare/2026-10-29_001519_HostedCiRepair-MtpAsanFocused/evidence.json).
+The older hosted failure used another machine; these observations are threshold acceptance,
+not a paired speedup or Full acceptance claim.
+
+The exact static gallery run `20261028T231645Z-92276-3eeed7f92fad4fef83a0e2515e7858ec`
+passes and produces all 45 nonactivating captures. Retain all raw captures externally, the
+complete scenario table and byte identities, and [six inspected original samples](../../TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-StaticGallery/evidence.json).
+The samples show readable layouts and synthetic fixture data; the other 39 have capture
+evidence without an individual visual-inspection claim.
+
+ASan rollback run `20261028T231645Z-44800-54177ba5f2f94fe98f939193d75fa2e4` passes its
+first invocation, fails its second, and leaves eight unexecuted through fail-fast. Both
+invocations report owned-handle POSIX deletion success. The failed listing contains
+`oversized.json` from the preceding invocation, plus `record.json`; no private sibling is
+listed. Preserve the [failed repeat and exact diagnostics](../../TestRuns/4cb089111a23/Commands/2026-10-29_001645_HostedCiRepair-RollbackRepeatFailure/evidence.json).
+Give every invocation an unused child of the existing owned sandbox using the existing
+GUID helper, preserving prior fixture records and all cleanup/reader/target/limit/reparse/
+concurrency assertions. The older hosted first-iteration failure lacks entry diagnostics;
+this independent repeat defect does not establish its exact cause. Fresh hosted ASan
+qualification remains mandatory.
+
+Focused Debug run `20261028T232522Z-84764-ccd1b965be1647f2876418f1fe3bacfb` completes all
+ten native cases successfully in 32,908 ms, including the 19 ms real-hotkey witness, queued
+close during snapshot and pending-preview settling, settings children, five prompt captures,
+clipboard and the cache race. Its wrapper is interrupted after native completion while
+waiting for a second desktop lease for inventory; retain that incomplete wrapper separately.
+The CLI inventory path exits before UI startup, so inventory queries must not acquire the
+desktop lease. The actual-function regression requires normal native admission true and
+inventory admission false, plus exact filter/list arguments and both contained cleanups;
+the original scalar admission control fails and the corrected five scheduler/inventory
+controls all pass. Actual tests retain their existing warnings, lease and restoration.
+
+The reviewed execution digest after the inventory admission correction is
+`ee8d355646a112b6de1fba8e5d06b67a2e6dccdfc418c5d4e488d1c69a8995e8`.
+Native case execution, suite/filter contracts and the two enabled PR profiles are unchanged;
+the modified runner and its explicit admission controls require fresh matching CI evidence.
