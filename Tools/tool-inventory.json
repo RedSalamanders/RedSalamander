@@ -96,7 +96,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate real MSVC 14.52 compiler/linker and pinned DxUi Release policy in all supported profiles with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
       "prerequisites": [
@@ -121,7 +121,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate real MSVC 14.52 compiler/linker and pinned DxUi Release policy in all supported profiles with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "prerequisites": [

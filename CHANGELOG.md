@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Repair Full tooling checks for Pester 3 collection membership and ordinary compiler/linker profile isolation from the ambient Embedded recovery format; preserve the caller environment and independent negative controls.
 - Record the final zero-warning six-build matrix, preserve the interrupted-profile Rebuild and Curl diagnostic limits, and keep actual application focused/Full qualification and measurements explicit.
 - Curate byte-preserved, digest-bound Curl fallback/310-check diagnostics and the retained managed-host timeout, with explicit limits separating them from native application Full qualification and paired performance evidence.
 - Require all 310 expanded Curl Entry checks in the native FileOps host while retaining Copy's 142-check expectation; keep interrupted-profile recovery governed by a matching full-solution rebuild.

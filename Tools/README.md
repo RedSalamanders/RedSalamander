@@ -31,6 +31,9 @@ The required vcpkg safety integration checks need that normal DxUi restore and t
 `vcpkg-tool.json` checkout at `.build/vcpkg-tool`, including its `versions` database.
 The mirror check uses the shared short source locator and verifies the full Git HEAD before importing modules.
 Missing prerequisites remain incomplete Full coverage; they are not new environment-skip exceptions.
+The compiler/linker policy audit queries ordinary profiles with an explicit child debug-format
+property, so Full's ambient Embedded recovery mode cannot change the expected Debug `/ZI` policy.
+It preserves the caller's environment and retains the broken compiler/linker controls.
 `Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
 CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
 product validation already passed in another environment; neither form creates a commit.

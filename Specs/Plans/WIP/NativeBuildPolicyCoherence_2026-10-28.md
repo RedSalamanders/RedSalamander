@@ -144,3 +144,13 @@ Source a94a68b5 incorporates the controlled pinned-libcurl EPSV/PASV origin witn
 The intentionally cancelled old-source C0 queue was unstarted but correctly marked the ASan artifact operation interrupted. Its marker is preserved; a normal full-solution Rebuild, rather than marker deletion, clears it and passes with zero warnings. All six final native profiles pass with zero warnings (Sal-a94a68-native-six-verified1.json). Actual native-host focused first-paint/C0 followed by fresh serial Full three remain pending. Each build uses an invocation-private compiler PDB endpoint after retained C1090/RPC failures; no compiler/linker or artifact-containment guard is weakened.
 
 Changed archive validation passes all eight new files. A voluntary whole-inventory check reports 213 historical over-size files and 32 over-size runs; none is in this change's archive. Their original diagnostics are retained externally without deleting history or raising archive limits.
+
+Actual native-host focused Entry and Copy pass with 310 and 142 checks respectively, and first-paint passes in
+all three x64 profiles. The unchanged a94a68 Debug Full subsequently reports 1,043 passed, two failed and one
+allowed skip in general Pester. One check used Pester 3's file-content `Contain` assertion for collection
+membership; the other inherited Full's Embedded override while asserting ordinary Debug `/ZI`. Both test-only
+repairs are isolated in the integration checkout while the original Full continues. A contained Pester 3 run
+from the original foreign working directory passes all 19 build-evidence cases and the complete real-profile
+policy audit, including independent negative controls and caller-environment preservation. Its records are
+`Sal-tooling-repair3-results.json` and the two `*-repair3.log` files in the task evidence root. This is focused
+repair evidence; changed workspace identity requires fresh Full qualification rather than exact Resume reuse.

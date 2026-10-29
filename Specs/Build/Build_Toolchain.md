@@ -279,6 +279,12 @@ not permission to serialize the profile or disjoint worktrees.
 Unknown values fail before MSBuild, and the selected value participates in receipt
 compatibility.
 
+The ordinary-profile policy auditor explicitly selects `ProgramDatabase` in each child
+MSBuild metadata query. It MUST still require Debug `/ZI` and ASan Debug `/Zi` when the
+calling Full runner has `RSBuildCompilerDebugInformation=Embedded`. This query isolation
+MUST preserve the caller's environment and retain the independent broken-profile controls;
+it does not change the receipt-bound format of the actual Full build.
+
 When `RSBuildEnableTests` is false, projects beneath `Tests/` are evaluated as
 no-output utility nodes so a production Release solution build does not compile a test
 executable against production libraries that intentionally omit test hooks. When the

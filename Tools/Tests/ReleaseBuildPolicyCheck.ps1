@@ -38,7 +38,10 @@ function Read-Profile([string]$Project,[string]$Configuration,[string]$Platform,
         $ProbePath=$chainPath
         $Extra=@($Extra|Where-Object{$_ -notlike '/p:ForceImportAfterCppTargets=*'})
     }
-    $arguments=@($Project,'/nologo',"/p:Configuration=$Configuration","/p:Platform=$Platform","/p:ForceImportAfterCppTargets=$ProbePath",'-getItem:ClCompile,Link,ProjectReference','-getProperty:MSBuildProjectName,ConfigurationType,VCToolsVersion,WholeProgramOptimization,LinkIncremental,Platform')+$Extra
+    # Audit the ordinary native profiles even when Full's caller uses the supported
+    # Embedded recovery format. A child property isolates evaluation without
+    # changing the caller's environment; explicit Extra controls can override it.
+    $arguments=@($Project,'/nologo',"/p:Configuration=$Configuration","/p:Platform=$Platform",'/p:RSBuildCompilerDebugInformation=ProgramDatabase',"/p:ForceImportAfterCppTargets=$ProbePath",'-getItem:ClCompile,Link,ProjectReference','-getProperty:MSBuildProjectName,ConfigurationType,VCToolsVersion,WholeProgramOptimization,LinkIncremental,Platform')+$Extra
     if($dependencySource){$arguments+="/p:DxUiRoot=$dependencySource"}
     $output=@(& $msbuild @arguments 2>&1)
     if($LASTEXITCODE-ne 0){throw "Evaluation failed: $Project $Configuration $Platform`n$($output -join "`n")"}

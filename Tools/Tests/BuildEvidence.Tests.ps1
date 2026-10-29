@@ -101,7 +101,7 @@ Describe 'Ghostty build evidence identity closure' {
             'RuntimeDependencies.props')
         $actual = [string[]]@(Get-RSGhosttyRuntimeIdentityInputPaths)
         ($actual -join "`0") | Should Be ($expected -join "`0")
-        $actual | Should Not Contain 'TerminalEngine.lock.json'
+        ($actual -contains 'TerminalEngine.lock.json') | Should Be $false
         foreach ($relativePath in $actual) {
             Test-Path -LiteralPath (Join-Path $repoRoot $relativePath) -PathType Leaf | Should Be $true
         }
