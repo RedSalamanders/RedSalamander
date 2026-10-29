@@ -4,6 +4,11 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Verify the Ghostty 1.4 runtime on native ARM64: clean first-run upstream C-ABI,
+  Zig and ABI-manifest qualification, Debug Terminal and command contracts,
+  production Release and portable smoke all passed with original reports,
+  receipt histories and package identities retained. Both current PR platforms
+  passed; separate local viewer coverage and failure follow-ups remain open.
 - Retain the native Ghostty product's Debug and Release receipt pointers,
   immutable receipt records and toolchain identities from their canonical profile
   directories. Keep external test-root evidence in its separate artifact.

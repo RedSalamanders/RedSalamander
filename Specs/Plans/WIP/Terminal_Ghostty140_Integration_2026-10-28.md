@@ -35,8 +35,11 @@ reinterpret its historical runs as current evidence or close that plan.
       changes while preserving clipboard, placement, teardown, and pairing rules.
 - [x] Execute deterministic x64 upstream/runtime/plugin coverage and collect a
       same-machine paired 200-sample Release VT corpus before admission.
-- [ ] Complete required native ARM64 candidate and admitted-product gates;
-      cross-compilation alone does not satisfy native runtime qualification.
+- [x] Complete the native ARM64 candidate gate, including original canonical
+      report publication and independent artifact/identity validation.
+- [x] Complete the admitted-product native ARM64 gate, including Debug Terminal
+      contracts, representative Commands, production Release, portable smoke
+      and original receipt/artifact publication.
 - [ ] Admit the reviewed lock/overlay, update authoritative specs/documentation,
       and complete applicable affected and PrePush obligations.
 - [ ] Fold/check the changelog, reconcile remaining gates, and move this record
@@ -157,6 +160,72 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+These are source-bound execution checkpoints. Statements about a run still
+being queued or pending describe that checkpoint; later successful records do
+not erase earlier failures. The live status is maintained in draft PR #148.
+At the 2026-10-29 07:34 UTC checkpoint, both native ARM64 gates and both PR CI
+platforms have passed. The local application run remains frozen at `3f2b0f1ce`;
+File Operations coverage validation and the two viewers still await the shared
+desktop lease, followed by the two focused failure checks. No complete local
+PrePush or repository verdict is inferred from the native gates.
+
+- Admitted-product ARM64 run `40821309490` passed every step at `17058e31f`:
+  test-enabled Debug, all 162 loaded Terminal selftests, all 15 representative
+  Commands cases (10 terminal-shortcut, four embedded-pane and one shell-route),
+  tests-disabled production Release, and native portable clean-extraction smoke.
+  Both artifact uploads passed. Original artifacts `12878221818` (product) and
+  `12877564861` (test root), complete logs and metadata are preserved in
+  `20261029T063245Z-42988-f7459e2ab88942db90e34c7ddb84d8d4`.
+  Independent verification in
+  `20261029T063510Z-78348-fef3861180164219ae9b84619162593d` checked both
+  canonical receipt pointers against their immutable records and projection
+  digests, their source/profile/test-enable identities, all three Commands
+  result sets, and the packaged runtime against the Release receipt and native
+  candidate. Debug receipt is
+  `3056a1c82efeb432843bcd9a78a870a77953eae904a73563561beae1142e724d`;
+  Release receipt is
+  `321f6ed68ccab52c5cfe7423313e82476b652cb4009e79838e0a2baf48181fda`.
+  `RedSalamander-7.0.1-ARM64-Portable.zip` is 25,163,597 bytes, SHA-256
+  `c1b85e06387c89ccfeb2e3e116b5d7e7365822db9b2a381b54216778709c1433`.
+
+- PR CI `40822116591` passed on x64 and native ARM64 at `72d874428`.
+  Each platform passed 1,064 PowerShell checks and eleven other gate entries,
+  including 162 loaded Terminal selftests, with two historical-evidence skips
+  and zero blocking classifications or quarantine entries. The ARM64 original
+  aggregate confirms PR scope, 1,075 passed, zero failed, two skipped and all
+  twelve entries promoted. ARM64 logs and original validation artifacts are
+  preserved with the product collection above; x64 logs are in
+  `20261029T055405Z-91012-3d89758a38904245ba9f0dbeab999e39`.
+  These matching PR gates do not turn the separately failed local application
+  run into complete repository qualification.
+
+- Native ARM64 run `40819647447` passed at `9a46463e8`, including original
+  evidence publication: 3,720 C-ABI tests and 3,233 Zig tests passed, each with
+  36 skips and zero failures, and the ABI manifest validated 187 types. All
+  targets passed on their first execution; no code-5 retry was needed. Original
+  artifact `12877308139` was downloaded and independently checked for exact
+  canonical/schema validity, the native ARM64 host, candidate/overlay and
+  canonical lock identity, and the admitted runtime hash. Complete job metadata,
+  logs, downloaded bytes and verification are preserved in
+  `20261029T062010Z-18316-64d5746c843848e3937c5d5bf0c2f02e`. The original
+  report SHA-256 is
+  `e71a6323145a329fbd886e6e3db6ef752c988f9a3d54972ba0a719e8d40ec758`.
+  This successful publication supersedes the earlier upload failure's open gate
+  while preserving that failed run and its explicit recovered-report provenance.
+
+- Local File Operations execution at frozen `3f2b0f1ce` finished with 293
+  passed, one failed and 28 skipped. Its only failure,
+  `R4A19_DiscoveryIndependentVolumes`, reports
+  `alternate-volume-test-root-not-authorized`: this invocation omitted
+  `-AllowAlternateVolumeTestRoot`. The existing machine resource already enables
+  `C:\RedSalamander.Perf`; its marker and reparse-free authorization were
+  independently validated without creating or initializing a new root. Preserve
+  the original result and repeat that exact control with the explicit opt-in
+  after the active profile releases. The initial failure snapshot and receipt
+  are preserved in `20261029T054109Z-74128-5e844c6cbfce492aa8964048f1859e9d`.
+  Coverage-list validation and both already-authorized interactive viewers are
+  still queued behind the shared desktop lease.
+
 - Product run `40819043691` was cancelled during dependency installation,
   before application build or product tests, after verifying that its artifact
   list referenced obsolete `.build/BuildReceipts/`. The canonical producer
@@ -205,8 +274,9 @@ and warning; acceptance remains pending their actual results.
   `20261029T043522Z-41352-3f2727b5a70544ac87bc06a5df8f2806` (x64) and
   `20261029T051210Z-84604-1b041457a32f4208a5335b53dcc08be8` (ARM64).
   At `3f2b0f1ce`, the local Commands entry
-  has now passed its coverage check and promoted its result; File Operations
-  is queued for execution and both interactive viewer entries remain pending.
+  has passed its coverage check and promoted its result. File Operations
+  execution and its pending coverage validation are recorded above; both
+  interactive viewer entries remain pending.
 
 - Combined workflow, candidate-review, scheduler, governance and scoped checks
   passed 138/138 in
@@ -233,8 +303,9 @@ and warning; acceptance remains pending their actual results.
   passed all 29 build/toolchain checks and refreshed its Debug receipt to
   `1d997c49ed7c7c55114a0682a2343bd4028cea440a606fad4b4c9569259a6fd5`.
   Commands execution completed with 957 passed, zero failed and six declared
-  opt-in skips, including all 17 Terminal cases. Its coverage-list check and
-  the three remaining interactive suites still await the shared desktop lease.
+  opt-in skips, including all 17 Terminal cases. Its coverage-list check passed
+  and its entry was promoted. File Operations execution is recorded above;
+  its coverage validation and both viewers await the shared desktop lease.
   Compare Directories recorded 259 passed, one failed and 21 environment skips:
   `search_service_sqlite_cold_start_stale_root_refreshes_before_query` timed
   out waiting for initial service warmup. Failed results remain intact; the
