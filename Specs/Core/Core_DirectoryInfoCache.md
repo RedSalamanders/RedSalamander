@@ -63,6 +63,17 @@ Borrowed handles keep the snapshot alive and non-evictable for the duration of u
 
 Pure cache borrows do not automatically attach a watcher. In the reference implementation, watcher attachment is a visible-pane decision by default.
 
+An invalidation received while enumeration is in flight must survive publication of that older
+snapshot, including repeated invalidations of an already dirty entry. Publication retains the
+dirty state and posts a coalesced follow-up impact for visible subscribers. The next
+`AllowEnumerate` borrow reloads it; `CacheOnly` still permits the old snapshot without I/O.
+Do not synchronously loop enumeration until a changing directory becomes quiet. Once the
+follow-up snapshot is current, ordinary borrows reuse it without further provider calls.
+`cmd_directory_cache_invalidation_during_enumeration_is_retained` captures an immutable old
+snapshot, holds its return, creates a late archive entry and invalidates the folder before
+release. It requires exactly one follow-up load, exact old/current names and retained old
+snapshot bytes. The existing archive round-trip case separately exercises visible pane refresh.
+
 ### Visible pinning
 
 `PinFolder(fileSystem, folder, hwnd, message)`:

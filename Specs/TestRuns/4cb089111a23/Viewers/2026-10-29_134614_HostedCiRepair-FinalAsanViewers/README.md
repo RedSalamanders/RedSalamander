@@ -1,0 +1,1 @@
+Five supported x64 ASan Debug focused ViewerPE cases pass with the original containment, read-only identity, image, close, Web teardown and VLC keyboard assertions. Parent desktop guards pass. Focused coverage only, not Full.

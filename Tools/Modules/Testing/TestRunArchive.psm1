@@ -6,6 +6,9 @@ $ErrorActionPreference = 'Stop'
 # by this commit. Older untouched evidence is grandfathered; any archive added
 # or modified from this commit onward belongs to the governed inventory.
 $script:RSTestRunArchiveContractCommit = '8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a'
+# Parentless snapshot of only pre-contract path/mode/blob triples still byte-identical
+# at the already-published source import. It carries no DualTail commit ancestry.
+$script:RSTestRunArchiveImportedBaselineCommit = '4a9489e9cb2d1190528b8ec35971fba885fd7792'
 
 function ConvertTo-RSRepoRelativePath {
     param(
@@ -496,18 +499,21 @@ function Get-RSChangedTestRunArchivePaths {
     $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $root = [IO.Path]::GetFullPath($RepoRoot)
 
-    $hasOriginMaster = $false
-    & git -C $root rev-parse --verify origin/master *> $null
-    if ($LASTEXITCODE -eq 0) {
-        $hasOriginMaster = $true
+    $baseRef = $null
+    foreach ($candidate in @('origin/main', 'origin/master')) {
+        & git -C $root rev-parse --verify "$candidate^{commit}" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $baseRef = $candidate
+            break
+        }
     }
 
     $commands = [System.Collections.Generic.List[object]]::new()
-    if ($hasOriginMaster) {
-        $commands.Add(@('diff', '--name-only', '--diff-filter=AM', 'origin/master...HEAD', '--', 'Specs/TestRuns'))
+    if ($null -ne $baseRef) {
+        $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', "$baseRef...HEAD", '--', 'Specs/TestRuns'))
     }
-    $commands.Add(@('diff', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
-    $commands.Add(@('diff', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
+    $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
+    $commands.Add(@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
 
     foreach ($arguments in $commands) {
         $output = & git -C $root @arguments 2>$null
@@ -543,13 +549,25 @@ function Get-RSTestRunArchiveInventoryPaths {
                 $hasContractCommit = $LASTEXITCODE -eq 0
             }
 
+            $contractRange = $null
             if ($hasContractCommit) {
-                $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 $contractRange = "$script:RSTestRunArchiveContractCommit^..HEAD"
+            } else {
+                & git -C $root rev-parse --verify "$script:RSTestRunArchiveImportedBaselineCommit^{commit}" *> $null
+                if ($LASTEXITCODE -eq 0) {
+                    & git -C $root merge-base --is-ancestor $script:RSTestRunArchiveImportedBaselineCommit HEAD *> $null
+                    if ($LASTEXITCODE -eq 0) {
+                        $contractRange = "$script:RSTestRunArchiveImportedBaselineCommit..HEAD"
+                    }
+                }
+            }
+
+            if ($null -ne $contractRange) {
+                $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 $commands = @(
-                    @('diff', '--name-only', '--diff-filter=AM', $contractRange, '--', 'Specs/TestRuns'),
-                    @('diff', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'),
-                    @('diff', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
+                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', $contractRange, '--', 'Specs/TestRuns'),
+                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'),
+                    @('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
                 )
                 foreach ($arguments in $commands) {
                     $output = & git -C $root @arguments 2>$null

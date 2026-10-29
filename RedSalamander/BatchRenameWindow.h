@@ -86,6 +86,7 @@ struct BatchRenameDebugSnapshot
     bool ruleHelperButtonsVisible         = false;
     bool rulesModeSelected                = false;
     bool manualModeSelected               = false;
+    bool modeSwitchEnabled                = false;
     bool manualControlsVisible            = false;
     bool renameButtonEnabled              = false;
     bool hideUnchangedRows                = false;
@@ -148,13 +149,13 @@ struct BatchRenameDebugCollectionResult
 };
 
 [[nodiscard]] size_t DebugGetBatchRenameWindowCount() noexcept;
-[[nodiscard]] bool DebugGetBatchRenameWindowSnapshot(BatchRenameDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugGetBatchRenameWindowSnapshot(BatchRenameDebugSnapshot& out, bool waitForTasks = true) noexcept;
 [[nodiscard]] bool DebugSetBatchRenameWindowRules(const BatchRename::Rules& rules) noexcept;
 [[nodiscard]] bool DebugSetBatchRenameWindowRuleControls(const BatchRename::Rules& rules) noexcept;
 [[nodiscard]] bool DebugSetBatchRenameWindowScope(std::wstring_view mask, bool includeSubdirectories, bool includeFiles, bool includeFolders) noexcept;
 [[nodiscard]] bool DebugSetBatchRenameWindowPreviewSort(std::wstring_view columnId, bool descending) noexcept;
 [[nodiscard]] bool DebugReorderBatchRenameWindowPreviewColumn(std::wstring_view columnId, size_t targetDisplayIndex) noexcept;
-[[nodiscard]] bool DebugSwitchBatchRenameWindowMode(BatchRename::Mode mode) noexcept;
+[[nodiscard]] bool DebugSwitchBatchRenameWindowMode(BatchRename::Mode mode, bool waitForTasks = true) noexcept;
 [[nodiscard]] bool DebugSetBatchRenameWindowManualText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugClickBatchRenameWindowManualPaste() noexcept;
 [[nodiscard]] bool DebugClickBatchRenameWindowManualSortLikePreview() noexcept;

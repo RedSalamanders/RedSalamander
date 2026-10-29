@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "c061b0578727d0d02aba14816e36d93dd316da6ea6a0abe85ddc7ba1ca726b2f",
+  "profile": "x64 Release",
+  "runId": "20261029T134350Z-98980-3c8e62e1be02488ab80f2ff87e550b4d",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 21265,
+  "scope": "Exact committed candidate x64 Release. DiscoveryScope_MultipleFoldersLiveProgress plus Setup/Cleanup repeated three times. Original both-roots, content, progress, row, and close assertions remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 86290,
+      "sha256": "7a0e4289737a4b1db7aa1f1eda97c2a2420fd3800a7f1222d2984f6590f3a6f6"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 31050,
+      "sha256": "bc76dd6f798f99788d89f820b4083a49aae9041da728c19c9eef301bd71e0138"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 1880,
+      "sha256": "e4ef4b78bccd9fb22d84421ad6362998a5b3c258a624f3b290f9c38ca4d8b2e6"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 1260922,
+      "sha256": "dda8aa568a7dc5829989084ba2f244f1d08ad2d58d6f3f52d7ca9e50faf0c6b4"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 262,
+      "sha256": "d332710a5a29187f22127e9f11b777d195befc127cdaea9ff121125918d555ed"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 4990,
+      "sha256": "2addcdf441a843e747d228d409112b24b894de2c90a7a22045ef01ba71d8b630"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 16778,
+      "sha256": "848bc21cad5a4c289e0f3bdf9c881414ec1e84a3c4a121f81e3c483a4734043e"
+    }
+  ]
+}

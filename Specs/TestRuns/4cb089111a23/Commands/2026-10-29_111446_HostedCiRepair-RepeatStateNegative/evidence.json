@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "8133b2cc775785150341c13d41f01b017e708a612a8edd7684c4ca8d143e25b0",
+  "buildReceiptId": "17d871317ef76260d49114b7d70fc27e8a7dc86786f4e7839a64be008a13e61a",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T111446Z-58980-9bf5189606b64503a834b8f9594484a7",
+  "passed": 6,
+  "failed": 6,
+  "skipped": 0,
+  "nativeDurationMs": 52617,
+  "scope": "Original repeated-fixture ASan control: settings future-schema and immutable-save cases and thumbnail size transition pass once, then each fails repetitions two and three; all three isolated theme performance invocations pass. No skipped cases. Keep this failed control; it is not qualified acceptance.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "f8116344e20226dc28b260803abecd7546a39fe2003b1adf46e1d60caa9d3dcb"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 378,
+      "sha256": "c48b253d42f681573cbff4e0815c6de70a9401711f4458b18c1f19892a957fc9"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 68050,
+      "sha256": "a9825ccdc72eacf8a1088ca7482be1f324aad53f00b432c1d62efda46ae89ee5"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 124464,
+      "sha256": "25dedfafdbfac9c2e314296435a1772224b03cd7e65ed1c7b5be028ec930e1c5"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 3384,
+      "sha256": "8c3a8e2cc41987c661199305f0ab28991fea25a6f7a727c418a4f54bf5ca37ec"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 304,
+      "sha256": "e8055cefd4eca61aa4e2b02a3199ad75ef9c7eccb7ec50faa6fbc2eb38e5f6d6"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 8292,
+      "sha256": "b1239ecaa3568f69ce8e187107e056e83aa4c26ebc03755b63c69cad5464086e"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 13796,
+      "sha256": "df93a8cffd61f480b818d8fb9bf39ef678aa96f8157f6a08ccc23308d4f27c33"
+    }
+  ]
+}

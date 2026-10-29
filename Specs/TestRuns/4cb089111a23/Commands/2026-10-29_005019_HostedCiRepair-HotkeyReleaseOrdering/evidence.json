@@ -1,0 +1,54 @@
+{
+  "case": "cmd_selftest_foreground_admission_hotkey_contract",
+  "compilerDebugInformation": "Embedded",
+  "buildReceiptId": "90ac8bed6ebfcb26a301bd6d97b53eccbfc5b0b3536e2e5fa4263455b1a4141e",
+  "skipped": 0,
+  "sourceCommit": "5cd2fa70464203d554dd41050bebb5eff390a6bf",
+  "runId": "20261029T005019Z-52116-167656286d44465996a9b126bd26471d",
+  "helperUnchanged": true,
+  "dispatchKeyDownStates": [
+    false,
+    false
+  ],
+  "exit": 1,
+  "failed": 1,
+  "testOnlyPatch": "negative-test.patch",
+  "profile": "x64 Debug",
+  "passed": 0,
+  "files": [
+    {
+      "sha256": "b20a2904f5a994124d8d2397c337c14b66ea2d0087164cdaaf88f561ef321cae",
+      "path": "build-receipt.json",
+      "byteCount": 84872
+    },
+    {
+      "sha256": "7b5a4acde635fdd07be5f9b17d51218c522ebb8d83b0ffbc73acfe2d6b7a1cff",
+      "path": "native-results.json",
+      "byteCount": 805
+    },
+    {
+      "sha256": "9e15c8e2e51b3b0154b8350647c2af5d72b67e516f56aa3244253ca2ad36208a",
+      "path": "negative-test.patch",
+      "byteCount": 2610
+    },
+    {
+      "sha256": "8bb10ea29548dc17d353042e88695e242e574b36718650ac38eb733eac9ea6ae",
+      "path": "README.md",
+      "byteCount": 948
+    },
+    {
+      "sha256": "5e57e6c7edef4e3f1cc5fc45d50679e98974c8a5814b52f132ab0c6d58125360",
+      "path": "runner-results.json",
+      "byteCount": 14975
+    },
+    {
+      "sha256": "fd9e96084a2bc175604a740985d928c70ef885657d483be37035339532e0d2f0",
+      "path": "trace.txt",
+      "byteCount": 2584
+    }
+  ],
+  "caseDurationMs": 32,
+  "retries": 0,
+  "schema": "hosted-ci-repair.hotkey-order-counterfactual.v1",
+  "nativeDurationMs": 805
+}

@@ -1076,13 +1076,18 @@ void DirectoryInfoCache::PostRefreshLocked(const std::shared_ptr<Entry>& entry) 
 
 void DirectoryInfoCache::MarkDirtyLocked(const std::shared_ptr<Entry>& entry) noexcept
 {
-    if (! entry || entry->dirty)
+    if (! entry)
     {
         return;
     }
 
-    entry->dirty = true;
-    ++_dirtyMarks;
+    // Invalidation during enumeration must survive publication of that older snapshot.
+    ++entry->dirtyVersion;
+    if (! entry->dirty)
+    {
+        entry->dirty = true;
+        ++_dirtyMarks;
+    }
 }
 
 void DirectoryInfoCache::MarkDirtyLocked(const Key& key) noexcept
@@ -1633,6 +1638,7 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
         SetLimits(ComputeDefaultMaxBytes(), _maxWatchers, _mruWatched);
     }
 
+    uint64_t loadVersion = 0u;
     for (;;)
     {
         std::unique_lock lock(_mutex);
@@ -1672,6 +1678,7 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
         }
 
         entry->loading = true;
+        loadVersion    = entry->dirtyVersion;
         break;
     }
 
@@ -1744,8 +1751,14 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
             const uint64_t oldBytes = entry->bytes;
             entry->info             = std::move(info);
             entry->bytes            = entryBytes;
-            entry->dirty            = false;
+            entry->dirty            = entry->dirtyVersion != loadVersion;
             entry->refreshPosted    = false;
+            if (entry->dirty)
+            {
+                // An earlier notification may have been consumed while loading.
+                // Retain a bounded follow-up refresh instead of re-enumerating in a loop.
+                PostRefreshLocked(entry);
+            }
             ++_enumerations;
 
             if (_currentBytes >= oldBytes)

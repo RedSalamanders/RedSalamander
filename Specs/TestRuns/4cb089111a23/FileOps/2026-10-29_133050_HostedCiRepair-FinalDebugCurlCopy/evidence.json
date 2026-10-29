@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "853ff02833077cdc5dfa273f730dbfb96a80ec327036ba78c109603530886609",
+  "profile": "x64 Debug",
+  "runId": "20261029T133050Z-38720-e5c1fcf7d5994acfa548096edb6f1adc",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 144953,
+  "scope": "Exact committed candidate x64 Debug. C0_CurlCopyTraversalTruth plus Setup/Cleanup retains all 142 internal traversal checks, all eight complete variants and the original native time budget. This functional run uses C-root; the retained E-root baseline is not a matched performance pair, so no causal speedup or non-regression is claimed. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "4fe7f9d45ac83f22ed378ec4482c13d1ff83ed1e7576cd805114c7188af4b863"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 19724,
+      "sha256": "4ab1d4dd29e9ff36080464b8ebd349362f0baa14b6645083ac9dbf3d39e7bfd8"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 885,
+      "sha256": "e6a335532841b7a74cd9cd0f6a04ee2f11ef0633ae675215838d14c64839ffb8"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 382892,
+      "sha256": "31a5eac5dbf23adfbfc4f13449cd55e439c0e26f61ea5d43dac28446f927865b"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 403,
+      "sha256": "4cc2c13c8c1fdb2326b02b36a7a0ff352524449cf272f9bc32c1a80f565dc792"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 3867,
+      "sha256": "31310475bc52718126244e9519e42438d0890060da0b3781c43bc09f4b928534"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 5492,
+      "sha256": "cd3e966e73478990637279dec8c1ad951026a71af871df063e7b3df9dfd6f8d0"
+    }
+  ]
+}

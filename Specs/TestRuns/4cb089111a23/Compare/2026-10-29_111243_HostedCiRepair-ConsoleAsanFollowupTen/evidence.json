@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "8133b2cc775785150341c13d41f01b017e708a612a8edd7684c4ca8d143e25b0",
+  "buildReceiptId": "17d871317ef76260d49114b7d70fc27e8a7dc86786f4e7839a64be008a13e61a",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T111243Z-58980-ff027f7f6b6346efbaff6224d82bd79a",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 35904,
+  "scope": "Fresh ASan follow-up: ten repetitions of child-process, duplicate-service and resource-scoped writer cases; original gates, no skips or classification retries. Focused acceptance only.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "f8116344e20226dc28b260803abecd7546a39fe2003b1adf46e1d60caa9d3dcb"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 40738,
+      "sha256": "7454011d19c9ead58a1222c1773ab0ca8c38659fb198c8f73889974e54d4e911"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 124464,
+      "sha256": "25dedfafdbfac9c2e314296435a1772224b03cd7e65ed1c7b5be028ec930e1c5"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 6075,
+      "sha256": "94fc6dfcb4fc2f77aef98a79ebe02d763ef83be9b3081cfa4a65fe35204bb7e3"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 33075,
+      "sha256": "24921b0c6ee2a5a0b4d817c3d3e759896bec3f3f32b256a832170680804a1951"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 186,
+      "sha256": "ebdd0f816baccd8b766d27b6d076e5c55e053fe73d6fb504f6298cd725ded591"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9678,
+      "sha256": "831c9b627e5e5594967c1cc46b2668acaff25c338a4109bf298d1f2723de6851"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 30034,
+      "sha256": "b2275b675c20fc308b73e9d288522764e00bdd6bc75b5fc05b754a9433c76bd4"
+    }
+  ]
+}

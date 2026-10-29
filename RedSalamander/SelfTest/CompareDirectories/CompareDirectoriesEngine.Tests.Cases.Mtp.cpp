@@ -631,11 +631,14 @@ SelfTest::RunCase(options,
                                         [&](SelfTest::CaseState& state) noexcept
 {
     constexpr std::wstring_view kDcimRoot            = L"/Fake Phone/Internal Storage/DCIM";
-    const std::array<std::wstring_view, 4> rootForms = {
+    const std::array<std::wstring_view, 7> rootForms = {
         kDcimRoot,
         L"mtp:/Fake Phone/Internal Storage/DCIM",
         L"mtp://Fake Phone/Internal Storage/DCIM",
         L"\\Fake Phone\\Internal Storage\\DCIM\\",
+        L"//Fake Phone//Internal Storage///DCIM////",
+        L"MTP:\\Fake Phone\\Internal Storage\\DCIM",
+        L"mtp:///Fake Phone//Internal Storage/DCIM/",
     };
 
     for (const std::wstring_view rootForm : rootForms)
@@ -668,15 +671,19 @@ SelfTest::RunCase(options,
             return false;
         }
 
-        std::string readBack;
-        state.Require(ReadPluginFileText(io.get(), L"/@conn:Any Saved Profile/Camera/photo001.txt", readBack, state, L"MTP path normalization conn read"),
-                      L"MTP path normalization: failed to read via /@conn: suffix path.");
-        state.Require(readBack == "RedSalamander deterministic MTP fixture\r\n", L"MTP path normalization: /@conn: suffix path read returned wrong contents.");
-
-        readBack.clear();
-        state.Require(ReadPluginFileText(io.get(), L"mtp://Camera/photo001.txt", readBack, state, L"MTP path normalization scheme read"),
-                      L"MTP path normalization: failed to read via mtp:// relative path.");
-        state.Require(readBack == "RedSalamander deterministic MTP fixture\r\n", L"MTP path normalization: mtp:// relative path read returned wrong contents.");
+        constexpr std::array<std::wstring_view, 5u> readForms{L"/@conn:Any Saved Profile/Camera/photo001.txt",
+                                                              L"mtp://Camera/photo001.txt",
+                                                              L"/Camera/photo001.txt",
+                                                              L"//Camera///photo001.txt",
+                                                              L"MTP:\\Camera\\photo001.txt"};
+        for (const auto readForm : readForms)
+        {
+            std::string readBack;
+            state.Require(ReadPluginFileText(io.get(), readForm.data(), readBack, state, L"MTP path normalization read"),
+                          std::format(L"MTP path normalization: failed to read '{}' under root '{}'.", readForm, rootForm));
+            state.Require(readBack == "RedSalamander deterministic MTP fixture\r\n",
+                          std::format(L"MTP path normalization: '{}' under root '{}' returned wrong contents.", readForm, rootForm));
+        }
     }
 
     return state.failure.empty();

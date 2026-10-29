@@ -1,0 +1,33 @@
+{
+  "repository": "https://github.com/RedSalamanders/DxUi",
+  "commit": "881e5d5ff252d5988c1357a5c64d14f480b46793",
+  "apiRevision": 4,
+  "platform": "x64",
+  "configuration": "ASan Debug",
+  "publicHeadersGitTree": "a2f6ea7d0ccd869631e8b0242848929182c18025",
+  "buildIdentity": {
+    "Fingerprint": "5af0d3b9229ed04835652cbbb66d459b0d95400441233f1e413c9215189653c5",
+    "Identity": {
+      "commit": "881e5d5ff252d5988c1357a5c64d14f480b46793",
+      "apiRevision": 4,
+      "platform": "x64",
+      "toolset": "v145",
+      "vcToolsVersion": "14.52.37025",
+      "windowsSdkVersion": "10.0.26100.0",
+      "runtimeFamily": "MD",
+      "preferredToolArchitecture": "x64",
+      "disableStlAnnotations": true,
+      "releaseOptimizationPolicy": "Gy-REF-GL-LTCG-full-v1",
+      "msbuildSha256": "1EAA178CD17C7D3C2E33F98928E9EBBE098B0F0A397517F10F16CD06A3F23085",
+      "compilerSha256": "F1023C336447D8AB00E28E9C02E25FD6206928F894DF22F11CFB0D4233A10F25",
+      "linkerSha256": "7F699618D3E6AB301F981F5A4C2C688C714FA42A6907A2A373E8C90F814A30A7",
+      "windowsHeaderSha256": "B337D661D03A4ABEFB7B86A2742CE1AD5D19B57CD8B858BD13E7BBCC1DBEEAAA",
+      "kernel32Sha256": "842F5CE7AD8CF5AAB7491B791E7968D2BE510AE93F4019D3311797289399D221",
+      "ucrtSha256": "7EF4EAC926BF597D2F243F16CDFED7E0DB22CB3CA34A1D7E088A84C994A03D66"
+    }
+  },
+  "archiveSha256": "2FD8108C18F60B847D5E468EC37BCFB3E8096597CBBF31496A81E55DC307F18B",
+  "module": "RedSalamander.exe",
+  "moduleSha256": "A606B215B5E054E182EDA7798F448A4E9898ACEFB5A98CE2C3CA6CE33BF74927",
+  "linkCommandSha256": "66EF6FDF4A91047774B1D28964458C23CEE53E186118CABB3C987FBD401834C5"
+}

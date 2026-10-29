@@ -1,0 +1,1 @@
+Three exact Release live-progress repetitions pass, including Setup and Cleanup. Retains both-roots visibility, content, monotonic progress, close-during-copy and row-bound assertions. This is focused acceptance, not Full or performance trend evidence.

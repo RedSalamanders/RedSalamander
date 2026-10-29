@@ -6782,7 +6782,8 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
 }
 
 [[nodiscard]] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot(const std::filesystem::path& referencePath,
-                                                                                                std::wstring& detail) noexcept
+                                                                                                std::wstring& detail,
+                                                                                                bool allowOwnedVirtualDisk = false) noexcept
 {
     detail.clear();
 
@@ -6899,6 +6900,37 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         {
             return candidate;
         }
+    }
+
+    if (allowOwnedVirtualDisk)
+    {
+        // A one-volume hosted runner already has a harness-owned VHDX for FileOps.
+        // Reuse only that exact validated mount; never adopt or mount another volume.
+        using namespace RedSalamander::TestSupport;
+        const std::wstring handedMount  = GetEnvironmentString(kOwnedVirtualDiskMountEnvironmentVariable);
+        const std::wstring handedVolume = GetEnvironmentString(kOwnedVirtualDiskVolumeEnvironmentVariable);
+        const std::wstring testRoot     = GetEnvironmentString(L"REDSALAMANDER_TEST_ROOT");
+        const std::wstring runId        = GetEnvironmentString(L"REDSALAMANDER_TEST_RUN_ID");
+        const auto expectedMount =
+            testRoot.empty() || ! IsSafeTestRunId(runId) ? std::filesystem::path{} : GetOwnedVirtualDiskMountPath(testRoot, runId, L"f7-admission-baseline");
+        const std::filesystem::path mountPath(handedMount);
+        detail = EvaluateOwnedVirtualDiskMount(ObserveOwnedVirtualDiskMount(mountPath, handedVolume), handedVolume, mountPath, expectedMount);
+        if (! detail.empty())
+            return std::nullopt;
+        const auto volume = TryGetVolumeGuidPathForPath(mountPath);
+        if (! volume.has_value() || _wcsicmp(volume.value().c_str(), referenceVolume.value().c_str()) == 0)
+        {
+            detail = L"test-owned-volume-not-distinct-from-primary";
+            return std::nullopt;
+        }
+        const auto candidate = mountPath / std::format(L"independent-volume-{}-{}", GetCurrentProcessId(), GetTickCount64());
+        if (! SelfTest::EnsureDirectory(candidate))
+        {
+            detail = L"test-owned-alternate-case-root-unavailable";
+            return std::nullopt;
+        }
+        AppendLog(std::format(L"Independent-volume fixture uses test-owned VHDX: mount={} volume={}", mountPath.native(), volume.value()));
+        return candidate;
     }
 
     if (detail.empty())
@@ -9451,7 +9483,9 @@ using TickResult = std::optional<bool>;
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
-    const HWND foreground = GetForegroundWindow();
+    const HWND foreground   = GetForegroundWindow();
+    DWORD foregroundProcess = 0u;
+    static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundProcess));
     // Retaining height is an explicit same-binary counterfactual of the old completion path.
     // Fixed geometry prevents window auto-sizing or deferred accessible text from masking the race.
     struct Scenario
@@ -9561,7 +9595,17 @@ using TickResult = std::optional<bool>;
         if (! correct)
             return reject(facts);
     }
-    return GetForegroundWindow() == foreground || reject(L"foreground changed");
+    const HWND finalForeground = GetForegroundWindow();
+    if (finalForeground == foreground)
+        return true;
+    DWORD finalForegroundProcess = 0u;
+    static_cast<void>(GetWindowThreadProcessId(finalForeground, &finalForegroundProcess));
+    return reject(std::format(L"foreground changed: before=0x{:X} beforePid={} after=0x{:X} afterPid={} selfPid={}",
+                              reinterpret_cast<uintptr_t>(foreground),
+                              foregroundProcess,
+                              reinterpret_cast<uintptr_t>(finalForeground),
+                              finalForegroundProcess,
+                              GetCurrentProcessId()));
 }
 
 [[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state) noexcept
@@ -15351,6 +15395,15 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Review remediation requires the no-activation guard.");
                 return true;
             }
+            // These ownership/alias controls need no mounted disk or desktop
+            // input; run them in the ordinary remediation case as well as F7.
+            std::wstring ownedVolumeFailure;
+            if (! AdmissionBaselineSelfTest::RunOwnedVolumeRefusalControls(state.tempRoot / L"review-owned-volume-refusal-controls", ownedVolumeFailure))
+            {
+                Fail(std::format(L"Owned-volume operation-path controls failed: {}", ownedVolumeFailure));
+                return true;
+            }
+            AppendLog(L"Owned-volume operation-path controls passed without mounting a disk or taking focus.");
             // Private predicates use their own engine; the real clipboard-ready journey
             // retains its strict idle-owner precondition under the no-activation guard.
             SelfTest::CaseState admissionContracts;

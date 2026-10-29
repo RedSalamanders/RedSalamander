@@ -1,5 +1,14 @@
 # SelfTest Specification
 
+## Hosted qualification prerequisites
+
+The shuffle artifact consumer restores the exact locked DxUi source before portable attestation import.
+Portable outputs alone cannot satisfy `Get-RSDxUiSourceIdentity` at receipt use. Keep the existing
+same-workflow producer/run/source/toolchain checks and byte-for-byte output verification intact.
+The hosted display wrapper propagates exceptions and restores the original mode. Its callers check
+the native child's exit status inside the protected action and throw on any nonzero result; parent
+PowerShell scope state cannot stand in for that result. Report success only after restoration.
+
 ## Sorting paint measurements
 
 The 5,000-file `folderView_perf_sort_toggle_stress` uses the versioned
@@ -72,7 +81,10 @@ Terminal documentation MUST use a per-thread, one-instance factory arm, consumed
 with `exchange(false)` and cleared on scope exit. It renders fixed VT bytes through
 the real engine and native embedded/floating hosts without opening a shell, PTY,
 profile, history file or displayed path. A second ordinary instance MUST prove the
-arm did not leak. These frames qualify Terminal presentation, not shell execution.
+arm did not leak. Before reading documentation exports, the fixture MUST obtain an
+ordinary unopened Terminal owner through the normal enabled factory and retain it
+through all export calls; a deferred catalog placeholder is not a loaded module.
+These frames qualify Terminal presentation, not shell execution.
 The native fixture also verifies the loaded Find hint preserves both U+2022
 separators; its UTF-8 resource source declares code page 65001.
 
@@ -506,6 +518,10 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Recycled test items are purged by the case that created them. A Recycle moves a test file into the user's `<volume>\$Recycle.Bin\<SID>`, outside every marked sandbox, so the Local provider's test build (`ENABLE_TESTS`) journals each Recycle Bin item its `IFileOperation` progress sinks see created (`PostDeleteItem` `newlyCreated`) for an original inside a marked `X:\RedSalamander.Perf`: the original path and the `$R` entry's file-system path, bounded, taken by the host through `RedSalamanderFileSystemTestTakeRecycledItems`. Recycles of any other path are not recorded. Every case boundary takes the journal and purges exactly those items, whatever the case's outcome: `SelfTest::RunCaseAttempt` after each Commands or Compare case body, and the FileOperations `RecordCurrentPhase` at every phase end, failed and skipped phases included. A Recycle still finishing when a suite's last case returned is caught by `SelfTest::PurgeRecycledTestItemsAtSuiteEnd`, which the Commands suite calls after the main window's file operations drain and the Compare suite calls after its last case; items it cannot purge fail the suite through a `recycle_bin_hygiene` result. `SelfTest::PurgeRecycledTestItem` deletes an item only after proving that the `$R` entry lies directly inside the current user's `$Recycle.Bin\<SID>` on the original's volume with reparse-free ancestors, and that the matching `$I` record (version 1 or 2) names that exact original, which must be a strict descendant of a marked sandbox and of this run (the self-test root, or `runs\<runId>` under the unified root or under the marked base on the original's volume, or the ad-hoc run root); it then removes the `$R` entry without following links and the `$I` record, and checks that neither remains. It never empties the Recycle Bin and never enumerates or touches any other item. An item it cannot prove, or fails to remove, and a journal that dropped records, fail that case. `Phase7_RecycleBinTestItemsPurged` proves the journal names exactly the recycled file and directory, that forged records (an original outside every sandbox, an entry outside `$Recycle.Bin`, a `$I` record naming another original) are refused without deleting anything, and that the purge leaves none of the case's items in the Recycle Bin. `Phase7_RecycleBinBatchDelete` (both the single-item and the batch progress sink) and `Phase7_RecycleBinBatchDeleteMultiBatch` require the purge to find exactly as many journaled items as the task recycled, so a sink that stops journaling fails them.
 - FileOperations queue-state selftests must prove the queue state they assert. Tests that cancel a queued task must start the active holder first, wait until that task has entered operation and owns the active slot, then start the queued task, assert `IsWaitingInQueue()` before queued-cancel assertions, and fail fast if the queued task enters operation or completes before cancellation. Timeout diagnostics must include task ids, live/completed state, queue flags, progress, and HRESULTs for every task participating in the queue proof.
 - Compare selftests that launch `RedSalamanderSearchService.exe --run-foreground` must create a JobObject with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, start the child process suspended with `CREATE_NO_WINDOW`, assign it with `AssignProcessToJobObject`, and resume the main thread only after assignment succeeds. The selftest-owned child must not share the broad runner's console-control lifetime, and it must not survive a selftest harness crash or timeout and hold SQLite/WAL or scratch-root handles into the next run.
+- The canonical captured-child helper enforces the same console isolation. `test_support_child_process_runner_contract` observes the service probe's actual `GetConsoleWindow` state in addition to its existing stream, quoting, exit-code, restricted-inheritance, timeout-tree and cancellation controls. Duplicate foreground service checks preserve the child's output and trace its exact exit code and the primary writer's lifetime; a passing isolated retry alone does not establish the cause of a broad-run failure.
+- Fresh ViewerPE harness children likewise start suspended with `CREATE_NO_WINDOW` before Job assignment. Their explicit standard streams use the restricted inherited-handle list and canonical concurrent pipe drains; both streams are bounded at 16 MiB and capture error/truncation fails the case. The existing private blocked-child fixture refuses readiness when `GetConsoleWindow` reports a console and proves exact Unicode markers on both streams, preserving its parent-message, zero-window, timeout, joined-root and empty-Job assertions. Hidden or inherited consoles are not a substitute for console isolation; all real-focus cases retain their warnings, desktop lease and restoration predicates.
+- Viewer parent restoration records foreground and focused-child HWND/PID/thread identities separately. Exact read-only observation permits a stable child belonging to a different thread/process when it remains under the saved foreground root. It grants no restoration write permission: the original same-thread, input-freshness and permitted-foreground restrictions remain. The existing containment fixture checks cross-thread/process observation, changed/reused identities, missing GUI information, unrelated focus/foreground and an exact absence of focus.
+- The ViewerWeb combo fixture releases its viewer instances, invokes the production shutdown export and pumps the production unload gate before releasing the library. A timeout fails the case and retains the module mapping through the fresh process exit; it never force-unloads live COM callbacks.
 - Compare selftests that gate foreground SearchService readiness must poll the explicit service status for the intended pipe and must diagnose early child-process exit with exit code plus captured stdout/stderr. Query-performance and parity tests must establish service readiness before the first warmup query; the first query is not an acceptable readiness probe.
 - Foreground SearchService readiness polling uses a scaled, bounded 30-second default. Freshly linked images and cold SQLite stores can legitimately spend more than 10 seconds in image verification and initialization before creating their unique pipe; successful warm starts still return immediately, and cases with a tighter semantic budget may pass an explicit override.
 - Foreground SearchService fault-injection and first-query gates must use the process-aware status helper with child output capture. A timeout, broken pipe, or early exit must retain the child exit code and captured stdout/stderr instead of reporting only the client-side pipe HRESULT.
@@ -523,11 +539,16 @@ Environment variables may select alternate test inputs such as profile names, bu
 - `PluginContractTests` must require each built-in filesystem plugin's `RunDebugSelfTests` export in Debug configurations. A missing expected export is a test failure, not a silent pass. Configurations that intentionally omit debug exports must report an explicit skip; if an optional export is present, the harness still executes it and requires its reported failures to remain zero.
 - ViewerText snapshot handlers, their backing counters and the embedded-preview bridge use `ENABLE_TESTS` consistently across Debug, Release and ASan Debug. A test-enabled Release must exercise the same text/hex/diff and preview assertions; `_DEBUG` must not silently remove the observations while the cases remain registered. Ordinary builds with tests disabled omit these hooks.
 - Compare `content_pending_elided` must hold real content workers at a bounded synchronization gate while asserting the initial folder-level pending state, then release them and require all 200 equal comparisons to finish with no surfaced items or pending state. Queue notifications on the calling thread must remain unblocked. A fast completed initial snapshot is valid product behavior, so file counts, sleeps or scheduler timing cannot establish the pending-state fixture. Gate timeouts fail explicitly, and teardown must release the gate and join workers before destroying callback captures, including after failure.
+- Independent settings fixtures that delete and reseed an owned test app's target MUST flush prior submissions and reset only that fixture app's test-only coordinator lineage before setup. Keep the original app IDs and all within-case stale-source, external-write, backup and coalescing checks; resetting lineage inside a tested production write/refusal scenario is forbidden.
+- The thumbnail size-transition fixture MUST establish and assert 48 DIP before the original 96-DIP command, then restore the captured original size. A repeated command at an already-selected size cannot prove cancellation; retain every completion, pending-count and cancellation assertion.
+- The theme performance fixture retains all 240 real commands, original resource/animation limits and the System end-state assertion. Pair each 12-next/4-previous burst with its inverse and balance the tail, proving 120 accepted commands in each direction. Its independent real custom catalog MUST have a length that does not divide the original net 120 steps, and its complete prior theme definitions MUST be restored. Old and changed command sequences are different measurement fixtures, not paired performance non-regression evidence.
+- The ordinary nonactivating FileOps remediation case MUST execute the existing owned-volume refusal and strict operation-path controls as well as its original queue, collision and parent-pin checks. The optional F7 benchmark retains those same controls; no disk is mounted by this pure refusal fixture.
 - Synthetic FolderView fixtures must retain the backing names for every borrowed `FolderItem::displayName` until the view and its retained items are destroyed. Initializer-list name vectors are valid only for synchronous calls that do not retain the resulting items. Removal-focus ownership/selection fixtures must exercise the same assertions under ASan without substituting owning product fields or changing production behavior.
 - `Phase6_LocalBandwidthThrottle` must measure whole-copy duration from the worker's published operation start, not the first UI observation. Its fixture deliberately defers the first observation by at least 500 ms while continuing to pump messages, so delayed polling cannot shorten the measured runtime. Preserve the 250 ms duration-lead allowance, sampled throughput checks and 250 ms cancellation limit; report observation delay separately from duration.
 - Its cancellation clock starts immediately before `RequestCancel`, includes the call itself, and ends at the actual UI completion callback. Retain ordered handler-entry, request, call-return and callback ticks; emit their diagnostics only after delivery. Handler setup and a worker-only cancellation measurement must not replace that unchanged 250 ms callback gate.
 - The R4A02 queue-after and don't-start fixtures hold the predecessor Copy at the existing test-only publication pause until the Delete is observed waiting in the overlap queue or completing explicit cancellation. Provider latency alone must not establish that state. Preserve the final nonzero wait-count, ordering, source-preservation and cancellation assertions; release and disable the pause on failure and after the decision witness.
 - A test-enabled Release selftest that asserts an info-level File Operations diagnostic must explicitly enable that diagnostic level for the case and restore the captured settings afterward. It must not wait for an info record while relying on Release's intentionally disabled default.
+- Loopback FTP fixture LIST serialization appends the fixed wire grammar directly and uses bounded decimal conversion for file sizes. Independent literal-byte oracles cover directories, known/unknown and maximum sizes, UTF-8 names, empty/missing/custom listings and fixture mutation; the 4,097-file, 64-render byte oracle remains. Entry lookup retains its original 298 checks plus the maximum-size oracle (299 total); Copy traversal retains all 142 checks. Do not cache mutable directory snapshots, omit rows, reduce the eight 4,096-file controls or change socket/operation deadlines.
 - FileSystemCurl selftest compilation and its exported selftest entry point use `ENABLE_TESTS`, so the same provider proof runs in Debug and an explicitly test-enabled Release build while an ordinary production Release omits the export. The provider proof must use bounded loopback FTP endpoints and the public cross-connection Move path to cover both a `226` upload that retains a strict prefix and a complete-upload control. It must assert the staged `STOR`/`SIZE`/cleanup command shape, source/final/staging byte state, `ERROR_PARTIAL_COPY` on the short case, success on the control, bounded teardown, and mutation sensitivity when the independent staged-size comparison is bypassed.
 - Portable ZIP creation must expand the completed archive into a new directory, validate the shared runtime-dependency manifest, authenticate the packaged Ghostty identity/DLL/notices against the receipt-bound shipping profile and canonical lock, start the packaged app through `--help`, natively load/free the packaged Ghostty DLL when the target architecture is executable, and run the matching plugin harness there with `--package-smoke`. Package-smoke mode validates load/enumeration/exports/schemas/capabilities for every built-in plugin but deliberately excludes Debug-only selftests and runtime-refresh probes. ARM64 package execution may be skipped on an x64 host only after full file/dependency and Ghostty identity validation; native admitted-product qualification must execute it.
 - An admitted Ghostty upgrade must also dispatch `.github/workflows/ghostty-runtime-product-qualification.yml` on native ARM64 Windows. The lane must bootstrap the exact executable-tool commit in `vcpkg-tool.json`, materialize `vcpkg.json`'s independent `builtin-baseline` as the ports/version registry root, and use the repository `vcpkg-install.ps1 -Platform ARM64` entrypoint before compiling, so a fresh runner cannot depend on ambient headers, packages, or a stale tool checkout's version database. The executable checkout must remain on the tool pin while `-VcpkgRoot` explicitly names the baseline worktree; `VCPKG_ROOT` is insufficient because vcpkg ignores it when the executable already resides in a valid checkout, and treating the two pins as one checkout is invalid. Before compilation, the lane must import the pinned checkout's `vcpkg.props` and `vcpkg.targets` process-locally, disable manifest installation during MSBuild, bind `VcpkgInstalledDir` to the repository-owned ARM64 install root, and provide the same installed include root directly to the compiler. This setup is required because a native hosted image need not include Visual Studio's vcpkg integration; user-wide integration and ambient package paths remain forbidden. One positive build number binds its test-enabled Debug build, canonical runtime schema/load validation, complete Terminal plugin contracts, representative embedded-terminal Commands filters, production Release build, and natively executed clean-extraction ARM64 portable smoke. Selecting `REDSALAMANDER_TEST_ROOT` is not the same as authorizing it: because this lane launches native harnesses directly instead of only through `Tools/Run-AllTests.ps1`, it must explicitly initialize the selected exact `X:\RedSalamander.Perf` root and its ownership marker through `Initialize-RSTestSandboxRoot -AllowExternalInitialization` before the first direct launch. A direct harness that acquires sandbox scratch fails closed against an unmarked root, so an uninitialized root turns the Terminal contracts step into a sandbox-acquisition failure rather than a contract result. That root is outside the workspace, so its evidence must be uploaded as its own artifact; mixing it into a workspace-rooted artifact path has no valid common artifact root and fails the upload. Each representative Commands invocation must use its own runner-owned `REDSALAMANDER_TEST_ROOT`, so a preceding filter's valid run directory cannot become a later filter's disk-audit residue. A pointer-follow assertion inside a native lifecycle filter must prove the foreground-owned success path when the hosted desktop grants foreground ownership and the fail-closed, focus-preserving path when it does not; child focus alone is not proof that the app root owns foreground. Its runtime identity artifact path is `.build/TerminalEngine/Product/ARM64/terminal-runtime-identity.json` and required evidence uploads fail when any named artifact is absent. The release workflow must require this reusable gate before artifact builds. Cross-compiled ARM64 build and package validation remains required but does not replace this native product gate.
@@ -541,9 +562,61 @@ Environment variables may select alternate test inputs such as profile names, bu
   `vcpkg-tool.json`; cache hits or ambient tools cannot bypass it.
 - `.github/workflows/asan.yml` owns the weekly and on-dispatch x64 and ARM64 `ASan Debug` plugin-contract lane. Before accepting a green harness run, it must invoke the opt-in `--asan-seed-heap-overflow` probe, require a nonzero result with an AddressSanitizer diagnostic, and then run the ordinary contracts successfully. `_DISABLE_STL_ANNOTATION` remains documented technical debt for non-ASan vcpkg dependencies; the seeded proof covers ordinary heap detection, not STL container annotations.
 - `.github/workflows/nightly-flake.yml` owns the expensive scheduled/manual shuffle-repeat lane. It must stay separate from PR CI, build the Debug self-test artifact, run `Tools/Run-AllTests.ps1 -Suite All -SkipBuild -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures`, and upload the runner-owned `REDSALAMANDER_TEST_ROOT` tree as `selftest-artifacts-nightly-shuffle`.
+- Scheduled Windows checkouts enable Git long paths before checkout. The shuffle-repeat producer
+  and consumer use the same VS 2026 runner family; the consumer initializes its governed sandbox
+  and verifies/rebinds the unchanged portable attestation before testing. Its evidence upload
+  requires a nonempty selected root and fails for missing files, never falling back to a drive root.
+- Hosted CI/Full and shuffle-repeat UI qualification use `Invoke-RSWithHostedTestDesktop` from
+  `Tools/Modules/Testing/HostedTestDesktop.psm1`. The ephemeral runner must offer a driver-enumerated
+  32-bit mode of at least 1920×1080 scaled for the display coordinates, and expose at least
+  1800×1000 of work area in those coordinates. The wrapper
+  records display, session and foreground ownership, preserves an already sufficient display,
+  and restores a changed mode on success or failure. Unsupported setup or failed restoration
+  fails qualification. Local invocation is refused; native assertions, warnings and desktop leases
+  remain authoritative. The PR suite keeps its noninteractive scope.
+- Theme-cycle animation fixtures explicitly select the supported reduced-motion Off setting and
+  restore the inherited UI settings; they must not depend on a hosted image's OS animation default.
+  The dedicated reduced-motion case still selects On and checks its complete atomic presentation.
+  The fixture-restoration case starts from On, exercises all original animation timing assertions,
+  and proves that On is restored. No timing, memory, handle or retention budget is relaxed.
+- The FileOps long-note overflow fixture has 520 diagnostic lines, retains the greater-than-4096-pixel
+  requirement at every tested width/DPI, and requires more than 520 laid-out lines. The independent
+  volume control may reuse the existing run-owned VHDX when no authorized alternate fixed volume
+  exists. It must validate that exact mount through `EvaluateOwnedVirtualDiskMount`, reject a
+  foreign or same-primary volume, and retain exact bytes, progress overlap, the 30-second ceiling
+  and the 1.35× isolated-time gate. No mounted volume is created or adopted by native test code.
+  Product operation arguments use `TryMakeOwnedVirtualDiskOperationPath` only after fresh validation
+  of that exact mount and volume. Only strict child paths can resolve to the owned volume GUID;
+  roots, escapes, foreign mounts, drive-letter aliases and physical volumes are refused. Seeding,
+  byte inspection and cleanup retain the marked mount path. Product reparse-boundary refusal stays intact.
 - Failure classification is blocking evidence, not a pass policy. `FLAKY` means an entry failed and passed on retry; for in-product suite failures it requires the failed cases to pass under `--selftest-case` and then pass shuffle triage. `REGRESSION` means retry evidence failed again, including any shuffle-triage seed that reproduces the failure. `ISOLATION_SUSPECT` means an in-product suite failed and failed cases passed under `--selftest-case`, but shuffle/order triage evidence is missing. Shuffle triage attempts must preserve their `shuffle_seed` in `retry_attempts`. Focused subset runs with `-CaseFilter` must still use failed-case retry plus shuffle triage, preserving the original subset filter for shuffle attempts instead of falling back to a whole-entry retry. When a native suite implements seeded/repeated order by dispatching one exact case at a time, that exact-case replay remains suite/shuffle context for classifier proof; only the runner's failed-case retry is isolated evidence. All non-`PASSED` classifications must keep the aggregate run exit code non-zero until the underlying test is fixed, replaced, or explicitly tracked through the reviewed quarantine process.
 - Before every Commands case dispatch, including the normal single-pass order and seeded/repeated exact-case order, the harness must close same-process non-main top-level windows, exit inherited native menu mode, clear test-owned menu-hover overrides and the visible theme-cycle overlay, verify the main window is enabled, reset shared pane/transient state, and reactivate it. It must then prove stable FolderView focus, pump a bounded directed-input/message quiet point, clear navigation and incremental-search transients again, and re-prove FolderView focus before dispatch. This second clear/focus proof is required because input and teardown completion from the preceding case can arrive after the initial activation. A failed isolation boundary must be recorded as that case's failure instead of running the fixture against inherited UI state. Fail-fast bookkeeping may skip this cleanup after the first recorded failure because remaining cases do not execute.
 - A same-process Commands case that delivers confirmed `WM_ENDSESSION` may validate persistence without performing normal teardown, but its test-only cleanup must reset both the runtime-settings save owner and every committed-shutdown gate before later cases run. In particular, the main-window command gate and host prompt-shutdown state must be restored; leaving the window alive while retaining production shutdown state is invalid suite isolation.
+- Every invocation of `cmd_fileops_durable_store_safe_mechanics`, including repeats and replays,
+  uses an unused child of its owned case sandbox. Keep prior oversized/rejected fixture records
+  for evidence without inheriting them into the next invocation. Preserve immediate private-name
+  disappearance, retained-reader bytes, prior-target integrity, entry/byte limits, reparse rejection
+  and concurrent-reader assertions unchanged.
+- The parent of a private settings-save child must service its bounded UI message queue while
+  probing child exit. Child Commands isolation must still acquire real notified foreground input;
+  the original scaled 12-second deadline, natural-exit requirement and contained-timeout handling
+  remain unchanged. Record dispatched messages alongside exit/wait diagnostics.
+  Configure the child with the canonical child-only Unicode environment block, never temporary
+  parent environment overrides. Probe exact parent environment invariance while pumping and
+  after child exit, including missing versus present-empty values.
+- An empty Shortcuts grid copy follows DxUi's unhandled no-op contract. Retain the selected-copy
+  positive control, then require the empty action to be unhandled and preserve the exact system
+  clipboard text, fallback text and sequence; clearing the clipboard or reporting a handled
+  empty copy cannot satisfy this control.
+- Batch Rename's normal test snapshot/mode-switch helpers may settle owned current work within
+  the existing bound. Their explicit immediate mode performs no such wait. The existing blocked
+  provider fixture uses immediate observation and dispatch to require disabled mode switching,
+  refusal without partial Manual seeding, then enabled switching with complete names after release.
+- The native-enumeration rejection fixture must leave MFT seeding eligible, inject a malformed-data
+  failure as a hard-error control, then reject a valid native enumeration with
+  `ERROR_INVALID_PARAMETER`. Require a reported tracked-root traversal, exact candidates before
+  and after rename/delete/create, and no native-complete flag. Do not widen root scope or accept
+  partial candidates.
 - A broad command-dispatch smoke case MUST NOT invoke commands whose contract performs a whole-runtime reload from durable or machine-local settings, such as `cmd/app/rereadAssociations`, or begins provider/OS lifecycle preparation before user confirmation, such as `cmd/pane/disconnect`; those commands require dedicated deterministic cases. After a smoke-dispatched command can alter navigation or presentation state, the smoke fixture MUST restore its in-memory settings snapshot, both pane providers and paths, and each pane's live display mode, sort key/direction, and visibility options, then prove both current-folder enumerations have settled before dispatching the next command. Restoring only the settings object does not reapply already-mutated `FolderView` state, and matching path text alone is not quiescence evidence.
 - A Commands case that asserts navigation-shell stability after changing a pane provider/path or focus MUST pump pending messages and observe a bounded quiet baseline across repeated samples before capturing refresh/path/focus counters. A single matching snapshot is not sufficient because queued provider and focus notifications can invalidate it immediately after capture. The Refresh-shell fixture captures its protected counters from the final quiet sample and dispatches Refresh immediately; it must not insert another focus helper/message pump between baseline capture and the command. Timeout diagnostics for this fixture and drive-menu focus restoration are formatted after the wait so their state describes the observed result.
 - The inspection-selection reentry fixture MUST establish `Selected` for a current
@@ -708,6 +781,34 @@ Environment variables may select alternate test inputs such as profile names, bu
   its suite and input probes borrow that process-lifetime surface.
   Commands isolation excludes only the exact live, helper-owned warning HWND
   from product-window cleanup; unrelated STATIC/tool windows are not exempt.
+  Its case boundary reuses `TryActivateOwnedWindow` for the notified foreground handoff,
+  requires the exact owned root as foreground before case work and after input settling,
+  and retains the previous/new HWND and process witness when a handoff was needed.
+  An unsuccessful handoff fails the case; an ignored `SetForegroundWindow` result cannot
+  establish keyboard/capture ownership. The exact static documentation capture bypass remains unchanged.
+  When ordinary foreground requests are refused, the same warned helper may use a temporary
+  registered F24 hotkey on the owned warning's UI thread to obtain foreground permission. Refuse
+  before input when the no-activation guard is active, the target is unowned, a modifier/key
+  is held or the registration is unavailable. Never attach a foreign input queue or change
+  system foreground-lock policy. Send key-down alone, dispatch the real hotkey through the owned
+  window procedure, and release the key after the handler's activation attempt. Do not batch key-up
+  before that dispatch: it can return input to the previous foreground process before the handoff.
+  Every exit after accepted key-down must release it, including timeout and failed activation;
+  failed key-release injection fails admission and retains a scoped final cleanup attempt.
+  Retire the registration and leave the synthetic key released;
+  the bounded handshake counts within the existing focus-acquisition budget.
+  Terminal/preview retirement retains its separate deadline; deduct only the handshake's
+  elapsed time when beginning the later 1.5-second focus wait.
+  The native `cmd_selftest_foreground_admission_hotkey_contract` exercises the forced handshake, exact
+  foreground proof, repeated registration cleanup and refusal controls. Its independent dispatch
+  witness must observe F24 still depressed before forwarding to the activation handler, in addition
+  to proving the exact original window procedure and properties restored. Actual key release remains
+  a separate postcondition. The handshake deadline stays 500 ms.
+  `cmd_pane_navigationView_keyboard_menu_stationary_pointer_retains_selection` creates a
+  keyboard-opened menu, selects its last row before any message pump, and sends a stationary
+  pointer event over that popup. It must retain keyboard selection; a subsequent real movement
+  must still hand selection to the pointer. Escape, owned-popup teardown and cursor restoration
+  remain required. The fixture does not relax the original history-navigation case.
   A refused foreground acquisition MUST immediately end that interaction path after recording
   failure. Do not continue into cursor movement, keyboard input or owned UIA invocation merely
   because the failure is already recorded; restore the fixture through its existing scope guards.
@@ -1170,6 +1271,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   state. After the work and owning UI are quiescent, the case must refresh the
   manager again and prove required built-in entries are loadable before it
   returns; unusable deferred placeholders must not leak into later cases.
+- `settings_deferred_plugin_disabled_state_tracks_settings` uses ViewerImgRaw and
+  Terminal, which hold their real unload gates for live interface instances. Verify
+  that probe before crossing rediscovery; a legacy plugin without the optional
+  unload probe cannot establish a deferred-state fixture. Cover disable and enable
+  transitions while the old owner lives, disabled refusal after retirement, and
+  ordinary re-enabled recovery without an extra Refresh. Keep the existing busy
+  and not-supported results, then restore settings and the ordinary catalog.
 - Tests for retained process-owned windows must obtain the HWND from an owning
   debug hook or another process-scoped lookup. A class-only `FindWindowW(...)`
   result is not valid teardown or identity evidence because another running app
@@ -2067,12 +2175,34 @@ STA/MTA; COM-only initialization does not meet that API precondition. Capture ob
 event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
 record the API stage and the process's session, window station and desktop.
 
-Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned non-activating/tool
-fixture that lacks it. Windows Server otherwise rejects that HWND with `E_INVALIDARG`.
+Speed-dialog layout captures requested by the modal interaction worker MUST prepare and restore
+the canonical admission scope through the prompt's synchronous test command on its owning UI.
+Only USER32 admission/restoration may run inside that input-synchronous handler: WGC/COM capture
+stays on the worker while the modal UI pumps. The worker MUST NOT change window styles.
+Every layout capture retains its success/geometry assertions, rejects direct worker admission,
+requires APPWINDOW eligibility with every other style bit preserved, and verifies exact restoration.
+A missing/destroyed prompt or unhandled admission command is a failed capture.
+All data-bearing speed-prompt test commands MUST use `SendMessagePayload` and
+`TakeMessagePayload` with the actual receiving HWND/message/type, plus an embedded
+operation check before accessing fields. Shared responses publish completion with
+release/acquire synchronization. Only Confirm/Cancel define a zero-payload close route.
+Initialize payload ownership during `WM_NCCREATE`, and fence/drain it and restore active
+admission before forwarding `WM_NCDESTROY` to DxUi: the host handles that message.
+The native speed-dialog case rejects empty, forged, wrong-type and wrong-operation
+requests without mutation, covers every capture path including the short locale view,
+and closes a prompt with admission active. Exactly one successful pre-destruction
+retirement and no failed restoration are required; existing modal lifetime gates remain.
+
+Capture-item admission temporarily adds `WS_EX_APPWINDOW` to an owned modal or non-activating/tool
+fixture that lacks it, including an ordinary owned dialog with neither NOACTIVATE nor TOOLWINDOW.
+Windows Server rejects an otherwise ineligible HWND with `E_INVALIDARG`.
 Only the owning UI thread may prepare or restore that admission scope, preserving
 `WS_EX_NOACTIVATE`. Direct UI capture restores the borrowed bit before frame capture;
-cross-thread capture requires the owner to prepare the scope, pump through worker
-retirement including bounded timeout cleanup, and then restore it. Restoration failure
+cross-thread capture requires the owner to prepare the scope and pump until capture objects
+are released and completion is acknowledged, then restore it. A UI-launched capture worker
+must retire through its joined/bounded timeout cleanup before that restoration. A modal
+interaction worker acknowledges capture completion only after the synchronous helper returns.
+Restoration failure
 fails the scenario. The helper never changes the console session. Lifecycle, documentation,
 in-flight and STA/MTA playback witnesses assert exact extended-style restoration; pixel,
 layer, foreground, ownership and timing assertions remain mandatory, including negative-color controls.
@@ -2304,7 +2434,7 @@ Compare fixtures must remove every successfully created test-owned symlink/junct
 
 Find result selection setup uses the public Grid selection requests so its current row belongs to the selected set before real keyboard context-menu input. Editing selection IDs alone is insufficient to establish that keyboard precondition.
 
-Regression fixtures wait for observable completion: the Compare body's first rendered frame, the thumbnail menu's posted size command, and a disclosure card's settled height. No-op scroll measurement starts from the existing warm-perf quiescence witness and still requires zero product repaint for an unchanged viewport. Find selection helpers use Grid selection requests so the current row belongs to the selected set. VLC publication timing covers the focus command through the matching snapshot; trace and focus-probe time is recorded outside that interval without changing the 900 ms ceiling. Popup cadence separately covers known-byte and unknown-byte paused tasks, preserving its idle render/timer ceilings.
+Regression fixtures wait for observable completion: the Compare body's first rendered frame, the thumbnail menu's posted size command, and a disclosure card's settled height. No-op scroll measurement starts from the existing warm-perf quiescence witness and still requires zero product repaint for an unchanged viewport. That witness drains and resamples again at its final quiet decision; the existing five timer trials and an independent real-paint timer queued after the first empty-queue observation must pass within the original deadline. Find selection helpers use Grid selection requests so the current row belongs to the selected set. VLC publication timing covers the focus command through the matching snapshot; trace and focus-probe time is recorded outside that interval without changing the 900 ms ceiling. Popup cadence separately covers known-byte and unknown-byte paused tasks, preserving its idle render/timer ceilings.
 
 The two-synthetic-root SQLite startup-lifecycle case explicitly selects the existing test-only traversal seed for those roots and restores its environment override at the case boundary. Its 15-second completion limit, exact candidate results, status/output/shutdown checks and query-fallback assertions remain unchanged. It also requires both persisted traversal roots to remain currentness-unproven. This case measures lifecycle, not whole-volume MFT seeding cost; dedicated native NTFS MFT/journal cases retain their default path and are required in Full. Never set the traversal override globally for qualification.
 

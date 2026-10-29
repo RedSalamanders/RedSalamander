@@ -1,0 +1,60 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "e5ffbee5b204a7e6ff2d7526bc41ad62c40005799488ec3af8a5068194a594ff",
+  "buildReceiptId": "b60f62efe5c28581bd6cd91dc906ad3f4ec9b4e6541a5bc9a2116e447f3308ec",
+  "profile": "x64 Debug",
+  "runId": "20261029T093953Z-74488-dbab28ce4d6e4d628a0acef4314b75c0",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 40250,
+  "scope": "Ten R4A19 repetitions pass every original byte, overlap and 1.35-times timing gate with four transfer workers plus a reserve. The four-transfer selection and socket hypothesis are diagnostic inputs only; neither is shipped. Metrics retain all R4A19 rows in source order, with full raw digest and line-number provenance; complete raw input stays in local archived run evidence.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "78765086c0764f5d227b4970be7718dc02d5615c119cc75ede1e5a91683c31ac"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 65792,
+      "sha256": "04fd37151825e7bee65e8e86bd0656ab4c9da7acbf6a0abc060dbea915e9a52c"
+    },
+    {
+      "path": "metric-compaction.json",
+      "byteCount": 881,
+      "sha256": "76b499ca286dbb0c4ca6d4a825077134e1bb507ad91ee0196425fc489916b814"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 104048,
+      "sha256": "356b082f1ef7947814409b02b9cc5147c2c2fcaa2f8ceaecb9313fea7a2c48cf"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 5225,
+      "sha256": "4385bcad1e62f4bc676d4bcd85f4e856d0ace94c53e1a77a4750ddc537a4085c"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 14440,
+      "sha256": "857b3f2a77daffb7a832f39462e706885867a0defbe3630fa18e88bd082949a2"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 378,
+      "sha256": "854d45586f25f14a959296c2fb50d0e9c68b7a5238a447608af391a978f3d51d"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 20760,
+      "sha256": "6c91530557c44bec70d3fb41b7a79088a31d01c26691e335164ae2b1ec177d2e"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 47520,
+      "sha256": "b2f268ca7d5542927de991120a8e3ac182c100a2cd6f023e301c200260bc353a"
+    }
+  ]
+}

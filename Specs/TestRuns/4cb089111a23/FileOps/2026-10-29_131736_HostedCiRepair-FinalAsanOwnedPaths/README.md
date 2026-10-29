@@ -1,0 +1,1 @@
+Exact committed candidate x64 ASan Debug ordinary remediation entry. Directly executes owned-volume operation-path acceptance and refusal controls without mounting a disk or taking focus, retaining the original remediation checks. Focused native coverage, not Full.

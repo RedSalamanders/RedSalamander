@@ -798,6 +798,11 @@ nonzero storage-resolved budget without re-clamping it to the inactive Manual va
 continues to take the smaller configured/requested limit. Provider/session limits, explicit one,
 verification serialization, discovery reservations, bandwidth and safety checks remain effective.
 
+The shared per-item I/O pool retains four to sixteen transfer workers (processor count clamped
+to that range), plus one starvation-reserve worker. The reserve must not reduce a four-file
+selection to three active transfers on a four-processor host. Existing fairness caps still reserve
+capacity for another task; workers remain bounded, reused and event-driven when idle.
+
 The selection-shape qualification counts the native `Transferring` lifecycle phase
 after exact source/destination handles, metadata preparation, buffer allocation and
 admission, including zero/full byte-report boundaries. Finalizing and Publishing
@@ -877,7 +882,15 @@ own walk's items, one file or link at a time, never another call's work, and an 
 completion, so a large file holds that walk's listing back even if workers free up meanwhile. A producer
 on the caller's thread (`CopyItem`, the host's per-item executor) waits for the workers.
 
-**Shared scheduler dispatch (Local provider).** The provider's shared scheduler dispatches a dynamic job's
+**Shared scheduler dispatch (Local provider).** The provider's shared scheduler uses a bounded
+four-to-sixteen transfer pool plus one starvation-reserve worker. Both static and
+dynamic jobs clamp their concurrency below the actual created pool size whenever it has at least two
+workers, including partial thread-creation failure. One throttled job must leave capacity for another
+job's first unit; round-robin dispatch cannot preempt a file already in flight. Per-operation transfer
+limits remain at most sixteen. Every global worker stream, including the reserve, owns a distinct
+progress/throttle/context slot; the reserve must never alias stream zero.
+
+The scheduler dispatches a dynamic job's
 step (a Local walk's, a parallel Delete's) only while the job has a ready unit and fewer steps in flight than
 its concurrency. A step that finds nothing it may run (a walk at its active limit while its listing runs
 ahead, an empty queue) parks its job until the job is woken: by one of its own steps that ran a unit (such a

@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "853ff02833077cdc5dfa273f730dbfb96a80ec327036ba78c109603530886609",
+  "profile": "x64 Debug",
+  "runId": "20261029T131333Z-38720-566c99600cfc4441a4a3e895233e85e0",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 26768,
+  "scope": "Exact committed candidate x64 Debug: three captured-runner, second-instance service and resource-scoped writer cases repeated ten times; 30 passed with no skips or retries. Console absence, exact captured bytes, duplicate exit and primary liveness are retained.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "4fe7f9d45ac83f22ed378ec4482c13d1ff83ed1e7576cd805114c7188af4b863"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 40638,
+      "sha256": "8ab0844fa1636898a0241b449045f7a6fc813ff6ba383fded665043f99086a13"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 6065,
+      "sha256": "253acfc5c3ed112f75542c8ef102ce490523b679582f4a931aa859ad21cd8dd6"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 32543,
+      "sha256": "b23bf7743331c07f6e512617a7b528279cbcd89263b0519d8356f51b80c742ea"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 263,
+      "sha256": "b0b5ea65f97c9cc20839d6f6a981a4b21e2e0c414a4373ace81c33da27471ce8"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9658,
+      "sha256": "55e563d0cc40dbf8885f5a172dcac8984b559a684746c7b8d941d8749e92a4f8"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 30034,
+      "sha256": "b8a44475d1cc0fd28dc98991add0a2b6fb04610fd71c35d2a5252c83b9212cb5"
+    }
+  ]
+}

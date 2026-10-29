@@ -1,0 +1,48 @@
+{
+  "schema": "hosted-ci-repair.standalone-followup.v1",
+  "sourceCommit": "cc6e19d5f736a784aa5f3b4ff99b5fea185aa097",
+  "sourceSnapshotId": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb",
+  "buildReceiptId": "333e985662480e39ff9c40b6a2074c74d5dc4df06260cbf325f24b1684d498bd",
+  "profile": "x64 Debug",
+  "runId": "20261029T171640Z-52724-0fed140039ea4545a7aed6ff934a82f3",
+  "accepted_commands": 3,
+  "internal_terminal_passed": 162,
+  "scope": "Three selected noninteractive standalone commands pass at integrated source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097: captured-child containment with original console/output/identity controls, the independent read-only desktop-observation counterfactuals, and Terminal selftests (162 internal assertions passed). Exact receipt/profile/source identities are retained. No Full or performance non-regression claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 85900,
+      "sha256": "89cd7a923a84e812804514df7c39da66f85211e6a681cfaa068fc4493127de1d"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 338402,
+      "sha256": "7ddfa9013ba9757e253a163bf2457c84aa92852acf4e85863a46fe299c9b2811"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 413,
+      "sha256": "d8a9cafbed675e53d9a82b54f8446999ff127e8d4574ef4813f79cab049b17a7"
+    },
+    {
+      "path": "standalone-results.json",
+      "byteCount": 1067,
+      "sha256": "fe865ecf17358b9fabf629ab6a777d1d6a4b4a31e106e0fab2804bee2683c913"
+    },
+    {
+      "path": "terminal-selftests.log",
+      "byteCount": 4875,
+      "sha256": "f8339060866002703caf42a584bdae9b79941dcb9e4dc47dd558b3b92295b8f2"
+    },
+    {
+      "path": "viewer-containment.log",
+      "byteCount": 5615,
+      "sha256": "00692d8f9008bf1fe336a1687c0296822848629311540f9c4bc911e182942257"
+    },
+    {
+      "path": "viewer-observation.log",
+      "byteCount": 3770,
+      "sha256": "986010c4617fd79daa0f7ef197b7d9a1afea6b73a9965ff472f482df480f0da7"
+    }
+  ]
+}

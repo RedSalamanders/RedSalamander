@@ -960,6 +960,8 @@ struct ViewerHarnessDesktopIdentity final
 
 constexpr std::wstring_view kViewerHarnessBlockedChild{L"__Internal_ViewerHarnessBlockedChild"};
 constexpr std::wstring_view kViewerHarnessReadyPrefix{L"--harness-ready-event="};
+constexpr std::string_view kViewerHarnessStdoutMarker{"viewer-harness-stdout-\xCE\xBB\n"};
+constexpr std::string_view kViewerHarnessStderrMarker{"viewer-harness-stderr-\xCE\xBB\n"};
 
 struct ViewerHarnessTimeoutProbe final
 {
@@ -969,6 +971,8 @@ struct ViewerHarnessTimeoutProbe final
     bool rootExited                = false;
     bool jobQuiet                  = false;
     bool jobReset                  = false;
+    bool stdoutCaptured            = false;
+    bool stderrCaptured            = false;
 };
 
 [[nodiscard]] bool RunFilteredSelfExecutable(std::wstring_view testName,
@@ -985,7 +989,10 @@ struct ViewerHarnessTimeoutProbe final
     if (timeoutProbe && (testName != kViewerHarnessBlockedChild || desktopInteraction != TestDesktopInteraction::Noninteractive || ! timeoutProbe->readyEvent ||
                          timeoutProbe->readyEventName.empty()))
     {
-        Check(false, L"Viewer harness timeout probe is restricted to its private noninteractive child", success);
+        Check(false,
+              L"Viewer harness timeout probe is restricted to its private "
+              L"noninteractive child",
+              success);
         return false;
     }
 
@@ -1041,8 +1048,46 @@ struct ViewerHarnessTimeoutProbe final
         commandLine.push_back(L' ');
         commandLine.append(RedSalamander::TestSupport::QuoteWindowsCommandLineArgument(std::wstring(kViewerHarnessReadyPrefix) + timeoutProbe->readyEventName));
     }
-    STARTUPINFOW startupInfo{};
-    startupInfo.cb = sizeof(startupInfo);
+    // The viewer parent retains its message pump and desktop quiet point, while
+    // reusing the canonical pipe creation/drain mechanics. A no-console child
+    // needs explicit standard handles; implicit console inheritance loses logs.
+    wil::unique_handle stdoutRead, stdoutWrite, stderrRead, stderrWrite;
+    DWORD pipeError         = ERROR_SUCCESS;
+    const bool pipesCreated = RedSalamander::TestSupport::ChildProcessDetail::CreateCapturedPipe(stdoutRead, stdoutWrite, pipeError) &&
+                              RedSalamander::TestSupport::ChildProcessDetail::CreateCapturedPipe(stderrRead, stderrWrite, pipeError);
+    if (! Check(pipesCreated, std::format(L"{} fresh harness owns captured output pipes (error={})", testName, pipeError), success))
+        return false;
+    SECURITY_ATTRIBUTES securityAttributes{};
+    securityAttributes.nLength        = sizeof(securityAttributes);
+    securityAttributes.bInheritHandle = TRUE;
+    wil::unique_handle nullInput(
+        CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! Check(nullInput.is_valid(), std::format(L"{} fresh harness owns noninteractive standard input", testName), success))
+        return false;
+    SIZE_T attributeBytes = 0u;
+    static_cast<void>(InitializeProcThreadAttributeList(nullptr, 1u, 0u, &attributeBytes));
+    if (! Check(attributeBytes != 0u, std::format(L"{} inherited-handle attribute size resolves", testName), success))
+        return false;
+    std::vector<std::byte> attributeStorage(attributeBytes);
+    auto* attributeList = reinterpret_cast<PPROC_THREAD_ATTRIBUTE_LIST>(attributeStorage.data());
+    if (! Check(InitializeProcThreadAttributeList(attributeList, 1u, 0u, &attributeBytes) != FALSE,
+                std::format(L"{} inherited-handle attribute list initializes", testName),
+                success))
+        return false;
+    const auto deleteAttributes = wil::scope_exit([&]() noexcept { DeleteProcThreadAttributeList(attributeList); });
+    std::array<HANDLE, 3> inheritedHandles{nullInput.get(), stdoutWrite.get(), stderrWrite.get()};
+    if (! Check(UpdateProcThreadAttribute(
+                    attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles.data(), sizeof(inheritedHandles), nullptr, nullptr) != FALSE,
+                std::format(L"{} restricts inherited handles to its three standard streams", testName),
+                success))
+        return false;
+    STARTUPINFOEXW startupInfo{};
+    startupInfo.StartupInfo.cb         = sizeof(startupInfo);
+    startupInfo.StartupInfo.dwFlags    = STARTF_USESTDHANDLES;
+    startupInfo.StartupInfo.hStdInput  = nullInput.get();
+    startupInfo.StartupInfo.hStdOutput = stdoutWrite.get();
+    startupInfo.StartupInfo.hStdError  = stderrWrite.get();
+    startupInfo.lpAttributeList        = attributeList;
     PROCESS_INFORMATION processInfo{};
     wil::unique_handle jobObject(CreateJobObjectW(nullptr, nullptr));
     Check(jobObject.is_valid(), std::format(L"{} fresh harness kill-on-close job object is created", testName), success);
@@ -1060,8 +1105,16 @@ struct ViewerHarnessTimeoutProbe final
         return false;
     }
 
-    const BOOL created =
-        CreateProcessW(modulePath.data(), commandLine.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED, nullptr, nullptr, &startupInfo, &processInfo);
+    const BOOL created = CreateProcessW(modulePath.data(),
+                                        commandLine.data(),
+                                        nullptr,
+                                        nullptr,
+                                        TRUE,
+                                        CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
+                                        nullptr,
+                                        nullptr,
+                                        &startupInfo.StartupInfo,
+                                        &processInfo);
     Check(created != FALSE, std::format(L"{} fresh harness process launches", testName), success);
     if (created == FALSE)
     {
@@ -1070,6 +1123,46 @@ struct ViewerHarnessTimeoutProbe final
 
     wil::unique_handle processHandle(processInfo.hProcess);
     wil::unique_handle threadHandle(processInfo.hThread);
+    stdoutWrite.reset();
+    stderrWrite.reset();
+    nullInput.reset();
+    RedSalamander::TestSupport::ChildProcessDetail::PipeDrainState stdoutState{}, stderrState{};
+    std::jthread stdoutDrain, stderrDrain;
+    const auto finishCapture    = wil::scope_exit([&]() noexcept
+    {
+        // The ordinary child cleanup has already proved a quiet job before any
+        // restoration. Its refusal paths still close the owned job before joins.
+        jobObject.reset();
+        if (stdoutDrain.joinable())
+            stdoutDrain.join();
+        if (stderrDrain.joinable())
+            stderrDrain.join();
+        Check(stdoutState.error == ERROR_SUCCESS && stderrState.error == ERROR_SUCCESS && ! stdoutState.truncated && ! stderrState.truncated,
+              std::format(L"{} retains complete bounded stdout and stderr", testName),
+              success);
+        const auto forward = [&](DWORD stream, const std::string& bytes) noexcept
+        {
+            size_t offset = 0u;
+            while (offset < bytes.size())
+            {
+                DWORD written = 0u;
+                if (WriteFile(GetStdHandle(stream), bytes.data() + offset, static_cast<DWORD>(bytes.size() - offset), &written, nullptr) == FALSE ||
+                    written == 0u)
+                {
+                    Check(false, std::format(L"{} forwards its captured child output", testName), success);
+                    return;
+                }
+                offset += written;
+            }
+        };
+        forward(STD_OUTPUT_HANDLE, stdoutState.bytes);
+        forward(STD_ERROR_HANDLE, stderrState.bytes);
+        if (timeoutProbe)
+        {
+            timeoutProbe->stdoutCaptured = stdoutState.bytes == kViewerHarnessStdoutMarker;
+            timeoutProbe->stderrCaptured = stderrState.bytes == kViewerHarnessStderrMarker;
+        }
+    });
     bool childAssigned          = false;
     const auto finishOwnedChild = wil::scope_exit([&]() noexcept
     {
@@ -1109,7 +1202,9 @@ struct ViewerHarnessTimeoutProbe final
             if (accountingAvailable && accounting.ActiveProcesses != 0u)
             {
                 if (! Check(TerminateJobObject(jobObject.get(), 1u) != FALSE,
-                            std::format(L"{} parent terminates only its remaining owned descendants", testName),
+                            std::format(L"{} parent terminates only its remaining owned "
+                                        L"descendants",
+                                        testName),
                             success))
                 {
                     return;
@@ -1121,7 +1216,9 @@ struct ViewerHarnessTimeoutProbe final
                 }
             }
             if (! Check(accountingAvailable && accounting.ActiveProcesses == 0u,
-                        std::format(L"{} owned job has no active processes before desktop restoration", testName),
+                        std::format(L"{} owned job has no active processes before "
+                                    L"desktop restoration",
+                                    testName),
                         success))
             {
                 return;
@@ -1131,7 +1228,8 @@ struct ViewerHarnessTimeoutProbe final
         {
             timeoutProbe->jobQuiet = true;
         }
-        jobObject.reset(); // No kill-on-close action may occur after foreground restoration.
+        jobObject.reset(); // No kill-on-close action may occur after foreground
+                           // restoration.
         if (timeoutProbe)
         {
             timeoutProbe->jobReset = ! jobObject;
@@ -1204,19 +1302,26 @@ struct ViewerHarnessTimeoutProbe final
         const bool permittedForeground =
             ! foreground || foreground == previousForeground || foregroundPid == processInfo.dwProcessId || foregroundPid == GetCurrentProcessId();
         if (! Check(savedIdentityValid && inputUnchanged && permittedForeground,
-                    std::format(L"{} saved desktop identity and input ownership permit restoration", testName),
+                    std::format(L"{} saved desktop identity and input ownership "
+                                L"permit restoration",
+                                testName),
                     success))
         {
-            std::wcout << std::format(L"[INFO] {} restoration refused: savedPid={} observedPid={} inputBefore={} inputAfter={}; unrelated desktop untouched.\n",
+            std::wcout << std::format(L"[INFO] {} restoration refused: savedPid={} observedPid={} "
+                                      L"inputBefore={} inputAfter={}; unrelated desktop untouched.\n",
                                       testName,
                                       previousPid,
                                       foregroundPid,
                                       previousInput.dwTime,
                                       currentInput.dwTime);
-            // Read-only diagnostics do not relax the independent restoration predicates.
-            std::wcout << std::format(L"[INFO] {} restoration predicates: savedIdentityValid={} inputAvailable={} inputUnchanged={} permittedForeground={} "
-                                      L"inputError={} beforeTick64={} afterTick64={} savedHwnd=0x{:X} observedHwnd=0x{:X} "
-                                      L"savedTid={} savedCurrentTid={} observedTid={} savedFocusHwnd=0x{:X} savedFocusPid={} savedFocusTid={}\n",
+            // Read-only diagnostics do not relax the independent restoration
+            // predicates.
+            std::wcout << std::format(L"[INFO] {} restoration predicates: savedIdentityValid={} "
+                                      L"inputAvailable={} inputUnchanged={} permittedForeground={} "
+                                      L"inputError={} beforeTick64={} afterTick64={} savedHwnd=0x{:X} "
+                                      L"observedHwnd=0x{:X} "
+                                      L"savedTid={} savedCurrentTid={} observedTid={} "
+                                      L"savedFocusHwnd=0x{:X} savedFocusPid={} savedFocusTid={}\n",
                                       testName,
                                       savedIdentityValid,
                                       inputAvailable,
@@ -1245,12 +1350,15 @@ struct ViewerHarnessTimeoutProbe final
             LASTINPUTINFO lastCheck{};
             lastCheck.cbSize = sizeof(lastCheck);
             if (! Check(GetForegroundWindow() == foreground && GetLastInputInfo(&lastCheck) != FALSE && lastCheck.dwTime == previousInput.dwTime,
-                        std::format(L"{} desktop ownership remains intact immediately before restoration", testName),
+                        std::format(L"{} desktop ownership remains intact immediately "
+                                    L"before restoration",
+                                    testName),
                         success))
             {
                 return;
             }
-            // Never attach foreign queues (which resets key state), or send SetFocus to a foreign control.
+            // Never attach foreign queues (which resets key state), or send SetFocus
+            // to a foreign control.
             const BOOL activated = SetForegroundWindow(previousForeground);
             if (activated && previousThread == GetCurrentThreadId())
             {
@@ -1259,7 +1367,8 @@ struct ViewerHarnessTimeoutProbe final
             restored = activated != FALSE && GetForegroundWindow() == previousForeground && GetGUIThreadInfo(previousThread, &restoredGui) != FALSE &&
                        restoredGui.hwndFocus == previousGui.hwndFocus;
         }
-        // These directed viewer cases do not move the pointer; do not reset an untouched cursor.
+        // These directed viewer cases do not move the pointer; do not reset an
+        // untouched cursor.
         Check(restored, std::format(L"{} parent observes restored foreground and keyboard focus", testName), success);
         if (desktopBoundaryIntact)
         {
@@ -1274,6 +1383,23 @@ struct ViewerHarnessTimeoutProbe final
     }
     childAssigned = true;
 
+    try
+    {
+        constexpr size_t kMaximumCapturedBytes = 16u * 1024u * 1024u;
+        stdoutDrain                            = std::jthread([pipe = stdoutRead.get(), maximumBytes = kMaximumCapturedBytes, &stdoutState]() noexcept
+        { RedSalamander::TestSupport::ChildProcessDetail::DrainPipe(pipe, maximumBytes, stdoutState); });
+        stderrDrain                            = std::jthread([pipe = stderrRead.get(), maximumBytes = kMaximumCapturedBytes, &stderrState]() noexcept
+        { RedSalamander::TestSupport::ChildProcessDetail::DrainPipe(pipe, maximumBytes, stderrState); });
+    }
+    catch (const std::system_error& error)
+    {
+        // Concurrent drains are required before resuming the owned child. The
+        // existing child/job guard contains it when thread creation fails.
+        Debug::Error(L"Viewer harness output drain startup failed: error={}", error.code().value());
+        Check(false, std::format(L"{} output drain startup fails: {}", testName, error.code().value()), success);
+        return false;
+    }
+
     const DWORD resumedThreadCount = ResumeThread(threadHandle.get());
     Check(resumedThreadCount != DWORD(-1), std::format(L"{} fresh harness process resumes", testName), success);
     if (resumedThreadCount == DWORD(-1))
@@ -1284,7 +1410,8 @@ struct ViewerHarnessTimeoutProbe final
     if (timeoutProbe)
     {
         if (! Check(WaitForSingleObject(timeoutProbe->readyEvent, 5000u) == WAIT_OBJECT_0,
-                    L"Viewer harness blocked child reaches its intentional wait before the timeout",
+                    L"Viewer harness blocked child reaches its intentional wait "
+                    L"before the timeout",
                     success))
         {
             return false;
@@ -1307,7 +1434,10 @@ struct ViewerHarnessTimeoutProbe final
             return TRUE;
         },
             reinterpret_cast<LPARAM>(&windowCount));
-        if (! Check(enumerated != FALSE, L"Viewer harness can observe only its blocked child's top-level windows", success))
+        if (! Check(enumerated != FALSE,
+                    L"Viewer harness can observe only its blocked child's top-level "
+                    L"windows",
+                    success))
         {
             return false;
         }
@@ -1349,6 +1479,47 @@ struct ViewerHarnessTimeoutProbe final
 [[nodiscard]] bool TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput() noexcept
 {
     bool success = true;
+    constexpr ViewerHarnessDesktopIdentity crossProcess{1u, 2u, 100u, 1000u, 200u, 2000u};
+    const auto observe = [](const ViewerHarnessDesktopIdentity& saved, const ViewerHarnessDesktopIdentity& observed) noexcept
+    { return IsViewerHarnessDesktopAlreadyRestored(saved, observed, true, saved.foregroundWindow, saved.focusWindow, true); };
+    Check(observe(crossProcess, crossProcess) && ! ViewerHarnessFocusSharesForegroundThread(crossProcess),
+          L"Exact cross-process child focus is observable without granting restoration writes",
+          success);
+    auto crossThread     = crossProcess;
+    crossThread.focusPid = crossThread.foregroundPid;
+    Check(observe(crossThread, crossThread) && ! ViewerHarnessFocusSharesForegroundThread(crossThread),
+          L"Exact cross-thread child focus is observable without granting restoration writes",
+          success);
+    auto sameThread        = crossThread;
+    sameThread.focusThread = sameThread.foregroundThread;
+    Check(observe(sameThread, sameThread) && ViewerHarnessFocusSharesForegroundThread(sameThread),
+          L"Exact same-thread focus retains the existing restoration restriction",
+          success);
+    for (unsigned int field = 0u; field < 6u; ++field)
+    {
+        auto changed = crossProcess;
+        switch (field)
+        {
+            case 0u: ++changed.foregroundWindow; break;
+            case 1u: ++changed.focusWindow; break;
+            case 2u: ++changed.foregroundPid; break;
+            case 3u: ++changed.foregroundThread; break;
+            case 4u: ++changed.focusPid; break;
+            case 5u: ++changed.focusThread; break;
+        }
+        Check(! observe(crossProcess, changed), L"Changed or reused foreground/focus identity invalidates read-only observation", success);
+    }
+    Check(! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, false, 1u, 2u, true) &&
+              ! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 3u, 2u, true) &&
+              ! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 1u, 3u, true) &&
+              ! IsViewerHarnessDesktopAlreadyRestored(crossProcess, crossProcess, true, 1u, 2u, false),
+          L"An unrelated foreground, focus, ancestry or unavailable GUI snapshot cannot qualify observation",
+          success);
+    auto noFocus        = crossProcess;
+    noFocus.focusWindow = 0u;
+    noFocus.focusPid    = 0u;
+    noFocus.focusThread = 0u;
+    Check(observe(noFocus, noFocus), L"An exact saved absence of keyboard focus remains observable", success);
     wil::unique_hwnd parentMessages(
         CreateWindowExW(WS_EX_NOACTIVATE, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
     uint32_t timerTicks                     = 0u;
@@ -1384,13 +1555,28 @@ struct ViewerHarnessTimeoutProbe final
     bool boundaryIntact = false;
     const bool expectedTimeout =
         RunFilteredSelfExecutable(kViewerHarnessBlockedChild, 100ms, TestDesktopInteraction::Noninteractive, childSuccess, &boundaryIntact, &probe);
-    Check(timerTicks > 0u, L"Viewer harness services parent messages while waiting for its contained child", success);
-    Check(expectedTimeout && childSuccess && boundaryIntact, L"Viewer harness deliberate timeout retains a verified containment boundary", success);
-    Check(probe.ownedTopLevelWindowCount == 0u, L"Viewer harness blocked child has no top-level window before termination", success);
-    Check(probe.rootExited && probe.jobQuiet && probe.jobReset,
-          L"Viewer harness joins the child and observes an empty job before releasing its job owner",
+    Check(timerTicks > 0u,
+          L"Viewer harness services parent messages while waiting for its "
+          L"contained child",
           success);
-    // Other applications may change foreground during this noninteractive test; global focus is not its assertion.
+    Check(expectedTimeout && childSuccess && boundaryIntact,
+          L"Viewer harness deliberate timeout retains a verified containment "
+          L"boundary",
+          success);
+    Check(probe.ownedTopLevelWindowCount == 0u,
+          L"Viewer harness blocked child has no top-level window before "
+          L"termination",
+          success);
+    Check(probe.rootExited && probe.jobQuiet && probe.jobReset,
+          L"Viewer harness joins the child and observes an empty job before "
+          L"releasing its job owner",
+          success);
+    Check(probe.stdoutCaptured && probe.stderrCaptured,
+          L"Viewer harness preserves exact Unicode markers on both child output "
+          L"streams",
+          success);
+    // Other applications may change foreground during this noninteractive test;
+    // global focus is not its assertion.
     return success;
 }
 
@@ -3598,6 +3784,21 @@ private:
     {
         return false;
     }
+    using PluginShutdownFn        = void(__stdcall*)();
+    using PluginCanUnloadFn       = BOOL(__stdcall*)();
+    PluginShutdownFn shutdownFn   = nullptr;
+    PluginCanUnloadFn canUnloadFn = nullptr;
+    const FARPROC shutdownProc    = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
+    const FARPROC canUnloadProc   = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
+    static_assert(sizeof(shutdownFn) == sizeof(shutdownProc));
+    static_assert(sizeof(canUnloadFn) == sizeof(canUnloadProc));
+    std::memcpy(&shutdownFn, &shutdownProc, sizeof(shutdownFn));
+    std::memcpy(&canUnloadFn, &canUnloadProc, sizeof(canUnloadFn));
+    if (! Check(shutdownFn && canUnloadFn,
+                L"ViewerWeb combo fixture requires the production shutdown and "
+                L"unload gates",
+                success))
+        return false;
 
     wil::com_ptr<IViewer> viewer;
     const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
@@ -3627,6 +3828,25 @@ private:
     });
 
     BuiltinFileSystemStub fileSystem;
+    const auto retireWebRuntime = [&]() noexcept
+    {
+        if (viewer)
+            static_cast<void>(viewer->Close());
+        viewer.reset();
+        shutdownFn();
+        const bool quiet = PumpUntil([&]() noexcept { return canUnloadFn() == TRUE; }, 10000ms);
+        Check(quiet,
+              L"ViewerWeb combo fixture retires all COM callbacks before releasing "
+              L"its module",
+              success);
+        if (! quiet)
+        {
+            // Fail the fresh child and retain mapping through its process exit;
+            // never unload code that still has callback owners.
+            static_cast<void>(pluginModule.release());
+        }
+    };
+    auto retireOnFailure              = wil::scope_exit([&]() noexcept { retireWebRuntime(); });
     const std::wstring firstPathText  = firstPath.wstring();
     const std::wstring secondPathText = secondPath.wstring();
     const wchar_t* otherFiles[]       = {firstPathText.c_str(), secondPathText.c_str()};
@@ -3660,7 +3880,10 @@ private:
         return false;
     }
 
-    Check(CountVisibleChildWindows(viewerWindow) >= 1u, L"ViewerWeb exposes visible child host content when alternate files exist", success);
+    Check(CountVisibleChildWindows(viewerWindow) >= 1u,
+          L"ViewerWeb exposes visible child host content when alternate files "
+          L"exist",
+          success);
     Check(CountVisibleChildWindowsByClass(viewerWindow, L"ComboBox") == 0u, L"ViewerWeb does not expose a visible legacy ComboBox child", success);
     CheckDxNativeMenuBar(viewerWindow, L"ViewerWeb", success);
     CheckPlainMenuModelContract(viewerWindow, L"ViewerWeb", success);
@@ -3673,6 +3896,8 @@ private:
     Check(SUCCEEDED(closeHr), L"ViewerWeb window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerWeb window closes cleanly", success);
     CheckEmbeddedViewerHidesStandaloneFileCombo(createFn, kViewerWebPluginId, context, kViewerWebWindowClassName, kViewerWebFileComboId, L"ViewerWeb", success);
+    retireWebRuntime();
+    retireOnFailure.release();
     return success;
 }
 
@@ -4805,9 +5030,9 @@ private:
 
 // Test-only host stub that records the decode-outcome alerts ViewerImgRaw raises. ViewerImgRaw
 // obtains its alert sink purely via host->QueryInterface(IHostAlerts) (ViewerImgRaw.cpp SetHost),
-// so passing this stub as the factory 'host' argument makes the async decode outcome observable:
-// a successful decode calls ClearAlert, while a decode failure (e.g. the CO_E_NOTINITIALIZED that
-// plan 015 fixes) calls ShowAlert(HOST_ALERT_WARNING). Stack-allocated, so Release never deletes.
+// so passing this stub as the factory 'host' argument makes decode warnings observable.
+// ClearAlert also runs at open-start and for previews, so alert activity is not a terminal signal.
+// Stack-allocated, so Release never deletes.
 class AlertRecordingHostStub final : public IHost, public IHostAlerts
 {
 public:
@@ -4825,11 +5050,6 @@ public:
     {
         return _clearAlerts.load(std::memory_order_acquire);
     }
-    [[nodiscard]] bool DecodeCompleted() const noexcept
-    {
-        return WarningAlertCount() != 0u || ClearAlertCount() != 0u;
-    }
-
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
     {
         if (! ppvObject)
@@ -4885,6 +5105,15 @@ private:
     std::atomic<unsigned int> _warningAlerts{0u};
     std::atomic<unsigned int> _clearAlerts{0u};
 };
+
+// These probes create a fresh viewer and open one request. Wait for the UI to apply that
+// request's final success/failure; initial alert clearing and progressive previews are not final.
+[[nodiscard]] bool ViewerImgRawDecodeResultApplied(HWND viewerWindow) noexcept
+{
+    WndMsg::ViewerImgRawResourceDebugSnapshot snapshot{};
+    return viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE &&
+           snapshot.currentRequestId != 0u && ! snapshot.loading && (snapshot.finalSuccessCount != 0u || snapshot.finalFailureCount != 0u);
+}
 
 [[nodiscard]] bool TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards() noexcept
 {
@@ -5111,6 +5340,24 @@ private:
         }
 
         BuiltinFileSystemStub fileSystem;
+        const auto blockingControl    = path == orientedTiff ? std::make_shared<BlockingReadControl>() : nullptr;
+        const auto releaseBlockedRead = wil::scope_exit([&]() noexcept
+        {
+            if (blockingControl && blockingControl->release)
+            {
+                static_cast<void>(SetEvent(blockingControl->release.get()));
+            }
+            fileSystem.DisableBlockingRead();
+        });
+        if (blockingControl)
+        {
+            Check(blockingControl->IsValid(), L"ViewerImgRaw orientation read gate initializes", success);
+            if (! blockingControl->IsValid())
+            {
+                return probe;
+            }
+            fileSystem.EnableBlockingRead(blockingControl);
+        }
         const std::wstring pathText = path.wstring();
         const wchar_t* otherFiles[] = {pathText.c_str()};
         ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
@@ -5196,7 +5443,27 @@ private:
             Check(menuSnapshot.hasHiddenMenuModel, std::format(L"{} has one hidden RAII menu owner", label), success);
         }
 
-        const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
+        if (blockingControl)
+        {
+            Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->entered.get(), 0u) == WAIT_OBJECT_0; }, 8000ms),
+                  L"ViewerImgRaw oriented TIFF read enters the controlled provider gate",
+                  success);
+            Check(hostStub.ClearAlertCount() != 0u, L"ViewerImgRaw clears alerts before the held TIFF read completes", success);
+            Check(! ViewerImgRawDecodeResultApplied(viewerWindow), L"ViewerImgRaw initial alert clearing is not decode completion", success);
+            WndMsg::ViewerImgRawResourceDebugSnapshot held{};
+            Check(SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&held)) != FALSE &&
+                      held.currentRequestId != 0u && held.loading && held.finalSuccessCount == 0u && held.finalFailureCount == 0u,
+                  L"ViewerImgRaw held TIFF request remains loading without an applied final result",
+                  success);
+            static_cast<void>(SetEvent(blockingControl->release.get()));
+            Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->exited.get(), 0u) == WAIT_OBJECT_0; }, 8000ms) &&
+                      blockingControl->timedOutReadCount.load(std::memory_order_acquire) == 0u,
+                  L"ViewerImgRaw held TIFF read exits through explicit release without timeout",
+                  success);
+            fileSystem.DisableBlockingRead();
+        }
+
+        const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
         Check(decodeCompleted, std::format(L"{} completes decode", label), success);
         Check(hostStub.WarningAlertCount() == 0u, std::format(L"{} decodes without a warning", label), success);
 
@@ -5470,7 +5737,7 @@ private:
             return;
         }
 
-        const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
+        const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
         Check(decodeCompleted, std::format(L"{} reaches a decode result", label), success);
         inspect(viewerWindow, hostStub);
 
@@ -6519,16 +6786,20 @@ private:
         8000ms);
     Check(openedWindow, L"ViewerImgRaw window becomes visible for PNG", success);
 
-    // Wait for the async decode to finish. Each alert site fires only at decode completion
-    // (success -> ClearAlert; failure -> ShowAlert(HOST_ALERT_WARNING)), never at open-start, so
-    // the first alert activity is the terminal decode signal.
-    const bool decodeCompleted = PumpUntil([&]() noexcept { return hostStub.DecodeCompleted(); }, 8000ms);
-    Check(decodeCompleted, L"ViewerImgRaw PNG decode completes (host alert observed)", success);
+    // The UI clears alerts when loading starts and may clear them for a progressive preview.
+    // Only an applied final result establishes completion; warning checks remain independent.
+    const bool decodeCompleted = PumpUntil([&]() noexcept { return ViewerImgRawDecodeResultApplied(viewerWindow); }, 8000ms);
+    Check(decodeCompleted, L"ViewerImgRaw PNG decode completes (final result applied)", success);
 
     // Regression assertion: a successful WIC decode raises no warning alert. On the pre-fix code
     // DecodeImageToBgraWic returns CO_E_NOTINITIALIZED and the async-failure path raises
     // ShowAlert(HOST_ALERT_WARNING), so WarningAlertCount() would be non-zero.
     Check(hostStub.WarningAlertCount() == 0u, L"ViewerImgRaw decodes PNG via WIC without a decode-failure alert", success);
+    WndMsg::ViewerImgRawDecodeDebugSnapshot decode{};
+    Check(viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&decode)) != FALSE &&
+              decode.hasImage,
+          L"ViewerImgRaw successful WIC PNG decode retains an image",
+          success);
 
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
     const HRESULT closeHr = viewer->Close();
@@ -8276,6 +8547,10 @@ private:
     const HRESULT closeHr     = viewer->Close();
     const uint64_t closeElapsedUs =
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStartedAt).count());
+    std::wcout << std::format(L"[INFO] ViewerText blocked-close proof: elapsedUs={} streamWorkerEntered={} unloadStressQueued={}\n",
+                              closeElapsedUs,
+                              closeWorkerEntered,
+                              unloadStressQueued);
     Check(SUCCEEDED(closeHr), L"ViewerText terminal-contract window closes while async-open callbacks are pending", success);
     Check(closeElapsedUs < 500000u, L"ViewerText close does not wait for a blocked streamed navigation callback", success);
     viewer.reset();
@@ -16280,8 +16555,10 @@ struct ViewerSpaceBlockingDirectoryControl final
         WndMsg::ViewerVlcDebugSnapshot snapshot{};
         if (SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE)
         {
-            std::wcout << std::format(L"[INFO] ViewerVLC snapshot: loadingActive={} loadingVisible={} missingVisible={} hasVideoChild={} "
-                                      L"videoChildIsChildWindow={} videoChildParentIsViewer={} hasVolumeMuteButton={} hasVolumeSlider={}\n",
+            std::wcout << std::format(L"[INFO] ViewerVLC snapshot: loadingActive={} loadingVisible={} "
+                                      L"missingVisible={} hasVideoChild={} "
+                                      L"videoChildIsChildWindow={} videoChildParentIsViewer={} "
+                                      L"hasVolumeMuteButton={} hasVolumeSlider={}\n",
                                       snapshot.loadingActive ? 1 : 0,
                                       snapshot.loadingVisible ? 1 : 0,
                                       snapshot.missingVisible ? 1 : 0,
@@ -16295,37 +16572,58 @@ struct ViewerSpaceBlockingDirectoryControl final
     }
     Check(videoWindow != nullptr && IsWindow(videoWindow) != FALSE, L"ViewerVLC exposes a visible video child that can take initial focus", success);
     Check(hudWindow != nullptr && IsWindow(hudWindow) != FALSE, L"ViewerVLC exposes a HUD child that can take focus", success);
-    Check(CountActuallyVisibleChildWindows(viewerWindow) >= 2u, L"ViewerVLC exposes visible video and HUD child surfaces", success);
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
+    WndMsg::ViewerVlcDebugSnapshot loadSnapshot{};
+    const bool loadReachedTerminalState = PumpUntil(
+        [&]() noexcept
+    {
+        loadSnapshot = {};
+        if (SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&loadSnapshot)) == FALSE)
+        {
+            return false;
+        }
+
+        return loadSnapshot.pendingLoadWorkCount == 0u && ! loadSnapshot.loadingActive && (loadSnapshot.vlcPlayerCreated || loadSnapshot.missingVisible);
+    },
+        20'000ms);
+    Check(loadReachedTerminalState, L"ViewerVLC retires its optional backend loader before keyboard coverage", success);
+    if (! loadReachedTerminalState)
+    {
+        static_cast<void>(viewer->Close());
+        return false;
+    }
     if (installedVlc.has_value())
     {
-        WndMsg::ViewerVlcDebugSnapshot loadSnapshot{};
-        const bool loadReachedTerminalState = PumpUntil(
-            [&]() noexcept
-        {
-            loadSnapshot = {};
-            if (SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&loadSnapshot)) == FALSE)
-            {
-                return false;
-            }
-
-            return loadSnapshot.vlcPlayerCreated || (! loadSnapshot.loadingActive && loadSnapshot.missingVisible);
-        },
-            20'000ms);
-        Check(loadReachedTerminalState, L"ViewerVLC reaches a terminal libVLC load state", success);
         Check(loadSnapshot.vlcModuleLoaded, L"ViewerVLC loads libvlc.dll with its sibling dependencies", success);
         Check(loadSnapshot.vlcInstanceLoaded, L"ViewerVLC creates a libVLC instance", success);
         Check(loadSnapshot.vlcPlayerCreated && ! loadSnapshot.missingVisible, L"ViewerVLC starts playback for the valid WAV fixture", success);
-        Check(ReadProcessDllDirectoryForTest() == dllDirectoryBeforeOpen, L"ViewerVLC dependency loading leaves the process DLL directory unchanged", success);
+        Check(ReadProcessDllDirectoryForTest() == dllDirectoryBeforeOpen,
+              L"ViewerVLC dependency loading leaves the process DLL directory "
+              L"unchanged",
+              success);
     }
     else
     {
-        std::wcout << L"[SKIP] ViewerVLC dependency-load/playback proof requires VLC in a standard Program Files location.\n";
+        std::wcout << L"[SKIP] ViewerVLC dependency-load/playback proof requires "
+                      L"VLC in a standard Program Files location.\n";
     }
+    WndMsg::ViewerVlcDebugPlaybackState keyboardFixture{};
+    keyboardFixture.lengthMs                     = 120'000;
+    keyboardFixture.timeMs                       = 1'000;
+    keyboardFixture.presentHudForKeyboardFixture = true;
+    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetPlaybackState, 0u, reinterpret_cast<LPARAM>(&keyboardFixture)) != FALSE,
+          L"ViewerVLC presents its real HUD fixture after optional backend "
+          L"retirement without assigning focus",
+          success);
+    RECT hudClient{};
+    Check(IsWindowVisible(hudWindow) != FALSE && GetClientRect(hudWindow, &hudClient) != FALSE && ! IsRectEmpty(&hudClient),
+          L"ViewerVLC keyboard fixture has an actually visible, laid-out HUD",
+          success);
 #else
     static_cast<void>(installedVlc);
     static_cast<void>(dllDirectoryBeforeOpen);
 #endif
+    Check(CountActuallyVisibleChildWindows(viewerWindow) >= 2u, L"ViewerVLC exposes visible video and HUD child surfaces", success);
     if (videoWindow && hudWindow)
     {
         static_cast<void>(SetFocus(viewerWindow));
@@ -16334,7 +16632,9 @@ struct ViewerSpaceBlockingDirectoryControl final
         bool videoFocusReady               = productRoutedVideoFocus;
         if (! videoFocusReady)
         {
-            std::wcout << L"[INFO] ViewerVLC did not route parent focus into the video surface; using the explicit video-focus fallback for keyboard-contract "
+            std::wcout << L"[INFO] ViewerVLC did not route parent focus into the "
+                          L"video surface; using the explicit video-focus fallback "
+                          L"for keyboard-contract "
                           L"coverage.\n";
             static_cast<void>(SetFocus(videoWindow));
             videoFocusReady = PumpUntil([&]() noexcept { return GetFocus() == videoWindow; }, 2000ms);
@@ -16342,7 +16642,8 @@ struct ViewerSpaceBlockingDirectoryControl final
         Check(videoFocusReady, L"ViewerVLC video surface can take keyboard focus", success);
         if (productRoutedVideoFocus)
         {
-            std::wcout << L"[INFO] ViewerVLC parent focus routed into the video surface without fallback.\n";
+            std::wcout << L"[INFO] ViewerVLC parent focus routed into the video "
+                          L"surface without fallback.\n";
         }
 
         if (videoFocusReady)
@@ -16350,12 +16651,19 @@ struct ViewerSpaceBlockingDirectoryControl final
             const LRESULT tabHandled = SendMessageW(videoWindow, WM_KEYDOWN, VK_TAB, 0);
             static_cast<void>(tabHandled);
             const bool movedToHud = PumpUntil([&]() noexcept { return GetFocus() == hudWindow; }, 2000ms);
+            std::wcout << std::format(L"[INFO] ViewerVLC first-Tab focus=0x{:X} expectedHud=0x{:X} hudVisible={}\n",
+                                      reinterpret_cast<uintptr_t>(GetFocus()),
+                                      reinterpret_cast<uintptr_t>(hudWindow),
+                                      IsWindowVisible(hudWindow) != FALSE);
             Check(movedToHud, L"ViewerVLC Tab transfers focus from the video surface into the HUD", success);
 
             const LRESULT secondTabHandled = SendMessageW(hudWindow, WM_KEYDOWN, VK_TAB, 0);
             static_cast<void>(secondTabHandled);
             const bool stayedOnHud = PumpUntil([&]() noexcept { return GetFocus() == hudWindow; }, 2000ms);
-            Check(stayedOnHud, L"ViewerVLC HUD keeps keyboard focus while cycling its internal controls", success);
+            Check(stayedOnHud,
+                  L"ViewerVLC HUD keeps keyboard focus while cycling its internal "
+                  L"controls",
+                  success);
         }
     }
 
@@ -17930,13 +18238,34 @@ int wmain(int argc, wchar_t** argv)
         {
             return 2;
         }
+        if (GetConsoleWindow() != nullptr)
+        {
+            std::wcerr << L"[FAIL] The noninteractive viewer harness child must not "
+                          L"allocate or inherit a console.\n";
+            return 2;
+        }
+        DWORD stdoutWritten = 0u;
+        DWORD stderrWritten = 0u;
+        if (WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),
+                      kViewerHarnessStdoutMarker.data(),
+                      static_cast<DWORD>(kViewerHarnessStdoutMarker.size()),
+                      &stdoutWritten,
+                      nullptr) == FALSE ||
+            WriteFile(GetStdHandle(STD_ERROR_HANDLE),
+                      kViewerHarnessStderrMarker.data(),
+                      static_cast<DWORD>(kViewerHarnessStderrMarker.size()),
+                      &stderrWritten,
+                      nullptr) == FALSE ||
+            stdoutWritten != kViewerHarnessStdoutMarker.size() || stderrWritten != kViewerHarnessStderrMarker.size())
+            return 2;
         const wil::unique_handle readyEvent(OpenEventW(EVENT_MODIFY_STATE, FALSE, harnessReadyEvent.c_str()));
         const wil::unique_handle blockedEvent(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (! readyEvent || ! blockedEvent || SetEvent(readyEvent.get()) == FALSE)
         {
             return 2;
         }
-        // Exact private fixture: no window, input or filesystem work; the parent must terminate and join it.
+        // Exact private fixture: no window, input or filesystem work; the parent
+        // must terminate and join it.
         static_cast<void>(WaitForSingleObject(blockedEvent.get(), INFINITE));
         return 3;
     }

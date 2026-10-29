@@ -1,0 +1,1 @@
+Nine exact native Commands cases pass three in-process repetitions each: Terminal lifecycle recovery, all disclosure routes, actual Find snapshots and independent final-boundary queued paint. Focused acceptance only, not Full. Full raw metrics remain in the local completed-run archive; this functional packet makes no performance trend claim.

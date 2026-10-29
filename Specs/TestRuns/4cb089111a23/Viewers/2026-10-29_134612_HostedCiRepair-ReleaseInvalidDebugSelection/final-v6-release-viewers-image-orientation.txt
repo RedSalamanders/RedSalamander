@@ -1,0 +1,244 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134612Z-103728-ec5e4322d92d4c8286e188fe3f147c7b\scratch\viewer-pe\webview2-89252-110801171
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards harness path resolves
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness owns captured output pipes (error=0)
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness owns noninteractive standard input
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards inherited-handle attribute size resolves
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards inherited-handle attribute list initializes
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards restricts inherited handles to its three standard streams
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness kill-on-close job object is created
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness kill-on-close job object is configured
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process launches
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process joins the kill-on-close job
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process resumes
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process exits before timeout
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness process reports an exit code
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards fresh harness run passes (exit=0x00000000)
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards owned job has no active processes before desktop restoration
+[PASS] TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards retains complete bounded stdout and stderr
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134612Z-103728-ec5e4322d92d4c8286e188fe3f147c7b\scratch\viewer-pe\webview2-77356-110801187
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Early failure fixture attaches its native menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Failed restoration retains one valid detached owner and its exact error
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Replacement fixture attaches a distinct native menu
+[PASS] Failed attachment discards the partial host
+[PASS] Unexpected native replacement stays owned by the window and the unused original is disposed
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Reentrant close during restoration destroys the transferred menu once and leaves no RAII claim
+[PASS] Native menu ownership fixture creates its hidden window and menu
+[PASS] Failed attachment discards the partial host
+[PASS] Observed native attachment transfers ownership even when restoration reports failure
+[PASS] Closing the fallback window destroys its menu
+[PASS] ViewerImgRaw Farsight test executable path resolves
+[PASS] ViewerImgRaw.dll is present for Farsight validation
+[PASS] ViewerImgRaw.dll loads for Farsight validation
+[PASS] ViewerImgRaw factory export is available for Farsight validation
+[PASS] ViewerImgRaw Farsight TestSandbox root is available
+[PASS] ViewerImgRaw Farsight image fixtures are valid files
+[PASS] ViewerImgRaw native-menu fallback iteration 1 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 1 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 1 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 1 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 1 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 1 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 1 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 1 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 1 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 1 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 1 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 1 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 1 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 1 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 1 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 1 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 1 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 1 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 1 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 1 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 1 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 1 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 1 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 1 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 1 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 1 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 1 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 1 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 1 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 1 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw native-menu fallback iteration 2 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 2 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 2 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 2 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 2 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 2 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 2 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 2 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 2 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 2 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 2 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 2 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 2 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 2 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 2 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 2 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 2 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 2 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 2 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 2 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 2 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 2 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 2 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 2 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 2 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 2 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 2 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 2 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 2 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 2 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw native-menu fallback iteration 3 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw native-menu fallback iteration 3 opens
+[PASS] ViewerImgRaw native-menu fallback iteration 3 shows a viewer window
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 3 keeps the native window-owned menu
+[PASS] ViewerImgRaw native-menu fallback iteration 3 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw native-menu fallback iteration 3 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the actual attach transition
+[PASS] ViewerImgRaw native-menu fallback iteration 3 restores the exact original menu identity
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exercises failure before detachment
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the fallback EXIF command
+[PASS] ViewerImgRaw native-menu fallback iteration 3 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw native-menu fallback iteration 3 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw native-menu fallback iteration 3 completes decode
+[PASS] ViewerImgRaw native-menu fallback iteration 3 decodes without a warning
+[PASS] ViewerImgRaw native-menu fallback iteration 3 exposes the decode snapshot
+[PASS] ViewerImgRaw native-menu fallback iteration 3 retains a decoded image
+[PASS] ViewerImgRaw native-menu fallback iteration 3 closes
+[PASS] ViewerImgRaw native-menu fallback iteration 3 destroys its viewer window
+[PASS] ViewerImgRaw native-menu fallback completes without an ownership crash
+[PASS] ViewerImgRaw post-detach fallback iteration 3 creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw post-detach fallback iteration 3 opens
+[PASS] ViewerImgRaw post-detach fallback iteration 3 shows a viewer window
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the menu ownership snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 3 keeps the native window-owned menu
+[PASS] ViewerImgRaw post-detach fallback iteration 3 does not leave a partial DxUi menu host
+[PASS] ViewerImgRaw post-detach fallback iteration 3 does not adopt the window-owned fallback menu
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the actual attach transition
+[PASS] ViewerImgRaw post-detach fallback iteration 3 restores the exact original menu identity
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exercises actual DxUi detachment before injected failure
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the fallback EXIF command
+[PASS] ViewerImgRaw post-detach fallback iteration 3 dispatches and updates a native fallback command
+[PASS] ViewerImgRaw post-detach fallback iteration 3 restores fallback command state without changing menu ownership
+[PASS] ViewerImgRaw post-detach fallback iteration 3 completes decode
+[PASS] ViewerImgRaw post-detach fallback iteration 3 decodes without a warning
+[PASS] ViewerImgRaw post-detach fallback iteration 3 exposes the decode snapshot
+[PASS] ViewerImgRaw post-detach fallback iteration 3 retains a decoded image
+[PASS] ViewerImgRaw post-detach fallback iteration 3 closes
+[PASS] ViewerImgRaw post-detach fallback iteration 3 destroys its viewer window
+[PASS] ViewerImgRaw post-detach fallback completes without an ownership crash
+[PASS] ViewerImgRaw oriented WIC TIFF creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw orientation read gate initializes
+[PASS] ViewerImgRaw oriented WIC TIFF opens
+[PASS] ViewerImgRaw oriented WIC TIFF shows a viewer window
+[PASS] ViewerImgRaw oriented WIC TIFF exposes the menu ownership snapshot
+[PASS] ViewerImgRaw oriented WIC TIFF detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw oriented WIC TIFF has one hidden RAII menu owner
+[PASS] ViewerImgRaw oriented TIFF read enters the controlled provider gate
+[PASS] ViewerImgRaw clears alerts before the held TIFF read completes
+[PASS] ViewerImgRaw initial alert clearing is not decode completion
+[PASS] ViewerImgRaw held TIFF request remains loading without an applied final result
+[PASS] ViewerImgRaw held TIFF read exits through explicit release without timeout
+[PASS] ViewerImgRaw oriented WIC TIFF completes decode
+[PASS] ViewerImgRaw oriented WIC TIFF decodes without a warning
+[PASS] ViewerImgRaw oriented WIC TIFF exposes the decode snapshot
+[PASS] ViewerImgRaw oriented WIC TIFF retains a decoded image
+[PASS] ViewerImgRaw oriented WIC TIFF closes
+[PASS] ViewerImgRaw oriented WIC TIFF destroys its viewer window
+[PASS] WIC TIFF orientation 6 propagates to render geometry (base=6, view=6)
+[PASS] WIC TIFF orientation swaps displayed axes (source=2x3, oriented=3x2)
+[PASS] ViewerImgRaw oriented WIC fallback creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw oriented WIC fallback opens
+[PASS] ViewerImgRaw oriented WIC fallback shows a viewer window
+[PASS] ViewerImgRaw oriented WIC fallback exposes the menu ownership snapshot
+[PASS] ViewerImgRaw oriented WIC fallback detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw oriented WIC fallback has one hidden RAII menu owner
+[PASS] ViewerImgRaw oriented WIC fallback completes decode
+[PASS] ViewerImgRaw oriented WIC fallback decodes without a warning
+[PASS] ViewerImgRaw oriented WIC fallback exposes the decode snapshot
+[PASS] ViewerImgRaw oriented WIC fallback retains a decoded image
+[PASS] ViewerImgRaw oriented WIC fallback closes
+[PASS] ViewerImgRaw oriented WIC fallback destroys its viewer window
+[PASS] WIC fallback preserves orientation (view=6, oriented=3x2)
+[PASS] ViewerImgRaw valid EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw valid EXIF orientation opens
+[PASS] ViewerImgRaw valid EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw valid EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw valid EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw valid EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw valid EXIF orientation completes decode
+[PASS] ViewerImgRaw valid EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw valid EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw valid EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw valid EXIF orientation closes
+[PASS] ViewerImgRaw valid EXIF orientation destroys its viewer window
+[PASS] Scalar SHORT count=1 EXIF orientation is accepted
+[PASS] ViewerImgRaw wrong-type EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw wrong-type EXIF orientation opens
+[PASS] ViewerImgRaw wrong-type EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw wrong-type EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw wrong-type EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw wrong-type EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw wrong-type EXIF orientation completes decode
+[PASS] ViewerImgRaw wrong-type EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw wrong-type EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw wrong-type EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw wrong-type EXIF orientation closes
+[PASS] ViewerImgRaw wrong-type EXIF orientation destroys its viewer window
+[PASS] Wrong-type EXIF orientation is rejected
+[PASS] ViewerImgRaw huge-count EXIF orientation creates a ViewerImgRaw instance
+[PASS] ViewerImgRaw huge-count EXIF orientation opens
+[PASS] ViewerImgRaw huge-count EXIF orientation shows a viewer window
+[PASS] ViewerImgRaw huge-count EXIF orientation exposes the menu ownership snapshot
+[PASS] ViewerImgRaw huge-count EXIF orientation detaches the native menu after DxUi attach
+[PASS] ViewerImgRaw huge-count EXIF orientation has one hidden RAII menu owner
+[PASS] ViewerImgRaw huge-count EXIF orientation completes decode
+[PASS] ViewerImgRaw huge-count EXIF orientation decodes without a warning
+[PASS] ViewerImgRaw huge-count EXIF orientation exposes the decode snapshot
+[PASS] ViewerImgRaw huge-count EXIF orientation retains a decoded image
+[PASS] ViewerImgRaw huge-count EXIF orientation closes
+[PASS] ViewerImgRaw huge-count EXIF orientation destroys its viewer window
+[PASS] Overflowing/non-scalar EXIF orientation count is rejected
+ViewerPETests passed.
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.
