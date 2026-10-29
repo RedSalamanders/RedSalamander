@@ -147,7 +147,8 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
         [Parameter(Mandatory = $true)][string]$PatchPath,
         [Parameter(Mandatory = $true)][string]$DescriptorPath,
         [Parameter(Mandatory = $true)][string]$ConcernReviewPath,
-        [DateTime]$GeneratedUtc = [DateTime]::UtcNow
+        [DateTime]$GeneratedUtc = [DateTime]::UtcNow,
+        [string]$Phase4DescriptorPath = ''
     )
 
     if ($CandidateCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'CandidateCommit must be a lowercase full SHA.' }
@@ -230,12 +231,47 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
 
     $abi = Get-RSGhosttyCandidateOverlayAbiReview -PristineSourcePath $pristineSourcePath -AppliedSourcePath $appliedSourcePath
     $descriptorSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeCandidateDescriptor.schema.json'
-    $descriptorBackupPath = Join-Path $candidateRoot 'candidate-descriptor.p4.json'
-    if (-not (Test-Path -LiteralPath $descriptorBackupPath -PathType Leaf)) {
-        $initialDescriptor = Get-Content -LiteralPath $descriptorPath -Raw | ConvertFrom-Json -Depth 100 -DateKind String
-        Write-RSAtomicCanonicalJsonFile -LiteralPath $descriptorBackupPath -InputObject $initialDescriptor -SchemaPath $descriptorSchemaPath -AllowedRoot $candidateRoot
+    $descriptorBackupPath = if ([string]::IsNullOrWhiteSpace($Phase4DescriptorPath)) {
+        Join-Path $candidateRoot 'candidate-descriptor.p4.json'
+    } else {
+        Assert-RSGhosttyCandidateOverlayPath -CandidateRoot $candidateRoot -Path $Phase4DescriptorPath -Field 'Phase4DescriptorPath'
     }
-    $baseDescriptor = Get-Content -LiteralPath $descriptorBackupPath -Raw | ConvertFrom-Json -Depth 100 -DateKind String
+    if ([string]::Equals($descriptorBackupPath, $descriptorPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Phase4DescriptorPath must differ from the mutable DescriptorPath.'
+    }
+    $hasBackup = Test-Path -LiteralPath $descriptorBackupPath
+    $basePath = if ($hasBackup) { $descriptorBackupPath } else { $descriptorPath }
+    try {
+        $baseDescriptor = Read-RSValidationJsonFile -LiteralPath $basePath -SchemaPath $descriptorSchemaPath -AllowedRoot $candidateRoot
+    } catch [System.Management.Automation.RuntimeException] {
+        throw "P4 descriptor '$basePath' is not valid schema-2 evidence. Regenerate candidate-descriptor.json, then select an unused Phase4DescriptorPath to preserve the old snapshot. $($_.Exception.Message)"
+    }
+    if ([string]$baseDescriptor.candidate.commit -cne $CandidateCommit -or [string]$baseDescriptor.candidate.tree -cne $candidateTree) {
+        throw 'P4 descriptor candidate commit/tree does not match the exact candidate sources.'
+    }
+    $baseBinding = [ordered]@{}
+    foreach ($field in @('sourceBinding', 'canonicalLock', 'candidate', 'ancestry', 'observation', 'review', 'toolchain', 'dependencies', 'overlay')) {
+        $baseBinding[$field] = $baseDescriptor.$field
+    }
+    if ([string]$baseDescriptor.inputDigest -cne (Get-RSCanonicalJsonDigest -InputObject $baseBinding)) {
+        throw 'P4 descriptor inputDigest does not match its complete frozen binding.'
+    }
+    if ($hasBackup) {
+        $currentDescriptor = Read-RSValidationJsonFile -LiteralPath $descriptorPath -SchemaPath $descriptorSchemaPath -AllowedRoot $candidateRoot
+        $currentBinding = [ordered]@{}
+        $savedBinding = [ordered]@{}
+        foreach ($field in @('sourceBinding', 'canonicalLock', 'candidate', 'ancestry', 'observation', 'review', 'toolchain', 'dependencies')) {
+            $currentBinding[$field] = $currentDescriptor.$field
+            $savedBinding[$field] = $baseDescriptor.$field
+        }
+        if ((Get-RSCanonicalJsonDigest $currentBinding) -cne (Get-RSCanonicalJsonDigest $savedBinding)) {
+            throw 'Saved P4 descriptor differs from the regenerated frozen inputs. Select an unused Phase4DescriptorPath; existing snapshots are preserved.'
+        }
+    }
+    if (-not $hasBackup) {
+        Write-RSAtomicCanonicalJsonFile -LiteralPath $descriptorBackupPath -InputObject $baseDescriptor `
+            -SchemaPath $descriptorSchemaPath -AllowedRoot $candidateRoot -CreateNew
+    }
     $baseDescriptorSha256 = (Get-FileHash -LiteralPath $descriptorBackupPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
     $patchRelative = [IO.Path]::GetRelativePath($repoRoot, $patchPath).Replace('\', '/')
@@ -308,6 +344,7 @@ function New-RSGhosttyRuntimeCandidateOverlayReview {
         ConcernCount = $concernIds.Count
         ReviewPath = $reviewPath
         ReviewSha256 = (Get-FileHash -LiteralPath $reviewPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        BaseDescriptorPath = $descriptorBackupPath
         DescriptorPath = $descriptorPath
         DescriptorSha256 = (Get-FileHash -LiteralPath $descriptorPath -Algorithm SHA256).Hash.ToLowerInvariant()
         InputDigest = [string]$updatedDescriptor.inputDigest

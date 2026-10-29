@@ -1214,7 +1214,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Validate one rederived Ghostty candidate overlay, concern map, every newly added private ABI allocation, and descriptor binding.",
-      "usage": "Run after rederiving the single candidate patch in isolated pristine and applied worktrees below the exact candidate .build root.",
+      "usage": "Run after rederiving the single candidate patch in isolated pristine and applied worktrees below the exact candidate .build root. After regenerating a legacy descriptor, choose an unused -Phase4DescriptorPath below that same root to preserve the old snapshot.",
       "usedBy": [
         "terminal runtime upgrade maintainers"
       ],
@@ -1227,12 +1227,12 @@
         "Reviewer-authored complete concern disposition input"
       ],
       "sideEffects": [
-        "Creates or replaces candidate overlay review and descriptor evidence only below .build/TerminalEngineUpgrade/<commit>"
+        "Creates or replaces candidate overlay review and mutable descriptor evidence only below .build/TerminalEngineUpgrade/<commit>; validates or creates the selected immutable P4 snapshot without overwriting existing snapshots"
       ],
       "outputs": [
         "Schema-validated candidate overlay review",
         "Overlay-bound candidate descriptor",
-        "Preserved P4 descriptor snapshot"
+        "Preserved schema-2 P4 descriptor snapshot and its selected path"
       ],
       "ownerSpec": "Specs/Terminal/Terminal_EmbeddedPlugin.md",
       "tests": [
@@ -2426,6 +2426,7 @@
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/TerminalEngine/GhosttyRuntimeStatus.psm1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/GhosttyCandidateOverlay.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
@@ -2996,7 +2997,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and schema-2 descriptor rebinding that preserves every dependency identity.",
+      "purpose": "Validate one exact candidate overlay, concern disposition map, review bounds, all newly added private ABI allocations, and schema-2 descriptor rebinding from a validated immutable P4 snapshot that preserves every dependency identity.",
       "usage": "Import through New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1; focused tests may call the pure candidate ABI comparison.",
       "usedBy": [
         "Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1",
@@ -3011,7 +3012,7 @@
         "Candidate descriptor and overlay-review schemas"
       ],
       "sideEffects": [
-        "Creates or replaces only candidate-descriptor.p4.json, candidate-overlay-review.json, and candidate-descriptor.json below the exact .build candidate root"
+        "Creates or reuses the selected immutable P4 snapshot and replaces candidate-overlay-review.json and candidate-descriptor.json below the exact .build candidate root; legacy snapshots remain untouched"
       ],
       "outputs": [
         "Measured candidate overlay identity",

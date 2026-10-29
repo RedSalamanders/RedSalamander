@@ -174,6 +174,64 @@ and warning; acceptance remains pending their actual results.
 
 ## Evidence and decisions
 
+### 2026-10-29 completed Commands classification and P4 review repair
+
+- Commands run `20261029T135851Z-95996-75f5e460bf094a7e83b6cd6ab91b9b3a`
+  completed with the canonical blocking `REGRESSION` classification and runner
+  exit 1. Initial counts remain 953 passed, three failed and seven skipped;
+  passing isolated retries do not promote the entry. All three shuffle seeds
+  (`1621399242`, `2092439765`, `952488912`) exited nonzero. Each ended on a
+  Compare UIA ValuePattern read that ignored COM cancellation, so its native
+  watchdog terminated the process without a final per-attempt aggregate.
+  Later shuffle failures are diagnostic evidence, not additions to the original
+  normal-order counts. This does not establish that Ghostty caused the failures.
+- The first two stopped-attempt traces are preserved in
+  `20261029T144922Z-60920-d9385fa82da94257836369fb7efb5f10` and
+  `20261029T150427Z-776-621e24471fbd41cba4172cec9818db35`.
+  Final trace, runner result, source snapshots and relevant source files are
+  independently preserved in
+  `20261029T153042Z-79816-886395bb291c4c6d98dea7049133fd35`.
+  The canonical native archive completed verified publication at 15:21:07 UTC.
+  Post-entry and final source snapshots both identify
+  `ce271fc5beea8f2cb03824251d7417f4536aa79aef17066edbfec448de388c11`.
+  The passive observer archived 1,503 samples with no desktop writes, captions,
+  command lines or process-memory capture. The controller and observer exited;
+  the shared queue was notified, and this chat queued no further interactive work.
+- Review `4413974910` exposed a valid schema migration defect: regenerating the
+  schema-2 descriptor did not replace an existing schema-1 P4 snapshot, and
+  rebinding accessed its missing `dependencies` member. The old module produced
+  the exact property error in the new regression test; five incumbent tests
+  passed and both new recovery controls failed in
+  `20261029T151719Z-91880-1f734d58d49a47b8a80ebea1ae9900f8`.
+- Overlay review now reuses the canonical schema-validated reader, checks the
+  candidate commit/tree and complete binding digest, and rejects mismatched
+  regenerated non-overlay inputs. `-Phase4DescriptorPath` selects a fresh
+  create-only snapshot from the regenerated descriptor, preserving existing
+  evidence byte-for-byte. The previous positional timestamp remains compatible.
+  Help, consumers/inventory and the authoritative Terminal contract are updated.
+- All fifty focused checks in candidate overlay/review, tooling governance and
+  inventory passed with zero skips in
+  `20261029T153429Z-95908-9d9079446c354ae68fbc27df24e703d0`.
+  This includes thirteen overlay tests. An earlier policy launch hit Git's
+  filename-length limit inside its private temporary fixture; the failed result
+  is retained as `20261029T153150Z-61888-625d31d3202b4dc0a771024f9e8d9251`.
+  The accepting launch used a shorter owned temporary-directory name with the
+  same cases, assertions and code; no machine Git setting changed.
+- Final Tools inventory validation reports zero blocking findings. Specification
+  inventory also reports zero blocking findings in
+  `20261029T153714Z-82920-f02a028f971c422480f15f15473e7e2a`.
+  The affected explanation in
+  `20261029T153812Z-1732-e38d2f6a5869487fb00c1de2d871d92a` conservatively
+  selects all eighteen entries after the tooling changes. That is a planning
+  result, not executed qualification; final exact-head PR coverage and the
+  remaining local obligations are not inferred from earlier source-bound runs.
+- The post-`f72618d62` changes affect tooling and documentation. Application and
+  native-test sources, admitted runtime lock/overlay and build entrypoints are
+  unchanged. Local native results retain their original `f72618d62` identity;
+  they are not restamped as execution of the later tooling commit. The initial
+  readiness cause and current Commands order/UIA failures remain open. I51 stays
+  in WIP, and PR #148 stays draft without repository Full or release approval.
+
 - Official release notes: <https://ghostty.org/docs/install/release-notes/1-4-0>.
 - Candidate status: `.build/TerminalEngineStatus/ghostty-1-4/status.json`,
   `update-observed`, exact source/tree and ancestor relationship confirmed.

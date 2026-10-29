@@ -1053,6 +1053,21 @@ are emitted only when all supporting commits occur inside the exact review
 range. The generated commit inventory does not replace the candidate's manual
 source review.
 
+Overlay review validates its saved P4 snapshot against the current canonical
+descriptor schema before reuse, including the exact candidate commit/tree and
+the digest of the complete frozen binding. Existing snapshots are immutable.
+Their non-overlay inputs must match the mutable descriptor; a regenerated
+schema-2 binding with changed dependency or provenance inputs also requires a
+new snapshot path. Only the overlay binding may differ during repeated review.
+If a schema-1 `candidate-descriptor.p4.json` remains after regenerating the
+schema-2 `candidate-descriptor.json`, the default overlay command rejects it
+before publishing review or rebound evidence. Repeat with an unused
+`-Phase4DescriptorPath` below the same exact candidate root, for example
+`candidate-descriptor.p4.v2.json` there. The command creates that snapshot from
+the validated regenerated descriptor, retains the legacy file byte-for-byte,
+and returns the selected `BaseDescriptorPath`. Repeated review reuses that
+validated snapshot; it never overwrites it or aliases the mutable descriptor.
+
 Overlay rederivation remains isolated until manual Product admission.
 `Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` accepts the single
 normalized patch plus clean and independently applied exact-candidate

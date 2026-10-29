@@ -72,6 +72,13 @@ Terminal VT pair validation requires identical Zig versions unless the caller su
 exact reviewed `-ZigToolchainTransition <baseline>,<candidate>`. All other comparison gates
 remain enforced; the result describes the complete runtime/toolchain upgrade. Contract tests
 generate synthetic 200-sample pairs and do not depend on ignored historical benchmark archives.
+Candidate overlay review validates saved P4 descriptors before reuse. To recover a legacy
+schema-1 snapshot, regenerate the schema-2 descriptor and repeat the overlay command with
+`-Phase4DescriptorPath` pointing to an unused file below the exact candidate root (for example
+`candidate-descriptor.p4.v2.json` there). The old snapshot is preserved; the new snapshot is
+created once and its candidate identity, complete binding digest and schema are checked on reuse.
+Regenerating changed frozen inputs also requires a new snapshot path; repeated overlay rebinding
+can change only the overlay portion of an existing frozen binding.
 Artifact action upgrades also update `ReleaseWorkflowPolicy.Tests.ps1` pin
 assertions and verify build, release, nightly, and qualification consumers together.
 The exact-byte historical Gate0 workflow is excluded from Dependabot updates. Its older artifact

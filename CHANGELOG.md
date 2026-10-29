@@ -4,6 +4,11 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Validate saved Ghostty P4 descriptors before overlay rebinding. Add an explicit
+  replacement snapshot path for regenerated schema-2 descriptors while preserving
+  legacy evidence; reject wrong candidate identities, changed dependency bindings,
+  mutable-path aliases and paths outside the candidate root. Cover the original
+  schema-1 failure and recovery with behavioral regression tests.
 - Reconcile Ghostty 1.4 qualification and main's documentation changes under
   the distinct I51 integration record. Record native platform and portable
   evidence, preserve failed initial local results, and keep individual suite
