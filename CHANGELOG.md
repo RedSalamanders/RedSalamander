@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Reuse Zig's compiler bootstrap within one authenticated Ghostty dependency-fetch
+  session, then remove its owned cache on success or failure. Preserve every
+  package, archive and license check, with cold, warm and failed-fetch coverage.
 - Ghostty builds report native command, lock and output-drain progress. The native ARM64 workflow can collect time-bounded build-only diagnostics under a separate check name without publishing qualification or starting product acceptance; ARM64 qualification remains open.
 - Ghostty candidate review handles long Windows paths within checkouts without changing Git configuration; runtime staging checks cover the Aro and Pixels notices added by the 1.4 upgrade. Qualification remains pending native ARM64 and repository gates.
 - Retry bounded, guarded Ghostty compiler-cache cleanup after transient file

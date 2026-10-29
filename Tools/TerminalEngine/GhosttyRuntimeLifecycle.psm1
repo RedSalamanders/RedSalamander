@@ -578,7 +578,6 @@ function Invoke-RSGhosttyRuntimeBuild {
                 Lock = $_
                 SourceArchive = Join-Path $downloadsRoot ([string]$_.sourceArchive.fileName)
                 ContentArchive = Join-Path $downloadsRoot ([string]$_.contentArchive.fileName)
-                FetchCacheRoot = Join-Path $cacheRoot ("dependency-fetch-{0}-{1}" -f [string]$_.id, $zigVersion)
             }
         })
     $uucodeState = @($dependencyStates | Where-Object { $_.Id -ceq 'uucode' })[0]
@@ -857,6 +856,13 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
         Copy-Item -LiteralPath $legacyUucodePackageArchive -Destination $uucodePackageArchive
     }
     $tarCommand = Get-Command tar.exe -ErrorAction Stop
+    # One disposable cache belongs to this repository-serialized bootstrap.
+    # Zig 0.17 compiles its maker here; deleting it between packages repeats
+    # that host compilation, especially costly under Windows ARM64 emulation.
+    $fetchCacheRoot = Join-Path $cacheRoot ("dependency-fetch-{0}" -f $zigVersion)
+    $fetchCacheInitialized = $false
+    $fetchSessionCompleted = $false
+    try {
     foreach ($dependencyState in $dependencyStates) {
         $dependency = $dependencyState.Lock
         $dependencyId = [string]$dependency.id
@@ -909,41 +915,36 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
                     -RequiredFileRelativePath $licenseRelativePath `
                     -Label "$dependencyId source archive")
 
-            $fetchCacheRoot = [string]$dependencyState.FetchCacheRoot
-            Remove-TerminalBuildDirectory -Path $fetchCacheRoot
-            [void](New-Item -ItemType Directory -Path $fetchCacheRoot -Force)
-            $fetchCompleted = $false
-            try {
-                $actualPackageName = (Invoke-CheckedProcess `
-                        -FilePath $zigExecutable `
-                        -ArgumentList @('fetch', $sourceArchive) `
-                        -WorkingDirectory $sourceRoot `
-                        -Environment @{ ZIG_GLOBAL_CACHE_DIR = $fetchCacheRoot }).Stdout.Trim()
-                if ($actualPackageName -cne $packageName) {
-                    throw "$dependencyId package content hash mismatch: $actualPackageName"
-                }
-
-                $canonicalPackageArchive = Join-Path $fetchCacheRoot "p\$packageName.tar.gz"
-                if (-not (Test-Path -LiteralPath $canonicalPackageArchive -PathType Leaf)) {
-                    throw "Zig did not materialize the canonical $dependencyId package archive: $canonicalPackageArchive"
-                }
-                $actualCanonicalSha256 =
-                    (Get-FileHash -Algorithm SHA256 -LiteralPath $canonicalPackageArchive).Hash.ToLowerInvariant()
-                if ($actualCanonicalSha256 -cne $contentSha256) {
-                    throw "$dependencyId canonical package archive SHA-256 mismatch: $actualCanonicalSha256"
-                }
-
-                $temporaryPackageArchive = "$contentArchive.partial"
-                if (Test-Path -LiteralPath $temporaryPackageArchive) {
-                    Remove-Item -LiteralPath $temporaryPackageArchive -Force
-                }
-                Copy-Item -LiteralPath $canonicalPackageArchive -Destination $temporaryPackageArchive
-                Move-Item -LiteralPath $temporaryPackageArchive -Destination $contentArchive
-                $fetchCompleted = $true
+            if (-not $fetchCacheInitialized) {
+                Remove-TerminalBuildDirectory -Path $fetchCacheRoot
+                [void](New-Item -ItemType Directory -Path $fetchCacheRoot -Force)
+                $fetchCacheInitialized = $true
             }
-            finally {
-                Remove-TerminalBuildDirectory -Path $fetchCacheRoot -PreservePrimaryError:(-not $fetchCompleted)
+            $actualPackageName = (Invoke-CheckedProcess `
+                    -FilePath $zigExecutable `
+                    -ArgumentList @('fetch', $sourceArchive) `
+                    -WorkingDirectory $sourceRoot `
+                    -Environment @{ ZIG_GLOBAL_CACHE_DIR = $fetchCacheRoot }).Stdout.Trim()
+            if ($actualPackageName -cne $packageName) {
+                throw "$dependencyId package content hash mismatch: $actualPackageName"
             }
+
+            $canonicalPackageArchive = Join-Path $fetchCacheRoot "p\$packageName.tar.gz"
+            if (-not (Test-Path -LiteralPath $canonicalPackageArchive -PathType Leaf)) {
+                throw "Zig did not materialize the canonical $dependencyId package archive: $canonicalPackageArchive"
+            }
+            $actualCanonicalSha256 =
+                (Get-FileHash -Algorithm SHA256 -LiteralPath $canonicalPackageArchive).Hash.ToLowerInvariant()
+            if ($actualCanonicalSha256 -cne $contentSha256) {
+                throw "$dependencyId canonical package archive SHA-256 mismatch: $actualCanonicalSha256"
+            }
+
+            $temporaryPackageArchive = "$contentArchive.partial"
+            if (Test-Path -LiteralPath $temporaryPackageArchive) {
+                Remove-Item -LiteralPath $temporaryPackageArchive -Force
+            }
+            Copy-Item -LiteralPath $canonicalPackageArchive -Destination $temporaryPackageArchive
+            Move-Item -LiteralPath $temporaryPackageArchive -Destination $contentArchive
         }
 
         [void](Assert-RSTerminalEngineArchiveLayout `
@@ -961,6 +962,13 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             throw "$dependencyId license semantic SHA-256 mismatch: $($licenseIdentity.Sha256)"
         }
         $dependencyState | Add-Member -NotePropertyName LicenseText -NotePropertyValue $licenseIdentity.Text
+    }
+    $fetchSessionCompleted = $true
+    }
+    finally {
+        if ($fetchCacheInitialized) {
+            Remove-TerminalBuildDirectory -Path $fetchCacheRoot -PreservePrimaryError:(-not $fetchSessionCompleted)
+        }
     }
 
     $privateRuntimeOverlayCanApply = Test-GitApply -Arguments @('apply', '--check', $normalizedPrivateRuntimeOverlayPatch) -WorkingDirectory $sourceRoot

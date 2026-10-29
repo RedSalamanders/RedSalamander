@@ -157,6 +157,31 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Diagnostic run `40790104792` at `8149476b4` exhausted its 20-minute
+  contained build limit during the `translate-c` fetch. Aro and Pixels fetches
+  had completed in 191 and 187 seconds; the third Zig parent was still running
+  after 660 seconds. No output-drain stall was observed. Its explicit
+  `qualification=false` record and complete logs are preserved in
+  `20261029T002335Z-80328-9cb3b1ae17a2483eb64a12ace14079ff`.
+  Each fetch previously deleted its compiler cache, repeating Zig 0.17 maker
+  compilation. One repository-serialized, disposable fetch-session cache now
+  spans the dependency closure; all package/archive/license checks remain.
+  Cold/warm/second-fetch-failure ownership checks passed with the lifecycle
+  suite, 39/39, in
+  `20261029T003210Z-83120-67aaadf3eeb44a19afc3230afde187f8`.
+  A cold x64 build passed in 399,025 ms, reproduced the exact locked DLL and
+  removed the cache, in
+  `20261029T003622Z-89180-65cfc0e461644515b6b647bd29826f24`.
+  Its first fetch took 106 seconds and each later fetch less than one second.
+  The record binds lifecycle SHA-256
+  `335880ddfbd03844ca36dac906ba816c53eea031f040717debdadddcbe6e8ae4`;
+  subsequent indentation cleanup does not change the executed statements.
+  This local result does not establish the native timeout's underlying cause
+  or native ARM64 acceptance; a fresh native qualification remains required.
+  The final cache implementation passed lifecycle, workflow, scoped-testing
+  and tooling-governance checks, 96/96, in
+  `20261029T004714Z-90328-752ebfc3157d4edeb715fcb4265ee46e`.
+
 - Native ARM64 candidate run `40761642957` at `62d181cf4` reached the
   120-minute job limit during the exact-candidate build; no upstream test ran
   and admitted-product continuation was skipped. The terminal build in PR CI

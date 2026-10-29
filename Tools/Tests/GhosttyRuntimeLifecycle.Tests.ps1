@@ -181,6 +181,86 @@ public static class RSGhosttyCleanupProbe {
     }
 }
 
+Describe 'Ghostty fetch session cache ownership' {
+    Import-Module (Join-Path $repoRoot 'Tools/TerminalEngine/TerminalEngineArchive.psm1') -Force
+    Import-Module (Join-Path $repoRoot 'Tools/TerminalEngine/TerminalEngineTextIdentity.psm1') -Force
+    $source = Get-Content -LiteralPath $modulePath -Raw
+    $start = $source.IndexOf('$fetchCacheRoot = Join-Path $cacheRoot ("dependency-fetch-{0}"', [StringComparison]::Ordinal)
+    $end = $source.IndexOf('$privateRuntimeOverlayCanApply =', $start, [StringComparison]::Ordinal)
+    $session = $source.Substring($start, $end - $start)
+    # Run the real bootstrap control flow with a synthetic compiler. Its maker
+    # marker is an independent witness for reuse; real archive/hash/license and
+    # guarded cleanup helpers still run.
+    $script:ghosttyFetchSessionInvocation = [scriptblock]::Create(@'
+param($context, $dependencyStates)
+$repoRoot = $context.Fixture.Owner
+$terminalBuildRoot = Join-Path $repoRoot '.build/TerminalEngine'
+$cacheRoot = Join-Path $terminalBuildRoot 'Cache'
+$zigVersion = 'fixture'
+$zigExecutable = 'fixture-zig'
+$sourceRoot = $context.Fixture.Source
+$tarCommand = [pscustomobject]@{ Source='fixture-tar' }
+function Remove-TerminalBuildDirectory {
+    param($Path, [switch]$PreservePrimaryError)
+    $context.CleanupFlags.Add([bool]$PreservePrimaryError)
+    & $script:ghosttyCleanupInvocation $repoRoot $terminalBuildRoot $Path -PreservePrimaryError:$PreservePrimaryError
+}
+function Invoke-CheckedProcess {
+    param($FilePath, $ArgumentList, $WorkingDirectory, $Environment)
+    if ($FilePath -ceq 'fixture-tar') {
+        return [pscustomobject]@{ Stdout=[IO.File]::ReadAllText((Join-Path $sourceRoot 'LICENSE')) }
+    }
+    if ($FilePath -cne 'fixture-zig') { throw 'Unexpected compiler fixture command.' }
+    $context.FetchCount++
+    $maker = Join-Path $Environment.ZIG_GLOBAL_CACHE_DIR 'maker-witness'
+    if (-not [IO.File]::Exists($maker)) {
+        $context.BootstrapCount++
+        [IO.File]::WriteAllText($maker, 'one owned compiler bootstrap')
+    }
+    if ($dependency.id -ceq $context.FailPackage) { throw 'Synthetic second fetch failure.' }
+    $packages = Join-Path $Environment.ZIG_GLOBAL_CACHE_DIR 'p'
+    [void][IO.Directory]::CreateDirectory($packages)
+    Copy-Item -LiteralPath $context.TemplateArchive -Destination (Join-Path $packages "$($dependency.packageName).tar.gz")
+    return [pscustomobject]@{ Stdout=$dependency.packageName }
+}
+'@ + "`n" + $session)
+
+    foreach ($scenario in @('cold', 'warm', 'second-fetch-failure')) {
+        It "retains one owned compiler cache across packages and cleans the $scenario session" {
+            $fixture = New-RSGhosttyLockedPackageFixture
+            $template = Join-Path $fixture.Downloads 'fixture-pkg.tar.gz'
+            $archiveHash = (Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash.ToLowerInvariant()
+            $licenseHash = (Get-RSTerminalLfStringIdentity -Text ([IO.File]::ReadAllText((Join-Path $fixture.Source 'LICENSE')))).Sha256
+            $states = @('one','two' | ForEach-Object {
+                $target = Join-Path $fixture.Downloads "$_-canonical.tar.gz"
+                if ($scenario -ceq 'warm') { Copy-Item -LiteralPath $template -Destination $target }
+                [pscustomobject]@{ Id=$_; SourceArchive=$template; ContentArchive=$target; Lock=[pscustomobject]@{
+                    id=$_; packageName="$_-pkg"; licenseArchiveRelativePath='LICENSE'; licenseSha256=$licenseHash
+                    sourceArchive=[pscustomobject]@{ sha256=$archiveHash; internalRoot='fixture-pkg/wrapper' }
+                    contentArchive=[pscustomobject]@{ sha256=$archiveHash; internalRoot='fixture-pkg/wrapper' }
+                } }
+            })
+            $context = [pscustomobject]@{
+                Fixture=$fixture; TemplateArchive=$template; FetchCount=0; BootstrapCount=0
+                FailPackage=$(if ($scenario -ceq 'second-fetch-failure') { 'two' } else { '' })
+                CleanupFlags=[Collections.Generic.List[bool]]::new()
+            }
+            if ($scenario -ceq 'second-fetch-failure') {
+                { & $script:ghosttyFetchSessionInvocation $context $states } | Should Throw 'Synthetic second fetch failure'
+                $context.CleanupFlags[$context.CleanupFlags.Count-1] | Should Be $true
+                Test-Path -LiteralPath $states[0].ContentArchive | Should Be $true
+                Test-Path -LiteralPath $states[1].ContentArchive | Should Be $false
+            } else {
+                & $script:ghosttyFetchSessionInvocation $context $states
+                @($states | Where-Object { -not [IO.File]::Exists($_.ContentArchive) }).Count | Should Be 0
+            }
+            $context.FetchCount | Should Be $(if ($scenario -ceq 'warm') { 0 } else { 2 })
+            $context.BootstrapCount | Should Be $(if ($scenario -ceq 'warm') { 0 } else { 1 })
+            Test-Path -LiteralPath (Join-Path $fixture.Owner '.build/TerminalEngine/Cache/dependency-fetch-fixture') | Should Be $false
+        }
+    }
+}
+
 function Assert-RSInvalidGhosttyRuntimeLock {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Mutate,
