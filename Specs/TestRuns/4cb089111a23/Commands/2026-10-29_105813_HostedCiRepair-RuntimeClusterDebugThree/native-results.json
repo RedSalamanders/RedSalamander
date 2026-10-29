@@ -1,0 +1,176 @@
+{
+    "run_started_utc": "2026-10-29T11:11:41.966Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261029T105813Z-72596-9f3de0032d574f2c9537bb974136cc75\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 37598,
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 227,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+            "status": "passed",
+            "duration_ms": 1768,
+            "repeat_index": 1
+        },
+        {
+            "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+            "status": "passed",
+            "duration_ms": 1351,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 2598,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_terminal_session_menu_floating_dispatch",
+            "status": "passed",
+            "duration_ms": 636,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+            "status": "passed",
+            "duration_ms": 974,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+            "status": "passed",
+            "duration_ms": 225,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+            "status": "passed",
+            "duration_ms": 473,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_warm_quiescence_drains_pending_paint",
+            "status": "passed",
+            "duration_ms": 1860,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 199,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+            "status": "passed",
+            "duration_ms": 1686,
+            "repeat_index": 2
+        },
+        {
+            "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+            "status": "passed",
+            "duration_ms": 959,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 2584,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_terminal_session_menu_floating_dispatch",
+            "status": "passed",
+            "duration_ms": 784,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+            "status": "passed",
+            "duration_ms": 1009,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+            "status": "passed",
+            "duration_ms": 177,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+            "status": "passed",
+            "duration_ms": 380,
+            "repeat_index": 2
+        },
+        {
+            "name": "folder_view_warm_quiescence_drains_pending_paint",
+            "status": "passed",
+            "duration_ms": 1874,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "passed",
+            "duration_ms": 220,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_find_dialog_restores_persisted_sort_order",
+            "status": "passed",
+            "duration_ms": 1673,
+            "repeat_index": 3
+        },
+        {
+            "name": "terminal_shortcut_floating_singleton_tabs_restore_and_close",
+            "status": "passed",
+            "duration_ms": 997,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 2720,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_terminal_session_menu_floating_dispatch",
+            "status": "passed",
+            "duration_ms": 616,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab",
+            "status": "passed",
+            "duration_ms": 960,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+            "status": "passed",
+            "duration_ms": 176,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+            "status": "passed",
+            "duration_ms": 353,
+            "repeat_index": 3
+        },
+        {
+            "name": "folder_view_warm_quiescence_drains_pending_paint",
+            "status": "passed",
+            "duration_ms": 1871,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

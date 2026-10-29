@@ -227,6 +227,13 @@ helper retains one owned metadata placeholder for each logical alias, without ad
 COM ownership, across refreshes and partial sweeps. All deferred aliases disappear when the final
 module owner is released; ordinary rediscovery or on-demand loading then resumes.
 
+Deferred placeholders also preserve their viewer/Terminal kind. Ordinary instance creation is
+an on-demand load: for an enabled deferred entry it retries the existing quiet-point sweep, keeps
+returning `ERROR_BUSY` while an old owner remains, and reloads once that owner retires. It never
+enables a disabled plugin or bypasses the unload safety export. The existing Terminal configuration
+roundtrip also holds an unopened instance across refresh, checks its kind and callable lifetime,
+requires busy refusal, then requires ordinary creation to recover without another Refresh/Apply.
+
 At process shutdown only, a plugin may return `TRUE` from `RedSalamanderPluginRetainModuleUntilProcessExit()` to ask the host to run the shutdown hook but leave the module loaded until OS process teardown. This is reserved for graphics-backed or driver-backed plugins that have already reached their quiet point but are unsafe to detach explicitly during process shutdown.
 
 ## Plugin Interfaces

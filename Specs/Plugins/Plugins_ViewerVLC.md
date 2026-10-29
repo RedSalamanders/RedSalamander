@@ -132,6 +132,11 @@ The close contract is responsiveness-sensitive: injected slow stop/release must 
 - safe option-token acceptance, native-domain unsigned numeric clamping, and separator/control/option/module-loading/logfile/pidfile rejection;
 - source-contract proof that discovery uses the registered VideoLAN install and Program Files known folders, never `SearchPathW`, the current directory, process `PATH`, or environment-derived search roots;
 - real dependency loading, instance/player creation, WAV playback, unchanged process DLL directory, and clean close when VLC is installed.
+- the keyboard fixture waits for the optional backend loader to retire, then presents the real HUD
+  through the test-only playback-state seam without assigning focus. It requires actual visibility
+  and nonempty layout before the original video-to-HUD Tab and internal-cycle focus assertions.
+  Installed-backend playback proof remains separate and required when available; a missing backend's
+  asynchronous error overlay must not race HUD keyboard coverage.
 - `TestViewerVlcLongPathsAndErrorMessages`: exact 259-, 260-, and 275-character Unicode/URI-delimiter WAV paths; standalone and embedded playback; already extended and forward-slash spellings; positive decoded duration; missing long files, non-local paths, directories, and missing installations with category-correct headings/details/download links. Guarded same-sandbox links cover a valid long-path target and a broken target; only missing OS symbolic-link privilege may skip these conditional link cases. Use a marked sandbox and the governed no-activation mode; never exercise the user's media as a fixture or change `LongPathsEnabled`.
 
 The source contract additionally bans a null drawable, process-global DLL-directory APIs, `SearchPathW`, UI-thread install probing, synchronous loader fallback, inline `VlcAsyncLoadResult` player stop/release, and callback-body module-pin destruction. Any performance or closeout claim must cite a fresh archived run containing the focused `ViewerPETests` result and the corresponding `viewer.vlc.*` JSONL rows; an unavailable historical archive is not normative proof.

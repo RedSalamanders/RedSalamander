@@ -974,13 +974,15 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         return false;
     }
 
-    constexpr uint64_t kIterationCount                           = 240u;
-    const std::wstring originalThemeId                           = g_settings.theme.currentThemeId;
-    const std::optional<Common::Settings::UiSettings> originalUi = g_settings.ui;
-    const auto restore                                           = wil::scope_exit([&]() noexcept
+    constexpr uint64_t kIterationCount                                  = 240u;
+    const std::wstring originalThemeId                                  = g_settings.theme.currentThemeId;
+    const std::vector<Common::Settings::ThemeDefinition> originalThemes = g_settings.theme.themes;
+    const std::optional<Common::Settings::UiSettings> originalUi        = g_settings.ui;
+    const auto restore                                                  = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
+        g_settings.theme.themes         = originalThemes;
         g_settings.ui                   = originalUi;
         SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
         PumpPendingMessages();
@@ -989,17 +991,49 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     Common::Settings::UiSettings ui = g_settings.ui.value_or(Common::Settings::UiSettings{});
     ui.windowBackdrop               = Common::Settings::WindowBackdropMode::Acrylic;
     g_settings.ui                   = ui;
+    // Exercise a real custom catalog whose length does not divide the old
+    // burst's net +120 steps. Finishing at System must not depend on the
+    // number of themes left by a preceding valid catalog fixture.
+    auto controlRing = DebugBuildThemeCycleRing();
+    state.Require(! controlRing.empty(), L"The theme-cycle performance control needs a real catalog.");
+    if (controlRing.empty())
+        return false;
+    for (uint32_t extra = 0u; extra < 8u && 120u % controlRing.size() == 0u; ++extra)
+    {
+        Common::Settings::ThemeDefinition fixtureTheme{};
+        fixtureTheme.id          = L"user/selftest-cycle-cardinality-" + NewGuidText();
+        fixtureTheme.name        = std::format(L"Cycle fixture {}", extra);
+        fixtureTheme.baseThemeId = L"builtin/dark";
+        g_settings.theme.themes.push_back(std::move(fixtureTheme));
+        controlRing = DebugBuildThemeCycleRing();
+    }
+    state.Require(120u % controlRing.size() != 0u, L"The independent catalog must expose the old burst's ring-length assumption.");
+    if (! state.failure.empty())
+        return false;
+    SelfTest::AppendSelfTestTrace(
+        std::format(L"Theme-cycle performance catalog control: themes={} commands={} legacyNetSteps=120.", controlRing.size(), kIterationCount));
     // Exercise the retained hidden HWND path used by the broad Commands run so
     // the fixture is self-contained when selected as an exact retry.
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"Theme-cycle perf retained-window warmup failed.");
     DebugHideThemeCycleOverlay();
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
-    const auto before = DebugGetThemeCycleOverlaySnapshot();
+    const auto before         = DebugGetThemeCycleOverlaySnapshot();
+    uint64_t nextCommands     = 0u;
+    uint64_t previousCommands = 0u;
     for (uint64_t iteration = 0u; iteration < kIterationCount; ++iteration)
     {
-        const std::wstring_view commandId =
-            (iteration % 16u) < 12u ? std::wstring_view{L"cmd/app/theme/selectNext"} : std::wstring_view{L"cmd/app/theme/selectPrev"};
+        // Pair the original 12-next/4-previous burst with its inverse and
+        // balance the final half-pair. Keep all 240 real commands and resource
+        // gates while returning to System for every valid catalog length.
+        const uint64_t pairPosition = iteration % 32u;
+        const bool tail             = iteration >= (kIterationCount / 32u) * 32u;
+        const bool next             = tail ? (iteration % 16u) < 8u : (pairPosition < 16u ? pairPosition < 12u : pairPosition >= 28u);
+        if (next)
+            ++nextCommands;
+        else
+            ++previousCommands;
+        const std::wstring_view commandId = next ? std::wstring_view{L"cmd/app/theme/selectNext"} : std::wstring_view{L"cmd/app/theme/selectPrev"};
         state.Require(DebugDispatchShortcutCommand(mainWindow, commandId), L"Theme-cycle perf command dispatch failed.");
         if (! state.failure.empty())
         {
@@ -1053,6 +1087,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     Debug::Perf::Emit(L"theme.cycle.overlay.stale_timer_ignored_count", L"case-aggregate", 0u, after.staleTimerIgnoredCount - before.staleTimerIgnoredCount);
     Debug::Perf::Emit(L"theme.cycle.overlay.dropped_generation_count", L"case-aggregate", 0u, after.droppedGenerationCount - before.droppedGenerationCount);
     state.Require(g_settings.theme.currentThemeId == L"builtin/system", L"The deterministic theme-cycle burst should end on the built-in system theme.");
+    state.Require(nextCommands == kIterationCount / 2u && previousCommands == kIterationCount / 2u,
+                  L"The original-size performance burst must balance both real command directions.");
     return state.failure.empty();
 }
 } // namespace

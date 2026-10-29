@@ -623,3 +623,178 @@ and ARM64 foreground/mounted-volume cases, plus shuffle viewer/Terminal deferred
 creation failures and its retained timeout. Keep the draft open and these gates
 explicit. The focused ViewerText diagnostic was interrupted before launching any
 child while waiting for the shared desktop lease; it supplies no runtime acceptance.
+
+## Follow-up runtime controls on 29 October
+
+The published search-console fix is `ed8f6683b`; PR run `40836790471` passes x64
+and native ARM64 Debug, formatting and migration guards. Main remains `8ea956a7e`.
+This is not green-main acceptance.
+
+The existing Terminal roundtrip, strengthened with retained-owner, placeholder-kind
+and ordinary-create recovery controls, fails on the original manager in run
+`20261029T075127Z-92084-509cec17ae40438e98b923e31d013e28`: kind is lost and
+ordinary creation remains busy after 5,010 ms. The manager candidate passes ten
+repetitions with zero failures/skips in `20261029T082549Z-64564-753e0db2692341aeaffabccdf77946cd`
+(native 5,616 ms; receipt `11a2bec9122b3cebcd87bf6781ce9cc0aa9ce6334ecb7e4b12423c814086d275`).
+
+A diagnostic-only four-worker provider build reproduces independent-volume starvation
+in `20261029T083234Z-72968-860900ab169e4aedb613d98f265324aa`: both operations
+copy all 16,777,216 bytes, but overlap is zero; isolated times are 1,188,000 and
+1,125,000 us, concurrent time 2,234,000 us, gate 1,603,800 us. The candidate adds
+one bounded reserve, caps each job below the actual created pool size and expands
+stream storage for the additional distinct ID. Restore hardware discovery before
+publication; the literal four-worker control is never a product setting.
+
+An ad hoc Curl launcher incorrectly passed viewer arguments and launched a contained
+ordinary app instance, PID 68260. It executed no native test. The owning operation
+was interrupted, all its descendants exited, and user instance PID 56680 remained
+untouched. Keep its invalid/interrupted evidence, never count it as coverage.
+A full Debug Rebuild then passed (receipt
+`c483bb03ef1771837740348048b09cf9a6a79c6890a5e6b3dad2f0a9a1ec0072`).
+The canonical original-socket Curl control in
+`20261029T090345Z-37156-66191dd46f3449c9a6fbefef55a774e6` passes all 142 checks,
+with no case failure/skip and native 186,500 ms. Its 4,096-file CopyItem controls take
+106,752,348 us at concurrency one and 57,208,650 us at four. The ARM64 baseline
+instead reaches the unchanged 180-second deadline; reserve-name and promote probes
+dominate. The TCP_NODELAY candidate in run
+`20261029T095411Z-64280-a4da63f7a8884706a9cacc61930a4ba1` also passes all 142
+checks, but takes 252,484 ms; the two wide CopyItem controls take 143,169,433 and
+73,864,257 us. Concurrent tooling CPU load prevents a causal regression claim.
+Both traces instead show 8,195 complete payload builds: the original spends
+44,049,024 us constructing their rows and the candidate 56,449,874 us. Remove the
+unsupported socket change. Serialize the fixed grammar directly with bounded
+decimal sizes, preserving every row, operation and deadline. Keep the existing
+literal-byte/4,097-file controls and add a maximum-size literal oracle to Entry
+lookup (298 to 299 checks); Copy traversal stays at 142. Fresh local and native
+ARM64 measurements remain required.
+
+Prepared viewer repairs preserve complete child output through restricted inherited
+handles and canonical bounded concurrent drains. The contained timeout case now also
+requires exact Unicode stdout/stderr markers and an actual no-console child. It
+separately checks read-only exact foreground/focus observation across thread/process
+boundaries; restoration writes retain the original stricter ownership predicates.
+Hosted ARM64 refusals show the same foreground and input timestamp with focus thread
+10668 under foreground thread 1560. The Web combo fixture must invoke production
+shutdown and reach CanUnloadNow before dropping its module; the original hosted child
+reported all assertions passed and then exited 0xC0000005. Optional-backend VLC keyboard
+coverage must settle loading and present a real laid-out HUD without assigning focus.
+
+VHDX operation arguments derive only strict child aliases of the freshly revalidated
+owned volume. Seeding/inspection/cleanup retain the sandbox mount spelling, and all
+foreign-volume, mount, alias and escape refusals plus product ancestry guards remain.
+These repairs remain candidates until focused, broader and hosted qualification passes.
+
+The four-transfer-plus-reserve diagnostic passes ten unchanged R4A19 repetitions
+in `20261029T093953Z-74488-dbab28ce4d6e4d628a0acef4314b75c0`: 30 passed,
+zero failed/skipped, native 40,250 ms, receipt
+`b60f62efe5c28581bd6cd91dc906ad3f4ec9b4e6541a5bc9a2116e447f3308ec`.
+Restore hardware discovery for the production candidate. A full ASan Debug Rebuild
+on that diagnostic source also passes in 5:59, receipt
+`7c0276dca43f6ea6ce2f5a97d8e4c177f69dc8cc2e96949a60a9b311724f7aa8`.
+Neither build substitutes for runtime acceptance of the final source.
+
+Viewer diagnostic run `20261029T103028Z-58920-9f320e0ecea34028a7fe8373a0c2fbd7`
+passes containment, Web shutdown/quiet unload and the real VLC HUD focus journey.
+The Text child also passes every assertion, including blocked close in 45,359 us
+under its unchanged 500,000 us gate. Its parent correctly refuses restoration:
+foreground changes from Slack PID 41372 to unrelated Claude PID 58440 and the input
+timestamp changes during the run. Retain the aggregate failure and rerun without
+weakening input ownership. This passing child is not a causal repair of the older
+hosted close failure.
+
+The governed source/spec/scoped/archive controls pass all 384 checks without skips
+in `20261029T101740Z-95300-91fa02cf404e497e8506f38d3eb4eed8` (453,929 ms).
+Those controls precede the serializer and Commands follow-ups and must not be
+reported as qualification of newer source. Documentation must pin an ordinary
+unopened Terminal before export lookup; a deferred catalog entry has no HMODULE.
+The warm-quiescence helper must drain and resample at its final quiet decision,
+with a real late-queued paint control retaining all five original timer trials.
+Find-sort diagnostics must format the actual post-wait snapshot; argument
+evaluation order previously formatted its zero-initialized value before waiting.
+
+### Source-bound follow-up and independent repeat controls
+
+Candidate v4 at public parent `ed8f6683b` has source snapshot
+`8133b2cc775785150341c13d41f01b017e708a612a8edd7684c4ca8d143e25b0`.
+Its Debug, ASan Debug and test-enabled Release receipts are respectively
+`c94752f45d45f7e17fb792fb7d7a663b3bd7e1dc97c25726234780774031c6cd`,
+`17d871317ef76260d49114b7d70fc27e8a7dc86786f4e7839a64be008a13e61a`
+and `792bf7adfe7e39d74635195ba6f8ef523fa3a4fadb408cead288f6f7687a8768`.
+The initial Release build omitted test-enabled Full overrides; all four attempts
+correctly refused attestation before execution. Preserve them as blocked attempts,
+not runtime acceptance. The corrected Release build uses the canonical Full
+overrides. Embedded compiler debug information and final PDBs remain enabled.
+
+- Debug run `20261029T105813Z-72596-9f3de0032d574f2c9537bb974136cc75`
+  passes nine exact Commands cases three times: 27 passed, no failures/skips,
+  native 37,598 ms. All three late-paint controls actually queue, drain and render
+  once before the quiet return. Every original disclosure route passes.
+- Static gallery runs `20261029T111249Z-72596-c0b31c15ec0c4f4ab1c0de4ff9a28ba0`
+  (Debug) and `20261029T112023Z-9060-989b7e4a90eb4b02b6f25c4162661341`
+  (Release) pass with no skips and no activation. Inspect the actual synthetic
+  Terminal Find and File Operations preferences captures; both Unicode separators
+  render. Static frames do not qualify keyboard focus.
+- Fresh ASan search/runner run
+  `20261029T111243Z-58980-ff027f7f6b6346efbaff6224d82bd79a` passes all
+  30 repeated console, duplicate-writer and resource-scoped ownership cases.
+- Entry lookup runs `20261029T111547Z-72868-77eec78043c940a3bf3cc3a35ed8eb49`
+  (Debug) and `20261029T112343Z-9060-08af2b90f7a848b1a4ada6b2bc04d12b`
+  (Release) pass all 299 internal checks plus Setup/Cleanup, with no skips.
+  Debug's 64 complete 4,097-file renders preserve all 14,159,232 bytes; this
+  unpaired direct measurement is not a performance non-regression claim.
+- Release live-progress run
+  `20261029T112207Z-9060-c5c846dceeaa43b3bfe93deab03bedae` and ASan run
+  `20261029T121138Z-94316-3f437f72b79d4c51a70353bb7fc27bf8` each pass
+  all three repetitions, including Setup/Cleanup (nine cases each). The original
+  both-roots/content/progress/close/row assertions remain.
+- ASan remediation run
+  `20261029T120930Z-94316-dbdfa9026a3e4a13a95b73f8f3bde4c7` passes
+  its original checks. It did not invoke the F7 owned-volume operation-path
+  helper; do not claim that native acceptance from this v4 run. Add the same
+  pure controls to the normal remediation entry and qualify them afresh.
+- The newer governed source/spec/scoped/archive run
+  `20261029T105320Z-55260-856680000623443db3ed22dd29fa4391` passes all
+  384 checks, zero failures/skips, in 416,759 ms. It predates the repeat-fixture
+  repairs and does not qualify those newer inputs.
+
+Original repeat control
+`20261029T111446Z-58980-9bf5189606b64503a834b8f9594484a7` reproduces
+six ASan failures (six passed, six failed, no skips; native 52,617 ms): both
+settings fixtures and the thumbnail fixture pass once, then fail on repetitions
+two and three. An independent fixture deletes/reseeds its target while its old
+coordinator lineage remains; use the existing test-only quiet/reset API only
+before setup. Within-case external/stale guards must remain untouched. The
+thumbnail command is a legitimate no-op if the prior invocation left 96 DIP;
+establish and assert 48 DIP, retaining the original cancellation gate.
+
+The isolated theme case passes those three original invocations. Its old loop
+nevertheless has a net 120 ring steps, so its System assertion depends on catalog
+length. Strengthen it with a real 16-theme catalog before changing the loop.
+That control at snapshot
+`ca9b88a0f173b382588f7792d98a3dbc9235195b1a97950a872020f2d7c867a3`,
+receipt `6469c207e5569054b1bc45abb3f0c573a3b5ab32f3e337f89fa4a9f0a4414103`,
+fails exactly the three System assertions in
+`20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c`.
+The repaired settings and thumbnail fixtures pass all nine corresponding
+invocations; native duration is 78,863 ms overall. Retain this deliberate
+negative control. The balanced candidate keeps every original 240-command,
+resource, animation and System assertion and adds exact 120/120 direction
+counts. Fresh Debug/Release/ASan and hosted/native ARM64 acceptance is pending.
+
+Only this repair's queued C0-copy controllers, PIDs 72868 and 9060, were stopped
+before native launch so the reproduced repairs could proceed. Both owners were
+verified dead; interrupted runs `20261029T115103Z-72868-7687f358223e473ab61c673bca3ef96f`
+and `20261029T115117Z-9060-da04384f12634920a24278c5df9b1e97` are preserved.
+No Copy traversal acceptance comes from either attempt. Full-solution Rebuilds
+precede renewed qualification. Independently launched user PID 56680 and the
+other chats' current entries remain untouched. Queue coordination with both
+Audit MSVC and Integrate libghostty is explicitly authorized; focus-taking work
+retains its agreed timing, warning, shared lease and verified restoration.
+
+Fifteen bounded follow-up packets retain the failed controls and successful
+focused results under `Specs/TestRuns/4cb089111a23`. Raw metrics exceeding the
+archive cap remain in the completed-run archive with their exact byte digest;
+the R4A19 packet retains every claim-bearing row in original order and its full
+input digest/count/line provenance. Native scope, skips and failures remain
+explicit. No limit is raised or baseline silently replaced. The reviewed PR
+execution digest remains `c12ab6b16cac10b9493ac6d1c70b4f9d8b49a40ef66f81e6ee6daab3bdf12e20`.

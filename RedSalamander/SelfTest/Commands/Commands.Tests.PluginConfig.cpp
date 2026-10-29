@@ -6368,7 +6368,52 @@ private:
     state.Require(info->SetConfiguration(R"json({"fontSizeDip":"14"})json") == E_INVALIDARG, L"The Terminal must still reject a string fontSizeDip.");
     state.Require(info->SetConfiguration("{") == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
                   L"The Terminal must report malformed configuration JSON as ERROR_INVALID_DATA.");
-    return true;
+
+    // Refresh while this unopened instance is retained, then use the ordinary
+    // creation path after its last owner retires. No intervening Refresh may
+    // conceal a permanently stranded deferred catalog entry.
+    auto& manager             = ViewerPluginManager::GetInstance();
+    const auto restoreCatalog = wil::scope_exit([&]() noexcept
+    {
+        info.reset();
+        terminal.reset();
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"The Terminal lifecycle fixture must restore the ordinary viewer catalog.");
+    });
+    g_folderWindow.CloseAllViewers();
+    PrepareFloatingTerminalWindowForAppShutdown();
+    state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"Viewer refresh must retain an externally owned Terminal instance safely.");
+    const auto& entries      = manager.GetPlugins();
+    const auto deferred      = std::find_if(entries.begin(), entries.end(), [](const auto& entry) noexcept { return entry.id == L"builtin/terminal"; });
+    const bool kindPreserved = deferred != entries.end() && deferred->type == ViewerPluginManager::PluginType::Terminal && deferred->unloadDeferred &&
+                               ! deferred->disabled && ! deferred->loadable;
+    state.Require(kindPreserved, L"A deferred Terminal placeholder must preserve its plugin kind, identity and enabled state.");
+    wil::com_ptr<ITerminal> blockedTerminal;
+    const HRESULT blockedHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, blockedTerminal);
+    state.Require(blockedHr == HRESULT_FROM_WIN32(ERROR_BUSY) && ! blockedTerminal,
+                  L"Ordinary Terminal creation must remain blocked while the old instance still owns its module.");
+    wil::com_ptr<IUnknown> retainedIdentity;
+    state.Require(SUCCEEDED(terminal->QueryInterface(__uuidof(IUnknown), retainedIdentity.put_void())) && retainedIdentity,
+                  L"Deferred unload must keep the retained Terminal interface mapped and callable.");
+    retainedIdentity.reset();
+    info.reset();
+    terminal.reset();
+    HRESULT recoveredHr  = E_PENDING;
+    const auto recovered = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        recoveredHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, terminal);
+        return SUCCEEDED(recoveredHr) && terminal;
+    },
+        {.timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)), .operationName = L"ordinary Terminal creation after the unload quiet point"});
+    Trace(std::format(L"Terminal deferred creation: kindPreserved={} blockedHr=0x{:08X} recovered={} recoveredHr=0x{:08X} elapsedMs={}",
+                      kindPreserved,
+                      static_cast<unsigned long>(blockedHr),
+                      recovered.conditionMet,
+                      static_cast<unsigned long>(recoveredHr),
+                      recovered.elapsed.count()));
+    state.Require(recovered.conditionMet && SUCCEEDED(recoveredHr) && terminal,
+                  L"Ordinary creation must recover a quiet deferred Terminal without an explicit Refresh or Apply.");
+    return state.failure.empty();
 }
 
 } // namespace (tests)

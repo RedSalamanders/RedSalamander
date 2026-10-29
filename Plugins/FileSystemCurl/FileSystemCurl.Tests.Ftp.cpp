@@ -847,7 +847,9 @@ public:
             }
             else
             {
-                std::format_to(std::back_inserter(payload), "drwxr-xr-x 1 owner group 0 Jan 01 2026 {}\r\n", leaf);
+                payload.append("drwxr-xr-x 1 owner group 0 Jan 01 2026 ");
+                payload.append(leaf);
+                payload.append("\r\n");
             }
         }
         for (const auto& [path, bytes] : _files)
@@ -866,12 +868,23 @@ public:
             {
                 payload.append(leaf);
                 payload.append("\r\n");
+                continue;
             }
-            else if (_listIncludesSize)
+            // The fixed wire grammar needs no general formatter per row. Wide
+            // destination probes still receive every original row and byte.
+            payload.append("-rw-r--r-- 1 owner group ");
+            if (_listIncludesSize)
             {
                 const auto listedSize = _listedSizes.find(path);
                 const size_t size     = listedSize == _listedSizes.end() ? bytes.size() : listedSize->second;
-                std::format_to(std::back_inserter(payload), "-rw-r--r-- 1 owner group {} Jan 01 2026 {}\r\n", size, leaf);
+                std::array<char, std::numeric_limits<size_t>::digits10 + 1u> sizeText{};
+                const auto converted = std::to_chars(sizeText.data(), sizeText.data() + sizeText.size(), size);
+                if (converted.ec != std::errc{})
+                {
+                    Debug::Error(L"FTP fixture listing size conversion failed.");
+                    return {};
+                }
+                payload.append(sizeText.data(), static_cast<size_t>(converted.ptr - sizeText.data()));
             }
             else
             {
@@ -879,8 +892,11 @@ public:
                 // listing cannot discard this file after parsing a directory
                 // entry. The nonnumeric size token intentionally yields
                 // sizeKnown=false in the production Unix LIST parser.
-                std::format_to(std::back_inserter(payload), "-rw-r--r-- 1 owner group ? Jan 01 2026 {}\r\n", leaf);
+                payload.push_back('?');
             }
+            payload.append(" Jan 01 2026 ");
+            payload.append(leaf);
+            payload.append("\r\n");
         }
         return payload;
     }
@@ -6496,6 +6512,15 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                          "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
                          "-rw-r--r-- 1 owner group 123456789 Jan 01 2026 a.bin\r\n"
                          "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n");
+            known.SetListedSize("/chosen/a.bin", (std::numeric_limits<size_t>::max)());
+            constexpr std::string_view maximumSizeListing = sizeof(size_t) == 8u ? "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
+                                                                                   "-rw-r--r-- 1 owner group 18446744073709551615 Jan 01 2026 a.bin\r\n"
+                                                                                   "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n"
+                                                                                 : "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
+                                                                                   "-rw-r--r-- 1 owner group 4294967295 Jan 01 2026 a.bin\r\n"
+                                                                                   "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n";
+            checkPayload(L"maximum-size", known, "/chosen", false, maximumSizeListing);
+            known.SetListedSize("/chosen/a.bin", 123456789u);
             known.SeedFile("/chosen/b.bin", {1u});
             checkPayload(L"new-generation",
                          known,

@@ -1444,6 +1444,14 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
 [[nodiscard]] bool TestSettingsStoreUnsupportedFutureSchemaNeverOverwritesSource(CaseState& state) noexcept
 {
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestFutureSchemaSaveBlock";
+    // Deleting/reseeding this owned fixture starts a separate settings lifecycle.
+    // Retire the previous invocation's coordinator lineage before fixture setup;
+    // every same-case stale-source and explicit-replacement guard stays active.
+    const bool priorSavesRetired = SettingsHotReload::FlushQueuedSettingsSaves(static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count()));
+    state.Require(priorSavesRetired && SettingsHotReload::DebugResetSettingsSaveLineageForSelfTest(kTestAppId),
+                  L"The independent future-schema fixture requires a quiet, fresh test-app lineage before seeding.");
+    if (! state.failure.empty())
+        return false;
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup                         = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
     const std::filesystem::path settingsPath   = Common::Settings::GetSettingsPath(kTestAppId);
@@ -5499,7 +5507,11 @@ enum class SettingsSaveChildMode : uint8_t
     }
 
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSerializedSettingsSave";
-    static_cast<void>(SettingsHotReload::FlushQueuedSettingsSaves(INFINITE));
+    const bool priorSavesRetired           = SettingsHotReload::FlushQueuedSettingsSaves(INFINITE);
+    state.Require(priorSavesRetired && SettingsHotReload::DebugResetSettingsSaveLineageForSelfTest(kTestAppId),
+                  L"The independent save-queue fixture requires a quiet, fresh test-app lineage before seeding.");
+    if (! state.failure.empty())
+        return false;
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup = wil::scope_exit([&]
     {

@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "d40b9f44710f79248d0435e22c7ecb71ebabdb6742721e03c121b70277f1bea4",
+  "buildReceiptId": "9288cfeead0e74b238738e5cb3210c9313dfb38062df7ffc1d68f4489eeb8454",
+  "profile": "x64 Debug",
+  "runId": "20261029T075127Z-92084-509cec17ae40438e98b923e31d013e28",
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "nativeDurationMs": 5913,
+  "scope": "Original manager negative control. Preserves lost Terminal kind and ordinary-create busy failure after prior owners retire.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "b1d70e607fbc19147522e692c7c04a13d95fb08af2d8284a909d9c17fc549f5d"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 33280,
+      "sha256": "22c37943983e40533281e257119fced880a2fea7ad3d8f003b158264dd3fb08a"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 4765,
+      "sha256": "e093b67b3cd0e9e3019e9f8d88ca5cba845ca62c1269d1160041f04223ff79cc"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 805,
+      "sha256": "ea07d8e9ca03576681fd36355d26cf070e28091c9e9ecfcac3b4546922d9da53"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 98642,
+      "sha256": "3bad67a7a6ae32b26afe08c9f6e450a12ee892407465a29b07c5cf63e377f7fb"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 125,
+      "sha256": "293678f2c8d25b6a1b1da25656f000d19be633426e620dc3dcb471af40147c3e"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 15674,
+      "sha256": "760cbc8335759806f28fb6ed60623508b15081b5786ec3cf356e15fad756f2b2"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 2408,
+      "sha256": "529af6c20f0a35fd3e1f4308fd4e9207a7fd0132b4c52b99697ddd405f18f608"
+    }
+  ]
+}

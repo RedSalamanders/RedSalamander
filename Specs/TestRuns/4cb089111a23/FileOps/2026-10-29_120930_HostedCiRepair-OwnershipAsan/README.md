@@ -1,0 +1,1 @@
+ASan FileOps review/remediation contracts pass, including their existing admission, missing-source, collision and parent-pin checks. This v4 case does not invoke the F7 owned-volume helper controls; it supplies no native acceptance of the new VHDX operation-path helper. Uses existing nonactivating exact-case admission. Focused acceptance only.

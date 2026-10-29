@@ -1,0 +1,197 @@
+diff --git a/Plugins/FileSystem/FileSystem.FileOps.cpp b/Plugins/FileSystem/FileSystem.FileOps.cpp
+index f57d16397..410b5b32d 100644
+--- a/Plugins/FileSystem/FileSystem.FileOps.cpp
++++ b/Plugins/FileSystem/FileSystem.FileOps.cpp
+@@ -404,7 +404,8 @@ private:
+             return;
+         }
+ 
+-        unsigned int workerCount = std::thread::hardware_concurrency();
++        // Diagnostic four-worker control; restore hardware discovery before publication.
++        unsigned int workerCount = 4u;
+         if (workerCount == 0)
+         {
+             workerCount = 4;
+diff --git a/RedSalamander/PluginModuleLifecycle.h b/RedSalamander/PluginModuleLifecycle.h
+index d1c6c1c63..c34a07cd2 100644
+--- a/RedSalamander/PluginModuleLifecycle.h
++++ b/RedSalamander/PluginModuleLifecycle.h
+@@ -36,7 +36,11 @@ template <typename Entry> void MarkDeferred(Entry& entry)
+ template <typename Entry> [[nodiscard]] Entry MakeDeferredPlaceholder(const Entry& entry)
+ {
+     Entry placeholder;
+-    placeholder.origin          = entry.origin;
++    placeholder.origin = entry.origin;
++    if constexpr (requires { placeholder.type = entry.type; })
++    {
++        placeholder.type = entry.type;
++    }
+     placeholder.path            = entry.path;
+     placeholder.factoryPluginId = entry.factoryPluginId;
+     placeholder.id              = entry.id;
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.PluginConfig.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.PluginConfig.cpp
+index 367eb0ecc..fe5dce67d 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.PluginConfig.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.PluginConfig.cpp
+@@ -6368,7 +6368,52 @@ private:
+     state.Require(info->SetConfiguration(R"json({"fontSizeDip":"14"})json") == E_INVALIDARG, L"The Terminal must still reject a string fontSizeDip.");
+     state.Require(info->SetConfiguration("{") == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                   L"The Terminal must report malformed configuration JSON as ERROR_INVALID_DATA.");
+-    return true;
++
++    // Refresh while this unopened instance is retained, then use the ordinary
++    // creation path after its last owner retires. No intervening Refresh may
++    // conceal a permanently stranded deferred catalog entry.
++    auto& manager             = ViewerPluginManager::GetInstance();
++    const auto restoreCatalog = wil::scope_exit([&]() noexcept
++    {
++        info.reset();
++        terminal.reset();
++        state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"The Terminal lifecycle fixture must restore the ordinary viewer catalog.");
++    });
++    g_folderWindow.CloseAllViewers();
++    PrepareFloatingTerminalWindowForAppShutdown();
++    state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"Viewer refresh must retain an externally owned Terminal instance safely.");
++    const auto& entries      = manager.GetPlugins();
++    const auto deferred      = std::find_if(entries.begin(), entries.end(), [](const auto& entry) noexcept { return entry.id == L"builtin/terminal"; });
++    const bool kindPreserved = deferred != entries.end() && deferred->type == ViewerPluginManager::PluginType::Terminal && deferred->unloadDeferred &&
++                               ! deferred->disabled && ! deferred->loadable;
++    state.Require(kindPreserved, L"A deferred Terminal placeholder must preserve its plugin kind, identity and enabled state.");
++    wil::com_ptr<ITerminal> blockedTerminal;
++    const HRESULT blockedHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, blockedTerminal);
++    state.Require(blockedHr == HRESULT_FROM_WIN32(ERROR_BUSY) && ! blockedTerminal,
++                  L"Ordinary Terminal creation must remain blocked while the old instance still owns its module.");
++    wil::com_ptr<IUnknown> retainedIdentity;
++    state.Require(SUCCEEDED(terminal->QueryInterface(__uuidof(IUnknown), retainedIdentity.put_void())) && retainedIdentity,
++                  L"Deferred unload must keep the retained Terminal interface mapped and callable.");
++    retainedIdentity.reset();
++    info.reset();
++    terminal.reset();
++    HRESULT recoveredHr  = E_PENDING;
++    const auto recovered = RedSalamander::TestSupport::PumpMessagesUntil(
++        [&]() noexcept
++    {
++        recoveredHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, terminal);
++        return SUCCEEDED(recoveredHr) && terminal;
++    },
++        {.timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)), .operationName = L"ordinary Terminal creation after the unload quiet point"});
++    Trace(std::format(L"Terminal deferred creation: kindPreserved={} blockedHr=0x{:08X} recovered={} recoveredHr=0x{:08X} elapsedMs={}",
++                      kindPreserved,
++                      static_cast<unsigned long>(blockedHr),
++                      recovered.conditionMet,
++                      static_cast<unsigned long>(recoveredHr),
++                      recovered.elapsed.count()));
++    state.Require(recovered.conditionMet && SUCCEEDED(recoveredHr) && terminal,
++                  L"Ordinary creation must recover a quiet deferred Terminal without an explicit Refresh or Apply.");
++    return state.failure.empty();
+ }
+ 
+ } // namespace (tests)
+diff --git a/RedSalamander/ViewerPluginManager.cpp b/RedSalamander/ViewerPluginManager.cpp
+index 904057ceb..7908fc747 100644
+--- a/RedSalamander/ViewerPluginManager.cpp
++++ b/RedSalamander/ViewerPluginManager.cpp
+@@ -230,15 +230,18 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
+         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+     }
+ 
+-    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
++    if (entry->type != PluginType::Viewer || entry->disabled)
+     {
+-        return HRESULT_FROM_WIN32(ERROR_BUSY);
++        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+     }
+-
+-    if (entry->type != PluginType::Viewer || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
++    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+     {
+-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
++        const HRESULT loadHr = EnsureLoaded(*entry);
++        if (FAILED(loadHr))
++            return loadHr;
+     }
++    if (! entry->loadable || ! entry->module || ! entry->createFactory)
++        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+ 
+     FactoryOptions options{};
+     options.debugLevel = DEBUG_LEVEL_NONE;
+@@ -277,14 +280,18 @@ HRESULT ViewerPluginManager::CreateTerminalInstance(std::wstring_view pluginId,
+     {
+         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+     }
+-    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
++    if (entry->type != PluginType::Terminal || entry->disabled)
+     {
+-        return HRESULT_FROM_WIN32(ERROR_BUSY);
++        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+     }
+-    if (entry->type != PluginType::Terminal || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
++    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+     {
+-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
++        const HRESULT loadHr = EnsureLoaded(*entry);
++        if (FAILED(loadHr))
++            return loadHr;
+     }
++    if (! entry->loadable || ! entry->module || ! entry->createFactory)
++        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+ 
+     FactoryOptions options{};
+     options.debugLevel = DEBUG_LEVEL_NONE;
+diff --git a/Specs/Plugins/Plugins_ViewerPlugins.md b/Specs/Plugins/Plugins_ViewerPlugins.md
+index c24a36e67..9bf8ff812 100644
+--- a/Specs/Plugins/Plugins_ViewerPlugins.md
++++ b/Specs/Plugins/Plugins_ViewerPlugins.md
+@@ -227,6 +227,13 @@ helper retains one owned metadata placeholder for each logical alias, without ad
+ COM ownership, across refreshes and partial sweeps. All deferred aliases disappear when the final
+ module owner is released; ordinary rediscovery or on-demand loading then resumes.
+ 
++Deferred placeholders also preserve their viewer/Terminal kind. Ordinary instance creation is
++an on-demand load: for an enabled deferred entry it retries the existing quiet-point sweep, keeps
++returning `ERROR_BUSY` while an old owner remains, and reloads once that owner retires. It never
++enables a disabled plugin or bypasses the unload safety export. The existing Terminal configuration
++roundtrip also holds an unopened instance across refresh, checks its kind and callable lifetime,
++requires busy refusal, then requires ordinary creation to recover without another Refresh/Apply.
++
+ At process shutdown only, a plugin may return `TRUE` from `RedSalamanderPluginRetainModuleUntilProcessExit()` to ask the host to run the shutdown hook but leave the module loaded until OS process teardown. This is reserved for graphics-backed or driver-backed plugins that have already reached their quiet point but are unsafe to detach explicitly during process shutdown.
+ 
+ ## Plugin Interfaces
+diff --git a/Specs/Testing/Testing_SelfTests.md b/Specs/Testing/Testing_SelfTests.md
+index 44cc14c0b..ee540885a 100644
+--- a/Specs/Testing/Testing_SelfTests.md
++++ b/Specs/Testing/Testing_SelfTests.md
+@@ -516,6 +516,7 @@ Environment variables may select alternate test inputs such as profile names, bu
+ - FileOperations queue-state selftests must prove the queue state they assert. Tests that cancel a queued task must start the active holder first, wait until that task has entered operation and owns the active slot, then start the queued task, assert `IsWaitingInQueue()` before queued-cancel assertions, and fail fast if the queued task enters operation or completes before cancellation. Timeout diagnostics must include task ids, live/completed state, queue flags, progress, and HRESULTs for every task participating in the queue proof.
+ - Compare selftests that launch `RedSalamanderSearchService.exe --run-foreground` must create a JobObject with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, start the child process suspended with `CREATE_NO_WINDOW`, assign it with `AssignProcessToJobObject`, and resume the main thread only after assignment succeeds. The selftest-owned child must not share the broad runner's console-control lifetime, and it must not survive a selftest harness crash or timeout and hold SQLite/WAL or scratch-root handles into the next run.
+ - The canonical captured-child helper enforces the same console isolation. `test_support_child_process_runner_contract` observes the service probe's actual `GetConsoleWindow` state in addition to its existing stream, quoting, exit-code, restricted-inheritance, timeout-tree and cancellation controls. Duplicate foreground service checks preserve the child's output and trace its exact exit code and the primary writer's lifetime; a passing isolated retry alone does not establish the cause of a broad-run failure.
++- Fresh ViewerPE harness children likewise start suspended with `CREATE_NO_WINDOW` before Job assignment. The existing private blocked-child fixture refuses readiness when `GetConsoleWindow` reports a console, preserving its parent-message, zero-window, timeout, joined-root and empty-Job assertions. Hidden or inherited consoles are not a substitute for console isolation; all real-focus cases retain their warnings, desktop lease and restoration predicates.
+ - Compare selftests that gate foreground SearchService readiness must poll the explicit service status for the intended pipe and must diagnose early child-process exit with exit code plus captured stdout/stderr. Query-performance and parity tests must establish service readiness before the first warmup query; the first query is not an acceptable readiness probe.
+ - Foreground SearchService readiness polling uses a scaled, bounded 30-second default. Freshly linked images and cold SQLite stores can legitimately spend more than 10 seconds in image verification and initialization before creating their unique pipe; successful warm starts still return immediately, and cases with a tighter semantic budget may pass an explicit override.
+ - Foreground SearchService fault-injection and first-query gates must use the process-aware status helper with child output capture. A timeout, broken pipe, or early exit must retain the child exit code and captured stdout/stderr instead of reporting only the client-side pipe HRESULT.
+diff --git a/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp b/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
+index 756a08619..bd34d1759 100644
+--- a/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
++++ b/Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp
+@@ -933,8 +933,8 @@ struct ViewerHarnessTimeoutProbe final
+         return false;
+     }
+ 
+-    const BOOL created =
+-        CreateProcessW(modulePath.data(), commandLine.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED, nullptr, nullptr, &startupInfo, &processInfo);
++    const BOOL created = CreateProcessW(
++        modulePath.data(), commandLine.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED | CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo);
+     Check(created != FALSE, std::format(L"{} fresh harness process launches", testName), success);
+     if (created == FALSE)
+     {
+@@ -17824,6 +17824,11 @@ int wmain(int argc, wchar_t** argv)
+         {
+             return 2;
+         }
++        if (GetConsoleWindow() != nullptr)
++        {
++            std::wcerr << L"[FAIL] The noninteractive viewer harness child must not allocate or inherit a console.\n";
++            return 2;
++        }
+         const wil::unique_handle readyEvent(OpenEventW(EVENT_MODIFY_STATE, FALSE, harnessReadyEvent.c_str()));
+         const wil::unique_handle blockedEvent(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+         if (! readyEvent || ! blockedEvent || SetEvent(readyEvent.get()) == FALSE)

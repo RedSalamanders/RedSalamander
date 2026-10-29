@@ -1,0 +1,1 @@
+Static nonactivating documentation gallery passes after obtaining a normal unopened Terminal owner before export lookup. All capture, Unicode, arm-consumption and no-shell controls remain. Captured PNGs stay outside this compact packet.

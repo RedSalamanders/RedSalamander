@@ -15309,7 +15309,13 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
            left.batchIconUpdateCalls == right.batchIconUpdateCalls && left.incrementalSearchEffectUpdates == right.incrementalSearchEffectUpdates;
 }
 
-[[nodiscard]] bool WaitForFolderViewWarmPerfQuiescence(FolderWindow::Pane pane, std::chrono::milliseconds stableFor, std::chrono::milliseconds timeout) noexcept
+// The optional UI-thread observer lets the existing queued-paint case inject
+// work at the final quiet decision without changing production scheduling.
+[[nodiscard]] bool WaitForFolderViewWarmPerfQuiescence(FolderWindow::Pane pane,
+                                                       std::chrono::milliseconds stableFor,
+                                                       std::chrono::milliseconds timeout,
+                                                       void (*beforeQuietCommit)(void*) noexcept = nullptr,
+                                                       void* quietCommitContext                  = nullptr) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -15331,7 +15337,20 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
         {
             if (std::chrono::steady_clock::now() - stableSince >= stableFor)
             {
-                return true;
+                if (beforeQuietCommit)
+                    beforeQuietCommit(quietCommitContext);
+                // Snapshot acquisition and the quiet-time check can make work
+                // due after the first queue observation. Drain and resample at
+                // the commit boundary instead of returning that stale result.
+                PumpPendingMessages();
+                const auto settledSnapshot = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
+                MSG remaining{};
+                if (PeekMessageW(&remaining, nullptr, 0, 0, PM_NOREMOVE) == FALSE && SameFolderViewWarmPerfSnapshot(currentSnapshot, settledSnapshot))
+                {
+                    return true;
+                }
+                lastSnapshot = settledSnapshot;
+                stableSince  = std::chrono::steady_clock::now();
             }
         }
         else
@@ -15414,7 +15433,62 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
         if (! state.failure.empty())
             return false;
     }
-    return true;
+    // Independently queue a real pane paint after the helper's first empty-queue
+    // observation. The five original 81 ms timer trials above remain unchanged.
+    struct QuietCommitPaint final
+    {
+        HWND timerWindow = nullptr;
+        bool armed       = false;
+        bool queued      = false;
+
+        static void Queue(void* context) noexcept
+        {
+            auto& control = *static_cast<QuietCommitPaint*>(context);
+            if (control.armed)
+                return;
+            control.armed = true;
+            if (SetTimer(control.timerWindow, 1u, 1u, PaintProbe::OnTimer) == 0u)
+                return;
+            std::this_thread::sleep_for(20ms);
+            MSG pending{};
+            control.queued = PeekMessageW(&pending, control.timerWindow, WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
+        }
+    };
+    std::atomic<uint32_t> latePaints{0u};
+    PaintProbe lateProbe{.target = g_folderWindow.GetFolderViewHwnd(pane), .paints = &latePaints};
+    wil::unique_hwnd lateTimerWindow(
+        CreateWindowExW(WS_EX_NOACTIVATE, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+    state.Require(static_cast<bool>(lateTimerWindow), L"Could not create the late queued-paint timer window.");
+    if (! lateTimerWindow)
+        return false;
+    lateProbe.timerOwner = std::addressof(lateTimerWindow);
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR attached = SetWindowLongPtrW(lateTimerWindow.get(), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&lateProbe));
+    state.Require(attached != 0 || GetLastError() == ERROR_SUCCESS, L"Could not attach the late queued-paint probe.");
+    if (! state.failure.empty())
+        return false;
+    QuietCommitPaint lateControl{.timerWindow = lateTimerWindow.get()};
+    const auto beforeLate             = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
+    const bool lateQuiet              = WaitForFolderViewWarmPerfQuiescence(pane, 100ms, SelfTest::Scale(5000ms), QuietCommitPaint::Queue, &lateControl);
+    const auto atLateReturn           = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
+    const uint32_t latePaintsAtReturn = latePaints.load(std::memory_order_acquire);
+    MSG pendingLate{};
+    const bool latePendingAtReturn = lateTimerWindow && PeekMessageW(&pendingLate, lateTimerWindow.get(), WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
+    SelfTest::AppendSelfTestTrace(std::format(L"Warm quiescence late probe: quiet={} armed={} queued={} pending={} paintsAtReturn={} renderDelta={}.",
+                                              lateQuiet,
+                                              lateControl.armed,
+                                              lateControl.queued,
+                                              latePendingAtReturn,
+                                              latePaintsAtReturn,
+                                              atLateReturn.renderCalls - beforeLate.renderCalls));
+    state.Require(lateQuiet && lateControl.armed && lateControl.queued,
+                  L"The independent late-paint control must actually queue work inside the original quiet deadline.");
+    state.Require(! latePendingAtReturn && latePaintsAtReturn == 1u && atLateReturn.renderCalls > beforeLate.renderCalls,
+                  L"Warm quiescence must drain and observe the real paint queued after its first empty-queue observation.");
+    // Drain any failed negative control while its borrowed probe is still alive.
+    if (lateControl.queued)
+        state.Require(WaitForAtomicAtLeast(latePaints, 1u, SelfTest::Scale(5000ms)), L"The independent late-paint positive control did not dispatch.");
+    return state.failure.empty();
 }
 
 [[nodiscard]] bool WaitForFolderViewSortAndWarmRender(FolderWindow::Pane pane,
@@ -17424,9 +17498,11 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const FolderView::DisplayMode displayBefore           = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
+    const uint32_t thumbnailSizeBefore                    = g_folderWindow.GetThumbnailSizeDip(FolderWindow::Pane::Left);
     const auto restoreState                               = wil::scope_exit([&]
     {
         g_folderWindow.DebugSetThumbnailProviderMode(FolderWindow::Pane::Left, FolderView::DebugThumbnailProviderMode::Shell);
+        g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, thumbnailSizeBefore);
         g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, displayBefore);
         if (leftBefore.has_value())
         {
@@ -17436,6 +17512,7 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
 
     g_folderWindow.DebugSetThumbnailProviderMode(FolderWindow::Pane::Left, FolderView::DebugThumbnailProviderMode::ForceFallback);
     g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
+    g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, 48u);
     state.Require(LoadLeftPaneThumbnailFixture(state, root, {L"size_change_000.jpg", L"size_change_095.jpg"}, SelfTest::Scale(5000ms)),
                   L"Thumbnail size-change fixture did not load.");
     if (! state.failure.empty())
@@ -17447,7 +17524,10 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     FolderWindow::PaneViewOptionsDebugSnapshot beforeChange{};
     state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
                                             [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept
-    { return snapshot.thumbnailPendingCount == 0u && snapshot.thumbnailCompletedCount > 0u; },
+    {
+        return snapshot.thumbnailTargetDip >= 47.0f && snapshot.thumbnailTargetDip <= 49.0f && snapshot.thumbnailPendingCount == 0u &&
+               snapshot.thumbnailCompletedCount > 0u;
+    },
                                             SelfTest::Scale(5000ms),
                                             &beforeChange),
                   L"Initial thumbnail size-change work did not settle.");
@@ -33769,7 +33849,23 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         if (! capture(GetShortcutsWindowHandle(), L"shortcuts-terminal"))
             return false;
         SendMessageW(GetShortcutsWindowHandle(), WM_CLOSE, 0u, 0);
-        // The terminal manager pins this module. Its per-thread arm is consumed by
+        // Acquire an ordinary unopened owner through the normal factory before
+        // probing exports. A deferred catalog placeholder has no module yet.
+        auto& terminalManager = ViewerPluginManager::GetInstance();
+        wil::com_ptr<ITerminal> terminalModuleOwner;
+        HRESULT terminalLoadHr   = E_PENDING;
+        const auto terminalReady = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            terminalLoadHr = terminalManager.CreateTerminalInstance(L"builtin/terminal", settings, terminalModuleOwner);
+            return terminalLoadHr != HRESULT_FROM_WIN32(ERROR_BUSY);
+        },
+            {.timeout = SelfTest::Scale(5000ms)});
+        state.Require(terminalReady.conditionMet && SUCCEEDED(terminalLoadHr) && terminalModuleOwner,
+                      std::format(L"Terminal documentation requires a normal loaded module owner: 0x{:08X}.", static_cast<uint32_t>(terminalLoadHr)));
+        if (! state.failure.empty())
+            return false;
+        // The terminal manager and this unopened owner pin the module. Its per-thread arm is consumed by
         // exactly one factory call and is cleared on every exit from this scope.
         const auto terminalEntry =
             std::ranges::find(ViewerPluginManager::GetInstance().GetPlugins(), L"builtin/terminal", &ViewerPluginManager::PluginEntry::id);
@@ -33780,7 +33876,10 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         UnicodeHintProbe unicodeHint = nullptr;
         const FARPROC hintAddress    = GetProcAddress(terminalEntry->module.get(), "RedSalamanderTerminalDocumentationFindHintIsUnicodeForSelfTest");
         std::memcpy(&unicodeHint, &hintAddress, sizeof(unicodeHint));
-        state.Require(unicodeHint && unicodeHint() != FALSE, L"Compiled Terminal Find instructions must preserve both Unicode bullet separators.");
+        state.Require(unicodeHint != nullptr, L"Loaded Terminal documentation Unicode probe export is missing.");
+        if (! unicodeHint)
+            return false;
+        state.Require(unicodeHint() != FALSE, L"Compiled Terminal Find instructions must preserve both Unicode bullet separators.");
         using ArmTerminal        = void(__stdcall*)(BOOL) noexcept;
         ArmTerminal arm          = nullptr;
         const FARPROC armAddress = GetProcAddress(terminalEntry->module.get(), "RedSalamanderTerminalArmDocumentationSessionForSelfTest");

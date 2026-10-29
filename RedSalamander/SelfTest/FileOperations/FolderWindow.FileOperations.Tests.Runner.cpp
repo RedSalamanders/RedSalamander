@@ -15395,6 +15395,15 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Review remediation requires the no-activation guard.");
                 return true;
             }
+            // These ownership/alias controls need no mounted disk or desktop
+            // input; run them in the ordinary remediation case as well as F7.
+            std::wstring ownedVolumeFailure;
+            if (! AdmissionBaselineSelfTest::RunOwnedVolumeRefusalControls(state.tempRoot / L"review-owned-volume-refusal-controls", ownedVolumeFailure))
+            {
+                Fail(std::format(L"Owned-volume operation-path controls failed: {}", ownedVolumeFailure));
+                return true;
+            }
+            AppendLog(L"Owned-volume operation-path controls passed without mounting a disk or taking focus.");
             // Private predicates use their own engine; the real clipboard-ready journey
             // retains its strict idle-owner precondition under the no-activation guard.
             SelfTest::CaseState admissionContracts;

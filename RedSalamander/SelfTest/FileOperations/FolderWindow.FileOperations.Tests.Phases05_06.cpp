@@ -5237,7 +5237,8 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             }
         }
 
-        // Compare admission-to-completion intervals; fixture I/O belongs outside every sample.
+        // Compare admission-to-completion intervals; fixture I/O belongs outside
+        // every sample.
         state.r4A19ScenarioStartTick = GetTickCount64();
         state.taskA                  = StartFileOperationAndGetId(state.fileOps,
                                                                   FILESYSTEM_COPY,
@@ -5258,10 +5259,37 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         return false;
     }
 
-    const std::filesystem::path dBase        = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
-    const std::filesystem::path dSource      = dBase / L"source-d";
-    const std::filesystem::path dDestination = dBase / L"destination-d";
-    const auto verifyTree                    = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
+    const std::filesystem::path dBase         = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
+    const std::filesystem::path dSource       = dBase / L"source-d";
+    const std::filesystem::path dDestination  = dBase / L"destination-d";
+    const auto resolveAlternateOperationPaths = [&]() -> std::optional<std::pair<std::filesystem::path, std::filesystem::path>>
+    {
+        using namespace RedSalamander::TestSupport;
+        const std::filesystem::path mountPath(GetEnvironmentString(kOwnedVirtualDiskMountEnvironmentVariable));
+        if (mountPath.empty() || ! Common::Testing::IsSameOrDescendantTestSandboxPath(dSource, mountPath))
+            return std::pair{dSource, dDestination};
+        const std::wstring volume   = GetEnvironmentString(kOwnedVirtualDiskVolumeEnvironmentVariable);
+        const std::wstring testRoot = GetEnvironmentString(L"REDSALAMANDER_TEST_ROOT");
+        const std::wstring runId    = GetEnvironmentString(L"REDSALAMANDER_TEST_RUN_ID");
+        const auto expectedMount =
+            testRoot.empty() || ! IsSafeTestRunId(runId) ? std::filesystem::path{} : GetOwnedVirtualDiskMountPath(testRoot, runId, L"f7-admission-baseline");
+        const auto facts = ObserveOwnedVirtualDiskMount(mountPath, volume);
+        std::wstring refusal;
+        const auto source = TryMakeOwnedVirtualDiskOperationPath(facts, volume, mountPath, expectedMount, dSource, refusal);
+        if (! source.has_value())
+        {
+            AppendLog(std::format(L"Independent-volume source operation path refused: {}", refusal));
+            return std::nullopt;
+        }
+        const auto destination = TryMakeOwnedVirtualDiskOperationPath(facts, volume, mountPath, expectedMount, dDestination, refusal);
+        if (! destination.has_value())
+        {
+            AppendLog(std::format(L"Independent-volume destination operation path refused: {}", refusal));
+            return std::nullopt;
+        }
+        return std::pair{source.value(), destination.value()};
+    };
+    const auto verifyTree = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
     {
         const std::filesystem::path copied = destinationRoot / source.filename();
         if (CountFilesRecursive(copied) != kFileCount)
@@ -5292,7 +5320,8 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         if (FAILED(completed->second.hr) || ! verifyTree(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeCIsolatedUs >= 30'000'000u)
         {
-            Fail(std::format(L"R4-A19 primary isolated control failed: hr=0x{:08X} bytes={}/{} durationUs={}.",
+            Fail(std::format(L"R4-A19 primary isolated control failed: hr=0x{:08X} "
+                             L"bytes={}/{} durationUs={}.",
                              static_cast<unsigned long>(completed->second.hr),
                              completed->second.discoveredTotalBytes,
                              kTaskBytes,
@@ -5300,15 +5329,23 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             return true;
         }
 
-        // Compare admission-to-completion intervals; fixture I/O belongs outside every sample.
+        const auto operationPaths = resolveAlternateOperationPaths();
+        if (! operationPaths.has_value())
+        {
+            Fail(L"R4-A19 refused an unowned alternate-volume operation path; see "
+                 L"trace.");
+            return true;
+        }
+        // Compare admission-to-completion intervals; fixture I/O belongs outside
+        // every sample.
         state.r4A19ScenarioStartTick = GetTickCount64();
         state.taskA                  = StartFileOperationAndGetId(state.fileOps,
                                                                   FILESYSTEM_COPY,
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {dSource},
-                                                                  dDestination,
+                                                                  {operationPaths.value().first},
+                                                                  operationPaths.value().second,
                                                                   static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
@@ -5334,7 +5371,8 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         if (FAILED(completed->second.hr) || ! verifyTree(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeDIsolatedUs >= 30'000'000u)
         {
-            Fail(std::format(L"R4-A19 alternate isolated control failed: hr=0x{:08X} bytes={}/{} durationUs={}.",
+            Fail(std::format(L"R4-A19 alternate isolated control failed: hr=0x{:08X} "
+                             L"bytes={}/{} durationUs={}.",
                              static_cast<unsigned long>(completed->second.hr),
                              completed->second.discoveredTotalBytes,
                              kTaskBytes,
@@ -5344,10 +5382,19 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 
         if (! RecreateEmptyDirectory(cDestination) || ! RecreateEmptyDirectory(dDestination))
         {
-            Fail(L"R4-A19 failed to reset destinations before concurrent volume work.");
+            Fail(L"R4-A19 failed to reset destinations before concurrent volume "
+                 L"work.");
             return true;
         }
-        // Compare admission-to-completion intervals; fixture I/O belongs outside every sample.
+        const auto operationPaths = resolveAlternateOperationPaths();
+        if (! operationPaths.has_value())
+        {
+            Fail(L"R4-A19 refused an unowned concurrent-volume operation path; see "
+                 L"trace.");
+            return true;
+        }
+        // Compare admission-to-completion intervals; fixture I/O belongs outside
+        // every sample.
         state.r4A19ScenarioStartTick = GetTickCount64();
         state.taskA                  = StartFileOperationAndGetId(state.fileOps,
                                                                   FILESYSTEM_COPY,
@@ -5364,14 +5411,15 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {dSource},
-                                                                  dDestination,
+                                                                  {operationPaths.value().first},
+                                                                  operationPaths.value().second,
                                                                   static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
-            Fail(L"R4-A19 failed to start both concurrent independent-volume controls.");
+            Fail(L"R4-A19 failed to start both concurrent independent-volume "
+                 L"controls.");
             return true;
         }
         state.r4A19IndependentProgressOverlap = false;
@@ -5413,8 +5461,10 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
         ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
-        Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} hrB=0x{:08X} overlap={} "
-                         L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} concurrent={} gate={}.",
+        Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} "
+                         L"hrB=0x{:08X} overlap={} "
+                         L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} "
+                         L"concurrent={} gate={}.",
                          static_cast<unsigned long>(completedA->second.hr),
                          static_cast<unsigned long>(completedB->second.hr),
                          state.r4A19IndependentProgressOverlap ? 1 : 0,
@@ -10190,7 +10240,7 @@ case SelfTestState::Step::C0_CurlImapTransportTruth:
     state.c0CurlModule.reset();
     const unsigned int expectedChecks = imapTransport     ? 15u
                                         : imapListing     ? 369u
-                                        : entryLookup     ? 298u
+                                        : entryLookup     ? 299u
                                         : copyTraversal   ? 142u
                                         : movePreflight   ? 256u
                                         : directorySize   ? 85u

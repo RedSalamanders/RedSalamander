@@ -134,12 +134,19 @@ route-query machinery. Never copy an advertised old prefix with full-struct assi
 retains the parent runner's output streams and viewer-specific process, job and
 desktop-restoration boundary. `RunChildProcess` instead owns bounded captured
 output and a structured result; replacing execution policy would change the suite's
-evidence and lifecycle assertions. Reuse its Windows argument quoting rather than
-duplicating that syntax. Viewer cases must join their owned root and descendants
+evidence and lifecycle assertions. The viewer variant reuses its Windows argument quoting,
+`CreateCapturedPipe` and `DrainPipe`, with explicit restricted standard handles and no console.
+It forwards complete bounded output and fails on capture errors or truncation. Viewer cases must join their owned root and descendants
 before releasing the job and restoring the saved foreground; restoration never
 attaches a foreign input queue or focuses a foreign control. The private blocked-child
 fixture checks timeout containment without activating a window. Actual interactive
 restoration remains a separate native qualification requirement.
+
+`TryMakeOwnedVirtualDiskOperationPath` in `TestSupport.Tests.OwnedVirtualDisk.h` extends the
+existing owned-mount validator for product operation arguments that must avoid traversing a
+mount-point reparse boundary. It requires the same complete observed ownership facts and a strict
+child path. Fixture I/O and cleanup retain the marked mount spelling; no other volume or access
+path becomes authorized. The existing F7 refusal controls cover both the validator and path builder.
 
 These entries document deliberate local ownership under the mandatory-reuse rule;
 they are not Common APIs. A second compatible consumer requires a fresh review
