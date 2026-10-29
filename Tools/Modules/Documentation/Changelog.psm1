@@ -5,6 +5,9 @@ $script:FragmentNamePattern = '^(?<date>\d{4}-\d{2}-\d{2})-[a-z0-9]+(?:-[a-z0-9]
 $script:UnreleasedHeadingPattern = '(?m)^## Unreleased[ \t]*(?:\r?\n(?:[ \t]*\r?\n)?|$)'
 $script:EntryPattern = '(?m)^- [^\r\n]*(?:\r?\n(?:[ \t][^\r\n]*|[ \t]*(?=\r?$)))*'
 $script:StrictUtf8 = [Text.UTF8Encoding]::new($false, $true)
+# Paths compare as the file system does: Windows ignores case, while on Linux two spellings that differ only in case
+# name two different folders.
+$script:PathComparison = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
 
 function Assert-ChangelogPath([string] $Path, [string] $Root) {
     # Links inside the checkout are refused, from the path up to and including the root, before anything is read or
@@ -15,7 +18,7 @@ function Assert-ChangelogPath([string] $Path, [string] $Root) {
         if ((Test-Path -LiteralPath $current) -and ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw "Changelog paths must not traverse reparse points: $current"
         }
-        if ([string]::Equals($current.TrimEnd('\', '/'), $rootPath, [StringComparison]::OrdinalIgnoreCase)) { return }
+        if ([string]::Equals($current.TrimEnd('\', '/'), $rootPath, $script:PathComparison)) { return }
         $current = [IO.Path]::GetDirectoryName($current)
         if (-not $current) { throw "Changelog path is outside the repository ${Root}: $Path" }
     }

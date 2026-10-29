@@ -19,7 +19,7 @@ param([Parameter(Mandatory)][string] $ScratchRoot)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
-Import-Module (Join-Path $repository 'Tools/Modules/Documentation/Changelog.psm1')
+$changelogModule = Import-Module (Join-Path $repository 'Tools/Modules/Documentation/Changelog.psm1') -PassThru
 $fold = Join-Path $repository 'Tools/Fold-Changelog.ps1'
 $validate = Join-Path $repository 'Tools/Test-Changelog.ps1'
 $submit = Join-Path $repository 'Tools/Submit-ChangelogFold.ps1'
@@ -427,6 +427,17 @@ Case 'fold submission opens one pull request; WhatIf writes to neither the remot
     Assert ($lists.Count -gt 0 -and @($lists | Where-Object { -not $_.Contains('--limit 1000') }).Count -eq 0) "An open-PR query was limited to gh's default page: $($lists -join ' | ')"
     Assert-NoFoldWorktree $fixture
 }
+Case 'a default branch without a Changes folder has nothing to fold' {
+    param($r)
+    $fixture = New-FoldFixture $r
+    [void](Invoke-FixtureGit $fixture.Clone @('rm', '-q', '-r', 'Changes'))
+    [void](Invoke-FixtureGit $fixture.Clone @('commit', '-q', '-m', 'No Changes folder'))
+    [void](Invoke-FixtureGit $fixture.Clone @('push', '-q', 'origin', 'main'))
+    $output = (& $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -PushOnly 6>&1) -join "`n"
+    Assert ($output.Contains('has no changelog fragments to fold')) "A default branch without Changes/ was not reported as having nothing to fold: $output"
+    Assert ((Get-FixtureGitLines $fixture.Origin @('branch', '--list', 'changelog/fold-*')).Count -eq 0) 'A default branch with nothing to fold pushed a fold branch'
+    Assert-NoFoldWorktree $fixture
+}
 Case 'a fold whose post-checkout hook fails reports it and leaves no worktree behind' {
     param($r)
     $fixture = New-FoldFixture $r
@@ -484,6 +495,17 @@ Case 'links inside the checkout are refused; a junction above it is accepted' {
     try { & $fold -Root $r } catch { $message = $_.Exception.Message }
     Assert ($message.Contains('must not traverse reparse points') -and $message.Contains('Changes')) "A linked Changes folder was not refused: $message"
     Assert ((Snapshot $elsewhere) -ceq $before) 'A refused link target was changed'
+}
+Case 'a spelling of the root that differs only in case is the root only where the file system ignores case' {
+    param($r)
+    # Every changelog command checks its paths with this internal guard. On Linux the other spelling names a different
+    # folder, and walking up from it never reaches the root.
+    $variant = Join-Path $parent ([IO.Path]::GetFileName($r).ToUpperInvariant())
+    $message = ''
+    try { & $changelogModule { param($Path, $Root) Assert-ChangelogPath $Path $Root } (Join-Path $variant 'CHANGELOG.md') $r }
+    catch { $message = $_.Exception.Message }
+    if ($IsWindows) { Assert ($message -ceq '') "A differently cased spelling of the root was refused on Windows: $message" }
+    else { Assert ($message -cne '') 'A folder whose name differs from the root only in case was accepted as the root' }
 }
 Case 'an interrupted cleanup names the fragment and a rerun finishes it' {
     param($r)

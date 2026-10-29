@@ -104,8 +104,10 @@ if (@($pushed | Where-Object { $_ }).Count) {
     } finally {
         # Only this command's own worktree is removed: a repository-wide prune would also drop the registration of
         # every worktree whose drive is offline right now. A failure here warns, so it never replaces the real result.
+        # Paths compare as the file system does: Windows ignores case, Linux does not.
+        $samePath = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { [StringComparer]::OrdinalIgnoreCase } else { [StringComparer]::Ordinal }
         $registered = @(& git -C $Root worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' } |
-            ForEach-Object { [IO.Path]::GetFullPath($_.Substring(9)) }) -contains $worktree
+            ForEach-Object { [IO.Path]::GetFullPath($_.Substring(9)) } | Where-Object { $samePath.Equals($_, $worktree) }).Count -gt 0
         if ($registered -or [IO.Directory]::Exists($worktree)) {
             $removal = @(& git -C $Root worktree remove --force $worktree 2>&1 | ForEach-Object { "$_" })
             if ($LASTEXITCODE -ne 0) {
