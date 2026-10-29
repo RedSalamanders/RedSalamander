@@ -500,9 +500,12 @@ Case 'the public PrePush runner validates the changelog against origin/main befo
         $start.RedirectStandardError = $true
         foreach ($argument in @('-NoProfile','-File',(Join-Path $r $runnerName))) { $start.ArgumentList.Add($argument) }
         if ($scoped) { $start.ArgumentList.Add('-Mode'); $start.ArgumentList.Add('PrePush') }
+        $start.Environment['NO_COLOR'] = '1'
         $outcome = Invoke-FixtureProcess $start
-        # One line: a host without a console wraps a long error message, continuing it on " | " lines.
-        $outcome | Add-Member -NotePropertyName Flat -NotePropertyValue ((($outcome.Output -replace '\r?\n\s*\|\s?', ' ') -replace '\s+', ' '))
+        # One line of plain text: a hosted runner may still color the error (ANSI) and wraps a long message, continuing
+        # it on " | " lines, so color codes go before the lines are joined.
+        $plain = $outcome.Output -replace "`e\[[0-9;?]*[ -/]*[@-~]", ''
+        $outcome | Add-Member -NotePropertyName Flat -NotePropertyValue ((($plain -replace '\r?\n\s*\|\s?', ' ') -replace '\s+', ' '))
         $outcome
     }
     Edit-Fixture $r 'CHANGELOG.md' '- Existing.' "- Hand edit.`n- Existing."
