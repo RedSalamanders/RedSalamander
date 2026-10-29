@@ -1045,6 +1045,32 @@ Describe 'Release workflow source contracts' {
         $activePatch | Should Match 'lib\.root_module\.strip = true'
     }
 
+    It 'passes each native test seed option as complete argv elements in both Zig branches' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $assignment = [regex]::Match($workflow, '(?m)^[ \t]*(?:\[string\[\]\][ \t]*)?\$seedArguments[ \t]*=[ \t]*if[^\r\n]+')
+        $assignment.Success | Should Be $true
+        $echo = Join-Path $TestDrive 'echo-native-seed.ps1'
+        '[Console]::WriteLine((ConvertTo-Json -InputObject @($args) -Compress))' | Set-Content -LiteralPath $echo -Encoding utf8NoBOM
+        $invoke = [scriptblock]::Create('param($child,$echo,[bool]$modernZig)' + "`n" + $assignment.Value + "`n" +
+            '& $child -NoLogo -NoProfile -NonInteractive -File $echo build --color off @seedArguments -j1')
+        $previousSeed = $env:RS_TEST_SEED
+        try {
+            $env:RS_TEST_SEED = '0x97d35bc7'
+            foreach ($modern in @($true, $false)) {
+                $json = & $invoke (Join-Path $PSHOME 'pwsh.exe') $echo $modern
+                $LASTEXITCODE | Should Be 0
+                $actual = @($json | ConvertFrom-Json)
+                $expected = if ($modern) {
+                    @('build','--color','off','--seed=0x97d35bc7','-j1')
+                } else {
+                    @('build','--color','off','--seed','0x97d35bc7','-j1')
+                }
+                ($actual -join '|') | Should Be ($expected -join '|')
+            }
+        }
+        finally { $env:RS_TEST_SEED = $previousSeed }
+    }
+
     It 'keeps build-only diagnostics outside native qualification and product continuation' {
         $workflow = Get-Content (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
         $blocks = @([regex]::Split($workflow, '(?m)(?=^      - name: )'))

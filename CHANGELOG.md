@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep the Ghostty native qualification seed as complete command-line arguments
+  across both Zig versions. A real child-process argv check covers the modern
+  single-option branch and the legacy two-argument form.
 - Initialize the native Ghostty qualification crash-dump registry parent on
   fresh runners without replacing existing settings. Keep per-executable keys
   exclusive and clean up only keys created by the run.

@@ -157,6 +157,19 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Native run `40801003949` at `a635ffdfd` completed the ARM64 build and WER
+  setup, but Zig rejected the command before upstream execution. PowerShell
+  unwrapped the modern one-element seed array returned by `if`; splatting
+  the resulting scalar passed each character as an argument. A typed string
+  array now preserves the complete seed option in both branches. The regression
+  executes the workflow's actual assignment and passes it to a real child
+  process, checking both modern and legacy argv vectors. The failed log and
+  initial-output artifact are preserved in
+  `20261029T020745Z-81776-950f4b2bb08f487b8e79f155fa808128`.
+  The actual modern and legacy argv vectors passed the child-process witness;
+  focused workflow, governance and scoped checks passed 58/58 in
+  `20261029T021539Z-93516-6241a7a2d5f84d0ab8148555a21df4ba`.
+
 - Native run `40796626342` at `a7f11e810` completed the exact ARM64 candidate
   build with the shared fetch cache, then failed before upstream execution.
   Its clean runner profile lacked WER's `LocalDumps` parent, so creating an

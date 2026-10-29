@@ -874,8 +874,10 @@ test processes run in owned TestSandbox scratch with upstream snapshot fixtures
 copied into their expected relative location. Logs, dumps and the qualification
 report stay in that marked sandbox; build inputs remain under `.build`.
 Each simple-runner process receives the fixed seed explicitly; the build graph
-seed alone is not a test-runner argument. Failure uploads require an acquired
-scratch root so an early compiler failure cannot select an unowned fallback path.
+seed alone is not a test-runner argument. The build's seed options are held in
+a typed string array so the modern single-option branch remains one native
+argv element when splatted. Failure uploads require an acquired scratch root
+so an early compiler failure cannot select an unowned fallback path.
 Before installing temporary per-executable WER settings, native qualification
 opens or creates the `LocalDumps` parent with the registry API, preserving
 existing data even when a fresh runner has no parent hierarchy. It rejects an

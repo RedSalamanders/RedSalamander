@@ -417,7 +417,7 @@ jobs:
             try {
               # Serialize the unchanged upstream tests and filters through the
               # temporary diagnostic harness prepared above.
-              $seedArguments = if ($modernZig) { @("--seed=$env:RS_TEST_SEED") } else { @('--seed', $env:RS_TEST_SEED) }
+              [string[]]$seedArguments = if ($modernZig) { @("--seed=$env:RS_TEST_SEED") } else { @('--seed', $env:RS_TEST_SEED) }
               $optimization = if ($modernZig) { '-Doptimize=debug' } else { '-Doptimize=Debug' }
               & $zig build --color off @seedArguments -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
                 -Dtarget=aarch64-windows-msvc `
