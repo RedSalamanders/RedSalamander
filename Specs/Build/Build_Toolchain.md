@@ -502,7 +502,11 @@ the executable identity check and pass the registry checkout through vcpkg's
 explicit `--vcpkg-root` option. Setting `VCPKG_ROOT` does not satisfy this contract
 because vcpkg ignores that environment variable when its executable is already
 inside a valid checkout. An explicit registry root must contain both `ports` and
-`versions` before dependency mutation begins. Before bootstrapping or installing,
+`versions` before dependency mutation begins. Its Git history must also contain
+the versioned port trees referenced by the selected baseline/overrides; having
+those directories in a shallow checkout alone is insufficient. Materialize the
+required history (or unshallow that exact pinned checkout) and retain its locked
+HEAD before retrying the normal installer. Before bootstrapping or installing,
 CI MUST read `scripts/vcpkg-tools.json` from both pinned commits and require the
 executable commit's positive `schema-version` to be at least the registry
 baseline's positive `schema-version`. A manifest-baseline update that raises this

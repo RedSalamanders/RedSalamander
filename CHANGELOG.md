@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Synchronize the performance contract with proved passive-fallback conservation and its refusal/corruption controls, and document the pinned registry history required by normal vcpkg restoration.
 - Account only for proved same-session EPSV-to-PASV fallback announcements, retain zero unexplained retirements and complete accepted-transfer conservation, and add refusal/corruption/cap controls. Remove implicit small-reply pacing on owned fake FTP control sockets while preserving the complete corpus, explicit stalls, contents, statuses and deadlines; native/Full requalification remains required.
 - Add an exclusively owned data-port refusal fixture that exercises real libcurl EPSV-to-PASV fallback, exact listing output and passive-announcement/accepted-transfer accounting. Keep the large Copy fixture's existing limits and assertions while investigating C11's original extra announcement.
 - Remove per-row general formatting from the fake FTP server's repeated directory listings while retaining the exact LIST/NLST byte oracles, 4,097-file corpus, passive-listener assertions and existing deadlines. This addresses measured fixture overhead; the separate intermittent C11 passive announcement remains under investigation.
