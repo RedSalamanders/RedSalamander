@@ -409,6 +409,23 @@ Case 'fold submission opens one pull request; WhatIf writes to neither the remot
     Assert ($lists.Count -gt 0 -and @($lists | Where-Object { -not $_.Contains('--limit 1000') }).Count -eq 0) "An open-PR query was limited to gh's default page: $($lists -join ' | ')"
     Assert-NoFoldWorktree $fixture
 }
+Case 'a fold whose post-checkout hook fails reports it and leaves no worktree behind' {
+    param($r)
+    $fixture = New-FoldFixture $r
+    # Git creates the worktree, then reports the hook's failure.
+    $hooks = Join-Path $r 'failing-hooks'
+    Put $hooks 'post-checkout' "#!/bin/sh`nexit 1`n"
+    if (-not $IsWindows) { [IO.File]::SetUnixFileMode((Join-Path $hooks 'post-checkout'), [IO.UnixFileMode]'UserRead, UserWrite, UserExecute') }
+    [void](Invoke-FixtureGit $fixture.Clone @('config', 'core.hooksPath', $hooks))
+    $registrations = Get-FixtureGitLines $fixture.Clone @('worktree', 'list', '--porcelain') 'worktree *'
+    $message = ''
+    try { & $submit -Root $fixture.Clone -WorktreeParent $fixture.WorktreeParent -PushOnly } catch { $message = $_.Exception.Message }
+    Assert ($message.Contains('git worktree add')) "The failing hook did not stop the fold with its error: $message"
+    Assert-NoFoldWorktree $fixture
+    $after = Get-FixtureGitLines $fixture.Clone @('worktree', 'list', '--porcelain') 'worktree *'
+    Assert (($after -join "`n") -ceq ($registrations -join "`n")) "A failed fold left a worktree registration: $($after -join ', ')"
+    Assert ((Get-FixtureGitLines $fixture.Origin @('branch', '--list', 'changelog/fold-*')).Count -eq 0) 'A failed fold pushed a branch'
+}
 Case 'invalid UTF-8 in CHANGELOG.md is refused without mutation' {
     param($r)
     [IO.File]::WriteAllBytes((Join-Path $r 'CHANGELOG.md'), [byte[]](@([Text.Encoding]::ASCII.GetBytes("# Changelog`n`n## Unreleased`n`n- Bad ")) + @(0xFF, 0x0A)))

@@ -9,7 +9,8 @@ RequireFolded rejects any pending fragment, for checking a finished fold.
 .PARAMETER Root
 Repository root; defaults to the repository containing this command.
 .PARAMETER Base
-Ref whose merge base with HEAD the checkout is compared with: origin/main before a push, HEAD^1 in CI.
+Ref whose merge base with HEAD the checkout is compared with: origin/main before a push; in CI, HEAD^1 for a pull
+request's merge commit and the replaced tip (github.event.before) for a push.
 .PARAMETER RequireFolded
 Also rejects pending fragments, even one. Equivalent to Fold-Changelog.ps1 -Check.
 .OUTPUTS

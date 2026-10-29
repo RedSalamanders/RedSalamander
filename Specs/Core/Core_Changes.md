@@ -26,8 +26,10 @@ honored), missing `Changes/README.md`, and a missing or duplicate `## Unreleased
 renamed, and `CHANGELOG.md` must equal the exact fold `Fold-Changelog.ps1` would write of the fragments that the merge
 base holds and the checkout no longer has. Hand edits, entries folded from fragments the same change adds, edited,
 removed, reordered or duplicated entries, any other change outside the Unreleased entries, and fragments removed
-without their entry are refused; line endings never count. PrePush entrypoints run it with `-Base origin/main` and CI with `-Base HEAD^1`
-from a two-commit checkout; repositories without PrePush run the same command before handoff. Existing
+without their entry are refused; line endings never count. PrePush entrypoints run it with `-Base origin/main`. CI
+compares a pull request's merge commit with its first parent (`HEAD^1`, from a two-commit checkout) and a push with
+the tip it replaced (`github.event.before`, from a full-history checkout), so every commit of a multi-commit push is
+covered; repositories without PrePush run the same command before handoff. Existing
 validation/tooling entrypoints invoke it or its shared module. Explanation-only runs never mutate files.
 
 [`Tools/Fold-Changelog.ps1`](../../Tools/Fold-Changelog.ps1) validates all input before writing. It inserts entries
@@ -47,8 +49,9 @@ that same checkout.
 temporary worktree outside the caller's checkout, checks the result with `Test-Changelog.ps1 -Base`, commits with the
 repository's own identity, signing and hooks, pushes `changelog/fold-<commit>` and opens its pull request with `gh`
 (`-PushOnly` leaves the pull request to the caller). The temporary worktree goes under `-WorktreeParent` (the user's
-temporary folder by default; test harnesses pass a folder in their sandbox). It removes only its own temporary
-worktree, never pruning other registrations, and changes nothing in the caller's checkout. It pushes nothing when
+temporary folder by default; test harnesses pass a folder in their sandbox). It removes only the temporary worktree
+it created, also when a hook fails after Git created it, never pruning other registrations, and changes nothing in
+the caller's checkout; a cleanup problem is a warning and never replaces the original failure. It pushes nothing when
 there is nothing to fold, reuses a branch already pushed for the same commit, and reports an open fold pull request,
 looking through every open pull request, instead of opening a second, conflicting one. `-WhatIf` folds and commits
 only in the temporary worktree and never pushes or opens a pull request, also for a fold branch pushed earlier. GitHub

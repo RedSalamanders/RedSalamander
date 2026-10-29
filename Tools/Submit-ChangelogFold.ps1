@@ -73,10 +73,13 @@ if (@($pushed | Where-Object { $_ }).Count) {
     # A short name: Git keeps this worktree's administration under .git/worktrees/<name>, within Windows path limits.
     $WorktreeParent = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorktreeParent)
     if (-not [IO.Directory]::Exists($WorktreeParent)) { throw "The fold worktree parent does not exist: $WorktreeParent" }
-    $worktree = Join-Path $WorktreeParent ('changelog-fold-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
-    [void](Invoke-FoldGit $Root @('worktree', 'add', '--quiet', '--detach', $worktree, $commit))
-    Write-Host "Folding $Remote/$Branch at $short in $worktree"
+    $worktree = [IO.Path]::GetFullPath((Join-Path $WorktreeParent ('changelog-fold-' + [guid]::NewGuid().ToString('N').Substring(0, 8))))
+    # Owned only when this command creates it: whatever already exists at the path is never removed.
+    if (Test-Path -LiteralPath $worktree) { throw "The temporary fold worktree path is already in use: $worktree" }
     try {
+        # Inside the guarded scope: a failing post-checkout hook makes Git report an error after creating the worktree.
+        [void](Invoke-FoldGit $Root @('worktree', 'add', '--quiet', '--detach', $worktree, $commit))
+        Write-Host "Folding $Remote/$Branch at $short in $worktree"
         $changes = Join-Path $worktree 'Changes'
         $fragments = @(if ([IO.Directory]::Exists($changes)) { Get-ChildItem -LiteralPath $changes -Filter '*.md' -File | Where-Object Name -cne 'README.md' | Sort-Object Name -Descending })
         if (-not $fragments.Count) { Write-Host "$Remote/$Branch ($short) has no changelog fragments to fold."; return }
@@ -101,13 +104,17 @@ if (@($pushed | Where-Object { $_ }).Count) {
     } finally {
         # Only this command's own worktree is removed: a repository-wide prune would also drop the registration of
         # every worktree whose drive is offline right now. A failure here warns, so it never replaces the real result.
-        $removal = @(& git -C $Root worktree remove --force $worktree 2>&1 | ForEach-Object { "$_" })
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "The temporary fold worktree $worktree was not unregistered ($($removal -join ' ')). Run: git worktree remove --force `"$worktree`""
-        }
-        if ([IO.Directory]::Exists($worktree)) {
-            try { Remove-Item -LiteralPath $worktree -Recurse -Force }
-            catch { Write-Warning "Delete the temporary fold worktree folder yourself: $worktree ($($_.Exception.Message))" }
+        $registered = @(& git -C $Root worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' } |
+            ForEach-Object { [IO.Path]::GetFullPath($_.Substring(9)) }) -contains $worktree
+        if ($registered -or [IO.Directory]::Exists($worktree)) {
+            $removal = @(& git -C $Root worktree remove --force $worktree 2>&1 | ForEach-Object { "$_" })
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "The temporary fold worktree $worktree was not unregistered ($($removal -join ' ')). Run: git worktree remove --force `"$worktree`""
+            }
+            if ([IO.Directory]::Exists($worktree)) {
+                try { Remove-Item -LiteralPath $worktree -Recurse -Force }
+                catch { Write-Warning "Delete the temporary fold worktree folder yourself: $worktree ($($_.Exception.Message))" }
+            }
         }
         $global:LASTEXITCODE = 0
     }
