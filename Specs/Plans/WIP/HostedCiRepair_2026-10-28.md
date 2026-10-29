@@ -945,3 +945,50 @@ build controller 13020 and its contained ASan build, verify it is dead, and run
 fresh full-solution Rebuilds before renewed qualification. The independently
 launched application PID 56680 remains alive and untouched. No native runtime
 acceptance comes from the interrupted attempt.
+
+### Qualified integrated runtime checkpoint
+
+Runtime source `cc6e19d5f736a784aa5f3b4ff99b5fea185aa097` passes fresh full-solution,
+test-enabled x64 Rebuilds with Ghostty 1.4/Zig 0.17 and qualified DxUi 881e5d5.
+Debug, ASan Debug and Release receipts are respectively
+`333e985662480e39ff9c40b6a2074c74d5dc4df06260cbf325f24b1684d498bd`,
+`ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa`
+and `602239334ec5c01de6c3319158e24ddb45d2bff6a01923e25206796f980b09ea`.
+Each profile has a passing 30-execution plugin policy/roundtrip batch and a
+15-execution Terminal Find/floating/menu/embedded-exit/keyboard batch, with zero
+skips. Both noninteractive viewer containment/observation cases and all 162
+internal Terminal selftests pass per profile. The integrated source passes all
+388 governed checks, zero failures/skips/pending results, in run
+`20261029T170709Z-72556-6ab4b3b3f62541a8849e52cc487cc7d0`.
+
+Retain initial ASan run `20261029T172334Z-66476-df919bedae1e4bfda85ddce09d655196`:
+29 passed, one failed stable-folder-focus prerequisite before the first viewer
+roundtrip body. Its trace acquired the test app foreground successfully; no
+foreign-focus cause is established. Fresh identical-source run
+`20261029T172824Z-65900-334b6d16de3d4666814f29c706288d8d` passes all 30, followed
+by the passing 15-case terminal batch and standalone checks. This retry does not
+establish the cause or erase the original failed receipt. No focus assertion,
+timeout, repeat, prerequisite or quarantine changed.
+
+The extra Release VT corpus invocation first rejected missing metadata. The next
+native run passed behavior and evidence writing but the archive schema correctly
+rejected a 64-character vcpkg identity where its Git commit was required. Preserve
+both caller failures in completed runs and the verified rejected-evidence copy;
+change only the external caller to use the actual pinned vcpkg commit. Fresh run
+`20261029T175658Z-99508-fde51cc53ada436a93e9cc86d8e46c8f` passes behavior, all
+200 samples, evidence writing, unload quiet point and explicit archive validation
+under `20261029_175658_ci146-ghostty14-current`. Its raw corpus/provenance is
+retained. It is unpaired and supplies no new performance admission or
+non-regression claim. Eleven bounded integrated packets retain these scopes.
+
+Integrated PrePush run `20261029T172705Z-91152-30c2f2d7531a4465a9aac1ae07bc11e7`
+passes all 29 build-toolchain checks and 256 Compare cases with 27 existing
+capability skips. Both entries are promoted; zero are incomplete or invalidated.
+The re-attested Debug receipt is
+`7721d02794652d1c9f8ab9b44722cab7eaf88ddfd18ccc0fade3d3c9af3585fb`.
+Canonical exit 2 remains filtered NOT_EVALUATED repository coverage with hosted
+PR delegation and broader interactive Full entries pending. The reviewed merged
+execution digest is
+`aba81fe99e00f01eec4b284987892b1a0778984c7a212b08581418b379acf564`.
+Publication changes only evidence/documentation after this runtime checkpoint;
+fresh PR x64/ARM64 and main workflow acceptance remain open.

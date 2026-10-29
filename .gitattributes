@@ -490,3 +490,14 @@ Specs/TestRuns/4cb089111a23/Commands/2026-10-29_150019_HostedCiRepair-DeferredFi
 Specs/TestRuns/4cb089111a23/Commands/2026-10-29_155459_HostedCiRepair-DeferredDisabledDebugTen/** -text -whitespace
 Specs/TestRuns/4cb089111a23/Commands/2026-10-29_160013_HostedCiRepair-DeferredDisabledAsanTen/** -text -whitespace
 Specs/TestRuns/4cb089111a23/Commands/2026-10-29_160639_HostedCiRepair-DeferredDisabledReleaseTen/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_171333_HostedCiRepair-Ghostty14DebugPolicyTen/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_171454_HostedCiRepair-Ghostty14DebugTerminalThree/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Viewers/2026-10-29_171640_HostedCiRepair-Ghostty14DebugStandalone/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172824_HostedCiRepair-Ghostty14AsanPolicyTen/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_173001_HostedCiRepair-Ghostty14AsanTerminalThree/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Viewers/2026-10-29_173136_HostedCiRepair-Ghostty14AsanStandalone/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172646_HostedCiRepair-Ghostty14ReleasePolicyTen/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172802_HostedCiRepair-Ghostty14ReleaseTerminalThree/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Viewers/2026-10-29_172943_HostedCiRepair-Ghostty14ReleaseStandalone/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172334_HostedCiRepair-Ghostty14AsanInitialFocusFailure/** -text -whitespace
+Specs/TestRuns/4cb089111a23/Terminal/20261029_175658_ci146-ghostty14-current/** -text -whitespace
