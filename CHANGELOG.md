@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
 - Align the PR formatter-policy regression with the checksum-pinned PowerShell installer, retaining ARM64, suite, permission and native formatting gates while keeping legitimate Python requirements outside the formatter job independent.
 - Correct canonical Markdown fence recognition so line-leading triple-backtick inline code and tab/four-space indentation cannot hide following unindented missing links; real backtick and tilde fences close only with whitespace after the matching delimiter run. Add link, heading and inventory regression controls, preserve zero-to-three-space top-level admission and retain tilde info containing backticks.
 - Reject reparse points at owned guidance roots and their ancestors before enumeration by reusing the canonical repository path guard; cover ordinary discovery and three junction boundaries with unchanged target witnesses and owned-link teardown.
