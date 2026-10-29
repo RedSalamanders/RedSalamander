@@ -1301,7 +1301,7 @@ struct ViewerHarnessTimeoutProbe final
         const bool inputUnchanged             = inputAvailable && currentInput.dwTime == previousInput.dwTime;
         const bool permittedForeground =
             ! foreground || foreground == previousForeground || foregroundPid == processInfo.dwProcessId || foregroundPid == GetCurrentProcessId();
-        if (! Check(savedIdentityValid && ViewerHarnessFocusSharesForegroundThread(capturedIdentity) && inputUnchanged && permittedForeground,
+        if (! Check(savedIdentityValid && inputUnchanged && permittedForeground,
                     std::format(L"{} saved desktop identity and input ownership "
                                 L"permit restoration",
                                 testName),

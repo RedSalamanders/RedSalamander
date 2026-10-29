@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Preserve every desktop restoration condition after integrating Ghostty main while removing a duplicate same-thread predicate already included in the saved identity check. Keep the original source-contract assertion and both independent observation/containment cases unchanged.
 - Reject Ghostty P4 snapshot paths that alias either mutable output before any
   publication. Cover the previously accepted overlay-review path and its
   normalized case variant, preserving both descriptor and snapshot evidence.

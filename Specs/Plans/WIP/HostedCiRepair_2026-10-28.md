@@ -929,3 +929,19 @@ acceptance remains open, and this plan stays ACTIVE until those results exist.
 ### Integration of newly merged Ghostty main
 
 Main advanced to `0ed4d6ff1f4316e727b7e238727ee19bb8d6a48e` through PR #148 while the previous source was being qualified. Its Ghostty 1.4/Zig 0.17 runtime, reviewed candidate recovery, workflow prerequisites and additional desktop-observation counterfactuals remain intact. Main owns rank I51 for that integration, so this repair takes unused rank I52; the prior I51 references describe historical checkpoints. Checkpoint `1aa1ca7b5f5330240376953c2a58841ffb662f43` preserves all prior receipts and their actual source/dependency identities. They do not qualify the new runtime combination. Resolve overlapping identity helpers without removing any original contract case, retain both immutable archive baseline admissions, and refresh the reviewed execution digest only after inspecting the combined workflow/tooling closure. Fresh builds, affected terminal/plugin and harness checks, and hosted acceptance remain pending for the integrated candidate.
+
+Integrated source `37b9bd750458179d8aca852175655b1caab62c20` builds x64 Debug
+with the real pinned Ghostty 1.4 runtime, receipt
+`7fa44e8148046a0160f0e24294d9774fefc032dfb6a3f4656487a19394dfed22`.
+Its governed run `20261029T165446Z-92744-a32efb7a98fc44a7b678f7885957087e`
+passes 387 of 388 checks with zero skips. The unchanged desktop-restoration
+source guard rejects the merged expression because it redundantly inserts the
+same-thread check between its expected identity/input/foreground conjunction.
+The identity variable already includes that exact pure predicate. Remove only
+the duplicate evaluation, preserving every logical condition and the unchanged
+test. Both independent observation/containment cases remain registered.
+Retain the failed run and original Debug receipt. Stop only this repair's owned
+build controller 13020 and its contained ASan build, verify it is dead, and run
+fresh full-solution Rebuilds before renewed qualification. The independently
+launched application PID 56680 remains alive and untouched. No native runtime
+acceptance comes from the interrupted attempt.
