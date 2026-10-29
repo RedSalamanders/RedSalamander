@@ -876,6 +876,10 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match 'Windows Error Reporting\\LocalDumps\\\$_'
         $ghosttyNativeWorkflow | Should Match "@\('test.exe', 'ghostty-vt-test.exe', 'ghostty-vt-c-test.exe'\)"
         $ghosttyNativeWorkflow | Should Match 'Existing WER configuration must be preserved'
+        $ghosttyNativeWorkflow | Should Match '\[Microsoft\.Win32\.Registry\]::CurrentUser\.CreateSubKey\('
+        $ghosttyNativeWorkflow | Should Match '\$dumpParent\.Dispose\(\)'
+        $ghosttyNativeWorkflow | Should Match 'New-Item -Path \$localDumpKey\)'
+        $ghosttyNativeWorkflow | Should Not Match 'New-Item -Path \$localDumpKey -Force'
         $ghosttyNativeWorkflow | Should Match 'DumpType'
         $ghosttyNativeWorkflow | Should Match 'test_zcu\.obj'
         $ghosttyNativeWorkflow | Should Match 'retryExitCode = \$retryExitCode'

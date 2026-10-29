@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Initialize the native Ghostty qualification crash-dump registry parent on
+  fresh runners without replacing existing settings. Keep per-executable keys
+  exclusive and clean up only keys created by the run.
 - Reuse Zig's compiler bootstrap within one authenticated Ghostty dependency-fetch
   session, then remove its owned cache on success or failure. Preserve every
   package, archive and license check, with cold, warm and failed-fetch coverage.

@@ -157,6 +157,18 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Native run `40796626342` at `a7f11e810` completed the exact ARM64 candidate
+  build with the shared fetch cache, then failed before upstream execution.
+  Its clean runner profile lacked WER's `LocalDumps` parent, so creating an
+  executable key with `New-Item` failed. The log is preserved in
+  `20261029T011759Z-18144-1bf839eac61d4468b9a42dd9a84258dc`.
+  Setup now opens or creates that parent through the registry API and disposes
+  its handle; it still rejects existing executable keys and never force-creates
+  them. Native unit and product acceptance remain pending the fresh run.
+  YAML/PowerShell parsing and focused workflow, governance and scoped-testing
+  checks passed 57/57 in
+  `20261029T012734Z-92760-ffe72c07a2174b788837901e68b7c82f`.
+
 - Diagnostic run `40790104792` at `8149476b4` exhausted its 20-minute
   contained build limit during the `translate-c` fetch. Aro and Pixels fetches
   had completed in 191 and 187 seconds; the third Zig parent was still running

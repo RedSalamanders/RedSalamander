@@ -876,6 +876,11 @@ report stay in that marked sandbox; build inputs remain under `.build`.
 Each simple-runner process receives the fixed seed explicitly; the build graph
 seed alone is not a test-runner argument. Failure uploads require an acquired
 scratch root so an early compiler failure cannot select an unowned fallback path.
+Before installing temporary per-executable WER settings, native qualification
+opens or creates the `LocalDumps` parent with the registry API, preserving
+existing data even when a fresh runner has no parent hierarchy. It rejects an
+existing executable key, creates each owned key without force, and removes only
+the keys recorded as created by this run.
 
 The builder reports native command, repository/drive-lease and dependency phases
 on PowerShell's information stream. A long command reports its owned PID and

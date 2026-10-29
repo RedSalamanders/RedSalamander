@@ -316,6 +316,16 @@ jobs:
             throw "Native qualification source differs from the builder's exact Windows allowlist: $($sourceStatusBefore -join '; ')"
           }
           try {
+            # Fresh runner profiles may have no LocalDumps ancestors. Open or
+            # create the parent without replacing any existing registry data.
+            $dumpParent = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey(
+              'Software\Microsoft\Windows\Windows Error Reporting\LocalDumps', $true)
+            try {
+              if ($null -eq $dumpParent) { throw 'Could not open the WER LocalDumps parent.' }
+            }
+            finally {
+              if ($null -ne $dumpParent) { $dumpParent.Dispose() }
+            }
             foreach ($localDumpKey in $localDumpKeys) {
               if (Test-Path -LiteralPath $localDumpKey) { throw "Existing WER configuration must be preserved: $localDumpKey" }
               [void](New-Item -Path $localDumpKey)
