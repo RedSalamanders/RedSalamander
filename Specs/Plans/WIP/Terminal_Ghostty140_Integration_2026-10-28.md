@@ -225,6 +225,16 @@ and warning; acceptance remains pending their actual results.
   selects all eighteen entries after the tooling changes. That is a planning
   result, not executed qualification; final exact-head PR coverage and the
   remaining local obligations are not inferred from earlier source-bound runs.
+- The final PrePush explanation initially retained all eighteen entries because
+  the reviewed execution digest had not yet incorporated the P4 tooling changes;
+  that fail-closed result is retained in
+  `20261029T154114Z-52096-2aa0f9fa9d0a479181b5dee1b1ae7a6a`.
+  After review, `Get-ScopedPrWorkflowDigest` refreshed the manifest to
+  `faaf9d7ef6b5030d1c6b90cc5b28c5dc4ddce978b57081c783fe65c0239e6508`.
+  All eight scoped/delegation guards passed in
+  `20261029T154514Z-37664-24da650255414d879a19b4ccb1ad357b`.
+  Digest equality enables forthcoming matching CI accounting; it is not a CI
+  pass and does not promote or relabel any local failure.
 - The post-`f72618d62` changes affect tooling and documentation. Application and
   native-test sources, admitted runtime lock/overlay and build entrypoints are
   unchanged. Local native results retain their original `f72618d62` identity;
