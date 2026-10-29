@@ -157,6 +157,26 @@ and warning; acceptance remains pending their actual results.
 
 ## Source review dispositions
 
+- Native run `40805550221` at `5e721727a` completed the ARM64 candidate build
+  and seed/WER setup, then failed while launching `uucode_generate.exe` from
+  the external locked package directory. No upstream test had executed. The
+  complete log and initial-output artifact are preserved in
+  `20261029T024956Z-87616-8962f735210041da8f7a5d8ecb3b08fe`.
+  A captured-output generator reproduction using the pinned x64 Zig compiler
+  and matching source/package layout failed with the same `FileNotFound` when
+  the local cache was inside the source tree (exit 1), then passed with an
+  external absolute cache (exit 0). Both graphs and logs are preserved in
+  `20261029T030404Z-92292-029bc5aef59349ff9b8ccccf2592c178`.
+  Native qualification now uses the exact candidate's `native-local-cache`,
+  including its diagnostic executable boundary and event filters. The upstream
+  test bodies, seed, filters and clean-first-execution rule remain unchanged.
+  Workflow YAML and all eight PowerShell blocks parse. Focused workflow,
+  governance and scoped checks passed 59/59, including execution of the actual
+  diagnostic path guard with absolute/relative images and sibling, traversal
+  and missing-image rejection, in
+  `20261029T030812Z-73288-2b0efe7f120e4241b0c50dbfe7aebf90`.
+  Native acceptance still requires a fresh successful run.
+
 - Native run `40801003949` at `a635ffdfd` completed the ARM64 build and WER
   setup, but Zig rejected the command before upstream execution. PowerShell
   unwrapped the modern one-element seed array returned by `if`; splatting

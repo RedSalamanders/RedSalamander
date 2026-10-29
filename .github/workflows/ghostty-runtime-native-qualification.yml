@@ -276,7 +276,11 @@ jobs:
           $env:PATH = "$hostTools;$env:PATH"
           $env:PYTHONPATH = $pythonPackages
           $env:ZIG_GLOBAL_CACHE_DIR = Join-Path $candidateRoot 'native-global-cache'
-          $env:ZIG_LOCAL_CACHE_DIR = Join-Path $sourceRoot '.zig-cache'
+          # A source-local cache makes Zig 0.17 rebase generated executables
+          # against package working directories; Windows can reject that path.
+          # An external cache keeps generator and test executable paths absolute.
+          $nativeLocalCache = [IO.Path]::GetFullPath((Join-Path $candidateRoot 'native-local-cache'))
+          $env:ZIG_LOCAL_CACHE_DIR = $nativeLocalCache
           $modernZig = [version]$lock.toolchain.zigVersion -ge [version]'0.17.0'
           $packageArguments = @()
           if ($modernZig) {
@@ -468,9 +472,8 @@ jobs:
                   $failedCommandPattern,
                   [Text.RegularExpressions.RegexOptions]::CultureInvariant)
                 $failedTestPath = [IO.Path]::GetFullPath(
-                  (Join-Path $sourceRoot $failedCommandMatch.Groups[1].Value))
-                $allowedCacheRoot = [IO.Path]::GetFullPath(
-                  (Join-Path $sourceRoot '.zig-cache')) + [IO.Path]::DirectorySeparatorChar
+                  [IO.Path]::Combine($sourceRoot, $failedCommandMatch.Groups[1].Value))
+                $allowedCacheRoot = $nativeLocalCache + [IO.Path]::DirectorySeparatorChar
                 if (-not $failedTestPath.StartsWith(
                     $allowedCacheRoot,
                     [StringComparison]::OrdinalIgnoreCase) -or
@@ -525,7 +528,7 @@ jobs:
                       Id = 1000
                       StartTime = (Get-Date).AddHours(-2)
                     } -ErrorAction SilentlyContinue | Where-Object {
-                      $_.Message.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -and
+                      $_.Message.Contains($nativeLocalCache, [StringComparison]::OrdinalIgnoreCase) -and
                         $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                     } | Select-Object -First 8)
                   $applicationErrorRecords = @($applicationErrors | ForEach-Object {
@@ -575,7 +578,7 @@ jobs:
                   Id = 1000
                   StartTime = (Get-Date).AddHours(-2)
                 } -ErrorAction SilentlyContinue | Where-Object {
-                  $_.Message.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -and
+                  $_.Message.Contains($nativeLocalCache, [StringComparison]::OrdinalIgnoreCase) -and
                     $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                 } | Select-Object -First 8)
               foreach ($applicationError in $applicationErrors) {

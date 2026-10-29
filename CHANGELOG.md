@@ -4,6 +4,11 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep Ghostty native qualification's local cache outside its source checkout so
+  Zig 0.17 launches generated tools with absolute paths from external package
+  directories. A captured-output reproduction fails with the prior layout and
+  passes with this layout; ARM64 upstream qualification still requires a clean
+  successful run.
 - Keep the Ghostty native qualification seed as complete command-line arguments
   across both Zig versions. A real child-process argv check covers the modern
   single-option branch and the legacy two-argument form.

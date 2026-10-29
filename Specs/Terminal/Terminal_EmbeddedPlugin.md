@@ -873,6 +873,11 @@ and the same hash-verified `--system` package staging as runtime builds. Native
 test processes run in owned TestSandbox scratch with upstream snapshot fixtures
 copied into their expected relative location. Logs, dumps and the qualification
 report stay in that marked sandbox; build inputs remain under `.build`.
+The native local cache is the absolute `native-local-cache` directory beneath
+the exact candidate root, outside the source checkout. This keeps Zig 0.17's
+generated executable paths absolute when a package changes its working
+directory, avoiding a Windows relative-path launch failure. Diagnostic path
+admission and event matching use this same exact cache root.
 Each simple-runner process receives the fixed seed explicitly; the build graph
 seed alone is not a test-runner argument. The build's seed options are held in
 a typed string array so the modern single-option branch remains one native
@@ -906,7 +911,7 @@ when the unchanged upstream graph exits 1 with exactly one code-5 `test.exe`,
 zero-failure companion summary, exactly one successful
 positive-type-count ARM64 schema summary, exactly one single-failure build summary, and no
 reported `FAIL` test. The reported executable must resolve beneath the exact
-candidate `.zig-cache`; the workflow waits two seconds, hashes that settled
+candidate `native-local-cache`; the workflow waits two seconds, hashes that settled
 file, runs that exact file once with the same fixed seed, and requires exit 0
 plus exactly one zero-failure summary. The initial code-5 result always fails
 qualification, including when the diagnostic retry succeeds. Acceptance requires
@@ -923,7 +928,7 @@ only the runtime identity and a canonical report validated against
 `Specs/Terminal/GhosttyRuntimeNativeQualification.schema.json`; it has no
 repository-write permission and does not publish the candidate inputs. If an
 upstream test process fails, the job reports only Windows Application Error
-event 1000 records matching both the candidate source root and a known test
+event 1000 records matching both the candidate native local cache and a known test
 executable name. After owned scratch is acquired, failure artifacts may retain
 that run's test dumps and bounded diagnostic output there; early failures
 cannot upload a fallback root. Unrelated event-log content is excluded.

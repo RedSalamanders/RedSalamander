@@ -870,7 +870,11 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match 'Retry passed only as diagnostic evidence; qualification requires a clean first execution'
         $ghosttyNativeWorkflow | Should Match 'schemaSummaries\.Count -eq 1'
         $ghosttyNativeWorkflow | Should Match 'reportedTestFailures\.Count -eq 0'
-        $ghosttyNativeWorkflow | Should Match 'Join-Path \$sourceRoot ''\.zig-cache'''
+        $ghosttyNativeWorkflow | Should Match '\$nativeLocalCache = \[IO\.Path\]::GetFullPath\(\(Join-Path \$candidateRoot ''native-local-cache''\)\)'
+        $ghosttyNativeWorkflow | Should Match '\$env:ZIG_LOCAL_CACHE_DIR = \$nativeLocalCache'
+        $ghosttyNativeWorkflow | Should Match '\$allowedCacheRoot = \$nativeLocalCache \+ \[IO\.Path\]::DirectorySeparatorChar'
+        $ghosttyNativeWorkflow | Should Match '\.Message\.Contains\(\$nativeLocalCache, \[StringComparison\]::OrdinalIgnoreCase\)'
+        $ghosttyNativeWorkflow | Should Not Match 'Join-Path \$sourceRoot ''\.zig-cache'''
         $ghosttyNativeWorkflow | Should Match 'Start-Sleep -Seconds 2'
         $ghosttyNativeWorkflow | Should Match '& \$failedTestPath "--seed=\$env:RS_TEST_SEED"'
         $ghosttyNativeWorkflow | Should Match 'Windows Error Reporting\\LocalDumps\\\$_'
@@ -1069,6 +1073,29 @@ Describe 'Release workflow source contracts' {
             }
         }
         finally { $env:RS_TEST_SEED = $previousSeed }
+    }
+
+    It 'admits absolute and relative diagnostic executables only inside the exact native cache' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $guard = [regex]::Match($workflow, '(?ms)^ {16}\$failedTestPath =.*?(?=^ {16}# Zig truncates)')
+        $guard.Success | Should Be $true
+        $invoke = [scriptblock]::Create('param($sourceRoot,$nativeLocalCache,$failedCommandMatch)' + "`n" + $guard.Value + "`n$" + 'failedTestPath')
+        $sourceRoot = Join-Path $TestDrive 'source'
+        $nativeLocalCache = Join-Path $TestDrive 'native-local-cache'
+        $image = Join-Path $nativeLocalCache 'o/object/ghostty-vt-c-test.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $image))
+        [IO.File]::WriteAllText($image, 'diagnostic path fixture')
+        foreach ($path in @($image, [IO.Path]::GetRelativePath($sourceRoot, $image))) {
+            $match = [regex]::Match($path, '^(.+)$')
+            (& $invoke $sourceRoot $nativeLocalCache $match) | Should Be $image
+        }
+        $sibling = Join-Path $TestDrive 'native-local-cache-other/test.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $sibling))
+        [IO.File]::WriteAllText($sibling, 'outside fixture')
+        foreach ($path in @($sibling, (Join-Path $nativeLocalCache 'missing.exe'), '../native-local-cache-other/test.exe')) {
+            $match = [regex]::Match($path, '^(.+)$')
+            { & $invoke $sourceRoot $nativeLocalCache $match } | Should Throw 'escaped the candidate cache'
+        }
     }
 
     It 'keeps build-only diagnostics outside native qualification and product continuation' {

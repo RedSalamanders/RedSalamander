@@ -380,7 +380,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence, complete native seed argv elements, fresh-profile WER parent initialization without replacing existing settings, and packaging contracts.",
+      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence, absolute native generator-cache paths with matching diagnostic boundaries, complete native seed argv elements, fresh-profile WER parent initialization without replacing existing settings, and packaging contracts.",
       "usage": "Run with Pester or the current tooling aggregate after artifact action, release, packaging or qualification workflow changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
