@@ -63,6 +63,72 @@ The user authorized the four pending interactive qualification suites on
 ViewerSqliteTests.Interactive. Execute them through the canonical desktop lease
 and warning; acceptance remains pending their actual results.
 
+## 2026-10-29 14:14 UTC qualification checkpoint
+
+- Application and build sources remain unchanged between `3f2b0f1ce` and
+  `f72618d62`; the current x64 Debug test-enabled Embedded build uses receipt
+  `224e9a7766a213ef9d91f34dcea8a5567862f12f96a6e4bdb648cce53e723c67`.
+  Its rebuild passed with one unchanged ViewerWeb C4464 warning and no errors.
+- Current PR CI `40847813175` passed on x64 and native ARM64 at `f72618d62`.
+  Each platform promoted all twelve entries: 1,076 passed, zero failed and
+  two historical-evidence skips, including all 162 loaded Terminal selftests.
+  Both original validation artifacts, complete logs and metadata were downloaded
+  and independently checked in
+  `20261029T103355Z-64404-57469813dc7e4797abc86f97ad52db4c` (x64) and
+  `20261029T103418Z-79536-67e027f8b42547509ad68f777ee908f9` (ARM64).
+- Fresh local run `20261029T100906Z-94716-97da1f410e0041d688bc0b29d42913d7`
+  is archived as FAILED: 1,542 passed, three failed and 52 declared skips.
+  Build-toolchain passed 29 checks; Compare passed 260/0/21, including the
+  previously timed-out cold-start case in 38,488 ms; File Operations passed
+  297/0/25, including `R4A19_DiscoveryIndependentVolumes` in 3,734 ms; interactive
+  SQLite passed. The alternate-volume control reused the existing marked
+  C: sandbox with the explicit opt-in. The original failed aggregate is retained.
+- Commands recorded 955 passed, two failed and six declared skips. The failures
+  are `cmd_pane_embedded_terminal_plugin_lifecycle` and
+  `cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab`. At the first
+  five-second readiness deadline, the listener reported stage 2, S_OK and no
+  authenticated client. Exact failed logs, source, receipt and terminal binaries
+  are preserved in `20261029T115415Z-85364-2b11848ba7f04ed98bd3d278c81b7ad4`.
+  This diagnostic does not establish why the shell was late.
+- The isolated four-case embedded-terminal repeat passed 4/0/0 at normal timeout
+  scale on the unchanged build, native run
+  `20261029T120142Z-72404-39188a0963824958b852d8aa752eceb4`. Its aggregate uses
+  the v1 schema; the wrapper's null v2 count fields do not replace those native
+  results. The ordered Navigation family then passed 168/0/0 across three
+  repetitions in `20261029T134326Z-69680-3b409fc1b3994df288a7f88a28518103`.
+  Neither repeat explains or relabels the failed broad run. No application
+  code, readiness deadline or assertion was changed.
+- Interactive PE's VLC child passed and its owned job became quiet, but the
+  parent refused restoration after foreground moved from Codex to the independent
+  PowerToys Mouse Without Borders helper while last-input state had changed.
+  This does not prove physical user input. After the user explicitly paused
+  that utility, the complete group passed all 57 child runs and all twenty
+  native identity controls, with unchanged guards and successful post-run
+  source/artifact attestation, in
+  `20261029T132040Z-68476-09c3b0c26f634329a72cfe4c28788942`.
+  That run observed no independent-owner restoration branch; the native
+  counterfactual and source-wiring checks retain their separate scope.
+  The user was told they could resume the utility after the desktop phase.
+- Original application and ViewerPE images were byte-verified and preserved
+  before any further replacement in
+  `20261029T134223Z-41384-31d6afb93c4744feb82461458c74e83d`.
+  Read-only observers recorded owned process metadata without command lines,
+  window captions, personal profile contents or process-memory capture.
+- Both raw paired VT runs were archived with all nine files preserved per run;
+  seven original corpus/provenance files per run match their published copies.
+  The candidate's three separately published review records remain distinct.
+  Verification is in `20261029T104411Z-5356-e8d1426c6dfc4cee87c474215fb6c67d`.
+- A complete Commands rerun with failure classification is now executing on
+  the unchanged source and artifacts, native run
+  `20261029T135851Z-95996-75f5e460bf094a7e83b6cd6ab91b9b3a`.
+  Its passive observer adds owned process counters and terminal-window geometry
+  to diagnose a recurrence. The original readiness failure's cause remains open.
+- The shared sandbox audit is explicitly non-blocking under
+  `Specs/Testing/Testing_SelfTests.md`. It records 47 remaining layout issues
+  after preserving this task's two older paired runs. Earlier wording treating
+  those diagnostics alone as a Full acceptance blocker was incorrect.
+  This checkpoint still makes no complete repository Full or release claim.
+
 ## Evidence and decisions
 
 - Official release notes: <https://ghostty.org/docs/install/release-notes/1-4-0>.
@@ -529,8 +595,8 @@ PrePush or repository verdict is inferred from the native gates.
   raw passing and failed results now live under `evidence/completed-runs/`.
   Transaction receipts are retained in
   `20261028T221107Z-93048-dbbd98b0ba314902b85285c4c0a11558`. The shared
-  sandbox's other layout issues still require reconciliation before Full
-  acceptance.
+  sandbox's other layout issues remained non-blocking audit diagnostics; incomplete
+  CI and interactive coverage kept repository acceptance open.
 - Review thread `4405126908` originated at `77ba80042` and is resolved after
   verifying the `62d181cf4` executable/schema/event-filter corrections and the
   diagnostic-only retry rule. No runtime acceptance is inferred from resolving
