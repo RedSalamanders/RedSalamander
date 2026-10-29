@@ -112,12 +112,25 @@ struct EndpointSnapshot final
     size_t passiveListenerCreations           = 0u;
     size_t passiveListenerReuses              = 0u;
     size_t passivePendingRetirements          = 0u;
+    size_t passiveFallbackCreations           = 0u;
+    size_t passiveFallbackReuses              = 0u;
     size_t idleControlClosures                = 0u;
     std::array<DataTransferCounts, static_cast<size_t>(DataTransferKind::Count)> dataTransfers{};
     uint64_t listPayloadBuildUs = 0u;
     uint64_t listPayloadBytes   = 0u;
     HRESULT serverHr            = S_OK;
 };
+
+[[nodiscard]] bool PassiveAnnouncementsAccounted(const EndpointSnapshot& endpoint, uint64_t firstUses, uint64_t reuses) noexcept
+{
+    // Failed EPSV data connects cause pinned libcurl to send PASV before a
+    // transfer command. Count that retired announcement, never invent an accept.
+    return endpoint.passiveListenerCreations <= 64u && endpoint.passiveFallbackCreations <= endpoint.passiveListenerCreations &&
+           endpoint.passiveFallbackReuses <= endpoint.passiveListenerReuses && endpoint.passivePendingRetirements >= endpoint.passiveFallbackCreations &&
+           endpoint.passivePendingRetirements - endpoint.passiveFallbackCreations == endpoint.passiveFallbackReuses &&
+           firstUses == endpoint.passiveListenerCreations - endpoint.passiveFallbackCreations &&
+           reuses == endpoint.passiveListenerReuses - endpoint.passiveFallbackReuses;
+}
 
 [[nodiscard]] HRESULT SocketErrorToHResult() noexcept
 {
@@ -648,6 +661,8 @@ public:
             .passiveListenerCreations           = _passiveListenerCreations,
             .passiveListenerReuses              = _passiveListenerReuses,
             .passivePendingRetirements          = _passivePendingRetirements,
+            .passiveFallbackCreations           = _passiveFallbackCreations,
+            .passiveFallbackReuses              = _passiveFallbackReuses,
             .idleControlClosures                = _idleControlClosures,
             .dataTransfers                      = _dataTransfers,
             .listPayloadBuildUs                 = _listPayloadBuildUs,
@@ -1266,7 +1281,19 @@ private:
             {
                 std::scoped_lock lock(_stateMutex);
                 ++_passivePendingRetirements;
-                detail = std::format(L"endpointPort={};listenerPort={};previouslyConsumed={};commands=", _port, passiveListener.port, passiveListener.used);
+                const size_t previousSlot =
+                    (passiveListener.nextCommandSlot + passiveListener.recentCommands.size() - 2u) % passiveListener.recentCommands.size();
+                const bool fallback =
+                    ! extended && passiveListener.recentCommandCount >= 2u && _commands[passiveListener.recentCommands[previousSlot]].verb == "EPSV";
+                if (fallback)
+                {
+                    ++(passiveListener.used ? _passiveFallbackReuses : _passiveFallbackCreations);
+                }
+                detail             = std::format(L"endpointPort={};listenerPort={};previouslyConsumed={};kind={};commands=",
+                                                 _port,
+                                                 passiveListener.port,
+                                                 passiveListener.used,
+                                                 fallback ? L"epsv-fallback" : L"unexplained");
                 const size_t first = passiveListener.recentCommandCount == passiveListener.recentCommands.size() ? passiveListener.nextCommandSlot : 0u;
                 for (size_t offset = 0u; offset < passiveListener.recentCommandCount; ++offset)
                 {
@@ -1337,6 +1364,13 @@ private:
         if (FAILED(hr))
         {
             return hr;
+        }
+        // These fixture control replies are complete small protocol messages.
+        // Do not add Nagle/delayed-ACK pacing to the bounded 4,097-file oracle.
+        const BOOL noDelay = TRUE;
+        if (setsockopt(control, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), static_cast<int>(sizeof(noDelay))) != 0)
+        {
+            return SocketErrorToHResult();
         }
         hr = SendAll(control, "220 RedSalamander deterministic FTP fixture ready.\r\n");
         if (FAILED(hr))
@@ -1790,6 +1824,8 @@ private:
     size_t _passiveListenerCreations           = 0u;
     size_t _passiveListenerReuses              = 0u;
     size_t _passivePendingRetirements          = 0u;
+    size_t _passiveFallbackCreations           = 0u;
+    size_t _passiveFallbackReuses              = 0u;
     bool _refuseNextPassiveAnnouncement        = false;
     unsigned short _refusedPassivePort         = 0u;
     size_t _idleControlClosures                = 0u;
@@ -6555,6 +6591,33 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                        L"refused EPSV consumes one announcement without an accepted data transfer",
                        *passed,
                        *failed);
+            DebugCheck(after.passiveFallbackCreations == 1u && after.passiveFallbackReuses == 0u &&
+                           PassiveAnnouncementsAccounted(after, uses.firstUse, uses.reuse),
+                       L"real fallback conserves creations and accepts without an unexplained retirement",
+                       *passed,
+                       *failed);
+            EndpointSnapshot unclassified         = after;
+            unclassified.passiveFallbackCreations = 0u;
+            DebugCheck(! PassiveAnnouncementsAccounted(unclassified, 1u, 0u), L"an unclassified retired announcement still fails accounting", *passed, *failed);
+            EndpointSnapshot missingRetirement          = after;
+            missingRetirement.passivePendingRetirements = 0u;
+            DebugCheck(! PassiveAnnouncementsAccounted(missingRetirement, 1u, 0u), L"a fallback label cannot hide a missing retirement", *passed, *failed);
+            EndpointSnapshot reused;
+            reused.passiveListenerCreations  = 2u;
+            reused.passiveListenerReuses     = 2u;
+            reused.passivePendingRetirements = 1u;
+            reused.passiveFallbackReuses     = 1u;
+            DebugCheck(PassiveAnnouncementsAccounted(reused, 2u, 1u),
+                       L"a reused announcement fallback conserves two real sessions and one accepted reuse",
+                       *passed,
+                       *failed);
+            DebugCheck(! PassiveAnnouncementsAccounted(reused, 2u, 0u) && ! PassiveAnnouncementsAccounted(reused, 2u, 2u),
+                       L"fallback accounting rejects missing and invented accepted reuse",
+                       *passed,
+                       *failed);
+            reused.passiveListenerCreations = 65u;
+            DebugCheck(
+                ! PassiveAnnouncementsAccounted(reused, 65u, 1u), L"classified fallback never increases the original listener creation cap", *passed, *failed);
             Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.EpsvFallbackProof",
                               L"owned-refused-EPSV;libcurl-PASV;one-complete-LIST",
                               0u,
@@ -7762,21 +7825,21 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                                 // reuses, not necessarily N-1. Require complete accounting
                                 // and the unchanged creation cap instead of one-session math.
                                 const bool accounted = commandCountsMatch && payload.firstUse + payload.reuse == 4'097u &&
-                                                       CountCommands(endpoint, "NLST") == 0u && endpoint.passivePendingRetirements == 0u &&
-                                                       firstUses == endpoint.passiveListenerCreations && reuses == endpoint.passiveListenerReuses &&
-                                                       endpoint.passiveListenerCreations <= 64u;
+                                                       CountCommands(endpoint, "NLST") == 0u && PassiveAnnouncementsAccounted(endpoint, firstUses, reuses);
                                 boundedFixture       = boundedFixture && accounted;
-                                boundedDetail += std::format(
-                                    L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};firstUses={};creations={};reuses={};listenerReuses={}]",
-                                    sourceEndpoint ? L"source" : L"destination",
-                                    commandCountsMatch,
-                                    payload.firstUse + payload.reuse,
-                                    CountCommands(endpoint, "NLST"),
-                                    endpoint.passivePendingRetirements,
-                                    firstUses,
-                                    endpoint.passiveListenerCreations,
-                                    reuses,
-                                    endpoint.passiveListenerReuses);
+                                boundedDetail += std::format(L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};fallbackCreations={};fallbackReuses="
+                                                             L"{};firstUses={};creations={};reuses={};listenerReuses={}]",
+                                                             sourceEndpoint ? L"source" : L"destination",
+                                                             commandCountsMatch,
+                                                             payload.firstUse + payload.reuse,
+                                                             CountCommands(endpoint, "NLST"),
+                                                             endpoint.passivePendingRetirements,
+                                                             endpoint.passiveFallbackCreations,
+                                                             endpoint.passiveFallbackReuses,
+                                                             firstUses,
+                                                             endpoint.passiveListenerCreations,
+                                                             reuses,
+                                                             endpoint.passiveListenerReuses);
                                 Debug::Perf::Emit(L"FileOps.Curl.NativeCopy.EndpointPassiveListeners",
                                                   endpointDetail.c_str(),
                                                   0u,

@@ -659,15 +659,24 @@ A controlled entry-lookup fixture announces an exclusively owned bound-only data
 port once. The real pinned libcurl cursor must capture that exact refused port,
 send EPSV then PASV before one LIST, and return the exact file row and terminal
 status. The server must count two passive creations, one retired announcement and
-one accepted first use. This is a protocol-origin witness, not permission to
-ignore unexplained retirements in the large Copy fixture.
+one accepted first use. The large Copy fixture classifies a retirement only when
+the same control session receives PASV immediately after EPSV with no intervening
+transfer command. Every other retirement remains a failure. Accepted first uses
+plus classified unused creations must equal creations; accepted reuses plus
+classified unused reuses must equal reuse announcements. Negative controls reject
+missing/invented accepts, an unclassified retirement, missing retirement accounting
+and a 65th creation. The original 64-creation cap, 4,097 payload transfers, exact
+contents, truthful completion and deadlines remain unchanged.
 
 The fixture's LIST serializer appends its fixed grammar and converts the decimal
 size directly, avoiding a general formatter for each repeated row. Its exact-byte
 oracles cover empty/nested directories, UTF-8/literal names, unknown/overridden and
 maximum 64-bit sizes, custom payloads and 64 complete 4,097-file listings. This
 changes fixture cost only: the large Copy corpus, deadlines, accepted-transfer
-counts and passive-retirement assertions remain unchanged.
+counts and complete passive-announcement accounting remain required. Accepted
+fixture FTP control sockets use TCP_NODELAY so small complete replies do not add
+Nagle/delayed-ACK pacing to that bounded corpus. Explicit stall/refusal modes are
+unchanged; no production socket option is changed.
 
 ## Permanent Delete by name (C10)
 

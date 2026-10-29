@@ -35,6 +35,17 @@ an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
 
+The controlled `ae990475a` ASan Entry export passes 304/0. Its exact owned refused
+port 60143 appears in both the libcurl failed-connect row and the same-session
+`USER -> PASS -> PWD -> CWD probe -> EPSV -> PASV` retirement tail, followed by one
+successful LIST. Candidate accounting now conserves accepted transfers and only
+these classified fallback announcements; six additional controls preserve rejection
+of unexplained retirements, missing/invented accepts and excess creations. The
+original large-corpus deadline and content/completion predicates are unchanged.
+Disable Nagle only on the fake FTP server's accepted control sockets to remove
+implicit small-reply pacing; production networking and explicit fixture stalls are
+unchanged. Fresh native/Full qualification and matched timing evidence remain open.
+
 The original C11 route also records a cursor data-connect failure at 07:26:12.165 UTC,
 inside its 07:22:52--07:26:39 window. Add a controlled real-libcurl EPSV refusal/PASV
 fallback witness with exclusive port ownership and exact command/transfer counts.
