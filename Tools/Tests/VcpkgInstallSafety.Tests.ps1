@@ -6,6 +6,7 @@ $testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1
 $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\VcpkgInstallSafety.psm1'
 Import-Module $testRunPlanModule -Force -ErrorAction Stop
 Import-Module $helperModule -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\DxUiPaths.psm1') -Force -ErrorAction Stop
 
 function New-RSTemporaryVcpkgInstallSafetyRoot {
     return (New-RSTestSandboxScratchDirectory `
@@ -403,10 +404,16 @@ Describe 'Vcpkg default MSVC toolset pin' {
     }
 
     $pin = (Get-Content -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') -Raw | ConvertFrom-Json).commit
-    $dxuiTools = Join-Path $repoRoot ".build\dependencies\DxUi\source\$pin\Tools"
+    $dxuiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build\dependencies\DxUi') -Commit $pin
+    $dxuiTools = Join-Path $dxuiSource 'Tools'
     $dxuiModulesRestored = (Test-Path -LiteralPath (Join-Path $dxuiTools 'VisualStudio.psm1')) -and (Test-Path -LiteralPath (Join-Path $dxuiTools 'VcpkgTriplet.psm1'))
 
     It 'matches the pinned DxUi modules it mirrors' -Skip:(-not $dxuiModulesRestored) {
+        # The short directory is only a locator; verify the complete identity
+        # before importing executable code from the restored dependency.
+        $restoredHead = & git -C $dxuiSource rev-parse HEAD 2>$null
+        $LASTEXITCODE | Should Be 0
+        ([string]$restoredHead).Trim() | Should Be $pin
         # This installer cannot import the pinned checkout (it runs before the restore), so it keeps DxUi's contract itself. Whenever
         # the checkout is restored, both implementations must agree on the installation, the toolset and the overlay file they write.
         # Only the documented consumer interface is called: Get-DxUiVisualStudioInstallation, Get-DxUiDefaultToolset and

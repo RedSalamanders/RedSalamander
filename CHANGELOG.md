@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Resolve the installer mirror test through the shared short DxUi source locator and verify its full Git HEAD before importing tool modules. Document the real pinned source/version-database prerequisites, preserving the strict Full skip gate and the existing history-dependent archive exception. Candidate qualification will serialize complete Full profiles after retained overlapping MSBuild fixtures were correctly refused.
 - Wait for the Find help overlay's actual first paint in its command selftest, within a bounded shared message-pump wait, before checking first-frame opacity and scrim. A single 10 ms pump turn could finish before paint dispatch; all visual assertions remain intact, with elapsed/message diagnostics added. The original ASan failure is retained and candidate qualification remains pending.
 - Record the current native profile and pinned-archive policy audit, qualified native builds and explicit remaining runtime, performance and integration gates.
 - Update the active shared-theme extraction plan to follow the common /Wall, /WX-disabled, zero-warning policy while retaining its SDL, external-header and analysis checks.

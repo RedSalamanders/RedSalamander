@@ -1,7 +1,7 @@
 # Native build policy, console results and dependency paths
 
 Status: normative intended contract
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 ## Compiler and linker policy
 
@@ -71,6 +71,10 @@ Do not create compatibility junctions or clean historical output as a side effec
 of this migration. Cleanup follows its separate inventory/preservation/process-use
 policy. Source restore, MSBuild imports, helper invocations, provenance and tests
 must agree on the same short folder convention.
+
+The vcpkg installer mirror check uses the same source-path helper and verifies
+the complete restored Git HEAD before importing DxUi's tool modules. A restored
+16-character source locator must execute that check rather than silently skip it.
 
 ## Reviewed ARM64 link-time notice
 

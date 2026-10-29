@@ -27,6 +27,10 @@ managed source rejects build/test reuse. The optional newer-version notice never
 is yellow and prints the normal update command plus its `-UpdateOnly` alternative. A candidate without a successful
 completed DxUi validation is red and must remain pinned.
 New managed clones enable Git long paths for metadata creation and persist them locally before checkout; user/global Git settings are unchanged.
+The required vcpkg safety integration checks need that normal DxUi restore and the exact
+`vcpkg-tool.json` checkout at `.build/vcpkg-tool`, including its `versions` database.
+The mirror check uses the shared short source locator and verifies the full Git HEAD before importing modules.
+Missing prerequisites remain incomplete Full coverage; they are not new environment-skip exceptions.
 `Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
 CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
 product validation already passed in another environment; neither form creates a commit.
