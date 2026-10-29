@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "c061b0578727d0d02aba14816e36d93dd316da6ea6a0abe85ddc7ba1ca726b2f",
+  "profile": "x64 Release",
+  "runId": "20261029T132543Z-98980-26a3ad2b6b934ef4b29e4d1704bcd1af",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 40735,
+  "scope": "Exact committed candidate x64 Release. Ordinary remediation directly executes the owned-volume operation-path acceptance and refusal controls, without mounting a disk or taking focus; original remediation checks remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 86290,
+      "sha256": "7a0e4289737a4b1db7aa1f1eda97c2a2420fd3800a7f1222d2984f6590f3a6f6"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 379,
+      "sha256": "d81169a98e9c67c7f0b3bf1039105e0435c4430b0c7ece3e80109d52d0125357"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 138422,
+      "sha256": "8ba6cac4468b63ac2ee9790c66d633c315c0c1e063367cdfebc88d02cbf38467"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 891,
+      "sha256": "dead8f97d06eb06371695bd5b8ed0cc426ee0cfb81b05b05476d925494806358"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 285,
+      "sha256": "6cf9ab0726a29eabee2f53d02268a726b2b0e5660a4b7e25dffd704245ee12fb"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 3885,
+      "sha256": "3337db037e2ff8546250616930db6d0b770bfe42600c8b6e9c7d3154cf6e91cc"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 113192,
+      "sha256": "a96b98e106d2b02e4f62966123ccd83b8f2cb33e59811bb4bbbf510793e24362"
+    }
+  ]
+}

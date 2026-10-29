@@ -798,3 +798,55 @@ the R4A19 packet retains every claim-bearing row in original order and its full
 input digest/count/line provenance. Native scope, skips and failures remain
 explicit. No limit is raised or baseline silently replaced. The reviewed PR
 execution digest remains `c12ab6b16cac10b9493ac6d1c70b4f9d8b49a40ef66f81e6ee6daab3bdf12e20`.
+
+### Integrated candidate focused qualification, 29 October
+
+Committed runtime candidate `a319e2f398788f35c58968b6dad18fa7632a933a` integrates main
+`b4ff85bead78c1caf2a1e9e7fb80545ca00831de`. Full-solution test-enabled x64 Rebuilds pass
+in Debug, ASan Debug and Release, with the same one pre-existing C4464 warning and no
+errors. Their exact receipts are respectively
+`853ff02833077cdc5dfa273f730dbfb96a80ec327036ba78c109603530886609`,
+`03233ac0698015cc18e4c2277b341656ece695139c877795139753ee9da0f51c` and
+`c061b0578727d0d02aba14816e36d93dd316da6ea6a0abe85ddc7ba1ca726b2f`.
+All focused counts below pass with zero skips and no automatic retries. FileOps counts
+include Setup/Cleanup; the internal Curl assertion counts remain separate.
+
+| Focused scope | Debug | ASan Debug | Release |
+|---|---:|---:|---:|
+| Owned-volume remediation | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_131153_HostedCiRepair-FinalDebugOwnedPaths/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_131736_HostedCiRepair-FinalAsanOwnedPaths/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_132543_HostedCiRepair-FinalReleaseOwnedPaths/README.md) |
+| Captured service and writer ownership (10 repeats) | [30](../../TestRuns/4cb089111a23/Compare/2026-10-29_131333_HostedCiRepair-FinalDebugSearchTen/README.md) | [30](../../TestRuns/4cb089111a23/Compare/2026-10-29_132000_HostedCiRepair-FinalAsanSearchTen/README.md) | [30](../../TestRuns/4cb089111a23/Compare/2026-10-29_132717_HostedCiRepair-FinalReleaseSearchTen/README.md) |
+| Settings, thumbnails and theme catalog (3 repeats) | [12](../../TestRuns/4cb089111a23/Commands/2026-10-29_131449_HostedCiRepair-FinalDebugRepeatThree/README.md) | [12](../../TestRuns/4cb089111a23/Commands/2026-10-29_132152_HostedCiRepair-FinalAsanRepeatThree/README.md) | [12](../../TestRuns/4cb089111a23/Commands/2026-10-29_132836_HostedCiRepair-FinalReleaseRepeatThree/README.md) |
+| Terminal, Find, disclosure, ViewerSpace and quiet-boundary cluster (3 repeats) | [27](../../TestRuns/4cb089111a23/Commands/2026-10-29_131717_HostedCiRepair-FinalDebugClusterThree/README.md) | [27](../../TestRuns/4cb089111a23/Commands/2026-10-29_133035_HostedCiRepair-FinalAsanClusterThree/README.md) | [27](../../TestRuns/4cb089111a23/Commands/2026-10-29_133212_HostedCiRepair-FinalReleaseClusterThree/README.md) |
+| Curl entry lookup (299 internal checks plus Setup/Cleanup) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_132507_HostedCiRepair-FinalDebugCurlEntry/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133311_HostedCiRepair-FinalAsanCurlEntry/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133617_HostedCiRepair-FinalReleaseCurlEntry/README.md) |
+| Curl traversal (142 internal checks plus Setup/Cleanup) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133050_HostedCiRepair-FinalDebugCurlCopy/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133644_HostedCiRepair-FinalAsanCurlCopy/README.md) | [3](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133723_HostedCiRepair-FinalReleaseCurlCopy/README.md) |
+| Multiple-folder live progress (3 repeats including Setup/Cleanup) | [9](../../TestRuns/4cb089111a23/FileOps/2026-10-29_133534_HostedCiRepair-FinalDebugMultipleFoldersThree/README.md) | [9](../../TestRuns/4cb089111a23/FileOps/2026-10-29_134303_HostedCiRepair-FinalAsanMultipleFoldersThree/README.md) | [9](../../TestRuns/4cb089111a23/FileOps/2026-10-29_134350_HostedCiRepair-FinalReleaseMultipleFoldersThree/README.md) |
+The original repeat-control failures and the independent non-divisor theme catalog
+failure remain intact in separate packets. Every original 240-command, animation,
+resource and System gate remains. Ordinary remediation now really invokes the owned-volume
+operation-path controls, as its retained native trace confirms. C-root functional Curl
+runs preserve all eight traversal variants; they are not a matched E-root performance
+pair, and establish no causal throughput or non-regression claim.
+
+Focused viewer batches pass five supported cases in Debug and ASan Debug and four in
+Release. These include containment/read-only identity controls, final-applied image
+orientation, Web quiet teardown and actual VLC HUD keyboard routing. The _DEBUG-only
+Text async-open/UTF-8/hex case passes with its original 500 ms close gate in Debug and
+ASan. A driver mistakenly selected that case for Release; the native registry correctly
+rejected it before execution. Preserve that original exit-1 attempt separately from the
+fresh corrected four-case Release pass. No compiled or registered test was removed.
+
+The governed five-file run `20261029T130632Z-99464-e9f865a30733457986517103d1b64622`
+passes 383 checks and fails one unchanged source guard at its 900-character loop window.
+The added explanatory comment enlarged that window. Move only its three lines before
+the loop; the original guard matches the 793-character body afterward. No executable
+C++ token, assertion, test count, deadline, or test-policy limit changes. Retain the
+failed run and qualify the adjusted source through the final tooling gates.
+
+Twenty-five bounded packets retain exact receipts, source patch, raw results and assertion
+traces: twenty-one successful in-product batches, three supported viewer passes, and the
+invalid Release selection. Native input patch SHA-256 is
+`2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b`.
+The handoff after this runtime candidate changes only explanatory comment placement and
+evidence/documentation; it does not turn these focused results into Full qualification.
+PrePush selected obligations and fresh hosted x64/ARM64 PR/main workflow acceptance
+remain explicit gates. Keep this plan ACTIVE until the main workflows actually pass.

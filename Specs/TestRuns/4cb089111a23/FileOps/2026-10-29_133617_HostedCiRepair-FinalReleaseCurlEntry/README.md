@@ -1,0 +1,1 @@
+Exact committed candidate x64 Release. C0_CurlEntryLookupTruth plus Setup/Cleanup retains all 299 internal assertions, including exact max-size serialization. Functional acceptance only; no paired throughput non-regression claim. Focused coverage only, not Full. No skips or automatic retries.

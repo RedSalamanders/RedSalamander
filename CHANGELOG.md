@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Archive source-bound Debug, Release and ASan runtime-repair qualification with unchanged assertions: repeated service/writer, settings/thumbnail/theme, terminal/disclosure/quiet-boundary, complete Curl and multiple-folder checks, plus supported viewer checks. Preserve independent failures and a rejected Debug-only Release selection; retain the existing source guard by moving its explanatory comment before the loop. Hosted x64/ARM64 main qualification remains pending.
 - Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
 - Make repeated CI fixtures preserve their original behavior and acceptance gates across independent invocations.
   - Flush and reset only the owned test app's coordinator lineage before deleting or seeding a fresh settings fixture; retain every same-case stale-source, backup, coalescing and immutable-snapshot check. Establish a 48-DIP thumbnail baseline before the original 96-DIP transition and restore its original size.

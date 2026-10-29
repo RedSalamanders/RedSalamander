@@ -1021,11 +1021,11 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     const auto before         = DebugGetThemeCycleOverlaySnapshot();
     uint64_t nextCommands     = 0u;
     uint64_t previousCommands = 0u;
+    // Pair the original 12-next/4-previous burst with its inverse and
+    // balance the final half-pair. Keep all 240 real commands and resource
+    // gates while returning to System for every valid catalog length.
     for (uint64_t iteration = 0u; iteration < kIterationCount; ++iteration)
     {
-        // Pair the original 12-next/4-previous burst with its inverse and
-        // balance the final half-pair. Keep all 240 real commands and resource
-        // gates while returning to System for every valid catalog length.
         const uint64_t pairPosition = iteration % 32u;
         const bool tail             = iteration >= (kIterationCount / 32u) * 32u;
         const bool next             = tail ? (iteration % 16u) < 8u : (pairPosition < 16u ? pairPosition < 12u : pairPosition >= 28u);

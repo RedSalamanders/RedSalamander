@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "03233ac0698015cc18e4c2277b341656ece695139c877795139753ee9da0f51c",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T134303Z-77368-855e4491e4aa481e84b6bfedfc37223e",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 22187,
+  "scope": "Exact committed candidate x64 ASan Debug. DiscoveryScope_MultipleFoldersLiveProgress plus Setup/Cleanup repeated three times. Original both-roots, content, progress, row, and close assertions remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "9baf5e11c28d83d6fc074e7b3cfd796399c4de442763eb0125f2f18a31c202a1"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 31110,
+      "sha256": "cb479b4a8f66a97f742e5707c71bec084db87862c17dfb3934616ea6f405bb40"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 1880,
+      "sha256": "59582b6b9f2520724279a5f32b5b2bb0c9e9d43e50cb6d53f778a364a298cfb6"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 1270994,
+      "sha256": "9694379fc5e08e0e65fe93a8027d5734623b4779ce27974490e88f067d2157cb"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 265,
+      "sha256": "5db7d08d9b30e036a8ee019d306f5785a57264ce1222352b5af94585ad8b9e4a"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 4996,
+      "sha256": "3ea2dc3428e5876dbd649be96a7826af1fd948f1cc30053d0bb5cc27ddfb7d8d"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 16778,
+      "sha256": "436b29bfe4c1ffe72622a48ace4d11368b1d5c4cbb28574cb70687c4529a9b3a"
+    }
+  ]
+}

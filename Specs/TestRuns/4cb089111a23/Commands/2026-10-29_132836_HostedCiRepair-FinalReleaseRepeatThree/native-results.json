@@ -1,0 +1,86 @@
+{
+    "run_started_utc": "2026-10-29T13:30:31.296Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261029T132836Z-98980-6e75ed5f93f643cf978ac4c1ccc70dd1\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 77570,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+            "status": "passed",
+            "duration_ms": 36,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_save_queue_serializes_coalesces_and_flushes",
+            "status": "passed",
+            "duration_ms": 22122,
+            "repeat_index": 1
+        },
+        {
+            "name": "theme_cycle_overlay_perf",
+            "status": "passed",
+            "duration_ms": 2310,
+            "repeat_index": 1
+        },
+        {
+            "name": "folderView_thumbnail_size_change_while_pending",
+            "status": "passed",
+            "duration_ms": 536,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_save_queue_serializes_coalesces_and_flushes",
+            "status": "passed",
+            "duration_ms": 21681,
+            "repeat_index": 2
+        },
+        {
+            "name": "theme_cycle_overlay_perf",
+            "status": "passed",
+            "duration_ms": 2329,
+            "repeat_index": 2
+        },
+        {
+            "name": "folderView_thumbnail_size_change_while_pending",
+            "status": "passed",
+            "duration_ms": 567,
+            "repeat_index": 2
+        },
+        {
+            "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+            "status": "passed",
+            "duration_ms": 33,
+            "repeat_index": 3
+        },
+        {
+            "name": "settings_save_queue_serializes_coalesces_and_flushes",
+            "status": "passed",
+            "duration_ms": 21531,
+            "repeat_index": 3
+        },
+        {
+            "name": "theme_cycle_overlay_perf",
+            "status": "passed",
+            "duration_ms": 2336,
+            "repeat_index": 3
+        },
+        {
+            "name": "folderView_thumbnail_size_change_while_pending",
+            "status": "passed",
+            "duration_ms": 487,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

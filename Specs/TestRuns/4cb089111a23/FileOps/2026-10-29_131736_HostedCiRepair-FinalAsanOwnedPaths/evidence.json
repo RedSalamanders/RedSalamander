@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "03233ac0698015cc18e4c2277b341656ece695139c877795139753ee9da0f51c",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T131736Z-77368-60440ec22b554af9b3c631152d8ba262",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 78063,
+  "scope": "Exact committed candidate x64 ASan Debug ordinary remediation entry. Directly executes owned-volume operation-path acceptance and refusal controls without mounting a disk or taking focus, retaining the original remediation checks. Focused native coverage, not Full.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "9baf5e11c28d83d6fc074e7b3cfd796399c4de442763eb0125f2f18a31c202a1"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 379,
+      "sha256": "c99cb5864a2f6ab48e83e32e7b7a12b9e95ee4304fb666b8533a531172cfebdf"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 138480,
+      "sha256": "b73dce0d674a75e9b0d42956baf90df822d7cdbf1945bf66e6c6732beaea55fc"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 892,
+      "sha256": "fffd7fbc0cc7023d5bf6a82f0facb6e9652f58362a05d97810196c3276453828"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 267,
+      "sha256": "fb6d828d8988a0ac9dbb21a818d50f657fadda0e7fbefe5934e63ee8285d92db"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 3893,
+      "sha256": "dc693bb2a4523c7db277569032a2c0208eef754f7002208f186bdd82f7430d78"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 113192,
+      "sha256": "d961df12480390aa04455c753da4c579b579e5b040f3dfb01d144a3b06ddbed0"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "03233ac0698015cc18e4c2277b341656ece695139c877795139753ee9da0f51c",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T133035Z-77368-b67bf51848bd4f6cbecd2d357877f3b5",
+  "passed": 27,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 50894,
+  "scope": "Exact committed candidate x64 ASan Debug. Nine deferred-plugin, Find-sort, terminal, two-task disclosure, ViewerSpace device-loss and warm-quiescence cases each repeated three times. Original assertions and every late-paint/disclosure route remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 90011,
+      "sha256": "9baf5e11c28d83d6fc074e7b3cfd796399c4de442763eb0125f2f18a31c202a1"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 379,
+      "sha256": "7826dcb869dfb99eac54358cb9ada71d564845c152e988db2e48dcc31d5ced83"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 224754,
+      "sha256": "15e647bdd20810d89d5daa0a478e4a665a55776d72e39d3437751f3fba7eb3b2"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 5553,
+      "sha256": "87d3880a220ddcc924119b675741a8fac6289742bb358eedcb65ed59f68efd60"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 314,
+      "sha256": "40f5eaea1ae68786c9face04fc695643616ba6ef976e96ee76acfef5436ac1c1"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9423,
+      "sha256": "30c4f0541af5bf1d3dccd469490aa67a82557ccec784b8e1ca6eecc66950d5c3"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 43928,
+      "sha256": "fecfa6e8aa974ce96ea5a2bc923d23bdf68d500b4a11d48523284e89b35ee16b"
+    }
+  ]
+}
