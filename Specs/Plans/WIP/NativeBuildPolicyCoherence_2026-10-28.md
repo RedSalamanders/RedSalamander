@@ -15,7 +15,7 @@ Five repositories implement the same policy without implicitly advancing DxUi pi
 - [x] Preserve the pre-change effective-profile audit and isolate changes from concurrent tooling work.
 - [x] Restore RedTilde ARM64 through its normal entrypoint and pass the required policy/lease checks.
 - [x] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
-- [x] Unify green zero-warning build results, diagnostic/log links and opt-in terminal executable hyperlinks, preserving plain text and existing build/run semantics.
+- [x] Unify green zero-warning build results, diagnostic/log links and automatic terminal executable hyperlinks where supported, preserving plain text and existing build/run semantics.
 - [x] Shorten source-commit and output-fingerprint folders to 16 hex characters with full identity validation and collision refusal; retain existing data without cleanup.
 - [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
 - [x] Publish zero-warning guidance and normative build/path/terminal contracts, with meaningful tooling tests.
@@ -136,3 +136,11 @@ The sealed terminal audit also found `tooling.pester` failed in all three profil
 ASan's build-toolchain fixture also collided with another profile's still-active MSBuild property query in general Pester. Its guard correctly refused the overlap; the first front-loaded artifact-writer admission was insufficient because general tooling can evaluate MSBuild too. Preserve this failed receipt and run the next Full profiles serially. This is an orchestration repair, not a reason to weaken process or shared-dependency guards.
 
 The repaired mirror/version-database suite executes all 29 cases with zero failures or skips after normal DxUi restore and exact pinned tool-source materialization. The isolated shared-runtime Clean suite passes all ten cases with explicit x64/ASan Debug context. Tool inventory validation and specification inventory pass, with zero blocking spec findings. A broader direct-Pester diagnostic in the unbuilt integration checkout is retained as failed setup: six reparse/link fixtures correctly refused its ambient TEMP/TestDrive outside the marked sandbox, and ProductUiTests was not built there. Final complete tooling must use the canonical runner's contained environment and attested native products; no guard or skip-policy change is justified by that diagnostic.
+
+## Current Curl and native qualification, 2026-10-29
+
+Source a94a68b5 incorporates the controlled pinned-libcurl EPSV/PASV origin witness, narrowly classified listener conservation and the native caller's corrected 310 Entry total (Copy remains 142). Only immediate same-session EPSV-to-PASV retirement is classified; unexplained retirements still fail, cap 64 and exact 4,097 payloads/status/deadlines remain. Entry's direct diagnostic passes 310/0. The managed-host Copy diagnostic still fails its unchanged six-minute serial deadline; it is not a native application or Full pass. The curated raw archive and its scope limits are linked above.
+
+The intentionally cancelled old-source C0 queue was unstarted but correctly marked the ASan artifact operation interrupted. Its marker is preserved; a normal full-solution Rebuild, rather than marker deletion, clears it and passes with zero warnings. All six final native profiles pass with zero warnings (Sal-a94a68-native-six-verified1.json). Actual native-host focused first-paint/C0 followed by fresh serial Full three remain pending. Each build uses an invocation-private compiler PDB endpoint after retained C1090/RPC failures; no compiler/linker or artifact-containment guard is weakened.
+
+Changed archive validation passes all eight new files. A voluntary whole-inventory check reports 213 historical over-size files and 32 over-size runs; none is in this change's archive. Their original diagnostics are retained externally without deleting history or raising archive limits.

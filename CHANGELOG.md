@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Record the final zero-warning six-build matrix, preserve the interrupted-profile Rebuild and Curl diagnostic limits, and keep actual application focused/Full qualification and measurements explicit.
 - Curate byte-preserved, digest-bound Curl fallback/310-check diagnostics and the retained managed-host timeout, with explicit limits separating them from native application Full qualification and paired performance evidence.
 - Require all 310 expanded Curl Entry checks in the native FileOps host while retaining Copy's 142-check expectation; keep interrupted-profile recovery governed by a matching full-solution rebuild.
 - Synchronize the performance contract with proved passive-fallback conservation and its refusal/corruption controls, and document the pinned registry history required by normal vcpkg restoration.
