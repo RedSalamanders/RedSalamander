@@ -298,7 +298,12 @@ jobs:
           name: ghostty-product-native-arm64-${{ github.run_id }}
           path: |
             .build/logs/
-            .build/BuildReceipts/
+            .build/ARM64/Debug/build-receipt.json
+            .build/ARM64/Debug/receipts/
+            .build/ARM64/Debug/toolchain-identity.json
+            .build/ARM64/Release/build-receipt.json
+            .build/ARM64/Release/receipts/
+            .build/ARM64/Release/toolchain-identity.json
             .build/AppPackages/*ARM64*.zip
             .build/TerminalEngine/Product/ARM64/terminal-runtime-identity.json
           if-no-files-found: error

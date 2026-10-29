@@ -348,9 +348,17 @@ function Compare-RSTerminalVtUpgradeEvidence {
         [string]$BaselineRunPath,
 
         [Parameter(Mandatory = $true)]
-        [string]$CandidateRunPath
+        [string]$CandidateRunPath,
+
+        [AllowEmptyCollection()]
+        [string[]]$ZigToolchainTransition = @()
     )
 
+    if ($ZigToolchainTransition.Count -notin @(0, 2) -or
+        @($ZigToolchainTransition | Where-Object { $_ -cnotmatch '^[0-9]+[.][0-9]+[.][0-9]+(?:[-+][0-9A-Za-z.-]+)?$' }).Count -ne 0 -or
+        ($ZigToolchainTransition.Count -eq 2 -and $ZigToolchainTransition[0] -ceq $ZigToolchainTransition[1])) {
+        throw 'ZigToolchainTransition requires exactly two distinct reviewed versions in baseline,candidate order.'
+    }
     $violations = [System.Collections.Generic.List[object]]::new()
     try {
         $baseline = Read-RSTerminalVtUpgradeEvidence -RepoRoot $RepoRoot -RunPath $BaselineRunPath
@@ -385,10 +393,18 @@ function Compare-RSTerminalVtUpgradeEvidence {
             & $addViolation "Pair identity '$property' differs between baseline and candidate."
         }
     }
-    foreach ($property in @('windowsBuild', 'cpu', 'architecture', 'compiler', 'windowsSdk', 'zig', 'vcpkgCommit')) {
+    foreach ($property in @('windowsBuild', 'cpu', 'architecture', 'compiler', 'windowsSdk', 'vcpkgCommit')) {
         if ($baselineResults.environment.$property -cne $candidateResults.environment.$property) {
             & $addViolation "Environment identity '$property' differs between baseline and candidate."
         }
+    }
+    if ($ZigToolchainTransition.Count -eq 0) {
+        if ($baselineResults.environment.zig -cne $candidateResults.environment.zig) {
+            & $addViolation "Environment identity 'zig' differs between baseline and candidate."
+        }
+    } elseif ($baselineResults.environment.zig -cne $ZigToolchainTransition[0] -or
+        $candidateResults.environment.zig -cne $ZigToolchainTransition[1]) {
+        & $addViolation 'Zig versions do not match the exact reviewed baseline,candidate toolchain transition.'
     }
     foreach ($property in @('formatId', 'version', 'sha256', 'inputByteCount')) {
         if ($baselineResults.corpus.$property -cne $candidateResults.corpus.$property) {
@@ -464,6 +480,7 @@ function Compare-RSTerminalVtUpgradeEvidence {
         Outcome = if ($violations.Count -eq 0) { 'pass' } else { 'fail' }
         BaselineRun = $baseline.RelativeRun
         CandidateRun = $candidate.RelativeRun
+        ZigToolchainTransition = [string[]]$ZigToolchainTransition
         Measurements = @($measurementRows)
         Violations = @($violations)
     }

@@ -1,4 +1,5 @@
 name: Ghostty Runtime Native Qualification
+run-name: Ghostty ARM64 - ${{ inputs.diagnostics_only && 'build diagnostics only' || 'native qualification' }}
 
 "on":
   workflow_dispatch:
@@ -15,8 +16,18 @@ name: Ghostty Runtime Native Qualification
         description: SHA-256 of the reviewed normalized candidate overlay
         required: true
         type: string
+      use_repository_lock:
+        description: Qualify the checked-out canonical lock and overlay instead of candidate secrets
+        required: true
+        default: false
+        type: boolean
       qualify_product:
         description: Continue into admitted-product Debug, Commands, Release, and portable qualification
+        required: true
+        default: false
+        type: boolean
+      diagnostics_only:
+        description: Collect a time-bounded runtime build log without running or publishing qualification
         required: true
         default: false
         type: boolean
@@ -34,7 +45,7 @@ concurrency:
 
 jobs:
   qualify-arm64:
-    name: Native ARM64 lib-vt qualification
+    name: ${{ inputs.diagnostics_only && 'ARM64 build diagnostics (not qualification)' || 'Native ARM64 lib-vt qualification' }}
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 120
     env:
@@ -42,6 +53,7 @@ jobs:
       RS_CANDIDATE_LOCK_SHA256: ${{ inputs.candidate_lock_sha256 }}
       RS_CANDIDATE_PATCH_SHA256: ${{ inputs.candidate_patch_sha256 }}
       RS_TEST_SEED: '0x97d35bc7'
+      RS_USE_REPOSITORY_LOCK: ${{ inputs.use_repository_lock }}
 
     steps:
       - name: Enable long Git paths before checkout
@@ -97,17 +109,23 @@ jobs:
               throw "Invalid $($entry.Name) input."
             }
           }
-          if ([string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_LOCK_B64) -or
-              [string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_PATCH_B64)) {
-            throw 'The reviewed candidate lock and patch secrets are required.'
-          }
-
           $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
           [void][IO.Directory]::CreateDirectory($candidateRoot)
           $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
           $patchPath = Join-Path $candidateRoot 'Ghostty-WindowsPrivateRuntime.patch'
-          [IO.File]::WriteAllBytes($lockPath, [Convert]::FromBase64String($env:RS_CANDIDATE_LOCK_B64))
-          [IO.File]::WriteAllBytes($patchPath, [Convert]::FromBase64String($env:RS_CANDIDATE_PATCH_B64))
+          $expectedOverlayPath = ".build/TerminalEngineUpgrade/$env:RS_CANDIDATE_COMMIT/Ghostty-WindowsPrivateRuntime.patch"
+          if ($env:RS_USE_REPOSITORY_LOCK -ceq 'true') {
+            $expectedOverlayPath = 'Tools/TerminalEngine/Patches/Ghostty-WindowsPrivateRuntime.patch'
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'External/TerminalEngine/GhosttyRuntimeLock.v1.json') -Destination $lockPath
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE $expectedOverlayPath) -Destination $patchPath
+          } else {
+            if ([string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_LOCK_B64) -or
+                [string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_PATCH_B64)) {
+              throw 'The reviewed candidate lock and patch secrets are required.'
+            }
+            [IO.File]::WriteAllBytes($lockPath, [Convert]::FromBase64String($env:RS_CANDIDATE_LOCK_B64))
+            [IO.File]::WriteAllBytes($patchPath, [Convert]::FromBase64String($env:RS_CANDIDATE_PATCH_B64))
+          }
 
           $actualLockSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash.ToLowerInvariant()
           $actualPatchSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $patchPath).Hash.ToLowerInvariant()
@@ -119,14 +137,29 @@ jobs:
           }
 
           $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json -Depth 100
-          $expectedOverlayPath = ".build/TerminalEngineUpgrade/$env:RS_CANDIDATE_COMMIT/Ghostty-WindowsPrivateRuntime.patch"
           if ([string]$lock.upstream.commit -cne $env:RS_CANDIDATE_COMMIT -or
               [string]$lock.overlay.path -cne $expectedOverlayPath -or
               [string]$lock.overlay.normalizedTextSha256 -cne $env:RS_CANDIDATE_PATCH_SHA256) {
             throw 'Candidate lock identity does not bind the requested commit and overlay.'
           }
 
+      - name: Select owned native test-data root
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestRunPlan.psm1') -Force
+          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          $root = Initialize-RSTestSandboxRoot -TestRoot $candidate -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization
+          $env:REDSALAMANDER_TEST_ROOT = $root
+          $env:REDSALAMANDER_TEST_RUN_ID = "ghostty-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+          $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $env:GITHUB_WORKSPACE -Harness upstream-ghostty -Case lib-vt
+          "REDSALAMANDER_TEST_ROOT=$root" >> $env:GITHUB_ENV
+          "REDSALAMANDER_TEST_RUN_ID=$env:REDSALAMANDER_TEST_RUN_ID" >> $env:GITHUB_ENV
+          "RS_NATIVE_TEST_SCRATCH=$scratch" >> $env:GITHUB_ENV
+
       - name: Build exact candidate natively
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -143,7 +176,76 @@ jobs:
             throw 'The native candidate build returned an invalid identity.'
           }
 
+      - name: Collect bounded native build diagnostics only
+        if: ${{ inputs.diagnostics_only }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scratch = $env:RS_NATIVE_TEST_SCRATCH
+          $env:TEMP = $scratch
+          $env:TMP = $scratch
+          Import-Module .\Tools\Modules\Build\ProcessStreaming.psm1 -Force
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $outputRoot = Join-Path $candidateRoot 'candidate-native-arm64'
+          $worker = Join-Path $scratch 'build-candidate.ps1'
+          @'
+          param([string]$RepoRoot, [string]$LockPath, [string]$OutputRoot)
+          $ErrorActionPreference = 'Stop'
+          Set-Location -LiteralPath $RepoRoot
+          $identity = & .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform ARM64 -CandidateLockPath $LockPath -CandidateOutputRoot $OutputRoot -Force -PassThru
+          if ($identity.machine -cne 'ARM64') { throw 'Diagnostic build produced the wrong architecture.' }
+          Write-Host "Diagnostic build produced ARM64 DLL $($identity.dllSha256). No native tests were run."
+          '@ | Set-Content -LiteralPath $worker -Encoding utf8NoBOM
+          $diagnosticExitCode = $null
+          $diagnosticFailure = $null
+          $clock = [Diagnostics.Stopwatch]::StartNew()
+          try {
+            $diagnosticExitCode = Invoke-RSStreamingProcess -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @(
+                '-NoLogo', '-NoProfile', '-NonInteractive', '-File', $worker,
+                '-RepoRoot', $env:GITHUB_WORKSPACE, '-LockPath', $lockPath, '-OutputRoot', $outputRoot
+              ) -WorkingDirectory $env:GITHUB_WORKSPACE -LogPath (Join-Path $scratch 'native-build.log') -TimeoutMilliseconds 1200000 -OutputLineCallback { param($line) Write-Host $line }
+            if ($diagnosticExitCode -isnot [int] -or $diagnosticExitCode -ne 0) {
+              throw "Diagnostic build failed with exit $diagnosticExitCode."
+            }
+          }
+          catch {
+            $diagnosticFailure = $_.Exception.ToString()
+            throw
+          }
+          finally {
+            $record = [ordered]@{
+              formatId = 'red-salamander-ghostty-native-build-diagnostics'
+              schemaVersion = 1
+              qualification = $false
+              scope = 'build diagnostics only; upstream tests and product qualification were not run'
+              sourceCommit = $env:GITHUB_SHA
+              candidateCommit = $env:RS_CANDIDATE_COMMIT
+              candidateLockSha256 = $env:RS_CANDIDATE_LOCK_SHA256
+              candidateOverlaySha256 = $env:RS_CANDIDATE_PATCH_SHA256
+              exitCode = $diagnosticExitCode
+              failure = $diagnosticFailure
+              elapsedMilliseconds = $clock.ElapsedMilliseconds
+            }
+            [IO.File]::WriteAllText((Join-Path $scratch 'build-diagnostics.json'), ($record | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+            $identityPath = Join-Path $outputRoot 'terminal-runtime-identity.json'
+            if ([IO.File]::Exists($identityPath)) {
+              Copy-Item -LiteralPath $identityPath -Destination (Join-Path $scratch 'diagnostic-runtime-identity.json')
+            }
+          }
+
+      - name: Upload build-only diagnostic evidence
+        if: ${{ always() && inputs.diagnostics_only && env.RS_NATIVE_TEST_SCRATCH != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghostty-native-build-diagnostics-${{ github.run_id }}
+          path: ${{ env.RS_NATIVE_TEST_SCRATCH }}/
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Run upstream native ARM64 lib-vt targets
+        id: native_tests
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -159,10 +261,12 @@ jobs:
             throw "Pinned Zig executable is missing: $zig"
           }
 
-          $pythonPackages = Join-Path $env:RUNNER_TEMP 'ghostty-python-packages'
+          $env:TEMP = $env:RS_NATIVE_TEST_SCRATCH
+          $env:TMP = $env:RS_NATIVE_TEST_SCRATCH
+          $pythonPackages = Join-Path $candidateRoot 'python-packages'
           & python -m pip install --disable-pip-version-check --no-warn-script-location --target $pythonPackages jsonschema==4.26.0
           if ($LASTEXITCODE -ne 0) { throw 'Installing the pinned jsonschema test dependency failed.' }
-          $hostTools = Join-Path $env:RUNNER_TEMP 'ghostty-host-tools'
+          $hostTools = Join-Path $candidateRoot 'host-tools'
           [void][IO.Directory]::CreateDirectory($hostTools)
           $pythonPath = (Get-Command python -ErrorAction Stop).Source
           [IO.File]::WriteAllText(
@@ -171,16 +275,37 @@ jobs:
             [Text.UTF8Encoding]::new($false))
           $env:PATH = "$hostTools;$env:PATH"
           $env:PYTHONPATH = $pythonPackages
+          $env:ZIG_GLOBAL_CACHE_DIR = Join-Path $candidateRoot 'native-global-cache'
+          # A source-local cache makes Zig 0.17 rebase generated executables
+          # against package working directories; Windows can reject that path.
+          # An external cache keeps generator and test executable paths absolute.
+          $nativeLocalCache = [IO.Path]::GetFullPath((Join-Path $candidateRoot 'native-local-cache'))
+          $env:ZIG_LOCAL_CACHE_DIR = $nativeLocalCache
+          $modernZig = [version]$lock.toolchain.zigVersion -ge [version]'0.17.0'
+          $packageArguments = @()
+          if ($modernZig) {
+            Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1')
+            $packages = Expand-RSGhosttyRuntimeLockedPackages -RepoRoot $env:GITHUB_WORKSPACE -RuntimeLock $lock `
+              -DownloadsRoot (Join-Path $env:GITHUB_WORKSPACE '.build/TerminalEngineUpgrade/Downloads') `
+              -DestinationRoot (Join-Path $candidateRoot 'native-locked-packages')
+            $packageArguments = @('--system', $packages)
+          }
+          $fixtures = Join-Path $sourceRoot 'src/terminal/snapshot/testdata'
+          $fixtureDestination = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'src/terminal/snapshot/testdata'
+          [void][IO.Directory]::CreateDirectory((Split-Path -Parent $fixtureDestination))
+          Copy-Item -LiteralPath $fixtures -Destination $fixtureDestination -Recurse
 
           $patchApplied = $false
           $buildModified = $false
           $buildPath = Join-Path $sourceRoot 'build.zig'
           $buildOriginal = $null
           $temporaryRunnerPath = Join-Path $sourceRoot '.red-salamander-native-test-runner.zig'
-          $crashRoot = Join-Path $env:RUNNER_TEMP 'ghostty-native-crash'
+          $crashRoot = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'crash'
           [void][IO.Directory]::CreateDirectory($crashRoot)
-          $localDumpKey = 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\test.exe'
-          $werConfigured = $false
+          $localDumpKeys = @('test.exe', 'ghostty-vt-test.exe', 'ghostty-vt-c-test.exe') | ForEach-Object {
+            "HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\$_"
+          }
+          $createdDumpKeys = [Collections.Generic.List[string]]::new()
           $windowsUnmaterializablePaths = @(
             'test/fuzz-libghostty/corpus/parser-cmin/id_000123,time_0,execs_0,orig_id_000940,src_000935,time_9023,execs_524829,op_quick,pos_55,val_+13,+cov',
             'test/fuzz-libghostty/corpus/parser-cmin/id_000213,time_0,execs_0,orig_id_001278,src_001266,time_20982,execs_1128131,op_quick,pos_31,val_+2,+cov'
@@ -195,7 +320,20 @@ jobs:
             throw "Native qualification source differs from the builder's exact Windows allowlist: $($sourceStatusBefore -join '; ')"
           }
           try {
-            [void](New-Item -Path $localDumpKey -Force)
+            # Fresh runner profiles may have no LocalDumps ancestors. Open or
+            # create the parent without replacing any existing registry data.
+            $dumpParent = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey(
+              'Software\Microsoft\Windows\Windows Error Reporting\LocalDumps', $true)
+            try {
+              if ($null -eq $dumpParent) { throw 'Could not open the WER LocalDumps parent.' }
+            }
+            finally {
+              if ($null -ne $dumpParent) { $dumpParent.Dispose() }
+            }
+            foreach ($localDumpKey in $localDumpKeys) {
+              if (Test-Path -LiteralPath $localDumpKey) { throw "Existing WER configuration must be preserved: $localDumpKey" }
+              [void](New-Item -Path $localDumpKey)
+              $createdDumpKeys.Add($localDumpKey)
             [void](New-ItemProperty `
                 -Path $localDumpKey `
                 -Name DumpFolder `
@@ -208,7 +346,7 @@ jobs:
                 -PropertyType DWord `
                 -Value 2 `
                 -Force)
-            $werConfigured = $true
+            }
 
             & git -C $sourceRoot apply --check $patchPath
             if ($LASTEXITCODE -ne 0) { throw 'Candidate overlay preflight failed.' }
@@ -240,8 +378,9 @@ jobs:
               }
               $updatedBuild = $updatedBuild.Replace($needle, $replacement)
             }
+            $cAbiName = if ($modernZig) { "            .name = `"ghostty-vt-c-test`",$newline" } else { '' }
             $cAbiNeedle =
-              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "        const mod_vt_c_test = b.addTest(.{$newline" + $cAbiName +
               "            .root_module = mod.vt_c,$newline"
             $cAbiReplacement =
               "        // The private Windows runtime strips the shared vt_c module.$newline" +
@@ -251,12 +390,23 @@ jobs:
               "        red_salamander_vt_c_test_root.strip = false;$newline" +
               "        red_salamander_vt_c_test_root.omit_frame_pointer = false;$newline" +
               "        red_salamander_vt_c_test_root.unwind_tables = .sync;$newline" +
-              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "        const mod_vt_c_test = b.addTest(.{$newline" + $cAbiName +
               "            .root_module = red_salamander_vt_c_test_root,$newline"
             if ([regex]::Matches($updatedBuild, [regex]::Escape($cAbiNeedle)).Count -cne 1) {
               throw 'Expected one native C-ABI diagnostic module insertion point.'
             }
             $updatedBuild = $updatedBuild.Replace($cAbiNeedle, $cAbiReplacement)
+            $testCwd = $env:RS_NATIVE_TEST_SCRATCH.Replace('\', '\\').Replace('"', '\"')
+            foreach ($testName in @('mod_vt_test', 'mod_vt_c_test')) {
+              $runNeedle = "        const $($testName)_run = b.addRunArtifact($testName);$newline"
+              if ([regex]::Matches($updatedBuild, [regex]::Escape($runNeedle)).Count -cne 1) {
+                throw "Expected one $testName working-directory insertion point."
+              }
+              $updatedBuild = $updatedBuild.Replace($runNeedle,
+                $runNeedle +
+                "        $($testName)_run.setCwd(.{ .cwd_relative = `"$testCwd`" });$newline" +
+                "        $($testName)_run.addArg(`"--seed=$env:RS_TEST_SEED`");$newline")
+            }
             [IO.File]::WriteAllText($buildPath, $updatedBuild, [Text.UTF8Encoding]::new($false))
             $buildModified = $true
             "RS_NATIVE_TEST_RUNNER_MODE=simple" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -271,11 +421,15 @@ jobs:
             try {
               # Serialize the unchanged upstream tests and filters through the
               # temporary diagnostic harness prepared above.
-              & $zig build --color off --seed $env:RS_TEST_SEED -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
+              [string[]]$seedArguments = if ($modernZig) { @("--seed=$env:RS_TEST_SEED") } else { @('--seed', $env:RS_TEST_SEED) }
+              $optimization = if ($modernZig) { '-Doptimize=debug' } else { '-Doptimize=Debug' }
+              & $zig build --color off @seedArguments -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
                 -Dtarget=aarch64-windows-msvc `
-                -Doptimize=Debug `
-                -Dsimd=false 2>&1 | Tee-Object -Variable nativeOutput | Write-Host
+                $optimization -Demit-lib-vt -Demit-themes=false -Demit-terminfo=false -Demit-termcap=false `
+                -Dsimd=false @packageArguments 2>&1 | Tee-Object -Variable nativeOutput | Write-Host
               $nativeExitCode = $LASTEXITCODE
+              [IO.File]::WriteAllLines((Join-Path $env:RS_NATIVE_TEST_SCRATCH 'native-output.txt'),
+                [string[]]@($nativeOutput | ForEach-Object { [string]$_ }), [Text.UTF8Encoding]::new($false))
             }
             finally {
               Pop-Location
@@ -289,14 +443,15 @@ jobs:
               $codeFiveLines = @($nativeText | Where-Object {
                   $_ -cmatch '^error: process exited with error code 5$'
                 })
+              $failedCommandPattern = '^failed command: "(.+[\\/](?:ghostty-vt(?:-c)?-)?test\.exe)"(?: "--seed=0x97d35bc7"| --seed=0x97d35bc7)?$'
               $failedCommandLines = @($nativeText | Where-Object {
-                  $_ -cmatch '^failed command: "(.+[\\/]test\.exe)"$'
+                  $_ -cmatch $failedCommandPattern
                 })
               $zeroFailureSummaries = @($nativeText | Where-Object {
                   $_ -cmatch '^[0-9]+ passed; [0-9]+ skipped; 0 failed\.$'
                 })
               $schemaSummaries = @($nativeText | Where-Object {
-                  $_ -cmatch '^validated aarch64-windows ABI manifest \(153 types\)$'
+                  $_ -cmatch '^validated aarch64-windows ABI manifest \([1-9][0-9]* types\)$'
                 })
               $singleFailureBuildSummaries = @($nativeText | Where-Object {
                   $_ -cmatch '^Build Summary: [0-9]+/[0-9]+ steps succeeded \(1 failed\)$'
@@ -314,12 +469,11 @@ jobs:
                   $reportedTestFailures.Count -eq 0) {
                 $failedCommandMatch = [regex]::Match(
                   $failedCommandLines[0],
-                  '^failed command: "(.+[\\/]test\.exe)"$',
+                  $failedCommandPattern,
                   [Text.RegularExpressions.RegexOptions]::CultureInvariant)
                 $failedTestPath = [IO.Path]::GetFullPath(
-                  (Join-Path $sourceRoot $failedCommandMatch.Groups[1].Value))
-                $allowedCacheRoot = [IO.Path]::GetFullPath(
-                  (Join-Path $sourceRoot '.zig-cache')) + [IO.Path]::DirectorySeparatorChar
+                  [IO.Path]::Combine($sourceRoot, $failedCommandMatch.Groups[1].Value))
+                $allowedCacheRoot = $nativeLocalCache + [IO.Path]::DirectorySeparatorChar
                 if (-not $failedTestPath.StartsWith(
                     $allowedCacheRoot,
                     [StringComparison]::OrdinalIgnoreCase) -or
@@ -344,7 +498,7 @@ jobs:
                   Copy-Item -LiteralPath $failedTestPdb -Destination (Join-Path $crashRoot 'test.pdb') -Force
                 }
                 $retryOutput = @()
-                Push-Location -LiteralPath $sourceRoot
+                Push-Location -LiteralPath $env:RS_NATIVE_TEST_SCRATCH
                 try {
                   & $failedTestPath "--seed=$env:RS_TEST_SEED" 2>&1 |
                     Tee-Object -Variable retryOutput | Write-Host
@@ -374,7 +528,8 @@ jobs:
                       Id = 1000
                       StartTime = (Get-Date).AddHours(-2)
                     } -ErrorAction SilentlyContinue | Where-Object {
-                      $_.Message -match '(?i)(^|[\\/])test\.exe'
+                      $_.Message.Contains($nativeLocalCache, [StringComparison]::OrdinalIgnoreCase) -and
+                        $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                     } | Select-Object -First 8)
                   $applicationErrorRecords = @($applicationErrors | ForEach-Object {
                       [ordered]@{
@@ -423,7 +578,8 @@ jobs:
                   Id = 1000
                   StartTime = (Get-Date).AddHours(-2)
                 } -ErrorAction SilentlyContinue | Where-Object {
-                  $_.Message -match '(?i)(^|[\\/])test\.exe'
+                  $_.Message.Contains($nativeLocalCache, [StringComparison]::OrdinalIgnoreCase) -and
+                    $_.Message -match '(?i)(^|[\\/])(?:ghostty-vt(?:-c)?-)?test\.exe'
                 } | Select-Object -First 8)
               foreach ($applicationError in $applicationErrors) {
                 $diagnostic = [ordered]@{
@@ -444,8 +600,8 @@ jobs:
               Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
           }
           finally {
-            if ($werConfigured -and (Test-Path -LiteralPath $localDumpKey)) {
-              Remove-Item -LiteralPath $localDumpKey -Recurse -Force
+            foreach ($localDumpKey in $createdDumpKeys) {
+              if (Test-Path -LiteralPath $localDumpKey) { Remove-Item -LiteralPath $localDumpKey -Recurse -Force }
             }
             if ($buildModified) {
               [IO.File]::WriteAllText($buildPath, $buildOriginal, [Text.UTF8Encoding]::new($false))
@@ -468,15 +624,16 @@ jobs:
           }
 
       - name: Upload native crash evidence
-        if: ${{ failure() }}
+        if: ${{ failure() && !inputs.diagnostics_only && steps.native_tests.outcome == 'failure' && env.RS_NATIVE_TEST_SCRATCH != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-crash-${{ github.run_id }}
-          path: ${{ runner.temp }}/ghostty-native-crash
+          path: ${{ env.RS_NATIVE_TEST_SCRATCH }}/crash
           if-no-files-found: warn
           retention-days: 30
 
       - name: Publish canonical native qualification evidence
+        if: ${{ !inputs.diagnostics_only }}
         shell: pwsh
         env:
           RS_HOST_OS_ARCHITECTURE: ${{ steps.host.outputs.os_architecture }}
@@ -488,7 +645,7 @@ jobs:
           $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
           $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
           $identityPath = Join-Path $candidateRoot 'candidate-native-arm64\terminal-runtime-identity.json'
-          $reportPath = Join-Path $candidateRoot 'native-arm64-qualification.json'
+          $reportPath = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'native-arm64-qualification.json'
           $schemaPath = Join-Path $env:GITHUB_WORKSPACE 'Specs\Terminal\GhosttyRuntimeNativeQualification.schema.json'
           Import-Module .\Tools\TerminalEngine\GhosttyRuntimeLifecycle.psm1 -Force -ErrorAction Stop
           Import-Module .\Tools\Modules\Testing\ValidationFingerprint.psm1 -Force -ErrorAction Stop
@@ -555,26 +712,37 @@ jobs:
               [ordered]@{ target = 'test-lib-vt-schema'; status = 'passed' }
             )
           }
+          $identityEvidencePath = Join-Path $env:RS_NATIVE_TEST_SCRATCH 'terminal-runtime-identity.json'
+          if (Test-Path -LiteralPath $identityEvidencePath) {
+            throw 'Native qualification identity evidence already exists.'
+          }
+          Copy-Item -LiteralPath $identityPath -Destination $identityEvidencePath -ErrorAction Stop
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityEvidencePath).Hash.ToLowerInvariant() -cne
+              [string]$report.runtime.identitySha256) {
+            throw 'Native qualification identity evidence does not match the tested runtime.'
+          }
           Write-RSAtomicCanonicalJsonFile `
             -LiteralPath $reportPath `
             -InputObject $report `
             -SchemaPath $schemaPath `
-            -AllowedRoot $candidateRoot
+            -AllowedRoot $env:RS_NATIVE_TEST_SCRATCH
           Get-Content -LiteralPath $reportPath -Raw
 
       - name: Upload native qualification evidence
+        if: ${{ !inputs.diagnostics_only }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-${{ env.RS_CANDIDATE_COMMIT }}
           path: |
-            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/native-arm64-qualification.json
-            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/candidate-native-arm64/terminal-runtime-identity.json
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-arm64-qualification.json
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/native-output.txt
+            ${{ env.RS_NATIVE_TEST_SCRATCH }}/terminal-runtime-identity.json
           if-no-files-found: error
           retention-days: 30
 
   qualify-product:
     name: Continue with admitted-product qualification
-    if: ${{ inputs.qualify_product }}
+    if: ${{ inputs.qualify_product && !inputs.diagnostics_only }}
     needs: qualify-arm64
     permissions:
       contents: read

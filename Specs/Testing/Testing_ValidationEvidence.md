@@ -400,7 +400,9 @@ Every entry declares resource classes and an advisory duration key. The runner e
 artifact writers first behind their re-attestation barrier, then cheap disjoint
 noninteractive work, then stateful/interactive/performance/network work; those exclusive
 classes remain serialized. Historical promoted durations are bounded, median-only
-estimates. Missing/corrupt history means unknown cost and never affects affectedness,
+estimates. An empty early set is valid, including after PR delegation leaves
+only interactive standalone entries; scheduling must retain every late entry.
+Missing/corrupt history means unknown cost and never affects affectedness,
 fingerprints, execution authority, or verdicts. Explain JSON and console output report
 reason codes and costs. Snapshot metrics separately report Git discovery, content
 hashing, canonicalization, and total acquisition time.

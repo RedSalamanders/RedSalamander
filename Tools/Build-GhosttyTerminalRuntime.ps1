@@ -4,6 +4,7 @@ Builds and verifies the locked Ghostty private Terminal runtime.
 
 .DESCRIPTION
 Invokes the lock-driven Ghostty lifecycle module. Product mode consumes the canonical tracked lock and alone may publish .build\TerminalEngine\Product plus its generated pairing header. Candidate mode requires an explicit lock and output below .build\TerminalEngineUpgrade and cannot write Product or a pairing header.
+Authenticated dependency fetches share one disposable bootstrap cache; each package remains hash-verified and the session cache is removed on success or failure.
 
 .PARAMETER Platform
 Selects the x64 or ARM64 runtime architecture.
@@ -30,6 +31,10 @@ With -PassThru, a PSCustomObject containing the verified runtime identity. Other
 Prerequisites: PowerShell 7, Git, the canonical schema, the selected lock, locked source/toolchain caches or network access when not offline, and the reviewed overlay/notices. Side effects: Product mode may update .build\TerminalEngine; candidate mode may update only .build\TerminalEngineUpgrade. Native children are kill-on-close contained. An exact independently owned output blocks replacement and is never killed.
 
 The delegated lifecycle preserves runtime identity schemaVersion = 5 and pairingContract = 'generated-raw-sha256-v1'. GhosttyRuntimeLifecycle.psm1 owns Get-TerminalRuntimeIdentityHeaderText, $generatedIdentityHeader publication in Product mode, and $expectedLicenseHashes verification.
+Zig bootstrap, build, and fetch caches use explicit per-child repository-local environment paths, preserving caller variables.
+
+Owned temporary-cache cleanup retries I/O/access failures up to 20 attempts with 250 ms delays. A failed fetch retains its original error when cleanup also fails; independently owned processes are never terminated.
+Native-command and lease progress goes to the information stream, including periodic waits and post-exit output drainage. Captured native stdout/stderr stay separate and unchanged; progress does not print arbitrary URI arguments.
 
 .EXAMPLE
 .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform x64 -Offline -PassThru

@@ -1665,6 +1665,14 @@ For every metric, candidate p95 must be no greater than
 `candidateMaximumP95` is checked for internal consistency but is never the
 comparison authority.
 
+When the reviewed upgrade requires a different Zig compiler, the comparison
+may declare `-ZigToolchainTransition <baseline-version>,<candidate-version>`.
+Both distinct versions must match the recorded environments exactly; omission
+retains strict Zig equality. Every other environment field, all behavior/control
+digests, raw sample bindings, and the 1.10 ceiling remain mandatory. Report this
+as a comparison of the complete runtime/toolchain upgrade, without attributing
+its measured effect to either component independently.
+
 Before an admission claim, run:
 
 ```powershell
