@@ -20,6 +20,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -110,6 +111,37 @@ struct OwnedVirtualDiskMountFacts final
     if (_wcsicmp(facts.fileSystemName.c_str(), L"NTFS") != 0)
         return std::format(L"volume-not-ntfs: {}", facts.fileSystemName);
     return {};
+}
+
+// Only product operation arguments use this alias. Fixture seeding, inspection
+// and cleanup retain the marked mount path. No foreign/lettered volume or
+// escaping relative path can acquire an operation path through this ownership
+// gate.
+[[nodiscard]] inline std::optional<std::filesystem::path> TryMakeOwnedVirtualDiskOperationPath(const OwnedVirtualDiskMountFacts& facts,
+                                                                                               std::wstring_view expectedVolumeGuidPath,
+                                                                                               const std::filesystem::path& mountPath,
+                                                                                               const std::filesystem::path& expectedMountPath,
+                                                                                               const std::filesystem::path& ownedPath,
+                                                                                               std::wstring& refusal)
+{
+    refusal = EvaluateOwnedVirtualDiskMount(facts, expectedVolumeGuidPath, mountPath, expectedMountPath);
+    if (! refusal.empty())
+        return std::nullopt;
+    const auto relative = ownedPath.lexically_relative(mountPath);
+    if (! ownedPath.is_absolute() || relative.empty() || relative.has_root_path())
+    {
+        refusal = L"operation-path-not-an-owned-child";
+        return std::nullopt;
+    }
+    for (const auto& component : relative)
+    {
+        if (component.empty() || component == L"." || component == L"..")
+        {
+            refusal = L"operation-path-not-an-owned-child";
+            return std::nullopt;
+        }
+    }
+    return std::filesystem::path(expectedVolumeGuidPath) / relative;
 }
 
 // Read-only observation; requires no privilege. Opening a volume with zero access only

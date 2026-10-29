@@ -1,0 +1,53 @@
+{
+  "schema": "hosted-ci-repair.console-isolation.v1",
+  "sourceCommit": "7a3a7057669c5cd9d2ae5c629133f6cdebd23875",
+  "sourceSnapshotId": "2442dd6e251b833b54d5b6f4b04748261f53ac3fc712f6c0b8ee75d8b3adde32",
+  "buildReceiptId": "0b6201754839c22dd10f6032e566f43ee4bf0449de9bf9ddc9bad2288c72c909",
+  "profile": "x64 Debug",
+  "compilerDebugInformation": "Embedded",
+  "runId": "20261029T071025Z-77996-89583cdd6e9d4e608d6ffc45a3dc7424",
+  "exit": 0,
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "requestedRepeats": 10,
+  "retries": 0,
+  "nativeDurationMs": 26319,
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "44e217527f8132f54793ba3f5d5ecba8abfac830deaf00fa2e260b2d439c3454"
+    },
+    {
+      "path": "last-duplicate-output.txt",
+      "byteCount": 367,
+      "sha256": "c139b8d243207483345d239c0a0175e60e5b2b270b7afc41ee34787cdeafb971"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 30005,
+      "sha256": "b0b3d0fff883e1cb7707c7c2e5136cc5db0912f230c22a246154577a7e5e52bb"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 6064,
+      "sha256": "8b00acd8f99c09c583f1ca621b95e54b06342d0bc8309d9d165e905bfb23519a"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 1079,
+      "sha256": "dea592e0356c670ffe7a69993ccf67f7fd570b6c5d2ea7b5b3f4eb82bd3bde51"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 21357,
+      "sha256": "9231214bd9adc8edac8da5bd6343c50aebac8b5c2ca9858cd0273dade0e59b08"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 30034,
+      "sha256": "af21fcec2ad70ddd2438dcf267f6deeea3e2df31784a51137181ef5cce9752e2"
+    }
+  ]
+}

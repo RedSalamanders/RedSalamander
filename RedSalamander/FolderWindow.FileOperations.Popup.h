@@ -2184,6 +2184,15 @@ void DebugResolveFileOperationsWholeTaskProgress(const FileOperationsPopupIntern
 void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept;
+// Prepare/restore canonical admission on the UI; the interaction worker performs WGC while that UI keeps pumping.
+[[nodiscard]] HRESULT DebugSetFileOperationsSpeedLimitPromptScreenshotAdmission(HWND prompt, bool enabled) noexcept;
+[[nodiscard]] bool DebugProbeFileOperationsSpeedLimitPromptScreenshotAdmissionRequests(HWND prompt) noexcept;
+struct FileOperationsSpeedLimitPromptAdmissionDebugCounters
+{
+    uint64_t retiredOnDestroy   = 0u;
+    uint64_t failedRestorations = 0u;
+};
+[[nodiscard]] FileOperationsSpeedLimitPromptAdmissionDebugCounters DebugGetFileOperationsSpeedLimitPromptAdmissionCounters() noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptClientHeightLimit(std::optional<float> heightDip) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptSelection(size_t start, size_t end) noexcept;
 [[nodiscard]] bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept;

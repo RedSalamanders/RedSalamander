@@ -1,0 +1,26 @@
+[
+  {
+    "batch": "viewer-containment",
+    "configuration": "ASan Debug",
+    "exit_code": 0,
+    "run_id": "20261029T173136Z-65900-8bad79207e0a4ffbb52c07f017ee7458",
+    "receipt_id": "ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  },
+  {
+    "batch": "viewer-observation",
+    "configuration": "ASan Debug",
+    "exit_code": 0,
+    "run_id": "20261029T173136Z-65900-8bad79207e0a4ffbb52c07f017ee7458",
+    "receipt_id": "ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  },
+  {
+    "batch": "terminal-selftests",
+    "configuration": "ASan Debug",
+    "exit_code": 0,
+    "run_id": "20261029T173136Z-65900-8bad79207e0a4ffbb52c07f017ee7458",
+    "receipt_id": "ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa",
+    "source_snapshot_id": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb"
+  }
+]

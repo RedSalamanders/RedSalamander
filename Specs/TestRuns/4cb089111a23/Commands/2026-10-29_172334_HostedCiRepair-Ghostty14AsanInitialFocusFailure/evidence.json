@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "cc6e19d5f736a784aa5f3b4ff99b5fea185aa097",
+  "sourceSnapshotId": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb",
+  "buildReceiptId": "ba04578a52cbec92752b91d1e2243f0447da8a43043e67ca475ba418963133aa",
+  "profile": "x64 ASan Debug",
+  "runId": "20261029T172334Z-66476-df919bedae1e4bfda85ddce09d655196",
+  "passed": 29,
+  "failed": 1,
+  "skipped": 0,
+  "nativeDurationMs": 43736,
+  "scope": "Retained original ASan prerequisite failure at source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097: 29 passed, one failed, zero skips. The first viewer-text roundtrip did not regain stable folder focus before its body. The trace records successful owned foreground acquisition, so no foreign-focus cause is established. All remaining invocations passed; a fresh identical-source retry passes all 30 plus the terminal cluster and standalone checks. That retry does not establish the cause or erase this failed receipt. No assertion, timeout, repeat, prerequisite or quarantine was weakened.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 91079,
+      "sha256": "30d8efde06d5a7014644b9139cace5412e42c276b07060bb5cf77206efe9c001"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 1268824,
+      "sha256": "6d7c3be7aeb1a5e87f18996a3d71d50b398c874c5d9e94ef70c585daf106c815"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 338402,
+      "sha256": "7ddfa9013ba9757e253a163bf2457c84aa92852acf4e85863a46fe299c9b2811"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 6092,
+      "sha256": "92dfb5af882b666ad9cd4327f4602cd5ae3f3fd5f52f9396bcc1798fe5c32579"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 821821,
+      "sha256": "c0b0a7f06b0a701d49de0f3c7989699738bea8642a4b2ac47d2c1cb6ed267ec2"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 587,
+      "sha256": "d19501c9db281a0f22a9b468c668085ab8e8ed0226b3c22fa380f407398b5bdc"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9886,
+      "sha256": "b77a6a8ca3fdfeae4fd52ca6a0ed0bc8b5a26887fb5afc2627434db49feacdad"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 20754,
+      "sha256": "b905a63299a9f610b4b92a4f5909d6d0f6a82eaf6fd3a36c90c3e6a6d1c7cf13"
+    }
+  ]
+}

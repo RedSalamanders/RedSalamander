@@ -1,0 +1,14 @@
+{
+  "schema": "red-salamander.archive-import-baseline.v1",
+  "baselineCommit": "4a9489e9cb2d1190528b8ec35971fba885fd7792",
+  "baselineTree": "3fb1f79ac855236a8cc2e0bf9b348601ec8cd5f3",
+  "parentCount": 0,
+  "preContractSource": "eaf640798eb0fa21f2b5b6e3883891ac2442a255",
+  "publishedSource": "58d1e03fdef9ec93e0cfe63139eed80461c9ca18",
+  "eligibleFileCount": 2075,
+  "publicFileCount": 19500,
+  "exactPathModeBlobIntersectionVerified": true,
+  "containsOnlyAlreadyPublishedBlobs": true,
+  "containsOnlySpecsTestRuns": true,
+  "requiresMergeCommitToRetainAncestor": true
+}

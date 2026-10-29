@@ -70,6 +70,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Archive/plan grandfathering requires its immutable public baseline ancestors.
+          fetch-depth: 0
           persist-credentials: false
 
       # ── Setup toolchain ──────────────────────────────────────────────
@@ -620,8 +622,17 @@ jobs:
           # self-test suites with failure classification. Suite Full adds the artifact-mutating
           # build-toolchain lane (a single-node targeted rebuild plus a full re-attestation build)
           # and ETW latency diagnostics; it remains the local closeout gate.
-          ./Tools/Run-AllTests.ps1 -Suite $env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot
-          if ($LASTEXITCODE -ne 0) { throw "Native $env:RS_TEST_SUITE suite failed with exit code $LASTEXITCODE." }
+          $runTests = {
+            ./Tools/Run-AllTests.ps1 -Suite $env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot
+            if ($LASTEXITCODE -ne 0) { throw "Native $env:RS_TEST_SUITE suite failed with exit code $LASTEXITCODE." }
+          }
+          if ($env:RS_TEST_SUITE -in @('CI', 'Full')) {
+            Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
+            Invoke-RSWithHostedTestDesktop -Action $runTests
+          } else {
+            & $runTests
+          }
+          exit 0
 
       - name: Upload native qualification evidence
         if: ${{ always() && inputs.run_full_tests && steps.test_root.outputs.path != '' }}

@@ -6368,7 +6368,215 @@ private:
     state.Require(info->SetConfiguration(R"json({"fontSizeDip":"14"})json") == E_INVALIDARG, L"The Terminal must still reject a string fontSizeDip.");
     state.Require(info->SetConfiguration("{") == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
                   L"The Terminal must report malformed configuration JSON as ERROR_INVALID_DATA.");
-    return true;
+
+    // Refresh while this unopened instance is retained, then use the ordinary
+    // creation path after its last owner retires. No intervening Refresh may
+    // conceal a permanently stranded deferred catalog entry.
+    auto& manager             = ViewerPluginManager::GetInstance();
+    const auto restoreCatalog = wil::scope_exit([&]() noexcept
+    {
+        info.reset();
+        terminal.reset();
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"The Terminal lifecycle fixture must restore the ordinary viewer catalog.");
+    });
+    g_folderWindow.CloseAllViewers();
+    PrepareFloatingTerminalWindowForAppShutdown();
+    state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"Viewer refresh must retain an externally owned Terminal instance safely.");
+    const auto& entries      = manager.GetPlugins();
+    const auto deferred      = std::find_if(entries.begin(), entries.end(), [](const auto& entry) noexcept { return entry.id == L"builtin/terminal"; });
+    const bool kindPreserved = deferred != entries.end() && deferred->type == ViewerPluginManager::PluginType::Terminal && deferred->unloadDeferred &&
+                               ! deferred->disabled && ! deferred->loadable;
+    state.Require(kindPreserved, L"A deferred Terminal placeholder must preserve its plugin kind, identity and enabled state.");
+    wil::com_ptr<ITerminal> blockedTerminal;
+    const HRESULT blockedHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, blockedTerminal);
+    state.Require(blockedHr == HRESULT_FROM_WIN32(ERROR_BUSY) && ! blockedTerminal,
+                  L"Ordinary Terminal creation must remain blocked while the old instance still owns its module.");
+    wil::com_ptr<IUnknown> retainedIdentity;
+    state.Require(SUCCEEDED(terminal->QueryInterface(__uuidof(IUnknown), retainedIdentity.put_void())) && retainedIdentity,
+                  L"Deferred unload must keep the retained Terminal interface mapped and callable.");
+    retainedIdentity.reset();
+    info.reset();
+    terminal.reset();
+    HRESULT recoveredHr  = E_PENDING;
+    const auto recovered = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        recoveredHr = manager.CreateTerminalInstance(L"builtin/terminal", isolatedSettings, terminal);
+        return SUCCEEDED(recoveredHr) && terminal;
+    },
+        {.timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)), .operationName = L"ordinary Terminal creation after the unload quiet point"});
+    Trace(std::format(L"Terminal deferred creation: kindPreserved={} blockedHr=0x{:08X} recovered={} recoveredHr=0x{:08X} elapsedMs={}",
+                      kindPreserved,
+                      static_cast<unsigned long>(blockedHr),
+                      recovered.conditionMet,
+                      static_cast<unsigned long>(recoveredHr),
+                      recovered.elapsed.count()));
+    state.Require(recovered.conditionMet && SUCCEEDED(recoveredHr) && terminal,
+                  L"Ordinary creation must recover a quiet deferred Terminal without an explicit Refresh or Apply.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestDeferredPluginDisabledStateTracksSettings(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"deferred plugin disabled-state admission"))
+        return false;
+
+    auto& manager           = ViewerPluginManager::GetInstance();
+    const auto savedPlugins = g_settings.plugins;
+    wil::com_ptr<IUnknown> owner;
+    wil::com_ptr<IUnknown> candidate;
+    const auto restoreCatalog = wil::scope_exit([&]() noexcept
+    {
+        candidate.reset();
+        owner.reset();
+        g_settings.plugins = savedPlugins;
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), L"Deferred disabled-state coverage must restore the original plugin catalog.");
+        const auto& restoredEntries = manager.GetPlugins();
+        for (const std::wstring_view id : {L"builtin/viewer-imgraw", L"builtin/terminal"})
+        {
+            const auto restored = std::find_if(restoredEntries.begin(), restoredEntries.end(), [&](const auto& entry) noexcept { return entry.id == id; });
+            state.Require(restored != restoredEntries.end() && restored->loadable && ! restored->unloadDeferred,
+                          std::format(L"{} must be ordinarily loadable after deferred disabled-state cleanup.", id));
+        }
+    });
+    g_folderWindow.CloseAllViewers();
+    PrepareFloatingTerminalWindowForAppShutdown();
+
+    struct Fixture final
+    {
+        std::wstring_view id;
+        ViewerPluginManager::PluginType type;
+    };
+    constexpr std::array fixtures{Fixture{L"builtin/viewer-imgraw", ViewerPluginManager::PluginType::Viewer},
+                                  Fixture{L"builtin/terminal", ViewerPluginManager::PluginType::Terminal}};
+    for (const auto& fixture : fixtures)
+    {
+        const auto create = [&](wil::com_ptr<IUnknown>& instance) noexcept
+        {
+            instance.reset();
+            if (fixture.type == ViewerPluginManager::PluginType::Terminal)
+            {
+                wil::com_ptr<ITerminal> terminal;
+                const HRESULT hr = manager.CreateTerminalInstance(fixture.id, g_settings, terminal);
+                instance         = terminal;
+                return hr;
+            }
+            wil::com_ptr<IViewer> viewer;
+            const HRESULT hr = manager.CreateViewerInstance(fixture.id, g_settings, viewer);
+            instance         = viewer;
+            return hr;
+        };
+        const auto removeDisabledId = [&]() noexcept
+        { std::erase_if(g_settings.plugins.disabledPluginIds, [&](const std::wstring& id) noexcept { return OrdinalString::EqualsNoCase(id, fixture.id); }); };
+        const auto isDeferredWithState = [&](bool disabled) noexcept
+        {
+            const auto& entries = manager.GetPlugins();
+            const auto found    = std::find_if(entries.begin(), entries.end(), [&](const auto& entry) noexcept { return entry.id == fixture.id; });
+            return found != entries.end() && found->type == fixture.type && found->unloadDeferred && ! found->loadable && found->disabled == disabled;
+        };
+        const auto createAfterRetirement = [&](wil::com_ptr<IUnknown>& instance, HRESULT& result) noexcept
+        {
+            return RedSalamander::TestSupport::PumpMessagesUntil(
+                [&]() noexcept
+            {
+                result = create(instance);
+                return SUCCEEDED(result) && instance;
+            },
+                {.timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)), .operationName = L"enabled plugin after deferred owner retirement"});
+        };
+
+        removeDisabledId();
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), std::format(L"{} initial enabled catalog refresh failed.", fixture.id));
+        HRESULT initialHr  = E_PENDING;
+        const auto initial = createAfterRetirement(owner, initialHr);
+        state.Require(initial.conditionMet && owner, std::format(L"{} enabled fixture creation failed (hr=0x{:08X}).", fixture.id, initialHr));
+        if (! owner)
+            return false;
+
+        // These fixtures must actually participate in deferred unload. Legacy
+        // plugins without the optional probe cannot establish this scenario.
+        using CanUnloadFunction    = BOOL(__stdcall*)();
+        const auto& initialEntries = manager.GetPlugins();
+        const auto initialEntry =
+            std::find_if(initialEntries.begin(), initialEntries.end(), [&](const auto& entry) noexcept { return entry.id == fixture.id; });
+        const FARPROC address       = initialEntry != initialEntries.end() && initialEntry->module
+                                          ? GetProcAddress(initialEntry->module.get(), "RedSalamanderPluginCanUnloadNow")
+                                          : nullptr;
+        CanUnloadFunction canUnload = nullptr;
+        static_assert(sizeof(canUnload) == sizeof(address));
+        std::memcpy(&canUnload, &address, sizeof(canUnload));
+        const bool ownerBlocksUnload = canUnload && canUnload() == FALSE;
+        state.Require(ownerBlocksUnload, std::format(L"{} live fixture must expose and hold its real deferred-unload gate.", fixture.id));
+        if (! ownerBlocksUnload)
+            return false;
+
+        // Disable the current placeholder while its backing entry still records
+        // the enabled state of the older, externally retained module.
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)) && isDeferredWithState(false),
+                      std::format(L"{} enabled owner must produce an enabled deferred placeholder.", fixture.id));
+        state.Require(SUCCEEDED(manager.DisablePlugin(fixture.id, g_settings)), std::format(L"{} placeholder disable failed.", fixture.id));
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), std::format(L"{} disabled catalog refresh failed.", fixture.id));
+        const bool disabledWhileHeld = isDeferredWithState(true);
+        state.Require(disabledWhileHeld, std::format(L"{} deferred placeholder must use the current disabled settings.", fixture.id));
+        const HRESULT heldHr = create(candidate);
+        state.Require(heldHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! candidate,
+                      std::format(L"{} disabled factory must reject creation while its old owner lives (hr=0x{:08X}).", fixture.id, heldHr));
+        candidate.reset();
+        wil::com_ptr<IUnknown> identity;
+        state.Require(SUCCEEDED(owner->QueryInterface(__uuidof(IUnknown), identity.put_void())) && identity,
+                      std::format(L"{} disabled deferred owner must remain mapped and callable.", fixture.id));
+        identity.reset();
+        owner.reset();
+        HRESULT retiredHr          = E_PENDING;
+        const auto disabledRetired = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            retiredHr = create(candidate);
+            return retiredHr != HRESULT_FROM_WIN32(ERROR_BUSY);
+        },
+            {.timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)), .operationName = L"disabled factory after deferred owner retirement"});
+        state.Require(disabledRetired.conditionMet && retiredHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! candidate,
+                      std::format(L"{} must remain disabled after its old owner retires, without another Refresh (hr=0x{:08X}).", fixture.id, retiredHr));
+        candidate.reset();
+
+        // Exercise the reverse transition too: the retained module now records
+        // disabled=true, but the next settings snapshot explicitly enables it.
+        removeDisabledId();
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), std::format(L"{} re-enabled catalog refresh failed.", fixture.id));
+        HRESULT enabledHr  = E_PENDING;
+        const auto enabled = createAfterRetirement(owner, enabledHr);
+        state.Require(enabled.conditionMet && owner, std::format(L"{} re-enabled fixture creation failed (hr=0x{:08X}).", fixture.id, enabledHr));
+        if (! owner)
+            return false;
+        state.Require(SUCCEEDED(manager.DisablePlugin(fixture.id, g_settings)) && SUCCEEDED(manager.Refresh(g_settings)) && isDeferredWithState(true),
+                      std::format(L"{} disabled live owner must retain a disabled deferred placeholder.", fixture.id));
+        removeDisabledId();
+        state.Require(SUCCEEDED(manager.Refresh(g_settings)), std::format(L"{} enabled deferred catalog refresh failed.", fixture.id));
+        const bool enabledWhileHeld = isDeferredWithState(false);
+        state.Require(enabledWhileHeld, std::format(L"{} deferred placeholder must use the current enabled settings.", fixture.id));
+        const HRESULT busyHr = create(candidate);
+        state.Require(busyHr == HRESULT_FROM_WIN32(ERROR_BUSY) && ! candidate,
+                      std::format(L"{} enabled factory must still refuse replacement while the old owner lives (hr=0x{:08X}).", fixture.id, busyHr));
+        candidate.reset();
+        owner.reset();
+        HRESULT recoveredHr  = E_PENDING;
+        const auto recovered = createAfterRetirement(candidate, recoveredHr);
+        state.Require(recovered.conditionMet && candidate,
+                      std::format(L"{} enabled factory must recover after owner retirement without another Refresh (hr=0x{:08X}).", fixture.id, recoveredHr));
+        Trace(std::format(L"Deferred plugin admission: id={} disabledWhileHeld={} heldHr=0x{:08X} retiredHr=0x{:08X} enabledWhileHeld={} "
+                          L"busyHr=0x{:08X} recovered={} recoveredHr=0x{:08X} elapsedMs={}",
+                          fixture.id,
+                          disabledWhileHeld,
+                          static_cast<unsigned long>(heldHr),
+                          static_cast<unsigned long>(retiredHr),
+                          enabledWhileHeld,
+                          static_cast<unsigned long>(busyHr),
+                          recovered.conditionMet,
+                          static_cast<unsigned long>(recoveredHr),
+                          recovered.elapsed.count()));
+        candidate.reset();
+    }
+    return state.failure.empty();
 }
 
 } // namespace (tests)
@@ -6384,6 +6592,9 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
         options, suite, L"settings_viewer_text_plugin_roundtrip", [](CaseState& state) noexcept { return TestViewerTextPluginConfigurationRoundTrip(state); });
     SelfTest::RunCase(
         options, suite, L"settings_terminal_plugin_roundtrip", [](CaseState& state) noexcept { return TestTerminalPluginConfigurationRoundTrip(state); });
+    SelfTest::RunCase(options, suite, L"settings_deferred_plugin_disabled_state_tracks_settings", [=](CaseState& state) noexcept {
+        return TestDeferredPluginDisabledStateTracksSettings(mainWindow, state);
+    });
     SelfTest::RunCase(
         options, suite, L"viewer_text_hex_byte_color_perf", [](CaseState& state) noexcept { return TestViewerTextHexByteColorPerfScenario(state); });
     SelfTest::RunCase(options, suite, L"viewer_text_diff_perf", [](CaseState& state) noexcept { return TestViewerTextDiffPerfScenario(state); });

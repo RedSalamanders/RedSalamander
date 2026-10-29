@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "c061b0578727d0d02aba14816e36d93dd316da6ea6a0abe85ddc7ba1ca726b2f",
+  "profile": "x64 Release",
+  "runId": "20261029T132717Z-98980-05d9e35ebd2447c59b1e80ce9678325a",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 25994,
+  "scope": "Exact committed candidate x64 Release. Three captured-runner, duplicate service and resource-scoped writer cases repeated ten times. Real console absence, exact captured bytes, duplicate exit and primary liveness remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 86290,
+      "sha256": "7a0e4289737a4b1db7aa1f1eda97c2a2420fd3800a7f1222d2984f6590f3a6f6"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 40678,
+      "sha256": "601c6f747f4ce50d7f28c3c046a6e378830b1d8b26a997d3255317c74a2c22a4"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 6065,
+      "sha256": "eda88e666963a722cf5a337e1ea25e660f00335ee4c8a6bb8031c7848d5b0a82"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 32300,
+      "sha256": "4b2a28f461742618537c3be25c45ac95697d93168ea87c0166674a6df22fdf32"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 286,
+      "sha256": "b983e4c07a77c9d6b934727b382a0662e8cf599a7457861e6fcc7b5166a4734c"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9662,
+      "sha256": "24aa957ef59369e73d53caa1fd5a0bbf5feb18912c2b12314db5719b6d5be87d"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 30034,
+      "sha256": "1cf80b637094c89478c4ffb651ec748fd77de6aea982bcce47256cf342f4e56d"
+    }
+  ]
+}

@@ -43,7 +43,9 @@ RedSalamander::TestSupport::ScopedWindowScreenshotAdmission::ScopedWindowScreens
         return;
     const LONG_PTR style = GetWindowLongPtrW(window, GWL_EXSTYLE);
     _status              = S_OK;
-    if ((style & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) == 0 || (style & WS_EX_APPWINDOW) != 0)
+    // An owned modal has no taskbar entry even without NOACTIVATE/TOOLWINDOW.
+    const bool ownedTopLevel = (GetWindowLongPtrW(window, GWL_STYLE) & WS_CHILD) == 0 && GetWindow(window, GW_OWNER) != nullptr;
+    if (((style & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) == 0 && ! ownedTopLevel) || (style & WS_EX_APPWINDOW) != 0)
         return;
     // SetWindowLongPtr sends synchronous style messages. Never call it from a
     // capture worker: the UI must remain free to pump until that worker retires.

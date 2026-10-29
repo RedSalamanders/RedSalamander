@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-29T08:00:58.367Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261029T075127Z-92084-509cec17ae40438e98b923e31d013e28\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 5913,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "A deferred Terminal placeholder must preserve its plugin kind, identity and enabled state.",
+    "cases": [
+        {
+            "name": "settings_terminal_plugin_roundtrip",
+            "status": "failed",
+            "duration_ms": 5292,
+            "repeat_index": 1,
+            "reason": "A deferred Terminal placeholder must preserve its plugin kind, identity and enabled state."
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

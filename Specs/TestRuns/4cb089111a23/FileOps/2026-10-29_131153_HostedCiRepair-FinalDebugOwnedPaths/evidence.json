@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "853ff02833077cdc5dfa273f730dbfb96a80ec327036ba78c109603530886609",
+  "profile": "x64 Debug",
+  "runId": "20261029T131153Z-38720-7bc2aa11faec456887d3da0fbeb9a5cc",
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 49437,
+  "scope": "Exact committed candidate x64 Debug ordinary remediation entry. Directly executes owned-volume operation-path acceptance and root/sibling/relative/traversal/foreign GUID/drive-letter/bus/mount/NTFS refusal controls, without mounting a disk or taking focus; original remediation checks retained.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "4fe7f9d45ac83f22ed378ec4482c13d1ff83ed1e7576cd805114c7188af4b863"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 379,
+      "sha256": "51f4e2ec9c6a250002ca7c131d5f6ec453270ffc914f4193b42c3bc850788898"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 138380,
+      "sha256": "e86122711011e71899739589344c8c667b013f2c49ad2456c8a71ab00ae4ca55"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 891,
+      "sha256": "6c3d853fce08a5c7868495ea3559721daeda6864fcc78ead8199f0da77243172"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 296,
+      "sha256": "9f7b18059503c4a2d4aff47c7aa3b05149da6eb3e261a01d119ca728a6e175db"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 3881,
+      "sha256": "a7d9c68eda492de9f4c497a758341fa14825c7ea1afe262c4a39823e30ac9ee6"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 113192,
+      "sha256": "b7c7e65660d9af7787a3f3cb9da1f6b2d13ada067e6b2ed278007f3dc2f48000"
+    }
+  ]
+}

@@ -1783,10 +1783,140 @@ SelfTest::RunCase(options,
     }
 
     state.Require(replayStats.journalReplayApplied || replayStats.usedTraversalSeed,
-                  L"Replay indexed query should apply journal changes or rebuild from traversal when journal access is unavailable.");
+                  std::format(L"Replay indexed query should apply journal changes or rebuild from traversal when journal access is unavailable. "
+                              L"journal={} replay={} mft={} traversal={} initialUsn={} replayUsn={} candidates={}",
+                              replayStats.journalAvailable,
+                              replayStats.journalReplayApplied,
+                              replayStats.usedNtfsEnumeration,
+                              replayStats.usedTraversalSeed,
+                              initialStats.nextUsn,
+                              replayStats.nextUsn,
+                              replayCandidates.size()));
     state.Require(CollectIndexedCandidateNames(replayCandidates) == std::vector<std::wstring>{L"delta.txt", L"renamed.txt"},
                   L"Replay indexed query returned an unexpected candidate set.");
 
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_journal_unavailable_rebuild_is_root_scoped",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_no_journal", caseRoot), L"Failed to prepare the no-journal root.");
+    state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub") && SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha") &&
+                      SelfTest::WriteTextFile(caseRoot / L"sub" / L"gamma.txt", "gamma"),
+                  L"Failed to create the no-journal fixture.");
+    // Use the nonthrowing environment reader at this noexcept boundary. The
+    // exception-throwing ScopedEnvironmentVariable cannot report setup to CaseState.
+    constexpr std::wstring_view forceTraversalName = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+    const auto previous                            = RedSalamander::TestSupport::ReadEnvironmentValue(forceTraversalName);
+    state.Require(previous.error == ERROR_SUCCESS, L"Failed to read the inherited traversal override.");
+    if (! state.failure.empty())
+        return false;
+    const auto restore = wil::scope_exit([&]() noexcept
+    { static_cast<void>(SetEnvironmentVariableW(forceTraversalName.data(), previous.value.has_value() ? previous.value.value().c_str() : nullptr)); });
+    state.Require(SetEnvironmentVariableW(forceTraversalName.data(), L"0") != FALSE, L"Failed to leave native MFT seeding eligible for the regression.");
+    if (! state.failure.empty())
+        return false;
+    LocalSearchIndexCore::Repository repository;
+    const auto clearProbe          = wil::scope_exit([&]() noexcept { repository.ClearNextJournalStateForTests(); });
+    const auto queryWithoutJournal = [&](std::vector<std::wstring> expected) noexcept
+    {
+        repository.SetNextJournalStateForTests(0u, 0u, 0u, false);
+        LocalSearchIndexCore::QueryStats stats{};
+        std::vector<LocalSearchIndexCore::Candidate> candidates;
+        const HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", stats, candidates);
+        state.Require(SUCCEEDED(hr), std::format(L"No-journal query failed: 0x{:08X}.", static_cast<unsigned long>(hr)));
+        state.Require(! stats.journalAvailable && stats.usedTraversalSeed && ! stats.usedNtfsEnumeration && stats.nativeMftSeedAttempts == 0u,
+                      std::format(L"No-journal fallback must traverse only its tracked root: journal={} traversal={} nativeMft={} attempts={}.",
+                                  stats.journalAvailable,
+                                  stats.usedTraversalSeed,
+                                  stats.usedNtfsEnumeration,
+                                  stats.nativeMftSeedAttempts));
+        state.Require(CollectIndexedCandidateNames(candidates) == expected, L"No-journal fallback returned stale or unexpected candidates.");
+    };
+    queryWithoutJournal({L"alpha.txt", L"gamma.txt"});
+    std::error_code ec;
+    std::filesystem::rename(caseRoot / L"alpha.txt", caseRoot / L"renamed.txt", ec);
+    state.Require(! ec, L"Failed to rename the no-journal fixture file.");
+    std::filesystem::remove(caseRoot / L"sub" / L"gamma.txt", ec);
+    state.Require(! ec && SelfTest::WriteTextFile(caseRoot / L"delta.txt", "delta"), L"Failed to update the no-journal fixture.");
+    queryWithoutJournal({L"delta.txt", L"renamed.txt"});
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_native_enumeration_rejection_preserves_root_results",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_native_rejection", caseRoot), L"Failed to prepare native-rejection root.");
+    const auto dataRoot = caseRoot / L"data";
+    state.Require(SelfTest::EnsureDirectory(dataRoot / L"sub") && SelfTest::WriteTextFile(dataRoot / L"alpha.txt", "alpha") &&
+                      SelfTest::WriteTextFile(dataRoot / L"sub" / L"gamma.txt", "gamma"),
+                  L"Failed to seed the native-rejection fixture.");
+    if (! state.failure.empty())
+        return false;
+    LocalSearchIndexCore::RepositoryOptions repositoryOptions{};
+    repositoryOptions.snapshotRootDirectory = (caseRoot / L"snapshots").wstring();
+    LocalSearchIndexCore::Repository repository(repositoryOptions);
+    LocalSearchIndexCore::SupportInfo support{};
+    state.Require(SUCCEEDED(repository.ProbePath(dataRoot.wstring(), support)), L"Failed to probe the acquired native-rejection sandbox.");
+    if (! state.failure.empty())
+        return false;
+    if (support.fileSystemKind != LocalSearchIndexCore::FileSystemKind::Ntfs)
+        return state.Skip(L"The acquired sandbox does not support the NTFS enumeration-rejection scenario.");
+
+    constexpr std::wstring_view overrideName = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+    const auto previous                      = RedSalamander::TestSupport::ReadEnvironmentValue(overrideName);
+    state.Require(previous.error == ERROR_SUCCESS, L"Failed to read the inherited native-seed override.");
+    if (! state.failure.empty())
+        return false;
+    const auto restore = wil::scope_exit([&]() noexcept
+    {
+        repository.SetNextNtfsEnumerationFailureForTests(ERROR_SUCCESS);
+        repository.ClearNextJournalStateForTests();
+        static_cast<void>(SetEnvironmentVariableW(overrideName.data(), previous.value.has_value() ? previous.value->c_str() : nullptr));
+    });
+    state.Require(SetEnvironmentVariableW(overrideName.data(), L"0") != FALSE, L"Failed to leave native enumeration eligible.");
+    if (! state.failure.empty())
+        return false;
+
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    repository.SetNextJournalStateForTests(17u, 0u, 1024u);
+    repository.SetNextNtfsEnumerationFailureForTests(ERROR_BAD_LENGTH);
+    state.Require(RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates) == HRESULT_FROM_WIN32(ERROR_BAD_LENGTH) &&
+                      candidates.empty(),
+                  L"A malformed native enumeration must fail closed without candidates.");
+    uint64_t nextJournalUsn             = 1024u;
+    const auto queryRejectedEnumeration = [&](const std::vector<std::wstring>& expected) noexcept
+    {
+        repository.SetNextJournalStateForTests(17u, 0u, nextJournalUsn);
+        nextJournalUsn += 1024u; // A real rename/delete/create advances the journal.
+        repository.SetNextNtfsEnumerationFailureForTests(ERROR_INVALID_PARAMETER);
+        const auto started = std::chrono::steady_clock::now();
+        const HRESULT hr   = RunIndexedNameQuery(repository, dataRoot.wstring(), L"*.txt", stats, candidates);
+        Debug::Perf::Emit(L"search.ntfs.seed_rejection_selftest",
+                          L"invalid-parameter-root-traversal",
+                          Debug::Perf::ElapsedUs(started),
+                          stats.nativeMftSeedAttempts,
+                          static_cast<uint64_t>(candidates.size()),
+                          hr);
+        state.Require(SUCCEEDED(hr) && stats.journalAvailable && stats.nativeMftSeedAttempts == 1u && stats.usedTraversalSeed && ! stats.usedNtfsEnumeration,
+                      L"A rejected native enumeration must use the complete tracked-root traversal and report the degraded seed.");
+        state.Require(CollectIndexedCandidateNames(candidates) == expected, L"Rejected native enumeration returned stale, partial or outside-root candidates.");
+    };
+    queryRejectedEnumeration({L"alpha.txt", L"gamma.txt"});
+    std::error_code error;
+    std::filesystem::rename(dataRoot / L"alpha.txt", dataRoot / L"renamed.txt", error);
+    state.Require(! error, L"Failed to rename the native-rejection fixture.");
+    std::filesystem::remove(dataRoot / L"sub" / L"gamma.txt", error);
+    state.Require(! error && SelfTest::WriteTextFile(dataRoot / L"delta.txt", "delta"), L"Failed to update the native-rejection fixture.");
+    queryRejectedEnumeration({L"delta.txt", L"renamed.txt"});
     return state.failure.empty();
 });
 
@@ -6659,6 +6789,17 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    const TestSupport::ChildProcessResult consoleState = TestSupport::RunChildProcess({.executablePath = servicePath,
+                                                                                       .arguments      = {L"--test-support-child-probe=console-state"},
+                                                                                       .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000))});
+    state.Require(consoleState.Completed(), consoleState.diagnostic);
+    AppendCompareSelfTestTraceLine(std::format(L"Captured child console probe: exitCode={} noConsole={} outputBytes={}",
+                                               consoleState.exitCode,
+                                               consoleState.stdoutBytes == "N",
+                                               consoleState.stdoutBytes.size()));
+    state.Require(consoleState.exitCode == 0u && consoleState.stdoutBytes == "N" && consoleState.stderrBytes.empty(),
+                  L"Captured service probes must run without allocating or inheriting an interactive console.");
+
     const TestSupport::ChildProcessResult largeStreams = TestSupport::RunChildProcess({.executablePath = servicePath,
                                                                                        .arguments      = {L"--test-support-child-probe=streams"},
                                                                                        .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(10'000))});
@@ -10553,6 +10694,16 @@ SelfTest::RunCase(options,
     }
 
     const std::wstring primaryExitSummary = service.TryCaptureExitedOutputForFailure();
+    const std::filesystem::path duplicateOutputPath =
+        SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::CompareDirectories, L"search-service-duplicate-child-output.txt");
+    state.Require(SelfTest::WriteTextFile(duplicateOutputPath, result.output), L"The duplicate-instance probe must preserve its captured child output.");
+    AppendCompareSelfTestTraceLine(
+        std::format(L"Duplicate foreground service probe: secondExitCode={} primaryAlive={} storeRoot='{}' outputBytes={} output='{}'",
+                    result.exitCode,
+                    primaryExitSummary.empty(),
+                    caseRoot.native(),
+                    result.output.size(),
+                    duplicateOutputPath.native()));
     state.Require(primaryExitSummary.empty(),
                   std::format(L"The primary foreground service exited before the duplicate probe completed.{}", primaryExitSummary));
 
@@ -12415,6 +12566,73 @@ SelfTest::RunCase(options,
     if (! state.failure.empty())
     {
         return false;
+    }
+
+    // An accepted client can own the serialized service while it is still sending
+    // its request. Hold that connection beyond the former 750 ms connect window;
+    // the next query must wait, then return the exact result after it is released.
+    // Exercise cancellation independently while the same occupied pipe remains busy.
+    for (const bool cancelWhileBusy : {false, true})
+    {
+        state.Require(::WaitNamedPipeW(pipeName.c_str(), 5'000u) != 0, L"Busy-pipe fixture did not find the isolated service listener.");
+        wil::unique_handle occupied(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        state.Require(static_cast<bool>(occupied), L"Busy-pipe fixture could not occupy the isolated service connection.");
+        if (! occupied)
+            return false;
+        wil::unique_event_nothrow clientStarted;
+        clientStarted.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        wil::unique_event_nothrow clientDone;
+        clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        state.Require(clientStarted && clientDone, L"Busy-pipe fixture synchronization events could not be created.");
+        if (! clientStarted || ! clientDone)
+            return false;
+        std::atomic<bool> cancelRequested{false};
+        const auto cancelCheck = [](void* cookie) noexcept -> HRESULT
+        { return static_cast<std::atomic<bool>*>(cookie)->load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK; };
+        QueryOutcome outcome{};
+        std::jthread queuedClient([&]() noexcept
+        {
+            LocalSearchIndexCore::QueryStats stats{};
+            static_cast<void>(::SetEvent(clientStarted.get()));
+            const ULONGLONG started = ::GetTickCount64();
+            outcome.hr              = SearchServiceBroker::Query(request, nullptr, nullptr, cancelCheck, &cancelRequested, outcome.candidates, &stats);
+            outcome.durationMs      = ::GetTickCount64() - started;
+            static_cast<void>(::SetEvent(clientDone.get()));
+        });
+        state.Require(::WaitForSingleObject(clientStarted.get(), 5'000u) == WAIT_OBJECT_0, L"Busy-pipe query did not start.");
+        if (! cancelWhileBusy)
+        {
+            SearchServiceBroker::ServiceStatus busyStatus{};
+            const ULONGLONG statusStarted = ::GetTickCount64();
+            const HRESULT statusHr        = SearchServiceBroker::GetStatus(busyStatus);
+            state.Require(FAILED(statusHr) && ::GetTickCount64() - statusStarted < 1'000u,
+                          L"A status probe must retain its short connection budget while the service is occupied.");
+            const ULONGLONG shutdownStarted = ::GetTickCount64();
+            const HRESULT shutdownHr        = SearchServiceBroker::RequestShutdown(pipeName, 500u);
+            state.Require(FAILED(shutdownHr) && ::GetTickCount64() - shutdownStarted < 750u,
+                          L"A 500 ms shutdown request must include connection contention in its operation deadline.");
+        }
+        state.Require(::WaitForSingleObject(clientDone.get(), cancelWhileBusy ? 100u : 1'200u) == WAIT_TIMEOUT,
+                      L"Busy-pipe query returned before the occupied connection was released or cancelled.");
+        if (cancelWhileBusy)
+        {
+            cancelRequested.store(true, std::memory_order_release);
+            state.Require(::WaitForSingleObject(clientDone.get(), 500u) == WAIT_OBJECT_0, L"Busy-pipe query did not cancel promptly.");
+        }
+        occupied.reset();
+        if (::WaitForSingleObject(clientDone.get(), 5'000u) != WAIT_OBJECT_0)
+        {
+            state.Require(false, L"Queued query did not complete after releasing the occupied service connection.");
+            cancelRequested.store(true, std::memory_order_release);
+        }
+        queuedClient.join();
+        state.Require(
+            cancelWhileBusy ? outcome.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) : SUCCEEDED(outcome.hr),
+            std::format(
+                L"Busy-pipe query cancel={} failed. hr=0x{:08X} elapsedMs={}", cancelWhileBusy, static_cast<unsigned long>(outcome.hr), outcome.durationMs));
+        state.Require(cancelWhileBusy ? outcome.candidates.empty()
+                                      : CollectIndexedCandidateNames(outcome.candidates) == std::vector<std::wstring>{L"alpha.txt"},
+                      L"Busy-pipe query returned an unexpected candidate set.");
     }
 
     std::array<QueryOutcome, 2> outcomes{};

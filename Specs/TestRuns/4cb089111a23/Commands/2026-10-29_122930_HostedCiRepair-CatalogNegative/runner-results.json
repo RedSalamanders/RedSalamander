@@ -1,0 +1,203 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-29T12:30:02.7603320Z",
+  "run_ended_utc": "2026-10-29T12:56:09.2823204Z",
+  "duration_ms": 1566522,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "E:\\RedSalamander.Perf\\ci-repair-20261028\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "settings_store_unsupported_future_schema_never_overwrites_source,settings_save_queue_serializes_coalesces_and_flushes,folderView_thumbnail_size_change_while_pending,theme_cycle_overlay_perf",
+  "exit_code": 1,
+  "passed": 9,
+  "failed": 3,
+  "skipped": 0,
+  "total": 12,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 5,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c",
+    "allowed_run_ids": [
+      "20261029T122930Z-72524-0a01c8e4738540149027a3566418ec0c"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\changes-workflow-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr119-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr120-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\loc-20261010125413",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\pester-20261010125254",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 1549892,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 3,
+      "passed": 9,
+      "failed": 3,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 57,
+          "attempt": 1
+        },
+        {
+          "name": "settings_save_queue_serializes_coalesces_and_flushes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 22170,
+          "attempt": 1
+        },
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2354,
+          "attempt": 1
+        },
+        {
+          "name": "folderView_thumbnail_size_change_while_pending",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 649,
+          "attempt": 1
+        },
+        {
+          "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 60,
+          "attempt": 2
+        },
+        {
+          "name": "settings_save_queue_serializes_coalesces_and_flushes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 22148,
+          "attempt": 2
+        },
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2343,
+          "attempt": 2
+        },
+        {
+          "name": "folderView_thumbnail_size_change_while_pending",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 532,
+          "attempt": 2
+        },
+        {
+          "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 46,
+          "attempt": 3
+        },
+        {
+          "name": "settings_save_queue_serializes_coalesces_and_flushes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 21859,
+          "attempt": 3
+        },
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2332,
+          "attempt": 3
+        },
+        {
+          "name": "folderView_thumbnail_size_change_while_pending",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 519,
+          "attempt": 3
+        }
+      ],
+      "failures": [
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2354,
+          "attempt": 1
+        },
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2343,
+          "attempt": 2
+        },
+        {
+          "name": "theme_cycle_overlay_perf",
+          "status": "failed",
+          "reason": "The deterministic theme-cycle burst should end on the built-in system theme.",
+          "duration_ms": 2332,
+          "attempt": 3
+        }
+      ]
+    }
+  ]
+}

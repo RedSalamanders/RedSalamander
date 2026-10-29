@@ -1,0 +1,50 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134612Z-103728-ec5e4322d92d4c8286e188fe3f147c7b\scratch\viewer-pe\webview2-54328-110807484
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly parent captures the desktop restoration boundary
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly harness path resolves
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness owns captured output pipes (error=0)
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness owns noninteractive standard input
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly inherited-handle attribute size resolves
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly inherited-handle attribute list initializes
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly restricts inherited handles to its three standard streams
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness kill-on-close job object is created
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness kill-on-close job object is configured
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process launches
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process joins the kill-on-close job
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process resumes
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process exits before timeout
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness process reports an exit code
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly fresh harness run passes (exit=0x00000000)
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly owned job has no active processes before desktop restoration
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly parent observes exact saved foreground and keyboard focus without restoration writes
+[PASS] TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly retains complete bounded stdout and stderr
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134612Z-103728-ec5e4322d92d4c8286e188fe3f147c7b\scratch\viewer-pe\webview2-50616-110807515
+[PASS] ViewerVLC test executable path resolves
+[PASS] ViewerVLC.dll is present for runtime validation
+[PASS] ViewerVLC.dll loads successfully
+[PASS] ViewerVLC factory export is available
+[PASS] ViewerVLC factory creates an IViewer instance
+[PASS] ViewerVLC fixture TestSandbox root is available
+[PASS] ViewerVLC window open succeeds
+[PASS] ViewerVLC window becomes visible
+[PASS] ViewerVLC exposes a visible video child that can take initial focus
+[PASS] ViewerVLC exposes a HUD child that can take focus
+[PASS] ViewerVLC retires its optional backend loader before keyboard coverage
+[PASS] ViewerVLC loads libvlc.dll with its sibling dependencies
+[PASS] ViewerVLC creates a libVLC instance
+[PASS] ViewerVLC starts playback for the valid WAV fixture
+[PASS] ViewerVLC dependency loading leaves the process DLL directory unchanged
+[PASS] ViewerVLC presents its real HUD fixture after optional backend retirement without assigning focus
+[PASS] ViewerVLC keyboard fixture has an actually visible, laid-out HUD
+[PASS] ViewerVLC exposes visible video and HUD child surfaces
+[PASS] ViewerVLC video surface can take keyboard focus
+[INFO] ViewerVLC parent focus routed into the video surface without fallback.
+[INFO] ViewerVLC first-Tab focus=0x2250A18 expectedHud=0x2250A18 hudVisible=true
+[PASS] ViewerVLC Tab transfers focus from the video surface into the HUD
+[PASS] ViewerVLC HUD keeps keyboard focus while cycling its internal controls
+[PASS] ViewerVLC window close succeeds
+[PASS] ViewerVLC window closes cleanly
+ViewerPETests passed.
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

@@ -342,6 +342,11 @@ record makes aggregate evidence `BLOCKED` and maps to corrupt-evidence exit 5.
 
 ### Specialized Terminal VT evidence
 
+The general archive size/schema/identity and unchanged pre-contract inventory rules remain owned by
+[`Specs/TestRuns/README.md`](../TestRuns/README.md), including the immutable parentless baseline for
+the history-free source import. That baseline establishes archive provenance, never runtime qualification.
+Unavailable ancestry fails closed to the complete tracked inventory; it cannot authorize evidence reuse.
+
 Ghostty VT upgrade performance evidence is a governed archive format distinct
 from Startrail aggregate reuse. A claim-bearing Terminal archive contains
 `results.json`, `trace.txt`, and `perf/perf_metrics.jsonl`; `results.json` must
@@ -406,6 +411,17 @@ Missing/corrupt history means unknown cost and never affects affectedness,
 fingerprints, execution authority, or verdicts. Explain JSON and console output report
 reason codes and costs. Snapshot metrics separately report Git discovery, content
 hashing, canonicalization, and total acquisition time.
+
+Either scheduling partition may be empty, including a PR-deferred Full remainder with only
+interactive standalone readers. Empty cheap-work selection MUST retain every later entry
+exactly once in its original order under strict-mode PowerShell. Nonempty cheap selections
+retain duration/identity ordering. Scheduling does not change entry contracts or verdicts.
+
+Native case inventory uses the early-exit `--selftest-list-cases` protocol. This read-only,
+nonactivating query MUST NOT acquire the interactive desktop lease, including coverage
+verification after a completed native entry. It retains contained-process ownership, exact
+suite/filter arguments, exit/JSON validation and artifact coordination. Actual test execution
+and repair attempts retain their declared desktop admission and restoration requirements.
 
 ## Exit categories
 

@@ -194,3 +194,51 @@ eight candidate-review and15 candidate-overlay cases). A retained first attempt 
 test still extracted through the removed legacy `$pin` line; its boundary now uses the following verified-source
 import, retaining both executed build-exit controls. The admitted859 noninteractive run remains on its captured
 source. Integration and updated native/runtime/performance qualification are still open.
+
+## Current main integration and measurement checkpoint, 2026-10-29
+
+Published2920df6b passes all six ordinary native profiles with zero warnings/errors, including the
+Ghostty1.4 runtime. Its hosted x64 Debug build, attestation and short-source matrix validator also pass.
+Immutable per-profile receipts/toolchain/runtime identities are retained externally. The last ARM64
+ASan invocation was unstarted at a20GiB capacity guard; lossless filesystem compression of inactive
+intermediates preserved file bytes and allowed its normal build to pass. Historical test evidence and
+frozen images remain intact.
+
+Four prespecified quiet studies completed250 native samples across Xe, DxUi, Prism and Tilde, with no
+observed concurrent compilation/validation. Fourteen of19 metrics have unstable same-side controls;
+the remaining five detect no significant fixture change. No measured regression or improvement is
+established. No run is repeated to select a passing result, and the public performance policy is not
+self-qualified. Sal's current shipping study remains open.
+
+Main then merged PR146 as28e70e694, changing product C++ and upgrading its API4 DxUi pin to881e5d5f.
+That pin contains substantial control/semantic-document changes absent from the older1f385ee0
+maintenance pin. The integration deliberately selects published4cdf1ce5: it includes that newer
+control surface and this task's warning/ICF repairs. Its native inputs match24aafbc5, already qualified
+in six library builds,57 ordinary suite executions and three default focus profiles. Its six hosted
+native jobs also pass. API revision4 and the single DxUi.lib boundary remain unchanged. Library
+qualification does not qualify this product adoption. Normal product restore, native/selected runtime
+gates and a new shipping closure remain required. The older2920 noninteractive run remains bound to
+its source while its active writer drains. The human's noninteractive-only instruction remains in force.
+
+## Explicit merge handoff, 2026-10-29
+
+The developer requested merging all five repositories after the outstanding validation and CI limits
+were identified. The resolved integration preserves main `28e70e6940619f1c82eb07958da762de34c04b4e`
+and task source `2920df6b48028f3b74ea718b6466c14a80a45142`. It retains both parent changelogs,
+the I51/I52/I53 plans, the FTP listener-conservation controls and the 310-check Entry fixture expectation.
+The listing formatter emits one prefix and suffix; the maximum-size case remains portable across size_t widths.
+
+Both architectures restore API4 DxUi `4cdf1ce52c7785446698e346b8aec058ed6a9283` successfully through
+the normal entrypoint. The resolved source passes 88 focused tooling tests (19 build-evidence, one
+warning-policy compiler control, 45 workflow-policy, eight candidate-review and 15 candidate-overlay),
+format checks for the two conflict-resolved C++ files, the canonical PR execution digest check, and the
+specification inventory with zero blocking findings. Required native-policy evaluation includes the
+new pin rather than relabeling evidence from the previous dependency.
+
+This merge does not establish complete product qualification for the newly combined source and pin.
+Earlier six-profile native results remain bound to 2920df6b and its previous DxUi dependency; the old
+noninteractive coordinator was stopped at a verified writer-free boundary as superseded, not passed.
+Current product native/runtime qualification and the new shipping size/performance closure remain open.
+Further focus-taking execution is paused by the developer. DxUi's failed paired CI preflight, private
+repository billing failures, and inconclusive quiet studies retain their original verdicts. WIP remains
+active for those outstanding gates after integration.

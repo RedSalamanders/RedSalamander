@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "ed8f6683bf7d83048302f98cd23d9cba744a43db",
+  "sourceSnapshotId": "3d1a9790b45f85083260862a5ac3a3dcb5abacbfe0a0afe8c52882ccb0a0dcde",
+  "buildReceiptId": "11a2bec9122b3cebcd87bf6781ce9cc0aa9ce6334ecb7e4b12423c814086d275",
+  "profile": "x64 Debug",
+  "runId": "20261029T083234Z-72968-860900ab169e4aedb613d98f265324aa",
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "nativeDurationMs": 6047,
+  "scope": "Controlled original four-worker provider: exact bytes and success codes remain, but zero overlap violates the original independent-volume timing gate.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 84872,
+      "sha256": "bc3d5f26f07de2d7e7db481aecf8cbc541362e0e61c209dab843ffad83d2a7ce"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 20968,
+      "sha256": "c299248b663c68a4e6040bf4d438f2c68e3a2924496dc32e4287a5ef954fec63"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 13786,
+      "sha256": "69b202bdd5e2a43826b35512fb43ed19d709d0f23d3676b6fd71bef14459718c"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 1340,
+      "sha256": "a80ddcbfb08f8e5e2791ca179b5096759444700c0e35e94215258b53b6752b41"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 1222129,
+      "sha256": "fe82cb0a1827cb927e267d92af317b1295ad797fc336567518250f632aedbf35"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 152,
+      "sha256": "ca1ed906f3cd2d4c0242e6aeb43d2aa142d8ef9d9b9dd3f1caf043101892f778"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 16243,
+      "sha256": "8009ac5f5be8b17821b0a9c220785b134737fcd4cf17b0e2091ea420aa1ae74a"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 6332,
+      "sha256": "59963984df5824a7724ac496d0dfc9d3ccdf2d75a9eba80ba4ca13f0e11d4f9c"
+    }
+  ]
+}

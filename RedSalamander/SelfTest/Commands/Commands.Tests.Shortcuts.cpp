@@ -1784,9 +1784,15 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(noMatchFilteringSelectionState->selectedName.empty(), L"Shortcuts no-match filtering should not keep a selected accessible row name.");
     }
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to focus the Shortcuts grid before no-match copy validation.");
-    std::wstring noMatchCopiedSelection;
-    state.Require(CopyShortcutsSelectionForTest(shortcuts, noMatchCopiedSelection), L"Failed to copy the empty Shortcuts grid selection.");
-    state.Require(noMatchCopiedSelection.empty(), L"Shortcuts Ctrl+C should be a no-op when no rows match the active search.");
+    const std::wstring noMatchClipboardBefore = ReadClipboardUnicodeText(shortcuts);
+    const auto noMatchFallbackBefore          = DxUi::DebugReadClipboardFallbackText();
+    const DWORD noMatchSequenceBefore         = GetClipboardSequenceNumber();
+    state.Require(! noMatchClipboardBefore.empty() || (noMatchFallbackBefore.has_value() && ! noMatchFallbackBefore->empty()),
+                  L"The preceding selected-row copy must provide a nonempty clipboard control.");
+    state.Require(! DebugCopyShortcutsWindowSelection(), L"An empty Shortcuts grid copy must remain unhandled.");
+    state.Require(GetClipboardSequenceNumber() == noMatchSequenceBefore && ReadClipboardUnicodeText(shortcuts) == noMatchClipboardBefore &&
+                      DxUi::DebugReadClipboardFallbackText() == noMatchFallbackBefore,
+                  L"Shortcuts Ctrl+C with no matching rows must preserve the exact clipboard content and sequence.");
     state.Require(DebugSetShortcutsWindowSearchText(L""), L"Failed to clear the Shortcuts no-match search text.");
     const bool noMatchRestored = waitForSnapshot(
         [&](const ShortcutsWindowDebugSnapshot& value) noexcept

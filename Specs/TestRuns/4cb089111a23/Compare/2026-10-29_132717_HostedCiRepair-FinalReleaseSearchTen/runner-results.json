@@ -1,0 +1,307 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-29T13:27:47.3278268Z",
+  "run_ended_utc": "2026-10-29T13:28:33.7799711Z",
+  "duration_ms": 46452,
+  "suite": "Compare",
+  "platform": "x64",
+  "configuration": "Release",
+  "executable": "E:\\RedSalamander.Perf\\ci-repair-20261028\\.build\\x64\\Release\\RedSalamander.exe",
+  "artifact_root": "C:\\RedSalamander.Perf\\evidence\\completed-runs\\20261029T132717Z-98980-05d9e35ebd2447c59b1e80ce9678325a\\artifacts\\selftest\\last_run",
+  "test_root": "C:\\RedSalamander.Perf",
+  "run_id": "20261029T132717Z-98980-05d9e35ebd2447c59b1e80ce9678325a",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "test_support_child_process_runner_contract,search_service_foreground_rejects_second_instance,search_service_store_writer_ownership_is_resource_scoped",
+  "exit_code": 0,
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "total": 30,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 5,
+    "test_root": "C:\\RedSalamander.Perf",
+    "run_id": "20261029T132717Z-98980-05d9e35ebd2447c59b1e80ce9678325a",
+    "allowed_run_ids": [
+      "20261029T132717Z-98980-05d9e35ebd2447c59b1e80ce9678325a"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\changes-workflow-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr119-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "C:\\RedSalamander.Perf\\pr120-explain.txt",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\loc-20261010125413",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "C:\\RedSalamander.Perf\\runs\\pester-20261010125254",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "CompareDirectories",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 26792,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 10,
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1484,
+          "attempt": 1
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 238,
+          "attempt": 1
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 589,
+          "attempt": 1
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1545,
+          "attempt": 2
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 245,
+          "attempt": 2
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 519,
+          "attempt": 2
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1333,
+          "attempt": 3
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 245,
+          "attempt": 3
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 601,
+          "attempt": 3
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1487,
+          "attempt": 4
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 294,
+          "attempt": 4
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 441,
+          "attempt": 4
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1492,
+          "attempt": 5
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 239,
+          "attempt": 5
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 742,
+          "attempt": 5
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1631,
+          "attempt": 6
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 242,
+          "attempt": 6
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 634,
+          "attempt": 6
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1505,
+          "attempt": 7
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 245,
+          "attempt": 7
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 732,
+          "attempt": 7
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1418,
+          "attempt": 8
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 239,
+          "attempt": 8
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 812,
+          "attempt": 8
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1429,
+          "attempt": 9
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 246,
+          "attempt": 9
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 756,
+          "attempt": 9
+        },
+        {
+          "name": "test_support_child_process_runner_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1386,
+          "attempt": 10
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 351,
+          "attempt": 10
+        },
+        {
+          "name": "search_service_store_writer_ownership_is_resource_scoped",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 685,
+          "attempt": 10
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

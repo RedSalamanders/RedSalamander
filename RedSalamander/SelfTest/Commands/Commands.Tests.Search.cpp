@@ -10942,10 +10942,10 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   L"Find search did not become idle for persisted-sort validation.");
 
     FindFilesDebugSnapshot snapshot{};
-    state.Require(WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept
-    { return value.usesDxUiHost && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u && matchesExpectedOrder(value); },
-                                      SelfTest::Scale(3000ms),
-                                      &snapshot),
+    const bool sortedBeforeClose = WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept {
+        return value.usesDxUiHost && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u && matchesExpectedOrder(value);
+    }, SelfTest::Scale(3000ms), &snapshot);
+    state.Require(sortedBeforeClose,
                   std::format(L"Find window did not expose the expected descending Name sort order before persistence validation. {}",
                               DescribeFindSnapshotBrief(snapshot)));
     if (! state.failure.empty())
@@ -10978,10 +10978,10 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   L"Reopened Find search did not become idle for persisted-sort restore validation.");
 
     FindFilesDebugSnapshot reopened{};
-    state.Require(WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept
-    { return value.usesDxUiHost && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u && matchesExpectedOrder(value); },
-                                      SelfTest::Scale(3000ms),
-                                      &reopened),
+    const bool sortedAfterReopen = WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept {
+        return value.usesDxUiHost && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u && matchesExpectedOrder(value);
+    }, SelfTest::Scale(3000ms), &reopened);
+    state.Require(sortedAfterReopen,
                   std::format(L"Reopened Find window did not restore the persisted descending Name sort order. {}", DescribeFindSnapshotBrief(reopened)));
 
     return state.failure.empty();

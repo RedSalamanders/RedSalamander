@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "cc6e19d5f736a784aa5f3b4ff99b5fea185aa097",
+  "sourceSnapshotId": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb",
+  "buildReceiptId": "602239334ec5c01de6c3319158e24ddb45d2bff6a01923e25206796f980b09ea",
+  "profile": "x64 Release",
+  "runId": "20261029T172802Z-15600-b585258653a04177a1f0e95b315ea8a8",
+  "passed": 15,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 28459,
+  "scope": "Integrated runtime source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097 with pinned Ghostty 1.4/Zig 0.17 and qualified DxUi 881e5d5. terminal-three passes 15 selected Commands executions, zero failures/skips, with original assertions, repeats and budgets. This is affected consumer qualification, not Full or a paired performance claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 87334,
+      "sha256": "63f54738a479953f66aa51397233c1193272386bfc75ad4aece5a732cd2bcbb6"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 97682,
+      "sha256": "75b4f6ab57a067834655829507606e4d06f4eb1d2d1b99ce76198bbf12ff2818"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 338402,
+      "sha256": "7ddfa9013ba9757e253a163bf2457c84aa92852acf4e85863a46fe299c9b2811"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 3303,
+      "sha256": "bf8ce823169039c93f8f51b97b12b4d262a23750fef3b31b6502343730680e1d"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "byteCount": 1945272,
+      "sha256": "487fc2875f78817ba346c8d244c3a8494dfb3e5b2ef8933fbbc61ea6a8b09d27"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 333,
+      "sha256": "7709c8449e4c50e5828ed3721ff46135b9e2f02504ee8a4b58948e3655203c48"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 6755,
+      "sha256": "9187b352a429a1c6c646e56acf226f9c7607f9de29e79eca4b911f4cc0751c8c"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 8062,
+      "sha256": "3688f3e86e54db3829f82ef1206e34b6297a6132066f43408a8905fbd9b7d5cf"
+    }
+  ]
+}

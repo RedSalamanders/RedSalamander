@@ -33,6 +33,7 @@ namespace
 constexpr uint32_t kMessageMagic                    = 0x53535252u; // "RRSS"
 constexpr uint32_t kMaxFrameBytes                   = 16u * 1024u * 1024u;
 constexpr DWORD kClientConnectTimeoutMs             = 150u;
+constexpr DWORD kClientConnectRetryWindowMs         = 750u;
 constexpr HRESULT kProtocolErrorHr                  = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
 constexpr DWORD kClientIoPollMs                     = 50u;
 constexpr DWORD kClientFrameTimeoutMs               = 30'000u;
@@ -58,6 +59,7 @@ struct ClientIoContext final
     void* cancelCookie                              = nullptr;
     ULONGLONG operationDeadline                     = 0u;
     DWORD frameTimeoutMs                            = kClientFrameTimeoutMs;
+    DWORD connectRetryWindowMs                      = kClientConnectRetryWindowMs;
 };
 
 struct ServerIoContext final
@@ -1541,8 +1543,13 @@ HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
                                  wil::unique_handle& outPipe,
                                  ClientIoContext* context = nullptr) noexcept
 {
-    const std::wstring pipeName         = BuildPipeName(requestedPipeName);
-    const ULONGLONG deadline            = ::GetTickCount64() + 750u;
+    const std::wstring pipeName = BuildPipeName(requestedPipeName);
+    // The server serializes requests. Cancelable queries allow the ordinary frame
+    // budget for contention; status/control probes retain their short connect
+    // window. Both connect and I/O consume the same operation deadline.
+    ULONGLONG deadline = MakeDeadline(context != nullptr ? context->connectRetryWindowMs : kClientConnectRetryWindowMs);
+    if (context != nullptr && context->operationDeadline != 0u)
+        deadline = (std::min)(deadline, context->operationDeadline);
     const ULONGLONG missingPipeDeadline = ::GetTickCount64() + missingPipeRetryWindowMs;
 
     for (;;)
@@ -1552,8 +1559,17 @@ HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
         {
             return hr;
         }
+        if (context != nullptr && IsDeadlineExpired(context->operationDeadline, ::GetTickCount64()))
+            return HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT);
 
-        if (::WaitNamedPipeW(pipeName.c_str(), kClientConnectTimeoutMs) == 0)
+        // A caller may explicitly allow a longer missing-listener startup window.
+        // It is independent of contention, but never exceeds its operation budget.
+        DWORD waitMs = (std::min)(kClientConnectTimeoutMs, (std::max<DWORD>)(1u, RemainingToDeadlineMs(deadline, ::GetTickCount64())));
+        if (context != nullptr)
+            waitMs = (std::min)(waitMs, RemainingToDeadlineMs(context->operationDeadline, ::GetTickCount64()));
+        if (waitMs == 0u)
+            return HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT);
+        if (::WaitNamedPipeW(pipeName.c_str(), waitMs) == 0)
         {
             const DWORD waitError = ::GetLastError();
             if (waitError == ERROR_FILE_NOT_FOUND)
@@ -3490,9 +3506,10 @@ HRESULT Query(const QueryRequest& request,
         };
 
         ClientIoContext ioContext{};
-        ioContext.cancelCheck       = cancelCheck;
-        ioContext.cancelCookie      = cancelCookie;
-        ioContext.operationDeadline = MakeDeadline(kClientQueryOperationTimeoutMs);
+        ioContext.cancelCheck          = cancelCheck;
+        ioContext.cancelCookie         = cancelCookie;
+        ioContext.operationDeadline    = MakeDeadline(kClientQueryOperationTimeoutMs);
+        ioContext.connectRetryWindowMs = kClientFrameTimeoutMs;
 
         wil::unique_handle pipe;
         HRESULT hr = ConnectClientPipe(pipe, &ioContext);
@@ -3799,15 +3816,14 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept
 {
     try
     {
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
         wil::unique_handle pipe;
-        HRESULT hr = ConnectClientPipe(pipe);
+        HRESULT hr = ConnectClientPipe(pipe, &ioContext);
         if (FAILED(hr))
         {
             return hr;
         }
-
-        ClientIoContext ioContext{};
-        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
 
         RebuildRequestPayload payload{};
         payload.rootPathBytes = static_cast<uint32_t>(rootPath.size() * sizeof(wchar_t));
@@ -3866,15 +3882,14 @@ HRESULT RequestCompact() noexcept
 {
     try
     {
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
         wil::unique_handle pipe;
-        HRESULT hr = ConnectClientPipe(pipe);
+        HRESULT hr = ConnectClientPipe(pipe, &ioContext);
         if (FAILED(hr))
         {
             return hr;
         }
-
-        ClientIoContext ioContext{};
-        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
 
         hr = ClientSendFrame(pipe.get(), MessageType::CompactRequest, kProtocolVersion, {}, &ioContext);
         if (FAILED(hr))
@@ -3930,16 +3945,15 @@ HRESULT RequestShutdown(std::wstring_view pipeName, uint32_t timeoutMs) noexcept
             return E_INVALIDARG;
         }
 
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(timeoutMs);
         wil::unique_handle pipe;
         const DWORD connectRetryMs = (std::min)(static_cast<DWORD>(timeoutMs), kDefaultMissingPipeRetryWindowMs);
-        HRESULT hr                 = ConnectClientPipeForName(pipeName, connectRetryMs, pipe);
+        HRESULT hr                 = ConnectClientPipeForName(pipeName, connectRetryMs, pipe, &ioContext);
         if (FAILED(hr))
         {
             return hr;
         }
-
-        ClientIoContext ioContext{};
-        ioContext.operationDeadline = MakeDeadline(timeoutMs);
 
         hr = ClientSendFrame(pipe.get(), MessageType::ShutdownRequest, kProtocolVersion, {}, &ioContext);
         if (FAILED(hr))

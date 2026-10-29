@@ -6,6 +6,139 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $testSupport = Join-Path $PSScriptRoot 'TestSupport.psm1'
 Import-Module $testSupport -Force
 
+Describe 'Run-AllTests standalone scheduling selections' {
+    BeforeAll {
+        Import-Module $helperModule -ErrorAction Stop
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Run-AllTests.ps1') -Raw
+        $start = $runner.IndexOf('$lateResourceClasses =', [StringComparison]::Ordinal)
+        $end = $runner.IndexOf('if ($earlyStandaloneConfigs.Count -gt 0)', $start, [StringComparison]::Ordinal)
+        if ($start -lt 0 -or $end -le $start) { throw 'Cannot find the actual runner scheduling phase.' }
+        $schedule = [scriptblock]::Create(@'
+param([object[]]$Entries, [hashtable]$Durations)
+Set-StrictMode -Version Latest
+$standaloneConfigs = @($Entries)
+$durationEstimates = $Durations
+'@ + "`n" + $runner.Substring($start, $end - $start) + "`n" + @'
+[pscustomobject]@{ Early = @($earlyStandaloneConfigs); Late = @($standaloneConfigs) }
+'@)
+    }
+
+    It 'retains an exclusively interactive remainder under strict mode' {
+        $late = [pscustomobject]@{ Id = 'viewer.interactive'; ResourceClasses = @('interactive-desktop') }
+        $actual = & $schedule @($late) @{}
+        $actual.Early.Count | Should Be 0
+        $actual.Late.Count | Should Be 1
+        [object]::ReferenceEquals($actual.Late[0], $late) | Should Be $true
+    }
+
+    It 'accepts empty and exclusively cheap selections without manufacturing work' {
+        $empty = & $schedule @() @{}
+        $empty.Early.Count | Should Be 0
+        $empty.Late.Count | Should Be 0
+        $cheap = [pscustomobject]@{ Id = 'tooling.contract'; ResourceClasses = @('artifact-read-only') }
+        $actual = & $schedule @($cheap) @{}
+        $actual.Early.Count | Should Be 1
+        $actual.Late.Count | Should Be 0
+        [object]::ReferenceEquals($actual.Early[0], $cheap) | Should Be $true
+    }
+
+    It 'orders cheap work by cost and identity while retaining late work exactly once in order' {
+        $entries = @(
+            [pscustomobject]@{ Id = 'late.first'; ResourceClasses = @('stateful') },
+            [pscustomobject]@{ Id = 'cheap.unknown'; ResourceClasses = @('artifact-read-only') },
+            [pscustomobject]@{ Id = 'cheap.b'; ResourceClasses = @('artifact-read-only') },
+            [pscustomobject]@{ Id = 'late.second'; ResourceClasses = @('network') },
+            [pscustomobject]@{ Id = 'cheap.a'; ResourceClasses = @('artifact-read-only') }
+        )
+        $actual = & $schedule $entries @{'cheap.a' = 10; 'cheap.b' = 10}
+        Assert-RSSequenceEqual -Actual @($actual.Early | ForEach-Object Id) -Expected @('cheap.a', 'cheap.b', 'cheap.unknown') -Message 'Cheap work retains exact cost/identity ordering.'
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('late.first', 'late.second') -Message 'Late work retains exact input ordering.'
+        $scheduled = @($actual.Early) + @($actual.Late)
+        $scheduled.Count | Should Be $entries.Count
+        @($scheduled | ForEach-Object Id | Sort-Object -Unique).Count | Should Be $entries.Count
+        foreach ($entry in $entries) {
+            @($scheduled | Where-Object { [object]::ReferenceEquals($_, $entry) }).Count | Should Be 1
+        }
+    }
+
+    It 'executes the real deferred Full reader selection with no cheap entries' {
+        $arguments = @{
+            RepoRoot = $repoRoot; Platform = 'x64'; Configuration = 'Debug'
+            RedSalamanderExePath = Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'
+        }
+        $full = @(Get-RSTestRunPlan -Suite Full @arguments)
+        $pr = @(Get-RSTestRunPlan -Suite PR @arguments)
+        $deferred = @(Get-RSPrDeferredTestPlan -FullPlan $full -PrPlan $pr -RepoRoot $repoRoot)
+        $readers = @($deferred | Where-Object { $_.Kind -ne 'SelfTest' -and @($_.ArtifactWriteIds).Count -eq 0 })
+        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The real deferred reader selection keeps both interactive viewers.'
+        $actual = & $schedule $readers @{}
+        $actual.Early.Count | Should Be 0
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real deferred viewers in order.'
+    }
+}
+
+Describe 'Run-AllTests inventory desktop admission' {
+    It 'keeps native execution leased and lists inventory without desktop admission' {
+        Import-Module $helperModule -ErrorAction Stop
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        & {
+            foreach ($name in @('Invoke-RSSelfTestProcess', 'Invoke-RSSelfTestCaseList')) {
+                $function = $ast.Find({ param($node)
+                    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+                }, $true)
+                if (-not $function) { throw "Missing actual runner function: $name" }
+                . ([scriptblock]::Create($function.Extent.Text))
+            }
+            $admissions = [Collections.Generic.List[bool]]::new()
+            $children = [Collections.Generic.List[object]]::new()
+            $closed = [Collections.Generic.List[object]]::new()
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) return $Entry.RequiresInteractiveDesktop }
+            function Invoke-RSInteractiveDesktopOperation {
+                param([bool]$RequiresInteractiveDesktop, $Operation)
+                $admissions.Add($RequiresInteractiveDesktop)
+                & $Operation
+            }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $children.Add($ProcessStartInfo)
+                $process = [pscustomobject]@{
+                    ExitCode = 0
+                    StandardOutput = [IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":["cmd_inventory_fixture"]}]}')
+                    StandardError = [IO.StringReader]::new('')
+                }
+                $process | Add-Member ScriptMethod WaitForExit { }
+                return $process
+            }
+            function Close-RSContainedProcess {
+                param($Process)
+                $closed.Add($Process)
+                $Process.StandardOutput.Dispose()
+                $Process.StandardError.Dispose()
+            }
+            $entry = [pscustomobject]@{
+                Path = 'fixture.exe'; WorkingDirectory = $TestDrive
+                Arguments = @('--commands-selftest', '--selftest-case=cmd_inventory_fixture')
+                RequiresInteractiveDesktop = $true
+            }
+            Invoke-RSSelfTestProcess -Entry $entry -Arguments $entry.Arguments | Should Be 0
+            $inventory = Invoke-RSSelfTestCaseList -Entry $entry
+            $inventory.suites[0].cases[0] | Should Be 'cmd_inventory_fixture'
+            $children.Count | Should Be 2
+            $closed.Count | Should Be 2
+            ($children[0].ArgumentList -contains '--selftest-list-cases') | Should Be $false
+            ($children[1].ArgumentList -contains '--selftest-list-cases') | Should Be $true
+            ($children[1].ArgumentList -contains '--selftest-case=cmd_inventory_fixture') | Should Be $true
+            $admissions.Count | Should Be 2
+            $admissions[0] | Should Be $true
+            $admissions[1] | Should Be $false
+        }
+    }
+}
+
 Describe 'Run-AllTests runner source contracts' {
     It 'admits all six native profiles through the real runner and deployment preflights' {
         $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw

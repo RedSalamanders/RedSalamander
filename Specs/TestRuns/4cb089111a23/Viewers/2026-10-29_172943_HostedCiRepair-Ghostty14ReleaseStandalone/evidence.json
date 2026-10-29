@@ -1,0 +1,53 @@
+{
+  "schema": "hosted-ci-repair.standalone-followup.v1",
+  "sourceCommit": "cc6e19d5f736a784aa5f3b4ff99b5fea185aa097",
+  "sourceSnapshotId": "dccfc28f690f1a58f98d5e3d1d5ae4fa64600c30c95d747b13c71e3f116baedb",
+  "buildReceiptId": "602239334ec5c01de6c3319158e24ddb45d2bff6a01923e25206796f980b09ea",
+  "profile": "x64 Release",
+  "runId": "20261029T172943Z-15600-8a992d6d410a418cb69e87a093e95d4e",
+  "accepted_commands": 3,
+  "internal_terminal_passed": 162,
+  "scope": "Three selected noninteractive standalone commands pass at integrated source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097: captured-child containment with original console/output/identity controls, the independent read-only desktop-observation counterfactuals, and Terminal selftests (162 internal assertions passed). Exact receipt/profile/source identities are retained. No Full or performance non-regression claim. The extra initial corpus invocation failed its missing-metadata admission; retain that original failed launcher log separately from the three accepted commands.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 87334,
+      "sha256": "63f54738a479953f66aa51397233c1193272386bfc75ad4aece5a732cd2bcbb6"
+    },
+    {
+      "path": "invalid-unbound-vt-corpus.log",
+      "byteCount": 590,
+      "sha256": "47219523755a32176edc8555eb2a1bb0386c1d6f5854f3e149f979f062d59642"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 338402,
+      "sha256": "7ddfa9013ba9757e253a163bf2457c84aa92852acf4e85863a46fe299c9b2811"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 574,
+      "sha256": "72386736865a12a709073f423b4ddb06412a8c3edc85820b6dea6b5cb2519cad"
+    },
+    {
+      "path": "standalone-results.json",
+      "byteCount": 1298,
+      "sha256": "c55bbc58301027751f1b1b06c3053ee71a97fe92f9c8dfe2bc7d9e7ff561fc90"
+    },
+    {
+      "path": "terminal-selftests.log",
+      "byteCount": 4875,
+      "sha256": "f8339060866002703caf42a584bdae9b79941dcb9e4dc47dd558b3b92295b8f2"
+    },
+    {
+      "path": "viewer-containment.log",
+      "byteCount": 5615,
+      "sha256": "aff8c1fa1770e12a4527cf18683f35e54f47e6d71e95e326e18aed72430e8d4d"
+    },
+    {
+      "path": "viewer-observation.log",
+      "byteCount": 3893,
+      "sha256": "b135592d7b7eed6d3c137c40656f0135ee4cf513546b8a8b79c6a4594e59c213"
+    }
+  ]
+}

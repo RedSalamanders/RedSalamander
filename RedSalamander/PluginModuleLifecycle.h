@@ -36,7 +36,11 @@ template <typename Entry> void MarkDeferred(Entry& entry)
 template <typename Entry> [[nodiscard]] Entry MakeDeferredPlaceholder(const Entry& entry)
 {
     Entry placeholder;
-    placeholder.origin          = entry.origin;
+    placeholder.origin = entry.origin;
+    if constexpr (requires { placeholder.type = entry.type; })
+    {
+        placeholder.type = entry.type;
+    }
     placeholder.path            = entry.path;
     placeholder.factoryPluginId = entry.factoryPluginId;
     placeholder.id              = entry.id;

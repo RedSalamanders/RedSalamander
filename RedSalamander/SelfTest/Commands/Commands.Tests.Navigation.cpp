@@ -2,6 +2,227 @@
 // Included from Commands.Tests.Runner.cpp — NOT compiled standalone.
 // Navigation test family: deferred pane-navigation and NavigationView shell test functions.
 
+[[nodiscard]] bool TestSelfTestForegroundAdmissionHotkeyContract(HWND mainWindow, CaseState& state) noexcept
+{
+    state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(GetDesktopWindow(), true),
+                  L"Foreground admission must reject an unowned window before sending input.");
+    {
+        RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+        if (! state.Require(blocker.Start(), L"Could not install the no-activation negative control."))
+            return false;
+        state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true), L"Foreground admission must respect the no-activation guard.");
+        state.Require(blocker.BlockedActivationCount() == 0u && blocker.BlockedFocusCount() == 0u,
+                      L"No-activation admission must refuse before attempting a focus or activation change.");
+    }
+    HWND warningWindow = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(),
+                      [](HWND window, LPARAM context) noexcept -> BOOL
+    {
+        if (! DirectedSelfTestInputWarning::IsWarningWindow(window))
+            return TRUE;
+        *reinterpret_cast<HWND*>(context) = window;
+        return FALSE;
+    },
+                      reinterpret_cast<LPARAM>(&warningWindow));
+    const auto warningProcedure = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC));
+    if (! state.Require(warningWindow && warningProcedure, L"The dispatch witness must identify the owned warning and its original procedure."))
+        return false;
+
+    struct HotkeyDispatchWitness final
+    {
+        HWND window                = nullptr;
+        unsigned int dispatchCount = 0u;
+        DWORD installError         = ERROR_SUCCESS;
+        bool retired               = false;
+        bool keyDownAtDispatch     = false;
+        static const wchar_t* StateProp() noexcept
+        {
+            return L"RedSalamander.TestForeground.DispatchWitness";
+        }
+        static const wchar_t* OriginalProcProp() noexcept
+        {
+            return L"RedSalamander.TestForeground.DispatchWitness.OriginalWndProc";
+        }
+        static void Remove(HWND window) noexcept
+        {
+            RedSalamander::Win32Callback::RestoreWndProcHook(window, OriginalProcProp(), Procedure);
+            RemovePropW(window, StateProp());
+        }
+        static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+        {
+            auto* const witness = reinterpret_cast<HotkeyDispatchWitness*>(GetPropW(window, StateProp()));
+            const auto original = RedSalamander::Win32Callback::GetStoredWndProc(window, OriginalProcProp());
+            if (message == WM_HOTKEY || message == WM_NCDESTROY)
+            {
+                if (witness && message == WM_HOTKEY)
+                {
+                    ++witness->dispatchCount;
+                    witness->keyDownAtDispatch = (GetAsyncKeyState(VK_F24) & 0x8000) != 0;
+                }
+                Remove(window);
+                if (witness)
+                {
+                    witness->retired = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(window, GWLP_WNDPROC)) == original;
+                    if (witness->retired)
+                        witness->window = nullptr;
+                }
+            }
+            return original ? RedSalamander::Win32Callback::CallWindowProcNoThrow(original, window, message, wParam, lParam)
+                            : DefWindowProcW(window, message, wParam, lParam);
+        }
+    } witness;
+    static thread_local HotkeyDispatchWitness* activeWitness = nullptr;
+    auto* const previousWitness                              = std::exchange(activeWitness, &witness);
+    const auto restoreWitness                                = wil::scope_exit([&]() noexcept { activeWitness = previousWitness; });
+    // WH_CALLWNDPROC does not observe posted-message dispatch. Install an independent
+    // outer subclass when the real hotkey is removed, after the helper installed its handler.
+    wil::unique_hhook hotkeyDispatchProbe(SetWindowsHookExW(WH_GETMESSAGE,
+                                                            [](int code, WPARAM wParam, LPARAM lParam) noexcept -> LRESULT
+    {
+        const auto* const message = reinterpret_cast<const MSG*>(lParam);
+        if (code >= 0 && wParam == PM_REMOVE && message->message == WM_HOTKEY && activeWitness &&
+            DirectedSelfTestInputWarning::IsWarningWindow(message->hwnd) && GetWindowThreadProcessId(message->hwnd, nullptr) == GetCurrentThreadId())
+        {
+            if (RedSalamander::Win32Callback::SetPropNoThrow(message->hwnd, HotkeyDispatchWitness::StateProp(), reinterpret_cast<HANDLE>(activeWitness)) &&
+                RedSalamander::Win32Callback::InstallWndProcHook(message->hwnd, HotkeyDispatchWitness::OriginalProcProp(), HotkeyDispatchWitness::Procedure))
+                activeWitness->window = message->hwnd;
+            else
+            {
+                activeWitness->installError = GetLastError();
+                HotkeyDispatchWitness::Remove(message->hwnd);
+            }
+        }
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    },
+                                                            nullptr,
+                                                            GetCurrentThreadId()));
+    if (! state.Require(static_cast<bool>(hotkeyDispatchProbe), L"Could not install the owned-thread hotkey dispatch witness."))
+        return false;
+    const auto removeWitness    = wil::scope_exit([&]() noexcept
+    {
+        if (witness.window)
+            HotkeyDispatchWitness::Remove(witness.window);
+    });
+    constexpr int probeHotkeyId = 0x5F11;
+    for (unsigned int attempt = 0u; attempt < 2u; ++attempt)
+    {
+        const unsigned int dispatchBefore = witness.dispatchCount;
+        witness.retired                   = false;
+        witness.keyDownAtDispatch         = false;
+        const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
+        const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
+                                    RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
+                                    reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC)) == warningProcedure;
+        if (! state.Require(activated && GetForegroundWindow() == mainWindow, L"The warned hotkey handshake must acquire actual foreground ownership."))
+            return false;
+        state.Require(retiredWitness && witness.installError == ERROR_SUCCESS && witness.dispatchCount == dispatchBefore + 1u,
+                      L"Foreground admission must dispatch exactly one real hotkey through its window procedure and retire the independent witness.");
+        Trace(std::format(
+            L"Foreground hotkey witness: keyDownAtDispatch={} dispatchCount={} retired={}", witness.keyDownAtDispatch, witness.dispatchCount, retiredWitness));
+        state.Require(witness.keyDownAtDispatch, L"The hotkey must remain depressed until its handler completes the foreground handoff.");
+        const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+            return (GetAsyncKeyState(VK_F24) & 0x8000) == 0;
+        }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});
+        state.Require(released.conditionMet, L"The foreground handshake must leave its synthetic key released.");
+        const bool registered = RegisterHotKey(mainWindow, probeHotkeyId, MOD_NOREPEAT, VK_F24) != FALSE;
+        if (! state.Require(registered, L"The foreground handshake must retire its hotkey registration."))
+            return false;
+        const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(mainWindow, probeHotkeyId); });
+        state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true),
+                      L"An unavailable hotkey must fail admission without overriding another registration.");
+    }
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestDirectoryCacheInvalidationDuringEnumerationIsRetained(CaseState& state) noexcept
+{
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"cache_inflight_invalidation", root))
+        return false;
+    const auto cleanupFiles = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    const auto base         = GetBatchRenameLocalFileSystem(state);
+    if (! base || ! state.Require(SelfTest::WriteTextFile(root / L"before.txt", "original"), L"Could not seed the original cached file."))
+        return false;
+    wil::unique_handle snapshotReady(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle snapshotRelease(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! state.Require(snapshotReady && snapshotRelease, L"Could not create the owned snapshot race gates."))
+        return false;
+    std::atomic_uint32_t calls{0u};
+    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, &calls);
+    if (! state.Require(wrapper != nullptr, L"Could not create the deterministic enumeration provider."))
+        return false;
+    wil::com_ptr<IFileSystem> provider;
+    provider.attach(wrapper);
+    wrapper->SetReadDirectoryInfoSnapshotGate(snapshotReady.get(), snapshotRelease.get());
+    auto& cache = DirectoryInfoCache::GetInstance();
+    cache.RegisterProvider(provider.get(), L"selftest/cache-inflight", L"file", root.native());
+    const auto unregister = wil::scope_exit([&]() noexcept { cache.UnregisterProvider(provider.get()); });
+    HRESULT firstStatus   = E_UNEXPECTED;
+    wil::com_ptr<IFilesInformation> firstSnapshot;
+    std::jthread enumerator([&]() noexcept
+    {
+        const auto com = wil::CoInitializeEx(COINIT_MULTITHREADED);
+        auto borrowed  = cache.BorrowDirectoryInfo(provider.get(), root, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        firstStatus    = borrowed.Status();
+        firstSnapshot  = borrowed.Get();
+    });
+    // Release before joining on every failure path; the provider also has its own deadline.
+    const auto release = wil::scope_exit([&]() noexcept { SetEvent(snapshotRelease.get()); });
+    const auto ready   = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return WaitForSingleObject(snapshotReady.get(), 0u) == WAIT_OBJECT_0;
+    }, {.timeout = SelfTest::Scale(std::chrono::milliseconds{3000}), .operationName = L"captured old directory snapshot"});
+    if (! state.Require(ready.conditionMet, L"Provider did not capture the immutable pre-mutation snapshot."))
+        return false;
+    state.Require(SelfTest::WriteTextFile(root / L"cp437.zip", "created after the snapshot"), L"Could not create the late archive entry.");
+    cache.InvalidateFolder(provider.get(), root);
+    cache.InvalidateFolder(provider.get(), root);
+    SetEvent(snapshotRelease.get());
+    enumerator.join();
+    const auto names = [](IFilesInformation* info) noexcept
+    {
+        std::vector<std::wstring> result;
+        unsigned long count = 0u;
+        if (! info || FAILED(info->GetCount(&count)))
+            return result;
+        for (unsigned long index = 0u; index < count; ++index)
+        {
+            FileInfo* item = nullptr;
+            if (FAILED(info->Get(index, &item)) || ! item || item->FileNameSize % sizeof(wchar_t) != 0u)
+                return std::vector<std::wstring>{};
+            result.emplace_back(item->FileName, item->FileNameSize / sizeof(wchar_t));
+        }
+        std::ranges::sort(result);
+        return result;
+    };
+    const std::vector<std::wstring> original{L"before.txt"};
+    const std::vector<std::wstring> current{L"before.txt", L"cp437.zip"};
+    state.Require(firstStatus == S_OK && names(firstSnapshot.get()) == original && calls.load() == 1u,
+                  L"The gated first enumeration must really return the old snapshot, not observe the late file.");
+    {
+        auto cached = cache.BorrowDirectoryInfo(provider.get(), root, DirectoryInfoCache::BorrowMode::CacheOnly);
+        state.Require(cached.Status() == S_OK && names(cached.Get()) == original && calls.load() == 1u,
+                      L"CacheOnly must preserve its explicit stale-snapshot/no-enumeration contract.");
+    }
+    const auto started = std::chrono::steady_clock::now();
+    auto refreshed     = cache.BorrowDirectoryInfo(provider.get(), root, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
+    state.Require(refreshed.Status() == S_OK && names(refreshed.Get()) == current && calls.load() == 2u,
+                  L"Invalidation during enumeration must require one follow-up load containing the late archive.");
+    state.Require(names(firstSnapshot.get()) == original, L"Refreshing the cache must not mutate the previously retained immutable snapshot.");
+    for (unsigned int hit = 0u; hit < 32u; ++hit)
+    {
+        auto cached = cache.BorrowDirectoryInfo(provider.get(), root, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        state.Require(cached.Status() == S_OK && names(cached.Get()) == current, L"The clean follow-up snapshot must remain reusable.");
+    }
+    state.Require(calls.load() == 2u, L"Retaining an in-flight invalidation must not cause repeated enumeration once current.");
+    Trace(std::format(L"DirectoryInfoCache.InflightInvalidation providerCalls={} refresh_us={} oldEntries={} currentEntries={}",
+                      calls.load(),
+                      elapsed,
+                      names(firstSnapshot.get()).size(),
+                      names(refreshed.Get()).size()));
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestNaturalNameSortingContracts(CaseState& state) noexcept
 {
     const std::wstring paneFailure = FolderView::DebugValidateNaturalSortingForSelfTest();
@@ -11269,6 +11490,12 @@ struct OwnedMenuSessionEscapeResult
 
 void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
+    SelfTest::RunCase(options, suite, L"cmd_selftest_foreground_admission_hotkey_contract", [=](CaseState& state) noexcept {
+        return TestSelfTestForegroundAdmissionHotkeyContract(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_directory_cache_invalidation_during_enumeration_is_retained", [](CaseState& state) noexcept {
+        return TestDirectoryCacheInvalidationDuringEnumerationIsRetained(state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_natural_name_sorting_contracts", [](CaseState& state) noexcept { return TestNaturalNameSortingContracts(state); });
     SelfTest::RunCase(
         options, suite, L"cmd_navigation_sibling_natural_sorting", [](CaseState& state) noexcept { return TestNavigationSiblingNaturalSorting(state); });

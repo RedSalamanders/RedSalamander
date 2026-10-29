@@ -141,6 +141,24 @@ struct Route final
         failure = std::format(L"complete test-owned facts were refused: {}", refusal);
         return false;
     }
+    std::wstring operationRefusal;
+    const auto ownedChild    = mount / L"case" / L"source";
+    const auto operationPath = TryMakeOwnedVirtualDiskOperationPath(accepted, owned, mount, mount, ownedChild, operationRefusal);
+    if (! operationPath.has_value() || operationPath.value() != std::filesystem::path(owned) / L"case" / L"source" || ! operationRefusal.empty())
+    {
+        failure = L"the exact owned child did not resolve to its test-owned volume "
+                  L"operation path";
+        return false;
+    }
+    for (const auto& unsafePath : {mount, probeDirectory / L"other", mount / L".." / L"escape", std::filesystem::path(L"relative/child")})
+    {
+        if (TryMakeOwnedVirtualDiskOperationPath(accepted, owned, mount, mount, unsafePath, operationRefusal).has_value() ||
+            operationRefusal != L"operation-path-not-an-owned-child")
+        {
+            failure = std::format(L"an unowned operation path was accepted: {}", unsafePath.native());
+            return false;
+        }
+    }
     const auto expectRefusal = [&](std::wstring_view control,
                                    const OwnedVirtualDiskMountFacts& facts,
                                    std::wstring_view guid,
@@ -148,7 +166,11 @@ struct Route final
                                    std::wstring_view expectedPrefix) noexcept
     {
         const auto refusal = EvaluateOwnedVirtualDiskMount(facts, guid, mountPath, mount);
-        if (refusal.starts_with(expectedPrefix))
+        std::wstring operationFailure;
+        const bool operationRefused =
+            ! TryMakeOwnedVirtualDiskOperationPath(facts, guid, mountPath, mount, mountPath / L"case", operationFailure).has_value() &&
+            operationFailure.starts_with(expectedPrefix);
+        if (refusal.starts_with(expectedPrefix) && operationRefused)
             return true;
         failure = std::format(L"control {} expected refusal '{}' but got '{}'", control, expectedPrefix, refusal);
         return false;
@@ -165,8 +187,8 @@ struct Route final
     outside.parentAuthorized       = false;
     auto fat                       = accepted;
     fat.fileSystemName             = L"FAT32";
-    // The real primary volume, as if mounted at the owned path: refused for its drive-letter
-    // access path or physical bus, not merely for a GUID mismatch.
+    // The real primary volume, as if mounted at the owned path: refused for its
+    // drive-letter access path or physical bus, not merely for a GUID mismatch.
     auto realVolume                   = ObserveOwnedVirtualDiskMount(mount, primaryGuid.value());
     const bool liveUnmountedRefused   = expectRefusal(L"live-plain-directory", realVolume, primaryGuid.value(), mount, L"mount-directory-is-not-");
     realVolume.parentAuthorized       = true;

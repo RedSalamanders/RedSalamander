@@ -513,7 +513,8 @@
       "usage": "Run before IDE builds or use the automatic root build restore.",
       "usedBy": [
         "Developers",
-        "build.ps1"
+        "build.ps1",
+        ".github/workflows/nightly-flake.yml"
       ],
       "prerequisites": [
         "Visual Studio C++",
@@ -1447,7 +1448,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Empty early scheduling sets remain valid when PR delegation leaves interactive standalone entries; noninteractive planning reports desktop-pending selections without blocking admitted entries.",
+      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission.",
       "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
@@ -2366,14 +2367,15 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every JSONL row, schemas, result bindings, and Terminal VT thresholds with identical environments except an explicitly matched reviewed Zig transition.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds and unchanged pre-contract inventory boundaries across the source-snapshot migration, with identical environments except an explicitly matched reviewed Zig transition.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
         "performance validation workflows"
       ],
       "prerequisites": [
-        "PowerShell Test-Json support for schema-owned archives"
+        "PowerShell Test-Json support for schema-owned archives",
+        "Git ancestry for immutable archive baselines; absent ancestry validates all tracked files"
       ],
       "sideEffects": [
         "Invokes read-only Git queries"
@@ -2576,6 +2578,35 @@
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/HistoricalTerminalProfile.Tests.ps1",
         "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Testing/HostedTestDesktop.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Establish a sufficient driver-supported display fixture for hosted native UI qualification and restore the original mode on success or failure.",
+      "usage": "Import in the reusable native CI/Full job and shuffle-repeat consumer, then wrap synchronous validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
+      "usedBy": [
+        ".github/workflows/build-reusable.yml",
+        ".github/workflows/nightly-flake.yml"
+      ],
+      "prerequisites": [
+        "Windows GitHub Actions runner with an interactive display",
+        "A driver-enumerated 32-bit mode containing the required native UI viewports"
+      ],
+      "sideEffects": [
+        "Temporarily changes display mode only when the current display is insufficient",
+        "Restores the original mode in finally; setup and restoration failures remain errors"
+      ],
+      "outputs": [
+        "Qualification action output and display/work-area/session/foreground diagnostics"
+      ],
+      "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
+      "tests": [
+        "Tools/Tests/HostedTestDesktop.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "replacement": null
     },

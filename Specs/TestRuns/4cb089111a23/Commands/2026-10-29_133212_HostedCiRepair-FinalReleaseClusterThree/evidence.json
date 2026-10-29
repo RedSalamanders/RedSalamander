@@ -1,0 +1,55 @@
+{
+  "schema": "hosted-ci-repair.runtime-followup.v1",
+  "sourceCommit": "a319e2f398788f35c58968b6dad18fa7632a933a",
+  "sourceSnapshotId": "f105449eebbd672f6424de5d54800bae2167071f056d5e1a84a1e2a1b95ba1a9",
+  "buildReceiptId": "c061b0578727d0d02aba14816e36d93dd316da6ea6a0abe85ddc7ba1ca726b2f",
+  "profile": "x64 Release",
+  "runId": "20261029T133212Z-98980-58ae6c66157c46349ecb93e48a99c65d",
+  "passed": 27,
+  "failed": 0,
+  "skipped": 0,
+  "nativeDurationMs": 35741,
+  "scope": "Exact committed candidate x64 Release. Nine deferred-plugin, Find-sort, terminal, two-task disclosure, ViewerSpace device-loss and warm-quiescence cases each repeated three times. Original assertions and every late-paint/disclosure route remain. Focused coverage only, not Full. No skips or automatic retries.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "byteCount": 86290,
+      "sha256": "7a0e4289737a4b1db7aa1f1eda97c2a2420fd3800a7f1222d2984f6590f3a6f6"
+    },
+    {
+      "path": "external-metrics.json",
+      "byteCount": 379,
+      "sha256": "6b42ebb6fdfde7d6320ef68f43874cc5dd7fcbc2180663d225cf12cbd1029619"
+    },
+    {
+      "path": "global-trace.txt",
+      "byteCount": 226286,
+      "sha256": "352894ab66f5c0159d60139d74736da1a215a3e6b2cb8ecda59f98e3891bf7fc"
+    },
+    {
+      "path": "native-inputs.patch",
+      "byteCount": 101299,
+      "sha256": "2722da4cceb58f66d81d1388601a91521a408da26aec6364e6de40c84981b91b"
+    },
+    {
+      "path": "native-results.json",
+      "byteCount": 5550,
+      "sha256": "8395f6d1e035a0187042dba8756bcdf1d68e6b386537e16066c947a9d7db9ee3"
+    },
+    {
+      "path": "README.md",
+      "byteCount": 311,
+      "sha256": "8230b5c8302e6256437ec389b4d1506fa732af0a29c137a69d4a4d96529c2d46"
+    },
+    {
+      "path": "runner-results.json",
+      "byteCount": 9415,
+      "sha256": "52b8b08020a64b0fa553be96f771094a7e9499d8d49550e816f5a0c95c0f827b"
+    },
+    {
+      "path": "trace.txt",
+      "byteCount": 43922,
+      "sha256": "d81a4bdb2368627df5fb855f12f711cd66817c1504f8fd628ac325e72835b5e5"
+    }
+  ]
+}

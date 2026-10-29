@@ -1,0 +1,5 @@
+# Focused x64 ASan MTP qualification
+
+Source 29615cf6f64e482bfd025fb41564330188c18c8f passes both unchanged recovery and normalization cases ten times: 20 passed, zero failed/skipped/retries. The native fixture retains 4,096 exact PUID identities, authority mismatch quarantine, expanded normalization aliases and its original 2,000,000 us limit. Ten recorded recovery samples range from 930,844 to 1,504,989 us (median 1,464,865.5 us). Every raw metric row is retained byte for byte.
+
+This is focused local ASan threshold evidence. The earlier hosted 522 failure uses a different machine, so these observations do not establish a paired speedup or repository Full acceptance. Build receipt and runner provenance bind the raw metric stream even where its legacy commit field is empty. All older failures remain retained.

@@ -391,6 +391,7 @@ namespace Common::DebugSelfTest
 struct Check final
 {
     std::wstring_view component;
+    void (*recordFailure)(const wchar_t* message, unsigned int passed, unsigned int failed) noexcept = nullptr;
 
     bool operator()(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) const noexcept
     {
@@ -402,6 +403,10 @@ struct Check final
 
         ++failed;
         Debug::Error(L"{} debug selftest failed: {}", component, message);
+        if (recordFailure)
+        {
+            recordFailure(message, passed, failed);
+        }
         // Plugin contract tests execute this code inside a loaded DLL and cannot observe the
         // provider's debugger stream. Mirror only failures to stderr so the harness preserves the
         // exact failed contract instead of reporting an opaque aggregate count.

@@ -6634,7 +6634,11 @@ private:
         }
 
         constexpr unsigned int kMaxWorkers = static_cast<unsigned int>(Task::kMaxInFlightFiles);
-        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+        // File I/O is not CPU-bound. Keep four transfer workers even on smaller
+        // hosts, plus the starvation reserve used by effectiveMaxConcurrencyLocked.
+        // Counting that reserve inside a four-core pool capped selected-file Copy
+        // at three transfers while the provider's folder walker used all four.
+        workerCount = std::clamp(workerCount, 4u, kMaxWorkers) + 1u;
         _workerCount.store(workerCount, std::memory_order_release);
 
         _workers.reserve(workerCount);
