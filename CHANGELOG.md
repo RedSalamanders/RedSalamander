@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Added an indexed, lead-verified review of the main merges from 2026-10-18 to 2026-10-28 (PR #142 source snapshot and PRs #143-#145): production-readiness verdict, findings by severity with file references and verification labels, simplification opportunities, ordered remediation slices and owner questions. This documentation-only change implements no fix; qualification and remediation remain open.
 - Correct ViewerPE qualification's read-only desktop check for hosted controls
   owned by another process or thread. Capture root and focus identities
   independently and accept exact automatic restoration without granting any

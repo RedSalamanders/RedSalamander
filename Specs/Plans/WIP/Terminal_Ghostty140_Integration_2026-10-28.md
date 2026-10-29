@@ -1,4 +1,4 @@
-# I50 Ghostty 1.4.0 terminal runtime integration
+# I51 Ghostty 1.4.0 terminal runtime integration
 
 > Non-normative execution record. The durable runtime contract belongs to
 > `Specs/Terminal/Terminal_EmbeddedPlugin.md`; testing and tooling contracts retain
@@ -20,6 +20,9 @@ RedSalamander `8ea956a7e2e271368082a953f28efd2a58e1013f` on
 
 I15 continues to own the older remediation qualification. This plan does not
 reinterpret its historical runs as current evidence or close that plan.
+
+Renumbered from I50 on 2026-10-29 because main already assigned I50 to its
+merge-review record. Earlier Ghostty references to I50 describe this same record.
 
 ## Progress
 
@@ -65,6 +68,12 @@ and warning; acceptance remains pending their actual results.
 
 ## 2026-10-29 14:14 UTC qualification checkpoint
 
+- Main synchronization incorporates `b4ff85bead78c1caf2a1e9e7fb80545ca00831de`.
+  Its delta from the integration base contains only the folded changelog,
+  main-merge review and WIP index. Preserve both records and their entries;
+  there is no application, dependency, build or test-code change in that delta.
+  The source and artifacts of the active Commands run remain frozen at
+  `f72618d62` in the primary worktree.
 - Application and build sources remain unchanged between `3f2b0f1ce` and
   `f72618d62`; the current x64 Debug test-enabled Embedded build uses receipt
   `224e9a7766a213ef9d91f34dcea8a5567862f12f96a6e4bdb648cce53e723c67`.

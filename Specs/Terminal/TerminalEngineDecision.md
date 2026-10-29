@@ -109,7 +109,7 @@ The 2026-10-28 integration branch selects libghostty-vt from Ghostty `v1.4.0`
 (`83fb95624b0439ee660c2679b43b38c8b63769cd`) with Zig 0.17.0. The private
 dynamic boundary and exact plugin/runtime pairing remain the decision. The
 rebased five-concern overlay retains clipboard rejection and placement bounds;
-new public APIs do not automatically enable new host features. I50 records
+new public APIs do not automatically enable new host features. I51 records
 current validation and open native ARM64/shipping gates. Earlier evidence does
 not qualify these new bytes.
 
