@@ -1,0 +1,1 @@
+- Confirm emergency overrides apply to PR merge checks only, and record successful two-architecture RedXe/RedMonitor v1.0.5 qualification and prepare-only promotion plus DxUi v1.0.4 SDK proof; retain remaining all-project acceptance gates in the active CI plan.
