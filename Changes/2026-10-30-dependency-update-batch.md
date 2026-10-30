@@ -1,0 +1,1 @@
+- Integrate the pending 7zip 26.5, curl 8.23.0, SQLite 3.54.1 and existing libjpeg-turbo 3.2.0#1 updates using one matching October 22 vcpkg tool/registry snapshot; retain the audited AWS SDK/CRT overrides and existing dependency features. Candidate dependency builds and consumer qualification remain required before merge.

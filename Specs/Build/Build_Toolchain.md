@@ -640,7 +640,7 @@ SDK compilation and the consumer Release build are required. The `aws-sdk-cpp`
 floor equals that override, and the pair moves only together after that
 re-audit. The vcpkg tool and registry baseline pins name one commit whose
 version database contains every current manifest floor and override, including
-the SQLite (`3.53.4#1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
+the SQLite (`3.54.1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
 See [the SDK's CRT source](https://github.com/aws/aws-sdk-cpp/tree/1.11.880/crt/aws-crt-cpp)
 and [the paired CRT declarations](https://github.com/awslabs/aws-crt-cpp/blob/v0.43.4/include/aws/crt/Types.h).
 
