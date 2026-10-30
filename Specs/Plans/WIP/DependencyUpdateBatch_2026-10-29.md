@@ -73,3 +73,34 @@ tool bootstrap passed. The first local installer attempt failed while Git tried
 to lazily fetch an AWS port blob: GitHub DNS resolution failed. Keep that failed
 log; it is not a successful dependency install. Fresh package installation and
 native candidate CI remain required.
+
+## ARM64 overlay correction
+
+Source `50f219ba2bf2c7cde33e252c6a515a31bdf7e5fe` subsequently passed the full
+local x64 Debug, Release and ASan Debug rebuilds with zero warnings and errors.
+SQLite noninteractive and Curl parser/planning checks passed in all three
+profiles at source snapshot `74326aa7b222708f1dcb4ccf778e65c1cdac2ed64f80caf4cb6cae40cca5a95c`.
+The intentional heap-overflow probe produced the required sanitizer diagnostic.
+The two earlier local capability skips were covered by 14 passing pin/toolset
+checks after the exact tool and DxUi sources were restored.
+
+The additional ARM64 restore exposed an incompatible overlay before compilation:
+the inherited `aws-c-common` 1.0.0 overlay cannot supply
+`aws_last_error_or_unknown_error` and
+`aws_error_or_last_error_or_unknown_error` for `aws-c-io` 1.1.0. Its failed
+inputs, linker log and ABI metadata were preserved before retry. The original
+hosted installer bypassed both the compatibility port and compiler-pinned triplet,
+so its successful native restore did not qualify this local path.
+
+The overlay now follows the selected registry's 1.0.3 source, archive hash, CRT
+patch and notices. The exact compiler/architecture/file-scoped `/Ob1` workaround
+is retained. Hosted installation uses the same triplet and ARM64 port overlays;
+its cache identity includes their helper and overlay bytes. Fresh installation,
+focused parity tests and candidate CI are required after this correction; the
+earlier source's receipts remain source-specific.
+
+The correction passes all 115 focused tooling checks with zero failures, skips
+or pending cases. The new coverage executes the actual hosted install script's
+argument selection for x64, ARM64, a failing native install and an unsupported
+triplet; it also checks registry/overlay source parity and cache dependency
+closure. The existing six compiler/architecture CMake controls remain passing.

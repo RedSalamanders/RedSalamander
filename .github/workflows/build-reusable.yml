@@ -232,7 +232,7 @@ jobs:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
             .build/vcpkg-tool/downloads
-          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json', 'vcpkg-install.ps1', 'Tools/Modules/Build/VcpkgInstallSafety.psm1', 'Build/vcpkg-ports/**') }}
 
       - name: Cache pinned Terminal runtime inputs and product
         id: terminal_runtime_cache
@@ -361,9 +361,8 @@ jobs:
             throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."
           }
 
-          # The two pins diverge, so the ports and version database come from a registry checkout of the baseline,
-          # passed to vcpkg install through --vcpkg-root (Build_Toolchain.md): the tool commit's own version database
-          # lacks entries the manifest requires, and vcpkg then fails with "no version database entry".
+          # Materialize the exact baseline as a registry checkout, including when it equals the tool pin.
+          # Explicit --vcpkg-root keeps port/version selection independent from executable discovery.
           $registryRoot = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-registry'
           if (Test-Path -LiteralPath $registryRoot) { Remove-Item -LiteralPath $registryRoot -Recurse -Force }
           git worktree prune
@@ -383,10 +382,22 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force
+          Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath (Join-Path $env:GITHUB_WORKSPACE 'vcpkg.json') -RegistryRoot $env:VCPKG_REGISTRY_ROOT
+          $installation = Get-RSVcpkgVisualStudioInstallation
+          $toolset = Get-RSVcpkgDefaultToolset -Installation $installation
+          $triplet = $env:VCPKG_DEFAULT_TRIPLET
+          $platformScope = if ($triplet -eq 'arm64-windows') { 'arm64' } elseif ($triplet -eq 'x64-windows') { 'x64' } else { throw "Unsupported CI triplet: $triplet" }
+          $overlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child ".build\vcpkg-triplets\$platformScope" -Description 'CI triplet overlay'
+          $overlay = Update-RSVcpkgOverlayTriplet -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $env:VCPKG_REGISTRY_ROOT -Triplet $triplet) -Toolset $toolset -OutputDirectory $overlayDirectory
           # The executable stays at vcpkg-tool.json's commit; the baseline's registry checkout supplies ports and versions.
           # Downloads stay beneath the tool checkout, where the vcpkg cache keeps them.
           $downloadsRoot = Join-Path $env:VCPKG_ROOT 'downloads'
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "--vcpkg-root=$env:VCPKG_REGISTRY_ROOT" "--downloads-root=$downloadsRoot" --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
+          $vcpkgArguments = @('install', "--vcpkg-root=$env:VCPKG_REGISTRY_ROOT", "--downloads-root=$downloadsRoot", '--triplet', $triplet,
+                             '--x-manifest-root', $env:GITHUB_WORKSPACE, '--x-install-root', $env:VCPKG_INSTALLED_DIR, "--overlay-triplets=$($overlay.Directory)")
+          if ($triplet -eq 'arm64-windows') { $vcpkgArguments += '--overlay-ports=' + (Join-Path $env:GITHUB_WORKSPACE 'Build/vcpkg-ports') }
+          & "$env:VCPKG_ROOT\vcpkg.exe" @vcpkgArguments
           if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed with exit code $LASTEXITCODE." }
 
       - name: Normalize vcpkg install root
