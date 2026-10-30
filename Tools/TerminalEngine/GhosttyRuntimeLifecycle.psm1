@@ -321,6 +321,22 @@ function Get-RSGhosttyRuntimeLockPlatform {
     return $matches[0]
 }
 
+function Get-RSGhosttyRuntimeHostPlatform {
+    [CmdletBinding()]
+    param(
+        [Runtime.InteropServices.Architecture]$OSArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    )
+
+    # Select the Zig build for the machine itself, not for this PowerShell process.
+    # On Windows ARM64 the x86-64 Zig 0.17 runs only under emulation, where its
+    # first-use maker bootstrap intermittently never finished on hosted CI.
+    switch ($OSArchitecture) {
+        ([Runtime.InteropServices.Architecture]::Arm64) { return 'ARM64' }
+        ([Runtime.InteropServices.Architecture]::X64) { return 'x64' }
+        default { throw "Ghostty runtime builds require an x64 or ARM64 Windows host; found '$OSArchitecture'." }
+    }
+}
+
 function Get-RSGhosttyRuntimeLockDependency {
     [CmdletBinding()]
     param(
@@ -517,9 +533,10 @@ function Invoke-RSGhosttyRuntimeBuild {
     $runtimePlatform = Get-RSGhosttyRuntimeLockPlatform -Lock $runtimeLock -Platform $Platform
     $dependencyLocks = @($runtimeLock.dependencies)
     $uucodeLock = Get-RSGhosttyRuntimeLockDependency -Lock $runtimeLock -Id 'uucode'
-    $hostToolchainArchives = @($runtimeLock.toolchain.archives | Where-Object { [string]$_.hostPlatform -ceq 'x64' })
+    $hostPlatform = Get-RSGhosttyRuntimeHostPlatform
+    $hostToolchainArchives = @($runtimeLock.toolchain.archives | Where-Object { [string]$_.hostPlatform -ceq $hostPlatform })
     if ($hostToolchainArchives.Count -ne 1) {
-        throw "Ghostty runtime lock field 'toolchain.archives' must contain exactly one x64 host toolchain."
+        throw "Ghostty runtime lock field 'toolchain.archives' must contain exactly one $hostPlatform host toolchain for this machine."
     }
     $zigArchiveLock = $hostToolchainArchives[0]
 
@@ -686,12 +703,81 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
         return $header.Replace("`r`n", "`n").Replace("`r", "`n") + "`n"
     }
 
+    function Write-RSGhosttyContainedProcessSnapshot {
+        param(
+            [Parameter(Mandatory)][int]$RootProcessId,
+            [Parameter(Mandatory)][datetime]$RootStartTime,
+            [Parameter(Mandatory)][string]$Reason
+        )
+
+        # Diagnose only the contained tree: the root and its descendants by parent
+        # link, excluding reused PIDs older than their recorded parent. Paths and
+        # thread states identify a stall without echoing command-line arguments.
+        try {
+            $all = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+            $tree = [Collections.Generic.List[object]]::new()
+            foreach ($candidate in $all) {
+                if (([int]$candidate.ProcessId -eq $RootProcessId -or [int]$candidate.ParentProcessId -eq $RootProcessId) -and
+                    $candidate.CreationDate -ge $RootStartTime.AddSeconds(-1)) {
+                    $tree.Add($candidate)
+                }
+            }
+            for ($index = 0; $index -lt $tree.Count; ++$index) {
+                $parent = $tree[$index]
+                foreach ($candidate in $all) {
+                    if ([int]$candidate.ParentProcessId -eq [int]$parent.ProcessId -and
+                        [int]$candidate.ProcessId -ne [int]$parent.ProcessId -and
+                        $candidate.CreationDate -ge $parent.CreationDate -and
+                        -not $tree.Contains($candidate)) {
+                        $tree.Add($candidate)
+                    }
+                }
+            }
+            if ($tree.Count -eq 0) {
+                Write-Host "[GhosttyRuntime] $Reason snapshot: pid=$RootProcessId has no running contained process."
+                return
+            }
+            $cpuBefore = @{}
+            foreach ($entry in $tree) {
+                $cpuBefore[[int]$entry.ProcessId] = ([long]$entry.UserModeTime + [long]$entry.KernelModeTime) / 10000000.0
+            }
+            Start-Sleep -Seconds 5
+            foreach ($entry in $tree) {
+                $processId = [int]$entry.ProcessId
+                $live = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                if ($null -eq $live) {
+                    Write-Host "[GhosttyRuntime] $Reason snapshot: pid=$processId parent=$($entry.ParentProcessId) exited during sampling: $($entry.ExecutablePath)"
+                    continue
+                }
+                $cpuSeconds = $live.TotalProcessorTime.TotalSeconds
+                $threadStates = @($live.Threads | ForEach-Object {
+                        if ($_.ThreadState -eq [Diagnostics.ThreadState]::Wait) { "Wait:$($_.WaitReason)" } else { [string]$_.ThreadState }
+                    } | Group-Object | Sort-Object Name | ForEach-Object { '{0}x{1}' -f $_.Name, $_.Count }) -join ','
+                Write-Host ([string]::Format([Globalization.CultureInfo]::InvariantCulture,
+                    '[GhosttyRuntime] {0} snapshot: pid={1} parent={2} cpuSeconds={3:F1} cpuSecondsLast5s={4:F2} workingSetMB={5:F0} threads={6} [{7}]: {8}',
+                    $Reason, $processId, $entry.ParentProcessId, $cpuSeconds,
+                    ($cpuSeconds - $cpuBefore[$processId]), ($live.WorkingSet64 / 1MB), $live.Threads.Count,
+                    $threadStates, $entry.ExecutablePath))
+            }
+        }
+        catch {
+            # The snapshot only annotates the caller's failure, which still
+            # terminates the contained tree and reports the stalled command.
+            Write-Host "[GhosttyRuntime] $Reason snapshot unavailable: $($_.Exception.Message)"
+        }
+    }
+
     function Invoke-CheckedProcess {
         param(
             [Parameter(Mandatory)][string]$FilePath,
             [Parameter(Mandatory)][string[]]$ArgumentList,
             [Parameter(Mandatory)][string]$WorkingDirectory,
-            [hashtable]$Environment = @{}
+            [hashtable]$Environment = @{},
+            # Every contained child is bounded. The slowest normal child, Zig's
+            # emulated reproducible build, took 533 s on CI; a stall must fail
+            # with its process state instead of consuming the six-hour job.
+            [ValidateRange(1, 86400)][int]$TimeoutSeconds = 1800,
+            [ValidateRange(1, 3600)][int]$OutputDrainTimeoutSeconds = 120
         )
 
         $startInfo = New-RSProcessStartInfo `
@@ -710,16 +796,29 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             $commandLabel = "{0} cwd={1}" -f $FilePath, $WorkingDirectory
             $commandClock = [Diagnostics.Stopwatch]::StartNew()
             Write-Host "[GhosttyRuntime] starting: $commandLabel"
+            $commandStartTime = [datetime]::Now
             $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
             Write-Host "[GhosttyRuntime] started pid=$($process.Id): $commandLabel"
             $stdoutTask = $process.StandardOutput.ReadToEndAsync()
             $stderrTask = $process.StandardError.ReadToEndAsync()
-            while (-not $process.WaitForExit(30000)) {
+            $timeoutMilliseconds = [long]$TimeoutSeconds * 1000
+            while (-not $process.WaitForExit([int][Math]::Max(1, [Math]::Min(30000, $timeoutMilliseconds - $commandClock.ElapsedMilliseconds)))) {
+                if ($commandClock.ElapsedMilliseconds -ge $timeoutMilliseconds) {
+                    Write-RSGhosttyContainedProcessSnapshot -RootProcessId $process.Id -RootStartTime $commandStartTime -Reason 'timeout'
+                    throw ("'$FilePath' (pid $($process.Id), cwd '$WorkingDirectory') did not exit within its $TimeoutSeconds-second bound. " +
+                           'The [GhosttyRuntime] timeout snapshot above shows its contained process tree, which is now terminated.')
+                }
                 Write-Host "[GhosttyRuntime] running pid=$($process.Id) elapsedSeconds=$([int]$commandClock.Elapsed.TotalSeconds): $commandLabel"
             }
             Write-Host "[GhosttyRuntime] exited pid=$($process.Id) code=$($process.ExitCode); draining output: $commandLabel"
             $outputReady = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutTask, $stderrTask))
-            while ([Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($outputReady), 30000) -lt 0) {
+            $drainClock = [Diagnostics.Stopwatch]::StartNew()
+            while ([Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($outputReady), [int][Math]::Max(1, [Math]::Min(30000, [long]$OutputDrainTimeoutSeconds * 1000 - $drainClock.ElapsedMilliseconds))) -lt 0) {
+                if ($drainClock.Elapsed.TotalSeconds -ge $OutputDrainTimeoutSeconds) {
+                    Write-RSGhosttyContainedProcessSnapshot -RootProcessId $process.Id -RootStartTime $commandStartTime -Reason 'output-drain'
+                    throw ("'$FilePath' (pid $($process.Id)) exited with code $($process.ExitCode), but a contained descendant kept its output open for $OutputDrainTimeoutSeconds seconds. " +
+                           'The contained process tree is now terminated.')
+                }
                 Write-Host "[GhosttyRuntime] output still open after process exit elapsedSeconds=$([int]$commandClock.Elapsed.TotalSeconds): $commandLabel"
             }
             $stdout = $stdoutTask.GetAwaiter().GetResult()
@@ -1490,6 +1589,7 @@ Export-ModuleMember -Function @(
     'Read-RSGhosttyRuntimeLock',
     'Get-RSGhosttyRuntimeLockDigest',
     'Get-RSGhosttyRuntimeLockPlatform',
+    'Get-RSGhosttyRuntimeHostPlatform',
     'Get-RSGhosttyRuntimeLockDependency',
     'Resolve-RSGhosttyRuntimeBuildPlan',
     'Assert-RSGhosttyRuntimeOutputReplaceable',

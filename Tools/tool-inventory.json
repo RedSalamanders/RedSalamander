@@ -839,14 +839,14 @@
         "PowerShell 7",
         "Git",
         "Canonical schema and explicit selected lock",
-        "Pinned Zig and source caches or network access when not offline",
+        "Pinned Zig for this host's OS architecture (native aarch64 on ARM64) and source caches or network access when not offline",
         "Reviewed current overlay and notices"
       ],
       "sideEffects": [
         "Product mode may populate .build/TerminalEngine and Product outputs",
         "Candidate mode is confined to .build/TerminalEngineUpgrade and cannot publish the pairing header",
         "May download locked source inputs unless offline",
-        "Launches native children through kill-on-close containment",
+        "Launches native children through kill-on-close containment, each bounded to 30 minutes plus 120 seconds of post-exit output drain; a stalled contained tree is snapshotted and terminated, and the build fails",
         "Takes the session-wide R: mapping lease only while an actual rebuild maps, uses, and unmaps the canonical drive"
       ],
       "outputs": [
@@ -3152,7 +3152,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture.",
+      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, the lock's Zig archive for the machine's OS architecture, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture, and every contained child is bounded with a process-tree snapshot before termination.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
         ".github/workflows/ghostty-runtime-native-qualification.yml",
@@ -3173,7 +3173,7 @@
         "Product mode may update only .build/TerminalEngine and its pairing header",
         "Candidate mode may update only .build/TerminalEngineUpgrade and never writes a pairing header",
         "May download locked inputs when not offline",
-        "Launches kill-on-close contained native children"
+        "Launches kill-on-close contained native children, terminating a contained tree that exceeds its 30-minute exit or 120-second output-drain bound"
       ],
       "outputs": [
         "Validated lock records and digests",
