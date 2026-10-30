@@ -21,7 +21,7 @@ Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 - [x] S3: five-minute main coordination, serialized admission and cumulative state; deterministic controls and live coalesced/stale/serialized RedMonitor and RedXe admissions verified.
 - [ ] S4: both native Release test branches, global test barrier, production ZIP/SDK and compiler-free security.
 - [ ] S5: explicit unchanged-artifact publication and winget preparation for the five applications.
-- [ ] S6: common engine pin, hosted witnesses and enforced gates across all six projects.
+- [ ] S6: common engine pin, hosted witnesses, enforced gates and an explicit organization-owner PR-only emergency route across all six projects (four public rulesets configured; private capability pending).
 - [ ] S7: authoritative specs, instructions, inventories, validation evidence and plan closeout.
 - [ ] Verify all six against the same policy version and close the implementation record.
 
@@ -623,3 +623,14 @@ RedMonitor automatic batch 41123775849 completed successfully for source 26f0f8b
 Manual Prepare 41128061007 passed using that original successful batch. Release, native winget install and submission jobs were skipped; no public release or upstream change was created. The earlier failed-evidence exercise 41124014295 remains a successful refusal witness. This proves the common unchanged-artifact preparation path for RedMonitor; it does not qualify other products or missing publication credentials.
 
 The RedSalamander cold-bootstrap repair passed seven actual Git/bootstrap/environment controls. Combined vcpkg/build reproducibility coverage passed 72 of 74 tests with no failures; two existing optional integration cases lacked their pinned local checkout prerequisites. Tooling governance passed 12/12; compiler-free adapter, workflow conformance, spec inventory and Changes validation passed. These local results are not the still-pending hosted RedSalamander native qualification.
+
+
+### Owner-requested emergency merge route
+
+On 2026-10-30 the owner requested an emergency bypass in the Git workflow. The implemented route is an explicit organization-owner PR merge override, with the reason and exact reviewed head recorded in the PR/merge commit. It grants no bot permission and does not bypass production, artifact or publication evidence. Ordinary rollout merges continue to wait for required checks; no emergency override has been used during implementation.
+
+The existing RedSalamander (12858820), RedXe (23723903) and DxUi (22346990) rulesets now include only OrganizationAdmin/pull_request bypass. Their rule and branch-target payloads were checked unchanged before/after. RedMonitor's new ruleset 26241026 retains all three existing Actions check identities and establishes the same PR-only owner route; its classic protection remains active with administrator bypass enabled. Evidence is retained at Z:/RedSalamander.Perf/evidence/unified-ci/emergency-merge-20261030. RedPrism/RedTilde ruleset APIs still return 403 under their current private account capability; apply the identical policy when the owner makes them public.
+
+The canonical operator procedure is [the organization runbook](https://github.com/RedSalamanders/.github/blob/main/Specs/EmergencyMerge.md), delivered by engine documentation PR 6 without changing deployed engine v1.0.4. It uses the full-head match and a reason file, preserves actual failed checks and normal five-minute main qualification, and requires no new privileged Actions token.
+
+Further concrete proof: RedPrism source 18fd8ba4 passed its fresh x64 Release build with zero warnings/errors, all ordinary Release suites and nine hidden capture scenarios at Z:/src/RedPrism/.build/ci-rollout/checkout/.build/evidence/test-runs/20261030T210631182Z-48592-c64dfab4ed77473eb8fbfe8c083d2b9f. The fresh assertion probe returned the required 21. Its separately qualified production ZIP remains source-matching. DxUi SDK source 2d0b17235577269261534a9c7187726d6bbfe4d7 passed x64 production and extracted-SDK-only compile/link/run outside the producer checkout, actual compiler header-closure checks, unchanged library bytes and a rejected real C4189 control. SDK 0.1.755 and its receipt are retained locally; native ARM64/main batch proof remains pending. SDK repair PR 146 merged as e61ad332ce599712458eda4be3c08f47fe9719db.
