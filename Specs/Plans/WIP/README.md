@@ -69,6 +69,7 @@ have no separate planning authority. Historical failed verdicts remain unchanged
 | ACTIVE | I52 | [Hosted CI repair](HostedCiRepair_2026-10-28.md) | Repair scheduled checkout, nightly runtime, ASan and hosted validation failures with unchanged assertions and budgets; qualify the integrated source and confirm main. |
 | ACTIVE | I53 | [Native build policy, terminal results and short DxUi paths](NativeBuildPolicyCoherence_2026-10-28.md) | Follow-up warning/debug/ICF, terminal and dependency-path coherence; retain I48's original compiler study separately and finish current-profile native, Full, size/performance and publication gates. |
 | ACTIVE | I54 | [Pending dependency integration](DependencyUpdateBatch_2026-10-29.md) | Integrate the outstanding package updates with one coherent pinned vcpkg graph, preserve audited AWS overrides and history boundaries, and qualify the actual candidate before main confirmation. |
+| ACTIVE | I55 | [Unified organization CI](CI_OrganizationStandardization_2026-10-29.md) | Owner-selected policy: compiler-free PR formatting/tooling; five-minute main batching; test-enabled Release on native x64/ARM64, both pass before production Release/ZIPs; manual extended qualification; manual ZIP publication for all six and winget for five apps; non-building dependency/security setup everywhere; shared .github engine. Plan preparation only; reconcile I51-I54 before implementation. |
 <!-- spec-ia:wip-index:end -->
 <!-- I29 is the user-authorized qualification successor to the delivered File Operations safety implementation. -->
 
