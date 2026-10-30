@@ -74,3 +74,6 @@ node_modules/
 ~$*
 *~
 *.tmp
+
+# Shared CI engine checkout (exact pin lives in .ci/project.json)
+/.ci-engine/

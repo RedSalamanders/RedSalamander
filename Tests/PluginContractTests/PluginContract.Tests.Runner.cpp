@@ -3190,6 +3190,13 @@ int wmain(int argc, wchar_t** argv)
 {
     RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
 
+    if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--ci-assertion-probe")
+    {
+        bool probeSuccess = true;
+        Check(false, L"CI_ASSERTION_PROBE", probeSuccess);
+        return probeSuccess ? 0 : 21;
+    }
+
     if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--temporary-file-contract")
     {
         bool focusedSuccess = true;

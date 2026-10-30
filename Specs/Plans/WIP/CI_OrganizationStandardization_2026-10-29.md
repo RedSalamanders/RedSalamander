@@ -1,10 +1,10 @@
 # I55 Unified CI policy for RedSalamanders
 
-Status: ACTIVE - owner-selected policy recorded; implementation has not started.
-Priority: P1 for the policy and validation gaps; implementation is not authorized by this planning request.
+Status: ACTIVE - implementation authorized on 2026-10-30; S0 contract and hosting checks in progress.
+Priority: P1 for the policy and validation gaps.
 Policy owner: repository/organization maintainer. Plan preparation: Codex.
 Prepared: 2026-10-29. Local planning checkout: ej/main-merges-review-20261028 at c363bf5ba3b289d95f596d88b27ef0c2c5891f2e.
-Integration preparation: 2026-10-30, ej/ci-organization-plan-20261030 from main at 6e4092d50eb892d15aa9c3b757c5d30d84266de2. The owner requested a commit, PR and merge of this plan; CI implementation remains a later task.
+Integration preparation: 2026-10-30, ej/ci-organization-plan-20261030 from main at 6e4092d50eb892d15aa9c3b757c5d30d84266de2. The plan was delivered in PR #153; the owner subsequently authorized implementation across all six projects on 2026-10-30.
 Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 
 ## Checklist
@@ -16,7 +16,13 @@ Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 - [x] Define ZIPs for all six projects, including a DxUi SDK, and manual winget for the five applications.
 - [x] Define non-building dependency/security automation for all six and a shared engine in RedSalamanders/.github.
 - [ ] Complete S0's technical contract/hosting checks and reconcile current plan owners.
-- [ ] Deliver S1-S7 only after implementation is requested; no workflow or account changes were made during planning.
+- [x] S1: shared input classifier and six reviewed project manifests; strict policy/complete-tree fixtures and local six-project conformance pass.
+- [ ] S2: compiler-free PR checks, formatting patches and explicit formatting commits with fresh checks.
+- [x] S3: five-minute main coordination, serialized admission and cumulative state; deterministic controls and live coalesced/stale/serialized RedMonitor and RedXe admissions verified.
+- [ ] S4: both native Release test branches, global test barrier, production ZIP/SDK and compiler-free security.
+- [ ] S5: explicit unchanged-artifact publication and winget preparation for the five applications.
+- [ ] S6: common engine pin, hosted witnesses and enforced gates across all six projects.
+- [ ] S7: authoritative specs, instructions, inventories, validation evidence and plan closeout.
 - [ ] Verify all six against the same policy version and close the implementation record.
 
 ## 1. Requested outcome and authority
@@ -34,7 +40,7 @@ The owner's 2026-10-29 request establishes these requirements:
 9. Long benchmarks and repeated stress tests use explicit manual qualification actions. Non-building dependency/security automation stays enabled and must be set up across all six.
 10. One versioned shared engine lives in the proposed RedSalamanders/.github repository, with thin project adapters.
 
-The owner selected the policy above and the decisions in section 3. This document prepares the implementation; the current request does not start it. No workflow, GitHub setting, dependency pin, toolchain or publication permission has been changed.
+The owner selected the policy above and the decisions in section 3, then explicitly authorized implementation from S0 through completion on 2026-10-30. The original planning work changed no workflows or settings. Implementation does not authorize public product releases, changes to repository visibility, paid account changes, consumer-pin updates or local desktop takeover.
 
 Current repository authority remains [AGENTS.md](../../../AGENTS.md), [the build contract](../../Build/Build_Toolchain.md), [validation evidence](../../Testing/Testing_ValidationEvidence.md), [self-test requirements](../../Testing/Testing_SelfTests.md), [performance validation](../../Testing/Testing_PerformanceValidation.md), [tooling governance](../../Testing/Testing_ToolingGovernance.md), [portable packaging](../../Installer/Installer_PortableZip.md), [winget integration](../../Installer/WingetIntegration.md), and [Changes](../../Core/Core_Changes.md).
 
@@ -114,7 +120,7 @@ The word Release in the automatic pipeline means a production build and retained
 | Manual publication | Verify retained production ZIPs/SDK and their qualification | No routine source rebuild; native install/package verification as required | Explicit GitHub release and winget stages |
 | Dependency/security/status timer | Metadata/advisory scans with compiler-free execution | No native build/test/package | Alerts and dependency PRs under existing update policy |
 
-Always report the stable required PR ci-gate, which covers only formatting, non-compiling tooling and declared security checks. Native deferral to the main batch is an explicit result, not a native success. A failed classifier or relevant static check fails this PR gate; it must never fall back to compiling on the PR.
+Always report the stable required PR ci-gate for formatting and non-compiling tooling. Require the separately reported compiler-free CodeQL and dependency-review jobs alongside it in supported branch rules. Native deferral to the main batch is an explicit result, not a native success. A failed classifier or relevant static check fails this PR gate; it must never fall back to compiling on the PR.
 
 Compiler-dependent tooling tests run once in the main batch's declared test prerequisites rather than being duplicated on PRs or per production role. Declarations specify which host/profile they require; do not drop them merely because test.ps1 uses SkipTooling.
 
@@ -379,7 +385,7 @@ Share engine code by immutable commit rather than floating main. Pin the same ap
 
 Reuse existing checkout, formatter, process, sandbox, dependency and evidence helpers. Preserve platform/profile locks and artifact ownership. Do not copy RedSalamander-specific machine facts or force its test root on the other projects; each adapter retains its own governed output contract.
 
-A common engine is a coordinated availability dependency. Roll out one reviewed version, retain the previous pin, and exercise a single-repository canary before changing all consumers. No new repository, app, secret, workflow dispatch or settings change is authorized by this draft.
+A common engine is a coordinated availability dependency. Roll out one reviewed version, retain the previous pin, and exercise a single-repository canary before merging all consumers. The owner's implementation authorization now covers the shared repository, CI workflow dispatches and necessary CI/security settings. Product publication, visibility, billing and licensing remain separate operator decisions.
 
 ## 11. Workflow migration map
 
@@ -421,7 +427,7 @@ S1-S5 update implementation, relevant coverage and authoritative contracts toget
 
 Likely authoritative owners: each repository's build/CI, scoped-testing/evidence, formatting and packaging contracts. In RedSalamander that includes Build_Toolchain, Testing_ValidationEvidence, Testing_SelfTests, Testing_PerformanceValidation, Testing_ToolingGovernance, Installer_PortableZip and WingetIntegration. Update AGENTS/client pointers only where the lasting workflow changes; never leave the policy solely in this WIP.
 
-Planning authoring is low-impact prose work. Native builds, Full, foreground tests, actual formatting pushes and publication are not validation steps for preparing this document.
+The original plan preparation was prose work. Implementation requires the meaningful behavioral and hosted qualification below; the planning-only checks do not satisfy it.
 
 ## 13. Required scenario coverage
 
@@ -487,7 +493,7 @@ Implementation is complete only when:
 
 Rollback uses the previous engine/adapter pins and known workflow definitions. Restore source and gate behavior without automatically restoring prohibited timer triggers. Preserve receipts, failed attempts and already published assets. Keep publication disabled while eligibility is uncertain.
 
-Stop implementation on conflicting active owners, unsupported required-check/security hosting capabilities, unavailable hosted execution, broken shared-engine access, missing public installer URLs, unreviewed input exclusions, inability to prove real Release test execution or bind source/version/artifacts, missing native ARM64 evidence, test/production contamination, or changes to sandbox/focus/publication authority beyond this scope.
+Block the affected rollout/publication gate on conflicting active owners, unsupported required-check/security hosting capabilities, unavailable hosted execution, broken shared-engine access, missing public installer URLs, unreviewed input exclusions, inability to prove real Release test execution or bind source/version/artifacts, missing native ARM64 evidence, test/production contamination, or changes to sandbox/focus/publication authority beyond this scope. Continue independent implementation and validation under the owner's until-complete instruction; an external prerequisite is never a passing gate.
 
 Planning validation receipts will be recorded below. This checklist is not an implementation or production pass.
 
@@ -505,3 +511,84 @@ Integration checks on 2026-10-30:
 - Tools/Test-Changelog.ps1 -Base origin/main: passed. The branch retains its new fragment alongside four pre-existing main fragments; generated CHANGELOG.md is unchanged.
 - Test-Changes.ps1 -Mode PrePush -Explain -BaseRef origin/main: exited 1, selected a full-build advisory for the three documentation/fragment paths and left four interactive entries pending. No build or tests ran. The read-only result is retained at Z:/RedSalamander.Perf/evidence/ci-plan-20261030-prepush-explain.json; it is not a passing PrePush or native qualification result.
 - Native build/test qualification is outside this documentation-only integration. The owner explicitly requested cancellation of automatic native CI for this PR and its merge; separate security automation is retained. This one-off cancellation does not implement the proposed CI policy.
+
+## 16. Implementation record
+
+### S0 - 2026-10-30 baseline and remaining prerequisites
+
+Implementation uses `ej/unified-ci-20261030` in each clean default checkout. Existing worktrees and their pending changes are preserved. The public shared engine exists at https://github.com/RedSalamanders/.github (local checkout Z:/src/RedSalamanders.CI). Its initial foundation is fe9a154776f7502ae1d76098dcd0c59d669ad7ad; hosted engine run 41097961310 passed on Windows and Ubuntu. Public reusable workflows are necessary for its public callers. Product visibility remains unchanged.
+
+| Project | Current main at implementation start | Hosting/security observation |
+|---|---|---|
+| RedSalamander | 8f0563355cee5b80b2080902ddcd5c1a58bd5219 | Public; recent CI passed; default CodeQL already configured with C++ build mode none |
+| DxUi | 09f6d96a8eeb1132cada71425a272781e8819773 | Public; recent CI passed; CodeQL not configured |
+| RedXe | 3f3bb07f092dd48f2ed484a7a202e27a941da200 | Public; recent CI passed; CodeQL not configured |
+| RedPrism | b6ec336d0a2a4c2657965e1001ca21da585a37ef | Private; hosted jobs refused for account payments/spending limits; private CodeQL refused without Advanced Security |
+| RedTilde | 468cd94faa813af2b47772d384e8a8f7e921947c | Private; same hosted execution and private CodeQL restrictions |
+| RedMonitor | eaac332391fde32cc5df47c54ffae7f45e3949cd | Public; recent CI passed; CodeQL not configured |
+
+All six repositories grant repository administration to the authenticated maintainer; organization Actions policy/runner administration remains unavailable to the current token. Organization metadata reports the Free plan and permits members to create public repositories. The public projects currently report dependency security updates, secret scanning and push protection disabled. Only RedSalamander and RedXe currently have a WINGET_TOKEN secret; values were not read. The other application publishers must retain prepare-only behavior until their publication credential and anonymous URLs are available.
+
+The private failures were verified from the latest job annotations, not inferred from a generic red badge. The owner has been asked which external hosting/security prerequisite they will resolve; implementation and offline acceptance continue independently. These limitations are not successful hosted/security qualification.
+
+S0 contract work still to complete: freeze the per-project test/version/package interfaces and SDK layout, separate compiler-dependent tooling, prove the explicit formatting redispatch route, and record the shared admission/state API. Existing MSVC 14.52, warning, sandbox, desktop and consumer-pin contracts remain in force. The original one-off cancellation for PR #153 and its merge does not cancel implementation qualification.
+
+### S1-S5 implementation in progress
+
+The engine has complete-tree classification, guarded quiet-window admission and state writes, role-specific receipt gates, pinned clang-format, explicit formatting redispatch and reusable PR/coordinator/native/security/manual qualification workflows. Engine behavior covers ZIP byte changes, both-architecture gates and winget nested executable generation. Product adapters and production-only selections exist in all six feature branches. RedMonitor is the merged rollout pilot and RedXe has an open implementation PR; hosted qualification and publication acceptance remain incomplete. The DxUi SDK extraction consumer and RedTilde runtime-bundled ZIP smoke have been added but not executed.
+
+Canonical normal-suite summaries explicitly count suite scopes in DxUi/RedXe/RedPrism; RedSalamander and RedTilde retain native case counts, RedMonitor retains scenario counts. The Release failure probes are always-on checks; Debug-only CRT failure-report probes remain separate. Standalone test targets are excluded from the second production build; RedSalamander reuses its attested smoke harness as a packaging input.
+
+Concurrent review-only edits appeared in DxUi, RedPrism and RedTilde after branch creation. Their plan/index/fragment files are outside the CI change and must not be staged or overwritten. RedPrism additionally has no product LICENSE file; winget licensing is pending an explicit owner answer. Private hosting/security and missing publication credentials remain open acceptance prerequisites.
+
+### Earlier implementation evidence through 2026-10-30 19:10 UTC
+
+- Shared engine PR 1 merged as 12dc4e20a3956f775ada5ae97299247249d9e411; v1.0.0 identifies reviewed source 195ab4a253947f4217ca1e57d37ba5e43ae1cb0c. Hosted run 41110204966 passed Windows (30 cases) and Linux (29 cases), with workflow lint on Windows.
+- Pilot RedMonitor PR 7 is open. Source 2fe53fc passed compiler-free formatting/tooling, CodeQL build mode none and dependency-review in runs 41111270238 and 41111270194. No native PR jobs ran. It is not merged or natively qualified yet.
+- The first pilot run 41110659110 correctly failed: the shared formatter mishandled an empty result array. Engine PR 2 fixes that bug, adds real already-formatted/multiple-file fixtures, preserves portable command/OS metadata and failed preflight evidence, and restores canonical Terminal dependency cache reuse. Native PE checks also refuse emulated/wrong-architecture images. The current final engine source is ba7c81a; final hosted qualification and the coordinated consumer pin update remain pending.
+- Latest local engine result: 31 passed, zero failed at Z:/RedSalamander.Perf/unified-ci/engine-20261030T190826872Z-147a5c24081c4c52b2ef580e5eb7fdea/results.json. These are engine controls, not product runtime qualification.
+- Local compiler-free adapters and workflow lint passed for all six. DxUi routing/tooling migrations separately passed NativeScope 12/12, BenchmarkGate 55/55 and Docs 25/25; the retained measurement controls were executed, not replaced with source-only checks. RedSalamander BuildReproducibility passed 35/35; the named release/winget source-contract migrations are still being checked.
+- Dependency vulnerability alerts and automated security fixes have been enabled on all six. Secret scanning and push protection were enabled on the four public projects. Private CodeQL/hosted execution remain blocked by the observed account capabilities. Sealed Gate0 bytes are unchanged and its control-plane workflow is disabled manually.
+- The manual DxUi gallery now renders native code with read-only credentials and publishes only data through trusted main code, then explicitly requests new PR checks. Paired studies move to benchmark.yml, require a passing verdict by default, retain all native/host evidence, and keep A/A explicitly diagnostic. This does not close the performance policy/trust-owner gates.
+
+### Source and hosted evidence through 2026-10-30 19:43 UTC
+
+- Engine PRs 1, 2 and 3 are merged. The current reviewed engine is v1.0.2, full source fcf723f54140eabb69ef5017c32c971deb117ada (PR 3 merge e3fd2f9462cb9d59995ba22e23235e7c6016a599). Hosted run 41117175169 passed Windows (32 cases), Linux (31 cases), dependency review and pinned workflow lint. All six candidate adapters now use that exact source; coordinated product rollout is in progress.
+- Engine controls cover complete Git trees and rename/deletion/unknown inputs, quiet/admission races and failed-state retention, native PE architecture, real Release assertion failure, the global two-architecture barrier, ZIP byte integrity, SDK/application distinction and idempotent winget transport. PR-native and timer-native routes are rejected. These controls are not product runtime qualification.
+- RedMonitor PR 7 merged as b851754026fdf085f6552bf5f7f317570edd2347. Its final compiler-free checks passed in runs 41113752185 and 41113752242. Required main checks are enforced for checks / ci-gate, security / codeql and security / dependency-review, bound to the verified GitHub Actions app. The post-merge changelog fold PR 8 merged as c0560fa0731336a037cf4f2050c646a792025f19, 3m18s later.
+- The earlier cheap coordinator 41114131298 was superseded by the fold merge. Coordinator 41114592553 waited for five quiet minutes; exactly one admitted native workflow 41115318996 targets c0560fa. Its x64 test-enabled Release build, ordinary regression scenarios and assertion probe passed. ARM64 remains in progress, with both production branches still blocked. No claim of complete native qualification is made yet.
+- The first RedMonitor PR run 41110659110 failed on an empty formatter-result array. Engine v1.0.1 fixed the defect and added real no-drift/multiple-file formatter cases. The failed run is retained. Engine v1.0.2 additionally closes the GITHUB_TOKEN event-suppression gap: an explicit formatting/gallery push now requests exact-head tooling, compiler-free CodeQL and dependency review, with trusted completion of all three required checks. A live manual formatting witness remains pending.
+- RedXe implementation PR 56 is open; its initial compiler-free CI and security runs 41115742413 and 41115742515 passed. The v1.0.2 pin update is being validated before merge. DxUi, RedSalamander, RedPrism and RedTilde adapters remain in preparation; their unrelated concurrent review fragments/plans are preserved.
+- Local compiler-free conformance and rendered workflow lint passed for all six at v1.0.1. At v1.0.2, DxUi, RedXe, RedPrism, RedTilde and RedMonitor passed; the RedSalamander final static pass is running. DxUi independent tooling passed except one new migrated scoped fixture call, corrected and rerun at 37/37. Its updated Docs behavior suite passed 26/26, including refusal of unrelated staged content. BenchmarkGate retains its executed 55/55 controls.
+- RedPrism migrated scoped testing passed 26 cases; RedTilde passed 40. Their complete tooling validation is now running. RedSalamander BuildReproducibility passed 35/35 and release/winget source and behavior contracts passed 66/66. The latter receipts are retained beneath Z:/RedSalamander.Perf/runs/20261030T191717Z-54152-03eb760d93ca4a6facc6d6ae795f41a5/scratch/unified-ci/final-source-contracts/result.json. They establish their named scopes only.
+- Dependency vulnerability alerts and automated security fixes are enabled on all six and the engine. Secret scanning and push protection are enabled on the four public products and the engine. Private CodeQL and hosted execution remain blocked by observed account capabilities, not by a source failure. Sealed Gate0 bytes are unchanged and its control-plane workflow is disabled manually.
+- The DxUi manual gallery separates read-only native rendering from a trusted data-only writer and explicitly requests new-head PR checks. Manual benchmark.yml requires a passing paired verdict by default, retains measurement and observer evidence, and keeps A/A diagnostic. This does not close performance-policy or trust-owner gates.
+- Existing RedSalamander publication required a separate Ghostty Debug/Release ARM64 product qualification. The owner has been asked whether to retain successful source-matching manual evidence as the publication gate or replace it with the unified Release matrix. That decision remains open; ordinary batch success must not silently waive it.
+
+Remaining acceptance includes live exact-head formatting/security checks, all-six required-check enforcement and native two-role witnesses, actual SDK/extracted-product proof, Prepare/refusal exercises, current owner reconciliation and private-hosting/publication prerequisites. Missing winget credentials, RedPrism product licensing and private hosted/security capabilities remain explicit external gates. No public product release or upstream winget PR has been created.
+
+### Rollout and owner reconciliation through 2026-10-30 20:03 UTC
+
+- S3 is implemented and witnessed: RedMonitor PRs 7/8 coalesced into native run 41115318996; the later main engine/fold changes did not cancel that active run. After its genuine artifact-output failure, the next engine/input identity was admitted in run 41119558369. RedXe candidate 41118826670 exited stale admission with zero native jobs after its fold merge; its successor 41119549299 is running both regression branches. No failed run or source-equivalent documentation commit was reported as qualified.
+- Engine v1.0.3 is source 395063c69b0982097cd925abed82887244293793, PR 4 merged as 532b6ce2c481061cdcc30dfe490fb0c8d3ed39f4. Run 41119512150 passed Windows (35 cases), Linux (33 cases), dependency review and workflow lint. New real-Git manual-writer fixtures cover literal bracketed paths, narrow staging, no-op retry, fork refusal, bounded metadata lag and exact-head redispatch. Actual receipt/Prepare command output files are checked.
+- The first native pilot's x64 production build and portable ZIP smoke completed and wrote its production receipt, but upload failed because the shared PowerShell expression emitted no separate archive_directory output. The same expression shape broke manual formatter staging in run 41118623354 before any commit/push. v1.0.3 fixes both; these original runs remain failed. No artifact from them is promoted.
+- RedMonitor temporary acceptance PR 12 deliberately failed formatting in 41118357060 and dependency review in 41118357216. The never-installed lodash 4.17.20 fixture was detected as high severity for GHSA-35jh-r3h4-6jhm and GHSA-r5fr-rjxr-66jc. It was removed in the next commit. The explicit formatter/new-head/security witness is being repeated after the staging fix; this PR must close without merging.
+- RedXe PR 56 merged as ecfeedf733e834c849939efe69e12d867aff2c79 and its fold PR 57 as cb028dd70f8ac8b802cc5f9debc3f2d3be7205ab. DxUi PR 138 merged as 6bbf39c9ccd7453c2947e3edcb257ff6d6598c88; fold PR 139 merged as cccdea83. Both had all selected compiler-free/security checks passing. Their existing rulesets now enforce the same three named Actions checks while preserving all existing review/deletion/force-push rules.
+- RedSalamander PR 161 passed compiler-free CI 41117955441 and CodeQL/dependency review 41117955518. Default CodeQL was disabled to avoid duplicate/default-versus-advanced uploads. Its separate Entire app check reports missing reviewer approval and no blocking findings; it is not among the repository's configured required status checks. The common engine update is pending before this PR merges. Publication remains an open hold pending the Ghostty Debug ARM64 gate decision.
+- Private RedPrism PR 23 and RedTilde PR 33 are concrete draft implementations. Both passed their complete local independent tooling validators. Their hosted account/security prerequisites are still unresolved. Unrelated concurrent review plans, indexes and fragments remain outside these commits.
+- RedTilde source 92b6f8e built test-enabled x64 Release with zero diagnostics and passed 68 cases, 32 hidden captures and crash checks at Z:/src/RedTilde/.build/c/.build/evidence/test-runs/20261030T195551685Z-88364-6a38b172e222495f9381097287ec3931. An earlier deeper-worktree attempt failed at a 253-character capture fixture path and is retained. Production then correctly refused an unused WS2_32 delay-load warning after test sources were excluded. Source 0206ac37133955e714652a61a8567bfda9e8dee1 makes that setting test-mode-only; its fresh test/production/package proof is running. This is local x64 evidence, not native ARM64 or publication qualification.
+- The DxUi primary checkout switched concurrently to its review branch during CI staging. Only CI-owned paths were committed (a412f316); unrelated review files stayed uncommitted. The intended CI branch was advanced to that exact commit, and subsequent CI work uses an isolated worktree. No unrelated branch history or files were reset.
+
+| Existing owner | Disposition for this cutover |
+|---|---|
+| I9 formatting race | Its old automatic format-job design is superseded by I55's check-only PR plus explicit trusted writer. Preserve its outstanding operator stale/fork/push evidence; do not run a second formatting implementation. |
+| I32 scoped testing | All five scope manifests now declare zero native PR coverage and reviewed execution-contract digests. Generic delegation/reuse behavior is retained; local native and interactive obligations remain local. |
+| I48 / I53 native build policy | Preserve MSVC 14.52, stdcpplatest, /Wall, /WX disabled, zero diagnostics, Debug /ZI, ASan /Zi and Release /OPT:ICF. Current-source Debug/ASan/performance and the historical C11 acceptance holds are not closed by this Release CI migration. |
+| I50 / I51 runtime/Ghostty | Keep existing runtime findings and candidate/product acceptance. Source-bound online status remains a compiler-free preflight. The former Debug ARM64 publication gate needs its explicit disposition; no successful common batch waives it. |
+| I52 hosted repair | Current main Release regressions and manual Full/Debug/ASan/flake routes replace its timer execution routes. Preserve original failed receipts, assertions, budgets and unqualified profiles. |
+| I54 dependency integration | Completed delivery stays Done; consumer pins and remaining provider/platform/resource qualifications are unchanged. |
+| Changes owner | Each feature retains its fragment. Separate post-merge fold PRs are used; no competing bot or hand-written generated changelog. |
+
+The normal test interface and role separation are frozen in each adapter and Build_UnifiedCI spec: RedSalamander CI with its governed desktop/sandbox and Pester prerequisites; DxUi Full plus resource/consumer/gallery coverage and an extracted SDK consumer; RedXe Full plus native AV measurements; RedPrism normal Full suites; RedTilde the complete native case catalog and captures/crash checks; RedMonitor its six scenarios. Production uses explicit test-disabled selections and source-bound ZIP/SDK smoke. Version bases are preserved (7.0, 0.1, 1.0, 0.1, 0.1, 0.1 respectively); commit count is frozen once per admitted batch. The shared state/admission and SDK layout are authoritative in the engine and per-project Build_UnifiedCI specifications.
+
+S0 remains open only where owner/capability decisions are still required; S2/S4-S7 remain open pending the described live/native/publication acceptance and closeout. All six candidates now pin v1.0.3; not all six default branches have cut over.

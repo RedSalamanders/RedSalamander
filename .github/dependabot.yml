@@ -2,41 +2,21 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
-    # Gate0 is an exact-byte historical reproduction input, guarded by its sealed SHA-256.
-    exclude-paths:
-      - .github/workflows/terminal-engine-gate0.yml
     schedule:
       interval: weekly
       day: monday
-      time: "05:00"
-    labels: [dependencies, github-actions]
+      time: '05:00'
     open-pull-requests-limit: 5
-
+    ignore:
+      # Engine pin updates also change .ci/project.json and all thin callers together.
+      - dependency-name: RedSalamanders/.github
+    exclude-paths:
+      - .github/workflows/terminal-engine-gate0.yml
+      - .github/workflows/terminal-engine-round4-closeout.yml
   - package-ecosystem: vcpkg
     directory: /
     schedule:
       interval: weekly
       day: monday
-      time: "05:00"
-    labels: [dependencies, vcpkg]
+      time: '05:30'
     open-pull-requests-limit: 5
-    groups:
-      core-stack:
-        patterns:
-          - wil
-          - yyjson
-    allow:
-      - dependency-type: direct
-    # Dependabot cannot propose a vcpkg port version update that is mergeable on its own. A port floor is only
-    # restorable when the pinned builtin-baseline already contains it, and the baseline moves only together with
-    # vcpkg-tool.json and the version floors/overrides in one reviewed change (Specs/Build/Build_Toolchain.md, Dependabot
-    # paragraph). Its PRs #98 and #111-#113 (baseline downgrade, floors past the baseline) and #117 (sqlite3
-    # port-version bump absent from the baseline) all broke or would have broken dependency restore. The wildcard ignore
-    # therefore silences every vcpkg dependency; the block stays declared because the offline contracts
-    # (Tools/Tests/VcpkgInstallSafety.Tests.ps1 and the core-stack group check in DocumentationDriftContracts) verify its
-    # ignores and group. Update vcpkg dependencies by hand, following that procedure.
-    ignore:
-      - dependency-name: "*"
-      - dependency-name: "github.com/microsoft/vcpkg"
-      - dependency-name: "aws-sdk-cpp"
-      - dependency-name: "aws-crt-cpp"

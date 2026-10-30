@@ -37,9 +37,9 @@
       Compare   - Run only --compare-selftest
       Commands  - Run only --commands-selftest
       FileOps   - Run only --fileops-selftest
-      PR        - Run the GitHub Actions pull-request/push gate: the non-interactive
-                  standalone entries of CI (about ten minutes on a hosted runner)
-      CI        - Run the nightly GitHub Actions suite: PR plus the in-product
+      PR        - Run the fast non-interactive standalone subset of CI
+                  (about ten minutes on a hosted runner); current PR CI does not compile.
+      CI        - Run the normal main-batch suite: PR plus the in-product
                   self-test suites, interactive entries, and failure classification
       Full      - Run all self-tests plus standalone/native and script tests
 
@@ -596,6 +596,9 @@ function Invoke-RSTestPlanEntry {
                 $exitCode = Invoke-RSStreamingProcess -FilePath $vstest -Arguments $arguments -WorkingDirectory $Entry.WorkingDirectory -LogPath $outputLogPath
             }
             'Pester' {
+                # These canonical suites use Pester 3 setup/assertion semantics. The
+                # hosted adapter provisions this exact dependency before execution.
+                Import-Module Pester -RequiredVersion 3.4.0 -Force -ErrorAction Stop
                 if (-not (Test-Path $Entry.Path)) {
                     throw "Pester test path not found: $($Entry.Path)"
                 }

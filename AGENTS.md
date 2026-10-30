@@ -328,3 +328,7 @@ adding blanket suppressions. Ordinary Debug uses /ZI, ASan Debug uses /Zi.
 Release explicitly enables /OPT:ICF; Debug/ASan explicitly disable it.
 Follow Specs/Build/Build_ConsoleAndPaths.md for the common green result, safe
 terminal launch links and short dependency folders with full identity checking.
+
+## Unified CI policy
+
+Use [Specs/Build/Build_UnifiedCI.md](Specs/Build/Build_UnifiedCI.md) for hosted CI. PRs run compiler-free checks and formatting feedback. Main native qualification starts after five continuous quiet minutes; both native Release test branches must pass before either production Release/ZIP branch starts. Scheduled dependency/security/status checks remain compiler-free. Formatting commits, extended qualification and ZIP/winget publication are explicit manual actions. PR checks do not satisfy native acceptance or waive applicable local scoped tests. Shared-engine pins in .ci/project.json and workflow callers must agree. Preserve dependency pins, native toolchain, evidence and desktop ownership contracts.

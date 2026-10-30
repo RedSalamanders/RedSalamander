@@ -10,10 +10,34 @@
       "path": "Specs/Build/Build_Toolchain.md",
       "status": "VERIFIED_MATCH",
       "contractOwner": "official toolchain identity and local artifact-operation coordination",
-      "implementationAnchors": [".github/workflows/build-reusable.yml", ".github/workflows/release.yml", ".github/workflows/winget-release.yml", "build.ps1", "Tools/Modules/Build/ArtifactOperationLock.psm1", "Directory.Build.targets", "Tools/Modules/Build/MSBuildInvocation.psm1", "Dependencies/DxUi.lock.json", "Build/RedSalamander.DxUi.props", "Build/RedSalamander.DxUi.targets", "Tools/Modules/Build/DxUiDependency.psm1", "Directory.Build.props"],
-      "testAnchors": ["Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1", "Tools/Tests/BuildOutputProcess.Tests.ps1", "Tools/Tests/BuildRuntimeClean.Tests.ps1", "Tools/Tests/MSBuildInvocation.Tests.ps1", "Tools/Tests/DxUiDependency.Tests.ps1"],
-      "siblingSpecs": ["Specs/Testing/Testing_SelfTests.md"],
-      "reviewedSections": ["all normative sections"],
+      "implementationAnchors": [
+        ".github/workflows/build-reusable.yml",
+        "build.ps1",
+        "Tools/Modules/Build/ArtifactOperationLock.psm1",
+        "Directory.Build.targets",
+        "Tools/Modules/Build/MSBuildInvocation.psm1",
+        "Dependencies/DxUi.lock.json",
+        "Build/RedSalamander.DxUi.props",
+        "Build/RedSalamander.DxUi.targets",
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Directory.Build.props",
+        ".github/workflows/qualify.yml",
+        ".github/workflows/publish.yml",
+        "Tools/Invoke-ProjectCi.ps1"
+      ],
+      "testAnchors": [
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+        "Tools/Tests/BuildOutputProcess.Tests.ps1",
+        "Tools/Tests/BuildRuntimeClean.Tests.ps1",
+        "Tools/Tests/MSBuildInvocation.Tests.ps1",
+        "Tools/Tests/DxUiDependency.Tests.ps1"
+      ],
+      "siblingSpecs": [
+        "Specs/Testing/Testing_SelfTests.md"
+      ],
+      "reviewedSections": [
+        "all normative sections"
+      ],
       "reviewerNote": "Compared pinned Visual Studio bootstrap packages, fail-closed discovery, compiler and MSBuild identity capture, Windows SDK and vcpkg provenance, artifact upload, update gates, profile-scoped artifact exclusion, authenticated delegation, path-qualified residual-process evidence, exact-output no-kill behavior, and scoped contamination repair with the official workflows, build scripts, module, and policy tests. Targeted 2026-09-06 FileOps C6 follow-up: shared DLL cleanup ownership is specified against Directory.Build.targets and real MSBuild fixtures in Tools/Tests/BuildRuntimeClean.Tests.ps1. Build diagnostic presentation is checked against the documented optional-code format, the shared parser and MSBuildInvocation.Tests.ps1; replay of the preserved vcpkg warning now counts one warning. These follow-ups do not restamp the historical whole-document review or claim final Full qualification. Targeted I19 build reconciliation, 2026-09-13: exact-pin imports/restore and the first-party ARM64 x64-host default are linked to their production helpers and DxUiDependency tests. Restore and ProjectReference propagate the evaluated compiler host; explicit overrides and environment restoration are covered. All eight dependency tests and final ad7f7735 ARM64 builds pass. Remaining Full, native runtime, package and resource acceptance stays in I19. Targeted I19 lifecycle follow-up, 2026-09-13: the user deferred further ARM64 and ASan qualification while retaining the supported build matrix. Publication of the tested library commit and restore without a local URL rewrite remain prerequisites for consumer merge/release; local unpublished-pin qualification is not remote-fetch evidence. Corrected x64 product qualification is recorded separately in I19. Targeted I19 local closeout, 2026-09-13: native 1232d181 passes x64 Debug Fresh Full (2,122 passed, 0 failed, 52 skipped) and Release Fresh Full (2,118 passed, 0 failed, 56 skipped), each 20/20 entries with 14 actual module identities verified. Portable A/B/A passes with 11 packaged identities and identical baseline payloads. The user's accepted resource trade-off is retained; ARM64/ASan are deferred to H4. Original failures and skips remain evidence. This updates only the I19 qualification status; it does not restamp the whole-document review or claim publication, consumer master merges, hardware coverage or deferred native-platform passes.",
       "discrepancyIds": []
     },
@@ -726,5 +750,7 @@
       "reviewerNote": "Targeted 2026-10-05 scoped testing review: the root Test-Changes command retains canonical Affected and exact Resume; PR deferral compares complete portable entry contracts and leaves unmatched or interactive local obligations pending. ScopedTesting.Tests.ps1 and ValidationImpact.Tests.ps1 prove native naming, complete shared/unknown fan-out including SQLite viewer coverage, narrow ownership and changed-argument refusal. Canonical RunAllTestsPlan, tooling governance and documentation drift regressions pass under the marked sandbox; the native build is separately blocked by libjpeg-turbo pkg-config dependency resolution. This targeted follow-up does not restamp the historical document review or claim native Full qualification. Historical Phase 0B review: Compared the explicitly inactive Fresh-only transition boundary, draft-07 schemas, canonical UTF-8/NFC identity, bounded parser and atomic publication primitives, path/provenance guards, and stable exit categories with the Phase 0B module and focused contracts. Resume/Affected behavior remains unimplemented and is not claimed by this record. Targeted I19 review, 2026-09-13: current Affected planning is implemented; the preceding inactive-transition note describes only that historical review. Product UI test sources now name the live ProductUiTests.vcxproj owner and existing standalone test surface; deleted Common/DxUi and Tests/DxUiTests project owners are removed. Exact pin changes and shared adapters retain conservative Full coverage including product UI tests. The ownership regression fails before and all nine focused impact tests pass after; an intermediate canonical-LF validation failure is retained. This targeted review does not restamp the complete modern Resume/Affected contract. Targeted I19 local closeout, 2026-09-13: native 1232d181 passes x64 Debug Fresh Full (2,122 passed, 0 failed, 52 skipped) and Release Fresh Full (2,118 passed, 0 failed, 56 skipped), each 20/20 entries with 14 actual module identities verified. Portable A/B/A passes with 11 packaged identities and identical baseline payloads. The user's accepted resource trade-off is retained; ARM64/ASan are deferred to H4. Original failures and skips remain evidence. This updates only the I19 qualification status; it does not restamp the whole-document review or claim publication, consumer master merges, hardware coverage or deferred native-platform passes. Targeted I27 source review, 2026-10-04: the runner refreshes its cached receipt-binding digest after byte-verifying the restored post-writer receipt, before computing downstream fingerprints; a metadata-only source-bound regression covers changed and unchanged receipts and Resume construction. Focused tooling and Fresh Full verdicts still require execution. Targeted supplied-review remediation, 2026-10-16: checked directory records, retained delete parents, destination/message/data-tag payload validation, honest benchmark outputs and typed skips, and full PR execution digest are reconciled with focused regression fixtures. Source review and focused checks are bounded evidence; native integration, Full, real SMB/NAS and other-platform qualification remain receipt-dependent. This does not restamp the whole-document review.",
       "discrepancyIds": []
     }
+,
+    {"reviewerNote":"2026-10-30 I55: source routing, native/PR separation, frozen shared-pin configuration and project adapter align with the new normative contract. Shared engine behavior is independently retained in its repository. Hosted product rollout, artifact promotion and organization acceptance remain in progress; this record does not qualify those gates.","testAnchors":["Tools/Tests/ToolingGovernance.Tests.ps1","Tools/Tests/BuildReproducibility.Tests.ps1","Tools/Tests/DxUiUpdate.Tests.ps1"],"siblingSpecs":["Specs/Build/Build_Toolchain.md","Specs/Testing/Testing_ValidationEvidence.md","Specs/Testing/Testing_SelfTests.md"],"discrepancyIds":[],"implementationAnchors":[".ci/project.json",".github/workflows/ci.yml",".github/workflows/qualify.yml",".github/workflows/qualification.yml",".github/workflows/format.yml",".github/workflows/publish.yml",".github/workflows/security.yml","Tools/Invoke-ProjectCi.ps1","build.ps1"],"path":"Specs/Build/Build_UnifiedCI.md","reviewedSections":["routing and project adapter contract","explicitly open hosted acceptance boundary"],"contractOwner":"organization CI roles, per-project adapter and immutable ZIP qualification","status":"VERIFIED_MATCH"}
   ]
 }

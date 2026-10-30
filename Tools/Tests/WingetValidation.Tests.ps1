@@ -124,213 +124,66 @@ exit /b 99
     }
 }
 
-Describe 'Winget release workflow' {
+Describe 'Winget shared publication route' {
     BeforeAll {
-        $workflowPath = Join-Path $repoRoot '.github\workflows\winget-release.yml'
-        $workflow = Get-Content -Path $workflowPath -Raw
-        $publicationModulePath = Join-Path $repoRoot 'Tools\Modules\Packaging\WingetPrPublication.psm1'
-        $publicationModule = Get-Content -LiteralPath $publicationModulePath -Raw
+        $engine = Join-Path $repoRoot '.ci-engine'
+        $workflow = Get-Content (Join-Path $engine '.github/workflows/publish.yml') -Raw
+        $publicationModule = Get-Content (Join-Path $engine 'Tools/Modules/Ci.WingetPublication.psm1') -Raw
+        $transport = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Winget.psm1') -Raw
+        $install = Get-Content (Join-Path $engine 'Tools/Invoke-WingetInstall.ps1') -Raw
     }
-
-    It 'enables local manifest installs before testing the generated manifest' {
-        $enableIndex = $workflow.IndexOf('winget settings --enable LocalManifestFiles')
-        $installMatch = [regex]::Match($workflow, '(?ms)winget install\s+`\r?\n\s+--manifest \$env:WINGET_MANIFEST_ROOT')
-
-        if ($enableIndex -lt 0) {
-            throw 'winget-release.yml must enable LocalManifestFiles before winget install --manifest.'
+    It 'requires explicit main publication and both native install receipts before submission' {
+        $caller = Get-Content (Join-Path $repoRoot '.github/workflows/publish.yml') -Raw
+        $caller | Should Match 'workflow_dispatch:'
+        $caller | Should Match "github.ref == 'refs/heads/main'"
+        $caller | Should Match 'default: Prepare'
+        $caller | Should Not Match '(?m)^  (push|release|schedule):'
+        $workflow | Should Match 'needs: \[prepare, install\]'
+        $workflow | Should Match 'platform: x64'
+        $workflow | Should Match 'platform: ARM64'
+        $submit = Get-Content (Join-Path $engine 'Tools/Submit-Winget.ps1') -Raw
+        $submit | Should Match 'foreach\(\$platform in @\(''x64'',''ARM64''\)\)'
+        $submit | Should Match 'manifestDigest -cne \$identity.PublicationId'
+        $submit | Should Match 'receipt.runId -cne \$env:GITHUB_RUN_ID'
+    }
+    It 'enables local manifests, validates before install and cleans only an owned absent identity' {
+        $enable = $install.IndexOf("@('settings','--enable','LocalManifestFiles')")
+        $validate = $install.IndexOf("@('validate','--manifest'")
+        $start = $install.IndexOf("@('install','--manifest'")
+        ($enable -ge 0 -and $validate -gt $enable -and $start -gt $validate) | Should Be $true
+        $install | Should Match 'noApplicationsFound=-1978335212'
+        $install | Should Match 'must be absent before this owned install'
+        $install | Should Match 'if\(\$owned\)'
+        $install | Should Match '''uninstall'',''--exact'',''--id'',\$package'
+        $install | Should Not Match 'build.ps1'
+    }
+    It 'keeps publication credentials out of native project execution and CLI arguments' {
+        $workflow | Should Match 'WINGET_TOKEN:'
+        $transport | Should Match 'Bearer.*\$env:WINGET_TOKEN'
+        $transport | Should Not Match '--token|Write-Host.*\$env:WINGET_TOKEN'
+        $transport | Should Match 'winget API route is outside its reviewed boundary'
+        $transport | Should Match 'winget API route names a foreign fork'
+        $transport | Should Match 'GetNewClosure'
+        $workflow | Should Match 'persist-credentials: false'
+    }
+    It 'retains the proven exact-version idempotency implementation and bounded redacted diagnostics' {
+        $original = Get-Content (Join-Path $repoRoot 'Tools/Modules/Packaging/WingetPrPublication.psm1') -Raw
+        $shared = $publicationModule -replace '(?m)^# (Derived from|Original MIT notice:)[^\r\n]*\r?\n',''
+        ($shared.Replace(([char]13).ToString(),'').Trim()) | Should Be ($original.Replace(([char]13).ToString(),'').Trim())
+        foreach($guard in @('GetUpstreamManifest','GetManifestContentHash','Test-RSWingetPullRequestCandidate','BranchPattern','ManifestHashes','RS-WINGET-PUBLICATION:','Get-RSWingetSubmitDiagnostics')) {
+            $publicationModule | Should Match ([regex]::Escape($guard))
         }
-
-        if (-not $installMatch.Success) {
-            throw 'winget-release.yml must install the generated winget-manifest.'
-        }
-
-        ($enableIndex -lt $installMatch.Index) | Should Be $true
+        $transport | Should Match 'default_branch_only=\$true'
+        $transport | Should Match "method POST|Method POST"
     }
-
-    It 'pins winget-create by its banner version and cleans up only an installed package' {
-        $workflow | Should Match 'WingetCreateCLI\\s\+\(\?<version>'
-        $workflow | Should Match '\\\+\[0-9a-fA-F\]\{7,40\}'
-        $workflow | Should Match ([regex]::Escape("`$versionMatch.Groups['version'].Value"))
-        $workflow | Should Not Match '\$resolvedVersion = \(& \$resolvedPath --version\)'
-
-        $installIndex = $workflow.IndexOf('- name: Install winget-create')
-        $installSection = $workflow.Substring($installIndex)
-        $installSection = $installSection.Substring(0, $installSection.IndexOf('- name: Validate Winget manifest'))
-        $installSection | Should Match ([regex]::Escape('$global:LASTEXITCODE = 0'))
-        ($installSection.IndexOf('$global:LASTEXITCODE = 0') -gt $installSection.IndexOf('--version 2>&1')) | Should Be $true
-        $installSection.TrimEnd() | Should Match '(?m)^\s+exit 0$'
-
-        $cleanupIndex = $workflow.IndexOf('Cleanup Winget install test')
-        $cleanupSection = $workflow.Substring($cleanupIndex)
-        $cleanupSection = $cleanupSection.Substring(0, $cleanupSection.IndexOf('- name: Submit to Winget'))
-        $cleanupSection | Should Match 'winget list'
-        $cleanupSection | Should Match '\$noApplicationsFound = -1978335212'
-        $cleanupSection | Should Match 'nothing to clean up'
-        $cleanupSection | Should Match 'winget list failed with exit code'
-        ($cleanupSection.IndexOf('winget list') -lt $cleanupSection.IndexOf('winget uninstall')) | Should Be $true
-    }
-
-    It 'uses one guarded manifest root and exact versioned portable inputs end to end' {
-        $workflow | Should Match '(?m)^\s+WINGET_MANIFEST_ROOT: \.build\\AppPackages\\winget-manifest\r?$'
-        $workflow | Should Match 'OutputDir = \$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match 'Get-ChildItem \$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match 'winget validate --manifest \$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match 'winget install[\s\S]+?--manifest \$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match 'Join-Path \$env:GITHUB_WORKSPACE \$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match '(?s)WINGETCREATE_PATH submit.+?\$env:WINGET_MANIFEST_ROOT'
-        $workflow | Should Match '\$outFile = \$assetName'
-        $workflow | Should Match 'RedSalamander-\$version-x64-Portable\.zip'
-        $workflow | Should Match 'RedSalamander-\$version-ARM64-Portable\.zip'
-        $workflow | Should Not Match 'RedSalamander-(x64|ARM64)\.zip'
-
-        $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match 'RedSalamander-\$packageVersion-x64-Portable\.zip'
-        $buildScript | Should Match 'RedSalamander-\$packageVersion-ARM64-Portable\.zip'
-        $buildScript | Should Not Match 'Get-ChildItem.+?RedSalamander-\*-x64-Portable\.zip'
-    }
-
-    It 'submits a detailed checklist-aligned pull request after validation and install testing' {
-        $workflow | Should Match ([regex]::Escape('$pullRequestTitle = "Update: RedSalamanders.RedSalamander to $version"'))
-        $workflow | Should Not Match 'search/issues|in:title'
-        $workflow | Should Match 'Import-Module \$env:PUBLICATION_MODULE -Force'
-        $workflow | Should Match 'Invoke-RSWingetPublication'
-        $workflow | Should Match '\$env:WINGETCREATE_PATH submit[\s\S]{0,260}--prtitle \$InitialTitle'
-        $publicationModule | Should Match 'RS-WINGET-PUBLICATION:'
-        $publicationModule | Should Match 'ExpectedAuthor'
-        $publicationModule | Should Match 'ExpectedHeadRepository'
-        $publicationModule | Should Match 'ManifestHashes'
-        $publicationModule | Should Match 'BranchPattern'
-        $publicationModule | Should Match "Kind = 'Conflict'"
-        $publicationModule | Should Match "Kind = 'Owned'"
-        $publicationModule | Should Match 'PatchPullRequest'
-        $workflow | Should Match '## 🧪 Automated validation'
-        $workflow | Should Match 'winget validate --manifest \.build\\AppPackages\\winget-manifest'
-        $workflow | Should Match 'winget install --manifest \.build\\AppPackages\\winget-manifest'
-        $workflow | Should Match 'winget list --exact --id RedSalamanders\.RedSalamander'
-        $workflow | Should Match 'Manifest conforms to the \[1\.12 schema\]'
-        $workflow | Should Match 'publication_url=\$\(\$publication\.Url\)'
-        $workflow | Should Match "pull_request_url=\`$\(if \(\`$publication\.Published\) \{ '' \} else \{ \`$publication\.Url \}\)"
-    }
-
-    It 'keeps event data inert and verifies one pinned publisher before exposing its token' {
-        $workflow | Should Match 'REQUESTED_VERSION:\s*\$\{\{ inputs\.version \|\| github\.event\.inputs\.version \}\}'
-        $workflow | Should Match 'RELEASE_TAG:\s*\$\{\{ github\.event\.release\.tag_name \}\}'
-        $workflow | Should Not Match '\$rawVersion\s*=\s*"\$\{\{'
-        $workflow | Should Match 'Microsoft\.WingetCreate --version \$expectedVersion'
-        $workflow | Should Match '\$expectedVersion = "1\.12\.8\.0"'
-        $workflow | Should Match 'WINGET_CREATE_GITHUB_TOKEN:\s*\$\{\{ secrets\.WINGET_TOKEN \}\}'
-        $workflow | Should Not Match '--token \$env:'
-        $workflow | Should Not Match '\$output\s*\|\s*ForEach-Object\s*\{\s*Write-Host'
-
-        $verifyIndex = $workflow.IndexOf('Resolved winget-create version')
-        $secretIndex = $workflow.IndexOf('WINGET_CREATE_GITHUB_TOKEN:')
-        ($verifyIndex -ge 0 -and $verifyIndex -lt $secretIndex) | Should Be $true
-    }
-
-    It 'names the token scopes and redacted WingetCreate output instead of a bare submit exit code' {
-        # Scope names are safe to log and make an unsupported token shape visible before submission.
-        $workflow | Should Match 'api\.github\.com/user" -ResponseHeadersVariable tokenResponseHeaders'
-        $workflow | Should Match "-ieq 'X-OAuth-Scopes'"
-        $workflow | Should Match "notcontains 'public_repo'"
-        $workflow | Should Not Match 'Write-Host[^\n]*\$env:WINGET_CREATE_GITHUB_TOKEN'
-        $workflow | Should Not Match 'Write-Host[^\n]*\$tokenResponseHeaders\b'
-
-        # The raw output stays out of the workflow; the module redacts it and bounds it before it can
-        # travel with the failure that stops publication.
-        $publicationModule | Should Match 'function Get-RSWingetSubmitDiagnostics'
-        $publicationModule | Should Match 'gh\[pousr\]_'
-        $publicationModule | Should Match 'github_pat_'
-        $publicationModule | Should Match 'WingetCreate output \(token-shaped values redacted\)'
-        $publicationModule | Should Match '\$submitDiagnostics = @\(Get-RSWingetSubmitDiagnostics -SubmitResult \$submitResult\)'
-        $publicationModule | Should Not Match "'Get-RSWingetSubmitDiagnostics'"
-    }
-
-    It 'treats upstream master as the authority for an already published version' {
-        # The PR list covers only recently updated PRs; a merged publication drops out within hours
-        # and a fresh submission then opens an empty PR that upstream closes.
-        $workflow | Should Match 'GetUpstreamManifest = \$getUpstreamManifest'
-        $workflow | Should Match 'api\.github\.com/repos/microsoft/winget-pkgs/git/ref/heads/master'
-        $workflow | Should Match 'contents/\$encodedPrefix\?ref=\$ref'
-        $workflow | Should Match 'if \(\$status -ne 404\) \{ throw \}'
-        $workflow | Should Match '"published=\$\(\[bool\]\$publication\.Published\)" >> \$env:GITHUB_OUTPUT'
-        $workflow | Should Match 'steps\.winget_submission\.outputs\.published'
-        $publicationModule | Should Match "-Name 'GetUpstreamManifest'"
-        $publicationModule | Should Match "Kind = 'Published'"
-        $publicationModule | Should Match 'function New-RSWingetPublishedResult'
-        $publicationModule | Should Match 'the changed-file list is empty'
-    }
-
-    It 'reads changed files only for candidate pull requests' {
-        # One changed-file request per listed upstream PR turned each state check into ~100 calls; the
-        # scan now inspects only the token owner's PRs and PRs naming the package or carrying the marker.
-        $publicationModule | Should Match 'function Test-RSWingetPullRequestCandidate'
-        $publicationModule | Should Match "@\(@\('title'\), @\('body'\), @\('head', 'ref'\)\)"
-        $publicationModule | Should Match '(?s)-not \$hasMarker -and\s+-not \(Test-RSWingetPullRequestCandidate[^\n]*\)\) \{\s+continue'
-        $publicationModule | Should Not Match "'Test-RSWingetPullRequestCandidate'"
-
-        # The waits, not the scan, now carry GitHub's eventual-consistency window for a fresh PR.
-        $workflow | Should Match 'Start-Sleep -Seconds \(\[Math\]::Min\(15 \* \$Attempt, 60\)\)'
-        $publicationModule | Should Match 'Start-Sleep -Seconds \(\[Math\]::Min\(15 \* \$Attempt, 60\)\)'
-        $publicationModule | Should Match "manifest content is not yet visible: '\`$path' at"
-        $publicationModule | Should Match 'files are not yet visible: \$\(\$candidate\.FileListFailure\)'
-    }
-
-    It 'compares canonical manifest content and stamps a deterministic ReleaseDate so reruns resume' {
-        # wingetcreate re-serializes the committed manifests, so byte hashes never match the generated files.
-        $workflow | Should Match 'GetManifestContentHash = \$getManifestContentHash'
-        $workflow | Should Match '(?s)\$getManifestContentHash = \{.+?return Get-RSWingetManifestContentHash -Bytes \$bytes'
-        $workflow | Should Not Match 'GetFileSha256'
-        $workflow | Should Not Match 'ToHexString\(\[Security\.Cryptography\.SHA256\]::HashData\(\$bytes\)\)'
-        $publicationModule | Should Match 'function ConvertTo-RSWingetCanonicalManifest'
-        $publicationModule | Should Match 'function Get-RSWingetManifestContentHash'
-        $publicationModule | Should Match "'Get-RSWingetManifestContentHash'"
-        $publicationModule | Should Match '\$manifestHashes\[\$remotePath\] = Get-RSWingetManifestContentHash -Bytes'
-        $publicationModule | Should Match "-Name 'GetManifestContentHash'"
-        $publicationModule | Should Not Match 'GetFileSha256'
-
-        # The identity marker embeds the manifest hashes, so ReleaseDate must not drift with the rerun day.
-        $workflow | Should Match '\$releaseDate = Get-RSReleaseDate \$release\.published_at'
-        $workflow | Should Match '"release_date=\$releaseDate" >> \$env:GITHUB_OUTPUT'
-        $workflow | Should Match 'RELEASE_DATE:\s*\$\{\{ steps\.portable\.outputs\.release_date \}\}'
-        $workflow | Should Match '\(Get-Command \$generator\)\.Parameters\.ContainsKey\(''ReleaseDate''\)'
-        $workflow | Should Match '\$generatorArguments\.ReleaseDate = \$env:RELEASE_DATE'
-        $workflow | Should Match '& \$generator @generatorArguments'
-
-        $generator = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\winget\generate-manifest.ps1') -Raw
-        $generator | Should Match '(?m)^\s+\[string\]\$ReleaseDate = ''''\r?$'
+    It 'keeps local optional ReleaseDate parsing deterministic and does not add a rerun date to shared manifests' {
+        $generator = Get-Content (Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1') -Raw
         $generator | Should Match 'function Resolve-WingetReleaseDate'
-        $generator | Should Match "TryParseExact\(\s*\`$CandidateDate,\s*'yyyy-MM-dd'"
-        $generator | Should Match '\$ReleaseDate = Resolve-WingetReleaseDate -CandidateDate \$ReleaseDate'
-        $generator | Should Not Match '\$ReleaseDate = Get-Date -Format "yyyy-MM-dd"'
-        $generator | Should Match '(?m)^\.PARAMETER ReleaseDate\r?$'
-    }
-
-    It 'derives the release date from the deserialized published_at value the GitHub API returns' {
-        # Invoke-RestMethod turns "2026-09-17T21:07:11Z" into a [datetime] (Kind Utc); the v7.0.60
-        # publication stopped because the workflow matched that object's culture text against the
-        # ISO pattern. Execute the workflow's own function against every shape it can receive.
-        $functionMatch = [regex]::Match($workflow, '(?ms)^ {10}function Get-RSReleaseDate\(\[object\]\$PublishedAt\) \{.*?^ {10}\}\r?$')
-        $functionMatch.Success | Should Be $true
-        . ([scriptblock]::Create($functionMatch.Value))
-
-        (Get-RSReleaseDate ([datetime]::new(2026, 9, 17, 21, 7, 11, [DateTimeKind]::Utc))) | Should Be '2026-09-17'
-        (Get-RSReleaseDate ([datetime]::new(2026, 9, 17, 23, 30, 0, [DateTimeKind]::Unspecified))) | Should Be '2026-09-17'
-        $lateLocal = [datetime]::new(2026, 9, 17, 23, 30, 0, [DateTimeKind]::Utc).ToLocalTime()
-        (Get-RSReleaseDate $lateLocal) | Should Be '2026-09-17'
-        (Get-RSReleaseDate '2026-09-17T21:07:11Z') | Should Be '2026-09-17'
-        (Get-RSReleaseDate '2026-09-17T23:30:00+02:00') | Should Be '2026-09-17'
-        (Get-RSReleaseDate '2026-09-18T01:30:00+02:00') | Should Be '2026-09-17'
-        { Get-RSReleaseDate '' } | Should Throw 'did not report a published_at timestamp'
-        { Get-RSReleaseDate $null } | Should Throw 'did not report a published_at timestamp'
-        { Get-RSReleaseDate 'yesterday' } | Should Throw 'not a recognizable timestamp'
-    }
-
-    It 'supports a serialized direct release handoff' {
-        $workflow | Should Match '(?ms)workflow_call:\s+inputs:\s+version:'
-        $workflow | Should Match "(?ms)concurrency:\s+group:\s+winget-RedSalamanders\.RedSalamander-\$\{\{ github\.event_name == 'release'.*?format\('v\{0\}', inputs\.version \|\| github\.event\.inputs\.version\) \}\}"
-        $workflow | Should Match 'cancel-in-progress:\s*false'
-        $workflow | Should Match 'ref:\s*\$\{\{ github\.workflow_sha \}\}'
-        $workflow | Should Match 'Tools/Modules/Packaging/WingetPrPublication\.psm1'
+        $generator | Should Not Match '\$ReleaseDate = Get-Date -Format'
+        $source = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Publication.psm1') -Raw
+        $source | Should Not Match 'ReleaseDate:|Get-Date -Format'
+        $source | Should Match 'NestedInstallerFiles:'
+        $source | Should Match 'PortableCommandAlias:'
     }
 }
 
