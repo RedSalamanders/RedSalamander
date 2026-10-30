@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Confirm emergency overrides apply to PR merge checks only, and record successful two-architecture RedXe/RedMonitor v1.0.5 qualification and prepare-only promotion plus DxUi v1.0.4 SDK proof; retain remaining all-project acceptance gates in the active CI plan.
 - Record the v1.0.5 rollout to four public projects, matching private candidates, verified emergency PR settings, real native barrier/ZIP/Prepare evidence and stale-engine publication refusal; retain pending hosted, visibility and publication acceptance in the active plan.
 - Pin the common CI engine to v1.0.5: verify native portable winget registration, every installed command alias, declared smoke probes and owned cleanup; retain the compiler-free custom dependency status observer and recorded owner-only emergency PR merge route. Publication remains an explicit action requiring both matching native Release regression and production ZIP receipts.
 - Document the explicit organization-owner, PR-only emergency merge route with a recorded reason and exact-head match; preserve actual checks and native publication qualification.
