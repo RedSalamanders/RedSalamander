@@ -740,9 +740,22 @@ build tuple, platform/machine/size envelopes, import/export ABI, eight notices,
 and runtime pairing contract. Builder-local copies of those values are
 prohibited. The current lock selects Ghostty commit
 `83fb95624b0439ee660c2679b43b38c8b63769cd` (Ghostty `v1.4.0`), tree
-`4dbd485a3b72c6ced65ad7ea447644a5967e382e`, Zig 0.17.0 archive SHA-256
-`b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428`,
+`4dbd485a3b72c6ced65ad7ea447644a5967e382e`, one Zig 0.17.0 archive per build
+host (ARM64 `zig-aarch64-windows-0.17.0.zip` SHA-256
+`0a59d91fa1cb40cf068e9b0954434ce973500c7a2ea749f1e01af62cdab52d26`, x64
+`zig-x86_64-windows-0.17.0.zip` SHA-256
+`b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428`),
 `fast`, SIMD disabled, stripped output, and no themes/terminfo/termcap emission.
+The two archives ship the same `lib` tree and license; only `zig.exe` differs.
+`Get-RSGhosttyRuntimeHostPlatform` maps the machine's OS architecture (not the
+PowerShell process architecture) to `toolchain.archives[].hostPlatform`, and
+the builder, its runtime identity (`zigArchiveSha256`) and native qualification
+use exactly that host's archive. Windows ARM64 must not run the x86-64 Zig
+under emulation: there its first-use maker bootstrap (the `zig fetch` and
+`zig build` maker compile into a fresh global cache) intermittently stopped
+making progress and never exited, which held hosted ARM64 jobs until their
+six-hour limit. A lock without exactly one archive for the build host fails
+before any download.
 Ghostty and libghostty have separate release cycles; this pins the libghostty-vt
 source shipped with Ghostty 1.4.0. The tracked Windows overlay selects LLVM/LLD
 and propagates stripping to `libghostty-vt`. The static companion is built but
@@ -863,7 +876,8 @@ and rejected before use if their hashes or internal bindings differ. The
 workflow requires native ARM64 PowerShell and Python, performs an isolated
 ARM64 Force build, then runs `test-lib-vt`, `test-lib-vt-build`, and
 `test-lib-vt-schema` for `aarch64-windows-msvc` with the evidence-bound fixed
-Zig seed `0x97d35bc7` and `-j1`. The qualification copies the default test-runner
+Zig seed `0x97d35bc7` and `-j1`, using the candidate lock's ARM64 host Zig
+toolchain that the build just verified. The qualification copies the default test-runner
 source from the hash-locked Zig toolchain byte-for-byte and declares it in
 simple mode. This transport-only override changes neither test bodies nor
 candidate code, records the runner-source SHA-256 in canonical evidence, and
@@ -917,6 +931,18 @@ Its optional `diagnostics_only` dispatch has a separate job/check name and a
 upstream execution and canonical qualification publication, and cannot continue
 into admitted-product qualification. A successful diagnostic build never
 establishes native runtime or product acceptance.
+
+Every contained builder child is bounded: 30 minutes from start to exit (the
+slowest normal child, the emulated reproducible build, took 533 seconds) and
+120 seconds for output to close after the child exits. At either bound the
+builder logs a `[GhosttyRuntime] timeout` or `output-drain` snapshot of the
+contained tree: per process its PID, parent, CPU seconds and CPU used over a
+five-second sample, working set, thread count, thread wait states and
+executable path, never its arguments. It then closes the kill-on-close job,
+which terminates only that contained tree, and fails with the command, PID,
+working directory and bound. A stalled compiler therefore fails its job within
+about half an hour with the evidence needed to tell a deadlock from a slow
+build.
 
 Native Windows ARM64 has reproducibly returned process code 5 on the first
 launch of the newly linked, larger Debug C-ABI test executable while the

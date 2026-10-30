@@ -102,6 +102,95 @@ Describe 'Ghostty native command output contract' {
     }
 }
 
+Describe 'Ghostty native command bounds' {
+    Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$tokens, [ref]$parseErrors)
+    $functions = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -in @('Write-RSGhosttyContainedProcessSnapshot', 'Invoke-CheckedProcess')
+    }, $true) | ForEach-Object { $_.Extent.Text })
+    $script:boundedInvoke = [scriptblock]::Create(
+        'param($FilePath, $Arguments, $WorkingDirectory, $TimeoutSeconds, $DrainSeconds)' + "`n" +
+        ($functions -join "`n") + "`n" +
+        'Invoke-CheckedProcess -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory ' +
+        '-TimeoutSeconds $TimeoutSeconds -OutputDrainTimeoutSeconds $DrainSeconds')
+    $script:pwsh = Join-Path $PSHOME 'pwsh.exe'
+
+    function Get-RSGhosttyBoundProbeProcesses([string]$Marker) {
+        return @(Get-CimInstance Win32_Process -Filter "Name='pwsh.exe'" |
+            Where-Object { [string]$_.CommandLine -like "*$Marker*" })
+    }
+
+    It 'terminates a stalled contained tree at its bound and reports its snapshot' {
+        $marker = 'ghostty-stall-' + [guid]::NewGuid().ToString('N')
+        $grandchild = "Start-Process -NoNewWindow -FilePath '$script:pwsh' -ArgumentList '-NoProfile','-Command','Start-Sleep 300 # $marker'; Start-Sleep 300"
+        $progressLog = Join-Path $TestDrive 'stall-progress.txt'
+        $failure = ''
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        try {
+            $null = & $script:boundedInvoke $script:pwsh @('-NoProfile', '-Command', $grandchild) ([string]$TestDrive) 2 30 6> $progressLog
+        }
+        catch { $failure = $_.Exception.Message }
+        $clock.Elapsed.TotalSeconds | Should BeLessThan 60
+        $failure | Should Match 'did not exit within its 2-second bound'
+        $failure | Should Match 'contained process tree, which is now terminated'
+        $progress = Get-Content -LiteralPath $progressLog -Raw
+        $progress | Should Match '\[GhosttyRuntime\] timeout snapshot: pid=\d+ parent=\d+ cpuSeconds=[0-9.]+ cpuSecondsLast5s=[0-9.]+ workingSetMB=\d+ threads=\d+ \['
+        $progress | Should Not Match ([regex]::Escape($marker))
+        Start-Sleep -Seconds 1
+        @(Get-RSGhosttyBoundProbeProcesses $marker).Count | Should Be 0
+    }
+
+    It 'terminates a descendant that keeps output open after the child exits' {
+        $marker = 'ghostty-drain-' + [guid]::NewGuid().ToString('N')
+        $grandchild = "Start-Process -NoNewWindow -FilePath '$script:pwsh' -ArgumentList '-NoProfile','-Command','Start-Sleep 300 # $marker'; exit 0"
+        $progressLog = Join-Path $TestDrive 'drain-progress.txt'
+        $failure = ''
+        try {
+            $null = & $script:boundedInvoke $script:pwsh @('-NoProfile', '-Command', $grandchild) ([string]$TestDrive) 120 2 6> $progressLog
+        }
+        catch { $failure = $_.Exception.Message }
+        $failure | Should Match 'exited with code 0, but a contained descendant kept its output open for 2 seconds'
+        (Get-Content -LiteralPath $progressLog -Raw) | Should Match '\[GhosttyRuntime\] output-drain snapshot: pid=\d+'
+        Start-Sleep -Seconds 1
+        @(Get-RSGhosttyBoundProbeProcesses $marker).Count | Should Be 0
+    }
+}
+
+Describe 'Ghostty host toolchain selection' {
+    It 'selects the Zig build for the machine architecture and rejects other hosts' {
+        Get-RSGhosttyRuntimeHostPlatform -OSArchitecture ([Runtime.InteropServices.Architecture]::Arm64) | Should BeExactly 'ARM64'
+        Get-RSGhosttyRuntimeHostPlatform -OSArchitecture ([Runtime.InteropServices.Architecture]::X64) | Should BeExactly 'x64'
+        { Get-RSGhosttyRuntimeHostPlatform -OSArchitecture ([Runtime.InteropServices.Architecture]::X86) } |
+            Should Throw 'require an x64 or ARM64 Windows host'
+    }
+
+    It 'locks one native Zig archive per supported host for the same release' {
+        $lock = Read-RSGhosttyRuntimeLock -LiteralPath $lockPath -SchemaPath $schemaPath -RepoRoot $repoRoot
+        $version = [string]$lock.toolchain.zigVersion
+        (@($lock.toolchain.archives.hostPlatform) -join ',') | Should BeExactly 'ARM64,x64'
+        foreach ($archive in @($lock.toolchain.archives)) {
+            $zigArchitecture = if ([string]$archive.hostPlatform -ceq 'ARM64') { 'aarch64' } else { 'x86_64' }
+            $stem = "zig-$zigArchitecture-windows-$version"
+            [string]$archive.fileName | Should BeExactly "$stem.zip"
+            [string]$archive.url | Should BeExactly "https://ziglang.org/download/$version/$stem.zip"
+            [string]$archive.executableRelativePath | Should BeExactly "$stem/zig.exe"
+        }
+    }
+
+    It 'never pins a builder to the emulated x86-64 toolchain on ARM64' {
+        $lifecycle = Get-Content -LiteralPath $modulePath -Raw
+        $nativeWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml') -Raw
+        $lifecycle | Should Match '\$hostPlatform = Get-RSGhosttyRuntimeHostPlatform'
+        $nativeWorkflow | Should Match '\$hostPlatform = Get-RSGhosttyRuntimeHostPlatform'
+        foreach ($source in @($lifecycle, $nativeWorkflow)) {
+            $source | Should Not Match "hostPlatform\s+-ceq\s+'x64'"
+        }
+    }
+}
+
 Describe 'Ghostty owned cache cleanup' {
     Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1')
     $tokens = $null

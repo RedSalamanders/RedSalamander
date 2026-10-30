@@ -4,6 +4,14 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Windows ARM64 builds of the Ghostty terminal runtime now use the native aarch64 Zig 0.17.0 toolchain
+  (`zig-aarch64-windows-0.17.0.zip`, SHA-256 `0a59d91fa1cb40cf068e9b0954434ce973500c7a2ea749f1e01af62cdab52d26`),
+  locked beside the x86-64 archive. The builder, its runtime identity and native ARM64 qualification select the
+  archive for the machine's OS architecture. Under x64 emulation, Zig 0.17's first-use maker bootstrap
+  intermittently never exited; after PR #149 changed a file hashed into the Terminal runtime cache key, hosted ARM64
+  Debug jobs rebuilt the runtime cold, and four of them stalled there, three until the six-hour job limit. Every
+  contained builder child is now bounded to 30 minutes, plus 120 seconds for its output to close after exit; a stall
+  logs a snapshot of the contained process tree, terminates only that tree and fails the build.
 - Integrate current main with the shared native build policy and the qualified API4 DxUi source, preserve both parent changelogs and FTP regression controls, and record the developer-requested merge with remaining product/runtime/performance qualification explicit.
 - Integrate current hosted-CI repairs with the shared warning/optimization policy, retain strict Curl fixture accounting, and adopt the qualified modern API4 DxUi candidate with ICF-safe payload identities; renewed product qualification remains explicit.
 - Keep the executed CI failed-build exit guard test aligned with the verified-source matrix invocation; check extraction bounds and retain both failure and success controls during Ghostty integration.

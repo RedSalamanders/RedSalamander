@@ -514,6 +514,14 @@
   "toolchain": {
     "archives": [
       {
+        "executableRelativePath": "zig-aarch64-windows-0.17.0/zig.exe",
+        "executableSha256": "a5ae142cc04be0d580be0982a0f72684c065b442f3ec904c5b060a777fd0ec47",
+        "fileName": "zig-aarch64-windows-0.17.0.zip",
+        "hostPlatform": "ARM64",
+        "sha256": "0a59d91fa1cb40cf068e9b0954434ce973500c7a2ea749f1e01af62cdab52d26",
+        "url": "https://ziglang.org/download/0.17.0/zig-aarch64-windows-0.17.0.zip"
+      },
+      {
         "executableRelativePath": "zig-x86_64-windows-0.17.0/zig.exe",
         "executableSha256": "f54b14f02a4d7d8ac62a94a0663486eb166bba3745d85b466238c1b93e723d46",
         "fileName": "zig-x86_64-windows-0.17.0.zip",
