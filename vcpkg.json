@@ -52,7 +52,7 @@
     },
     {
       "name": "webview2",
-      "version>=": "1.0.4191.47"
+      "version>=": "1.0.4314.35"
     },
     {
       "name": "ftxui",
