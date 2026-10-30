@@ -1,7 +1,9 @@
-# I54 Pending dependency integration — 2026-10-29
+# I54 Dependency integration — 2026-10-29
 
-Status: ACTIVE. Owner: dependency integration. The developer requested merging all
-projects and explicitly included the outstanding Dependabot updates.
+Status: COMPLETE for dependency integration and regular CI at the sources recorded below.
+Owner: dependency integration. The developer requested merging all projects and
+explicitly included the outstanding Dependabot updates. Separately owned Full,
+platform, physical-input, performance and release gates remain open.
 
 This batch integrates RedSalamander PRs #130, #137, #138, #139 and #140 with the
 already reviewed fold-on-main tooling in PR #150. Preserve both public history and
@@ -34,8 +36,8 @@ build and validation contracts remain
 - [x] Review and refresh the complete execution-contract digest.
 - [x] Validate manifest/tool consistency, affected tooling and the actual package graph.
 - [x] Build and test the affected package consumers with exact source/dependency receipts.
-- [ ] Pass candidate CI, merge the coherent batch and verify main.
-- [ ] Publish the exact results and remaining separately owned holds; close this plan
+- [x] Pass candidate CI, merge the coherent batch and verify main.
+- [x] Publish the exact results and remaining separately owned holds; close this plan
   only when its required gates have passed.
 
 ## Evidence boundaries
@@ -160,3 +162,56 @@ current installer contract checks its actual argument array, pinned executable
 and all five cache inputs; the existing executable argument/overlay/failure
 controls remain mandatory. Validate the complete active tooling profile and
 fresh hosted compilation before merging this correction, then confirm main.
+
+## Public integration and closeout preparation — 30 October
+
+PR #151 merged at `2ec73448acf6cf34feb8c23530ec20e5022327fe`, the coherent
+dependency batch #138 at `9c99afd3b3574a19bd0fe2ccd6dc17079eab1082`, and
+the tooling correction #152 at `6e4092d50eb892d15aa9c3b757c5d30d84266de2`.
+The original fold-tooling source `fb7b14c11cff04131011fbfa86e35b0b154a02be`
+is already an ancestor of #138. PR #150's later merge-only marker was closed as
+superseded: a real three-way comparison found no additional implementation, only
+its obsolete execution digest. The correct combined digest was preserved.
+
+The final #152 source `3dd3600cdf67c177c21fe6179571e3451d71ae90` passed
+[candidate CI 41046044940](https://github.com/RedSalamanders/RedSalamander/actions/runs/41046044940):
+x64 Debug and native ARM64 Debug each passed 1,122 cases with zero failures or
+skips. Its complete local active tooling selection passed 1,113 cases. None of
+these results reclassifies the earlier two-failure receipts as successful.
+
+[Main CI 41050818399](https://github.com/RedSalamanders/RedSalamander/actions/runs/41050818399)
+at `6e4092d` completed all four native PR suites: x64 and ARM64, Debug and
+Release, each passed 1,122 cases with zero failures or skips. Every compilation
+passed with zero warnings and errors. The documentation merge #153 interrupted
+the initial ARM64 Release suite; attempt 2 reran only that job and completed
+successfully. The interrupted log remains retained. The documentation-only main
+`61445c631326b5c7c4183821fbc3a0282e906559` had its automatic native run
+canceled by the owner; that separate canceled run is not reported as green.
+
+Prepared closeout source `b929316f1db4060fe30603e8f3de6980c8eae880` passed
+96 focused specification/scoping/changelog/tooling checks with zero failures,
+skips or pending cases. Its exact archive admission rejects both an unreviewed
+date-shifted sibling and a companion path. Both hosted Debug compilation steps
+passed, and x64 and native ARM64 each completed 1,123 PR cases without failure or
+skip in the successful
+[CI 41064135973](https://github.com/RedSalamanders/RedSalamander/actions/runs/41064135973).
+
+That same prepared source also passed a fresh local x64 Debug rebuild with zero
+warnings and errors. Its noninteractive PrePush remainder passed 29 toolchain
+and 256 Compare Directories cases, with zero failures and 27 declared environment
+skips. The complete profile was re-attested after the deployment tests under
+receipt `99ed05b01b483b35503b22ceb40a0d4573d177723d3b95eda1b95855cc6edd94`
+at source snapshot `c1aefe6bda35cf43da09da4c2a459c097805b3bd924decd7575163ada26474d1`.
+PrePush stayed NOT_EVALUATED/exit 2: 12 PR contracts were delegated and four
+focus-taking entries remained pending. Six sandbox audit items were recorded;
+neither Full acceptance nor a globally clean sandbox is claimed.
+
+The public-history audit covered every advertised branch and tag: 42 refs and
+384 reachable commits, with no intersection against the 1,850 private-only
+DualTail commits. The existing public archive remains an ancestor. The primary
+`Z:\src\RedSalamander` checkout is clean on public main, with both origin fetch
+and push URLs naming `RedSalamanders/RedSalamander`.
+
+The checkpoints above retain their original source and environment identities.
+I51, I52, I48 and I53 keep their separate runtime, Full, platform, physical-input,
+performance and release obligations; this integration record cannot close them.

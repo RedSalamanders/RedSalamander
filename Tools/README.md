@@ -32,6 +32,9 @@ The I49 agent/skill remediation record has exact-file admission under `Specs/Pla
 Its guard rejects a date-shifted sibling and an unreviewed companion. This records guidance and
 package-check closeout; native runtime qualification remains outside that review's scope.
 
+The I54 dependency integration record has exact-file admission. Its guard rejects a date-shifted
+sibling and an unreviewed companion; it grants no broader runtime or performance qualification.
+
 `Restore-DxUi.ps1 -Platform x64 -Configuration Debug -CheckUpdates` restores the exact
 `Dependencies/DxUi.lock.json` pin before an IDE build. Root `build.ps1` performs this automatically.
 The source and compiler/SDK/CRT-isolated outputs stay under `.build/dependencies/DxUi`; a dirty
