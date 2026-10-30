@@ -1,6 +1,6 @@
 # I55 Unified CI policy for RedSalamanders
 
-Status: ACTIVE - implementation authorized on 2026-10-30; S0 contract and hosting checks in progress.
+Status: ACTIVE - S0-S3 implemented; native qualification, rollout and manual publication verification in progress.
 Priority: P1 for the policy and validation gaps.
 Policy owner: repository/organization maintainer. Plan preparation: Codex.
 Prepared: 2026-10-29. Local planning checkout: ej/main-merges-review-20261028 at c363bf5ba3b289d95f596d88b27ef0c2c5891f2e.
@@ -15,9 +15,9 @@ Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 - [x] Define test-enabled Release -> actual regression execution -> production Release -> retained ZIPs.
 - [x] Define ZIPs for all six projects, including a DxUi SDK, and manual winget for the five applications.
 - [x] Define non-building dependency/security automation for all six and a shared engine in RedSalamanders/.github.
-- [ ] Complete S0's technical contract/hosting checks and reconcile current plan owners.
+- [x] S0: freeze technical interfaces and versions, audit hosting/security capability, reconcile owners and record operator prerequisites and final policy decisions.
 - [x] S1: shared input classifier and six reviewed project manifests; strict policy/complete-tree fixtures and local six-project conformance pass.
-- [ ] S2: compiler-free PR checks, formatting patches and explicit formatting commits with fresh checks.
+- [x] S2: compiler-free PR checks, formatting patches and explicit formatting commits with fresh checks; live exact-head tooling/CodeQL/dependency-review witness passed.
 - [x] S3: five-minute main coordination, serialized admission and cumulative state; deterministic controls and live coalesced/stale/serialized RedMonitor and RedXe admissions verified.
 - [ ] S4: both native Release test branches, global test barrier, production ZIP/SDK and compiler-free security.
 - [ ] S5: explicit unchanged-artifact publication and winget preparation for the five applications.
@@ -591,4 +591,35 @@ Remaining acceptance includes live exact-head formatting/security checks, all-si
 
 The normal test interface and role separation are frozen in each adapter and Build_UnifiedCI spec: RedSalamander CI with its governed desktop/sandbox and Pester prerequisites; DxUi Full plus resource/consumer/gallery coverage and an extracted SDK consumer; RedXe Full plus native AV measurements; RedPrism normal Full suites; RedTilde the complete native case catalog and captures/crash checks; RedMonitor its six scenarios. Production uses explicit test-disabled selections and source-bound ZIP/SDK smoke. Version bases are preserved (7.0, 0.1, 1.0, 0.1, 0.1, 0.1 respectively); commit count is frozen once per admitted batch. The shared state/admission and SDK layout are authoritative in the engine and per-project Build_UnifiedCI specifications.
 
-S0 remains open only where owner/capability decisions are still required; S2/S4-S7 remain open pending the described live/native/publication acceptance and closeout. All six candidates now pin v1.0.3; not all six default branches have cut over.
+S0 and S2 were open at this checkpoint; the later owner confirmations and live formatting proof below supersede that state. S4-S7 remain subject to their actual hosted/native/publication evidence.
+
+### Accepted decisions and live formatting closure
+
+The owner confirmed on 2026-10-30: they will make RedPrism and RedTilde public; RedPrism uses MIT; the common two-architecture Release regression pipeline replaces RedSalamander's former separate Ghostty Debug ARM64 publication gate. Visibility changes remain the owner's action, not an implied agent permission. The online source/lock observer remains a compiler-free preflight; independent I50/I51 findings and manual Debug/ASan/extended investigations remain owned separately.
+
+- S0 technical/policy questions are resolved. Repository/public-URL, credential and actual hosted capability prerequisites stay explicit rollout gates. Repository and accessible organization secret-name lists confirmed no WINGET_TOKEN for RedMonitor, RedPrism or RedTilde; secret values were never read.
+- S2 live proof completed in temporary RedMonitor PR 12. Manual run 41120962042 pushed only src/CiFormattingWitness.cpp as bot commit af274798874e6faf39d9bb7da38724b413107bc1. Explicit trusted-main run 41121016201 executed the fresh compiler-free checks; the exact new head has successful checks / ci-gate, security / codeql and security / dependency-review, all from Actions app 15368. The checked API response is retained at Z:/src/RedMonitor/.build/ci-format-acceptance/.build/new-head-checks.json. PR 12 is closed without merging.
+- All four public default branches now use v1.0.3: RedMonitor PR 13 merged as 2e70f51f39ca33e405a5df7b89ee3b91721b5bf5 (fold 14: 26f0f8b298e17d11d9f6f06298399c69b954d3c9); RedXe PR 60 as 0abf0e9d79e20f8933c461e128a31c2b83efb21f; DxUi PR 141 as f981ede30c93aa9197124fddb285c460f0abd077; RedSalamander PR 161 as a6576e0d82df93dd4de9c3c86285a6d3cfcea187. Exact-head required checks passed before each ordinary merge; no admin bypass was used. RedSalamander's manual publisher is active under the newly accepted Release gate.
+- Canonical post-merge folds are merged: RedSalamander PR 163 (2a93cd28fc7bca6bb28cd45b98718a1b48f94751), RedXe PR 61 (a8841dd258f29629bba280b473bb1f7692f5e5f5), DxUi PR 143 (e29bf708c600464a32dc93a5ab6d344accfe77ad).
+- RedTilde source 0206ac37133955e714652a61a8567bfda9e8dee1 passed fresh x64 test-enabled Release, all 68 cases, 32 captures/crash checks, production-only Release with zero diagnostics, and portable ZIP/extraction smoke. The immutable test snapshot's hash was unchanged by production. Full local runtime evidence is Z:/src/RedTilde/.build/c/.build/evidence/test-runs/20261030T200226212Z-86496-940cdb02ea534565b23c40474f6fd3d8; package RedTilde-0.1.201-x64-20261030-210345-881.zip remains internal. Native ARM64/hosted acceptance is still unqualified.
+- RedPrism source d4a05850 passed the complete ordinary x64 Release suite and actual failure guard (expected exit 21), retained at Z:/src/RedPrism/.build/ci-rollout/checkout/.build/evidence/test-runs/20261030T200221331Z-69812-2388acb5a0804cf582702dedbe3aa976. The production audit then found embedded tests still compiled despite standalone test targets being excluded. The adapter now sets an explicit test role, excludes 135 test translation units, refuses test/crash-probe dispatch before startup, and verifies a test-disabled receipt plus hidden ZIP startup. The first production link failures exposed remaining test-only callers; they are retained and being causally guarded, not skipped. MIT is configured and LICENSE.txt ships in its ZIP. All independent tooling passed; the new wrong-role receipt guard adds a 27th passing scoped behavior. Source 18fd8ba4d273dfd216590b246a81cb0701eca5b3 passed production-only x64 Release with zero warnings/errors and ZIP smoke (help, test-mode refusal, hidden WARP capture and version identity); ZIP RedPrism-0.1.594-x64.zip has SHA-256 106cb6ce6c0769c1f31215321dba64b805c5164069590b52ce383dbff216289c. Fresh test-enabled regression is running for that same source. This is local x64 evidence, not hosted/ARM64 qualification.
+- Older v1.0.1/v1.0.2 artifact-output failures remain failed. Source-changing engine candidates serialize behind active work; stale candidates can finish their admission-only workflow without any native build. Such a green admission exit is not native qualification. The latest RedMonitor v1.0.3 run is 41123775849; all product qualification claims await their actual receipts.
+- Read-only manual Prepare refusal exercise 41124014295 rejected original failed pilot 41115318996: the run was not an original successful main qualification. All release, install and submission jobs were skipped. Successful current-artifact preparation and complete all-six native/SDK qualification remain outstanding.
+
+The previous implementation-record checkpoints are historical. Their formerly pending licensing/publication decisions are superseded by the owner's confirmations above. Current private visibility, missing publication credentials, native matrix receipts and publication/install proof remain capability/execution gates rather than unanswered policy choices.
+
+
+### Cold-runner and diagnostics repair
+
+The first RedSalamander v1.0.3 batch, 41123820774, failed before regressions because the adapter omitted the root pinned vcpkg installation; missing WIL, blake3 and 7-Zip headers were observed in retained MSBuild logs. It remains failed. Native build roles now call the shared pinned tool/baseline bootstrap and canonical platform installer before applying process-local MSBuild integration. The legacy hosted callers use the same bootstrap implementation. No dependency/toolchain pin changes or warning suppression are included.
+
+Engine v1.0.4 source 633e127f13408d294bb6bdd338bfceac721b109a (PR 5) captures both child output pipes on windowless runners and forwards diagnostics after completion, preserving real exit codes. Hosted controls 41126664862 passed Windows (35) and Linux (33), dependency review and workflow lint. This candidate pins the reviewed version; remaining product adapters will follow together. The earlier failed native runs and their receipts are not promoted.
+
+
+### First complete hosted batch and promotion preparation
+
+RedMonitor automatic batch 41123775849 completed successfully for source 26f0f8b298e17d11d9f6f06298399c69b954d3c9 and engine v1.0.3. Each native architecture executed all six normal scenarios with the active failure probe; the global gate passed before either production branch. Both production ZIP/extraction smoke stages and artifact uploads passed. Downloaded receipts and ZIP hashes were independently checked under Z:/RedSalamander.Perf/evidence/unified-ci/RedMonitor-41123775849. Qualified x64 ZIP SHA-256: 19cf2032c23baaa1653fac82ffe95046a9e8ae6021ce42fe6ee02d5cd4317a6d.
+
+Manual Prepare 41128061007 passed using that original successful batch. Release, native winget install and submission jobs were skipped; no public release or upstream change was created. The earlier failed-evidence exercise 41124014295 remains a successful refusal witness. This proves the common unchanged-artifact preparation path for RedMonitor; it does not qualify other products or missing publication credentials.
+
+The RedSalamander cold-bootstrap repair passed seven actual Git/bootstrap/environment controls. Combined vcpkg/build reproducibility coverage passed 72 of 74 tests with no failures; two existing optional integration cases lacked their pinned local checkout prerequisites. Tooling governance passed 12/12; compiler-free adapter, workflow conformance, spec inventory and Changes validation passed. These local results are not the still-pending hosted RedSalamander native qualification.

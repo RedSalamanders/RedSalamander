@@ -306,6 +306,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Get-ToolInventory.ps1` | Public governance command | Validates and renders `tool-inventory.json`. |
 | `Get-VisibleTypographyAudit.ps1` | Public UI source audit | Finds visible typography paths outside the intended DirectWrite model. |
 | `Install-ClangFormat.ps1` | Public formatter acquisition | Checksum-pinned native formatter download/offline extraction, cache verification and failure-preserving publication. |
+| `Invoke-ProjectCi.ps1` | Public hosted CI adapter | Runs compiler-free PR checks or admitted native roles with pinned dependencies, governed test evidence and internal ZIPs. |
 | `Invoke-SanitizedMsbuild.ps1` | Public build diagnostic command | Runs contained MSBuild with normalized environment plus explicit profile/dependency coordination. |
 | `InvokeSolutionCloc.ps1` | Supported manual compatibility command | Preserves hand-run raw cloc arguments while forwarding solution discovery to `Measure-SourceLines.ps1 -Scope Solution`. |
 | `Manage-WindowsCredentials.ps1` | Public support command | Lists or, with confirmation, removes selected Windows credentials. |
@@ -361,7 +362,7 @@ and focused tests.
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |
 | `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution. |
 | `Modules/Build/SanitizedEnvironment.psm1` | Canonical environment normalization with distinct null-removal and present-empty child overrides, kill-on-close contained process launch (the job also applies `SEM_NOGPFAULTERRORBOX`, so a crash ends the process without a Windows Error Reporting dialog), and local current-parent identity. |
-| `Modules/Build/VcpkgInstallSafety.psm1` | Manifest floor/override validation, safe triplet validation, confined vcpkg merge paths, and the default-MSVC-toolset overlay-triplet pin shared by `vcpkg-install.ps1` and `build.ps1`. |
+| `Modules/Build/VcpkgInstallSafety.psm1` | Pinned tool/baseline bootstrap and process-local hosted integration, manifest floor/override validation, safe triplets/merge paths, and the default-MSVC-toolset overlay shared by installer and build. |
 | `Modules/Build/VcpkgToolIdentity.psm1` | Pinned vcpkg executable attestation. |
 | `Modules/Build/Versioning.psm1` | Atomic locked version resolution/persistence and validated diagnostics plus pure explicit package-version construction. |
 | `Modules/Packaging/PortablePackageSmoke.psm1` | Clean-extraction package smoke plus receipt-bound Ghostty identity, notice, and native load/free validation. |
@@ -497,3 +498,5 @@ the parentless import baseline documented in [the archive contract](../Specs/Tes
 New or edited evidence retains the size, schema and identity gates; unavailable ancestry validates all
 tracked files. Hosted native checkout keeps complete public history so this inventory check executes.
 Changed evidence uses public origin/main before the legacy origin/master fallback.
+
+Unified native CI calls the canonical VcpkgInstallSafety pinned bootstrap, then vcpkg-install.ps1 for its selected platform, before applying process-local MSBuild integration. Incomplete restored tool directories are preserved; dependency installation retains its platform lock and pins. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.

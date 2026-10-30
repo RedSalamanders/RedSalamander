@@ -1,0 +1,1 @@
+- Restore the pinned vcpkg tool, ports baseline and platform dependencies before every hosted native build role; preserve incomplete cache state, share the bootstrap with legacy callers, and retain native child diagnostics through shared engine v1.0.4.
