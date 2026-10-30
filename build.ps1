@@ -65,6 +65,9 @@ param(
     
     [Parameter(HelpMessage = "Specific project to build (builds entire solution if not specified)")]
     [string]$ProjectName = $null,
+
+    [Parameter(HelpMessage = "Build the production solution projects, excluding Tests and PoC (Release only)")]
+    [switch]$ProductionOnly,
     
     [Parameter(HelpMessage = "Perform a clean build")]
     [switch]$Clean,
@@ -99,6 +102,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
+if ($ProductionOnly -and ($Configuration -ne 'Release' -or $ProjectName -or $Clean)) {
+    throw 'ProductionOnly requires Release and cannot be combined with ProjectName or Clean.'
+}
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 $BuildProjectSelectionModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\BuildProjectSelection.psm1"
@@ -833,11 +840,19 @@ $receiptProjectSelection = if ($resolvedProjectPath) {
 } else {
     @([IO.Path]::GetRelativePath($SolutionDir, $SolutionFullPath).Replace('\', '/'))
 }
+if ($ProductionOnly) {
+    $productionProjects = @(Get-RSSolutionProjects -SolutionPath $SolutionFullPath | Where-Object {
+        $_.RelativePath -match '\.vcxproj$' -and $_.RelativePath -notmatch '^(Tests|PoC)[\\/]'
+    })
+    if (-not $productionProjects.Count) { throw 'No production solution projects were selected.' }
+    $receiptProjectSelection = @($productionProjects | ForEach-Object { $_.RelativePath.Replace('\','/') })
+}
 $receiptBuildArguments = @(
     "build-number=$($versionContext.BuildNumber)",
     "official-release=$([bool]$OfficialRelease)",
     "monitor-diagnostics=$([bool]$MonitorDiagnostics)"
 )
+$receiptBuildArguments += "production-only=$($ProductionOnly.IsPresent.ToString().ToLowerInvariant())"
 $requestedCompilerDebugInformation = [Environment]::GetEnvironmentVariable('RSBuildCompilerDebugInformation', 'Process')
 if ([string]::IsNullOrWhiteSpace($requestedCompilerDebugInformation)) {
     $effectiveCompilerDebugInformation = 'ProgramDatabase'
@@ -908,6 +923,11 @@ $msbuildTarget = if ($ProjectName) {
     "Rebuild"
 } else {
     "Build"
+}
+if ($ProductionOnly) {
+    $msbuildTarget = (@($productionProjects | ForEach-Object {
+        if ($Rebuild) { $_.Name + ':Rebuild' } else { $_.Name }
+    }) -join ';')
 }
 
 # Build parameters

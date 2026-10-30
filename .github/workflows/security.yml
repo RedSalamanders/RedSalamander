@@ -1,0 +1,18 @@
+name: Security without native builds
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '29 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+jobs:
+  security:
+    uses: RedSalamanders/.github/.github/workflows/security.yml@395063c69b0982097cd925abed82887244293793
+    with:
+      engine_ref: 395063c69b0982097cd925abed82887244293793

@@ -649,9 +649,9 @@ Describe 'Distributable test surface (ENABLE_TESTS) policy' {
 
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
         $reusable | Should Match 'if: \$\{\{ inputs\.official_release && \(inputs\.run_full_tests \|\| inputs\.configuration != ''Release''\) \}\}\s+shell: pwsh\s+run: throw'
-        $release = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
+        $release = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
         $release | Should Not Match 'run_full_tests'
-        $release | Should Match 'Assert-RSReleaseArtifacts'
+        $release | Should Match 'Write-CiProductionReceipt'
     }
 }
 
@@ -800,11 +800,7 @@ Describe 'Release workflow source contracts' {
         (& ([scriptblock]::Create(($helpers -join "`n") + "`nResolve-RSHostOrderedMSBuildPath -Path '$unrelated'"))) | Should Be $unrelated
         ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
         $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
-        # The MSIX packaging job selects MSBuild with the same host order.
-        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
-        $releaseWorkflow | Should Match "if \(\`$hostArchitecture -eq 'Arm64'\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
-        $releaseWorkflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
-        $releaseWorkflow | Should Not Match "-find 'MSBuild\\Current\\Bin\\MSBuild\.exe'"
+        # MSIX remains a local packaging wrapper; public CI promotes ZIPs only.
         $restoreScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Restore-DxUi.ps1') -Raw
         $restoreScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
@@ -830,7 +826,7 @@ Describe 'Release workflow source contracts' {
     }
 
     BeforeAll {
-        $releaseWorkflowPath = Join-Path $repoRoot '.github\workflows\release.yml'
+        $releaseWorkflowPath = Join-Path $repoRoot '.ci-engine/.github/workflows/publish.yml'
         $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
         $ghosttyStatusWorkflowPath = Join-Path $repoRoot '.github\workflows\ghostty-runtime-status.yml'
         $ghosttyStatusWorkflow = Get-Content -LiteralPath $ghosttyStatusWorkflowPath -Raw
@@ -842,17 +838,28 @@ Describe 'Release workflow source contracts' {
 
     It 'uses normal dependency success semantics and no permissive artifact download' {
         $releaseWorkflow | Should Not Match 'continue-on-error:\s*true'
-        $releaseWorkflow | Should Not Match '!cancelled\(\)'
-        $releaseWorkflow | Should Match 'MSIX packaging disabled by policy'
-        $releaseWorkflow | Should Match 'Assert-RSReleaseArtifacts'
-        $releaseWorkflow | Should Match 'Assert-RSReleaseChecksumFile'
+        $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
+        $native | Should Match 'needs: \[admission, test-gate\]'
+        $native | Should Match "if-no-files-found: error"
+        $native | Should Not Match 'continue-on-error:\s*true'
+        $artifacts = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Artifacts.psm1') -Raw
+        $artifacts | Should Match 'Test-CiRegressionReceipt'
+        $artifacts | Should Match 'Get-FileHash'
     }
 
     It 'uploads deterministic package names and fails when an upload path is missing' {
-        $releaseWorkflow | Should Match 'RedSalamander-\$\{\{ needs\.version-info\.outputs\.release_version \}\}-\$\{\{ matrix\.platform \}\}-Portable\.zip'
-        $releaseWorkflow | Should Match 'RedSalamander-\$\{\{ needs\.version-info\.outputs\.release_version \}\}-\$\{\{ matrix\.platform \}\}\.msix'
-        [regex]::Matches($releaseWorkflow, 'if-no-files-found:\s*error').Count | Should Be 3
-        $releaseWorkflow | Should Match 'fail_on_unmatched_files:\s*true'
+        $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
+        $adapter = Get-Content (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $package = Get-Content (Join-Path $repoRoot 'Installer/zip/build-zip.ps1') -Raw
+        $native | Should Match 'name: production-'
+        $native | Should Match 'archive_directory'
+        $native | Should Match 'if-no-files-found: error'
+        $adapter | Should Match 'Installer/zip/build-zip.ps1'
+        $adapter | Should Match 'Write-CiProductionReceipt'
+        $package | Should Match 'RedSalamander-\$Version-\$Platform-Portable\.zip|\$zipName'
+        $publication = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Publication.psm1') -Raw
+        $publication | Should Match 'Existing release contains unqualified assets'
+        $publication | Should Match 'Existing public release is incomplete'
     }
 
     It 'keeps Ghostty observation read-only, scheduled, and explicit about candidate identity' {
@@ -871,9 +878,7 @@ Describe 'Release workflow source contracts' {
         $ghosttyStatusWorkflow | Should Match '(?s)name: Upload status report\s+if: always\(\).*?path: \.build/TerminalEngineStatus/workflow/status\.json'
         $ghosttyStatusWorkflow | Should Match '(?s)name: Enforce scheduled observation result.*?steps\.status\.outputs\.gate_failure'
         $ghosttyStatusWorkflow.IndexOf('name: Upload status report') | Should BeLessThan $ghosttyStatusWorkflow.IndexOf('name: Enforce scheduled observation result')
-        $releaseWorkflow | Should Match '(?s)name: Upload Ghostty release preflight\s+if: always\(\).*?path: \.build/TerminalEngineStatus/release/status\.json'
-        $releaseWorkflow | Should Match '(?s)name: Enforce Ghostty release preflight.*?source_binding_valid.*?lock_binding_valid.*?result_valid'
-        $releaseWorkflow.IndexOf('name: Upload Ghostty release preflight') | Should BeLessThan $releaseWorkflow.IndexOf('name: Enforce Ghostty release preflight')
+        $releaseWorkflow | Should Match '(?s)name: Retain Ghostty publication preflight.*?if: always\(\).*?path: \.build/TerminalEngineStatus/publication/status\.json'
     }
 
     It 'qualifies reviewed Ghostty candidates on native ARM64 with read-only artifact evidence' {
@@ -1049,71 +1054,76 @@ Describe 'Release workflow source contracts' {
         $upload | Should Not Match '\.build/BuildReceipts/'
     }
 
-    It 'runs a source-and-lock-bound Ghostty preflight before release artifact builds' {
-        $releaseWorkflow | Should Match '(?ms)^  ghostty-runtime-preflight:.*?Get-GhosttyTerminalRuntimeStatus\.ps1.*?-Mode Online.*?-ExpectedSourceCommit \$env:GITHUB_SHA'
-        $releaseWorkflow | Should Match '(?ms)^  ghostty-runtime-preflight:.*?Get-FileHash.*?canonicalLock\.sha256.*?security-review.*?required-manual.*?unreachable'
-        $releaseWorkflow | Should Match '(?ms)^  ghostty-product-qualification:.*?needs:\s*\[version-info, ghostty-runtime-preflight\].*?uses:\s*\./\.github/workflows/ghostty-runtime-product-qualification\.yml.*?build_number:\s*\$\{\{ needs\.version-info\.outputs\.build_number \}\}'
-        $releaseWorkflow | Should Match '(?m)^  build:\s*\r?\n\s+needs:\s*\[version-info, ghostty-runtime-preflight, ghostty-product-qualification\]'
-        $releaseWorkflow | Should Match 'ghostty-runtime-release-preflight-\$\{\{ github\.run_id \}\}'
-        $releaseWorkflow | Should Match 'sourceBinding\.repositoryCommit -cne \$env:GITHUB_SHA'
-        $releaseWorkflow | Should Match 'canonicalLock\.sha256 -cne \$lockSha256'
+    It 'keeps the source-and-lock-bound online Ghostty preflight in read-only publication preparation' {
+        $publication = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Publication.psm1') -Raw
+        $prepare = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Invoke-Publication.ps1') -Raw
+        $publication | Should Match 'Get-GhosttyTerminalRuntimeStatus\.ps1'
+        $publication | Should Match "'-Mode','Online'"
+        $publication | Should Match '''-ExpectedSourceCommit'',\$Plan\.batch\.commit'
+        $publication | Should Match 'sourceBinding\.repositoryCommit -cne \$Plan\.batch\.commit'
+        $publication | Should Match 'canonicalLock\.sha256 -cne \$lockHash'
+        $publication | Should Match 'security-review.*required-manual.*unreachable'
+        $prepare | Should Match 'Test-CiProjectPublicationPreflight'
+        $prepare | Should Not Match 'build\.ps1|Build-GhosttyTerminalRuntime'
+        $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
+        $native | Should Not Match 'ghostty-product-qualification|ghostty-runtime-native-qualification'
     }
 
-    It 'publishes the validated asset matrix atomically and invokes Winget directly' {
-        [regex]::Matches($releaseWorkflow, 'uses:\s*softprops/action-gh-release@').Count | Should Be 1
-        $releaseWorkflow | Should Match 'files:\s*artifacts/\*'
-        $releaseWorkflow | Should Match '(?ms)publish-winget:\s+if:\s*\$\{\{ github\.event_name != ''workflow_dispatch'' \|\| inputs\.build_arm64 \}\}\s+needs:\s*\[version-info, release\].*?uses:\s*\./\.github/workflows/winget-release\.yml'
-        $releaseWorkflow | Should Match 'submit:\s*true'
-        $releaseWorkflow | Should Match '(?ms)concurrency:\s+group:\s*release-RedSalamander-\$\{\{ github\.run_number \}\}\s+cancel-in-progress:\s*false'
+    It 'publishes only an explicitly selected qualified ZIP matrix with a separate winget action' {
+        $caller = Get-Content (Join-Path $repoRoot '.github/workflows/publish.yml') -Raw
+        $caller | Should Match 'workflow_dispatch:'
+        $caller | Should Not Match '(?m)^  (push|release|schedule):'
+        $caller | Should Match 'default: Prepare'
+        $caller | Should Match 'cancel-in-progress: false'
+        $releaseWorkflow | Should Match "if: inputs.operation == 'Release'"
+        $releaseWorkflow | Should Match "if: inputs.operation == 'Winget'"
+        $releaseWorkflow | Should Match 'needs: \[prepare, install\]'
+        $publication = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Publication.psm1') -Raw
+        $publication | Should Match 'draft=\$true'
+        $publication | Should Match "sha256:"
+        $publication | Should Match 'Assert-CiPublicationCurrent'
+        $publication | Should Match 'Existing version tag targets different source'
     }
 
-    It 'grants repository write only to publishing jobs and disables checkout persistence elsewhere' {
-        $ciWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
-        $buildWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-
-        $ciWorkflow | Should Match '(?ms)^permissions:\s+contents:\s*read'
-        $formatJob = [regex]::Match($ciWorkflow, '(?ms)^  format:\r?\n(?<body>.*?)(?=^  [a-zA-Z][\w-]*:|\z)').Groups['body'].Value
-        $formatJob | Should Match 'Check changed native sources'
-        $formatJob | Should Match 'persist-credentials:\s*false'
-        $formatJob | Should Not Match 'contents:\s*write|git\s+push'
+    It 'separates read-only project execution from trusted state, format and publication writers' {
+        $pr = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/pr.yml') -Raw
+        $pr | Should Match '(?ms)^permissions:\s+contents:\s*read'
+        $pr | Should Match 'persist-credentials:\s*false'
+        $pr | Should Not Match 'contents:\s*write|git\s+push|checks:\s*write'
         $releaseWorkflow | Should Match '(?ms)^permissions:\s+contents:\s*read'
         $releaseWorkflow | Should Match '(?ms)^  release:.*?permissions:\s+contents:\s*write'
-        $buildWorkflow | Should Match 'persist-credentials:\s*false'
         $releaseWorkflow | Should Not Match '(?ms)^permissions:\s+contents:\s*write'
+        $releaseWorkflow | Should Match 'Publish-Release.ps1'
+        $releaseJob = [regex]::Match($releaseWorkflow,'(?ms)^  release:.*?(?=^  [A-Za-z0-9_-]+:|\z)').Value
+        $releaseJob | Should Not Match 'manifest.adapter|Invoke-ProjectCi|build.ps1'
+        $format = Get-Content (Join-Path $repoRoot '.github/workflows/format.yml') -Raw
+        $format | Should Match "github.ref == 'refs/heads/main'"
+        $format | Should Match 'Invoke-Formatting.ps1'
+        $admission = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.GitHub.psm1') -Raw
+        $admission | Should Match 'force = \$false'
     }
 
-    It 'pins installer packages, caches the exact active Terminal input closure, and records canonical toolchain evidence' {
-        $buildWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-        foreach ($workflow in @($buildWorkflow, $releaseWorkflow)) {
-            $workflow | Should Match 'visualstudio2026buildtools -PackageVersion 118\.8\.1'
-            $workflow | Should Match 'visualstudio2026-workload-vctools -PackageVersion 1\.0\.0'
-        }
-        $releaseWorkflow | Should Match 'visualstudio2026-workload-universalbuildtools -PackageVersion 1\.0\.0'
+    It 'preserves manual Terminal cache identity and conservatively keys automatic dependency binaries' {
+        $buildWorkflow = Get-Content (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+        $buildWorkflow | Should Match 'visualstudio2026buildtools -PackageVersion 118\.8\.1'
+        $buildWorkflow | Should Match 'visualstudio2026-workload-vctools -PackageVersion 1\.0\.0'
         $buildWorkflow | Should Match 'Cache pinned Terminal runtime inputs and product'
-
-        $cacheKeyMatch = [regex]::Match(
-            $buildWorkflow,
-            "(?m)^\s*key:\s*`\$\{\{ runner\.os \}\}-terminal-runtime-.*?hashFiles\((?<inputs>[^)]*)\)")
+        $cacheKeyMatch = [regex]::Match($buildWorkflow, "(?m)^\s*key:.*-terminal-runtime-.*?hashFiles\((?<inputs>[^)]*)\)")
         $cacheKeyMatch.Success | Should Be $true
-        $actualInputs = @([regex]::Matches($cacheKeyMatch.Groups['inputs'].Value, "'(?<path>[^']+)'") |
-            ForEach-Object { $_.Groups['path'].Value })
-        $expectedInputs = @((Get-RSGhosttyRuntimeIdentityInputPaths) |
-            ForEach-Object { $_.Replace('\', '/') } |
-            ForEach-Object {
-                if ($_ -ceq 'External/TerminalEngine/Notices/uucode-bjoern-hoehrmann.txt') {
-                    'External/TerminalEngine/Notices/*'
-                }
-                elseif ($_ -cne 'External/TerminalEngine/Notices/unicode-license-3.0-2025.txt') {
-                    $_
-                }
-            })
+        $actualInputs = @([regex]::Matches($cacheKeyMatch.Groups['inputs'].Value, "'(?<path>[^']+)'") | ForEach-Object { $_.Groups['path'].Value })
+        $expectedInputs = @((Get-RSGhosttyRuntimeIdentityInputPaths) | ForEach-Object { $_.Replace('\','/') } | ForEach-Object {
+            if ($_ -ceq 'External/TerminalEngine/Notices/uucode-bjoern-hoehrmann.txt') { 'External/TerminalEngine/Notices/*' }
+            elseif ($_ -cne 'External/TerminalEngine/Notices/unicode-license-3.0-2025.txt') { $_ }
+        })
         @($actualInputs | Sort-Object -Unique).Count | Should Be $actualInputs.Count
-        (($actualInputs | Sort-Object) -join "`0") | Should Be (($expectedInputs | Sort-Object) -join "`0")
-        @($actualInputs | Where-Object { $_ -ceq 'Tools/TerminalEngine/Patches/Ghostty-WindowsARM64-SharedOnly.patch' }).Count | Should Be 0
-        $buildWorkflow | Should Match 'id:\s*toolchain_identity'
+        (($actualInputs | Sort-Object) -join [char]0) | Should Be (($expectedInputs | Sort-Object) -join [char]0)
         $buildWorkflow | Should Match 'Get-RSBuildToolchainIdentity'
-        $buildWorkflow | Should Match 'steps\.toolchain_identity\.outputs\.digest'
         $buildWorkflow | Should Match 'ToolchainIdentity\.schema\.json'
+        $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
+        $native | Should Match 'actions/cache/restore@[a-f0-9]{40}'
+        $native | Should Match 'actions/cache/save@[a-f0-9]{40}'
+        $native | Should Match "'Tools/\*\*'"
+        $native | Should Not Match 'restore-keys:'
     }
 
     It 'executes the CI matrix gate through the verified short source from a foreign directory' {
@@ -1318,6 +1328,11 @@ Describe 'Release workflow source contracts' {
                 ++$externalCount
                 if ($reference -notmatch '@[0-9a-f]{40}$') {
                     throw "$($workflowFile.Name) contains mutable action reference '$reference'."
+                }
+                if ($reference.StartsWith('RedSalamanders/.github/')) {
+                    $pin = (Get-Content (Join-Path $repoRoot '.ci/project.json') -Raw | ConvertFrom-Json).engine.ref
+                    $reference | Should Match ([regex]::Escape('@'+$pin)+'$')
+                    continue
                 }
                 if ($match.Groups['comment'].Value -notmatch '#\s+v\d+\.\d+\.\d+\s*$') {
                     throw "$($workflowFile.Name) action '$reference' lacks an exact version comment."

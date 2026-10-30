@@ -1,0 +1,27 @@
+name: Manual extended qualification
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Diagnostic profile; does not publish or advance Release qualification
+        type: choice
+        options: [Debug, ASan Debug, Release]
+        default: Debug
+      scope:
+        description: Normal regression or explicit Full qualification
+        type: choice
+        options: [Normal, Full]
+        default: Normal
+permissions:
+  contents: read
+concurrency:
+  group: explicit-qualification-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  qualification:
+    if: github.ref == 'refs/heads/main'
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@395063c69b0982097cd925abed82887244293793
+    with:
+      engine_ref: 395063c69b0982097cd925abed82887244293793
+      configuration: ${{ inputs.configuration }}
+      scope: ${{ inputs.scope }}
