@@ -1,1 +1,0 @@
-- Start the authorized I55 unified CI implementation across all six RedSalamanders projects. Refresh default-branch identities, hosting/security prerequisites and active owners; preserve the current toolchain and record unavailable private hosted/security capabilities as open acceptance gates. Implementation and hosted qualification remain in progress.
