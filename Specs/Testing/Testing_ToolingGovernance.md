@@ -422,6 +422,6 @@ Terminal reproduction uses its archival profile rather than extending every defa
 
 ## Changes workflow
 
-The [shared Changes contract](../Core/Core_Changes.md) owns fragment validation and immediate folding. The current tooling profile discovers Changelog.Tests.ps1; its adapter runs the identical shared behavior fixtures in the existing marked sandbox. PrePush rejects pending fragments. Folding is an explicit source-documentation mutation and never a side effect of validation or planning.
+The [shared Changes contract](../Core/Core_Changes.md) owns fragment validation and folding on the default branch after merge. The current tooling profile discovers Changelog.Tests.ps1; its adapter runs the identical shared behavior fixtures in the existing marked sandbox. Pending fragments are expected before a push: PrePush and CI run Test-Changelog.ps1 with -Base, which refuses any CHANGELOG.md change that is not an exact fold of fragments already on the base. Folding is an explicit source-documentation mutation made by Submit-ChangelogFold.ps1 in a temporary worktree and a pull request of its own, never a side effect of validation or planning.
 
 The completed PowerShell tooling migration has exact-file admission at Specs/Plans/Done/PowerShellTooling_2026-10-28.md. Focused tests reject a date-shifted sibling and an unreviewed companion. This admission records tooling implementation and validation only; native product/platform qualification is separate.

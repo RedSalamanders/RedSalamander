@@ -1335,7 +1335,7 @@ Describe 'Terminal engine dependency lifecycle' {
         $terminalSpec | Should Match 'Build-GhosttyTerminalRuntime\.ps1 -Platform ARM64 -Offline -PassThru'
         $terminalSpec | Should Match '\-Offline \-Force'
         $terminalSpec | Should Match 'generated identity header'
-        $terminalSpec | Should Match 'all\s+five notices as one\s+atomic\s+manifest unit'
+        $terminalSpec | Should Match 'all\s+eight notices as one\s+atomic\s+manifest unit'
         $builder | Should Match '\[switch\]\$Offline'
         $builder | Should Match 'schemaVersion\s*=\s*5'
         $builder | Should Match "pairingContract\s*=\s*'generated-raw-sha256-v1'"

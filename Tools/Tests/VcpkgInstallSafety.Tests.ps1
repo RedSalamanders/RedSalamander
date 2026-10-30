@@ -591,6 +591,131 @@ Describe 'Vcpkg dependency pins' {
         }
         $errorMessage | Should BeNullOrEmpty
     }
+
+    It 'keeps the ARM64 compatibility overlay on the selected registry source and notices' -Skip:(-not $toolCheckoutAtPin) {
+        $baseline = Get-Content -LiteralPath (Join-Path $toolCheckout 'versions/baseline.json') -Raw | ConvertFrom-Json
+        $overlayRoot = Join-Path $repoRoot 'Build/vcpkg-ports/aws-c-common'
+        $registryRoot = Join-Path $toolCheckout 'ports/aws-c-common'
+        $overlay = Get-Content -LiteralPath (Join-Path $overlayRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+        $registry = Get-Content -LiteralPath (Join-Path $registryRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+        $overlay.version | Should Be $baseline.default.'aws-c-common'.baseline
+        $overlay.version | Should Be $registry.version
+        ($overlay | ConvertTo-Json -Depth 8 -Compress) | Should Be ($registry | ConvertTo-Json -Depth 8 -Compress)
+        $overlayPort = [IO.File]::ReadAllText((Join-Path $overlayRoot 'portfile.cmake'))
+        $registryPort = [IO.File]::ReadAllText((Join-Path $registryRoot 'portfile.cmake'))
+        $archivePattern = '(?m)^\s*SHA512\s+([0-9a-f]{128})\s*$'
+        $expected = [regex]::Match($registryPort, $archivePattern)
+        $actual = [regex]::Match($overlayPort, $archivePattern)
+        $expected.Success | Should Be $true
+        $actual.Success | Should Be $true
+        $actual.Groups[1].Value | Should Be $expected.Groups[1].Value
+        $overlayPatch = [IO.File]::ReadAllText((Join-Path $overlayRoot 'disable-internal-crt-option.patch')).Replace("`r`n", "`n")
+        $registryPatch = [IO.File]::ReadAllText((Join-Path $registryRoot 'disable-internal-crt-option.patch')).Replace("`r`n", "`n")
+        $overlayPatch | Should Be $registryPatch
+        $overlayPort | Should Match 'msvc1452-arm64\.cmake'
+        $overlayPort | Should Match '"\$\{SOURCE_PATH\}/NOTICE"'
+    }
+}
+
+Describe 'Hosted vcpkg install parity' {
+    It 'executes the real CI argument selection with pinned triplets, ARM64 ports and failure propagation' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml')
+        $step = [Array]::IndexOf($workflow, '      - name: Install dependencies')
+        $step | Should BeGreaterThan 0
+        $body = [Collections.Generic.List[string]]::new()
+        $reading = $false
+        for ($index = $step + 1; $index -lt $workflow.Count; ++$index) {
+            $line = $workflow[$index]
+            if ($line -eq '        run: |') { $reading = $true; continue }
+            if (-not $reading) { continue }
+            if ($line.StartsWith('      - name:')) { break }
+            if ($line.StartsWith('          ')) { $body.Add($line.Substring(10)) }
+            elseif ([string]::IsNullOrWhiteSpace($line)) { $body.Add('') }
+            else { throw "Unexpected install-step indentation: $line" }
+        }
+        $scriptText = $body -join "`n"
+        $launcher = '& "$env:VCPKG_ROOT\vcpkg.exe" @vcpkgArguments'
+        $import = 'Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force'
+        $scriptText.Contains($launcher) | Should Be $true
+        $scriptText.Contains($import) | Should Be $true
+        # Only resolve the real helper import and intercept the native launch.
+        # All actual workflow branches, arguments, path guards and exit checks execute.
+        $escapedModule = $helperModule.Replace("'", "''")
+        $scriptText = $scriptText.Replace($import, "Import-Module '$escapedModule' -Scope Local")
+        $scriptText = $scriptText.Replace($launcher, 'Invoke-CapturedVcpkg @vcpkgArguments')
+        $fixture = New-RSTemporaryVcpkgInstallSafetyRoot
+        $names = @('GITHUB_ACTIONS','GITHUB_WORKSPACE','MSBUILD_EXE_PATH','VCPKG_ROOT','VCPKG_REGISTRY_ROOT','VCPKG_INSTALLED_DIR','VCPKG_DEFAULT_TRIPLET')
+        $saved = @{}
+        foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+        $savedLastExitCode = $global:LASTEXITCODE
+        try {
+            $workspace = Join-Path $fixture 'workspace with spaces'
+            $registry = Join-Path $fixture 'registry'
+            $installation = Join-Path $fixture 'selected VS 18'
+            [void][IO.Directory]::CreateDirectory($workspace)
+            [void][IO.Directory]::CreateDirectory((Join-Path $registry 'versions/a-'))
+            [void][IO.Directory]::CreateDirectory((Join-Path $registry 'triplets'))
+            [void][IO.Directory]::CreateDirectory((Join-Path $installation 'VC/Auxiliary/Build'))
+            [IO.File]::WriteAllText((Join-Path $workspace 'vcpkg.json'), '{"name":"fixture","dependencies":[{"name":"aws-c-common","version>=":"1.0.3"}]}')
+            [IO.File]::WriteAllText((Join-Path $registry 'versions/a-/aws-c-common.json'), '{"versions":[{"version":"1.0.3","port-version":0}]}')
+            [IO.File]::WriteAllText((Join-Path $registry 'triplets/x64-windows.cmake'), "set(VCPKG_TARGET_ARCHITECTURE x64)`n")
+            [IO.File]::WriteAllText((Join-Path $registry 'triplets/arm64-windows.cmake'), "set(VCPKG_TARGET_ARCHITECTURE arm64)`n")
+            [IO.File]::WriteAllText((Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt'), '14.52.37025')
+            $env:GITHUB_ACTIONS = 'true'
+            $env:GITHUB_WORKSPACE = $workspace
+            $env:MSBUILD_EXE_PATH = Join-Path $installation 'MSBuild/Current/Bin/amd64/MSBuild.exe'
+            $env:VCPKG_ROOT = Join-Path $fixture 'tool'
+            $env:VCPKG_REGISTRY_ROOT = $registry
+            $env:VCPKG_INSTALLED_DIR = Join-Path $workspace '.build/installed'
+            function Invoke-CapturedVcpkg {
+                $script:capturedInstallArguments = @($args)
+                $global:LASTEXITCODE = $script:capturedInstallExitCode
+            }
+            foreach ($case in @(
+                    @{Triplet='x64-windows';Scope='x64';Ports=$false;Exit=0;Error=$null},
+                    @{Triplet='arm64-windows';Scope='arm64';Ports=$true;Exit=0;Error=$null},
+                    @{Triplet='arm64-windows';Scope='arm64';Ports=$true;Exit=17;Error='exit code 17'},
+                    @{Triplet='x86-windows';Scope='';Ports=$false;Exit=0;Error='Unsupported CI triplet'})) {
+                $env:VCPKG_DEFAULT_TRIPLET = $case.Triplet
+                $script:capturedInstallArguments = @()
+                $script:capturedInstallExitCode = $case.Exit
+                $errorMessage = $null
+                try { & ([scriptblock]::Create($scriptText)) } catch { $errorMessage = $_.Exception.Message }
+                if ($case.Error) { $errorMessage | Should Match $case.Error }
+                else { $errorMessage | Should BeNullOrEmpty }
+                if (-not $case.Scope) {
+                    $script:capturedInstallArguments.Count | Should Be 0
+                    continue
+                }
+                $arguments = $script:capturedInstallArguments
+                $arguments[0] | Should Be 'install'
+                ($arguments -contains "--vcpkg-root=$registry") | Should Be $true
+                $tripletIndex = [Array]::IndexOf($arguments, '--triplet')
+                $tripletIndex | Should BeGreaterThan 0
+                $arguments[$tripletIndex + 1] | Should Be $case.Triplet
+                $directory = Join-Path $workspace ('.build/vcpkg-triplets/' + $case.Scope)
+                ($arguments -contains "--overlay-triplets=$directory") | Should Be $true
+                $portsArgument = '--overlay-ports=' + (Join-Path $workspace 'Build/vcpkg-ports')
+                ($arguments -contains $portsArgument) | Should Be $case.Ports
+                $tripletText = [IO.File]::ReadAllText((Join-Path $directory ($case.Triplet + '.cmake')))
+                $tripletText | Should Match 'VCPKG_PLATFORM_TOOLSET_VERSION "14\.52"'
+                $tripletText | Should Match ([regex]::Escape($installation.Replace('\','\\')))
+            }
+        } finally {
+            foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+            $global:LASTEXITCODE = $savedLastExitCode
+            Remove-Item -LiteralPath $fixture -Recurse -Force
+        }
+    }
+
+    It 'invalidates the hosted dependency cache when the overlays or their helper change' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml')
+        $keys = @($workflow | Where-Object { $_ -match '^\s*key:.*-vcpkg-' })
+        $keys.Count | Should Be 1
+        foreach ($input in @('vcpkg.json','vcpkg-tool.json','vcpkg-install.ps1','Tools/Modules/Build/VcpkgInstallSafety.psm1','Build/vcpkg-ports/**')) {
+            $keys[0].Contains("'$input'") | Should Be $true
+        }
+    }
 }
 
 Describe 'MSBuild manifest install toolset pin' {

@@ -315,10 +315,10 @@ The user's accepted workflow replaces unconditional full-test iteration. Use `Te
 
 Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)
 and [Specs/Core/Core_Changes.md](Specs/Core/Core_Changes.md). Do not hand-edit generated `CHANGELOG.md` entries.
-Run `Tools/Test-Changelog.ps1` while editing. Before PrePush and final handoff, and immediately after every
-merge/rebase that introduces fragments, run `Tools/Fold-Changelog.ps1` and then `Tools/Fold-Changelog.ps1 -Check`,
-even for one fragment. Include the generated changelog and fragment removals in the current change; do not wait
-for release batches or a separate cleanup PR. Validation is read-only; `-WhatIf` previews folding without writes.
+Keep the fragment in the change: never fold it in a feature change and never edit `CHANGELOG.md`. Fragments are
+folded on `main` after merge by `Tools/Submit-ChangelogFold.ps1`, which opens a fold pull request of its own. Run
+`Tools/Test-Changelog.ps1` while editing; PrePush and CI run it with `-Base`, which refuses any `CHANGELOG.md` change
+that is not an exact fold of fragments already on `main`. Validation is read-only.
 
 ## Shared native build policy (2026-10-28)
 

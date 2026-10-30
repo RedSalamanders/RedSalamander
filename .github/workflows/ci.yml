@@ -32,6 +32,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # A pull request needs its merge commit and first parent; a push needs the history back to the tip it replaced. The
+          # strings matter: a bare 0 is falsy, so "push && 0 || 2" would give every push a two-commit checkout.
+          fetch-depth: ${{ github.event_name == 'push' && '0' || '2' }}
+
+      - name: Changelog changes are fragments or exact folds
+        shell: pwsh
+        env:
+          # A pull request's merge commit compares with its first parent; a push compares with the tip it replaced.
+          CHANGELOG_BASE: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD^1' }}
+        run: ./Tools/Test-Changelog.ps1 -Base $env:CHANGELOG_BASE
 
       - name: Verify migrated code no longer uses comctl subclass manager
         shell: pwsh

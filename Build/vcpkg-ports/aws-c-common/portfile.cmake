@@ -2,13 +2,13 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO awslabs/aws-c-common
     REF "v${VERSION}"
-    SHA512 f9cd67637383d86353cef7d230051aad67574f9b5c72d6260713f9d8b1139d730ce56d3cc8b646bc0344d99c8cae79d3cfca86c1994207c1b74b9bb814645f4b
+    SHA512 05cd13aa8c55762345fd7754c1c393b6db48918cb4b4335ade9a75dfbcf20802fa00f8d2e25fa2826b054ffdfe98c60bc50f6c7bb686c1d7df790741bbf8244a
     HEAD_REF master
     PATCHES
         disable-internal-crt-option.patch # Disable internal crt option because vcpkg contains crt processing flow
 )
 
-# Local compatibility overlay of registry tree a4b4f45d42ae3a7ce2c5040af18cc9bb1b0113a6.
+# Local compatibility overlay of registry tree 97972a5d5632f2cf4a5d649e8b261f89059643bc.
 # Keep the upstream source/version/hash and CRT patch. The helper checks the actual
 # compiler/target before applying the narrowly reproduced ARM64 backend workaround.
 file(APPEND "${SOURCE_PATH}/CMakeLists.txt" "\ninclude(\"${CMAKE_CURRENT_LIST_DIR}/msvc1452-arm64.cmake\")\n")
@@ -37,5 +37,6 @@ vcpkg_copy_pdbs()
 vcpkg_install_copyright(
     FILE_LIST
         "${SOURCE_PATH}/LICENSE"
+        "${SOURCE_PATH}/NOTICE"
         "${SOURCE_PATH}/THIRD-PARTY-LICENSES.txt"
 )

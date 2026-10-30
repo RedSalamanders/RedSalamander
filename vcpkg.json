@@ -1,12 +1,12 @@
 {
   "name": "red-salamander",
   "description": "RedSalamander Project",
-  "homepage": "https://github.com/Redsalamanderse/RedSalamander",
-  "builtin-baseline": "d53f25d56e7806475054f624439e93ee38e1e81d",
+  "homepage": "https://github.com/RedSalamanders/RedSalamander",
+  "builtin-baseline": "aeb162b71d47950344248a4ebcac733e12f8a992",
   "dependencies": [
     {
       "name": "7zip",
-      "version>=": "26.3"
+      "version>=": "26.5"
     },
     {
       "name": "wil",
@@ -22,7 +22,7 @@
     },
     {
       "name": "sqlite3",
-      "version>=": "3.53.4#1"
+      "version>=": "3.54.1"
     },
     {
       "name": "libraw",
@@ -42,7 +42,7 @@
     },
     {
       "name": "curl",
-      "version>=": "8.22.0#1",
+      "version>=": "8.23.0",
       "features": [
         "ssl",
         "ssh",

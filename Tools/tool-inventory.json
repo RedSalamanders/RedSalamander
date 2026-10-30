@@ -241,7 +241,7 @@
       "sideEffects": [
         "Atomically replaces CHANGELOG.md and removes only successfully folded fragment files; Check and WhatIf are read-only"
       ],
-      "usage": "See Changes/README.md and the command help; run before final handoff and after integration.",
+      "usage": "See Changes/README.md and the command help; run on the default branch after merge, normally through Submit-ChangelogFold.ps1, never in a feature change.",
       "prerequisites": [
         "PowerShell 7"
       ],
@@ -255,10 +255,41 @@
       "path": "Tools/Fold-Changelog.ps1",
       "usedBy": [
         "Manual developer/integration use",
-        "Test-Changes.ps1",
+        "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Immediately fold validated Changes fragments into CHANGELOG.md with preview and a read-only zero-fragment gate."
+      "purpose": "Fold validated Changes fragments into CHANGELOG.md on the default branch, with preview and a read-only zero-fragment gate."
+    },
+    {
+      "lifecycle": "active",
+      "visibility": "public",
+      "replacement": null,
+      "ownerSpec": "Specs/Core/Core_Changes.md",
+      "kind": "command",
+      "sideEffects": [
+        "Fetches the default branch, folds it in a temporary worktree outside the caller's checkout, commits there and pushes changelog/fold-<commit> to the remote; the caller's branch, index and files never change",
+        "Opens the fold pull request with gh unless PushOnly; WhatIf pushes nothing"
+      ],
+      "usage": "See Changes/README.md and the command help; run after merges to fold the default branch's fragments through a pull request of its own.",
+      "prerequisites": [
+        "PowerShell 7",
+        "Git",
+        "Authenticated gh unless PushOnly"
+      ],
+      "tests": [
+        "Tools/Tests/Changelog.Tests.ps1"
+      ],
+      "outputs": [
+        "Console summary naming the fold branch and pull request",
+        "Pushed changelog/fold-<commit> branch and its pull request"
+      ],
+      "path": "Tools/Submit-ChangelogFold.ps1",
+      "usedBy": [
+        "Manual developer/integration use",
+        "Tools/Test-ChangelogWorkflow.ps1",
+        "Tools/Tests/Changelog.Tests.ps1"
+      ],
+      "purpose": "Fold the default branch's Changes fragments on a fold branch and open its pull request without touching the caller's checkout."
     },
     {
       "lifecycle": "active",
@@ -267,9 +298,10 @@
       "ownerSpec": "Specs/Core/Core_Changes.md",
       "kind": "command",
       "sideEffects": [],
-      "usage": "See Changes/README.md and the command help; run before final handoff and after integration.",
+      "usage": "See Changes/README.md and the command help; run while editing, and with -Base before a push (PrePush) and in CI.",
       "prerequisites": [
-        "PowerShell 7"
+        "PowerShell 7",
+        "Git for -Base"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -280,9 +312,12 @@
       "path": "Tools/Test-Changelog.ps1",
       "usedBy": [
         "Manual developer use",
+        "Test-Changes.ps1",
+        ".github/workflows/ci.yml",
+        "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Read-only shared fragment-format validation and optional fully-folded handoff check."
+      "purpose": "Read-only shared fragment-format validation, the exact-fold comparison of CHANGELOG.md with a base ref, and an optional check of a finished fold."
     },
     {
       "lifecycle": "active",
@@ -291,11 +326,12 @@
       "ownerSpec": "Specs/Core/Core_Changes.md",
       "kind": "command",
       "sideEffects": [
-        "Creates and removes only uniquely owned fixture children inside the authorized test sandbox"
+        "Creates and removes only uniquely owned fixture children, including local Git fixture repositories and a bare remote, inside the authorized test sandbox"
       ],
-      "usage": "See Changes/README.md and the command help; run before final handoff and after integration.",
+      "usage": "See Changes/README.md and the command help; run through the Changelog Pester adapter.",
       "prerequisites": [
-        "PowerShell 7"
+        "PowerShell 7",
+        "Git"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -316,11 +352,12 @@
       "ownerSpec": "Specs/Core/Core_Changes.md",
       "kind": "module",
       "sideEffects": [
-        "Exported fold writes changelog and removes folded inputs; import and validation are read-only"
+        "Exported fold writes changelog and removes folded inputs; import, validation and the base comparison (read-only Git commands) never write"
       ],
-      "usage": "See Changes/README.md and the command help; run before final handoff and after integration.",
+      "usage": "See Changes/README.md and the command help; imported by the changelog commands and the shared behavior suite.",
       "prerequisites": [
-        "PowerShell 7"
+        "PowerShell 7",
+        "Git for the base comparison"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -336,7 +373,7 @@
         "Tools/Test-Changelog.ps1",
         "Tools/Test-ChangelogWorkflow.ps1"
       ],
-      "purpose": "Shared fragment validation, deterministic merge and recoverable staged folding, identical across the five projects."
+      "purpose": "Shared fragment validation, exact-fold comparison with a base ref, deterministic merge and recoverable staged folding, identical across the six projects."
     },
     {
       "lifecycle": "active",
@@ -347,7 +384,7 @@
       "sideEffects": [
         "Creates test-owned scratch below the marked sandbox"
       ],
-      "usage": "See Changes/README.md and the command help; run before final handoff and after integration.",
+      "usage": "See Changes/README.md and the command help; run with the tooling Pester suites.",
       "prerequisites": [
         "PowerShell 7"
       ],

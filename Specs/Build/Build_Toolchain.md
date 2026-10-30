@@ -640,7 +640,7 @@ SDK compilation and the consumer Release build are required. The `aws-sdk-cpp`
 floor equals that override, and the pair moves only together after that
 re-audit. The vcpkg tool and registry baseline pins name one commit whose
 version database contains every current manifest floor and override, including
-the SQLite (`3.53.4#1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
+the SQLite (`3.54.1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
 See [the SDK's CRT source](https://github.com/aws/aws-sdk-cpp/tree/1.11.880/crt/aws-crt-cpp)
 and [the paired CRT declarations](https://github.com/awslabs/aws-crt-cpp/blob/v0.43.4/include/aws/crt/Types.h).
 
@@ -860,10 +860,10 @@ Active Windows compilation/tooling workflows use the local setup-msvc composite 
 
 ### MSVC 14.52 ARM64 AWS backend compatibility
 
-ARM64 dependency installation selects Build/vcpkg-ports/aws-c-common, preserving aws-c-common 1.0.0, its upstream SHA512 and existing CRT patch. A compiler/architecture-scoped CMake helper applies /Ob1 only to source/hash_table.c under the exact MSVC C compiler 19.52.37025.0, retaining /O2 elsewhere. The exact 14.52.37025 command crashes in lookup3.inl:640 with C1001; removing /MP, using /Zi, or /O1 does not repair it, while /Ob1 and /Ob0 compile. Canonical package/product builds remain required. This ARM64-only dependency change has no effect on the x64 size/performance experiment. Native ARM64/S3 performance remains unmeasured. The CMake regression checks affected and other compiler/architecture/file combinations; retained repros live under .build/msvc1452/compiler-repro-attempt2/3.
+ARM64 dependency installation selects Build/vcpkg-ports/aws-c-common, preserving the pinned registry's aws-c-common 1.0.3 source, upstream SHA512, CRT patch and notices. Update that overlay with the selected registry: the older 1.0.0 overlay lacks error helpers required by aws-c-io 1.1.0 and fails to link the October dependency graph. Local and hosted installs use the same compiler-pinned triplet and ARM64 port overlay; the CI dependency cache includes their helper and overlay bytes. A compiler/architecture-scoped CMake helper applies /Ob1 only to source/hash_table.c under the exact MSVC C compiler 19.52.37025.0, retaining /O2 elsewhere. The exact 14.52.37025 command crashes in lookup3.inl:640 with C1001; removing /MP, using /Zi, or /O1 does not repair it, while /Ob1 and /Ob0 compile. Canonical package/product builds remain required. This ARM64-only dependency change has no effect on the x64 size/performance experiment. Native ARM64/S3 performance remains unmeasured. The CMake regression checks affected and other compiler/architecture/file combinations; retained repros live under .build/msvc1452/compiler-repro-attempt2/3.
 
 Workflow-selected MSBuild paths may use a custom or hosted temporary installation root. Discovery validates the executable's VS18-or-newer version, invariant MSBuild.exe binary identity and standard MSBuild/Current/Bin host layout; it must not require a Microsoft Visual Studio parent-directory name. Required MSVC14.52/compiler/SDK checks remain independent and mandatory.
 
 The [native policy, console and dependency-path contract](Build_ConsoleAndPaths.md) owns /Wall without /WX, zero-warning acceptance, Debug/ASan symbols, Release-only ICF, common terminal results and verified short dependency folders.
 
-The native build-policy candidate locks DxUi API4 at `1f385ee013189e967ad5298f2311801a066de2c7`. It preserves this consumer's existing API adoption while repairing native warning diagnostics and stable payload type identity under Release COMDAT folding. Restore and compile matching headers/archive from this exact lock. The indexed NativeBuildPolicyCoherence plan records outstanding product and desktop-focus qualification; this pin selection alone is not a green product receipt.
+The native build-policy candidate uses DxUi API4 at the exact commit recorded in `Dependencies/DxUi.lock.json`. It preserves this consumer's existing API adoption while repairing native warning diagnostics and stable payload type identity under Release COMDAT folding. Restore and compile matching headers/archive from this exact lock. The indexed NativeBuildPolicyCoherence plan records outstanding product and desktop-focus qualification; this pin selection alone is not a green product receipt.
