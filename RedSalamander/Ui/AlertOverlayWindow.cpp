@@ -3106,6 +3106,26 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
 bool DebugRunAlertOverlayIdentitySelfTest(HWND parent, AlertOverlayIdentitySelfTestResult& out) noexcept
 {
     out = {};
+    // Translated captions and arbitrary IDs cannot determine button roles. The safe
+    // default remains Cancel even after options and OK are placed before it.
+    AlertModel orderingModel{};
+    orderingModel.buttons = {
+        {.id = 91u, .label = L"Annuler", .primary = true, .role = AlertButtonRole::Cancel},
+        {.id = 92u, .label = L"Valider", .primary = false, .role = AlertButtonRole::Accept},
+        {.id = 93u, .label = L"Autre", .primary = false},
+    };
+    AlertOverlay ordering;
+    ordering.SetModel(std::move(orderingModel));
+    const auto& ordered = ordering.GetModel().buttons;
+    if (ordered.size() != 3u || ordered[0].id != 93u || ordered[1].id != 92u || ordered[2].id != 91u ||
+        ordering.GetFocusedButtonId() != std::optional<uint32_t>{91u})
+        return false;
+    ordering.ClearFocusedButton();
+    for (const uint32_t expected : {93u, 92u, 91u, 93u})
+        if (! ordering.FocusNextButton(false) || ordering.GetFocusedButtonId() != std::optional<uint32_t>{expected})
+            return false;
+    if (! ordering.FocusNextButton(true) || ordering.GetFocusedButtonId() != std::optional<uint32_t>{91u})
+        return false;
     if (! parent || IsWindow(parent) == FALSE || GetWindowThreadProcessId(parent, nullptr) != GetCurrentThreadId())
         return false;
 

@@ -1,0 +1,8 @@
+{
+  "scope": "3 passed, 0 failed; focused rate-window display. Not Full qualification. Later source change only corrects Commands mirror Tab expectation; runtime FileOps implementation unchanged.",
+  "run_id": "20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5\\artifacts\\selftest\\last_run",
+  "source_snapshot_id": "37cf299a10b2d2246e90a58db7007d02d927704042331a0f8064d2c3bb9fe1c7",
+  "capture_kind": "Actual deterministic harness application capture with synthetic fixtures; no manual desktop capture.",
+  "build_receipt_id": "a5b09c3c7b659d8103a9bd2ad5b90a34f8d718880dfa94176bc10c56daab1d5e"
+}

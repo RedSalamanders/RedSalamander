@@ -3010,14 +3010,14 @@ void BatchRenameWindow::BuildUi()
     _hideUnchangedCheck->SetChecked(_hideUnchangedRows);
     _hideUnchangedCheck->SetOnToggled([this](bool checked) { SetHideUnchangedRows(checked); });
 
-    _cancelButton = _root->AddChild<Button>(LoadBatchRenameString(IDS_BATCH_RENAME_BTN_CANCEL, L"Cancel"));
-    _cancelButton->SetEnabled(false);
-    _cancelButton->SetOnClick([this] { RequestTaskCancel(); });
-
     _renameButton = _root->AddChild<Button>(LoadBatchRenameString(IDS_BATCH_RENAME_BTN_RENAME, L"Rename"));
     _renameButton->SetPrimary(true);
     _renameButton->SetEnabled(false);
     _renameButton->SetOnClick([this] { static_cast<void>(ExecuteRename()); });
+
+    _cancelButton = _root->AddChild<Button>(LoadBatchRenameString(IDS_BATCH_RENAME_BTN_CANCEL, L"Cancel"));
+    _cancelButton->SetEnabled(false);
+    _cancelButton->SetOnClick([this] { RequestTaskCancel(); });
 
     _dxHost.SetRoot(std::move(_rootStorage));
     ApplyPreviewGridSettings();
@@ -3295,13 +3295,13 @@ void BatchRenameWindow::Layout() noexcept
     if (_cancelButton)
     {
         const float buttonTop = footerTop + (footerHeight - buttonHeight) / 2.0f;
-        _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonTop, buttonLeft - gap, buttonTop + buttonHeight));
+        _cancelButton->SetBounds(D2D1::RectF(buttonLeft, buttonTop, bounds.right - outer, buttonTop + buttonHeight));
     }
 
     if (_renameButton)
     {
         const float buttonTop = footerTop + (footerHeight - buttonHeight) / 2.0f;
-        _renameButton->SetBounds(D2D1::RectF(buttonLeft, buttonTop, bounds.right - outer, buttonTop + buttonHeight));
+        _renameButton->SetBounds(D2D1::RectF(cancelLeft, buttonTop, buttonLeft - gap, buttonTop + buttonHeight));
     }
 }
 

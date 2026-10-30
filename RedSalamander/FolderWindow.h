@@ -207,6 +207,7 @@ struct ArchivePackPromptDebugSnapshot
     size_t selectedPackerIndex     = 0u;
     bool deleteAfterPacking        = false;
     bool commandButtonsFitInClient = false;
+    bool commandButtonsUseStandardOrder = false;
 };
 
 [[nodiscard]] HWND GetArchivePackPromptHandle() noexcept;
@@ -234,6 +235,7 @@ struct ArchiveUnpackPromptDebugSnapshot
     std::wstring maskText;
     bool maskHelpVisible           = false;
     bool commandButtonsFitInClient = false;
+    bool commandButtonsUseStandardOrder = false;
 };
 
 [[nodiscard]] HWND GetArchiveUnpackPromptHandle() noexcept;

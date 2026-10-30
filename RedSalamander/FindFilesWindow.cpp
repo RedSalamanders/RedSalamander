@@ -2799,15 +2799,6 @@ void FindFilesWindow::BuildUi() noexcept
     _subtractButton->SetVisible(false);
     _subtractButton->SetMnemonic(L'S');
 
-    _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
-    _cancelButton->SetOnClick([this]
-    {
-        _cancelRequestedUi = true;
-        _session.Cancel();
-        RefreshStatusText();
-        UpdateActionButtons();
-    });
-
     _openButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_FIND_ACTION_OPEN));
     _openButton->SetMnemonic(L'O');
     _openButton->SetOnClick([this] { OpenSelectedResult(false); });
@@ -2821,6 +2812,15 @@ void FindFilesWindow::BuildUi() noexcept
     _helpButton->SetAccessibleName(LoadStringResource(nullptr, IDS_FIND_ACTION_HELP_TOOLTIP));
     _helpButton->SetAccessibleHelpText(LoadStringResource(nullptr, IDS_FIND_RESULT_ACTIONS_HELP_TEXT));
     _helpButton->SetOnClick([this] { ShowResultActionsHelp(); });
+
+    _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+    _cancelButton->SetOnClick([this]
+    {
+        _cancelRequestedUi = true;
+        _session.Cancel();
+        RefreshStatusText();
+        UpdateActionButtons();
+    });
 
     _statusText = _root->AddChild<StatusStrip>();
     _statusText->SetFontRole(DxUi::FontRole::Small);
@@ -4283,19 +4283,11 @@ void FindFilesWindow::Layout() noexcept
     buttonX += buttonWidth + gap;
     _parentButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
 
-    const float helpButtonLeft = std::max(margin, right - helpButtonWidth);
+    const float cancelLeft = std::max(margin, right - buttonWidth);
+    const float helpButtonLeft = std::max(margin, (_session.IsActive() ? cancelLeft - gap : right) - helpButtonWidth);
     _helpButton->SetBounds(rect(helpButtonLeft, y, helpButtonLeft + helpButtonWidth, y + buttonHeight));
-    float rightActionLeft = helpButtonLeft;
-    if (_session.IsActive())
-    {
-        const float cancelLeft = std::max(margin, helpButtonLeft - gap - buttonWidth);
-        _cancelButton->SetBounds(rect(cancelLeft, y, cancelLeft + buttonWidth, y + buttonHeight));
-        rightActionLeft = cancelLeft;
-    }
-    else
-    {
-        _cancelButton->SetBounds(rect(helpButtonLeft, y, helpButtonLeft, y + buttonHeight));
-    }
+    const float rightActionLeft = helpButtonLeft;
+    _cancelButton->SetBounds(rect(cancelLeft, y, _session.IsActive() ? cancelLeft + buttonWidth : cancelLeft, y + buttonHeight));
 
     const float statusLeft  = buttonX + buttonWidth + gap;
     const float statusRight = std::max(statusLeft, rightActionLeft - gap);

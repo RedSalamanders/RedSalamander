@@ -2312,6 +2312,9 @@ private:
             button.id      = id;
             button.label   = label;
             button.primary = thisResult == primaryResult;
+            button.role = thisResult == HOST_PROMPT_RESULT_CANCEL ? RedSalamander::Ui::AlertButtonRole::Cancel
+                        : thisResult == HOST_PROMPT_RESULT_OK ? RedSalamander::Ui::AlertButtonRole::Accept
+                                                             : RedSalamander::Ui::AlertButtonRole::Option;
             model.buttons.push_back(std::move(button));
         };
 

@@ -1,0 +1,226 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-30T17:56:35.4534693Z",
+  "run_ended_utc": "2026-10-30T17:57:05.9710222Z",
+  "duration_ms": 30518,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander-worktrees\\delete-ui-20261030\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_app_prompt_uses_alert_overlay_window,cmd_app_prompt_access_keys_route_expected_actions,cmd_preferences_dialog_shell_uses_dxui_header_footer_without_visible_legacy_shell_controls,cmd_preferences_dialog_general_tab_traversal_live_dx_interaction,cmd_pane_pack_prompt_uses_dxui_unique_archive_and_packer_extensions,cmd_pane_unpack_prompt_uses_dxui_destination_unpacker_and_mask,cmd_pane_batchRename_theme_accessibility_snapshot,cmd_pane_find_dialog_tab_traversal_matches_expected_order,cmd_pane_find_dialog_escape_from_dx_control_closes_cancel,cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states,cmd_pane_fileops_conflict_hosted_decision_keys,cmd_pane_fileops_decision_mirror_real_focus",
+  "exit_code": 0,
+  "passed": 12,
+  "failed": 0,
+  "skipped": 0,
+  "total": 12,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 14,
+    "test_root": "Z:\\RedSalamander.Perf",
+    "run_id": "20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa",
+    "allowed_run_ids": [
+      "20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\unified-ci",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\arm64-compiler-scope.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-explain.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083308",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083544",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083656",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-extraction-20261021T213312",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-probes-b00db1bb2b6948ed891c1f3a7ae31bb3",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 14373,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_batchRename_theme_accessibility_snapshot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 73,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_shell_uses_dxui_header_footer_without_visible_legacy_shell_controls",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 350,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_preferences_dialog_general_tab_traversal_live_dx_interaction",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 359,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_find_dialog_escape_from_dx_control_closes_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 64,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_find_dialog_tab_traversal_matches_expected_order",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 831,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1034,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 994,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_decision_mirror_real_focus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1508,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_app_prompt_uses_alert_overlay_window",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 641,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_app_prompt_access_keys_route_expected_actions",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 806,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_pack_prompt_uses_dxui_unique_archive_and_packer_extensions",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 186,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_unpack_prompt_uses_dxui_destination_unpacker_and_mask",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 257,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

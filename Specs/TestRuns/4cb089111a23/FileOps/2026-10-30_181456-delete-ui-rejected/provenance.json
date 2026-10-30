@@ -1,0 +1,9 @@
+{
+  "scope": "Rejected focused safety-family attempt; retained failure, not superseded by a later pass",
+  "native_run_id": "20261030T171034Z-95484-f9bdfbb8187d40cd8f13d94763bba159",
+  "build_receipt_id": "8908d264b5df21bcf7a94ce29cad612293033a7f23eefc8a7b37310b056c50e4",
+  "command": "Tools/Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOpsFamily_SafetyRemediationContracts -Configuration Debug -TestRoot Z:/RedSalamander.Perf",
+  "diagnosis": "The navigation fixture pressed Right from Cancel expecting a focus change; Cancel is now rightmost. Repair tests held Left and Right return without activation or invocation.",
+  "source_snapshot_id": "f980aa7dc22edd989ab9d0586abbf366a7d1106c31d428f0afe6de85aaebc679",
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T171034Z-95484-f9bdfbb8187d40cd8f13d94763bba159\\artifacts\\selftest\\last_run"
+}

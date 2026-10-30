@@ -1,0 +1,75 @@
+{
+    "run_started_utc": "2026-10-30T20:26:10.562Z",
+    "duration_ms": 101614,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_SafetyRemediationContracts",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261030T201842Z-73480-01ceb4e920a745a8b0cc19c4dc5ac184\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 87312,
+            "passed": 8,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_SafetyRemediationContracts",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 2672,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_SafetyRemediationContracts",
+                    "status": "passed",
+                    "duration_ms": 36750,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ConflictMessageText",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ReviewRemediationContracts",
+                    "status": "passed",
+                    "duration_ms": 40859,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_RepeatDecisionContracts",
+                    "status": "passed",
+                    "duration_ms": 2750,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_SkipCountingPresentation",
+                    "status": "passed",
+                    "duration_ms": 3297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_PermanentDeleteCompletionProgress",
+                    "status": "passed",
+                    "duration_ms": 484,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 109,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0
+}
