@@ -1384,10 +1384,23 @@ running, terminal-owned, completed-idle and informational states, observes scala
 building a snapshot, and retains paired CPU/memory/handle observations with worker-barrier caveats.
 
 Ordinary deletion cards expose a localized, accessible item rate alongside item progress
-and the source path. They reserve no byte-throughput graph, graph disclosure or
-empty graph body. Their compact expanded layout keeps the progress bar and actions
-separate from the text rows. Copy/Move retain the saved, initially expanded byte
-graph preference; deleting does not modify that preference.
+and the source path, plus the same hosted throughput disclosure and bounded history used by
+transfer cards. Delete plots and labels use items/second, never bytes/second. The rate sampler
+uses published recursive completed-file plus completed-folder receipts when supported, with
+legacy item progress as a fallback; it must not sample only selected-root completions while
+the card reports recursive removals. Pause and decision waits reset the live measurement;
+silent periods decay to zero. Graph space is reserved below every fact/path row and above
+progress/actions, including while discovery remains open. Copy/Move retain byte units.
+All operations use the saved, initially expanded graph preference. Collapsing the delete graph releases its plot height while retaining the disclosure and rate summary.
+
+## Button placement
+
+Cancel is the last action at the physical right of a decision row; when OK is present it is
+immediately before Cancel, or last when Cancel is absent. Other choices, including More,
+precede them. Shared alerts declare semantic Accept/Cancel roles rather than inspecting
+localized captions or caller-specific IDs. Visual, UIA and Tab/Arrow order agree. Moving a
+button never changes the safe default, Enter action or Escape binding. Narrow layouts wrap
+the same order without clipping actions.
 
 ## User-facing policy
 
@@ -2060,8 +2073,13 @@ space estimate remains a distinct consent, since it is not proof of an actual di
 
 For an exact retained permanent-delete source tree, a provider-proven read-only refusal may offer
 `Permanently delete read-only`. The question explicitly confirms deletion of the item, or the folder
-and all its contents. This is a new explicit, non-repeatable authorization for that selected tree,
-after the initial permanent-delete consent. It preserves opened-object identity checks and never
+and all its contents. This is explicit authorization after the initial permanent-delete consent.
+The Apply to all option remembers the choice only within the current task and matching typed
+source/destination/profile/root scope; files and folders require separate consent. Every later
+selected root must independently prove a read-only blocker before it consumes this choice.
+A generic access-denied result is not classified as read-only merely because the root has a
+read-only attribute. Clear the per-attempt blocker observation before each provider call so a
+later permission failure cannot reuse stale read-only evidence. It preserves opened-object identity checks and never
 turns a generic access-denied error into permission to clear attributes. Known partial deletion
 inside the owned tree may resume after that confirmation; ordinary retries after committed/unknown
 mutations remain prohibited. Skip and Cancel preserve undeleted read-only items and retain actual
@@ -2202,7 +2220,7 @@ Checked File Operations controls, including conflict `Apply to all`, render the 
 existing DirectWrite icon format (`Segoe Fluent Icons` preferred, Unicode fallback) instead of custom
 line geometry. The box fill, border, theme colors, hit target, and state semantics remain unchanged.
 The Recycle-failed escalation prompt never renders `Apply to all`; its Permanent delete grant is
-one-shot for the exact revalidated item. Cancel is the first keyboard/default action, followed by
+one-shot for the exact revalidated item. Cancel remains the default action at the right of the row; other choices precede it, including
 Delete permanently and Skip, so Enter or initial focus cannot authorize deletion. In a task with
 more than one selected item the **More…** menu also offers `Delete all remaining permanently`, the
 explicit task-scoped grant described in `FileSystem_FileOperations.md` (Delete and Recycle). It is
@@ -2230,8 +2248,8 @@ count and/or bytes; unknown facts are omitted rather than estimated. The publish
 | Placeholder hydration | Download and continue | Cancel |
 | EFS encryption cannot be preserved | Copy without encryption (Copy) or Move without encryption (Move); Copy and keep source on Move | Cancel |
 | Metadata loss on Move | Move anyway / Copy and keep source | Cancel |
-| Recycle failure | Cancel / Delete permanently / Skip (More: Delete all remaining permanently, multi-item task) | Cancel |
-| Recycle failure on a location without file identities (I35 R7.3) | Cancel / Delete by name / Skip (More: Delete all remaining by name, multi-item task); the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
+| Recycle failure | Delete permanently / Skip / Cancel (More: Delete all remaining permanently, multi-item task) | Cancel |
+| Recycle failure on a location without file identities (I35 R7.3) | Delete by name / Skip / Cancel (More: Delete all remaining by name, multi-item task); the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
 
 Eligible non-Recycle risks may expose `Apply to all` only for the exact task/risk/destination-root
 scope. Recycle never exposes it; its only broader scope is the explicit More action above. The prompt snapshot includes the deferred-consent marker, known

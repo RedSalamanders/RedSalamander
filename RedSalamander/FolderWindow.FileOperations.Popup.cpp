@@ -449,8 +449,7 @@ constexpr UINT kFileOperationsSpeedLimitPromptDeferredActionMessage = WM_APP + 0
 constexpr std::wstring_view kEllipsisText                           = L"\u2026";
 constexpr float kFileOperationsExpandedCardHeightDip                = 280.0f;
 constexpr float kFileOperationsExpandedTransferCardHeightDip        = 244.0f;
-// Header, three ordinary text rows, a separated progress bar and the action row.
-// Deletion has an item rate; it does not reserve a byte-throughput plot.
+// Delete reserves space for bounded item-throughput history as well as its facts.
 constexpr float kFileOperationsExpandedDeleteCardHeightDip     = 152.0f;
 constexpr int kFileOperationsPopupMinClientHeightDip           = 320;
 constexpr int kFileOperationsPopupFooterOnlyMinClientHeightDip = 96;
@@ -1411,8 +1410,9 @@ struct WholeTaskProgressPresentation final
     result.showDiscoveryActivity =
         result.includeInAggregateCohort && ! task.cancellationRequested && ! task.discoveryClosed && task.discoveryAheadActive && ! task.discoverySkipped;
     result.showTransferProgress = result.includeInAggregateCohort;
-    result.showThroughputGraph =
-        result.includeInAggregateCohort && result.transferActive && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
+    result.showThroughputGraph  = result.includeInAggregateCohort && result.transferActive &&
+                                  (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE ||
+                                   (task.operation == FILESYSTEM_DELETE && (task.completedWorkCountsKnown || task.hasProgressCallbacks)));
 
     // D2-A08: no growing-denominator fraction. Until the total closes the bar is indeterminate (a
     // marquee once transfer is active) and the card shows exact counters instead.
@@ -4011,7 +4011,8 @@ struct WindowedRates final
 {
     // I35 R10.2: the marker shows the published window rate only. It never falls back to an older
     // plotted sample, which would hold a rate through a pause or a stall.
-    return ClampFiniteNonNegative(history.displayedBytesPerSec) + ClampFiniteNonNegative(history.displayedVerificationBytesPerSec);
+    return history.itemRate ? ClampFiniteNonNegative(history.displayedItemsPerSec)
+                            : ClampFiniteNonNegative(history.displayedBytesPerSec) + ClampFiniteNonNegative(history.displayedVerificationBytesPerSec);
 }
 
 void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, double sample, double verificationSample, float hue, bool stalled = false) noexcept
@@ -4213,6 +4214,12 @@ void NoteByteReportCadence(FileOperationsPopupInternal::RateHistory& history, UL
     return FormatStringResource(nullptr, IDS_FMT_FILEOPS_RATE_WITH_STALL, rateText, LoadStringResource(nullptr, stallTextId));
 }
 
+[[nodiscard]] std::wstring FormatRateLabelText(const FileOperationsPopupInternal::RateHistory& history)
+{
+    return history.itemRate ? FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_ITEMS, history.displayedItemsPerSec)
+                            : FormatRateLabelText(CurrentBandwidthForGraphMarker(history), history.stallKind);
+}
+
 struct RateUpdateTotals final
 {
     uint64_t maxCallbackSilenceMs = 0;
@@ -4231,6 +4238,7 @@ void AdvanceRateHistory(FileOperationsPopupInternal::RateHistory& history,
     using FileOperationsPopupInternal::RateStallKind;
     const bool blocked  = IsRateSamplingBlocked(task);
     const bool itemRate = task.operation == FILESYSTEM_DELETE;
+    history.itemRate    = itemRate;
 
     if (! history.initialized)
     {
@@ -5602,7 +5610,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
                 snap.completedBytes = std::max(snap.completedBytes, snap.completedWorkBytes);
                 const uint64_t workItems =
                     std::min<uint64_t>(snap.completedWorkFileCount, ULONG_MAX) + std::min<uint64_t>(snap.completedWorkFolderCount, ULONG_MAX);
-                snap.completedItems = std::max(snap.completedItems, static_cast<unsigned long>(std::min<uint64_t>(workItems, ULONG_MAX)));
+                snap.completedItems = static_cast<unsigned long>(std::min<uint64_t>(workItems, ULONG_MAX));
             }
             snap.discoveredBytesKnown = task->_discoveredBytesKnown.load(std::memory_order_acquire);
             snap.exactDiscoveredBytes = task->_fileWorkBytesKnownScopes == task->_fileWorkScopes.size() && ! task->_fileWorkScopes.empty()
@@ -5937,7 +5945,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
                                                            task.operation == FILESYSTEM_DELETE || task.totalBytes == 0u
                                                        ? 0.0
                                                        : 64.0 * 1024.0 * 1024.0;
-        history.displayedItemsPerSec             = task.operation == FILESYSTEM_DELETE ? 24.0 : 0.0;
+        history.itemRate                         = task.operation == FILESYSTEM_DELETE;
+        history.displayedItemsPerSec             = history.itemRate && task.started && ! task.paused && ! task.conflict.active && ! task.finished ? 24.0 : 0.0;
         history.displayedVerificationBytesPerSec = task.verificationActive ? 128.0 * 1024.0 * 1024.0 : 0.0;
         history.smoothedEtaSeconds               = task.verificationActive ? 32.0 : 80.0;
         history.hasSmoothedEta                   = task.started && ! task.finished && ! task.paused && task.discoveryClosed;
@@ -5955,8 +5964,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
         }
         for (size_t i = 0u; i < history.count; ++i)
         {
-            history.samples[i] =
-                task.operation == FILESYSTEM_DELETE || task.totalBytes == 0u || ! task.started ? 0.0f : static_cast<float>((48u + i % 23u) * 1024u * 1024u);
+            history.samples[i]             = history.itemRate                          ? static_cast<float>(18u + i % 23u)
+                                             : task.totalBytes == 0u || ! task.started ? 0.0f
+                                                                                       : static_cast<float>((48u + i % 23u) * 1024u * 1024u);
             history.verificationSamples[i] = task.verificationActive ? history.samples[i] * 2.0f : 0.0f;
             history.hues[i]                = 210.0f;
             history.hueWeightCounts[i]     = static_cast<uint8_t>(task.inFlightFileCount);
@@ -6030,6 +6040,12 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
         {
             std::scoped_lock lock(task->_inFlightFilesMutex);
+            if (task->_operation == FILESYSTEM_DELETE && task->_completedWorkCountsKnown.load(std::memory_order_acquire))
+            {
+                const uint64_t files   = std::min<uint64_t>(task->_completedWorkFileCount.load(std::memory_order_acquire), ULONG_MAX);
+                const uint64_t folders = std::min<uint64_t>(task->_completedWorkFolderCount.load(std::memory_order_acquire), ULONG_MAX);
+                snap.completedItems    = static_cast<unsigned long>(std::min<uint64_t>(files + folders, ULONG_MAX));
+            }
             snap.discoveryClosed      = task->_discoveryClosed.load(std::memory_order_acquire);
             snap.discoveredTotalBytes = task->_discoveredTotalBytes.load(std::memory_order_acquire);
             snap.discoveredBytesKnown = task->_discoveredBytesKnown.load(std::memory_order_acquire);
@@ -7314,7 +7330,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
             const auto found = _rates.find(task.taskId);
             const RateHistory empty{};
             const auto& history = found != _rates.end() ? found->second : empty;
-            rate                = FormatRateLabelText(CurrentBandwidthForGraphMarker(history), history.stallKind);
+            rate                = FormatRateLabelText(history);
             if (! task.cancellationRequested && task.discoveryClosed && task.totalBytes > 0u && history.hasSmoothedEta && history.smoothedEtaSeconds > 0.0 &&
                 task.completedBytes <= task.totalBytes)
                 eta = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(SaturatingCeilNonNegativeToUint64(history.smoothedEtaSeconds)));
@@ -7396,7 +7412,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
     hostedGraph.rainbowMode                    = rainbowMode;
     hostedGraph.perStreamBands                 = perStreamBands;
     hostedGraph.currentBandwidthBytesPerSecond = CurrentBandwidthForGraphMarker(history);
-    hostedGraph.currentBandwidthText           = FormatRateLabelText(hostedGraph.currentBandwidthBytesPerSecond, history.stallKind);
+    hostedGraph.currentBandwidthText           = FormatRateLabelText(history);
     hostedGraph.currentBandwidthTrailingText =
         currentValueTrailingText.empty() ? LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE) : std::wstring(currentValueTrailingText);
 #ifdef ENABLE_TESTS
@@ -7801,10 +7817,10 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
     const size_t count        = primaryCount + (hasMore ? 1u : 0u);
     std::array<std::wstring, TaskSnapshot::kMaxConflictActions + 1u> labels;
     for (size_t index = 0u; index < primaryCount; ++index)
-        labels[index] =
+        labels[index + (hasMore ? 1u : 0u)] =
             ConflictActionText(ConflictActionFromRaw(task.conflict.primaryActions[index]), static_cast<ConflictBucket>(task.conflict.bucket), task.operation);
     if (hasMore)
-        labels[primaryCount] = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE);
+        labels[0] = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE);
     auto* format = _controlsHost.GetTextFormat(DxUi::FontRole::Body,
                                                DWRITE_TEXT_ALIGNMENT_CENTER,
                                                DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
@@ -7839,7 +7855,7 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
                 labels[index].data(), static_cast<UINT32>(labels[index].size()), format, widthDip - 24.0f, 4096.0f, text.put()));
             DWRITE_TEXT_METRICS metrics{};
             RETURN_IF_FAILED(text->GetMetrics(&metrics));
-            const float horizontalPadding = index == primaryCount ? 52.0f : 24.0f;
+            const float horizontalPadding = hasMore && index == 0u ? 52.0f : 24.0f;
             sizes[index] =
                 D2D1::SizeF(std::min(widthDip, std::max(80.0f, std::ceil(metrics.widthIncludingTrailingWhitespace * scale) / scale + horizontalPadding)),
                             std::max(32.0f, std::ceil(metrics.height * scale) / scale + 16.0f));
@@ -7858,7 +7874,7 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
                                             D2D1::SizeF(8.0f, 6.0f),
                                             bounds,
                                             arranged,
-                                            rightToLeft ? DxUi::FlowDirection::RightToLeft : DxUi::FlowDirection::LeftToRight);
+                                            DxUi::FlowDirection::LeftToRight); // Cancel remains physically rightmost in every locale.
     }();
     if (FAILED(hr))
     {
@@ -7879,6 +7895,21 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
         cached.count          = count;
         cached.rightToLeft    = rightToLeft;
         return hr;
+    }
+    // This consumer keeps the standard terminal actions at the physical right,
+    // including a wrapped last row. Text direction remains locale-sensitive.
+    for (size_t rowStart = 0u; rowStart < count;)
+    {
+        size_t rowEnd = rowStart + 1u;
+        while (rowEnd < count && bounds[rowEnd].top == bounds[rowStart].top)
+            ++rowEnd;
+        const float offset = std::max(0.0f, widthDip - bounds[rowEnd - 1u].right);
+        for (size_t index = rowStart; index < rowEnd; ++index)
+        {
+            bounds[index].left += offset;
+            bounds[index].right += offset;
+        }
+        rowStart = rowEnd;
     }
     cached.scopeLabel     = scopeLabel;
     cached.scopeHeightDip = scopeHeightDip;
@@ -9411,7 +9442,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const bool summary        = TaskUsesSkippedCountingWorkSummary(task);
                 const float discoveryRows = ResolveWholeTaskProgressPresentation(task).showDiscoveryActivity ? 2.0f : 0.0f;
                 const float bodyRows      = 1.0f + discoveryRows + (preparing ? 1.0f : summary ? 1.0f : 2.0f);
-                h = std::max(DipsToPixels(kFileOperationsExpandedDeleteCardHeightDip, _dpi), DipsToPixels(82.0f, _dpi) + bodyRows * baseLineH);
+                const float graphHeight =
+                    ResolveWholeTaskProgressPresentation(task).showThroughputGraph ? (IsTaskThroughputExpanded(task.taskId) ? 112.0f : 56.0f) : 0.0f;
+                h = std::max(DipsToPixels(kFileOperationsExpandedDeleteCardHeightDip + graphHeight, _dpi),
+                             DipsToPixels(82.0f + graphHeight, _dpi) + bodyRows * baseLineH);
             }
             if (! displayCollapsed && ! task.conflict.active && task.operation != FILESYSTEM_COPY && task.operation != FILESYSTEM_MOVE &&
                 TaskUsesSkippedCountingWorkSummary(task))
@@ -11939,7 +11973,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else if (! priorityTransfer)
                         {
-                            const std::wstring rateText = FormatRateLabelText(CurrentBandwidthForGraphMarker(graphHistory), graphHistory.stallKind);
+                            const std::wstring rateText = FormatRateLabelText(graphHistory);
                             const std::wstring etaText  = graphEtaText.empty() ? LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE) : graphEtaText;
                             const std::wstring summary  = std::format(L"{0} · {1}", rateText, etaText);
                             static_cast<void>(
@@ -12037,10 +12071,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                                           buttonsTop + DipsToPixels(local.bottom, _dpi));
                                 button.hit.taskId           = task.taskId;
                                 button.hit.promptGeneration = task.conflict.generation;
-                                if (index < primaryActionCount)
+                                const bool hasMore          = actions.count > primaryActionCount;
+                                if (! hasMore || index > 0u)
                                 {
-                                    button.hit.kind = PopupHitTest::Kind::TaskConflictAction;
-                                    button.hit.data = static_cast<uint32_t>(RawConflictAction(ConflictActionFromRaw(task.conflict.primaryActions[index])));
+                                    const size_t primaryIndex = index - (hasMore ? 1u : 0u);
+                                    button.hit.kind           = PopupHitTest::Kind::TaskConflictAction;
+                                    button.hit.data =
+                                        static_cast<uint32_t>(RawConflictAction(ConflictActionFromRaw(task.conflict.primaryActions[primaryIndex])));
                                     _buttons.push_back(button);
                                     DrawButton(button, _buttonSmallFormat.get(), actions.labels[index]);
                                 }
@@ -15664,6 +15701,18 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             result.taskUnderGraphProgressBarCount = 1u;
         }
 
+        float lastActionRight = -1.0f;
+        float cancelRight     = -1.0f;
+        for (const auto& button : _buttons)
+        {
+            if (button.hit.taskId != result.taskId ||
+                (button.hit.kind != PopupHitTest::Kind::TaskConflictAction && button.hit.kind != PopupHitTest::Kind::TaskConflictMore))
+                continue;
+            lastActionRight = std::max(lastActionRight, button.bounds.right);
+            if (button.hit.kind == PopupHitTest::Kind::TaskConflictAction && button.hit.data == static_cast<uint32_t>(ConflictAction::Cancel))
+                cancelRight = button.bounds.right;
+        }
+        result.conflictCancelRightmost     = cancelRight >= 0.0f && std::abs(cancelRight - lastActionRight) <= 1.0f;
         result.conflictOverflowActionCount = std::min(taskIt->conflict.overflowActionCount, taskIt->conflict.overflowActions.size());
         for (size_t i = 0; i < result.conflictOverflowActionCount && i < result.conflictOverflowActions.size(); ++i)
         {
@@ -17584,7 +17633,7 @@ bool DebugRunFileOperationsRateModel(FileSystemOperation operation,
         observation.displayedVerificationBytesPerSec = history.displayedVerificationBytesPerSec;
         observation.displayedItemsPerSec             = history.displayedItemsPerSec;
         observation.stallKind                        = history.stallKind;
-        observation.rateLabelText                    = FormatRateLabelText(CurrentBandwidthForGraphMarker(history), history.stallKind);
+        observation.rateLabelText                    = FormatRateLabelText(history);
         observation.hasSmoothedEta                   = history.hasSmoothedEta;
         observation.smoothedEtaSeconds               = history.smoothedEtaSeconds;
         observation.sampleCount                      = history.count;

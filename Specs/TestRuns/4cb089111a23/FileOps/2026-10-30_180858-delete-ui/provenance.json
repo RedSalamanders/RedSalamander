@@ -1,0 +1,10 @@
+{
+  "scope": "Focused FileOps permanent-delete completion and consent; not Full qualification",
+  "candidate_branch": "ej/delete-ui-20261030",
+  "git_head": "8f0563355cee5b80b2080902ddcd5c1a58bd5219",
+  "source_snapshot_id": "f980aa7dc22edd989ab9d0586abbf366a7d1106c31d428f0afe6de85aaebc679",
+  "build_receipt_id": "a38b7ef26ba1f1b2b080bc17646e767889f07042e93362c0c127717cc6d88957",
+  "native_run_id": "20261030T170443Z-70940-c5f51fc1260a4d9d849a7fe432f0d683",
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T170443Z-70940-c5f51fc1260a4d9d849a7fe432f0d683\\artifacts\\archive\\4cb089111a23\\FileOps\\2026-10-30_180858",
+  "sandbox_audit_note": "14 unrelated existing CI/RedMonitor sandbox entries were retained; the focused cases passed."
+}

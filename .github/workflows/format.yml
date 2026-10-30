@@ -1,0 +1,49 @@
+name: Commit PR formatting
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Same-repository open PR to format and recheck
+        type: number
+        required: true
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: format-pr-${{ inputs.pr_number }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  format:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Enable long Windows checkout paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: RedSalamanders/.github
+          ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+          path: .ci-engine
+          persist-credentials: false
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_PR: ${{ inputs.pr_number }}
+        run: ./.ci-engine/Tools/Invoke-Formatting.ps1 -Root . -CommitFormatting -PullRequest $env:CI_PR
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: formatting-commit-patch
+          path: .build/ci/format.patch
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14

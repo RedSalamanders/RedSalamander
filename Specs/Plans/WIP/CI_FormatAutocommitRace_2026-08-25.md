@@ -1,10 +1,10 @@
 # CI Format Autocommit Race Hardening
 
-> **NON-NORMATIVE ACTIVE PLAN.** Sole remaining owner for the `.github/workflows/ci.yml` `format` job. The 2026-08-04 write-up is frozen history at `Specs/Plans/Done/CI_FormatAutocommitRace_2026-08-04.md`. Historical root `plans/012-format-autocommit-race.md` is `Specs/Plans/Done/AdvisorPlan_012-format-autocommit-race_2026-06-11.md`. Do not recreate `plans/`. This file does not authorize a push or workflow change outside the exact format-job boundary.
+> **NON-NORMATIVE RESIDUAL VALIDATION PLAN.** [I55](CI_OrganizationStandardization_2026-10-29.md) owns the shared check-only PR formatter and explicit manual writer. This record retains unmatched operator witnesses; its old automatic mutation design is superseded. The 2026-08-04 write-up is frozen history at `Specs/Plans/Done/CI_FormatAutocommitRace_2026-08-04.md`. Historical root `plans/012-format-autocommit-race.md` is `Specs/Plans/Done/AdvisorPlan_012-format-autocommit-race_2026-06-11.md`. Do not recreate `plans/` or a second formatting implementation.
 
 ## Status
 
-- **State:** ACTIVE
+- **State:** ACTIVE residual operator validation; implementation superseded by I55 on 2026-10-30
 - **Priority:** P3 workflow safety
 - **Planned at:** `56db9af9d0a19b4b3f375e16989591f29e014a6c`
 - **Ownership boundary:** same-repository/fork eligibility, stale-head-safe publication, narrow staging, and concurrency behavior for the `.github/workflows/ci.yml` `format` job
@@ -12,6 +12,10 @@
 - **Authoritative specs:** contributor/CI documentation only when publication behavior changes; current workflow text is not a product contract
 
 ## Remaining outcomes
+
+Current routing: I55's v1.0.3 engine has real-Git narrow/literal staging, no-op and fork-refusal controls and bounded exact-head confirmation. RedMonitor PR 12 proved a formatting-only bot commit and successful fresh tooling, CodeQL and dependency-review checks on that exact head; it closed without merging. Preserve unmatched live stale-head/fork/push witnesses as validation work here. They do not authorize the former automatic bot model or waive runtime/build evidence obligations.
+
+The following 2026-08-25 findings describe the superseded implementation and must not be treated as a current source inventory.
 
 Re-verified 2026-08-25: checkout still uses `ref: ${{ github.head_ref || github.ref }}` (`.github/workflows/ci.yml` ~`:41`) and the bot still stages with `git add -A` (~`:88`).
 

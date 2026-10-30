@@ -1,123 +1,125 @@
 name: CI
-
-run-name: >-
-  ${{ github.event_name == 'pull_request'
-  && 'Suite PR on x64 Debug + ARM64 Debug (pull request)'
-  || format('Suite PR on x64 + ARM64, Debug + Release ({0} {1})', github.event_name == 'push' && 'push to' || 'dispatch on', github.ref_name) }}
-
-"on":
-  push:
-    branches: [main, master]
+on:
   pull_request:
-    branches: [main, master]
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
-
+    inputs:
+      pr_number:
+        description: PR to recheck after an explicit formatting commit
+        type: string
+        required: true
+      expected_head:
+        description: Exact new PR head SHA
+        type: string
+        required: true
 permissions:
   contents: read
-
-# A newer push to the same PR or branch supersedes the running gate.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event_name == 'push' && 'main-coordinator' || github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
-
 jobs:
-  migration-guards:
-    runs-on: windows-latest
+  resolve:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+    outputs:
+      head: ${{ steps.pr.outputs.head }}
+      base: ${{ steps.pr.outputs.base }}
+      check_id: ${{ steps.pr.outputs.check_id }}
+      codeql_id: ${{ steps.pr.outputs.codeql_id }}
+      dependency_id: ${{ steps.pr.outputs.dependency_id }}
     steps:
       - name: Enable long Windows checkout paths
+        if: runner.os == 'Windows'
         shell: pwsh
         run: git config --global core.longpaths true
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: RedSalamanders/.github
+          ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+          path: .ci-engine
           persist-credentials: false
-          # A pull request needs its merge commit and first parent; a push needs the history back to the tip it replaced. The
-          # strings matter: a bare 0 is falsy, so "push && 0 || 2" would give every push a two-commit checkout.
-          fetch-depth: ${{ github.event_name == 'push' && '0' || '2' }}
-
-      - name: Changelog changes are fragments or exact folds
+      - id: pr
         shell: pwsh
         env:
-          # A pull request's merge commit compares with its first parent; a push compares with the tip it replaced.
-          CHANGELOG_BASE: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD^1' }}
-        run: ./Tools/Test-Changelog.ps1 -Base $env:CHANGELOG_BASE
-
-      - name: Verify migrated code no longer uses comctl subclass manager
-        shell: pwsh
-        run: .\Tools\Verify-NoSubclassManager.ps1
-
-      - name: Verify comctl report-surface audit
-        shell: pwsh
-        run: .\Tools\Audit-ComctlReportSurfaces.ps1
-
-      - name: Verify visible native surface audit
-        shell: pwsh
-        run: .\Tools\Audit-VisibleNativeSurfaces.ps1
-
-  format:
-    runs-on: windows-latest
-    steps:
-      - name: Enable long Windows checkout paths
-        shell: pwsh
-        run: git config --global core.longpaths true
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.head_ref || github.ref }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Install pinned formatter
-        shell: pwsh
-        run: ./Tools/Install-ClangFormat.ps1
-
-      - name: Check changed native sources
-        shell: pwsh
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $base = $env:BASE_SHA
-          if ([string]::IsNullOrWhiteSpace($base) -or $base -match '^0+$') {
-            $base = (git rev-parse HEAD^).Trim()
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the comparison for manual formatting validation.' }
-          }
-          $changed = @(git diff --name-only --diff-filter=ACMR "$base...HEAD")
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate changed native sources.' }
-          $sources = @($changed | Where-Object { $_ -match '^(Common|Plugins|PoC|Red[^/]+|Tests|Tools)/.*\.(?:cpp|h)$' })
-          $failed = @()
-          foreach ($source in $sources) {
-            & .build/format/clang_format/data/bin/clang-format.exe --dry-run --Werror --style=file $source
-            if ($LASTEXITCODE -ne 0) { $failed += $source }
-          }
-          if ($failed.Count) { throw "Formatting differs in: $($failed -join ', ')" }
-          Write-Host "Formatting passes for $($sources.Count) changed native files; archived evidence is excluded."
-          $global:LASTEXITCODE = 0
-
-  # Pull requests build one Debug profile per architecture on native runners; pushes to main add
-  # both Release profiles. Every job runs Suite PR: the standalone test executables and tooling
-  # contracts, about ten minutes, no in-product self-test suites and no classification reruns.
-  # Suite CI (the in-product suites, one to four hours per profile) runs nightly from
-  # nightly-ci.yml; ASan Debug runs weekly from asan.yml, never on pull requests or pushes.
-  native:
-    strategy:
-      fail-fast: false
-      matrix:
-        include: >-
-          ${{ fromJSON(github.event_name == 'pull_request'
-          && '[{"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Debug"},
-          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"}]'
-          || '[{"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Debug"},
-          {"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Release"},
-          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"},
-          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Release"}]') }}
-    uses: ./.github/workflows/build-reusable.yml
+          GH_TOKEN: ${{ github.token }}
+          CI_PR: ${{ inputs.pr_number }}
+          CI_HEAD: ${{ inputs.expected_head }}
+        run: ./.ci-engine/Tools/Resolve-PrCheck.ps1 -PullRequest $env:CI_PR -ExpectedHead $env:CI_HEAD
+  checks:
+    needs: resolve
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'))
+    uses: RedSalamanders/.github/.github/workflows/pr.yml@c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
     with:
-      configuration: ${{ matrix.configuration }}
-      platform: ${{ matrix.platform }}
-      native_runner: ${{ matrix.runner }}
-      run_full_tests: true
-      test_suite: PR
-      upload_build_output: false
+      engine_ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+      head: ${{ github.event.pull_request.head.sha || needs.resolve.outputs.head }}
+      base: ${{ github.event.pull_request.base.sha || needs.resolve.outputs.base }}
+    permissions:
+      contents: read
+  security-recheck:
+    needs: resolve
+    if: github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'
+    uses: RedSalamanders/.github/.github/workflows/security.yml@c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+    with:
+      engine_ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+      head: ${{ needs.resolve.outputs.head }}
+      base: ${{ needs.resolve.outputs.base }}
+      pr_number: ${{ inputs.pr_number }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+  report:
+    needs: [resolve, checks, security-recheck]
+    if: always() && github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Enable long Windows checkout paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: RedSalamanders/.github
+          ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+          path: .ci-engine
+          persist-credentials: false
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_CHECK_ID: ${{ needs.resolve.outputs.check_id }}
+          CI_RESULT: ${{ needs.checks.result }}
+          CODEQL_CHECK_ID: ${{ needs.resolve.outputs.codeql_id }}
+          DEPENDENCY_CHECK_ID: ${{ needs.resolve.outputs.dependency_id }}
+          CODEQL_RESULT: ${{ needs.security-recheck.outputs.codeql_result || 'failure' }}
+          DEPENDENCY_RESULT: ${{ needs.security-recheck.outputs.dependency_result || 'failure' }}
+        run: |
+          # Complete every exact-head check even when another check fails.
+          $failed = $false
+          foreach ($check in @(
+            @{Id=$env:CI_CHECK_ID;Kind='CI';Result=$env:CI_RESULT},
+            @{Id=$env:CODEQL_CHECK_ID;Kind='CodeQL';Result=$env:CODEQL_RESULT},
+            @{Id=$env:DEPENDENCY_CHECK_ID;Kind='Dependency';Result=$env:DEPENDENCY_RESULT}
+          )) {
+            try { ./.ci-engine/Tools/Complete-PrCheck.ps1 -CheckId $check.Id -Kind $check.Kind -Result $check.Result }
+            catch { Write-Host $_.Exception.Message; $failed = $true }
+          }
+          if ($failed) { throw 'One or more compiler-free PR rechecks failed.' }
+  coordinate:
+    if: github.event_name == 'push'
+    uses: RedSalamanders/.github/.github/workflows/coordinate.yml@c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+    with:
+      engine_ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+    permissions:
+      contents: read
+      statuses: write
+      actions: write

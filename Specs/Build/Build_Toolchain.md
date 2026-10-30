@@ -1,4 +1,7 @@
 # Official Build Toolchain Identity
+
+Organization CI routing and artifact promotion are owned by [Build_UnifiedCI.md](Build_UnifiedCI.md). The project-local reusable builder below remains available to explicit domain qualification workflows. Native PR matrices, scheduled native builds and release-time rebuilds are retired.
+
 ## External RedMonitor build boundary
 
 RedMonitor is an independent project. RedSalamander vendors only Client.h and its MIT notice under
@@ -323,7 +326,7 @@ its outputs are never package inputs. Every distributable path builds with
   `/p:RSBuildEnableTests=false` to the MSIX packaging project so its project references cannot
   be rebuilt test-enabled.
 - The reusable build workflow fails a call that requests `official_release` together with
-  `run_full_tests` or a configuration other than Release; `release.yml` builds Release and never
+  `run_full_tests` or a configuration other than Release; the unified production adapter builds Release and never
   requests `run_full_tests`.
 - `Common/VersionInfo.rc` stamps every test-enabled first-party executable and DLL with
   `VS_FF_SPECIALBUILD` and the version string `SpecialBuild` =
@@ -517,6 +520,8 @@ CI stages its managed executable-tool checkout and download cache under
 snapshots. The checkout must not appear as an untracked nested repository at
 the product root. Its executable and manifest pins remain separately verified;
 the source-integrity check must not gain an exclusion for a root `vcpkg/` checkout.
+
+Initialize-RSVcpkgToolContext in the canonical VcpkgInstallSafety module owns hosted tool/bootstrap setup. It verifies both Git pins and tools schemas, preserves incomplete restored tool directories, reuses compatible downloads, refuses dirty checkouts and reparse points, and serializes only shared tool provisioning. Ports installation remains in vcpkg-install.ps1 under its selected platform dependency lock. Get-RSVcpkgBuildEnvironment validates the matching installed tree and returns pinned process-local integration; it never installs user-wide MSBuild integration. Automatic test, production and manual native build phases all establish this cold-runner prerequisite before MSBuild.
 
 The `vcpkg-tool.json` executable revision and `vcpkg.json` `builtin-baseline`
 remain independent identities. When a caller materializes them as separate
@@ -796,7 +801,7 @@ The MSBuild executable must match the host: `MSBuild\Current\Bin\arm64\MSBuild.e
 ARM64 hosts and `Bin\amd64\MSBuild.exe` on x64 hosts, with `Bin\MSBuild.exe` (the 32-bit
 x86 MSBuild) only as a last resort. `build.ps1` (every discovery strategy: vswhere, the
 common installation roots, and `VSINSTALLDIR`), `Tools\Restore-DxUi.ps1`, the DxUi
-consumer test, the CI "Select MSBuild" step, and the MSIX packaging job in `release.yml`
+consumer test, the CI "Select MSBuild" step, and explicit MSIX packaging
 all follow that order. The VC toolset
 (`Microsoft.Cpp.ToolsetLocation.props`) derives the compiler host from the MSBuild
 process's own `PROCESSOR_ARCHITECTURE`: it downgrades a requested `arm64` host to x86

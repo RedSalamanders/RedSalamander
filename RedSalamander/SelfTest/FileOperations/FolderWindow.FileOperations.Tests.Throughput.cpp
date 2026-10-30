@@ -1078,11 +1078,20 @@ private:
     const auto deleted = RunRateShape(deletion, FILESYSTEM_DELETE);
     if (deleted.empty() || ! RateNear(deleted[59].displayedItemsPerSec, 30.0, 0.01))
         return std::format(L"30 deletions a second showed {:.2f} items/s", deleted.empty() ? -1.0 : deleted[59].displayedItemsPerSec);
+    if (deleted[59].rateLabelText != FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_ITEMS, deleted[59].displayedItemsPerSec) ||
+        ! RateNear(deleted[59].newestSample, 30.0, 0.01) || deleted.back().displayedItemsPerSec >= deleted[59].displayedItemsPerSec ||
+        deleted[59].displayedBytesPerSec != 0.0)
+        return L"deletion graph/label units or falling item-throughput history were incorrect";
     for (const RateObservation& now : deleted)
     {
         if (now.stallKind != RateStall::None)
             return L"a deletion named a transfer stall";
     }
+    deletion.SetPaused(true);
+    deletion.Run(2'000ull, 0u);
+    const auto pausedDelete = RunRateShape(deletion, FILESYSTEM_DELETE);
+    if (pausedDelete.empty() || pausedDelete.back().displayedItemsPerSec != 0.0 || pausedDelete.back().sampleCount > 180u)
+        return L"paused deletion retained a live item rate or exceeded its bounded graph history";
     return std::nullopt;
 }
 

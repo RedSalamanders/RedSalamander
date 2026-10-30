@@ -1,0 +1,9 @@
+{
+  "scope": "Rejected focused family: 7 passed, 1 failed; not complete qualification. Graph and repeated navigation passed; selected-readonly aggregate failed without sufficient per-field diagnostics.",
+  "run_id": "20261030T171721Z-96612-6e8f28356f5f4ca3ac9219d45c849b99",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T171721Z-96612-6e8f28356f5f4ca3ac9219d45c849b99\\artifacts\\selftest\\last_run",
+  "build_receipt_id": "997f40532547cafd46414f9bd844339ad2aab3967d78cd5e0aa431747047bf48",
+  "source_snapshot_id": "e760ec86d86d6a74d579e87983295160cb2b13ad3733cf62cbef53a05a25ae25",
+  "command": "Tools/Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOpsFamily_SafetyRemediationContracts -Configuration Debug -TestRoot Z:/RedSalamander.Perf",
+  "capture_kind": "Actual application, deterministic synthetic snapshot, no desktop takeover"
+}

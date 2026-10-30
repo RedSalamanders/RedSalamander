@@ -2433,22 +2433,25 @@ private:
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui->language.empty() && g_settings.ui->language != L"system")
         previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui->language};
-    const auto previousTheme    = folder->GetTheme();
-    const bool previousFooter   = operations->GetPopupFooterOnly();
-    const bool previousDensity  = operations->GetPopupCompactDensity();
-    const auto restore          = wil::scope_exit([&]() noexcept
+    const auto previousTheme      = folder->GetTheme();
+    const bool previousFooter     = operations->GetPopupFooterOnly();
+    const bool previousDensity    = operations->GetPopupCompactDensity();
+    const bool previousThroughput = operations->GetPopupThroughputExpanded();
+    const auto restore            = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage));
         folder->ApplyTheme(previousTheme);
         operations->SetPopupFooterOnly(previousFooter);
         operations->SetPopupCompactDensity(previousDensity);
+        operations->SetPopupThroughputExpanded(previousThroughput);
         static_cast<void>(operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u));
     });
-    auto theme                  = ResolveAppTheme(ThemeMode::Dark, L"SkipCountingPresentation");
-    theme.reducedMotionOverride = true;
+    auto theme                    = ResolveAppTheme(ThemeMode::Dark, L"SkipCountingPresentation");
+    theme.reducedMotionOverride   = true;
     folder->ApplyTheme(theme);
     operations->SetPopupFooterOnly(false);
     operations->SetPopupCompactDensity(false);
+    operations->SetPopupThroughputExpanded(true);
     MONITORINFO monitor{};
     monitor.cbSize = sizeof(monitor);
     if (! GetMonitorInfoW(MonitorFromWindow(state.mainWindow, MONITOR_DEFAULTTONEAREST), &monitor))
@@ -2588,6 +2591,8 @@ private:
                 painted.taskId = task.taskId;
                 if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), painted))
                     return reject(L"the painted layout could not be observed");
+                if (scene >= 5u && ! painted.conflictCancelRightmost)
+                    return reject(L"Cancel was not physically rightmost among the decision actions");
                 if (scene < 5u)
                 {
                     const std::wstring operation =
@@ -2598,6 +2603,28 @@ private:
                         painted.taskPaintedBodyBottomPx + 10.0f > painted.taskPaintedActionRowRect.top ||
                         painted.taskPaintedTransferRect.bottom > painted.taskPaintedBodyBottomPx)
                         return reject(std::format(L"{} {} at {} DIP retained duplicate counts or clipped its work summary", culture, names[scene], widthDip));
+                    if (scene == 3u && (painted.hostedGraphControlCount != 1u || ! painted.graphCurrentBandwidthLabelVisible ||
+                                        painted.graphCurrentBandwidthBytesPerSecond != 24.0 || painted.graphPlotRect.bottom <= painted.graphPlotRect.top ||
+                                        painted.graphPlotRect.bottom > painted.taskPaintedActionRowRect.top))
+                        return reject(L"delete item-throughput graph/current marker was missing or overlapped the action row");
+                    if (scene == 3u)
+                    {
+                        const float expandedHeight = painted.taskPaintedCardRect.bottom - painted.taskPaintedCardRect.top;
+                        const PopupSelfTestInvoke toggle{.kind = PopupHitTest::Kind::TaskToggleThroughput, .taskId = task.taskId};
+                        if (! DebugInvokeFileOperationsPopup(popup.get(), toggle))
+                            return reject(L"delete throughput disclosure could not be collapsed");
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        PopupLayoutDebugSnapshot collapsed{};
+                        collapsed.taskId = task.taskId;
+                        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), collapsed) || collapsed.taskThroughputExpanded ||
+                            collapsed.taskPaintedCardRect.bottom - collapsed.taskPaintedCardRect.top >=
+                                expandedHeight - static_cast<float>(MulDiv(32, static_cast<int>(dpi), 96)) ||
+                            collapsed.taskPaintedBodyBottomPx + 10.0f > collapsed.taskPaintedActionRowRect.top)
+                            return reject(L"collapsed delete throughput retained expanded graph space or clipped the body");
+                        if (! DebugInvokeFileOperationsPopup(popup.get(), toggle))
+                            return reject(L"delete throughput disclosure could not be restored");
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                    }
                     if (scene == 4u && painted.taskInlineSpeedRowVisible)
                         return reject(L"a delete route without committed counters showed a fabricated zero rate");
                     std::wstring accessible;
@@ -2644,7 +2671,7 @@ private:
                                                               task.taskId,
                                                               static_cast<uint32_t>(Action::DeleteReadOnly),
                                                               task.conflict.generation);
-                    if (std::ranges::find(offered, deleteAction) == offered.end() || painted.conflictApplyToAllVisible || painted.conflictMoreVisible ||
+                    if (std::ranges::find(offered, deleteAction) == offered.end() || ! painted.conflictApplyToAllVisible || painted.conflictMoreVisible ||
                         ! painted.conflictPrimaryLabelsFit || ! painted.conflictPromptVisibleWithoutClipping ||
                         ! renderer->DebugHostedButtonTextForSelfTest(deleteId, deleteText, deleteName) ||
                         deleteText != LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_DELETE_READONLY) || deleteName != deleteText ||

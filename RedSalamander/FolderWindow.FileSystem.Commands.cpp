@@ -5193,15 +5193,15 @@ private:
         _deleteAfterCheckbox = _root->AddChild<Checkbox>(LoadStringResource(nullptr, IDS_ARCHIVE_PACK_DELETE_AFTER));
         _deleteAfterCheckbox->SetChecked(false);
 
+        _helpButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HELP));
+        _helpButton->SetOnClick([]() noexcept { MessageBeep(MB_ICONINFORMATION); });
+
         _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
         _okButton->SetPrimary(true);
         _okButton->SetOnClick([this] { Confirm(); });
 
         _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
         _cancelButton->SetOnClick([this] { Cancel(); });
-
-        _helpButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HELP));
-        _helpButton->SetOnClick([]() noexcept { MessageBeep(MB_ICONINFORMATION); });
 
         _dxHost.SetRoot(std::move(_rootStorage));
     }
@@ -5343,12 +5343,13 @@ private:
         const float totalButtonsWidth = (kButtonWidthDip * 3.0f) + (kGapDip * 2.0f);
         const float buttonsLeft       = std::max(left, left + ((right - left - totalButtonsWidth) * 0.5f));
         const float buttonsTop        = std::max(y, client.bottom - kMarginDip - kButtonHeightDip);
-        const float cancelLeft        = buttonsLeft + kButtonWidthDip + kGapDip;
-        const float helpLeft          = cancelLeft + kButtonWidthDip + kGapDip;
+        const float helpLeft          = buttonsLeft;
+        const float okLeft            = helpLeft + kButtonWidthDip + kGapDip;
+        const float cancelLeft        = okLeft + kButtonWidthDip + kGapDip;
 
         if (_okButton)
         {
-            _okButton->SetBounds(D2D1::RectF(buttonsLeft, buttonsTop, buttonsLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
         }
         if (_cancelButton)
         {
@@ -5451,6 +5452,9 @@ private:
                 snapshot->deleteAfterPacking                  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
                 const D2D1_RECT_F client                      = _dxHost.GetClientBoundsDip();
                 snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
+                snapshot->commandButtonsUseStandardOrder      = _helpButton && _okButton && _cancelButton &&
+                                                                _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
+                                                                _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
                 return TRUE;
             }
             case ArchivePackPromptDebugCommand::SetPackerIndex: SetPackerIndex(static_cast<size_t>(lParam)); return TRUE;
@@ -5883,13 +5887,6 @@ private:
         _maskHelpLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         _maskHelpLabel->SetVisible(false);
 
-        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
-        _okButton->SetPrimary(true);
-        _okButton->SetOnClick([this] { Confirm(); });
-
-        _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
-        _cancelButton->SetOnClick([this] { Cancel(); });
-
         _helpButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HELP));
         _helpButton->SetOnClick([this]
         {
@@ -5897,6 +5894,13 @@ private:
             UpdateMaskHelpVisibility();
             ResizeForMaskHelpState();
         });
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetOnClick([this] { Confirm(); });
+
+        _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+        _cancelButton->SetOnClick([this] { Cancel(); });
 
         _dxHost.SetRoot(std::move(_rootStorage));
     }
@@ -6073,12 +6077,13 @@ private:
         const float totalButtonsWidth = (kButtonWidthDip * 3.0f) + (kGapDip * 2.0f);
         const float buttonsLeft       = std::max(left, left + ((right - left - totalButtonsWidth) * 0.5f));
         const float buttonsTop        = std::max(y, client.bottom - kMarginDip - kButtonHeightDip);
-        const float cancelLeft        = buttonsLeft + kButtonWidthDip + kGapDip;
-        const float helpLeft          = cancelLeft + kButtonWidthDip + kGapDip;
+        const float helpLeft          = buttonsLeft;
+        const float okLeft            = helpLeft + kButtonWidthDip + kGapDip;
+        const float cancelLeft        = okLeft + kButtonWidthDip + kGapDip;
 
         if (_okButton)
         {
-            _okButton->SetBounds(D2D1::RectF(buttonsLeft, buttonsTop, buttonsLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
         }
         if (_cancelButton)
         {
@@ -6166,6 +6171,9 @@ private:
                 snapshot->maskHelpVisible                         = _maskHelpVisible;
                 const D2D1_RECT_F client                          = _dxHost.GetClientBoundsDip();
                 snapshot->commandButtonsFitInClient               = _lastButtonsBottomDip <= client.bottom;
+                snapshot->commandButtonsUseStandardOrder          = _helpButton && _okButton && _cancelButton &&
+                                                                    _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
+                                                                    _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
                 return TRUE;
             }
             case ArchiveUnpackPromptDebugCommand::SetDestinationPath:

@@ -50,11 +50,19 @@ enum class AlertPresentation : uint8_t
     Delete,
 };
 
+enum class AlertButtonRole : uint8_t
+{
+    Option,
+    Accept,
+    Cancel,
+};
+
 struct AlertButton
 {
     uint32_t id = 0;
     std::wstring label;
-    bool primary = false;
+    bool primary         = false;
+    AlertButtonRole role = AlertButtonRole::Option;
 };
 
 // A button's Alt mnemonic is only an explicit '&' marker in its label (the character after it);
@@ -192,6 +200,17 @@ public:
 
     void SetModel(AlertModel model)
     {
+        // Roles, never translated captions or caller-specific numeric IDs, own order.
+        // Stable insertion keeps options in caller order, then OK, then Cancel.
+        for (size_t index = 1u; index < model.buttons.size(); ++index)
+        {
+            size_t slot = index;
+            while (slot > 0u && model.buttons[slot].role < model.buttons[slot - 1u].role)
+            {
+                std::swap(model.buttons[slot], model.buttons[slot - 1u]);
+                --slot;
+            }
+        }
         _model           = std::move(model);
         _scrollOffsetDip = 0.0f;
 #if defined(ENABLE_TESTS)

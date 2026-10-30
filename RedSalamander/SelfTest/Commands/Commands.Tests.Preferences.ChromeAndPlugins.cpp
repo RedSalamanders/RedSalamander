@@ -623,6 +623,9 @@ namespace
                                   context,
                                   snapshot.shellHostClientWidthPx,
                                   snapshot.shellHostClientHeightPx));
+        state.Require(snapshot.shellApplyButtonBoundsPx.right <= snapshot.shellOkButtonBoundsPx.left &&
+                          snapshot.shellOkButtonBoundsPx.right <= snapshot.shellCancelButtonBoundsPx.left,
+                      L"Preferences footer must place Apply before OK and keep Cancel rightmost.");
         state.Require(snapshot.shellFooterButtonsInsideHost,
                       std::format(L"Preferences DX footer buttons should stay inside the shell host during {}; host={}x{}, OK=({},{}-{},{}), "
                                   L"Cancel=({},{}-{},{}), Apply=({},{}-{},{}).",

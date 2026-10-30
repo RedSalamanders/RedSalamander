@@ -269,7 +269,7 @@ Describe 'Declarative runtime dependency graph' {
 
     It 'makes fresh-extraction app and plugin smoke part of portable packaging' {
         $packageScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\zip\build-zip.ps1') -Raw
-        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\release.yml') -Raw
+        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
         $testTargets = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\Directory.Build.targets') -Raw
         $pluginContractHarness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp') -Raw
         $packageScript | Should Match 'PortablePackageSmoke\.psm1'
@@ -291,7 +291,7 @@ Describe 'Declarative runtime dependency graph' {
         $smokeModule | Should Match 'Build\\SanitizedEnvironment\.psm1'
         $smokeModule | Should Match '(?s)function Invoke-RSPortableSmokeProcess.+?Invoke-RSProcess.+?-Arguments \$ArgumentList'
         $smokeModule | Should Not Match '(?m)^\s*&\s+\$FilePath\s+@ArgumentList'
-        $releaseWorkflow | Should Match 'Installer\\zip\\build-zip\.ps1'
+        $releaseWorkflow | Should Match 'Installer[\\/]zip[\\/]build-zip\.ps1'
     }
 
     It 'publishes portable ZIPs through guarded same-directory atomic replacement' {
@@ -357,8 +357,8 @@ Describe 'MSI and MSIX package source contracts' {
         $resolver = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/ResolveVersionForMsbuild.ps1') -Raw
         $buildScript | Should Match 'Resolve-RSVersionContext'
         $resolver | Should Match 'Resolve-RSVersionContext'
-        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
-        $releaseWorkflow | Should Match 'Resolve-RSVersionContext'
+        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $releaseWorkflow | Should Match 'context\.batch\.buildNumber'
         $releaseWorkflow | Should Not Match 'Get-RSVersionContext'
         $buildScript | Should Not Match 'Use-RSVersionStateLock|Save-RSVersionContext'
         $resolver | Should Not Match 'Use-RSVersionStateLock|Save-RSVersionContext'
@@ -504,8 +504,8 @@ Describe 'MSI and MSIX package source contracts' {
     }
 
     It 'keeps each release MSIX build in one contained packaging transaction' {
-        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\release.yml') -Raw
-        $workflow | Should Match '(?s)Installer\\msix\\build-msix\.ps1.+?-Version "\$\{\{ needs\.version-info\.outputs\.release_version \}\}".+?-Configuration Release.+?-Platform "\$\{\{ matrix\.platform \}\}".+?-MSBuildPath \$env:MSBUILD_EXE_PATH'
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $workflow | Should Not Match 'build-msix|MSBuild.exe|Msi'
         $workflow | Should Not Match '(?m)^\s+MSBuild\.exe\s+@msixParams'
 
         $wrapper = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msix/build-msix.ps1') -Raw
@@ -686,13 +686,12 @@ Describe 'Pinned build-tool and CI identity' {
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2
         $ci | Should Not Match 'Record exact resolved toolchain identity'
         $ci | Should Not Match 'compilerBv'
-        $ci | Should Match 'git checkout --detach \$toolCommit'
-        $ci | Should Match '\$actualToolCommit -ne \$toolCommit'
-        $ci | Should Match '\$toolMetadata = git show "\$\{toolCommit\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ci | Should Match '\$baselineMetadata = git show "\$\{baseline\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ci | Should Match '\$toolSchemaVersion -lt \$baselineSchemaVersion'
-        $ci | Should Match 'Update vcpkg-tool\.json with the baseline'
-        $ci.IndexOf('$toolSchemaVersion -lt $baselineSchemaVersion') | Should BeLessThan $ci.IndexOf('git checkout --detach $toolCommit')
+        $ci | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
+        $bootstrap = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Raw
+        # Real Git/bootstrap negative controls live in VcpkgBootstrap.Tests.ps1.
+        $bootstrap | Should Match '\$toolSchema -lt \$portsSchema'
+        $bootstrap.IndexOf('$toolSchema -lt $portsSchema') | Should BeLessThan $bootstrap.IndexOf("@('checkout', '--detach', " + '$commit)')
+        $bootstrap | Should Match "Update the pins together"
         $ci | Should Not Match 'vcpkg(?:\.exe)?\s+integrate\s+install'
         $ci | Should Match '\$env:ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
         $ci | Should Match '\$env:ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
@@ -708,7 +707,7 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '\$vcpkgTargets\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.targets"'
         $ci | Should Match 'VCPKG_ROOT:.*\\\.build\\vcpkg-tool'
         $ci | Should Match '\.build/vcpkg-tool/downloads'
-        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-tool'''
+        $bootstrap | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$RepoRoot -Child ''\.build/vcpkg-tool'''
         $ci | Should Not Match 'git clone \$toolRepository \.\\\\vcpkg'
         $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
@@ -740,92 +739,56 @@ Describe 'Pinned build-tool and CI identity' {
         # The tool commit's own version database predates the versions vcpkg.json requires; with one checkout vcpkg fails
         # with "no version database entry" (Build_Toolchain.md).
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-registry'''
-        $ci | Should Match 'git worktree add --detach \$registryRoot \$baseline'
-        $ci | Should Match '\$actualBaseline -ne \$baseline'
+        $ci | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
+        $bootstrap = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Raw
+        $bootstrap | Should Match '\.build/vcpkg-registry'
+        $bootstrap | Should Match '''worktree'', ''add'', ''--detach'', \$registryRoot, \$baseline'
+        $bootstrap | Should Match '''rev-parse'', ''HEAD''\)\) -cne \$baseline'
         $ci | Should Match '"--vcpkg-root=\$env:VCPKG_REGISTRY_ROOT"'
         $ci | Should Match '"--downloads-root=\$downloadsRoot"'
-        $ci.IndexOf('git checkout --detach $toolCommit') | Should BeLessThan $ci.IndexOf('git worktree add --detach $registryRoot $baseline')
-        $ci.IndexOf('VCPKG_REGISTRY_ROOT=$registryRoot') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
+        $ci.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
     }
 
-    It 'keeps ARM64 compilation and critical contract suites in the PR gate' {
-        $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
-        $subclassGuard = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Verify-NoSubclassManager.ps1') -Raw
-        $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
-        # The run title names the suite, the profiles, and the trigger instead of the PR title.
-        $ci | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ github\.event_name == 'pull_request'\s*\r?\n\s*&& 'Suite PR on x64 Debug \+ ARM64 Debug \(pull request\)'"
-        $ci | Should Match "\|\| format\('Suite PR on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'push' && 'push to' \|\| 'dispatch on', github\.ref_name\)"
-        $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
-        $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
-        $ci | Should Match 'contents:\s*read'
-        $ci | Should Not Match 'contents:\s*write|git commit|git push|format-all\.ps1'
-        $ci | Should Match 'git diff --name-only --diff-filter=ACMR'
-        # This guard owns workflow wiring; acquisition integrity belongs to ClangFormat.Tests.ps1.
-        # Restrict bootstrap policy to this job because other build dependencies may need Python.
-        $formatMatch = [regex]::Match($ci, '(?ms)^  format:\s*\r?\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*\r?\n|\z)')
-        $formatMatch.Success | Should Be $true
-        $formatJob = $formatMatch.Groups['body'].Value
-        $formatJob | Should Match '(?m)^\s*shell:\s*pwsh\s*\r?\n\s*run:\s*\.[/\\]Tools[/\\]Install-ClangFormat\.ps1\s*$'
-        $formatJob | Should Not Match '(?im)actions/setup-python@|\b(?:python3?(?:\.exe)?|py(?:\.exe)?)\s+-m\s+pip\b|\bpip3?(?:\.exe)?\s+install\b'
-        $ci | Should Match '--dry-run --Werror --style=file'
-        $ci | Should Match '\^\(Common\|Plugins\|PoC\|Red\[\^/\]\+\|Tests\|Tools\)'
-        $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"
-        $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
-        $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
-        $ci | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"'
-        $selfTests | Should Match 'Suite PR is the ten-minute subset of Suite CI: .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
-        $ci | Should Match 'run_full_tests:\s*true'
-        # Pull requests and pushes to main run Suite PR; Suite CI runs nightly from nightly-ci.yml;
-        # Full stays the local closeout gate.
-        $ci | Should Match 'test_suite:\s*PR\s*\r?\n'
-        $ci | Should Not Match 'test_suite:\s*\$\{\{'
-        $nightly = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
-        $nightly | Should Match 'schedule:\s*\r?\n\s*- cron: "47 2 \* \* \*"'
+    It 'keeps native ARM64 regression behind main admission and PRs compiler-free' {
+        $ci = Get-Content (Join-Path $repoRoot '.github/workflows/ci.yml') -Raw
+        $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
+        $pr = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/pr.yml') -Raw
+        $adapter = Get-Content (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $ci | Should Match 'branches: \[main\]'
+        $ci | Should Not Match 'run_full_tests|test_suite:|build-reusable'
+        $pr | Should Match "CI_NATIVE_BUILDS_DISABLED: 'true'"
+        $pr | Should Not Match 'setup-msvc|vcpkg-install|build.ps1'
+        $native | Should Match 'platform: x64'
+        $native | Should Match 'platform: ARM64'
+        $native | Should Match 'runner: windows-11-vs2026-arm'
+        $native | Should Match 'ReleaseTestBuild'
+        $native | Should Match 'ReleaseTest -Platform'
+        $native | Should Match 'needs: \[admission, test-gate\]'
+        $adapter | Should Match "else \{ 'CI' \}"
+        $adapter | Should Match 'Invoke-RSWithHostedTestDesktop'
+        $adapter | Should Match 'QualificationScope -eq ''Full'''
+        $adapter | Should Match 'Import-Module.*HostedTestDesktop'
+        $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('Suite CI on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'schedule' && 'nightly on' \|\| 'dispatch on', github\.ref_name\) \}\}"
-        $nightly | Should Not Match 'pull_request:|push:'
-        $nightly | Should Match 'test_suite:\s*CI\s*\r?\n'
-        $nightly | Should Match 'run_full_tests:\s*true'
-        $nightly | Should Not Match '"configuration": "ASan Debug"|configuration: ASan Debug'
-        $nightly | Should Match 'workflows/nightly-ci\.yml/runs\?branch='
-        # The run-list call needs the Actions read scope; an API failure runs the suite instead of skipping it.
-        $nightly | Should Match '(?ms)^  changes:\s*\r?\n(?:.*?\r?\n)*?    permissions:\s*\r?\n\s*actions: read\s*\r?\n\s*contents: read'
-        $nightly | Should Match 'shell:\s*pwsh'
-        $nightly | Should Match 'status=completed&per_page=1'
-        $nightly | Should Match 'if \(\$LASTEXITCODE -eq 0\)'
-        $nightly | Should Match 'Unreadable workflow history; running\.'
-        $nightly | Should Match 'Test-RSScheduledTestsRequired -EventName \$env:EVENT_NAME -Commit \$env:COMMIT -PreviousRun \$previous'
-        $nightly | Should Match "if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.run != 'false' \}\}"
-        foreach ($profile in @('x64, runner: windows-2025-vs2026, configuration: Debug',
-                'x64, runner: windows-2025-vs2026, configuration: Release',
-                'ARM64, runner: windows-11-vs2026-arm, configuration: Debug',
-                'ARM64, runner: windows-11-vs2026-arm, configuration: Release')) {
-            $nightly | Should Match ([regex]::Escape("- { platform: $profile }"))
-        }
-        $nightly | Should Match '(?ms)^concurrency:\s+group:\s*nightly-ci-\$\{\{ github\.ref \}\}\s+cancel-in-progress:\s*false'
-        $ci | Should Not Match '"configuration": "ASan Debug"'
-        $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
+        $nightly | Should Match 'scope: Full'
+        $nightly | Should Not Match 'schedule:|pull_request:|push:'
+        @((Get-Content (Join-Path $repoRoot 'Tests/test-scopes.json') -Raw|ConvertFrom-Json).prCoverage).Count | Should Be 0
     }
 
-    It 'runs weekly ASan on both architectures with a seeded detector proof before green contracts' {
-        $asan = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\asan.yml') -Raw
-        $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-        $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp') -Raw
-        $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\) \}\}"
-        $asan | Should Match 'schedule:\s*\r?\n\s*- cron: "30 4 \* \* 2"'
+    It 'keeps manual ASan on both native architectures with seeded detector proof' {
+        $asan = Get-Content (Join-Path $repoRoot '.github/workflows/asan.yml') -Raw
+        $qualification = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/qualification.yml') -Raw
+        $adapter = Get-Content (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $harness = Get-Content (Join-Path $repoRoot 'Tests/PluginContractTests/PluginContract.Tests.Runner.cpp') -Raw
         $asan | Should Match 'workflow_dispatch:'
-        # The instrumented build alone takes over an hour: never a pull-request or push lane.
-        $asan | Should Not Match 'pull_request|push:'
-        $asan | Should Match 'configuration:\s*ASan Debug'
-        $asan | Should Match 'run_asan_plugin_contracts:\s*true'
-        $asan | Should Match 'run_full_tests:\s*true'
-        $asan | Should Match 'test_suite:\s*CI\s*\r?\n'
-        $asan | Should Match '- \{ platform: x64, runner: windows-2025-vs2026 \}'
-        $asan | Should Match '- \{ platform: ARM64, runner: windows-11-vs2026-arm \}'
-        $reusable | Should Match '--asan-seed-heap-overflow'
-        $reusable | Should Match 'not rejected by AddressSanitizer'
-        $reusable | Should Match 'AddressSanitizer diagnostic'
+        $asan | Should Not Match 'schedule:|pull_request:|push:'
+        $asan | Should Match 'configuration: ASan Debug'
+        $qualification | Should Match 'platform: x64'
+        $qualification | Should Match 'platform: ARM64'
+        $adapter | Should Match '--asan-seed-heap-overflow'
+        $adapter | Should Match 'seed.exitCode -eq 0'
+        $adapter | Should Match 'not rejected with an AddressSanitizer diagnostic'
+        $adapter.IndexOf('--asan-seed-heap-overflow') | Should BeLessThan $adapter.IndexOf('Invoke-RSWithHostedTestDesktop -Action')
         $harness | Should Match 'RS_ASAN_DEBUG_BUILD'
         $harness | Should Match 'raw\[16\]\s*=\s*0x5Au'
     }

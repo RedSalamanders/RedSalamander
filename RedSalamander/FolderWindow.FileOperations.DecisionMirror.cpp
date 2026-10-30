@@ -632,6 +632,8 @@ struct FolderWindow::FileOperationState::DecisionMirror final
 
         // The engine's published primary actions in order (the popup's presentation-only rule): the
         // published default carries the initial focus ring, so Enter submits it.
+        if (prompt.overflowActionCount > 0u)
+            model.buttons.push_back(AlertButton{.id = kMoreButtonId, .label = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE), .primary = false});
         for (size_t index = 0u; index < prompt.primaryActionCount; ++index)
         {
             const ConflictAction action = prompt.primaryActions[index];
@@ -639,10 +641,9 @@ struct FolderWindow::FileOperationState::DecisionMirror final
                 .id      = kPrimaryButtonBase + static_cast<uint32_t>(action),
                 .label   = FileOperations::FormatConflictActionLabel(action, prompt.bucket, prompt.operation),
                 .primary = action == prompt.defaultAction,
+                .role    = action == ConflictAction::Cancel ? RedSalamander::Ui::AlertButtonRole::Cancel : RedSalamander::Ui::AlertButtonRole::Option,
             });
         }
-        if (prompt.overflowActionCount > 0u)
-            model.buttons.push_back(AlertButton{.id = kMoreButtonId, .label = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE), .primary = false});
         if (prompt.applyToAllEligible)
         {
             model.options.push_back(AlertOption{

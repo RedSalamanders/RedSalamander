@@ -99,11 +99,21 @@
       "purpose": "Compile real dependency-header and first-party warning controls through the pinned DxUi CI binding while retaining default MSVC/SDK external roots.",
       "usage": "Run through the current tooling Pester profile in the governed test sandbox.",
       "usedBy": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
-      "prerequisites": ["PowerShell 7 with Pester", "Windows MSVC 14.52", "Existing marked test sandbox and run context"],
-      "sideEffects": ["Compiles isolated static-library fixtures beneath the current run scratch directory; restores caller environment and uses a private compiler PDB endpoint"],
-      "outputs": ["Pester result and retained native warning-control logs"],
+      "prerequisites": [
+        "PowerShell 7 with Pester",
+        "Windows MSVC 14.52",
+        "Existing marked test sandbox and run context"
+      ],
+      "sideEffects": [
+        "Compiles isolated static-library fixtures beneath the current run scratch directory; restores caller environment and uses a private compiler PDB endpoint"
+      ],
+      "outputs": [
+        "Pester result and retained native warning-control logs"
+      ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
-      "tests": ["self"],
+      "tests": [
+        "self"
+      ],
       "replacement": null
     },
     {
@@ -601,42 +611,43 @@
       "replacement": null
     },
     {
-      "path": "Tools/Modules/Build/DxUiDependency.psm1",
-      "kind": "module",
-      "visibility": "internal",
-      "lifecycle": "active",
-      "purpose": "Validate the clean public DxUi pin and its API revision, restore it under the dependency lease with Git long paths and a sparse checkout, render its bounded update advisory with severity and a product action, and bind and stage linked module provenance.",
-      "usage": "Import through build, snapshot and dependency restore entrypoints.",
-      "usedBy": [
-        "build.ps1",
-        "Installer/zip/build-zip.ps1",
-        "Tools/Modules/Build/BuildEvidence.psm1",
-        "Tools/Modules/Testing/ValidationFingerprint.psm1",
-        "Tools/Restore-DxUi.ps1",
-        "Tools/Tests/BuildEvidence.Tests.ps1",
-        "Tools/Tests/DxUiDependency.Tests.ps1"
-      ],
-      "consumerClosure": "derived-references",
-      "prerequisites": [
-        "Git",
-        "MSBuild for restore",
-        "RedSalamander/RedSalamander.vcxproj and the selected first-party MSBuild compiler-host policy"
-      ],
-      "sideEffects": [
-        "Explicit restore and provenance functions write guarded repository build outputs; identity reads are read-only",
-        "A failed restore removes only the partial source checkout it created, beneath the guarded dependency root",
-        "Evaluates the selected consumer profile and temporarily forwards its compiler host to the canonical identity probe, restoring the caller environment on success or failure"
-      ],
-      "outputs": [
-        "Source/build identities",
-        "Module provenance sidecars"
-      ],
-      "ownerSpec": "Specs/Build/Build_Toolchain.md",
-      "tests": [
-        "Tools/Tests/DxUiDependency.Tests.ps1"
-      ],
-      "replacement": null
-    },
+  "path": "Tools/Modules/Build/DxUiDependency.psm1",
+  "kind": "module",
+  "visibility": "internal",
+  "lifecycle": "active",
+  "purpose": "Validate the clean public DxUi pin and its API revision, restore it under the dependency lease with Git long paths and a sparse checkout, render its bounded update advisory with severity and a product action, and bind and stage linked module provenance.",
+  "usage": "Import through build, snapshot and dependency restore entrypoints.",
+  "usedBy": [
+    "build.ps1",
+    "Installer/zip/build-zip.ps1",
+    "Tools/Modules/Build/BuildEvidence.psm1",
+    "Tools/Modules/Testing/ValidationFingerprint.psm1",
+    "Tools/Restore-DxUi.ps1",
+    "Tools/Tests/BuildEvidence.Tests.ps1",
+    "Tools/Tests/DxUiDependency.Tests.ps1",
+    "Tools/Invoke-ProjectCi.ps1"
+  ],
+  "consumerClosure": "derived-references",
+  "prerequisites": [
+    "Git",
+    "MSBuild for restore",
+    "RedSalamander/RedSalamander.vcxproj and the selected first-party MSBuild compiler-host policy"
+  ],
+  "sideEffects": [
+    "Explicit restore and provenance functions write guarded repository build outputs; identity reads are read-only",
+    "A failed restore removes only the partial source checkout it created, beneath the guarded dependency root",
+    "Evaluates the selected consumer profile and temporarily forwards its compiler host to the canonical identity probe, restoring the caller environment on success or failure"
+  ],
+  "outputs": [
+    "Source/build identities",
+    "Module provenance sidecars"
+  ],
+  "ownerSpec": "Specs/Build/Build_Toolchain.md",
+  "tests": [
+    "Tools/Tests/DxUiDependency.Tests.ps1"
+  ],
+  "replacement": null
+},
     {
       "path": "Tools/Modules/Build/DxUiUpdate.psm1",
       "kind": "module",
@@ -2059,29 +2070,35 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets.",
-      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install.",
+      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds.",
+      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install. Unified native build roles bootstrap then invoke the canonical platform installer before MSBuild.",
       "usedBy": [
         "vcpkg-install.ps1",
         "build.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
-        ".github/workflows/build-reusable.yml"
+        ".github/workflows/build-reusable.yml",
+        "Tools/Invoke-ProjectCi.ps1",
+        ".github/workflows/ghostty-runtime-product-qualification.yml"
       ],
       "prerequisites": [
-        "Visual Studio with MSBuild (vswhere) and its default toolset version file, for the toolset pin"
+        "Visual Studio with MSBuild (vswhere) and its default toolset version file, for the toolset pin",
+        "Git and Windows; network for an uncached pinned tool bootstrap"
       ],
       "sideEffects": [
         "Merge functions copy validated vcpkg outputs into caller-selected safe roots",
-        "The overlay function writes a triplet file beneath the caller-selected directory only when its bytes change"
+        "The overlay function writes a triplet file beneath the caller-selected directory only when its bytes change",
+        "Managed tool bootstrap acquires a repository-local provisioning lock, fetches pinned Git objects and preserves incomplete restored directories beneath .build"
       ],
       "outputs": [
-        "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset"
+        "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset",
+        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1"
       ],
       "replacement": null
     },
@@ -4900,9 +4917,129 @@
       ],
       "replacement": null
     },
-    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Locate short dependency folders, refuse full-identity collisions and bind native compiler-policy file digests.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Modules/Build/DxUiPaths.psm1","kind":"module","usedBy":["Tools/Modules/Build/DxUiDependency.psm1","Tools/Tests/BuildConsoleCheck.ps1","Tools/Tests/VcpkgInstallSafety.Tests.ps1"]},
-    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Exercise zero-warning results, terminal links, launch-command quoting and short dependency identity collision refusal.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsoleCheck.ps1","kind":"test","usedBy":["Tools/Tests/BuildConsole.Tests.ps1"]},
-    {"ownerSpec":"Specs/Build/Build_ConsoleAndPaths.md","replacement":null,"tests":["Tools/Tests/BuildConsole.Tests.ps1"],"sideEffects":["Explicit functions write dependency markers or owned fixture data; import is read-only"],"visibility":"internal","purpose":"Run the owned build-console and dependency-path behavior checks through Pester.","usage":"Use through the existing build/tooling entrypoints.","prerequisites":["PowerShell","Git","Initialized marked test sandbox for fixture tests"],"lifecycle":"active","outputs":["Dependency identity validation or behavior-test evidence"],"path":"Tools/Tests/BuildConsole.Tests.ps1","kind":"test","usedBy":["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1","Tools/Run-AllTests.ps1"]}
+    {
+      "ownerSpec": "Specs/Build/Build_ConsoleAndPaths.md",
+      "replacement": null,
+      "tests": [
+        "Tools/Tests/BuildConsole.Tests.ps1"
+      ],
+      "sideEffects": [
+        "Explicit functions write dependency markers or owned fixture data; import is read-only"
+      ],
+      "visibility": "internal",
+      "purpose": "Locate short dependency folders, refuse full-identity collisions and bind native compiler-policy file digests.",
+      "usage": "Use through the existing build/tooling entrypoints.",
+      "prerequisites": [
+        "PowerShell",
+        "Git",
+        "Initialized marked test sandbox for fixture tests"
+      ],
+      "lifecycle": "active",
+      "outputs": [
+        "Dependency identity validation or behavior-test evidence"
+      ],
+      "path": "Tools/Modules/Build/DxUiPaths.psm1",
+      "kind": "module",
+      "usedBy": [
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Tests/BuildConsoleCheck.ps1",
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
+      ]
+    },
+    {
+      "ownerSpec": "Specs/Build/Build_ConsoleAndPaths.md",
+      "replacement": null,
+      "tests": [
+        "Tools/Tests/BuildConsole.Tests.ps1"
+      ],
+      "sideEffects": [
+        "Explicit functions write dependency markers or owned fixture data; import is read-only"
+      ],
+      "visibility": "internal",
+      "purpose": "Exercise zero-warning results, terminal links, launch-command quoting and short dependency identity collision refusal.",
+      "usage": "Use through the existing build/tooling entrypoints.",
+      "prerequisites": [
+        "PowerShell",
+        "Git",
+        "Initialized marked test sandbox for fixture tests"
+      ],
+      "lifecycle": "active",
+      "outputs": [
+        "Dependency identity validation or behavior-test evidence"
+      ],
+      "path": "Tools/Tests/BuildConsoleCheck.ps1",
+      "kind": "test",
+      "usedBy": [
+        "Tools/Tests/BuildConsole.Tests.ps1"
+      ]
+    },
+    {
+      "ownerSpec": "Specs/Build/Build_ConsoleAndPaths.md",
+      "replacement": null,
+      "tests": [
+        "Tools/Tests/BuildConsole.Tests.ps1"
+      ],
+      "sideEffects": [
+        "Explicit functions write dependency markers or owned fixture data; import is read-only"
+      ],
+      "visibility": "internal",
+      "purpose": "Run the owned build-console and dependency-path behavior checks through Pester.",
+      "usage": "Use through the existing build/tooling entrypoints.",
+      "prerequisites": [
+        "PowerShell",
+        "Git",
+        "Initialized marked test sandbox for fixture tests"
+      ],
+      "lifecycle": "active",
+      "outputs": [
+        "Dependency identity validation or behavior-test evidence"
+      ],
+      "path": "Tools/Tests/BuildConsole.Tests.ps1",
+      "kind": "test",
+      "usedBy": [
+        "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
+        "Tools/Run-AllTests.ps1"
+      ]
+    },
+    {
+      "sideEffects": [
+        "Invokes the reviewed compiler-free subset or canonical native commands",
+        "Creates governed test evidence and build receipts",
+        "Creates qualified internal ZIP artifacts; never publishes or updates source",
+        "Bootstraps the pinned tool/ports and installs selected platform dependencies under .build before native builds"
+      ],
+      "path": "Tools/Invoke-ProjectCi.ps1",
+      "purpose": "Adapt pinned organization CI roles to canonical project build, test and ZIP commands.",
+      "kind": "command",
+      "replacement": null,
+      "prerequisites": [
+        "PowerShell 7.4",
+        "Git",
+        "Exact pinned shared engine",
+        "Matching GitHub-hosted native runner for native phases",
+        "Network for missing pinned build dependencies"
+      ],
+      "lifecycle": "active",
+      "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
+      "visibility": "public",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Native local work uses canonical build/test entry points.",
+      "tests": [
+        "Tools/Tests/ToolingGovernance.Tests.ps1",
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1"
+      ],
+      "usedBy": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/qualify.yml",
+        ".github/workflows/qualification.yml"
+      ],
+      "outputs": [
+        "Governed RedSalamander.Perf evidence and regression receipt",
+        ".build production ZIP and source-bound receipt",
+        "GitHub job output paths",
+        "Pinned tool/registry and platform-private installed dependencies beneath .build"
+      ]
+    }
   ],
   "rules": [
     {

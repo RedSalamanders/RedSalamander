@@ -203,10 +203,11 @@ struct ArchivePackPromptDebugSnapshot
     std::wstring archivePathText;
     std::wstring packerDisplayName;
     std::wstring packerExtension;
-    size_t packerCount             = 0u;
-    size_t selectedPackerIndex     = 0u;
-    bool deleteAfterPacking        = false;
-    bool commandButtonsFitInClient = false;
+    size_t packerCount                  = 0u;
+    size_t selectedPackerIndex          = 0u;
+    bool deleteAfterPacking             = false;
+    bool commandButtonsFitInClient      = false;
+    bool commandButtonsUseStandardOrder = false;
 };
 
 [[nodiscard]] HWND GetArchivePackPromptHandle() noexcept;
@@ -232,8 +233,9 @@ struct ArchiveUnpackPromptDebugSnapshot
     bool replaceExistingFiles    = false;
     bool deleteAfterUnpacking    = false;
     std::wstring maskText;
-    bool maskHelpVisible           = false;
-    bool commandButtonsFitInClient = false;
+    bool maskHelpVisible                = false;
+    bool commandButtonsFitInClient      = false;
+    bool commandButtonsUseStandardOrder = false;
 };
 
 [[nodiscard]] HWND GetArchiveUnpackPromptHandle() noexcept;

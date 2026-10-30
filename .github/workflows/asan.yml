@@ -1,70 +1,14 @@
-name: AddressSanitizer
-
-run-name: >-
-  ${{ format('ASan Debug, Suite CI on x64 + ARM64 ({0})', github.event_name == 'schedule' && 'weekly' || 'dispatch') }}
-
-"on":
+name: Manual AddressSanitizer
+on:
   workflow_dispatch:
-  schedule:
-    - cron: "30 4 * * 2"
-
 permissions:
   contents: read
-
 concurrency:
-  group: asan-${{ github.ref }}
-  cancel-in-progress: true
-
-# ASan Debug is the slowest profile (the instrumented build alone takes over an hour), so it
-# never runs on pull requests or pushes: both architectures run Suite CI weekly and on dispatch.
+  group: explicit-asan-${{ github.run_id }}
+  cancel-in-progress: false
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - id: decide
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          REPOSITORY: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          Import-Module ./Tools/Modules/Testing/ScopedTesting.psm1 -Force
-          $previous = $null
-          if ($env:EVENT_NAME -eq 'schedule') {
-            try {
-              $json = gh api "repos/$env:REPOSITORY/actions/workflows/asan.yml/runs?branch=$env:BRANCH&status=completed&per_page=1" --jq '.workflow_runs[0] // null'
-              if ($LASTEXITCODE -eq 0) { $previous = $json | ConvertFrom-Json }
-            } catch [System.Management.Automation.RuntimeException] { Write-Warning 'Unreadable workflow history; running.' }
-          }
-          $run = Test-RSScheduledTestsRequired -EventName $env:EVENT_NAME -Commit $env:COMMIT -PreviousRun $previous
-          "run=$($run.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          Write-Host "Tests required: $run. Manual dispatch, latest failure/cancellation and unreadable history always run."
-          exit 0
-  asan:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.run != 'false' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { platform: x64, runner: windows-2025-vs2026 }
-          - { platform: ARM64, runner: windows-11-vs2026-arm }
-    uses: ./.github/workflows/build-reusable.yml
+  qualification:
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
     with:
+      engine_ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
       configuration: ASan Debug
-      platform: ${{ matrix.platform }}
-      native_runner: ${{ matrix.runner }}
-      run_full_tests: true
-      test_suite: CI
-      run_asan_plugin_contracts: true
-      upload_build_output: false

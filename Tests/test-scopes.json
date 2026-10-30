@@ -31,21 +31,6 @@
   ],
   "rules": [],
   "toolingCommands": [],
-  "prCoverage": [
-    {
-      "configuration": "Debug",
-      "scopes": [
-        "PR"
-      ],
-      "platform": "x64"
-    },
-    {
-      "configuration": "Debug",
-      "scopes": [
-        "PR"
-      ],
-      "platform": "ARM64"
-    }
-  ],
-  "prWorkflowDigest": "e3a4057a8f8fbc25454af262b8c5424519ce066eb81986a13fee862837aff3c6"
+  "prCoverage": [],
+  "prWorkflowDigest": "ce757e7fb8ea990b4d72a6c8af1ee606200a91aad6f92e1f34e8e7df9c09ab2b"
 }

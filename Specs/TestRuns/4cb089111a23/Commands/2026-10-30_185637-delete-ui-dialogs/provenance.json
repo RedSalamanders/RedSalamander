@@ -1,0 +1,8 @@
+{
+  "scope": "12 focused dialog and live keyboard cases passed, 0 failed, 0 skipped. Debug only; not Full qualification.",
+  "run_id": "20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T175305Z-85828-707d020cb81c44d0b37afee33723e4aa\\artifacts\\selftest\\last_run",
+  "source_snapshot_id": "e2e2330a90c3ed529afad54c1101a3cbef9dd3c4b0730059d06aacec627052be",
+  "build_receipt_id": "77859e6fede531d31b5f17aff1fea8af193c7bbcd39822ed43369aceb2ad0410",
+  "focus_authorization": "User explicitly authorized focus-taking interaction tests; governed warning and desktop lease used."
+}

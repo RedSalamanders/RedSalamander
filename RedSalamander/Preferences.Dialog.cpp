@@ -1494,9 +1494,9 @@ void ApplyDxShellTheme(PreferencesDialogHost& hostState, const AppTheme& theme) 
     };
 
     hostState._resetAllButtonControl = addButton(IDC_PREFS_RESET_ALL, false);
+    hostState._applyButtonControl    = addButton(IDC_PREFS_APPLY, false);
     hostState._okButtonControl       = addButton(IDOK, true);
     hostState._cancelButtonControl   = addButton(IDCANCEL, false);
-    hostState._applyButtonControl    = addButton(IDC_PREFS_APPLY, false);
 
     hostState._shellHost.SetRoot(std::move(root));
     hostState._shellHost.SetDefaultButton(hostState._okButtonControl);
@@ -3400,12 +3400,12 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
         finalGroupWidth = okWidth + cancelWidth + applyWidth + 2 * gapUsed;
     }
 
-    const int applyLeft  = static_cast<int>(client.right) - margin - applyWidth;
-    const int cancelLeft = applyLeft - gapUsed - cancelWidth;
+    const int cancelLeft = static_cast<int>(client.right) - margin - cancelWidth;
     const int okLeft     = cancelLeft - gapUsed - okWidth;
+    const int applyLeft  = okLeft - gapUsed - applyWidth;
     const int buttonsTop = std::max(0, static_cast<int>(client.bottom) - margin - buttonHeight);
 
-    // Reset All button is left-aligned, independent of the right-aligned OK/Cancel/Apply group.
+    // Reset All button is left-aligned, independent of the right-aligned Apply/OK/Cancel group.
     const int resetAllLeft  = margin;
     const int resetAllWidth = resetAllWidthMin;
 

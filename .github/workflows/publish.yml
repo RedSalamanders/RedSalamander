@@ -1,0 +1,30 @@
+name: Publish qualified ZIPs
+on:
+  workflow_dispatch:
+    inputs:
+      qualification_run:
+        description: Original successful Qualify main Release run ID; retained ZIPs only
+        type: string
+        required: true
+      operation:
+        description: Prepare previews; Release publishes ZIPs; Winget verifies both native installs then submits
+        type: choice
+        options: [Prepare, Release, Winget]
+        default: Prepare
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: explicit-publication
+  cancel-in-progress: false
+  queue: max
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    uses: RedSalamanders/.github/.github/workflows/publish.yml@c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+    with:
+      engine_ref: c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c
+      qualification_run: ${{ inputs.qualification_run }}
+      operation: ${{ inputs.operation }}
+    secrets:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}

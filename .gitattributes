@@ -503,3 +503,16 @@ Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172802_HostedCiRepair-Ghostty14R
 Specs/TestRuns/4cb089111a23/Viewers/2026-10-29_172943_HostedCiRepair-Ghostty14ReleaseStandalone/** -text -whitespace
 Specs/TestRuns/4cb089111a23/Commands/2026-10-29_172334_HostedCiRepair-Ghostty14AsanInitialFocusFailure/** -text -whitespace
 Specs/TestRuns/4cb089111a23/Terminal/20261029_175658_ci146-ghostty14-current/** -text -whitespace
+
+# Preserve digest-bound delete UI qualification evidence exactly.
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_180858-delete-ui/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_181456-delete-ui-rejected/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_182250-delete-ui-rejected-consent/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_183910-delete-ui-safety/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_184422-delete-ui-rate/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_185235-delete-ui-presentation-perf/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Commands/2026-10-30_185637-delete-ui-dialogs/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_212800-delete-ui-review-safety/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_213315-delete-ui-review-filter-rejected/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_213815-delete-ui-review-rate/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_214255-delete-ui-review-perf/** -text -whitespace
