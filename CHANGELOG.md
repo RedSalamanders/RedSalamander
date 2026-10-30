@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Document the explicit organization-owner, PR-only emergency merge route with a recorded reason and exact-head match; preserve actual checks and native publication qualification.
 - Record the accepted MIT license and public-repository prerequisite for RedPrism/RedTilde, replace the separate Ghostty Debug ARM64 publication gate with the shared Release matrix, and reconcile formatting/scoped-testing owners with executed rollout evidence.
 - Restore the pinned vcpkg tool, ports baseline and platform dependencies before every hosted native build role; preserve incomplete cache state, share the bootstrap with legacy callers, and retain native child diagnostics through shared engine v1.0.4.
 - Fix permanent-delete item throughput to include recursive removals and display its variation in the hosted graph; distinguish proven read-only blockers from access-denied failures, allow task-scoped repeat consent for matching read-only items, and keep options before OK/Cancel with Cancel rightmost. Add focused rate, repeat-consent, and button-order coverage.
