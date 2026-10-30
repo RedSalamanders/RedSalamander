@@ -1,6 +1,11 @@
 <#
 .SYNOPSIS
 Adapts the project commands to the pinned organization CI engine.
+.DESCRIPTION
+Runs the reviewed compiler-free PR subset or the admitted native build/test/package
+role. Native build roles restore pinned dependencies beneath .build and apply
+process-local integration before invoking canonical project commands. Test scratch
+and evidence use the governed sandbox. No product publication is performed here.
 .PARAMETER Phase
 Compiler-free PR checks, Release test build, regression execution, production ZIP, or explicit qualification.
 .PARAMETER EngineRoot
@@ -20,7 +25,9 @@ Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
 Canonical test evidence, source-bound receipts and qualified ZIPs; GitHub job output paths.
 .NOTES
-Requires PowerShell 7.4 and Git. Native work is hosted-only and uses the matching architecture.
+Requires PowerShell 7.4 and Git. Native build phases bootstrap the pinned vcpkg
+tool/baseline and install the selected platform dependencies before building.
+Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
@@ -59,6 +66,16 @@ if ($Phase -eq 'Static') {
     return
 }
 if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
+Import-Module (Join-Path $root 'Tools/Modules/Build/VcpkgInstallSafety.psm1')
+if ($Phase -in @('ReleaseTestBuild','Production','Qualification')) {
+    $vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $root
+    Run 'vcpkg-install.ps1' @('-Platform',$Platform,'-VcpkgExe',$vcpkg.Executable,'-VcpkgRoot',$vcpkg.RegistryRoot)
+}
+# The test step must retain the build's environment identity without reinstalling.
+$toolRoot = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-tool'
+$environment = Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration
+foreach ($entry in $environment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key,$entry.Value,'Process') }
+$env:VCPKG_REGISTRY_ROOT = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-registry'
 $number = [string]$context.batch.buildNumber
 $profile = @('-Platform',$Platform,'-Configuration',$Configuration)
 $started = [DateTime]::UtcNow

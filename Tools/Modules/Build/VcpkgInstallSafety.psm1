@@ -610,7 +610,196 @@ function Update-RSVcpkgOverlayTriplet {
     }
 }
 
+function Invoke-RSVcpkgBootstrapGit {
+    param([string]$Root, [string[]]$Arguments)
+    $output = @(& git -C $Root @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pinned vcpkg Git operation failed: git $($Arguments -join ' ') $($output -join [Environment]::NewLine)"
+    }
+    return ($output -join [Environment]::NewLine)
+}
+
+function Assert-RSVcpkgManagedBootstrapPath {
+    param([string]$RepoRoot, [string]$Path)
+    $relative = [IO.Path]::GetRelativePath($RepoRoot, $Path)
+    $current = $RepoRoot
+    foreach ($part in ($relative -split '[\\/]')) {
+        $current = Join-Path $current $part
+        if (Test-Path -LiteralPath $current) {
+            if ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "Pinned vcpkg bootstrap refuses a reparse point: $current"
+            }
+        }
+    }
+}
+
+function Initialize-RSVcpkgToolContext {
+    <#
+    .SYNOPSIS
+        Restore and bootstrap the independently pinned vcpkg tool and ports baseline.
+    .DESCRIPTION
+        Uses repository-local managed paths, validates both Git identities and tools
+        schemas, and preserves an incomplete restored tool directory before cloning.
+        A short repository tool-provisioning lock protects only this shared checkout;
+        dependency installation keeps its separate platform-scoped locks.
+        Existing dirty checkouts and reparse points fail without forced reset/deletion.
+    .PARAMETER RepoRoot
+        Repository containing vcpkg.json and vcpkg-tool.json.
+    .OUTPUTS
+        ToolRoot, RegistryRoot, Executable, ToolCommit and Baseline.
+    .NOTES
+        Requires Git and Windows. Downloads/clones/bootstrap output stay beneath .build.
+        Does not install ports, change pins or modify user/global Git configuration.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    $RepoRoot = [IO.Path]::GetFullPath($RepoRoot)
+    $manifest = Get-Content -LiteralPath (Join-Path $RepoRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+    $pin = Get-Content -LiteralPath (Join-Path $RepoRoot 'vcpkg-tool.json') -Raw | ConvertFrom-Json
+    $baseline = ([string]$manifest.'builtin-baseline').Trim().ToLowerInvariant()
+    $commit = ([string]$pin.commit).Trim().ToLowerInvariant()
+    $repository = ([string]$pin.repository).Trim()
+    if ($baseline -cnotmatch '^[0-9a-f]{40}$' -or $commit -cnotmatch '^[0-9a-f]{40}$' -or
+        [string]::IsNullOrWhiteSpace($repository) -or $repository.StartsWith('-')) {
+        throw 'Pinned vcpkg bootstrap requires a repository and full tool/baseline commit identities.'
+    }
+    $buildRoot = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child '.build'
+    $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child '.build/vcpkg-tool'
+    $registryRoot = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child '.build/vcpkg-registry'
+    foreach ($path in @($buildRoot, $toolRoot, $registryRoot)) {
+        Assert-RSVcpkgManagedBootstrapPath -RepoRoot $RepoRoot -Path $path
+    }
+    [void][IO.Directory]::CreateDirectory($buildRoot)
+    $lock = $null
+    $wait = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        while ($null -eq $lock) {
+            try {
+                $lock = [IO.File]::Open((Join-Path $buildRoot 'vcpkg-bootstrap.lock'),
+                    [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            } catch [IO.IOException] {
+                if ($wait.Elapsed.TotalMinutes -ge 5) { throw 'Timed out waiting for pinned vcpkg tool provisioning.' }
+                [Threading.Thread]::Sleep(100)
+            }
+        }
+        $recovery = $null
+        if (-not (Test-Path -LiteralPath (Join-Path $toolRoot '.git') -PathType Container)) {
+            if (Test-Path -LiteralPath $toolRoot) {
+                $recovery = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child ('.build/vcpkg-tool-recovery-' + [Guid]::NewGuid().ToString('N'))
+                Move-Item -LiteralPath $toolRoot -Destination $recovery
+                Write-Host "Preserved incomplete vcpkg checkout at $recovery"
+            }
+            Write-Host (Invoke-RSVcpkgBootstrapGit $RepoRoot @('clone', '--', $repository, $toolRoot))
+        }
+        $actualRoot = Invoke-RSVcpkgBootstrapGit $toolRoot @('rev-parse', '--show-toplevel')
+        if ([IO.Path]::GetFullPath($actualRoot) -ine $toolRoot) { throw 'vcpkg tool is not its own managed Git checkout.' }
+        $dirty = Invoke-RSVcpkgBootstrapGit $toolRoot @('status', '--porcelain', '--untracked-files=no')
+        if ($dirty) { throw "Pinned vcpkg tool checkout is dirty; preserve or repair it explicitly: $toolRoot" }
+        $shallow = Invoke-RSVcpkgBootstrapGit $toolRoot @('rev-parse', '--is-shallow-repository')
+        if ($shallow -eq 'true') {
+            Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('fetch', '--unshallow', 'origin'))
+        }
+        foreach ($required in @($commit, $baseline) | Select-Object -Unique) {
+            & git -C $toolRoot cat-file -e ($required + '^{commit}') 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('fetch', 'origin', $required))
+                $null = Invoke-RSVcpkgBootstrapGit $toolRoot @('cat-file', '-e', ($required + '^{commit}'))
+            }
+        }
+        $null = Invoke-RSVcpkgBootstrapGit $toolRoot @('show', ($baseline + ':versions/baseline.json'))
+        $toolMetadata = Invoke-RSVcpkgBootstrapGit $toolRoot @('show', ($commit + ':scripts/vcpkg-tools.json')) | ConvertFrom-Json
+        $portsMetadata = Invoke-RSVcpkgBootstrapGit $toolRoot @('show', ($baseline + ':scripts/vcpkg-tools.json')) | ConvertFrom-Json
+        $toolSchema = [int]$toolMetadata.'schema-version'
+        $portsSchema = [int]$portsMetadata.'schema-version'
+        if ($toolSchema -lt 1 -or $portsSchema -lt 1 -or $toolSchema -lt $portsSchema) {
+            throw "vcpkg tools schema is incompatible: tool=$toolSchema baseline=$portsSchema. Update the pins together."
+        }
+        Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('checkout', '--detach', $commit))
+        if ((Invoke-RSVcpkgBootstrapGit $toolRoot @('rev-parse', 'HEAD')) -cne $commit) {
+            throw 'Pinned vcpkg tool identity mismatch.'
+        }
+        if (Test-Path -LiteralPath $registryRoot) {
+            $actualRoot = Invoke-RSVcpkgBootstrapGit $registryRoot @('rev-parse', '--show-toplevel')
+            if ([IO.Path]::GetFullPath($actualRoot) -ine $registryRoot) { throw 'vcpkg registry is not its own managed Git checkout.' }
+            if (Invoke-RSVcpkgBootstrapGit $registryRoot @('status', '--porcelain', '--untracked-files=no')) {
+                throw "Pinned vcpkg registry is dirty; preserve or repair it explicitly: $registryRoot"
+            }
+            Write-Host (Invoke-RSVcpkgBootstrapGit $registryRoot @('checkout', '--detach', $baseline))
+        } else {
+            Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('worktree', 'add', '--detach', $registryRoot, $baseline))
+        }
+        if ((Invoke-RSVcpkgBootstrapGit $registryRoot @('rev-parse', 'HEAD')) -cne $baseline) {
+            throw 'Pinned vcpkg registry identity mismatch.'
+        }
+        if ($recovery) {
+            $downloads = Join-Path $recovery 'downloads'
+            Assert-RSVcpkgManagedBootstrapPath -RepoRoot $RepoRoot -Path $downloads
+            if (Test-Path -LiteralPath $downloads -PathType Container) {
+                Move-Item -LiteralPath $downloads -Destination (Join-Path $toolRoot 'downloads')
+            }
+        }
+        $bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'
+        & $bootstrap -disableMetrics | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "Pinned vcpkg bootstrap failed with exit code $LASTEXITCODE." }
+        $executable = Join-Path $toolRoot 'vcpkg.exe'
+        if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'Pinned bootstrap did not produce vcpkg.exe.' }
+        Write-Host "Pinned vcpkg ready: tool=$commit baseline=$baseline schema=$toolSchema"
+        return [pscustomobject]@{ ToolRoot=$toolRoot; RegistryRoot=$registryRoot; Executable=$executable; ToolCommit=$commit; Baseline=$baseline }
+    } finally {
+        if ($lock) { $lock.Dispose() }
+    }
+}
+
+function Get-RSVcpkgBuildEnvironment {
+    <#
+    .SYNOPSIS
+        Bind a CI build to its pinned vcpkg integration and installed triplet.
+    .DESCRIPTION
+        Returns process-local environment values without installing user-wide
+        integration. Validates inputs before returning any changes. Callers apply
+        the values only to the child build/test lifetime or hosted job.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$ToolRoot,
+        [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
+        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration)
+    $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
+    $installed = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child ('.build/vcpkg_installed/' + $Platform.ToLowerInvariant())
+    $tripletRoot = Join-Path $installed $triplet
+    $debug = $Configuration -like '*Debug*'
+    $include = Join-Path $tripletRoot 'include'
+    $lib = Join-Path $tripletRoot $(if ($debug) { 'debug/lib' } else { 'lib' })
+    $bin = Join-Path $tripletRoot $(if ($debug) { 'debug/bin' } else { 'bin' })
+    $props = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.props'
+    $targets = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.targets'
+    foreach ($path in @($include,$lib,$props,$targets)) {
+        if (-not (Test-Path -LiteralPath $path)) { throw "Pinned vcpkg build input not found: $path" }
+    }
+    $linkPaths = @($lib)
+    $manual = Join-Path $lib 'manual-link'
+    if (Test-Path -LiteralPath $manual -PathType Container) { $linkPaths += $manual }
+    $linkFlags = ($linkPaths | ForEach-Object { '/LIBPATH:"{0}"' -f $_ }) -join ' '
+    return [ordered]@{
+        ForceImportBeforeCppTargets = $props
+        ForceImportAfterCppTargets = $targets
+        VcpkgRoot = $ToolRoot
+        VcpkgConfiguration = $(if ($debug) { 'Debug' } else { 'Release' })
+        VcpkgManifestInstall = 'false'
+        VcpkgXUseBuiltInApplocalDeps = 'false'
+        VCPkgLocalAppDataDisabled = 'true'
+        VCPKG_DEFAULT_TRIPLET = $triplet
+        VCPKG_INSTALLED_DIR = $installed
+        VcpkgInstalledDir = $installed.TrimEnd('\') + '\'
+        CL = ('/I"{0}" {1}' -f $include,$env:CL).Trim()
+        LINK = ($linkFlags + ' ' + $env:LINK).Trim()
+        Path = $(if (Test-Path -LiteralPath $bin -PathType Container) { $bin + [IO.Path]::PathSeparator + $env:Path } else { $env:Path })
+    }
+}
+
 Export-ModuleMember -Function @(
+    'Get-RSVcpkgBuildEnvironment',
+    'Initialize-RSVcpkgToolContext',
     'Assert-RSVcpkgTripletLeafName',
     'Assert-RSVcpkgManifestVersionConstraintsAvailable',
     'Resolve-RSVcpkgSafeChildPath',

@@ -521,6 +521,8 @@ snapshots. The checkout must not appear as an untracked nested repository at
 the product root. Its executable and manifest pins remain separately verified;
 the source-integrity check must not gain an exclusion for a root `vcpkg/` checkout.
 
+Initialize-RSVcpkgToolContext in the canonical VcpkgInstallSafety module owns hosted tool/bootstrap setup. It verifies both Git pins and tools schemas, preserves incomplete restored tool directories, reuses compatible downloads, refuses dirty checkouts and reparse points, and serializes only shared tool provisioning. Ports installation remains in vcpkg-install.ps1 under its selected platform dependency lock. Get-RSVcpkgBuildEnvironment validates the matching installed tree and returns pinned process-local integration; it never installs user-wide MSBuild integration. Automatic test, production and manual native build phases all establish this cold-runner prerequisite before MSBuild.
+
 The `vcpkg-tool.json` executable revision and `vcpkg.json` `builtin-baseline`
 remain independent identities. When a caller materializes them as separate
 checkouts, `vcpkg-install.ps1 -VcpkgExe <tool> -VcpkgRoot <registry>` MUST preserve

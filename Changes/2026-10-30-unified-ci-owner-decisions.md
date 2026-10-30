@@ -1,0 +1,1 @@
+- Record the accepted MIT license and public-repository prerequisite for RedPrism/RedTilde, replace the separate Ghostty Debug ARM64 publication gate with the shared Release matrix, and reconcile formatting/scoped-testing owners with executed rollout evidence.

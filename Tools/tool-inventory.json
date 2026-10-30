@@ -2070,29 +2070,35 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets.",
-      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install.",
+      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds.",
+      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install. Unified native build roles bootstrap then invoke the canonical platform installer before MSBuild.",
       "usedBy": [
         "vcpkg-install.ps1",
         "build.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
-        ".github/workflows/build-reusable.yml"
+        ".github/workflows/build-reusable.yml",
+        "Tools/Invoke-ProjectCi.ps1",
+        ".github/workflows/ghostty-runtime-product-qualification.yml"
       ],
       "prerequisites": [
-        "Visual Studio with MSBuild (vswhere) and its default toolset version file, for the toolset pin"
+        "Visual Studio with MSBuild (vswhere) and its default toolset version file, for the toolset pin",
+        "Git and Windows; network for an uncached pinned tool bootstrap"
       ],
       "sideEffects": [
         "Merge functions copy validated vcpkg outputs into caller-selected safe roots",
-        "The overlay function writes a triplet file beneath the caller-selected directory only when its bytes change"
+        "The overlay function writes a triplet file beneath the caller-selected directory only when its bytes change",
+        "Managed tool bootstrap acquires a repository-local provisioning lock, fetches pinned Git objects and preserves incomplete restored directories beneath .build"
       ],
       "outputs": [
-        "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset"
+        "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset",
+        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1"
       ],
       "replacement": null
     },
@@ -4999,7 +5005,8 @@
       "sideEffects": [
         "Invokes the reviewed compiler-free subset or canonical native commands",
         "Creates governed test evidence and build receipts",
-        "Creates qualified internal ZIP artifacts; never publishes or updates source"
+        "Creates qualified internal ZIP artifacts; never publishes or updates source",
+        "Bootstraps the pinned tool/ports and installs selected platform dependencies under .build before native builds"
       ],
       "path": "Tools/Invoke-ProjectCi.ps1",
       "purpose": "Adapt pinned organization CI roles to canonical project build, test and ZIP commands.",
@@ -5009,7 +5016,8 @@
         "PowerShell 7.4",
         "Git",
         "Exact pinned shared engine",
-        "Matching GitHub-hosted native runner for native phases"
+        "Matching GitHub-hosted native runner for native phases",
+        "Network for missing pinned build dependencies"
       ],
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
@@ -5017,7 +5025,8 @@
       "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1"
       ],
       "usedBy": [
         ".github/workflows/ci.yml",
@@ -5027,7 +5036,8 @@
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
         ".build production ZIP and source-bound receipt",
-        "GitHub job output paths"
+        "GitHub job output paths",
+        "Pinned tool/registry and platform-private installed dependencies beneath .build"
       ]
     }
   ],

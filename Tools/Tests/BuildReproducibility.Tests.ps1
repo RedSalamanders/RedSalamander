@@ -686,13 +686,12 @@ Describe 'Pinned build-tool and CI identity' {
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2
         $ci | Should Not Match 'Record exact resolved toolchain identity'
         $ci | Should Not Match 'compilerBv'
-        $ci | Should Match 'git checkout --detach \$toolCommit'
-        $ci | Should Match '\$actualToolCommit -ne \$toolCommit'
-        $ci | Should Match '\$toolMetadata = git show "\$\{toolCommit\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ci | Should Match '\$baselineMetadata = git show "\$\{baseline\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ci | Should Match '\$toolSchemaVersion -lt \$baselineSchemaVersion'
-        $ci | Should Match 'Update vcpkg-tool\.json with the baseline'
-        $ci.IndexOf('$toolSchemaVersion -lt $baselineSchemaVersion') | Should BeLessThan $ci.IndexOf('git checkout --detach $toolCommit')
+        $ci | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
+        $bootstrap = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Raw
+        # Real Git/bootstrap negative controls live in VcpkgBootstrap.Tests.ps1.
+        $bootstrap | Should Match '\$toolSchema -lt \$portsSchema'
+        $bootstrap.IndexOf('$toolSchema -lt $portsSchema') | Should BeLessThan $bootstrap.IndexOf("@('checkout', '--detach', " + '$commit)')
+        $bootstrap | Should Match "Update the pins together"
         $ci | Should Not Match 'vcpkg(?:\.exe)?\s+integrate\s+install'
         $ci | Should Match '\$env:ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
         $ci | Should Match '\$env:ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
@@ -708,7 +707,7 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '\$vcpkgTargets\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.targets"'
         $ci | Should Match 'VCPKG_ROOT:.*\\\.build\\vcpkg-tool'
         $ci | Should Match '\.build/vcpkg-tool/downloads'
-        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-tool'''
+        $bootstrap | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$RepoRoot -Child ''\.build/vcpkg-tool'''
         $ci | Should Not Match 'git clone \$toolRepository \.\\\\vcpkg'
         $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
@@ -740,13 +739,14 @@ Describe 'Pinned build-tool and CI identity' {
         # The tool commit's own version database predates the versions vcpkg.json requires; with one checkout vcpkg fails
         # with "no version database entry" (Build_Toolchain.md).
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
-        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-registry'''
-        $ci | Should Match 'git worktree add --detach \$registryRoot \$baseline'
-        $ci | Should Match '\$actualBaseline -ne \$baseline'
+        $ci | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
+        $bootstrap = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Raw
+        $bootstrap | Should Match '\.build/vcpkg-registry'
+        $bootstrap | Should Match '''worktree'', ''add'', ''--detach'', \$registryRoot, \$baseline'
+        $bootstrap | Should Match '''rev-parse'', ''HEAD''\)\) -cne \$baseline'
         $ci | Should Match '"--vcpkg-root=\$env:VCPKG_REGISTRY_ROOT"'
         $ci | Should Match '"--downloads-root=\$downloadsRoot"'
-        $ci.IndexOf('git checkout --detach $toolCommit') | Should BeLessThan $ci.IndexOf('git worktree add --detach $registryRoot $baseline')
-        $ci.IndexOf('VCPKG_REGISTRY_ROOT=$registryRoot') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
+        $ci.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
     }
 
     It 'keeps native ARM64 regression behind main admission and PRs compiler-free' {

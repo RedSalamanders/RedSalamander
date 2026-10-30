@@ -83,76 +83,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $manifest = Get-Content -LiteralPath .\vcpkg.json -Raw | ConvertFrom-Json
-          $portsBaseline = ([string]$manifest.'builtin-baseline').Trim().ToLowerInvariant()
-          $toolPin = Get-Content -LiteralPath .\vcpkg-tool.json -Raw | ConvertFrom-Json
-          $toolRepository = ([string]$toolPin.repository).Trim()
-          $toolCommit = ([string]$toolPin.commit).Trim().ToLowerInvariant()
-          if ($portsBaseline -cnotmatch '^[0-9a-f]{40}$') {
-            throw "vcpkg.json builtin-baseline is not a lowercase full commit: '$portsBaseline'."
-          }
-          if ([string]::IsNullOrWhiteSpace($toolRepository)) {
-            throw 'vcpkg-tool.json repository is missing/empty.'
-          }
-          if ($toolCommit -cnotmatch '^[0-9a-f]{40}$') {
-            throw "vcpkg-tool.json commit is not a lowercase full commit: '$toolCommit'."
-          }
-
-          New-Item -ItemType Directory -Force -Path .\.build | Out-Null
-          git clone $toolRepository .\.build\vcpkg-tool
-          if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE." }
-          Push-Location .\.build\vcpkg-tool
-          try {
-            foreach ($requiredCommit in @($toolCommit, $portsBaseline) | Select-Object -Unique) {
-              git cat-file -e "$requiredCommit`^{commit}" 2>$null
-              if ($LASTEXITCODE -ne 0) {
-                git fetch --depth 1 origin $requiredCommit
-                if ($LASTEXITCODE -ne 0) {
-                  throw "Unable to fetch pinned vcpkg commit '$requiredCommit'."
-                }
-              }
-            }
-
-            $toolMetadata = git show "${toolCommit}:scripts/vcpkg-tools.json" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) {
-              throw "Unable to read scripts/vcpkg-tools.json from vcpkg tool commit '$toolCommit'."
-            }
-            $portsMetadata = git show "${portsBaseline}:scripts/vcpkg-tools.json" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) {
-              throw "Unable to read scripts/vcpkg-tools.json from vcpkg ports baseline '$portsBaseline'."
-            }
-            $toolSchemaVersion = [int]$toolMetadata.'schema-version'
-            $portsSchemaVersion = [int]$portsMetadata.'schema-version'
-            if ($toolSchemaVersion -lt 1 -or $portsSchemaVersion -lt 1) {
-              throw "vcpkg tool metadata schema versions must be positive integers; tool=$toolSchemaVersion ports=$portsSchemaVersion."
-            }
-            if ($toolSchemaVersion -lt $portsSchemaVersion) {
-              throw "vcpkg tool commit '$toolCommit' supports tools schema $toolSchemaVersion, older than ports baseline '$portsBaseline' schema $portsSchemaVersion. Update vcpkg-tool.json with the baseline."
-            }
-            Write-Host "vcpkg tools schema: tool=$toolSchemaVersion ports=$portsSchemaVersion"
-
-            git checkout --detach $toolCommit
-            if ($LASTEXITCODE -ne 0) { throw "Unable to check out pinned vcpkg tool commit '$toolCommit'." }
-            $actualToolCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
-            if ($actualToolCommit -cne $toolCommit) {
-              throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."
-            }
-
-            git worktree add --detach ..\vcpkg-registry $portsBaseline
-            if ($LASTEXITCODE -ne 0) {
-              throw "Unable to materialize pinned vcpkg ports baseline '$portsBaseline'."
-            }
-            $actualPortsBaseline = (git -C ..\vcpkg-registry rev-parse HEAD).Trim().ToLowerInvariant()
-            if ($actualPortsBaseline -cne $portsBaseline) {
-              throw "vcpkg ports identity mismatch: expected '$portsBaseline', found '$actualPortsBaseline'."
-            }
-          }
-          finally {
-            Pop-Location
-          }
-
-          & .\.build\vcpkg-tool\bootstrap-vcpkg.bat
-          if ($LASTEXITCODE -ne 0) { throw "bootstrap-vcpkg.bat failed with exit code $LASTEXITCODE." }
+          Import-Module ./Tools/Modules/Build/VcpkgInstallSafety.psm1
+          $context = Initialize-RSVcpkgToolContext -RepoRoot $env:GITHUB_WORKSPACE
+          ('VCPKG_REGISTRY_ROOT=' + $context.RegistryRoot) >> $env:GITHUB_ENV
 
       - name: Install pinned ARM64 dependencies
         shell: pwsh
