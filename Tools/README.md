@@ -240,6 +240,10 @@ Each reviewed root names itself. Inventory validation rejects an orphaned
 historical file, an unreviewed or missing path, and a path that does not resolve
 to an explicit `historical` command entry.
 
+Current rollback-notice coverage lives in `Tests/GhosttyRuntimeLifecycle.Tests.ps1`.
+It checks the pinned notice closure and its documented atomic rollback unit;
+sealed generic lifecycle tests retain their recorded bytes and archival contract.
+
 Before running a command that downloads, deletes, modifies credentials, changes
 firewall rules, accesses a device, or rewrites checked-in assets, read its
 `sideEffects` entry in the manifest and its comment-based help.

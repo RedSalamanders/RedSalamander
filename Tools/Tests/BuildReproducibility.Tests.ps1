@@ -674,9 +674,13 @@ Describe 'Pinned build-tool and CI identity' {
         $props | Should Match '<RSVcpkgPlatformScope[^>]*>arm64</RSVcpkgPlatformScope>'
         $props | Should Match '<VcpkgInstalledDir[^>]*>\$\(RSBuildRoot\)vcpkg_installed\\\$\(RSVcpkgPlatformScope\)\\</VcpkgInstalledDir>'
         $ci | Should Match 'VCPKG_INSTALLED_DIR:.*\\vcpkg_installed\\\$\{\{ inputs\.platform'
-        $ci | Should Match '--x-install-root \$env:VCPKG_INSTALLED_DIR'
+        # The installer splats its arguments; VcpkgInstallSafety also executes
+        # the live workflow's platform, overlay and native-failure branches.
+        $ci | Should Match '\$vcpkgArguments\s*=\s*@\(\s*''install'','
+        $ci | Should Match '''--x-install-root'',\s*\$env:VCPKG_INSTALLED_DIR'
+        $ci | Should Match '&\s+"\$env:VCPKG_ROOT\\vcpkg\.exe"\s+@vcpkgArguments'
         $ci | Should Match '\$vcpkgRoot\s*=\s*Join-Path \$env:VCPKG_INSTALLED_DIR \$triplet'
-        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json'\)"
+        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json', 'vcpkg-install\.ps1', 'Tools/Modules/Build/VcpkgInstallSafety\.psm1', 'Build/vcpkg-ports/\*\*'\)"
         $ci | Should Match 'id:\s*toolchain_identity'
         $ci | Should Match 'Get-RSBuildToolchainIdentity'
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2

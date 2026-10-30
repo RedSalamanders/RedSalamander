@@ -125,9 +125,38 @@ That receipt establishes compilation only, not ARM64 native runtime acceptance.
 Local integration `d42b6a7ed3e53207a1d1e8c4b51933f339f014f5` also retains
 PR #151 source `630d3565547b77268ab6bc1e3bcde5aee187471f`: native Zig selection
 on ARM64 hosts and bounded contained runtime-builder children. Its reviewed
-rollback contract already requires eight notices; the stale test assertion now
-requires that exact count rather than the superseded five. The five required
-upgrade lane manifests are a different contract and remain unchanged. The
-combined source requires its own focused tooling and hosted CI results before
-publication and merge. Earlier receipts above remain bound to their original
-sources; they are not relabeled as combined-source qualification.
+rollback contract already requires eight notices. The initial attempt to update
+the generic lifecycle test changed a sealed historical input and was rejected by
+the hosted integrity guard. Restore those exact bytes; current rollback coverage
+belongs in the active Ghostty suite. The five required upgrade lane manifests are
+a different contract and remain unchanged. Earlier receipts above remain bound
+to their original sources; they are not relabeled as combined-source qualification.
+
+## Hosted tooling follow-up
+
+Combined source `f531c3e02e59e2812d0f7e8e5a9330e5e156f388` passed both hosted
+Debug compilation steps and fresh local x64 Debug/ASan Debug plus ARM64 ASan
+cross-builds with zero warnings and errors. Its local noninteractive PrePush
+remainder passed 29 toolchain checks and 256 Compare Directories cases, with zero
+failures and 27 declared environment skips. The runner re-attested the complete
+Debug profile after the deployment proof under receipt
+`7139232642a8642c5e4815382fc6770d848085a0834c6f7d92864856ba9f54e2`.
+Local PrePush remained NOT_EVALUATED/exit 2: 12 PR contracts were delegated and
+four focus-taking entries remained pending locally. Five pre-existing sandbox
+audit items were recorded; no complete Full or globally clean sandbox claim was made.
+
+The developer's compilation-based integration approval permitted merging #138
+at `9c99afd3b3574a19bd0fe2ccd6dc17079eab1082` while hosted PR validation
+continued. Its x64 job subsequently reported 1,108 passing tooling cases and two
+failures: the altered sealed test and an installer assertion that still expected
+the former direct command syntax/cache inputs. Retain that failed receipt; it is
+not a passing candidate CI result. Main verification and this plan remain open.
+
+The follow-up restores `TerminalDependencyLifecycle.Tests.ps1` to its recorded
+SHA-256 `11154a9e66a8bb26a94795e00cf716669d00e5690db9a232f1f8b71fbff97d1e`
+without changing the historical manifest. The active Ghostty test instead checks
+all eight locked notice paths and their documented atomic rollback unit. The
+current installer contract checks its actual argument array, pinned executable
+and all five cache inputs; the existing executable argument/overlay/failure
+controls remain mandatory. Validate the complete active tooling profile and
+fresh hosted compilation before merging this correction, then confirm main.

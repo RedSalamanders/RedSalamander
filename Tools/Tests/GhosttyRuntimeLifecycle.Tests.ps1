@@ -33,6 +33,17 @@ function New-RSGhosttyLockedPackageFixture {
     }
 }
 
+Describe 'Ghostty runtime rollback notice contract' {
+    It 'keeps all eight locked notices in the documented atomic rollback unit' {
+        $lock = Read-RSGhosttyRuntimeLock -LiteralPath $lockPath -SchemaPath $schemaPath -RepoRoot $repoRoot
+        @($lock.notices).Count | Should Be 8
+        @($lock.notices.outputRelativePath | Sort-Object -Unique).Count | Should Be 8
+        $terminalSpec = [IO.File]::ReadAllText(
+            (Join-Path $repoRoot 'Specs/Terminal/Terminal_EmbeddedPlugin.md'))
+        $terminalSpec | Should Match 'all\s+eight notices as one\s+atomic\s+manifest unit'
+    }
+}
+
 Describe 'Ghostty closed package directory' {
     It 'stages verified nested archive contents directly beneath their Zig package name' {
         $fixture = New-RSGhosttyLockedPackageFixture
