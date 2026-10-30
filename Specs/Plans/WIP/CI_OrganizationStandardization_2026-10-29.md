@@ -12,6 +12,7 @@ Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 - [x] Review current CI and record source identities for all six repositories.
 - [x] Challenge the alternatives and record the owner's answers to the eight original questions.
 - [x] Confirm the two-architecture test barrier, manual extended qualification and compiler-free PR checks.
+- [x] Confirm emergency bypass applies to PR merge checks only; native qualification and publication requirements remain enforced.
 - [x] Define test-enabled Release -> actual regression execution -> production Release -> retained ZIPs.
 - [x] Define ZIPs for all six projects, including a DxUi SDK, and manual winget for the five applications.
 - [x] Define non-building dependency/security automation for all six and a shared engine in RedSalamanders/.github.
@@ -102,6 +103,7 @@ The owner's answers and follow-up confirmations are recorded below. Recommendati
 | Q9 | Batch boundary | Per repository, with no implicit organization-wide build fan-out | This is the implementation interpretation of the selected main-batch policy. Consumer pin adoption remains explicit. |
 | Q10 | Formatting revalidation | Trusted least-privileged write path and verified checks for the new head | Engineering proof belongs to S2. Use a strictly non-compiling PR revalidation mode; do not invoke the native qualification action. New app/credential administration is not performed during planning. |
 | Q11 | Compiler-dependent tooling | Move fixture/compiler tests out of PR checks into the main batch | Pure metadata evaluation must not escape into a compiler through imported scripts/targets. Non-compiling validators remain PR work. |
+| Q12 | Emergency bypass | PR merge checks only; explicitly confirmed by the owner on 2026-10-31 | Organization-owner PR override with the reviewed head and recorded reason. Both native test branches, production/SDK smoke, artifact identity and manual publication requirements remain mandatory. |
 
 The three follow-up confirmations are explicit: both architectures pass before production starts; extended stress/benchmark work is manual; and PRs prohibit compiler-dependent tooling fixtures.
 
@@ -477,7 +479,7 @@ Collect elapsed time, setup/build/test phase durations, native-start count and s
 
 Implementation is complete only when:
 
-- The selected Q1-Q11 policy, actual suite coverage and technical formatting-revalidation method are implemented and recorded.
+- The selected Q1-Q12 policy, actual suite coverage and technical formatting-revalidation method are implemented and recorded.
 - All six repositories use the agreed policy version and reviewed adapter schema.
 - Every tested excluded-only change starts zero native restore/build/test work; meaningful assets/scripts/dependencies are correctly included.
 - A representative merge burst has real evidence of one matrix per admitted batch; later merges and failed attempts retain honest accounting.
@@ -669,3 +671,15 @@ Final dependency observer 41136206347 confirms all four public main branches use
 Project-native compiler policy retains its existing owner: RedMonitor currently declares /W4 /WX in Directory.Build.props and Build_Consumption.md; the other five declare their reviewed /Wall, /WX-disabled, zero-diagnostic policy. Unified CI aligns triggers, admission, test/production barriers, formatting, evidence and publication. It does not silently alter RedMonitor's compiler flags or claim that its diagnostic coverage equals a /Wall build.
 
 Remaining acceptance is explicit: the owner makes RedPrism/RedTilde public; verify their exact-head compiler-free checks/security capabilities, apply the same protected PR and emergency policy, merge/fold normally and execute their two native architectures. Collect successful final-source native regression/production/SDK receipts across all six, repeat unchanged-artifact Prepare against those successful runs and re-run the central observer to six-of-six coverage. WINGET_TOKEN remains an operator prerequisite for RedMonitor/RedPrism/RedTilde; no secret value was read. Actual public release/native winget installation/upstream submission remains a separately selected manual product action. Preserve the independent Debug/ASan, performance and runtime holds of the existing owners. S4-S7 and Done-path admission remain unchecked until their applicable evidence exists; no public product release or upstream winget PR has been created.
+
+### Owner confirmation and hosted receipts - 2026-10-31
+
+The owner explicitly selected "PR merge checks only" for emergency bypass. This confirms the deployed organization-owner PR override and the common runbook's existing boundary. The reviewed SHA and reason remain required by the operator procedure; native regression, production/SDK, artifact and publication requirements remain enforced. Engine documentation PR 9 (0ebfdcb3ea0afe023aa79bde7c0653f30603f266) also retains the SHA captured during review, compares it with the live PR head and supplies that original SHA to the final merge guard. No emergency override was exercised.
+
+RedXe v1.0.5 [qualification 41136579577](https://github.com/RedSalamanders/RedXe/actions/runs/41136579577) passed for source 0ad2b4d626d36e6005c6b9078e711d6bca98d1db, version 1.0.412. Both native architectures executed all 15 selected suite scopes and the active failure probe; the global barrier preceded both successful test-disabled production/package jobs. This is the hosted two-architecture proof for the repaired production provenance. Downloaded portable and symbol ZIP hashes, receipt identities and actual barrier timestamps were independently verified under Z:/RedSalamander.Perf/evidence/unified-ci/RedXe-41136579577/independently-verified.json. Artifact-only [Prepare 41145397691](https://github.com/RedSalamanders/RedXe/actions/runs/41145397691) passed; release, install and submission were skipped.
+
+RedMonitor v1.0.5 [qualification 41136463768](https://github.com/RedSalamanders/RedMonitor/actions/runs/41136463768) passed for source 2330aa166b34e1c03f47bdab74b5fddd4c5145d2, version 0.1.58. Both native six-scenario regressions, active probes, global barrier, production builds and ZIP smoke passed. Downloaded hashes and stage ordering were independently checked under Z:/RedSalamander.Perf/evidence/unified-ci/RedMonitor-41136463768/independently-verified.json. Artifact-only [Prepare 41145400669](https://github.com/RedSalamanders/RedMonitor/actions/runs/41145400669) passed; release, install and submission were skipped.
+
+DxUi v1.0.4 [qualification 41131787806](https://github.com/RedSalamanders/DxUi/actions/runs/41131787806) passed for source 299193409156976458c9a819db9504563eeb3341, SDK 0.1.762. Its selected x64/ARM64 regression scopes (23/21), active probes, barrier and production SDKs passed. Both native extracted consumers passed source/header closure, unchanged library and real first-party warning-control gates. Independent ZIP hashes and SDK receipts are retained under Z:/RedSalamander.Perf/evidence/unified-ci/DxUi-41131787806/independently-verified.json. Its final v1.0.5 run 41137013910 is still executing and is not yet qualified. RedSalamander's existing batch 41130003444 is still building, with later candidates queued; no active native work was cancelled.
+
+The visibility refresh still found RedPrism and RedTilde private. Their hosted/security/enforcement gates remain open. S4-S7 remain partial; these new positive receipts do not establish all-six or actual public-release/winget-install acceptance. Only prepare-only publication actions were dispatched during this verification.
