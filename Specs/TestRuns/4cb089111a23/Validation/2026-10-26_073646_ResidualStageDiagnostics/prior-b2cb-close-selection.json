@@ -1,9 +1,0 @@
-{
-  "source": "E:\\RedSalamander.Perf\\evidence\\completed-runs\\20261026T071149Z-27092-06ebb1952d2946ec805ecdd5af5afafa\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
-  "sourceSha256": "C4BDEB7A40EEAEA3031ABBAF548B09281BD4F849EE79BF486F48E5719B1C3EC6",
-  "sourceBytes": 10469551,
-  "extract": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\b2cb-viewer-baseline-close-extract.jsonl",
-  "extractSha256": "931AC7C80C94ED5AD67EE568E89B72CE4557546BD4ABE043A293BC1AC022B9C4",
-  "lines": 57,
-  "encoding": "Selected original UTF-8 lines re-encoded by Set-Content; not the complete original byte stream."
-}

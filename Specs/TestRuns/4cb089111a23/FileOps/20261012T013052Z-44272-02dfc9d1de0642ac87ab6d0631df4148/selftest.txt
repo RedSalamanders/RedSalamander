@@ -1,3 +1,0 @@
-=== selftest start (utc): 2026-10-12T01:31:26.854Z ===
-duration_ms: 11111
-exit_code: 0

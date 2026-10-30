@@ -1,7 +1,0 @@
-{
-  "source": "S:\\RedSalamander.Perf\\evidence\\i26-typed-result-candidate-v2-20260921\\scratch\\settings-store\\RedSalamander\\Logs\\FileOperations-20260921.jsonl",
-  "source_sha256": "0304acbc12a009e2a8a8f563ec079633665e44c4e76e656ab8f01e75fec7aac2",
-  "selection": "acceptedDecision or conflictResult; decoded then normalized JSON/LF",
-  "normalized_sha256": "40807aab7f6c9726787cf4c3af1fa123407ff081db0fe02b34faf05e03062507",
-  "exact_correlated_results": 3
-}

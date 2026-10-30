@@ -1,9 +1,0 @@
-$env:REDSALAMANDER_TEST_ROOT='C:\RSPerf'
-Remove-Item Env:\REDSALAMANDER_SELFTEST_ROOT -ErrorAction SilentlyContinue
-.\Tools\Run-AllTests.ps1 -Suite Commands -SkipBuild -TimeoutMultiplier 2
-
-Observed checkpoint:
-- Run id: 20260710T152520Z-51084-2e7f683cb2f648e6bdec72c9c7ffd09a
-- Commands failed after moving past cmd_app_shortcuts_live_dx_search_interaction.
-- Passed: 781, failed: 5, skipped: 2, disk audit issues: 0.
-- Failures: cmd_compare_directories_options_live_dx_body_interaction; cmd_pane_navigation_rename_prompt_keeps_navigation_shell_stable; cmd_pane_navigation_go_to_path_from_other_pane_keeps_navigation_shell_stable; cmd_pane_changeCase_prompt_long_run_open_close_stays_stable; cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded.

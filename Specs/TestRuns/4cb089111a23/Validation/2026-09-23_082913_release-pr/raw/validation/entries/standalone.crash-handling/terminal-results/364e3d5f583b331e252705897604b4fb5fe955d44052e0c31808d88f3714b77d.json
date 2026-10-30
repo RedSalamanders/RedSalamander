@@ -1,1 +1,0 @@
-{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":1,"skipped":0,"total":1},"entry_id":"standalone.crash-handling","kind":"Executable","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d"}

@@ -1,3 +1,0 @@
-[START] Theme
-[DONE] Theme
-All DxUi tests passed.

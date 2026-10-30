@@ -1,3 +1,0 @@
-Specs/Plans/WIP/DxUi_Uia_ContinuationBaton_2026-06-29.md
-Specs/Plans/WIP/FolderView_WarpDrive_ContinuationBaton_2026-06-29.md
-Specs/Plans/WIP/Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md

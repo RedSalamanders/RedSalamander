@@ -1,5 +1,0 @@
-# Exact-byte supplemental provenance
-# Columns: sha256  bytes  archive-path  source-path  verification-status
-6f1126dde6131a1445aabb4ce55e5cff458b5dcaa7bc8f9d06b17f54e5ab5c80  95452  build/build-receipt-687fe30cf9b5d5959000e9ed71af515fe41fe16237b74fc4ace7f9c45732d475.json  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Debug\receipts\687fe30cf9b5d5959000e9ed71af515fe41fe16237b74fc4ace7f9c45732d475.json  verified-current
-be8fda7df9cd395585057143b91ce6d8c0dfea13d27aa3ee8b665d3b9c89c7f0  38123  build/debug-build.launch.txt  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\space-final-worker-hook-debug-build.launch.log  verified-current
-c7fb57a2b4fc227816e64c18ee4bff1a4689701bcc11d1923ffdfab06072b9a0  2883  captures/raw-provenance.json  D:\RedSalamander.Perf\runs\20261009T065738Z-42144-9524e13aa58746d2bb8841fc1076aae2\artifacts\archive\7d3a1247382a\Commands\2026-10-09_090207\perf\viewer_space_captures\provenance.json  verified-pre-cleanup-source-now-absent

@@ -1,6 +1,0 @@
-# SHA-256 manifest; exact copied source bytes.
-# Columns: sha256  bytes  archived-name  source-path
-d68ed6a0f5c30a0ba1d19327b5c7b4224a315bf9b7304df76fecb501595e2fe0  7324  qualification.md  D:\RedSalamander.Perf\evidence\viewer-space-final-qualification-d713\final-qualification.md
-24fa0b053f1a5738a7e25a5ac1ac69861053174dfddb4a2210990aaf6b1cca97  20061  spec-inventory.md  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\SpecInventory\spec-inventory.md
-bd035578f874c9ef9fc6a8f70cc5ec3c8ff1478a328f8572a399b2af3033e08b  563  spec-inventory-command.log  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\space-final-spec-inventory.log
-09eea32ea16ee20f6de411d2fc2e0894dc80440ac5ee53103115715f53080e62  1995  spec-inventory-summary.json  D:\RedSalamander.Perf\evidence\viewer-space-final-qualification-d713\final-spec-inventory.summary.json

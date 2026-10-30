@@ -1,9 +1,0 @@
-{
-  "passed": 33,
-  "failed": 0,
-  "skipped": 0,
-  "source_snapshot": "8c39c3fd092126b9bd96659f2f710c3363e1c7218cfe8e77e71be9da89ff8ef2",
-  "build_receipt": "f6cd6e7b4625e141d428c7d33675dcc787a0a6828366ec90a28ad1786602acad",
-  "raw": "S:\\RedSalamander.Perf\\evidence\\i26-decision-conflict-regression-v4-20260921",
-  "runner_sha256": "518d7bb4bacb3e1bafc880679d2c5aabe6e8d26dc18ea476c39db90bbc6e4d21"
-}

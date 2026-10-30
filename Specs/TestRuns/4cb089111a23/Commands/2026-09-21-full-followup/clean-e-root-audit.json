@@ -1,9 +1,0 @@
-{
-  "schema": "red-salamander.test-sandbox-disk-audit.v1",
-  "is_clean": true,
-  "issue_count": 0,
-  "test_root": "E:\\RedSalamander.Perf",
-  "run_id": "",
-  "allowed_run_ids": [],
-  "issues": []
-}

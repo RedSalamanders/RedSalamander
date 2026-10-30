@@ -1,5 +1,0 @@
-# Retained repeated durable-store fixture failure
-
-Source 29615cf6f64e482bfd025fb41564330188c18c8f, x64 ASan Debug, requested ten repeats. The first invocation passes; the second fails the unchanged immediate-cleanup enumeration assertion and fail-fast leaves eight unexecuted. Both invocations report successful owned-handle POSIX deletion. The failed enumeration contains record.json and oversized.json, which the first invocation intentionally created later in its fixture. No private transaction sibling remains in that listing.
-
-This independently reproduces fixture reuse, without proving the exact cause of the older hosted first-iteration failure whose original trace lacks entry diagnostics. Preserve that failure too, retain the Win32 diagnostics and require fresh hosted ASan qualification. The correction gives every invocation an unused child directory and preserves all existing cleanup, retained-reader, limit, reparse and concurrency assertions.

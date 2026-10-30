@@ -1,1 +1,0 @@
-Five supported x64 Debug focused ViewerPE cases pass: containment and exact read-only desktop identity controls, applied TIFF/fallback orientation, bounded Text close, Web combo quiet teardown and actual VLC HUD Tab routing. Parent desktop guards pass. Focused coverage only, not Full.

@@ -1,5 +1,0 @@
-[ RUN      ] S3 R0b exact-generation virtual-folder Delete selftests
-[       OK ] FileSystemS3.dll R0b exact-generation Delete: loads for debug selftests
-[ FAILED  ] FileSystemS3.dll R0b exact-generation Delete: debug selftests pass (passed=2, failed=1, hr=0x80004005)
-[       OK ] FileSystemS3.dll R0b exact-generation Delete: debug selftest module reaches its unload quiet point
-PluginContractTests focused S3 R0b Delete selftests failed.

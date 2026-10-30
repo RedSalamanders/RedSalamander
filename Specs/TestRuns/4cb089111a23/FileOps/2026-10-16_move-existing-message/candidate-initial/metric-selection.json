@@ -1,9 +1,0 @@
-{
-  "raw_path": "Z:\\RedSalamander.Perf\\evidence\\move-existing-message\\candidate-initial\\perf_metrics.jsonl",
-  "raw_sha256": "1CD357F33EBE128C48887C8752EAA03853502346F99A6BFA16DEE591FDA2DE98",
-  "raw_bytes": 4209537,
-  "raw_rows": 10844,
-  "selected_rows": 23,
-  "preserves_order": true,
-  "build_receipt": "527b5fdc51fd1a37a406f41736e5af0a5eb224afdfd00ad3a4857d3fea846bcc"
-}

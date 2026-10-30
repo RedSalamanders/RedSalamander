@@ -1,5 +1,0 @@
-  TEST RESULTS SUMMARY
-         (results.json not found - exit code: -1073741819)
-  Overall: 
-FAILED
-  Failed: 0

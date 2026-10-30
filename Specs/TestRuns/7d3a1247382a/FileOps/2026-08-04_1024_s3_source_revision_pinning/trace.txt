@@ -1,5 +1,0 @@
-run=1 passed=131 failed=0 hr=0x00000000
-run=2 passed=131 failed=0 hr=0x00000000
-run=3 passed=131 failed=0 hr=0x00000000
-run=4 passed=131 failed=0 hr=0x00000000
-run=5 passed=131 failed=0 hr=0x00000000

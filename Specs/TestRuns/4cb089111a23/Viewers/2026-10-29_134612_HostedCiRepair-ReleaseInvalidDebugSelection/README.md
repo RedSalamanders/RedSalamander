@@ -1,1 +1,0 @@
-Retained failed driver attempt: four eligible Release cases pass, while selecting the _DEBUG-only Text async-open case is correctly refused by native registration before any case execution. Original aggregate exit is 1. This packet is not green runtime acceptance; the corrected four-case Release run is separate.

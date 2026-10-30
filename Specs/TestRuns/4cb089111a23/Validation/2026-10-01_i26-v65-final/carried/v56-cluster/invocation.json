@@ -1,8 +1,0 @@
-{
-  "startedUtc": "2026-10-01T03:29:39.0373771+00:00",
-  "endedUtc": "2026-10-01T03:31:04.5796130+00:00",
-  "exitCode": 0,
-  "runId": "20261001T032939Z-69528-0f2e124ea9dd4721a752ccd97d5b9d93",
-  "filter": "cmd_pane_fileops_hosted_cancel_all_confirmation,cmd_pane_fileops_popup_footer_menu_action_routes,cmd_pane_fileops_retained_source_and_mixed_journeys,cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface,cmd_pane_fileops_speedLimit_prompt_live_dx_interaction,cmd_pane_fileops_speedLimit_prompt_long_run_open_close_stays_stable,cmd_pane_fileops_speedLimit_prompt_keeps_navigation_shell_stable",
-  "repeatCount": 3
-}

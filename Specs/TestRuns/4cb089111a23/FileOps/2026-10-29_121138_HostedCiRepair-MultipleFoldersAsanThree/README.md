@@ -1,1 +1,0 @@
-ASan live-progress case passes three repetitions, including Setup and Cleanup. Retains both-roots visibility, exact content, bounded rows, closed-during-copy and monotonic-progress assertions. Focused acceptance only.

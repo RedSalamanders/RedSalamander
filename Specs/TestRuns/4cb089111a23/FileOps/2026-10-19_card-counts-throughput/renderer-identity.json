@@ -1,5 +1,0 @@
-{
-  "rendererPath": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
-  "rendererSha256": "530e5a3616ee58e9d76f3e0dfa9c85431e5d866d442d4a21325ecfa7078991cd",
-  "note": "Renderer and resources are unchanged between first and final candidates; only UIA test warning repair and documentation/provenance differ. Timing observations do not establish why frame tails differ."
-}

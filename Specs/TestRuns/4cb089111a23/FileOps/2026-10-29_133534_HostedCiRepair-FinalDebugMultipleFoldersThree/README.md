@@ -1,1 +1,0 @@
-Exact committed candidate x64 Debug. DiscoveryScope_MultipleFoldersLiveProgress plus Setup/Cleanup repeated three times. Original both-roots, content, progress, row, and close assertions remain. Focused coverage only, not Full. No skips or automatic retries.

@@ -1,1 +1,0 @@
-Independent original-loop catalog control: a real 16-theme catalog rejects the unchanged System end-state assertion on all three 240-command invocations. The settings and thumbnail fixture repairs pass all nine corresponding invocations. Retain this deliberate negative control. No assertion, resource or time limit is relaxed; no performance comparison is claimed.

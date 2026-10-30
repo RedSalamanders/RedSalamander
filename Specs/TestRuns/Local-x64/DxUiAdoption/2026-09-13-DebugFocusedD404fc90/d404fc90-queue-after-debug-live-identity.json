@@ -1,7 +1,0 @@
-{
-  "ProcessId": 49632,
-  "ParentProcessId": 87256,
-  "ExecutablePath": "Z:\\RsI19Closeout\\.build\\x64\\Debug\\RedSalamander.exe",
-  "CommandLine": "Z:\\RsI19Closeout\\.build\\x64\\Debug\\RedSalamander.exe --fileops-selftest --selftest-no-activate --selftest-case=R4A02_DeleteOverCopySourceWarnsAndQueues --selftest-repeat=10",
-  "CreationDate": "2026-09-13T10:49:09.476003+02:00"
-}

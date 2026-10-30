@@ -1,7 +1,0 @@
-{
-  "scope": "Before-fix runtime control NOT_EVALUATED: interrupted only while queued, verified no native child; no original flag-failure claim",
-  "run_id": "20261029T151839Z-54156-881d85e1b846432db60268274eb38c94",
-  "controller": 54156,
-  "controller_dead": true,
-  "rebuild_required_before_qualification": true
-}

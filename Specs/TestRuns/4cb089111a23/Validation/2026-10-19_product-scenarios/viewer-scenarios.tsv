@@ -1,9 +1,0 @@
-scenario	dpi	widthPx	heightPx	noActivation
-viewer-text	96	1100	720	true
-viewer-text-hex	96	1100	720	true
-viewer-imgraw	96	1100	720	true
-viewer-pe	96	1100	720	true
-viewer-web	96	1100	720	true
-viewer-json	96	1100	720	true
-viewer-markdown	96	1100	720	true
-viewer-vlc-unavailable	96	1100	720	true

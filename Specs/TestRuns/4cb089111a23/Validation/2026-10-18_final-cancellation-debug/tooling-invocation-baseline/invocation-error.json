@@ -1,6 +1,0 @@
-{
-  "phase": "Before Invoke-Pester launched",
-  "error": "Resolve-Path could not find Tools/Tests/DebugWorkflowPolicy.Tests.ps1",
-  "correction": "Use actual Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1 independently of the Debug build profile",
-  "tests_executed": 0
-}

@@ -1,7 +1,0 @@
-{
-  "scope": "Pre-repair real Terminal Factory metadata",
-  "expected": "OldStyle",
-  "actual": "ProgramDatabase",
-  "passed": false,
-  "note": "Requested Embedded property did not update the existing compile item; no compilation or isolation claim."
-}

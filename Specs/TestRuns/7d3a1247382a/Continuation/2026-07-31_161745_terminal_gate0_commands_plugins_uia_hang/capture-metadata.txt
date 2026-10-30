@@ -1,8 +1,0 @@
-CapturedUtc=2026-07-31T16:17:45.7636100Z
-FrozenCommit=3e84e87b717841e28e11e1fe7e5bc04b4e3a3e0d
-RunRoot=D:\RedSalamander-terminal-gate0\.build\TestSandbox\runs\20260731T153831Z-35744-9dceccf8fcac42a8b91d71f30c3a489e
-ObservedCase=cmd_preferences_dialog_plugins_live_search_dx_interaction
-ObservedPid=35952
-SuiteStartUtc=2026-07-31T15:38:29Z
-CaseProcessStartLocal=2026-07-31T17:46:08+02:00
-Reason=No trace/results progress for more than 15 minutes while process remains responsive and consumes CPU.

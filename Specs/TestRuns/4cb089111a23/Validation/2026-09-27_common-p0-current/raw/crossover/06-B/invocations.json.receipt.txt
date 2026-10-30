@@ -1,6 +1,0 @@
-{
-  "case": "FileOps_CommonPresentationPerf",
-  "startedUtc": "2026-09-27T12:19:40.6873284+00:00",
-  "completedUtc": "2026-09-27T12:20:12.8721814+00:00",
-  "exit": 0
-}

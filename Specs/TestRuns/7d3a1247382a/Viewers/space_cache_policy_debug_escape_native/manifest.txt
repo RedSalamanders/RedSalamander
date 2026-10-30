@@ -1,6 +1,0 @@
-# SHA-256 manifest; exact source bytes verified after copy.
-# Columns: sha256  bytes  archived-name  source-path
-254634ac0fa1261b4d626322fa62e14dd282ad60b594e3258c6cd98dec720c52  7657  TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log  D:\RedSalamander.Perf\runs\20261009T115917Z-40568-f4d87559f9ce4b27ae7ca20b1f8a1da7\artifacts\selftest\last_run\TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log
-2fce38051cf7b1f9804cc02242784e5289a9cdda2944998a53a914811ff2a273  822  viewer-space-focused-diagnostic.json  D:\RedSalamander.Perf\runs\20261009T115917Z-40568-f4d87559f9ce4b27ae7ca20b1f8a1da7\artifacts\selftest\last_run\viewer-space-focused-diagnostic.json
-bff68e9c7de8708b59ec71960abd5d9b9ca76b3db591f07e4af9fe82a34f5ee2  95445  build-receipt.json  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Debug\receipts\2bf8224f970817fc029a478e7bcb4a838e959c32050bb7afbaea2ebdd5468647.json
-1b5baf2abe0a889d18f9b378768ede043ea82f220303cbe4e84ec904c4080969  7835  launcher.log  D:\RedSalamander.Perf\evidence\viewer-space-final-qualification-d713\native-debug-cache-policy-escape.log

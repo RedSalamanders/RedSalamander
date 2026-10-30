@@ -1,1 +1,0 @@
-Archive intentionally excludes recursive SelfTest\last_run\commands\work fixture trees and raw *.dmp files. The failed broad Full evidence is preserved through top-level result JSON/log/trace files, ViewerPETests output, runner stdout, and focused resume commands.

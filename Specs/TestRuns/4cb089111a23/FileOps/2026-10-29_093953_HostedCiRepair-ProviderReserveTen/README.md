@@ -1,1 +1,0 @@
-Ten R4A19 repetitions pass every original byte, overlap and 1.35-times timing gate with four transfer workers plus a reserve. The four-transfer selection and socket hypothesis are diagnostic inputs only; neither is shipped. Metrics retain all R4A19 rows in source order, with full raw digest and line-number provenance; complete raw input stays in local archived run evidence.

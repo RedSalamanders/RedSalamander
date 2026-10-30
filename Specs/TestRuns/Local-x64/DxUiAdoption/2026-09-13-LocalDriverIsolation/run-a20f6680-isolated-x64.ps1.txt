@@ -1,7 +1,0 @@
-$ErrorActionPreference='Stop'
-$hostExecutable=(Get-Process -Id $PID).Path
-foreach($configuration in @('Release','ASan Debug','Debug')){
- & $hostExecutable -NoProfile -File 'Z:/RedSalamander.Perf/runs/I19-work/scratch/run-a20f6680-isolated-profile.ps1' -Configuration $configuration
- if($LASTEXITCODE -ne 0){throw ('Isolated '+$configuration+' qualification failed; preserve evidence before continuing')}
-}
-Write-Output 'All three isolated x64 profile runs passed.'

@@ -1,5 +1,0 @@
-{"utc":"2026-10-17T19:40:51.0403592Z","stage":"synthetic-observer-control","gap_ms":11.524,"work_ms":421.846,"tools":[{"name":"pwsh","pid":91808,"build_shell":true}],"unresolved_shells":[]}
-{"utc":"2026-10-17T19:40:51.2806952Z","stage":"synthetic-observer-control","gap_ms":636.784,"work_ms":28.414,"tools":[{"name":"pwsh","pid":91808,"build_shell":true}],"unresolved_shells":[]}
-{"utc":"2026-10-17T19:40:51.5373931Z","stage":"synthetic-observer-control","gap_ms":232.629,"work_ms":52.422,"tools":[{"name":"pwsh","pid":91808,"build_shell":true}],"unresolved_shells":[]}
-{"utc":"2026-10-17T19:40:51.7773927Z","stage":"synthetic-observer-control","gap_ms":263.225,"work_ms":29.183,"tools":[{"name":"pwsh","pid":91808,"build_shell":true}],"unresolved_shells":[]}
-{"utc":"2026-10-17T19:40:52.0121135Z","stage":"synthetic-observer-control","gap_ms":233.03,"work_ms":30.838,"tools":[{"name":"pwsh","pid":91808,"build_shell":true}],"unresolved_shells":[]}

@@ -1,6 +1,0 @@
-{
-  "original_probe_result_scope_is_generic": true,
-  "process_id": 13404,
-  "observed_command": "Z:/src/DxUi-worktrees/rich-text-core-d2/.build/x64/ASan Debug/DxUi.ControlTests.exe --suite=Accessibility --no-activate",
-  "scope": "Five observations of the already-running DxUi Accessibility test process; no synthetic test or new application was launched."
-}

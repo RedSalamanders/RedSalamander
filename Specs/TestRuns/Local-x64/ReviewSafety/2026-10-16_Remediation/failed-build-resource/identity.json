@@ -1,5 +1,0 @@
-{
-  "path": "C:\\Users\\eric\\.codex\\worktrees\\review-safety-regressions\\RedSalamander\\.build\\logs\\msbuild-20261016_120227_839-pid89836-00b34de2.log",
-  "sha256": "f0cb1ae73650edbfec3399f9356278520588eb1a079bbe7d143fd3d93d007b7c",
-  "disposition": "MSBuild reported FTK1004/FTK1005 disk-space errors; its owned child was then stopped to incorporate the independently exposed Dummy layout correction. No successful receipt was produced."
-}

@@ -1,7 +1,0 @@
-{
-  "scope": "Pre-fix effective metadata, preserving normal Debug EditAndContinue; ASan Embedded is the defect",
-  "runId": "20261023T163647Z-66052-61a551eff7de418aaa3abdcb3ffa00c6",
-  "passed": 10,
-  "failed": 2,
-  "skipped": 0
-}

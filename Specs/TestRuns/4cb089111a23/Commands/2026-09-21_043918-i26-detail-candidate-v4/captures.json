@@ -1,6 +1,0 @@
-{
-  "captures": [],
-  "caption_probes": [],
-  "source_snapshot": "0fa8ac6a2fdfe87cfc6c9264af07bf79dcaa8f85879ea6675f9aea57f0a86d9e",
-  "capture_method": "SaveWindowScreenshot; private HWND protected by ScopedWindowActivationBlocker"
-}

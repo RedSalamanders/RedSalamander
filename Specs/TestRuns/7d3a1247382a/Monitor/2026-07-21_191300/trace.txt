@@ -1,5 +1,0 @@
-Scenario: monitor.chrome.dxui_toolbar_statusstrip
-ArchiveToRepo: D:\RedSalamander\Specs\TestRuns\7d3a1247382a\Monitor\2026-07-21_191300
-FAIL: required monitor frame metrics (one or more required monitor frame metrics missing)
-FAIL: monitor etw burst latency metrics (one or more etw burst latency metrics missing)
-FAIL: overall (Monitor DxUI chrome selftest requires ENABLE_TESTS.)

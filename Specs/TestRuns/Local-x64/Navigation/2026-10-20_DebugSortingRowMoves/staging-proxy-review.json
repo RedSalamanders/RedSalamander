@@ -1,9 +1,0 @@
-{
-  "toolchain_version": "14.51.36231",
-  "header": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.51.36231\\include\\xstring",
-  "sha256": "AB80A6B60196246D1C8653E6D55F78E3CBAAF4207860A37CF6996CDC833EEA7A",
-  "move_constructor_lines": "1077-1080",
-  "move_assignment_lines": "1274-1298",
-  "finding": "The installed move constructor allocates a checked iterator proxy before taking string contents. With the application default allocator, move assignment reuses the existing proxy. A lazy optional row therefore avoids repeating two proxy allocations for every permutation cycle without disabling iterator checking.",
-  "scope": "Source-derived allocation-path analysis; no process-wide allocation or memory claim."
-}

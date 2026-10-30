@@ -1,5 +1,0 @@
-mode=default-collapse
-processId=91704
-exitCode=0
-elapsedMs=4729
-completed=true

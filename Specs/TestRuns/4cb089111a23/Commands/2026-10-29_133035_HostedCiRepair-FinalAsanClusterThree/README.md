@@ -1,1 +1,0 @@
-Exact committed candidate x64 ASan Debug. Nine deferred-plugin, Find-sort, terminal, two-task disclosure, ViewerSpace device-loss and warm-quiescence cases each repeated three times. Original assertions and every late-paint/disclosure route remain. Focused coverage only, not Full. No skips or automatic retries.

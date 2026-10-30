@@ -1,1 +1,0 @@
-{"schema":"red-salamander.case-history.v1","run_id":"20261003T210505Z-80796-b4c8dd0ab103477caf7b286524b042af","run_started_utc":"2026-10-03T21:05:33.7609574Z","suite":"FileOps","harness":"FileOperations","case":"FileOps_IntegratedPresentationPerf","duration_ms":12063,"status":"passed","reason":"","classification":"PASSED","seed":"","attempt":1,"source":"case","mode":""}

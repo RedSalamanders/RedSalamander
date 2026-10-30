@@ -1,8 +1,0 @@
-{
-  "runId": "closeout-safety-debug-20261016T223637Z-93699ddd0218461480740fd91b47bc23",
-  "configuration": "Debug",
-  "caseFilter": "FileOpsFamily_SafetyRemediationContracts",
-  "repeatCount": 1,
-  "exitCode": 0,
-  "buildReceipt": "8f19e1856a6488bda35098c0c3a606ffa9db595a379cc37062046c13fd3d7c3d"
-}

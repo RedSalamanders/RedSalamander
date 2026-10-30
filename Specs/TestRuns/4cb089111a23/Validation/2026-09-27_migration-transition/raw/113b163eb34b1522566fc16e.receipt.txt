@@ -1,6 +1,0 @@
-{
-  "case": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
-  "startedUtc": "2026-09-27T15:14:21.7813934+00:00",
-  "completedUtc": "2026-09-27T15:15:01.7808986+00:00",
-  "exit": 0
-}

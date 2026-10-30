@@ -1,6 +1,0 @@
-{
-  "log": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-keyboard-qualified.log",
-  "sha256": "89468144fffa21975cc59dab43bd81fd9dc67c5baa59dddf4a5f943862f7f060",
-  "status": "Build failed; no tests ran",
-  "diagnostics": "WIL scope_exit needed a direct lambda; fixed hidden-local name and instantiated expected WIL deleted-copy warnings inside the existing guard."
-}

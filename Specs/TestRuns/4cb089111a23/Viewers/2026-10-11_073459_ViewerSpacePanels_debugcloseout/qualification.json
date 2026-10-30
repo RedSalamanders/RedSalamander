@@ -1,7 +1,0 @@
-{
-  "releaseFull": "Separate run",
-  "status": "passed",
-  "captures": "All eleven valid, foreground preserved, binary hashes matched and every layer witness checked",
-  "repositoryVerdict": "NOT_EVALUATED",
-  "scope": "Seven no-activation ViewerSpace cases and one real-input case; final source x64 Debug"
-}

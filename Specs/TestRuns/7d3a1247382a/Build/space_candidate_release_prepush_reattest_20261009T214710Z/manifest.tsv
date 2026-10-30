@@ -1,5 +1,0 @@
-path	bytes	sha256	absolute_source
-build-receipt.json	96947	d20692190256c647089fab52005638563b019d59ece317bb14f9ed2ded3a0cc6	C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\build-receipt.json
-msbuild.log	42095	c1beccada832c6f251be4916eb603923e0fc8a7c95728f00e19c97c250c17572	C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\logs\msbuild-20261009_234710_900-pid43264-027778f3.log
-outer.log	967998	d25e999702314314ff13b926c83ecf43a2f2755f54a5ad388ffe38e8af0ca77c	D:\RedSalamander.Perf\evidence\viewer-space-finish-all-20261009\prepush-release-queued-path.log
-RedSalamander.exe.DxUi.json	1595	7254e921ea8d1084fe5018ef1704e179dda298fd85c0be0f7cd401e512f852e2	C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamander.exe.DxUi.json

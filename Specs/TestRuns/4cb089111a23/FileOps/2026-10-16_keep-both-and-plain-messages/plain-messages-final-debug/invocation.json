@@ -1,8 +1,0 @@
-{
-  "runId": "plain-messages-final-debug-20261016T222217Z-074bbe790f1948fbad26ee0a0959bb6d",
-  "configuration": "Debug",
-  "caseFilter": "FileOpsFamily_SafetyRemediationContracts",
-  "repeatCount": 3,
-  "exitCode": 1,
-  "buildReceipt": "8ae4bcf2f9cbea2be23383abf5eb4deedc918bf775f0c06875045d147b5b0562"
-}

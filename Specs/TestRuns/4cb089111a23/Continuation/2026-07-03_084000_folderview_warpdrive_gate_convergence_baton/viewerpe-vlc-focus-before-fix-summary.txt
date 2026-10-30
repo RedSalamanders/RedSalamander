@@ -1,6 +1,0 @@
-
-> .build\codex-runs\viewerpe_vlc_focus_repeat10_20260703.log:40:[FAIL] ViewerVLC Tab transfers focus from the video surface into the HUD
-> .build\codex-runs\viewerpe_vlc_focus_repeat10_20260703.log:41:[FAIL] ViewerVLC HUD keeps keyboard focus while cycling its internal controls
-  .build\codex-runs\viewerpe_vlc_focus_repeat10_20260703.log:42:[PASS] ViewerVLC window close succeeds
-
-

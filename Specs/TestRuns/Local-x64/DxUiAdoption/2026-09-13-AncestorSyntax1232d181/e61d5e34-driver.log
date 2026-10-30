@@ -1,5 +1,0 @@
-Exception: Z:\RedSalamander.Perf\runs\I19-work\scratch\run-i19-navigation-diagnosis.ps1:35
-Line |
-  35 |   if($LASTEXITCODE -ne 0){throw 'Diagnostic build failed'}
-     |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | Diagnostic build failed

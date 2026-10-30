@@ -1,1 +1,0 @@
-Exact committed candidate x64 Release. Three captured-runner, duplicate service and resource-scoped writer cases repeated ten times. Real console absence, exact captured bytes, duplicate exit and primary liveness remain. Focused coverage only, not Full. No skips or automatic retries.

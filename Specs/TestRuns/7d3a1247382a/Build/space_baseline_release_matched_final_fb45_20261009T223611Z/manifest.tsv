@@ -1,6 +1,0 @@
-path	bytes	sha256	absolute_source
-build-receipt.json	95417	a66f8102fe37d5c7ff56dac4fc764a2ce23aeb9f778fa274a877af9eb3cd1423	C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\build-receipt.json
-msbuild.log	37000	aeb94db5578c840a4061518ffd39eeae52f43a1d0ed5c8a3d834522cb44cb0eb	C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\logs\msbuild-20261010_003631_297-pid10532-59c6e0be.log
-outer.log	40495	156a0bb9974ec5c041ec0ecd7067073630a42324f3633d30b3d2d0e000ab3b98	D:\RedSalamander.Perf\evidence\viewer-space-finish-all-20261009\baseline-release-final-fb45-build.log
-RedSalamander.exe.DxUi.json	1595	c64aed13a0fab167c849b3970fd8511f57b5fccd88da29fbdfc22f7316d9e3cc	C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander\.build\x64\Release\RedSalamander.exe.DxUi.json
-baseline-observer-runtime.patch	70443	f57d7daf41097892ceabb0f346567f132df71c0bad2cd637c9997bc5787ed0c0	D:\RedSalamander.Perf\evidence\viewer-space-finish-all-20261009\space_baseline_release_matched_final_fb45_20261009T223611Z.patch

@@ -1,9 +1,0 @@
-{
-  "Base": "265147ee62c296b1a47ed44efb4d8edb58ad60cf",
-  "TestedMerge": "9a4d243416fa503899c2f44e4242a1276db1cef9",
-  "Receipt": "771cfd37703d1466900aa2fa6b7df68d248d9bec79ef1cd87dc07c208a9ff260",
-  "Platform": "x64",
-  "Configuration": "Debug",
-  "CI": "blocked before execution: GitHub billing/spending limits",
-  "Scope": "Explicit affected selections only; no Full acceptance"
-}

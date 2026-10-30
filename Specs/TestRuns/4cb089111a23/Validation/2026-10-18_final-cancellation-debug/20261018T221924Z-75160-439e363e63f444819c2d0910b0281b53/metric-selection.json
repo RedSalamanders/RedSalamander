@@ -1,9 +1,0 @@
-{
-  "raw_path": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\20261018T221924Z-75160-439e363e63f444819c2d0910b0281b53\\artifacts\\selftest\\last_run/perf/perf_metrics.jsonl",
-  "raw_sha256": "c5aadd967cccc37410956cc860a308ead5b0b1bf426a04ad8ffcddc5f9069e27",
-  "selected_path": "selected-metrics.jsonl",
-  "selected_sha256": "0163be825df46b375c4854461c6f51bb7968cfc2c572b642330b781e5d82a7c9",
-  "selected_line_count": 3,
-  "selection_regex": "fileops\\.local\\.mutation\\.rename_reconcile_unknown|FileOps\\.Local\\.(RenameReconcileUnknown|PublicationCanceledBeforeRename)|FileOps\\.Bridge\\.(FailurePhase|StageDisposition|StageRetainedCount)|FileOps\\.SelfTest\\.|FileOps\\.Discovery\\.SelectedFiles|FileOps\\.Popup\\.AutoCollapse|FileOps\\.Bridge\\.ActiveFilesMax|folder\\.sort_toggle_us|folder\\.enumerate\\.natural_name_rank_prepare_us",
-  "derivation": "Original complete matching JSONL lines, unchanged; all other metrics retained in raw archive"
-}

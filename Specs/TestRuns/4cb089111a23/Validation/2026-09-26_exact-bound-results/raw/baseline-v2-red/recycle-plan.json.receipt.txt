@@ -1,5 +1,0 @@
-{
-  "Id": "selftest.file-operations",
-  "Kind": "SelfTest",
-  "RequiresInteractiveDesktop": false
-}

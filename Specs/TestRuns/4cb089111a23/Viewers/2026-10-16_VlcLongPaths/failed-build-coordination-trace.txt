@@ -1,6 +1,0 @@
-Exception: Cannot start 'direct MSBuild shared dependency phase Debug|x64' because another RedSalamander build or test operation
-owns artifact scope 'shared-dependency|platform=X64' at
-'Z:\src\RedSalamander\.build\artifact-operations\shared-dependency-x64-634c3ff6af81.lock'. Owner PID=37952;
-Path='C:\Users\eric\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe';
-Operation='MSBuild shared dependency phase Release|x64'; StartedUtc='10/16/2026 08:38:44'. Wait for it to finish and
-retry.

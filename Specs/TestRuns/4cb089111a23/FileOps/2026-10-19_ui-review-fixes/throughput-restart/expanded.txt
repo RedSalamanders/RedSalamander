@@ -1,5 +1,0 @@
-mode=expanded
-processId=76008
-exitCode=0
-elapsedMs=4401
-completed=true

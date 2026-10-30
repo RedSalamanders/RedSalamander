@@ -1,9 +1,0 @@
-Validated build-dxui
-Validated consumer-integration
-Validated control-development
-Validated embedded-rendering
-Validated input-accessibility
-Validated modern-cpp-wil
-Validated performance-resources
-Validated spec-workflow
-Validated win32-host

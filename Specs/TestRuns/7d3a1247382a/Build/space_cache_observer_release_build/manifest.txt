@@ -1,4 +1,0 @@
-path	bytes	sha256	source
-immutable-build-receipt.json	96954	a7a2d77e7566529d717a3ec450e9d3c6fdccd6a1469280819b0a7eed4e6c6372	.build/x64/Release/build-receipt.json
-release-build.launch.log	45727	6143d5de2df28e5dff237ed4c9c595fd206dcae24feb61ea5268d46c5b944fa2	.build/space-cache-observer-release-build.launch.log
-release-msbuild.log	42095	a29b67661255d83e2f6a0e5a3a777c6c5cd61865815ad1b49598f78acd2d8b43	.build/logs/msbuild-20261009_115522_152-pid14180-2164f454.log

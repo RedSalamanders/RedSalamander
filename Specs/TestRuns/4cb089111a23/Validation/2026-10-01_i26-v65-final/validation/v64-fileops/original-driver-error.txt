@@ -1,7 +1,0 @@
-PropertyNotFoundException: C:\RedSalamander.Perf\evidence\i26-ui\final-gates-drivers-20260930\run-release-v64-fileops-full-draft.ps1:105
-Line |
- 105 |      if($detail.schema -cne 'red-salamander.run-all-tests.v1' -or $det …
-     |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | The property 'case_filter' cannot be found on this object. Verify that the property exists.
-
-

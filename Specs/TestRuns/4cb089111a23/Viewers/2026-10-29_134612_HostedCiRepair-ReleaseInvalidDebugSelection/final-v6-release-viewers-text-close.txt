@@ -1,4 +1,0 @@
-[PASS] Viewer harness acquires its isolated browser profile
-[INFO] Viewer harness WebView2 profile: C:\RedSalamander.Perf\runs\20261029T134612Z-103728-ec5e4322d92d4c8286e188fe3f147c7b\scratch\viewer-pe\webview2-65100-110803437
-[FAIL] Viewer parent selection matches a registered case in the requested activation class
-ViewerPETests failed.

@@ -1,7 +1,0 @@
-
-Name                                   Filter                                                         Exit Total Passed Failed Skipped DurationMs Failure Log
-----                                   ------                                                         ---- ----- ------ ------ ------- ---------- ------- ---
-find_action_buttons_focused_after_wait cmd_pane_find_dialog_action_buttons_activate_expected_commands    0     1      1      0       0       5287         .build\codex-runs\runall_commands_find_action_buttons_focused_after_wait_20260703.log
-find_dialog_prefix_after_wait          cmd_pane_find_dialog_                                             0    63     63      0       0     118802         .build\codex-runs\runall_commands_find_dialog_prefix_after_wait_20260703.log
-
-

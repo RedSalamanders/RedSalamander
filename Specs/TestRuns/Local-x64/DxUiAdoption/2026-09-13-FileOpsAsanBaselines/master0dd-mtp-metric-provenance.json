@@ -1,8 +1,0 @@
-{
-  "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp\\archive\\4cb089111a23\\FileOps\\2026-09-13_093428\\perf\\perf_metrics.jsonl",
-  "sourceBytes": 175224,
-  "sourceSha256": "8ac95943bc3570326ec54ac9c34946a2b3dd7f4e0389c46072d98b39d04339a4",
-  "selection": "Original rows for R0d, NativeCopy.TruthFixture, R4A19.ProviderControl and LocalBandwidthThrottle in source order.",
-  "rows": 1,
-  "excerptsSha256": "1a7a3b2661ea653a5992f60ed0b2e2e929b6d0b04e0aac3619a434c5ba1b3734"
-}

@@ -1,3 +1,0 @@
-# Keep original build, Pester and native result bytes, including formatted trailing blanks.
-*.log -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
-*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

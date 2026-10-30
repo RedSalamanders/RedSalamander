@@ -1,7 +1,0 @@
-{
-  "schema": "hosted-ci-repair.external-metrics.v1",
-  "sha256": "2572e8b46b93e93f37670026bd9c76a6e79d99e3d4a33f835be4beda92d1dab2",
-  "bytes": 11617782,
-  "retention": "Complete raw metrics remain in this completed-run archive; no performance non-regression or trend claim is based on this functional packet",
-  "runId": "20261029T105813Z-72596-9f3de0032d574f2c9537bb974136cc75"
-}

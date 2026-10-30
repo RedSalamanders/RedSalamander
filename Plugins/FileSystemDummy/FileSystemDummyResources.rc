@@ -1,8 +1,0 @@
-#include <windows.h>
-#include "FileSystemDummyResources.h"
-
-STRINGTABLE
-BEGIN
-    IDS_FILESYSTEMDUMMY_NAME "File System Dummy"
-    IDS_FILESYSTEMDUMMY_DESCRIPTION "Deterministic in-memory dummy file system for testing."
-END

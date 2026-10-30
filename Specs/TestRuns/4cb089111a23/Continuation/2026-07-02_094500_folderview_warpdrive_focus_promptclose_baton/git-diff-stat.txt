@@ -1,5 +1,0 @@
- .../FolderWindow.FileOperations.Popup.cpp          | 20 ++++--
- .../FolderWindow.FileSystem.Navigation.Part.cpp    | 47 ++++++++------
- .../Commands/Commands.SelfTest.Settings.cpp        | 35 ++++++++++-
- Tests/DxUiTests/DxUiTests.NativeTextInput.cpp      | 71 ++++++++++++++++++++++
- 4 files changed, 145 insertions(+), 28 deletions(-)

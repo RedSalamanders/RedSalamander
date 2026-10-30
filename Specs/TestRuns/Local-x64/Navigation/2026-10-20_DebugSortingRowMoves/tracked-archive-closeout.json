@@ -1,9 +1,0 @@
-{
-  "concurrent_new_entries": 58,
-  "own_packet": "Explicit validation covers the ignored new sorting packet separately.",
-  "status": "passed",
-  "concurrent_scope": "New ViewerSpace ModifiedTimestamps packet was staged by another task and is preserved; full inventory is rerun separately.",
-  "current_tracked_entries": 17994,
-  "original_historical_index_and_worktree_unchanged": true,
-  "original_tracked_entries": 17936
-}

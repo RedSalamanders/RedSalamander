@@ -1,3 +1,0 @@
-scenario	timeMs	lengthMs	moduleLoaded	playerCreated	videoChild	videoPixels
-viewer-vlc-playback	1025	12000	true	true	true	346026
-viewer-vlc-paused	1525	12000	true	true	true	346026

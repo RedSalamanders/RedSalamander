@@ -1,9 +1,0 @@
-{
-  "startedUtc": "2026-10-01T09:04:50.2727903+00:00",
-  "endedUtc": "2026-10-01T09:20:54.2202623+00:00",
-  "exitCode": 0,
-  "runId": "20261001T090450Z-99932-e4fc6b4b30da433da94d58284796c674",
-  "suite": "FileOps",
-  "filter": "",
-  "repeatCount": 1
-}

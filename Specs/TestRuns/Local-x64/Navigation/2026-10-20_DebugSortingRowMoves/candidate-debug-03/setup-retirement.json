@@ -1,4 +1,0 @@
-{
-  "benchmark_started": false,
-  "reason": "Candidate v1 diagnostic was contaminated. Installed MSVC source confirms per-cycle checked string proxy allocations; optimize staging reuse before final matched qualification."
-}

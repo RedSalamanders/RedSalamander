@@ -1,4 +1,0 @@
-{
-  "reason": "Superseded to add a deterministic stage-debt regression witness after the timing-dependent cancellation repeat had no natural Unknown publication.",
-  "qualification": "The following DiscoveryScope native tests passed, but the runner rejected source stability after the deterministic test was added. Neither partial selection qualifies the final source."
-}

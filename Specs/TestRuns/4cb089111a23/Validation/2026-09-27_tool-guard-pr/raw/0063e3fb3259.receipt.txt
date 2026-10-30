@@ -1,9 +1,0 @@
-{
-  "nativeExecutedBeforeRecovery": false,
-  "failures": [
-    "Driver template replacement compared Windows backslashes with forward-slash literals.",
-    "Appending changed inputs duplicated an existing tool-inventory entry with its old hash."
-  ],
-  "correction": "Use normalized slash paths and replace manifest entries by source path; verify every final hash.",
-  "finalInputCount": 40
-}

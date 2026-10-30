@@ -1,5 +1,0 @@
-{
-  "path": "C:\\Users\\eric\\.codex\\worktrees\\review-safety-regressions\\RedSalamander\\.build\\logs\\msbuild-20261016_120946_021-pid69420-4b50507d.log",
-  "sha256": "fcc9fd3e29bc1f2ece1a052c7aaaa6198007f6bb8b77a52a9119a7f53eb3d946",
-  "disposition": "Compiler C2471 PDB update errors across projects; this operation owned MSBuild child was stopped. A separate worktree build was active. Retry uses the documented receipt-bound Embedded compiler debug mode; no source change is attributed to this environmental failure."
-}

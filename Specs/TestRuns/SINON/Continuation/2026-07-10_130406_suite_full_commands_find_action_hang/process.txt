@@ -1,9 +1,0 @@
-
-Id              : 17344
-ProcessName     : RedSalamander
-CPU             : 200,015625
-StartTime       : 10/07/2026 12:48:19
-Responding      : True
-MainWindowTitle : RedSalamander
-
-

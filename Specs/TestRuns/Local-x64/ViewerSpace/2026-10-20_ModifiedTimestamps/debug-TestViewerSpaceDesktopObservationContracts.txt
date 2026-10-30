@@ -1,2 +1,0 @@
-[PASS] ViewerSpace nonactivating desktop observation contracts
-ViewerPETests passed.

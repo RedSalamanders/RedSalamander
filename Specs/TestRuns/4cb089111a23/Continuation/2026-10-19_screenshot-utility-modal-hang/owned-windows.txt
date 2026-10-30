@@ -1,3 +1,0 @@
-hwnd=0xE1D1B62 thread=72340 visible=True class=Static
-hwnd=0x38A16B8 thread=72340 visible=True class=REDSALAMANDER
-hwnd=0x2C046A thread=72340 visible=False class=IME

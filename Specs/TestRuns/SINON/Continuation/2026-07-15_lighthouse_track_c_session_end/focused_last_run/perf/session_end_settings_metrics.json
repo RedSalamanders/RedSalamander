@@ -1,8 +1,0 @@
-{
-  "scenario": "app/windows-session-end-settings-save",
-  "query_end_session_us": 1,
-  "end_session_save_us": 1533,
-  "writer_call_count": 1,
-  "normal_teardown_call_count": 0,
-  "result_hr": 0
-}

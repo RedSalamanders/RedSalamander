@@ -1,4 +1,0 @@
-{
-  "benchmark_started": false,
-  "reason": "Reusable MSBuild nodes with exited build parent are conservatively blocking the gate; verify exact inactive identities and CPU counters before a revised frozen observer, before any baseline measurement."
-}

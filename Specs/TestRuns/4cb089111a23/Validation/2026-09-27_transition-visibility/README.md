@@ -1,7 +1,0 @@
-# Release terminal visibility diagnostics
-
-The full x64 Release build passes with zero warnings/errors, receipt `164674b2c8088a615fe4caddb9d941bad635dc8f3eb7e9eba73726d5665f0bf2`. Gallery run `20260927T153240Z-90320-cbb07f251f7e4a2c846d41bc6fb6bb2d` passes 1/0/0 with zero disk findings. All sixty same-window terminal transitions and both legacy-layout witnesses pass on native 144/96-DPI displays. All 571 runner copies are verified against their retained inventory.
-
-Only test diagnostics differ from V13: existing group visibility, viewport, painted-card/action rectangles and scroll position are recorded at footer restoration or a failed observation. Successful restoration on both monitors has no hidden group or residual scroll, and its card fits the viewport. No production layout changes were made. The earlier [V9 failure](../2026-09-27_migration-transition/README.md) remains unexplained; these passing observations do not establish its cause or repair. New screenshots do not change visual production behavior, and the earlier published originals remain the review entry points.
-
-The forty-input manifest, exact source snapshot, full suite trace, source/build/run bindings and complete copied-file hashes are retained under `raw`. `file-map.json.receipt.txt` maps byte-exact payloads to their original files; `SHA256SUMS.txt` binds the archive. Full/DPI/AT and paired resource acceptance remain separate.

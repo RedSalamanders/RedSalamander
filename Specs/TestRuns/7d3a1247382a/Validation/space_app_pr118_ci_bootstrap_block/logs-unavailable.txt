@@ -1,3 +1,0 @@
-gh run view 37882302098 --repo DualTail/RedSalamander --log-failed
-log not found: 113664470178
-No runner log was available; all jobs have zero steps and runner_id 0.

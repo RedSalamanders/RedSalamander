@@ -1,4 +1,0 @@
-Case: cmd_pane_editNew_prompt_rejects_invalid_and_existing_names
-Case returned: cmd_pane_editNew_prompt_rejects_invalid_and_existing_names ok=no failed=yes skipped=no
-Case failure: cmd_pane_editNew_prompt_rejects_invalid_and_existing_names reason='Edit New should show a validation message for every invalid file name.'
-Edit New should show a validation message for every invalid file name.

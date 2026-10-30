@@ -1,8 +1,0 @@
-[ RUN      ] Terminal VT upgrade deterministic corpus and Release performance baseline
-[       OK ] Terminal.dll: loads for VT upgrade corpus
-[       OK ] Terminal.dll: resolves the test-enabled VT upgrade corpus export
-[       OK ] Terminal.dll: VT upgrade corpus behavior and 200-sample measurement pass
-VT upgrade evidence metadata environment is missing or invalid.
-[ FAILED  ] Terminal.dll: writes bounded digest-only VT upgrade evidence
-[       OK ] Terminal.dll: VT upgrade corpus reaches its unload quiet point
-PluginContractTests focused Terminal VT upgrade corpus failed.

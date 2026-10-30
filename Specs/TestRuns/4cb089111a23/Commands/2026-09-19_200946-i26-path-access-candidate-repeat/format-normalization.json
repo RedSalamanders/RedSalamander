@@ -1,6 +1,0 @@
-{
-  "before_sha256": "502a384745e01955f981f4a0e5ba81fe990eac773e8518feea4c7bafa497b097",
-  "after_sha256": "7816a6426917ce95c14d43d1b046239c73d5f9c4443c34aeec5fb67451bdbe3e",
-  "line_endings_only": true,
-  "scope": "Final fixture line-ending normalization after native tests; all recorded runs used the before hash."
-}

@@ -1,1 +1,0 @@
-{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":1,"skipped":0,"total":1},"entry_id":"perf.monitor-etw-latency","kind":"Executable","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"094083409e4107610da04af067aaa6abe396a3f7f5366ab0e79b4f14628d3a4e"}

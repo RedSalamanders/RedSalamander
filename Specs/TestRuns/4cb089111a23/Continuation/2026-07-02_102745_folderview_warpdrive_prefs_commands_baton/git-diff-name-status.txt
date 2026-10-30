@@ -1,5 +1,0 @@
-M	RedSalamander/FolderWindow.FileOperations.Popup.cpp
-M	RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp
-M	RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp
-M	Tests/DxUiTests/DxUiTests.Controls.cpp
-M	Tests/DxUiTests/DxUiTests.NativeTextInput.cpp

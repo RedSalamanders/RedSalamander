@@ -1,5 +1,0 @@
-{
-  "phase": "baseline-debug-01",
-  "benchmark_started": false,
-  "reason": "Observer routing changed before any measurement; owned gate stopped and restarted with frozen monitor source. No app or build was stopped."
-}

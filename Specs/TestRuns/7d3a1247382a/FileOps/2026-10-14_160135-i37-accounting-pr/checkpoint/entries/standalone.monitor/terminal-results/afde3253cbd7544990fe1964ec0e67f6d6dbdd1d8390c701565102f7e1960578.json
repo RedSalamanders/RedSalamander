@@ -1,1 +1,0 @@
-{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":1,"skipped":0,"total":1},"entry_id":"standalone.monitor","kind":"Executable","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"afde3253cbd7544990fe1964ec0e67f6d6dbdd1d8390c701565102f7e1960578"}

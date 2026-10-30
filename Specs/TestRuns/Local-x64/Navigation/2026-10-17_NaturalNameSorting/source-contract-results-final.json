@@ -1,8 +1,0 @@
-{
-  "passed": 309,
-  "failed": 0,
-  "skipped": 0,
-  "pending": 0,
-  "duration": "00:01:14.2551036",
-  "scope": "Final C++ source including the test-local shadow-name warning fix"
-}

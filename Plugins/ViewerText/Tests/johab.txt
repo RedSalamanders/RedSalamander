@@ -1,9 +1,0 @@
-Encoding: Johab (CP1361) - no BOM
-File: johab.txt
-Line endings: CRLF
-Purpose: Validate Johab mapping.
----
-01: Korean: ´e‘wÐa­A¶a
-02: Korean: ÐeŠ‚´á
-03: PATH: C:\Temp\ViewerText\johab.txt
-04: End marker: EOF

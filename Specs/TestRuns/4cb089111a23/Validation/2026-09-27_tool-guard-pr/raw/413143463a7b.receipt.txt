@@ -1,2 +1,0 @@
-Stale TestSandbox run cleanup: 1 removed, 0 failed.
-BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution build receipt and byte-identical artifacts. Run build.ps1 for Release|x64, or import a verified same-workflow portable attestation.

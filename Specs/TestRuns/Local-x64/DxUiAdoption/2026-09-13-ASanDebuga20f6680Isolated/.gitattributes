@@ -1,5 +1,0 @@
-# Preserve original receipts, including native banners and formatted trailing whitespace.
-*.log -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
-*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-
-*.jsonl -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol

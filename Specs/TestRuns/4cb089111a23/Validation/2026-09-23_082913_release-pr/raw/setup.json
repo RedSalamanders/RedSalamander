@@ -1,8 +1,0 @@
-{
-  "source": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
-  "checkout": "C:/RsI26Final",
-  "toolCommit": "1391150599c0b9dc6f2a3c79c50eff6c94b077d1",
-  "toolExeSha256": "13b8175e99a884c5ad34249218754b45541a1a63f216e92603aee57a285ac741",
-  "packageBuildLogs": 623,
-  "result": "dependencies restored; product build and PR tests pending"
-}

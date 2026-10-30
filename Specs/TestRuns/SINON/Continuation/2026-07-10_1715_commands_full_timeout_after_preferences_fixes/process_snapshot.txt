@@ -1,9 +1,0 @@
-
-Id              : 84304
-ProcessName     : RedSalamander
-CPU             : 233,71875
-StartTime       : 10/07/2026 16:52:46
-Responding      : True
-MainWindowTitle : Shortcuts
-Path            : Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
-

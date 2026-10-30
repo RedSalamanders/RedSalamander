@@ -1,3 +1,0 @@
-Root reviewed all eight original native lifecycle PNGs at original resolution on 2026-10-09. Framing, header status, partial observed totals, retained refresh display, memory-refusal wording, empty and provider-error presentation were accepted for the recorded 144-DPI x64 Debug scenario. Files have folded corners and nested folder content remains visible.
-
-This review does not establish physical input latency, broader DPI/locale/platform coverage, human screen-reader behavior, or selection from the blue table tint. Original provenance remains unchanged. This broader run failed overall (1182 passed, 9 failed, 28 skipped); accepted frames do not convert its verdict into a pass.

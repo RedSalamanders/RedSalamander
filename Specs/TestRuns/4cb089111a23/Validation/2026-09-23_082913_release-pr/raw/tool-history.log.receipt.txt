@@ -1,2 +1,0 @@
-From https://github.com/microsoft/vcpkg
- * branch                  1391150599c0b9dc6f2a3c79c50eff6c94b077d1 -> FETCH_HEAD

@@ -1,9 +1,0 @@
-Case: cmd_compare_directories_options_tab_traversal_live_dx_interaction
-compare_options_tab: label='Compare size toggle' reverse=false target=0x9E1002C class='RedSalamander.CompareOptions.DxHost' beforeFocus=1 beforeScroll=0/978
-compare_options_tab: label='Compare size toggle' afterFocus=2 afterScroll=0/978
-compare_options_tab: label='Compare date/time toggle' reverse=false target=0x9E1002C class='RedSalamander.CompareOptions.DxHost' beforeFocus=2 beforeScroll=0/978
-compare_options_tab: label='Compare date/time toggle' afterFocus=3 afterScroll=0/978
-compare_options_tab: label='Compare attributes toggle' reverse=false target=0x9E1002C class='RedSalamander.CompareOptions.DxHost' beforeFocus=3 beforeScroll=0/978
-compare_options_tab: label='Compare attributes toggle' afterFocus=0 afterScroll=93/978
-Case failure: cmd_compare_directories_options_tab_traversal_live_dx_interaction reason='Compare Directories options Compare attributes toggle focus target not reached during tab traversal. actualFocus=0 visibleLegacyEdits=0 visibleLegacyToggles=0 visibleDxBodyCards=10 optionsVisible=true usesDxStatics=true usesDxToggles=true usesDxEdits=true routedTo=0x9E1002C class='RedSalamander.CompareOptions.DxHost' beforeFocus=3 scroll=93/978.'
-Compare Directories options Compare attributes toggle focus target not reached during tab traversal. actualFocus=0 visibleLegacyEdits=0 visibleLegacyToggles=0 visibleDxBodyCards=10 optionsVisible=true usesDxStatics=true usesDxToggles=true usesDxEdits=true routedTo=0x9E1002C class='RedSalamander.CompareOptions.DxHost' beforeFocus=3 scroll=93/978.

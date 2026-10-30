@@ -1,9 +1,0 @@
-{
-  "result": "Failed before tests",
-  "reason": "New test-only screen-text helper lacked the COM header needed to expose WIL CoTaskMem ownership aliases.",
-  "sourceLog": ".build\\logs\\msbuild-20260908_183447_243-pid66604-5c485c85.log",
-  "logSha256": "a9070acd3a864a1ae016c5877048b859c279891f91acfcc37f8af6a4c1b9c95c",
-  "warnings": 0,
-  "errors": 6,
-  "correction": "Include objbase.h and the gated WIL resource definitions in TerminalHostSupport.cpp."
-}

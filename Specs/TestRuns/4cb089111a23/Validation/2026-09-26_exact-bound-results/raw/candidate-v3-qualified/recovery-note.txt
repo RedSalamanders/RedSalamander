@@ -1,1 +1,0 @@
-Candidate v2 failed at the governed artifact contamination guard before compilation or tests. User-interrupted v1 requires a matching full-solution Release|x64 -Rebuild. Candidate v3 uses that supported recovery; source35inputs are unchanged. Never remove or bypass the contamination marker manually.

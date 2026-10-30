@@ -1,6 +1,0 @@
-{
-  "reviewed_by_root": true,
-  "build_receipt_id": "69898b9bf90205dc930d66b24284b8ebb5975222542b8ae411f77a4a3d7f6173",
-  "batch_run_id": "20260926T102340Z-37620-c3820504fa5e4ee1a9f0579b5e81656e",
-  "recycle_run_id": "20260926T102415Z-37620-cdb691b468294ef6a6a98613e8954b7b"
-}

@@ -1,1 +1,0 @@
-No running RedSalamander process was found at archive time.

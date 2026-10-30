@@ -1,9 +1,0 @@
-# Direct Issues: matched Release evidence
-
-The corrected baseline gallery `20260923T185945Z-63936-c51b67dcd7374c58b690d9bc1cf642fa` fails its new Direct Issues witnesses by design; the candidate gallery `20260923T190842Z-84028-f9b2968bba5d44bd8825a3e1b132d16a` passes. Both have 532 filename-matched actual captures, including 16 new scene-145–147 PNGs. The initial baseline compile failure (C2513 near-macro collision and C4365 UINT conversion) remains archived separately; the corrected baseline build is the paired comparison source. The primary HEAD changed from the reviewed 199728b8 baseline to bf5506bd after terminal facts were committed between attempts; both isolated build receipts retain ccebd5af. The frozen input manifests bind the exact source delta, and the VisualGallery witness bytes are unchanged.
-
-RGBA pixel comparison finds 120 changed images and 12 dimension changes. The 24 shared five-round synchronous redraw fixtures show paired median redraw-time changes from -1.49% to +2.12% and private-byte changes from -13.47 to +12.92 MiB. These are in-process observations, not presented FPS, heap attribution, GPU memory, or final performance acceptance.
-
-The gallery trace checks 16 actual action-fit observations and 20 same-HWND transition observations across two native displays, including Issues without More. The raw localization transcript records 9/9 passes; its first PowerShell wrapper exited 1 after redirecting the PassThru object, so no passing wrapper exit is claimed. The direct Issues Commands API case is candidate-only and requires an interactive desktop lease; this Release gallery packet does not validate it. Debug, UIA, manual input, PR, and Full validation remain separate.
-
-[Gallery](gallery.html) · [All capture comparisons](baseline-release-comparison.json).

@@ -1,7 +1,0 @@
-path	bytes	sha256	source
-debug-build-receipt.json	95452	76b82e2dd836cf72171441ed9632832c6d3ad00fc09ae962d25683e351354722	.build/x64/Debug/receipts/4e2c3e2030fb55d83e9dc573f1455e545d73c38729892d0f8279573427e0645f.json
-debug-build.launch.log	38123	07dbe5b588fda576faccb6c792b4c247fe24db70dee7159b05e2697fa55483d2	.build/space-hover-clock-debug-build.launch.log
-debug-msbuild.log	34503	272f2b9b9dd2c17c347020d9be06b43f3d2719468808630fadb557544ac93821	.build/logs/msbuild-20261009_110717_930-pid44292-7bc677e0.log
-release-build-receipt.json	96954	c6237a300b0e1ceeb4d5221979467315f75723c129765e03e536dd7274a2b738	.build/x64/Release/receipts/ea4ebe861c5fcf352f2903a1791c44a2e6731f309472dbb1ccf9b9870c2a7bb3.json
-release-build.launch.log	45727	1c881b2590a32932221c3870c200b3b1c0033f60fb160235eef6f495af2e4cfe	.build/space-hover-clock-release-build.launch.log
-release-msbuild.log	42095	9fe5f552acca8ee77f57e0f3691d97942cbe43a8c3efb4026de47540daeb1703	.build/logs/msbuild-20261009_112742_874-pid44124-ad1da9a7.log

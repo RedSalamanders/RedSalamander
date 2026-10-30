@@ -1,5 +1,0 @@
-Spec inventory: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\SpecInventory\spec-inventory.json
-Normative consistency: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\SpecInventory\normative-consistency.json
-Markdown report: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\SpecInventory\spec-inventory.md
-Test inventory: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\SpecInventory\test-inventory.json
-Blocking findings: 0

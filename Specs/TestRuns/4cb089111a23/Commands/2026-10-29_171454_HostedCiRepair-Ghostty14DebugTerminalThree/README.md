@@ -1,1 +1,0 @@
-Integrated runtime source cc6e19d5f736a784aa5f3b4ff99b5fea185aa097 with pinned Ghostty 1.4/Zig 0.17 and qualified DxUi 881e5d5. terminal-three passes 15 selected Commands executions, zero failures/skips, with original assertions, repeats and budgets. This is affected consumer qualification, not Full or a paired performance claim.

@@ -1,7 +1,0 @@
-
-  ViewerPE.Tests.Runner.cpp
-  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
-  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
-  TestSupport.Tests.WindowScreenshot.cpp
-  Generating Code...
-  ViewerPETests.vcxproj -> Z:\src\RedSalamander\.build\x64\Debug\ViewerPETests.exe

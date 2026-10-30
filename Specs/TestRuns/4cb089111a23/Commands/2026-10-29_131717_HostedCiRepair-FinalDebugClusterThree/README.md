@@ -1,1 +1,0 @@
-Exact committed candidate x64 Debug: nine selected deferred-plugin, Find-sort, terminal, two-task disclosure, ViewerSpace device-loss and warm-quiescence cases repeated three times; 27 passed with no skips or retries. This is focused native coverage, not Full. All late-paint and task-disclosure routes remain.

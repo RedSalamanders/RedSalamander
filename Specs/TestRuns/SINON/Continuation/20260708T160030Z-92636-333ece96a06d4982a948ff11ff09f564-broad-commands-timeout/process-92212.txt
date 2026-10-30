@@ -1,8 +1,0 @@
-
-ProcessId       : 92212
-ParentProcessId : 92636
-CommandLine     : "Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe" --commands-selftest --selftest-timeout-multiplier=2
-ExecutablePath  : Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
-CreationDate    : 08/07/2026 18:00:30
-
-

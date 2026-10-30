@@ -1,3 +1,0 @@
-path	bytes	sha256	source
-build-receipt.json	95445	942e5f0b602e8401f3472798e0d8b5bb6bcd54745221a611e74ac4820d56f103	C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Debug\receipts\b19eb791cc282d8398da563dadd7b1c00485838d658f084ad569425adb0b59fd.json
-msbuild.log	34503	75090c37f5fba797d684ca3a3e86bd7fbd370bdfecf892c02706507b8649337c	C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\logs\msbuild-20261009_130637_504-pid13812-032eda1c.log

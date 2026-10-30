@@ -1,3 +1,0 @@
-records.cpp
-ProductUi.Scope.Tests.DirectoryRecords.cpp
-Generating Code...

@@ -1,6 +1,0 @@
-{
-  "ProcessId": 104228,
-  "CreationDate": "2026-10-20T21:47:36.067831+02:00",
-  "ExecutablePath": "C:\\Users\\eric\\.codex\\worktrees\\p1-opacity-host-proof\\RedPrism\\.build\\x64\\ASan Debug\\RedPrism.exe",
-  "CommandLine": "\"C:\\Users\\eric\\.codex\\worktrees\\p1-opacity-host-proof\\RedPrism\\.build\\x64\\ASan Debug\\RedPrism.exe\" --self-test --warp"
-}

@@ -1,1 +1,0 @@
-The Pester log records 9 passed, 0 failed/skipped. The first PowerShell wrapper mistakenly redirected the PassThru object, leaving its variable null and returning exit 1 after the completed passing suite. The raw log retains the result object and counts; no test failure or passing wrapper exit is claimed.

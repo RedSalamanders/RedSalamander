@@ -1,8 +1,0 @@
-Terminal VT upgrade corpus: PASS
-Samples per p95: 200
-Corpus SHA-256: e457df11809c0f039b1e09fcf94fa940d389d51972e54503b25ddcadbed1b7ba
-PTY output SHA-256: 4b2c3c1d5bc7784cac1d05215e046d912a43658e8d816cc065ecb3d4b4bcc3e4
-Snapshot SHA-256: 86e291cb315f8f2225e9e35ee99271ddd49f45912e5ee029b6a09aebd2dc6616
-VT write p50/p95 us: 9194/12031
-Snapshot p50/p95 us: 2798/4126
-Hosted render p50/p95 us: 5023/8773

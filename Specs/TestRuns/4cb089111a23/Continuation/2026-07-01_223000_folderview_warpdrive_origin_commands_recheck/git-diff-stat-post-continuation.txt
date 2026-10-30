@@ -1,3 +1,0 @@
- .../Commands/Commands.SelfTest.ViewCommands.cpp    | 70 ++++++++++++----------
- ...pDrive_AnyCircumstancePerformance_2026-06-28.md | 46 ++++++++++++++
- 2 files changed, 84 insertions(+), 32 deletions(-)

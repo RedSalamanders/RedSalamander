@@ -1,1 +1,0 @@
-Baseline is direct-issues-qualified-20260923: retained 532-PNG Release gallery with exact 29 input hashes. Four files change in this candidate; new semantic assertions and an extra result-only success scene were not executed against the baseline. Shared 24 redraw fixtures remain identical; complete-gallery process memory is not a matched resource gate.

@@ -1,5 +1,0 @@
-# Static consumer gallery qualification
-
-The exact cmd_product_documentation_gallery case passes on source 29615cf6f64e482bfd025fb41564330188c18c8f, x64 Debug. It produces all 45 deterministic harness captures at 144 DPI with no activation. The complete scenario table and byte identities for every original PNG are retained; the full raw captures remain in the original run archive.
-
-Six inspected, unmodified PNGs cover dual-pane layout, light theme, keyboard preferences, File Operations preferences, Search results and an invented MTP device profile. Their visible data comes from synthetic fixtures. The major controls and text are readable in those samples. The other 39 images have capture/identity evidence, without a claim of individual visual inspection. Six unmodified representative frames keep this review receipt compact. Functional focus, keyboard, lifetime, sanitizer, platform and repository Full acceptance remain separate gates.

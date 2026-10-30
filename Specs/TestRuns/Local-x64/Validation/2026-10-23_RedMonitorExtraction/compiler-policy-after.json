@@ -1,8 +1,0 @@
-{
-  "scope": "Actual compile-item metadata after all imports: four projects, six profiles, two policies; no compilation",
-  "runId": "20261023T163947Z-76884-713382343cd24d4fb9282bc171ab0ee1",
-  "passed": 12,
-  "failed": 0,
-  "skipped": 0,
-  "priorFailedRun": "20261023T163647Z-66052-61a551eff7de418aaa3abdcb3ffa00c6"
-}

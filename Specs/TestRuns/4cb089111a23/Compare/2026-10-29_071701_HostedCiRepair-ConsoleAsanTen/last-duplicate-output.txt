@@ -1,1 +1,0 @@
-Another 'RedSalamanderSearchService.Debug' writer for this SearchService store is already running (ownership file 'E:\RedSalamander.Perf\runs\20261029T071701Z-63824-12778437662840b2b106a8991cdb9d2e\artifacts\selftest\last_run\compare\work\search_service_foreground_rejects_second_instance\.red-salamander-search-writer.lock'). Stop that live writer before retrying.

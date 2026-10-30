@@ -1,9 +1,0 @@
-{
-  "scenario":"viewer_space_cached_reopen_200_first_map",
-  "status":"failed","failurePhase":"sample-first-map",
-  "configuration":"topK2048_threads8_volume1_cacheTTL600_entries1",
-  "fixtureSetupUs":4393834,"lifecycleUs":300106692,"fixtureDirectories":121,"fixtureFiles":10000,"fixtureRootBytes":302230,
-  "cacheHitCount":1,"expectedSampleCount":200,"sampleCount":1,"completedSampleCount":0,"samples":[
-    {"sample":1,"status":"failed","openToCleanPresentedSettleUs":299739844,"firstMeaningfulPaintUs":157818,"cacheRestoreBytes":614398,"cacheHitCount":1,"layoutGeneration":1,"presentedLayoutGeneration":1,"directories":121,"files":10000,"rootBytes":302230}
-  ]
-}

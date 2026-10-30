@@ -1,7 +1,0 @@
- .../FolderWindow.FileOperations.Popup.cpp          | 20 ++++--
- .../FolderWindow.FileSystem.Navigation.Part.cpp    | 47 ++++++++------
- .../Commands/Commands.SelfTest.Settings.cpp        | 35 ++++++++++-
- ...pDrive_AnyCircumstancePerformance_2026-06-28.md |  1 +
- Tests/DxUiTests/DxUiTests.Controls.cpp             | 21 ++++++-
- Tests/DxUiTests/DxUiTests.NativeTextInput.cpp      | 71 ++++++++++++++++++++++
- 6 files changed, 165 insertions(+), 30 deletions(-)

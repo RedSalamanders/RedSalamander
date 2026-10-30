@@ -1,8 +1,0 @@
-Specs/Plans/Done/Operation_Crosscut_CompareDirectoriesRemediation_Handoff_2026-06-22.md
-Specs/Plans/Done/UI_BatchRenameWindowPlan_2026-06-10.md
-Specs/Plans/WIP/DxUi_Uia_ContinuationBaton_2026-06-29.md
-Specs/Plans/WIP/FolderView_WarpDrive_ContinuationBaton_2026-06-29.md
-Specs/Plans/WIP/Operation_Blueprint_NormativeSpecAccuracyRemediation_2026-07-03.md
-Specs/Plans/WIP/Operation_Granite_FiveDayMasterBranchAndWorktreeReviewRemediation_2026-07-02.md
-Specs/Plans/WIP/Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md
-Specs/Plans/WIP/README.md

@@ -1,9 +1,0 @@
-{
-  "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-reentrant-isolated-20260921/perf/perf_metrics.jsonl",
-  "sourceSha256": "6D176B09AD898E01827671DCACD134819E05CEEC2E788EA2E0FC66C898CDF57B",
-  "sourceBytes": 1437117,
-  "sourceLines": 3646,
-  "zeroBasedLineIndices": [],
-  "selectedSha256": "01BA4719C80B6FE911B091A7C05124B64EEECE964E09C058EF8F9805DACA546B",
-  "selection": "All FileOps.Clipboard and FileOps.Popup.Capture.PathFocusPixels rows, unchanged line contents, original order, UTF-8 no BOM with LF."
-}

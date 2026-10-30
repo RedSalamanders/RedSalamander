@@ -1,4 +1,0 @@
-Stale TestSandbox run cleanup: 23 removed, 0 failed.
-Skipping build (verified receipt 19fee914abe1320b5a562dce199a00e3d3e5f62e278b9c4d7de9f8bdf2cd3d38).
-Validation plan: 58336f513976e44ce58d3aabd7df254fc5020e40c27108305ad67ae98bf6d344
-INVALID CLI/PLAN: Validation impact governance is incomplete: Specs/TestRuns/Local-x64/DxUiAdoption/2026-09-13-LocalQualification/compiler-host-propagation/before-DxUi-resolved-ARM64.props

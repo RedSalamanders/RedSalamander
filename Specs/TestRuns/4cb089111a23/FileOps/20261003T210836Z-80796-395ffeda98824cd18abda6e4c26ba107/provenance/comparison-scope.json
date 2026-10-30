@@ -1,8 +1,0 @@
-{
-  "fixture_sha256": "b0848be7ab47d0d4fd4804b858e8a7729242a3ad8ba03468a151cac0878377d4",
-  "vcpkg_baseline": "7ffe9209f80ebb665be746dd1dad72edf5fc0e2257115ea63e316b1aac2dd932",
-  "vcpkg_candidate": "d14885142b565a1097b95a5d2c1d35613a0f578e54f84a9c36111e16a56f9eb5",
-  "equal_vcpkg": false,
-  "native_candidate_metric_commit_exception_requested": true,
-  "qualification": "Collection only; unequal dependency identities require explicitly reviewed whole-product attribution, not native-code-only nonregression."
-}

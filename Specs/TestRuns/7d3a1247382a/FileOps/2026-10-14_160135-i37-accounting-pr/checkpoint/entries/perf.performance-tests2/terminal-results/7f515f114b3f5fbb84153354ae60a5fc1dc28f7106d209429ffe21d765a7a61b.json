@@ -1,1 +1,0 @@
-{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":1,"skipped":0,"total":1},"entry_id":"perf.performance-tests2","kind":"CppUnitTest","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b"}

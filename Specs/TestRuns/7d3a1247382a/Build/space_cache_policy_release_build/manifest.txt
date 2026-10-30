@@ -1,4 +1,0 @@
-path	bytes	sha256	source
-build-receipt.json	96954	2cac4c4dd0c96b910d0aca5716765fa064ce6e6e67264aadc01706e476539f24	.build/x64/Release/receipts/4a245de29d61893189be0ac558a0c15f6989b4f9daf95201b721b2a7e8c135fe.json
-msbuild.log	42095	89bf17cb06b0c0c9c25a76b5e14f4677343b0ac698265d7309ba36448ab375e4	.build/logs/msbuild-20261009_122935_685-pid42380-7dacf965.log
-build.launch.log	45727	03481146cd2e863bf426539d2fb713bf4ebc146a55943d08d1be2963316ffc37	.build/space-cache-policy-release-build.launch.log

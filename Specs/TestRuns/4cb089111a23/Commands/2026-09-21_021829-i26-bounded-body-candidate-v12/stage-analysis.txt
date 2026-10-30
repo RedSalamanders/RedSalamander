@@ -1,9 +1,0 @@
-{'passed': 5, 'failed': 1, 'skipped': 0}
-[(2, 'Keyboard capture must retain the fixed explanation and show scope focus: text=304/304, focus=0.')]
-dxui.frame.total_us 880 median 4312.5 p95 5655 max 286880
-dxui.frame.update_us 880 median 7.5 p95 48 max 35984
-dxui.frame.render_us 880 median 665.0 p95 972 max 286784
-dxui.frame.present_us 880 median 3450.0 p95 5016 max 5389
-FileOps.Popup.CommonName.RedrawBatchUs 45 median 66589 p95 67087 max 71516
-FileOps.Popup.ConflictRows.RedrawBatchUs 45 median 66578 p95 108238 max 252780
-slow frames [('2026-09-21T00:18:36.645Z', 'dxui.frame.total_us', 286880), ('2026-09-21T00:18:36.645Z', 'dxui.frame.render_us', 286784)]

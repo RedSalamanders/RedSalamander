@@ -1,1 +1,0 @@
-V1 witness had no terminal card/actions observation and emitted C5246 for array initialization; its original failure is retained. V2 populates the existing test-only painted-body map before terminal actions and braces the array, identically for baseline and candidate. No product layout changed. V1 is not the paired performance baseline.

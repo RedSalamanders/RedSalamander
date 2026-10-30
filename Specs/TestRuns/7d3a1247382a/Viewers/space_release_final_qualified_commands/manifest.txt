@@ -1,8 +1,0 @@
-# SHA-256 manifest for exact archived PNG and build receipt bytes.
-# Columns: sha256  bytes  archived-name  source-path
-586bfac781f54f3e28b69b1ee62b679ad94e5de330c7b65ca721fdf8c5b3db05  431914  captures/analyst-dark.png  D:\RedSalamander.Perf\runs\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\artifacts\selftest\last_run\perf\viewer_space_captures\analyst-dark.png
-35b9e320d352a6f47c78e0055d0e44f98756654dafa51e144b91366ddebd5627  164289  captures/analyst-high-contrast.png  D:\RedSalamander.Perf\runs\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\artifacts\selftest\last_run\perf\viewer_space_captures\analyst-high-contrast.png
-82d52b79fc86d1cd5fc1500f5ee5c4902081a4a0f381638efc087623cfbbe9ba  383689  captures/analyst-rainbow.png  D:\RedSalamander.Perf\runs\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\artifacts\selftest\last_run\perf\viewer_space_captures\analyst-rainbow.png
-5d63937c440dd3378c3d316379d9b490a79158433d7a1d5e4b2849aee5b88b76  501173  captures/explorer-light.png  D:\RedSalamander.Perf\runs\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\artifacts\selftest\last_run\perf\viewer_space_captures\explorer-light.png
-399bc927320cc7b6d1fe969797453aefd9ce2e8fd04857397653a079d137c99a  198727  captures/explorer-narrow.png  D:\RedSalamander.Perf\runs\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\artifacts\selftest\last_run\perf\viewer_space_captures\explorer-narrow.png
-c33eadd455e4bbfded9ce05608de3f4ce6c9063f3b9fe2dbf8d2b37c9cf61c9a  96954  build-receipt.json  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\receipts\8954e5665904ae14116dcf42b2e459de0718c25140827489d70a1fab0b8e3928.json

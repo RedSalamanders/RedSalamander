@@ -1,1 +1,0 @@
-closing_observed=1 shutdown_returned_before_child_release=0 parent_quiescent=1 shutdown_quiescent=1
