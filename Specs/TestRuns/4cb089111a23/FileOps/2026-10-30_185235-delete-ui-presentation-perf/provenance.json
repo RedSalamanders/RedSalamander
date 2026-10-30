@@ -1,0 +1,8 @@
+{
+  "scope": "Focused integrated presentation performance case: 1 passed, 0 failed. Debug only, not Full or Release qualification; no baseline speedup claim.",
+  "run_id": "20261030T174805Z-85828-0ce4fd3fe6114907b7ec253658d3bb84",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T174805Z-85828-0ce4fd3fe6114907b7ec253658d3bb84\\artifacts\\selftest\\last_run",
+  "source_snapshot_id": "e2e2330a90c3ed529afad54c1101a3cbef9dd3c4b0730059d06aacec627052be",
+  "build_receipt_id": "4ccd4ae15980ee35c01c5133a84e6805c5fc87d43f978ab4084434f111933ef1",
+  "command": "Tools/Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOps_IntegratedPresentationPerf -Configuration Debug -TestRoot Z:/RedSalamander.Perf"
+}

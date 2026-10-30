@@ -1,0 +1,8 @@
+{
+  "scope": "8 passed, 0 failed; focused safety family including second-file-first read-only repeat consent. Not Full qualification. Later source change only corrects Commands mirror Tab expectation; runtime FileOps implementation unchanged.",
+  "run_id": "20261030T173442Z-55264-d30b479c92034d85929fd57ff03a7009",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T173442Z-55264-d30b479c92034d85929fd57ff03a7009\\artifacts\\selftest\\last_run",
+  "source_snapshot_id": "37cf299a10b2d2246e90a58db7007d02d927704042331a0f8064d2c3bb9fe1c7",
+  "capture_kind": "Actual deterministic harness application capture with synthetic fixtures; no manual desktop capture.",
+  "build_receipt_id": "58a2504092599a229f5eb7119382aafdc5f2be3340456d165f04ab122a0eeb8c"
+}

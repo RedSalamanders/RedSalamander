@@ -164,7 +164,7 @@
         if (! TryAcceptLocked(arbiter, generation, Action::DeleteReadOnly, std::nullopt, Placement::Primary))
             return false;
         const auto decision = PendingLocked(arbiter, generation);
-        if (! decision || decision.value().action != Action::DeleteReadOnly || decision.value().applyToAll)
+        if (! decision || decision.value().action != Action::DeleteReadOnly || ! decision.value().applyToAll)
             return false;
     }
     ++generation;

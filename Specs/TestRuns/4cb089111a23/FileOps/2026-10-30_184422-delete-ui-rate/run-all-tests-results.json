@@ -1,0 +1,163 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-30T17:44:21.9925828Z",
+  "run_ended_utc": "2026-10-30T17:44:40.6597121Z",
+  "duration_ms": 18667,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander-worktrees\\delete-ui-20261030\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "FileOps_RateWindowDisplay",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "total": 3,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 14,
+    "test_root": "Z:\\RedSalamander.Perf",
+    "run_id": "20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5",
+    "allowed_run_ids": [
+      "20261030T174048Z-55264-e38542197e7d4b7bb75dbaa42509a5d5"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\unified-ci",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\arm64-compiler-scope.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-explain.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083308",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083544",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083656",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-extraction-20261021T213312",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-probes-b00db1bb2b6948ed891c1f3a7ae31bb3",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 2144,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1218,
+          "attempt": 1
+        },
+        {
+          "name": "FileOps_RateWindowDisplay",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

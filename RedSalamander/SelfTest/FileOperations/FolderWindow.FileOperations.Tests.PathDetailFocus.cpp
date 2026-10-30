@@ -282,14 +282,21 @@
     if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), bindingB.hostedDefaultAutomationId))
         return reject(L"could not focus B's task action before repeated navigation");
     const uint64_t beforeNavigation = popupState->DebugHostedActionCountForSelfTest();
-    SendMessageW(popup.get(), WM_KEYDOWN, VK_RIGHT, repeatedKeyData);
-    SendMessageW(popup.get(), WM_KEYUP, VK_RIGHT, 0);
+    // Cancel is physically rightmost. Held Left must navigate to its neighbor;
+    // held Right must return to Cancel without invoking either action.
+    SendMessageW(popup.get(), WM_KEYDOWN, VK_LEFT, repeatedKeyData);
+    SendMessageW(popup.get(), WM_KEYUP, VK_LEFT, 0);
     PopupLayoutDebugSnapshot navigated{};
     navigated.taskId = taskId;
     if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), navigated) || navigated.hostedFocusedAutomationId.empty() ||
         navigated.hostedFocusedAutomationId == bindingB.hostedDefaultAutomationId || popupState->DebugHostedActionCountForSelfTest() != beforeNavigation ||
         GetForegroundWindow() != foregroundBefore || GetFocus() != focusBefore)
-        return reject(L"repeat suppression swallowed task navigation, invoked an action, or changed native ownership");
+        return reject(L"repeat suppression swallowed Left navigation from rightmost Cancel, invoked an action, or changed native ownership");
+    SendMessageW(popup.get(), WM_KEYDOWN, VK_RIGHT, repeatedKeyData);
+    SendMessageW(popup.get(), WM_KEYUP, VK_RIGHT, 0);
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), navigated) || navigated.hostedFocusedAutomationId != bindingB.hostedDefaultAutomationId ||
+        popupState->DebugHostedActionCountForSelfTest() != beforeNavigation || GetForegroundWindow() != foregroundBefore || GetFocus() != focusBefore)
+        return reject(L"held Right did not return to rightmost Cancel without invoking an action or changing native ownership");
 
     return true;
 }

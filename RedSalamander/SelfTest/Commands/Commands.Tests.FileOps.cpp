@@ -22310,7 +22310,12 @@ namespace
             .conditionMet;
     };
     if (! state.Require(waitButton(cancelButton), L"The decision must start on safe Cancel.") ||
-        ! state.Require(pressKey(VK_TAB) && waitButton(deleteButton), L"Tab must immediately reach Permanently delete without invoking it.") ||
+        ! state.Require(pressKey(VK_TAB) && RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept
+    { return RedSalamander::Ui::DebugGetAlertOverlayModelessSnapshot(mirror.overlay, overlay) && overlay.focusedClose; },
+                                                                                          waitOptions)
+                                                .conditionMet,
+                        L"Tab from rightmost Cancel must reach Close without invoking it.") ||
+        ! state.Require(pressKey(VK_TAB) && waitButton(deleteButton), L"Tab from Close must reach Permanently delete without invoking it.") ||
         ! state.Require(pressKey(VK_LEFT) && waitButton(cancelButton), L"Left must immediately return to Cancel.") ||
         ! state.Require(pressKey(VK_RIGHT) && waitButton(deleteButton), L"Right must immediately reach Permanently delete.") ||
         ! state.Require(CurrentConflictPromptGenerationForSelfTest(fileOps, taskId) != 0u, L"Navigation must leave the decision pending."))

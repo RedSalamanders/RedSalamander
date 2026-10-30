@@ -4455,7 +4455,9 @@ template <typename Fn>
         const bool isDelete           = operation == FILESYSTEM_DELETE;
         const std::wstring_view probe = isDelete ? sourcePath : destinationPath;
 
-        if (! probe.empty())
+        // A delete root's attributes cannot prove why a child/ACL operation failed.
+        // Only the provider's per-attempt ReadOnlyDeleteBlocked receipt qualifies it below.
+        if (! isDelete && ! probe.empty())
         {
             unsigned long attributes = 0;
             bool gotAttributes       = false;
@@ -5002,18 +5004,15 @@ struct ConflictActionPolicy
         }
 
         // Name collisions keep all four eligible choices direct and in the approved order.
-        // Other prompt families retain their existing order and safe default/Escape semantics.
-        const bool nameCollision = bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists ||
-                                   bucket == ConflictBucket::TypeMismatch || bucket == ConflictBucket::DestinationLink;
-        if (nameCollision)
-        {
-            AddPrimaryIfAvailable(ConflictAction::Skip);
-        }
-        AddPrimaryIfAvailable(ConflictAction::Cancel);
-        if (! nameCollision)
-        {
-            AddPrimaryIfAvailable(ConflictAction::Skip);
-        }
+        // Every prompt keeps Cancel last while preserving safe default/Escape semantics.
+        AddPrimaryIfAvailable(ConflictAction::Skip);
+        // Keep Cancel rightmost without changing the safe default or Escape action.
+        const auto primaryEnd = primaryActions.begin() + static_cast<std::ptrdiff_t>(primaryActionCount);
+        const auto cancel     = std::ranges::find(primaryActions.begin(), primaryEnd, ConflictAction::Cancel);
+        if (cancel != primaryEnd)
+            std::rotate(cancel, cancel + 1, primaryEnd);
+        else
+            AddPrimaryIfAvailable(ConflictAction::Cancel);
 
         for (size_t index = 0u; index < actionCount; ++index)
         {
@@ -5081,12 +5080,12 @@ struct ConflictActionPolicy
 
     if (bucket == ConflictBucket::ReadOnlyRegularFile && allowReadOnlyDelete)
     {
-        // This is a fresh confirmation for the one retained delete root/subtree, not a
-        // replacement grant or permission that can leak to another selected item.
+        // Consent repeats only for matching typed read-only scopes within this task.
+        // Each later root must prove the blocker and retain its own handle.
         policy.Add(ConflictAction::DeleteReadOnly);
         policy.Add(ConflictAction::Skip);
         policy.Add(ConflictAction::Cancel);
-        policy.FinalizePresentation(bucket, false);
+        policy.FinalizePresentation(bucket, applyToAllEligible);
         return policy;
     }
 
@@ -5248,8 +5247,7 @@ struct ConflictActionPolicy
 [[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept
 {
     return action != ConflictAction::Retry && action != ConflictAction::Cancel && action != ConflictAction::None && action != ConflictAction::SkipAll &&
-           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes &&
-           action != ConflictAction::InvalidateLiveOutput && action != ConflictAction::DeleteReadOnly;
+           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes && action != ConflictAction::InvalidateLiveOutput;
 }
 
 [[nodiscard]] bool IsCachedConflictDecisionEligible(const Task& task,
@@ -5824,8 +5822,6 @@ struct ConflictPromptBeginResult
     bucket                                    = RefineTypedConflictBucket(task._operation, bucket, sourceMetadata, destinationMetadata);
     const bool allowKeepBoth                  = IsKeepBothActionEligible(task, perItemCookie, bucket, promptDestinationPath);
     Task::ConflictDecisionScope decisionScope = BuildConflictDecisionScope(task, perItemCookie, bucket, sourceMetadata, destinationMetadata);
-    if (allowReadOnlyDelete && bucket == ConflictBucket::ReadOnlyRegularFile)
-        decisionScope.applyToAllEligible = false;
     if (allowKeepBoth && perItemCookie != nullptr)
     {
         decisionScope.keepBothContext = ! perItemCookie->operationDestinationPath.empty() &&
@@ -8132,10 +8128,10 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          {ConflictAction::SkipAll},
                          true,
                          true) &&
-           matchesPolicy(targetConflict, {ConflictAction::Skip, ConflictAction::Cancel}, {ConflictAction::Cancel, ConflictAction::Skip}, {}, false, false) &&
+           matchesPolicy(targetConflict, {ConflictAction::Skip, ConflictAction::Cancel}, {ConflictAction::Skip, ConflictAction::Cancel}, {}, false, false) &&
            matchesPolicy(accessRetry,
                          {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::Retry, ConflictAction::Cancel, ConflictAction::Skip},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
                          {ConflictAction::SkipAll},
                          true,
                          true) &&
@@ -8148,39 +8144,39 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
            matchesPolicy(diskFullNoScope, {ConflictAction::Retry, ConflictAction::Cancel}, {ConflictAction::Retry, ConflictAction::Cancel}, {}, false, false) &&
            matchesPolicy(readOnlyDelete,
                          {ConflictAction::DeleteReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DeleteReadOnly, ConflictAction::Cancel, ConflictAction::Skip},
+                         {ConflictAction::DeleteReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
-                         false,
+                         true,
                          false) &&
            matchesPolicy(recycle,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll},
-                         {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
                          {ConflictAction::PermanentDeleteAll},
                          false,
                          false) &&
            matchesPolicy(recycleOneItem,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
-                         {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          false,
                          false) &&
-           // I35 R7.3: the by-name consents mirror the exact ones: Cancel first and default, no
+           // I35 R7.3: the by-name consents mirror the exact ones: Cancel last and default, no
            // Apply to all, and the task-scoped choice only on an eligible escalation, under More.
            matchesPolicy(recycleByName,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll},
-                         {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
                          {ConflictAction::PermanentDeleteAll},
                          false,
                          false) &&
            matchesPolicy(recycleByNameOne,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
-                         {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          false,
                          false) &&
            matchesPolicy(permanentByName,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete},
-                         {ConflictAction::Cancel, ConflictAction::PermanentDelete},
+                         {ConflictAction::PermanentDelete, ConflictAction::Cancel},
                          {},
                          false,
                          false) &&
@@ -8207,14 +8203,14 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          ConflictAction::Proceed) &&
            matchesPolicy(liveBounded,
                          {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::Skip, ConflictAction::InvalidateLiveOutput, ConflictAction::Cancel},
-                         {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::InvalidateLiveOutput, ConflictAction::Cancel, ConflictAction::Skip},
+                         {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::InvalidateLiveOutput, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          false,
                          false,
                          ConflictAction::QueueUntilOtherTaskFinishes) &&
            matchesPolicy(liveOverflow,
                          {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::Cancel, ConflictAction::Skip},
+                         {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          false,
                          false,
@@ -24367,6 +24363,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                             // The executor crosses the phase only after its live-output,
                             // circuit-breaker and retained-source gates, at a mutating entry.
                             // The per-item phase stays conservative across later retries.
+                            cookie.readonlyDeleteBlocked.store(false, std::memory_order_release);
                             const QualifiedItemMutationResult mutationResult = executeQualifiedItemMutation(
                                 index, transferPlan, itemStrategy, sourceText, destinationItemText, itemFlags, isDirectoryShell, cookie, finalExecutionPhase);
                             HRESULT itemHr                = mutationResult.hr;

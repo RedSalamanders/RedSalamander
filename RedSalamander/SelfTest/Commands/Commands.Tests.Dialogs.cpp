@@ -8427,7 +8427,8 @@ void AutomateChangeCasePrompt(
                   std::format(L"Pack prompt initial extension should be zip; saw '{}'.", probe.initialSnapshot.packerExtension));
     state.Require(probe.initialSnapshot.packerCount > 1u, L"Pack prompt should enumerate available 7-Zip packer formats in addition to ZIP.");
     state.Require(! probe.initialSnapshot.deleteAfterPacking, L"Pack prompt should leave delete-after-packing off by default.");
-    state.Require(probe.initialSnapshot.commandButtonsFitInClient, L"Pack prompt command buttons should fit inside the client area.");
+    state.Require(probe.initialSnapshot.commandButtonsFitInClient && probe.initialSnapshot.commandButtonsUseStandardOrder,
+                  L"Pack prompt command buttons should fit inside the client and order Help, OK, Cancel.");
     state.Require(probe.uiaPatternStats.has_value(), L"Failed to collect UI Automation stats for Pack prompt.");
     if (probe.uiaPatternStats.has_value())
     {
@@ -8705,7 +8706,8 @@ void AutomateChangeCasePrompt(
     state.Require(! probe.initialSnapshot.deleteAfterUnpacking, L"Unpack prompt should leave delete-after-unpacking off by default.");
     state.Require(probe.initialSnapshot.maskText == L"*.*", L"Unpack prompt should default the file mask to *.*.");
     state.Require(! probe.initialSnapshot.maskHelpVisible, L"Unpack prompt should keep mask hints collapsed initially.");
-    state.Require(probe.initialSnapshot.commandButtonsFitInClient, L"Unpack prompt command buttons should fit inside the client area.");
+    state.Require(probe.initialSnapshot.commandButtonsFitInClient && probe.initialSnapshot.commandButtonsUseStandardOrder,
+                  L"Unpack prompt command buttons should fit inside the client and order Help, OK, Cancel.");
     state.Require(probe.uiaPatternStats.has_value(), L"Failed to collect UI Automation stats for Unpack prompt.");
     if (probe.uiaPatternStats.has_value())
     {

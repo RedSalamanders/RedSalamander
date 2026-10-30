@@ -8128,10 +8128,10 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   L"Active Find Cancel button should expose a visible debug target rectangle.");
     state.Require(DebugGetFindFilesWindowTargetClientRect(FindFilesDebugFocusTarget::HelpButton, activeHelpRect),
                   L"Active Find help button should expose a visible debug target rectangle.");
-    const LONG activeCancelHelpGapPx    = activeHelpRect.left - activeCancelRect.right;
+    const LONG activeCancelHelpGapPx    = activeCancelRect.left - activeHelpRect.right;
     const LONG maxActiveCancelHelpGapPx = MulDiv(40, static_cast<int>(GetDpiForWindow(findWindow)), 96);
-    state.Require(activeCancelRect.right <= activeHelpRect.left && activeCancelHelpGapPx >= 0 && activeCancelHelpGapPx <= maxActiveCancelHelpGapPx,
-                  std::format(L"Active Find Cancel button should appear immediately left of the help button; gap was {} px.", activeCancelHelpGapPx));
+    state.Require(activeHelpRect.right <= activeCancelRect.left && activeCancelHelpGapPx >= 0 && activeCancelHelpGapPx <= maxActiveCancelHelpGapPx,
+                  std::format(L"Active Find Cancel button should appear immediately right of the help button; gap was {} px.", activeCancelHelpGapPx));
 
     state.Require(DebugCancelFindFilesWindowSearch(), L"Failed to cancel Find search for command-enablement test.");
     state.Require(WaitForFindFilesWindowIdleWithDiagnostics(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),

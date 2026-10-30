@@ -1261,7 +1261,7 @@ left under its temporary sibling.
 | In-tree link target cannot be mapped/published | Retain the source link and dependent source ancestry; report target conflict | Source retained | Never infer another mutation grant |
 | Name infeasible | Keep Both if a valid name exists; otherwise Skip / Cancel | Cancel | Same feasibility class |
 | Sharing/access/transient provider error | Retry / Skip / Cancel | Cancel | Exact error class |
-| Recycle failed | Cancel / Delete permanently / Skip; under **More…** in a multi-item task, Delete all remaining permanently | Cancel | Never the checkbox; only the explicit task-scoped choice (see Delete and Recycle) |
+| Recycle failed | Delete permanently / Skip / Cancel; under **More…** in a multi-item task, Delete all remaining permanently | Cancel | Never the checkbox; only the explicit task-scoped choice (see Delete and Recycle) |
 
 Decisions are one-shot unless the user explicitly selects an eligible scope. **Skip All** is Skip
 plus explicit Apply-to-all for that row and is normally exposed through **More…**; Disk full exposes
@@ -1509,7 +1509,7 @@ consent and confirmation-to-mutation identity continuity. Admission makes no pro
 it decides native authority from the provider's binding interface alone and gathers the
 confirmation's words from the pane listing. When exact host binding exists, Preparing pins each
 selected root no-follow on the task thread (the retained delete authority), then asks the
-confirmation on the task card in the words the modal used (Cancel first and default, Permanently
+confirmation on the task card in the words the modal used (Cancel rightmost and default, Permanently
 delete); after the answer it binds each confirmed pathname again and requires the object/revision
 identity to match the pinned root before recording the consent receipt, and execution calls
 `DeleteIfUnchanged` on the retained authority. It never confirms one object and later deletes a
@@ -1743,7 +1743,7 @@ above (a change that keeps a file's size, dates and attributes; a change an SMB 
 until the delete reaches it).
 
 The card asks one explicit consent in its own class (`PermanentDeleteByNameConfirmation`, title
-"Permanent delete by name"): **Delete by name** and **Cancel**, Cancel first, the default and the Escape
+"Permanent delete by name"): **Delete by name** and **Cancel**, Cancel rightmost, the default and the Escape
 action, no Apply to all and not a preference. Its question ends with a paragraph saying, in the C10
 wording family (never the engine word *identity*, P5), that the location cannot prove which object a
 name refers to, that only what it lists now is deleted by name (each selected item and everything inside
@@ -3329,3 +3329,18 @@ Each permanent-delete traversal frame that owns its root retains a no-follow DEL
 `FileOps_ReviewRemediationContracts` pauses after a committed child and listing closure, attempts descendant-parent rename and write opens, and checks success/cancelled handle release through 32 nested levels for serial/parallel and bound/unbound routes. The bound contents-only route remains serial; metrics distinguish configured from effective concurrency. It also injects unreachable/refused XP-09 prerequisites through the actual case result path. An unreachable prerequisite is `skipped` with a reason, a sandbox refusal is `failed`, and neither is a cross-root pass.
 
 `FileOps_SmallFileCopyCost` validates an exact unique destination filename set and byte-for-byte source equality on both provider and bridge routes after timing stops. Missing and same-sized corrupt output negative controls must fail validation before performance evidence is emitted. A requested file count is never accepted as an observed result. The Dummy fixture provider must produce `alignof(FileInfo)`-aligned records accepted by the canonical packed cursor; mixed filename lengths are checked independently in PluginContractTests.
+
+### Permanent-delete read-only decisions and progress
+
+The popup samples recursive completed file/folder observations for item throughput, falling back
+to legacy progress only when those observations are unavailable. A successful selected-root count
+is not a substitute for child-removal throughput. The hosted graph uses the same item/second units.
+
+A provider-proven ReadOnlyDeleteBlocked observation can offer a task-scoped Apply to all choice
+for matching typed scopes. Each later root must still prove the blocker and retain its own identity;
+this never authorizes a generic access-denied retry, crosses task boundaries, or turns an unknown
+mutation outcome into replay permission. The blocker observation is cleared before each attempt.
+
+### Standard action placement
+
+Archive Pack/Unpack and selection-mask prompts place Help before OK and Cancel, keeping Cancel rightmost. Hosted creation order matches physical placement for keyboard and accessibility traversal.

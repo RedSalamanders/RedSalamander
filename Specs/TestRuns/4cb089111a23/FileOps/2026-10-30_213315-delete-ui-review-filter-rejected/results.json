@@ -1,0 +1,27 @@
+{
+    "run_started_utc": "2026-10-30T20:33:14.768Z",
+    "duration_ms": 532,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_RateWindowDisplay,FileOps_IntegratedPresentationPerf",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261030T202818Z-40408-52728b9dc1c345cbb1b173ddbab5cb87\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 0,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_RateWindowDisplay,FileOps_IntegratedPresentationPerf",
+            "failureMessage": "FileOpsSelfTest: unknown case/family filter 'FileOps_RateWindowDisplay,FileOps_IntegratedPresentationPerf'.",
+            "cases": []
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

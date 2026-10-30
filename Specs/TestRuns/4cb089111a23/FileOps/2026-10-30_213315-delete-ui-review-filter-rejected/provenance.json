@@ -1,0 +1,6 @@
+{
+  "run_id": "20261030T202818Z-40408-52728b9dc1c345cbb1b173ddbab5cb87",
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261030T202818Z-40408-52728b9dc1c345cbb1b173ddbab5cb87\\artifacts\\selftest\\last_run",
+  "scope": "Rejected harness invocation: comma-separated FileOps filter unsupported; scheduler matched no expected cases, no product cases executed. Preserve failure; subsequent exact-case results do not replace this verdict.",
+  "source_snapshot_id": "c44d105c8235c168d26c467755d1cb74a243578bf023e320763beb9552c315c9"
+}

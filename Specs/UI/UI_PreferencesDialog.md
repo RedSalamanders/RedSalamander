@@ -342,3 +342,7 @@ final search, row count, category and native focus/active/foreground identities.
 ## Refresh focus and draft preview
 
 A theme refresh or Apply notification on the current Preferences page MUST preserve valid retained keyboard focus. First initialization and a category switch MUST retire the previous page's interaction state. A delayed notification from an earlier Apply MUST accept incoming theme colors and high-contrast state while retaining edited compact-mode, motion and backdrop preview fields in the current draft. An unchanged draft or a language-only edit MUST continue to honor the incoming theme.
+
+### Standard action placement
+
+The fixed footer uses Apply, OK, Cancel from left to right, with Cancel rightmost and OK immediately before it. Native template order and hosted child order must preserve the same Tab/UIA sequence.

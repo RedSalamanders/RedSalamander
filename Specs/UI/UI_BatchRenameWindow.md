@@ -24,7 +24,7 @@
 - Closing the window requests cancellation of any admitted rename task but does not join or own its worker. Collection/preview threadpool workers own their provider/context snapshots and module pins, so teardown invalidates their generations and drains posted payloads without waiting for blocked provider I/O; a late task completion is discarded by the posted-payload generation/lifetime gate.
 - The window MUST restore persisted Batch Rename rule defaults before creating visible controls and MUST persist close-time state before DxUi child controls are destroyed.
 - The window MUST initialize posted-payload tracking during create and drain pending posted payloads during `WM_NCDESTROY` before async collection or execution messages can target it.
-- Focusable Batch Rename controls MUST expose stable accessible names and follow DxUi creation-order keyboard traversal. Rules mode starts at `Mask:`, proceeds through scope, mode, rule fields, helper buttons, options, case dropdowns, preview grid, `Hide unchanged`, the `Cancel` button (focusable only while a background task runs), and the enabled `Rename` button.
+- Focusable Batch Rename controls MUST expose stable accessible names and follow DxUi creation-order keyboard traversal. Rules mode starts at `Mask:`, proceeds through scope, mode, rule fields, helper buttons, options, case dropdowns, preview grid, `Hide unchanged`, the enabled `Rename` button, and the `Cancel` button (focusable only while a background task runs).
 - Text fields that edit rules own normal text-edit keyboard behavior. Application shortcuts MUST NOT fire while those edit fields have focus.
 - Helper menu buttons next to template, search, and replace fields MUST use the shared DxUi menu input contract. Invoking a helper command inserts its text at the caret or replaces the active selection in the owning field.
 - The primary action is `Rename`; it is disabled while the current plan has blocking errors.
@@ -291,3 +291,7 @@ The existing blocked-provider case also posts `WM_CLOSE` during both snapshot se
 an actual pending-preview flush. It requires prompt destruction and refusal of a retired
 result while the provider is held, then safe worker retirement after explicit release.
 Original provider cancellation, mode admission, preview and close deadlines remain unchanged.
+
+### Standard action placement
+
+The footer places Rename before Cancel, with Cancel rightmost. Creation-order keyboard traversal follows the same order; disabled controls remain excluded.

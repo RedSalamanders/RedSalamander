@@ -57,10 +57,9 @@ bool TryAcceptLocked(
     arbiter.decisionAction        = skipAll ? Task::ConflictAction::Skip : (permanentDeleteAll ? Task::ConflictAction::PermanentDelete : action);
     // Skip consumes the same explicit checkbox scope as other reusable choices. Retry
     // remains one attempt even when checked, so a persistent error cannot auto-retry.
-    arbiter.decisionApplyToAll =
-        permanentDeleteAll || (skipAll && prompt.skipAllEligible) ||
-        (prompt.applyToAllEligible && action != Task::ConflictAction::Retry && action != Task::ConflictAction::Cancel &&
-         action != Task::ConflictAction::SkipAll && action != Task::ConflictAction::DeleteReadOnly && applyToAll.value_or(prompt.applyToAllChecked));
+    arbiter.decisionApplyToAll = permanentDeleteAll || (skipAll && prompt.skipAllEligible) ||
+                                 (prompt.applyToAllEligible && action != Task::ConflictAction::Retry && action != Task::ConflictAction::Cancel &&
+                                  action != Task::ConflictAction::SkipAll && applyToAll.value_or(prompt.applyToAllChecked));
     arbiter.decisionWasOffered = true;
     arbiter.decisionGeneration = generation;
     // Signal before unlocking: no old submission can signal a successor prompt.
