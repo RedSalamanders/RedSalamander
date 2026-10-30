@@ -62,4 +62,10 @@ if(-not $selected){
     if(-not $selected){throw "Insiders did not provide default MSVC $required.x and every required target tool. Review channel/component availability; another compiler is never accepted."}
 }
 Write-Host ('Verified required toolchain: '+($selected|ConvertTo-Json -Compress))
+if ($env:GITHUB_ACTIONS -eq 'true' -and -not $VerifyOnly) {
+    $msbuildHost = if ($selected.host -eq 'arm64') { 'arm64' } else { 'amd64' }
+    $msbuild = Join-Path $selected.installation "MSBuild/Current/Bin/$msbuildHost/MSBuild.exe"
+    if (-not (Test-Path -LiteralPath $msbuild -PathType Leaf)) { throw 'The selected native MSBuild executable is missing.' }
+    if ($env:GITHUB_ENV) { Add-Content -LiteralPath $env:GITHUB_ENV -Value ("MSBUILD_EXE_PATH=" + $msbuild) }
+}
 $global:LASTEXITCODE=0

@@ -49,7 +49,7 @@ function Get-RSDxUiValidatedMainCandidate {
         if ($comparison.status -eq 'behind') { throw 'The product DxUi pin is ahead of DxUi main; review the lock manually.' }
         if ($comparison.status -ne 'ahead') { throw 'The product DxUi pin and DxUi main diverge; review the lock manually.' }
 
-        $runs = @((& $Request "actions/workflows/ci.yml/runs?head_sha=$candidate&branch=main&event=push&per_page=1").workflow_runs)
+        $runs = @((& $Request "actions/workflows/qualify.yml/runs?head_sha=$candidate&branch=main&event=workflow_dispatch&per_page=1").workflow_runs)
         if ($runs.Count -ne 1 -or $runs[0].head_sha -cne $candidate -or
             $runs[0].status -ne 'completed' -or $runs[0].conclusion -ne 'success') {
             throw "DxUi main $($candidate.Substring(0, 12)) has no successful completed validation; the lock remains unchanged."

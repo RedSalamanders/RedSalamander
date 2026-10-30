@@ -2,6 +2,13 @@
 
 ## Hosted qualification prerequisites
 
+The unified CI adapter runs the normal CI suite after a test-enabled Release build on both native
+architectures; Full and ASan remain explicit manual qualifications. See
+[Build_UnifiedCI.md](../Build/Build_UnifiedCI.md) for event routing and the global production barrier.
+Canonical Pester entries require Pester 3.4.0 setup/assertion semantics. The hosted adapter provisions
+that exact dependency, and the runner imports it explicitly before Pester execution. Seeded ASan
+detector proof remains mandatory before ordinary ASan contracts can pass.
+
 The shuffle artifact consumer restores the exact locked DxUi source before portable attestation import.
 Portable outputs alone cannot satisfy `Get-RSDxUiSourceIdentity` at receipt use. Keep the existing
 same-workflow producer/run/source/toolchain checks and byte-for-byte output verification intact.

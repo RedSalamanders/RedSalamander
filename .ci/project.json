@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "1",
+  "repository": "RedSalamanders/RedSalamander",
+  "engine": {
+    "repository": "RedSalamanders/.github",
+    "ref": "fcf723f54140eabb69ef5017c32c971deb117ada"
+  },
+  "kind": "application",
+  "adapter": "Tools/Invoke-ProjectCi.ps1",
+  "include": [
+    "Specs/SettingsStore.schema.json",
+    "Tests/Fixtures/**"
+  ],
+  "exclude": [
+    "**/*.md",
+    "Specs/Plans/**",
+    "Specs/TestRuns/**",
+    "Specs/Mockups/**",
+    "Measurements/**",
+    "docs/**",
+    "Changes/**",
+    "legacy/**",
+    ".agents/**",
+    ".claude/**",
+    ".vscode/**",
+    ".github/ISSUE_TEMPLATE/**",
+    ".github/dependabot.yml",
+    ".github/CODEOWNERS"
+  ],
+  "formatRoots": [
+    "Common",
+    "Plugins",
+    "PoC",
+    "RedConfigure",
+    "RedLauncher",
+    "RedSalamander",
+    "RedSalamanderSearchService",
+    "Tests",
+    "Tools"
+  ],
+  "formatExclude": [
+    "Tools/TerminalEngine/**"
+  ],
+  "versionBase": "7.0",
+  "winget": {
+    "identifier": "RedSalamanders.RedSalamander",
+    "executable": "RedLauncher.exe",
+    "alias": "RedSalamander",
+    "additionalCommands": [
+      {
+        "executable": "red.exe",
+        "alias": "red"
+      }
+    ],
+    "license": "MIT",
+    "minimumOSVersion": "10.0.22000.2600"
+  }
+}

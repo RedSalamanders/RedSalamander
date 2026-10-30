@@ -1,75 +1,21 @@
-name: Nightly Native Suite
-
-run-name: >-
-  ${{ format('Suite CI on x64 + ARM64, Debug + Release ({0} {1})', github.event_name == 'schedule' && 'nightly on' || 'dispatch on', github.ref_name) }}
-
-# Suite CI (the three in-product self-test suites plus the standalone executables, with
-# failure classification) takes one to four hours per profile on hosted runners, so it runs
-# once a night on every native profile instead of on every push. Pushes and pull requests
-# run Suite PR (ci.yml); ASan Debug runs weekly from asan.yml.
-"on":
-  schedule:
-    - cron: "47 2 * * *"
+name: Manual Native Suite
+on:
   workflow_dispatch:
-
+    inputs:
+      configuration:
+        description: Explicit native qualification profile
+        type: choice
+        options: [Debug, Release, ASan Debug]
+        default: Release
 permissions:
   contents: read
-
 concurrency:
-  group: nightly-ci-${{ github.ref }}
+  group: explicit-native-${{ github.run_id }}
   cancel-in-progress: false
-
 jobs:
-  # Skip the whole matrix when main has not changed since the last completed nightly.
-  changes:
-    runs-on: ubuntu-latest
-    # Listing this workflow's runs needs the Actions read scope on the job token.
-    permissions:
-      actions: read
-      contents: read
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - id: decide
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          REPOSITORY: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          Import-Module ./Tools/Modules/Testing/ScopedTesting.psm1 -Force
-          $previous = $null
-          if ($env:EVENT_NAME -eq 'schedule') {
-            try {
-              $json = gh api "repos/$env:REPOSITORY/actions/workflows/nightly-ci.yml/runs?branch=$env:BRANCH&status=completed&per_page=1" --jq '.workflow_runs[0] // null'
-              if ($LASTEXITCODE -eq 0) { $previous = $json | ConvertFrom-Json }
-            } catch [System.Management.Automation.RuntimeException] { Write-Warning 'Unreadable workflow history; running.' }
-          }
-          $run = Test-RSScheduledTestsRequired -EventName $env:EVENT_NAME -Commit $env:COMMIT -PreviousRun $previous
-          "run=$($run.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          Write-Host "Tests required: $run. Manual dispatch, latest failure/cancellation and unreadable history always run."
-          exit 0
-  native:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.run != 'false' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { platform: x64, runner: windows-2025-vs2026, configuration: Debug }
-          - { platform: x64, runner: windows-2025-vs2026, configuration: Release }
-          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Debug }
-          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Release }
-    uses: ./.github/workflows/build-reusable.yml
+  qualification:
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@fcf723f54140eabb69ef5017c32c971deb117ada
     with:
-      configuration: ${{ matrix.configuration }}
-      platform: ${{ matrix.platform }}
-      native_runner: ${{ matrix.runner }}
-      run_full_tests: true
-      test_suite: CI
-      upload_build_output: false
+      engine_ref: fcf723f54140eabb69ef5017c32c971deb117ada
+      configuration: ${{ inputs.configuration }}
+      scope: Full
