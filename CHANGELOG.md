@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Pin the common CI engine to v1.0.5: verify native portable winget registration, every installed command alias, declared smoke probes and owned cleanup; retain the compiler-free custom dependency status observer and recorded owner-only emergency PR merge route. Publication remains an explicit action requiring both matching native Release regression and production ZIP receipts.
 - Document the explicit organization-owner, PR-only emergency merge route with a recorded reason and exact-head match; preserve actual checks and native publication qualification.
 - Record the accepted MIT license and public-repository prerequisite for RedPrism/RedTilde, replace the separate Ghostty Debug ARM64 publication gate with the shared Release matrix, and reconcile formatting/scoped-testing owners with executed rollout evidence.
 - Restore the pinned vcpkg tool, ports baseline and platform dependencies before every hosted native build role; preserve incomplete cache state, share the bootstrap with legacy callers, and retain native child diagnostics through shared engine v1.0.4.
