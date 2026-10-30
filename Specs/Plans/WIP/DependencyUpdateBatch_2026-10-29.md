@@ -32,8 +32,8 @@ build and validation contracts remain
 - [x] Verify the requested versions against the official vcpkg registry snapshots.
 - [x] Integrate the original PR commits without resetting unrelated worktrees.
 - [x] Review and refresh the complete execution-contract digest.
-- [ ] Validate manifest/tool consistency, affected tooling and the actual package graph.
-- [ ] Build and test the affected package consumers with exact source/dependency receipts.
+- [x] Validate manifest/tool consistency, affected tooling and the actual package graph.
+- [x] Build and test the affected package consumers with exact source/dependency receipts.
 - [ ] Pass candidate CI, merge the coherent batch and verify main.
 - [ ] Publish the exact results and remaining separately owned holds; close this plan
   only when its required gates have passed.
@@ -104,3 +104,30 @@ or pending cases. The new coverage executes the actual hosted install script's
 argument selection for x64, ARM64, a failing native install and an unsupported
 triplet; it also checks registry/overlay source parity and cache dependency
 closure. The existing six compiler/architecture CMake controls remain passing.
+
+## Corrected source and ARM64 build follow-up
+
+Corrected source `e01f711f7a0852a302464388754c15b40d2c4be3` passed fresh x64
+Debug, Release and ASan Debug solution rebuilds with zero warnings and errors.
+Its exact source snapshot is
+`1dbad1732a35b389d6061cb25022dd4a550d90c2986b8ba38b44c51571a073f8`.
+The build receipt IDs are respectively
+`fe74eb1341d001af4da7105f18a9c13630313c27874aabeeb9b3eb3c3fc3767b`,
+`6d560aac0458445e8df71b14fd402cfdb3ab20aa2c1621f4696c1569ddc8740e`,
+and `2dec30bccf98c11c1734178c15e7614fb30b4f2e0434b37612b1ebc6159948cc`.
+The nonactivating SQLite group and Curl parser/request-planning checks passed
+against each receipt. These are focused consumer checks, not Full or live-network
+qualification. ARM64 installation also passed with the corrected overlay; the
+fresh ARM64 ASan Debug cross-build passed with zero warnings and errors under
+receipt `3fe8187678bd341558faca9be1fa678e5cdff0860b358ed92142c97b10b4c022`.
+That receipt establishes compilation only, not ARM64 native runtime acceptance.
+
+Local integration `d42b6a7ed3e53207a1d1e8c4b51933f339f014f5` also retains
+PR #151 source `630d3565547b77268ab6bc1e3bcde5aee187471f`: native Zig selection
+on ARM64 hosts and bounded contained runtime-builder children. Its reviewed
+rollback contract already requires eight notices; the stale test assertion now
+requires that exact count rather than the superseded five. The five required
+upgrade lane manifests are a different contract and remain unchanged. The
+combined source requires its own focused tooling and hosted CI results before
+publication and merge. Earlier receipts above remain bound to their original
+sources; they are not relabeled as combined-source qualification.
