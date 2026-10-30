@@ -703,6 +703,28 @@ $sample = ']('
         @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
     }
 
+    It 'admits only the reviewed dependency integration closeout record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/DependencyUpdateBatch_2026-10-29.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed dependency integration`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        $unreviewed = @(
+            'Specs/Plans/Done/DependencyUpdateBatch_2026-10-30.md',
+            'Specs/Plans/Done/DependencyUpdateBatch_2026-10-29/unreviewed.md'
+        )
+        foreach ($path in $unreviewed) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
+        foreach ($path in $unreviewed) {
+            (@($inventory.ProtectedDone.Unexpected) -contains $path) | Should Be $true
+        }
+    }
+
     It 'admits only the reviewed agent-skill remediation closeout record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-24.md'
