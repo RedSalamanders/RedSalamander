@@ -1,1 +1,0 @@
-- Record the v1.0.5 rollout to four public projects, matching private candidates, verified emergency PR settings, real native barrier/ZIP/Prepare evidence and stale-engine publication refusal; retain pending hosted, visibility and publication acceptance in the active plan.
