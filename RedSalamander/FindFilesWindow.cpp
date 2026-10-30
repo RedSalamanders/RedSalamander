@@ -4283,7 +4283,7 @@ void FindFilesWindow::Layout() noexcept
     buttonX += buttonWidth + gap;
     _parentButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
 
-    const float cancelLeft = std::max(margin, right - buttonWidth);
+    const float cancelLeft     = std::max(margin, right - buttonWidth);
     const float helpButtonLeft = std::max(margin, (_session.IsActive() ? cancelLeft - gap : right) - helpButtonWidth);
     _helpButton->SetBounds(rect(helpButtonLeft, y, helpButtonLeft + helpButtonWidth, y + buttonHeight));
     const float rightActionLeft = helpButtonLeft;

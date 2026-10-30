@@ -5008,7 +5008,7 @@ struct ConflictActionPolicy
         AddPrimaryIfAvailable(ConflictAction::Skip);
         // Keep Cancel rightmost without changing the safe default or Escape action.
         const auto primaryEnd = primaryActions.begin() + static_cast<std::ptrdiff_t>(primaryActionCount);
-        const auto cancel = std::ranges::find(primaryActions.begin(), primaryEnd, ConflictAction::Cancel);
+        const auto cancel     = std::ranges::find(primaryActions.begin(), primaryEnd, ConflictAction::Cancel);
         if (cancel != primaryEnd)
             std::rotate(cancel, cancel + 1, primaryEnd);
         else
@@ -5247,8 +5247,7 @@ struct ConflictActionPolicy
 [[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept
 {
     return action != ConflictAction::Retry && action != ConflictAction::Cancel && action != ConflictAction::None && action != ConflictAction::SkipAll &&
-           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes &&
-           action != ConflictAction::InvalidateLiveOutput;
+           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes && action != ConflictAction::InvalidateLiveOutput;
 }
 
 [[nodiscard]] bool IsCachedConflictDecisionEligible(const Task& task,

@@ -5452,9 +5452,9 @@ private:
                 snapshot->deleteAfterPacking                  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
                 const D2D1_RECT_F client                      = _dxHost.GetClientBoundsDip();
                 snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
-                snapshot->commandButtonsUseStandardOrder =
-                    _helpButton && _okButton && _cancelButton && _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
-                    _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
+                snapshot->commandButtonsUseStandardOrder      = _helpButton && _okButton && _cancelButton &&
+                                                                _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
+                                                                _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
                 return TRUE;
             }
             case ArchivePackPromptDebugCommand::SetPackerIndex: SetPackerIndex(static_cast<size_t>(lParam)); return TRUE;
@@ -6171,9 +6171,9 @@ private:
                 snapshot->maskHelpVisible                         = _maskHelpVisible;
                 const D2D1_RECT_F client                          = _dxHost.GetClientBoundsDip();
                 snapshot->commandButtonsFitInClient               = _lastButtonsBottomDip <= client.bottom;
-                snapshot->commandButtonsUseStandardOrder =
-                    _helpButton && _okButton && _cancelButton && _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
-                    _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
+                snapshot->commandButtonsUseStandardOrder          = _helpButton && _okButton && _cancelButton &&
+                                                                    _helpButton->GetBounds().right <= _okButton->GetBounds().left &&
+                                                                    _okButton->GetBounds().right <= _cancelButton->GetBounds().left;
                 return TRUE;
             }
             case ArchiveUnpackPromptDebugCommand::SetDestinationPath:

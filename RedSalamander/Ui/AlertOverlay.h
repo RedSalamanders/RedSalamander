@@ -61,7 +61,7 @@ struct AlertButton
 {
     uint32_t id = 0;
     std::wstring label;
-    bool primary = false;
+    bool primary         = false;
     AlertButtonRole role = AlertButtonRole::Option;
 };
 

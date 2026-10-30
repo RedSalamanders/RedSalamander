@@ -294,10 +294,8 @@
         return reject(L"repeat suppression swallowed Left navigation from rightmost Cancel, invoked an action, or changed native ownership");
     SendMessageW(popup.get(), WM_KEYDOWN, VK_RIGHT, repeatedKeyData);
     SendMessageW(popup.get(), WM_KEYUP, VK_RIGHT, 0);
-    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), navigated) ||
-        navigated.hostedFocusedAutomationId != bindingB.hostedDefaultAutomationId ||
-        popupState->DebugHostedActionCountForSelfTest() != beforeNavigation ||
-        GetForegroundWindow() != foregroundBefore || GetFocus() != focusBefore)
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), navigated) || navigated.hostedFocusedAutomationId != bindingB.hostedDefaultAutomationId ||
+        popupState->DebugHostedActionCountForSelfTest() != beforeNavigation || GetForegroundWindow() != foregroundBefore || GetFocus() != focusBefore)
         return reject(L"held Right did not return to rightmost Cancel without invoking an action or changing native ownership");
 
     return true;

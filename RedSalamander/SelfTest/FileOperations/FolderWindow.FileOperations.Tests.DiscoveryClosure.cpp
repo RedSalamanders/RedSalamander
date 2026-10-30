@@ -2433,11 +2433,11 @@ private:
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui->language.empty() && g_settings.ui->language != L"system")
         previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui->language};
-    const auto previousTheme    = folder->GetTheme();
-    const bool previousFooter   = operations->GetPopupFooterOnly();
-    const bool previousDensity  = operations->GetPopupCompactDensity();
+    const auto previousTheme      = folder->GetTheme();
+    const bool previousFooter     = operations->GetPopupFooterOnly();
+    const bool previousDensity    = operations->GetPopupCompactDensity();
     const bool previousThroughput = operations->GetPopupThroughputExpanded();
-    const auto restore          = wil::scope_exit([&]() noexcept
+    const auto restore            = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage));
         folder->ApplyTheme(previousTheme);
@@ -2446,8 +2446,8 @@ private:
         operations->SetPopupThroughputExpanded(previousThroughput);
         static_cast<void>(operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u));
     });
-    auto theme                  = ResolveAppTheme(ThemeMode::Dark, L"SkipCountingPresentation");
-    theme.reducedMotionOverride = true;
+    auto theme                    = ResolveAppTheme(ThemeMode::Dark, L"SkipCountingPresentation");
+    theme.reducedMotionOverride   = true;
     folder->ApplyTheme(theme);
     operations->SetPopupFooterOnly(false);
     operations->SetPopupCompactDensity(false);
@@ -2604,8 +2604,7 @@ private:
                         painted.taskPaintedTransferRect.bottom > painted.taskPaintedBodyBottomPx)
                         return reject(std::format(L"{} {} at {} DIP retained duplicate counts or clipped its work summary", culture, names[scene], widthDip));
                     if (scene == 3u && (painted.hostedGraphControlCount != 1u || ! painted.graphCurrentBandwidthLabelVisible ||
-                                        painted.graphCurrentBandwidthBytesPerSecond != 24.0 ||
-                                        painted.graphPlotRect.bottom <= painted.graphPlotRect.top ||
+                                        painted.graphCurrentBandwidthBytesPerSecond != 24.0 || painted.graphPlotRect.bottom <= painted.graphPlotRect.top ||
                                         painted.graphPlotRect.bottom > painted.taskPaintedActionRowRect.top))
                         return reject(L"delete item-throughput graph/current marker was missing or overlapped the action row");
                     if (scene == 3u)
@@ -2618,7 +2617,8 @@ private:
                         PopupLayoutDebugSnapshot collapsed{};
                         collapsed.taskId = task.taskId;
                         if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), collapsed) || collapsed.taskThroughputExpanded ||
-                            collapsed.taskPaintedCardRect.bottom - collapsed.taskPaintedCardRect.top >= expandedHeight - static_cast<float>(MulDiv(32, static_cast<int>(dpi), 96)) ||
+                            collapsed.taskPaintedCardRect.bottom - collapsed.taskPaintedCardRect.top >=
+                                expandedHeight - static_cast<float>(MulDiv(32, static_cast<int>(dpi), 96)) ||
                             collapsed.taskPaintedBodyBottomPx + 10.0f > collapsed.taskPaintedActionRowRect.top)
                             return reject(L"collapsed delete throughput retained expanded graph space or clipped the body");
                         if (! DebugInvokeFileOperationsPopup(popup.get(), toggle))

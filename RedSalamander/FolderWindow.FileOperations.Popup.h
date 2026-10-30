@@ -505,7 +505,7 @@ struct PopupLayoutDebugSnapshot
     float footerActionMinimumPaddingPx          = 0.0f;
     bool footerActionHitTargetsActive           = true;
     bool popupCompactDensity                    = false;
-    bool conflictCancelRightmost = false;
+    bool conflictCancelRightmost                = false;
     bool taskThroughputDisclosureVisible        = false;
     bool taskThroughputExpanded                 = true;
     bool taskThroughputSummaryVisible           = false;
@@ -844,8 +844,8 @@ struct RateSnapshot
 
 struct RateHistory
 {
-    bool itemRate = false; // Delete samples and labels are items/s, never bytes/s.
-    static constexpr size_t kMaxSamples             = 180u; // ~18s @ 100ms
+    bool itemRate                                   = false; // Delete samples and labels are items/s, never bytes/s.
+    static constexpr size_t kMaxSamples             = 180u;  // ~18s @ 100ms
     static constexpr size_t kMaxHueWeightsPerSample = TaskSnapshot::kMaxInFlightFiles;
 
     struct HueWeight

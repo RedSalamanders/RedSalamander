@@ -641,7 +641,7 @@ struct FolderWindow::FileOperationState::DecisionMirror final
                 .id      = kPrimaryButtonBase + static_cast<uint32_t>(action),
                 .label   = FileOperations::FormatConflictActionLabel(action, prompt.bucket, prompt.operation),
                 .primary = action == prompt.defaultAction,
-                .role = action == ConflictAction::Cancel ? RedSalamander::Ui::AlertButtonRole::Cancel : RedSalamander::Ui::AlertButtonRole::Option,
+                .role    = action == ConflictAction::Cancel ? RedSalamander::Ui::AlertButtonRole::Cancel : RedSalamander::Ui::AlertButtonRole::Option,
             });
         }
         if (prompt.applyToAllEligible)

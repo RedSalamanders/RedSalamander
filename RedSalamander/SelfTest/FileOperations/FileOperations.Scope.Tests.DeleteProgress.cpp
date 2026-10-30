@@ -543,7 +543,8 @@
         return reject(L"owned readonly root fixture unavailable");
     std::error_code ec;
     std::filesystem::create_directory(directory, ec);
-    if (ec || ! SetFileAttributesW(secondFile.c_str(), FILE_ATTRIBUTE_READONLY) || ! SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_READONLY) || ! SetFileAttributesW(directory.c_str(), FILE_ATTRIBUTE_READONLY))
+    if (ec || ! SetFileAttributesW(secondFile.c_str(), FILE_ATTRIBUTE_READONLY) || ! SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_READONLY) ||
+        ! SetFileAttributesW(directory.c_str(), FILE_ATTRIBUTE_READONLY))
         return reject(L"owned readonly root attributes unavailable");
     const bool autoDismiss    = operations->GetAutoDismissSuccess();
     const bool autoAccept     = HostGetAutoAcceptPrompts();
@@ -572,8 +573,15 @@
     operations->SetAutoDismissSuccess(false);
     HostSetAutoAcceptPrompts(false);
     HostClearTestPromptResultOverride();
-    const auto admitted = StartFileOperationAndGetId(
-        operations, FILESYSTEM_DELETE, FolderWindow::Pane::Left, std::nullopt, state.fsLocal, {secondFile, file, directory}, {}, FILESYSTEM_FLAG_RECURSIVE, false);
+    const auto admitted = StartFileOperationAndGetId(operations,
+                                                     FILESYSTEM_DELETE,
+                                                     FolderWindow::Pane::Left,
+                                                     std::nullopt,
+                                                     state.fsLocal,
+                                                     {secondFile, file, directory},
+                                                     {},
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     false);
     if (! admitted.has_value())
         return reject(L"three selected readonly roots were not admitted");
     taskId                      = admitted.value();
@@ -597,22 +605,27 @@
                 }
                 else if (PromptHasAction(prompt.value(), Task::ConflictAction::DeleteReadOnly))
                 {
-                    AppendLog(std::format(L"Selected readonly prompt: path={} generation={} kind={} destinationKind={} sourceProfile={} destinationProfile={} root={} repeat={} priorPrompts={}",
-                                          prompt->sourcePath, prompt->generation, static_cast<unsigned int>(prompt->decisionScope.sourceKind),
-                                          static_cast<unsigned int>(prompt->decisionScope.destinationKind), prompt->decisionScope.sourceProfileId,
-                                          prompt->decisionScope.destinationProfileId, prompt->decisionScope.destinationRootId,
-                                          prompt->applyToAllEligible, confirmedReadonlyPaths.size()));
-                    const bool fileRoot = prompt->sourcePath == file.native() || prompt->sourcePath == secondFile.native();
+                    AppendLog(std::format(L"Selected readonly prompt: path={} generation={} kind={} destinationKind={} sourceProfile={} destinationProfile={} "
+                                          L"root={} repeat={} priorPrompts={}",
+                                          prompt->sourcePath,
+                                          prompt->generation,
+                                          static_cast<unsigned int>(prompt->decisionScope.sourceKind),
+                                          static_cast<unsigned int>(prompt->decisionScope.destinationKind),
+                                          prompt->decisionScope.sourceProfileId,
+                                          prompt->decisionScope.destinationProfileId,
+                                          prompt->decisionScope.destinationRootId,
+                                          prompt->applyToAllEligible,
+                                          confirmedReadonlyPaths.size()));
+                    const bool fileRoot   = prompt->sourcePath == file.native() || prompt->sourcePath == secondFile.native();
                     const bool folderRoot = prompt->sourcePath == directory.native();
                     // Workers may reach the arbiter in either order. One file consent must
                     // cover its sibling; the folder must still obtain its own typed consent.
-                    const bool repeatedKind = std::ranges::any_of(confirmedReadonlyPaths, [&](const std::wstring& prior) noexcept
-                    {
+                    const bool repeatedKind = std::ranges::any_of(confirmedReadonlyPaths, [&](const std::wstring& prior) noexcept {
                         return fileRoot ? prior == file.native() || prior == secondFile.native() : prior == directory.native();
                     });
-                    const DWORD attributes = GetFileAttributesW(prompt->sourcePath.c_str());
-                    unexpected = (! fileRoot && ! folderRoot) || ! prompt->applyToAllEligible || attributes == INVALID_FILE_ATTRIBUTES ||
-                                 (attributes & FILE_ATTRIBUTE_READONLY) == 0u || repeatedKind;
+                    const DWORD attributes  = GetFileAttributesW(prompt->sourcePath.c_str());
+                    unexpected              = (! fileRoot && ! folderRoot) || ! prompt->applyToAllEligible || attributes == INVALID_FILE_ATTRIBUTES ||
+                                              (attributes & FILE_ATTRIBUTE_READONLY) == 0u || repeatedKind;
                     if (! unexpected)
                     {
                         confirmedReadonlyPaths.push_back(prompt->sourcePath);
@@ -631,19 +644,28 @@
     operations->CollectCompletedTasks(summaries);
     const auto summary    = std::ranges::find_if(summaries, [taskId](const auto& value) noexcept { return value.taskId == taskId; });
     const auto completion = state.completedTasks.find(taskId);
-    AppendLog(std::format(L"Selected readonly result: settled={} unexpected={} initial={} readonlyPrompts={} completion={} hr=0x{:08X} summary={} known={} files={} folders={} bytes={} remaining={}/{}/{} foreground={}",
-                          completed.conditionMet, unexpected, initialConsents, confirmedReadonlyPaths.size(), completion != state.completedTasks.end(),
+    AppendLog(std::format(L"Selected readonly result: settled={} unexpected={} initial={} readonlyPrompts={} completion={} hr=0x{:08X} summary={} known={} "
+                          L"files={} folders={} bytes={} remaining={}/{}/{} foreground={}",
+                          completed.conditionMet,
+                          unexpected,
+                          initialConsents,
+                          confirmedReadonlyPaths.size(),
+                          completion != state.completedTasks.end(),
                           completion != state.completedTasks.end() ? static_cast<unsigned long>(completion->second.hr) : 0ul,
-                          summary != summaries.end(), summary != summaries.end() && summary->completedWorkCountsKnown,
+                          summary != summaries.end(),
+                          summary != summaries.end() && summary->completedWorkCountsKnown,
                           summary != summaries.end() ? summary->completedWorkFileCount : 0u,
                           summary != summaries.end() ? summary->completedWorkFolderCount : 0u,
                           summary != summaries.end() ? summary->completedWorkBytes : 0u,
-                          GetFileAttributesW(file.c_str()), GetFileAttributesW(secondFile.c_str()), GetFileAttributesW(directory.c_str()),
+                          GetFileAttributesW(file.c_str()),
+                          GetFileAttributesW(secondFile.c_str()),
+                          GetFileAttributesW(directory.c_str()),
                           GetForegroundWindow() == foreground));
     if (! completed.conditionMet || unexpected || initialConsents == 0u || confirmedReadonlyPaths.size() != 2u || completion == state.completedTasks.end() ||
         completion->second.hr != S_OK || summary == summaries.end() || ! summary->completedWorkCountsKnown || summary->completedWorkFileCount != 2u ||
-        summary->completedWorkFolderCount != 1u || summary->completedWorkBytes != 36u || GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES || GetFileAttributesW(secondFile.c_str()) != INVALID_FILE_ATTRIBUTES ||
-        GetFileAttributesW(directory.c_str()) != INVALID_FILE_ATTRIBUTES || GetForegroundWindow() != foreground)
+        summary->completedWorkFolderCount != 1u || summary->completedWorkBytes != 36u || GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES ||
+        GetFileAttributesW(secondFile.c_str()) != INVALID_FILE_ATTRIBUTES || GetFileAttributesW(directory.c_str()) != INVALID_FILE_ATTRIBUTES ||
+        GetForegroundWindow() != foreground)
         return reject(L"typed repeat consent did not cover the second file while keeping the folder consent separate with exact final counts");
     AppendLog(L"Selected readonly Delete consent: one file consent covered both files; the folder required separate typed consent; "
               L"initial permanent consent did not clear readonly attributes; final 2 files/1 folder/36 B.");

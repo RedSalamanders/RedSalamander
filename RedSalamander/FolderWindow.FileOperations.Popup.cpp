@@ -1410,10 +1410,9 @@ struct WholeTaskProgressPresentation final
     result.showDiscoveryActivity =
         result.includeInAggregateCohort && ! task.cancellationRequested && ! task.discoveryClosed && task.discoveryAheadActive && ! task.discoverySkipped;
     result.showTransferProgress = result.includeInAggregateCohort;
-    result.showThroughputGraph =
-        result.includeInAggregateCohort && result.transferActive &&
-        (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE ||
-         (task.operation == FILESYSTEM_DELETE && (task.completedWorkCountsKnown || task.hasProgressCallbacks)));
+    result.showThroughputGraph  = result.includeInAggregateCohort && result.transferActive &&
+                                  (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE ||
+                                   (task.operation == FILESYSTEM_DELETE && (task.completedWorkCountsKnown || task.hasProgressCallbacks)));
 
     // D2-A08: no growing-denominator fraction. Until the total closes the bar is indeterminate (a
     // marquee once transfer is active) and the card shows exact counters instead.
@@ -4239,7 +4238,7 @@ void AdvanceRateHistory(FileOperationsPopupInternal::RateHistory& history,
     using FileOperationsPopupInternal::RateStallKind;
     const bool blocked  = IsRateSamplingBlocked(task);
     const bool itemRate = task.operation == FILESYSTEM_DELETE;
-    history.itemRate = itemRate;
+    history.itemRate    = itemRate;
 
     if (! history.initialized)
     {
@@ -5965,9 +5964,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
         }
         for (size_t i = 0u; i < history.count; ++i)
         {
-            history.samples[i] = history.itemRate ? static_cast<float>(18u + i % 23u)
-                                 : task.totalBytes == 0u || ! task.started ? 0.0f
-                                                                        : static_cast<float>((48u + i % 23u) * 1024u * 1024u);
+            history.samples[i]             = history.itemRate                          ? static_cast<float>(18u + i % 23u)
+                                             : task.totalBytes == 0u || ! task.started ? 0.0f
+                                                                                       : static_cast<float>((48u + i % 23u) * 1024u * 1024u);
             history.verificationSamples[i] = task.verificationActive ? history.samples[i] * 2.0f : 0.0f;
             history.hues[i]                = 210.0f;
             history.hueWeightCounts[i]     = static_cast<uint8_t>(task.inFlightFileCount);
@@ -6043,9 +6042,9 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             std::scoped_lock lock(task->_inFlightFilesMutex);
             if (task->_operation == FILESYSTEM_DELETE && task->_completedWorkCountsKnown.load(std::memory_order_acquire))
             {
-                const uint64_t files = std::min<uint64_t>(task->_completedWorkFileCount.load(std::memory_order_acquire), ULONG_MAX);
+                const uint64_t files   = std::min<uint64_t>(task->_completedWorkFileCount.load(std::memory_order_acquire), ULONG_MAX);
                 const uint64_t folders = std::min<uint64_t>(task->_completedWorkFolderCount.load(std::memory_order_acquire), ULONG_MAX);
-                snap.completedItems = static_cast<unsigned long>(std::min<uint64_t>(files + folders, ULONG_MAX));
+                snap.completedItems    = static_cast<unsigned long>(std::min<uint64_t>(files + folders, ULONG_MAX));
             }
             snap.discoveryClosed      = task->_discoveryClosed.load(std::memory_order_acquire);
             snap.discoveredTotalBytes = task->_discoveredTotalBytes.load(std::memory_order_acquire);
@@ -9443,9 +9442,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const bool summary        = TaskUsesSkippedCountingWorkSummary(task);
                 const float discoveryRows = ResolveWholeTaskProgressPresentation(task).showDiscoveryActivity ? 2.0f : 0.0f;
                 const float bodyRows      = 1.0f + discoveryRows + (preparing ? 1.0f : summary ? 1.0f : 2.0f);
-                const float graphHeight = ResolveWholeTaskProgressPresentation(task).showThroughputGraph
-                                              ? (IsTaskThroughputExpanded(task.taskId) ? 112.0f : 56.0f)
-                                              : 0.0f;
+                const float graphHeight =
+                    ResolveWholeTaskProgressPresentation(task).showThroughputGraph ? (IsTaskThroughputExpanded(task.taskId) ? 112.0f : 56.0f) : 0.0f;
                 h = std::max(DipsToPixels(kFileOperationsExpandedDeleteCardHeightDip + graphHeight, _dpi),
                              DipsToPixels(82.0f + graphHeight, _dpi) + bodyRows * baseLineH);
             }
@@ -12073,12 +12071,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                                           buttonsTop + DipsToPixels(local.bottom, _dpi));
                                 button.hit.taskId           = task.taskId;
                                 button.hit.promptGeneration = task.conflict.generation;
-                                const bool hasMore = actions.count > primaryActionCount;
+                                const bool hasMore          = actions.count > primaryActionCount;
                                 if (! hasMore || index > 0u)
                                 {
                                     const size_t primaryIndex = index - (hasMore ? 1u : 0u);
-                                    button.hit.kind = PopupHitTest::Kind::TaskConflictAction;
-                                    button.hit.data = static_cast<uint32_t>(RawConflictAction(ConflictActionFromRaw(task.conflict.primaryActions[primaryIndex])));
+                                    button.hit.kind           = PopupHitTest::Kind::TaskConflictAction;
+                                    button.hit.data =
+                                        static_cast<uint32_t>(RawConflictAction(ConflictActionFromRaw(task.conflict.primaryActions[primaryIndex])));
                                     _buttons.push_back(button);
                                     DrawButton(button, _buttonSmallFormat.get(), actions.labels[index]);
                                 }
@@ -15703,7 +15702,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
         }
 
         float lastActionRight = -1.0f;
-        float cancelRight = -1.0f;
+        float cancelRight     = -1.0f;
         for (const auto& button : _buttons)
         {
             if (button.hit.taskId != result.taskId ||
@@ -15713,7 +15712,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             if (button.hit.kind == PopupHitTest::Kind::TaskConflictAction && button.hit.data == static_cast<uint32_t>(ConflictAction::Cancel))
                 cancelRight = button.bounds.right;
         }
-        result.conflictCancelRightmost = cancelRight >= 0.0f && std::abs(cancelRight - lastActionRight) <= 1.0f;
+        result.conflictCancelRightmost     = cancelRight >= 0.0f && std::abs(cancelRight - lastActionRight) <= 1.0f;
         result.conflictOverflowActionCount = std::min(taskIt->conflict.overflowActionCount, taskIt->conflict.overflowActions.size());
         for (size_t i = 0; i < result.conflictOverflowActionCount && i < result.conflictOverflowActions.size(); ++i)
         {
