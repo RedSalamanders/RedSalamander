@@ -1,1 +1,0 @@
-- Fix permanent-delete item throughput to include recursive removals and display its variation in the hosted graph; distinguish proven read-only blockers from access-denied failures, allow task-scoped repeat consent for matching read-only items, and keep options before OK/Cancel with Cancel rightmost. Add focused rate, repeat-consent, and button-order coverage.
