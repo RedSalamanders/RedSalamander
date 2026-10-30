@@ -254,9 +254,16 @@ jobs:
           $patchPath = Join-Path $candidateRoot 'Ghostty-WindowsPrivateRuntime.patch'
           $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json -Depth 100
           $sourceRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\Sources\ghostty-$env:RS_CANDIDATE_COMMIT"
-          $hostToolchain = @($lock.toolchain.archives | Where-Object { $_.hostPlatform -ceq 'x64' })[0]
+          # Use the toolchain the candidate build just selected for this host:
+          # the native aarch64 Zig, never the emulated x86-64 one.
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1')
+          $hostPlatform = Get-RSGhosttyRuntimeHostPlatform
+          $hostToolchains = @($lock.toolchain.archives | Where-Object { $_.hostPlatform -ceq $hostPlatform })
+          if ($hostPlatform -cne 'ARM64' -or $hostToolchains.Count -ne 1) {
+            throw "Native qualification requires exactly one ARM64 host Zig toolchain in the candidate lock; host is $hostPlatform."
+          }
           $zig = Join-Path (Join-Path $env:GITHUB_WORKSPACE '.build\TerminalEngineUpgrade\Toolchains') `
-            ([string]$hostToolchain.executableRelativePath).Replace('/', '\')
+            ([string]$hostToolchains[0].executableRelativePath).Replace('/', '\')
           if (-not [IO.File]::Exists($zig)) {
             throw "Pinned Zig executable is missing: $zig"
           }
