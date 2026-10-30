@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Start the authorized I55 unified CI implementation across all six RedSalamanders projects. Refresh default-branch identities, hosting/security prerequisites and active owners; preserve the current toolchain and record unavailable private hosted/security capabilities as open acceptance gates. Implementation and hosted qualification remain in progress.
 - Record the selected common CI policy for all six RedSalamanders projects: compiler-free PR formatting/tooling, meaningful-input classification, five-minute main batching, native x64/ARM64 test-enabled Release and a global test gate before production Release/ZIPs, manual extended qualification and publication, a DxUi SDK ZIP, winget for five applications, and non-building dependency/security monitoring through a versioned shared engine. The indexed I55 plan records decisions, alternatives, implementation slices and acceptance scenarios; implementation has not started.
 - Align the Terminal rollback contract check with all eight required notices while
   retaining the five-lane upgrade evidence requirement. Record fresh build and
