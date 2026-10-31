@@ -375,8 +375,9 @@ the candidate sources and compiled with native MSVC 14.52.37025 under /Wall and 
 policy. The focused executable passed 29 checks with zero warnings/errors. Replacing only the connector with the
 old single-WaitNamedPipe implementation made both missing-listener and delayed-instance controls fail (exit 1),
 while the 27 ownership/event checks still passed. This proves focused test sensitivity, not GUI restoration or product
-qualification. The initial fixture-extraction failure and external-header notice receipts remain retained; the corrected
-extraction and existing Build/NativeBuildPolicy.targets notice policy were used for the passing run.
+qualification. The initial fixture-extraction failure and external-header notice outcomes remain in the tool transcript;
+their original scratch files were later swept before archival. They are not represented as retained original raw files.
+The corrected extraction and existing Build/NativeBuildPolicy.targets notice policy were used for the passing run.
 
 All 213 existing TestHarnessSourceContracts checks passed with zero failures/skips in the marked sandbox. Compiler-free
 Static admission, the 16 workflow syntax checks, inventories and specification consistency passed with zero blocking findings.
@@ -384,3 +385,18 @@ clang-format 22.1.3 and changelog validation passed. Source,
 fixture, compiler and control receipts are under the continuation evidence root. Both full native architectures,
 the two remaining File Operations outcomes, production ZIPs and RedSalamander Prepare remain open. No active
 heavy run was cancelled, no test was removed, and the unrelated review-remediation checkout was not modified.
+
+The repair integrated through PR 190 (reviewed c652e76a2e66461f667b9dbfdb280a180479e256, merge
+5cb42723073f8219d79ab14c513a3822c0092e0c) and separate fold PR 191 (merge
+94bd4cb66ac2f097b5f5092b9979e60deb16d1c4). Both exact heads passed all three normal required checks without
+bypass. The fold preserved native digest 7acb4b6631d438e0567486ad549d77f58ad461ed2146c03b72b129416feadcd2.
+Current-main candidate 41216506783 was submitted after five quiet minutes and remains behind old ARM64 regression
+41198411091. A queued admission is not a test pass; neither production nor Prepare is eligible yet.
+
+After discovering the disposable local fixture files had been swept, the 29 focused checks and old-connector
+negative control were rerun on committed folded main 94bd4cb66ac2f097b5f5092b9979e60deb16d1c4. The result was
+again 29 passed/zero warnings or errors; the old connector failed exactly the two listener checks with the other
+27 checks passing. The generated candidate/control C++ SHA-256 values match the earlier reported values. Seven
+source/log/receipt files were copied and hash-verified into RS-native-harness-fixture under the continuation evidence
+root before the live owner exited; archive-manifest.json identifies this as a fresh rerun rather than reconstructed
+original evidence. These receipts still do not qualify the product or GUI restoration.
