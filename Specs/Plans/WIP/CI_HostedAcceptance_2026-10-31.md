@@ -366,6 +366,9 @@ WaitNamedPipe call waits while no listener instance exists. The parent viewer pe
 request, then bounded read-only observation with identity/input/foreground interference refusal; exact saved focus
 is still mandatory. File Operations assertions remain intact. Their case summaries now retain the decision-mirror
 step reason and short-viewport window/task/layout witnesses so the next failed run is diagnosable even without a trace.
+The old short-viewport failure constructed its message in the same call that collected the witnesses; C++ argument
+evaluation order could therefore print their initial zero values. The repaired check collects the complete condition
+before formatting its diagnostic. Those old zero values alone are not evidence that the live task or popup disappeared.
 
 The actual connector, new deterministic delayed-listener case, desktop ownership predicates and existing noninteractive ownership case were extracted from
 the candidate sources and compiled with native MSVC 14.52.37025 under /Wall and the existing reviewed native notice

@@ -15658,19 +15658,20 @@ struct FileOperationsPopupTestFixture final
     shortTask                       = {};
     const bool shortLayoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
     const bool shortTaskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), shortTask);
-    state.Require(
+    const bool overflowRevealed =
         shortLayoutAvailable && shortLayout.scrollPosition > 0 &&
-            shortLayout.hostedFocusedAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                                 static_cast<uint32_t>(FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore),
-                                                                 fixture.taskId.value(),
-                                                                 fixture.taskSnapshot.conflict.overflowActionCount,
-                                                                 fixture.taskSnapshot.conflict.generation) &&
-            FindMatchingWindowHostRawProvider(
-                fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE), moreProvider.put()) &&
-            moreProvider && SUCCEEDED(moreProvider.query_to(moreFragment.put())) && SUCCEEDED(moreFragment->get_BoundingRectangle(&moreBounds)) &&
-            moreBounds.height > 0 && moreBounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
-            moreBounds.top + moreBounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <=
-                static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom,
+        shortLayout.hostedFocusedAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                             static_cast<uint32_t>(FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore),
+                                                             fixture.taskId.value(),
+                                                             fixture.taskSnapshot.conflict.overflowActionCount,
+                                                             fixture.taskSnapshot.conflict.generation) &&
+        FindMatchingWindowHostRawProvider(
+            fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE), moreProvider.put()) &&
+        moreProvider && SUCCEEDED(moreProvider.query_to(moreFragment.put())) && SUCCEEDED(moreFragment->get_BoundingRectangle(&moreBounds)) &&
+        moreBounds.height > 0 && moreBounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
+        moreBounds.top + moreBounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
+    state.Require(
+        overflowRevealed,
         std::format(L"Tab must reveal the overflow action above the footer: scroll={} focused={} overflowCount={} boundsTop={} height={} viewportBottom={} "
                     L"layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
                     shortLayout.scrollPosition,
