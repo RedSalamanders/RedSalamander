@@ -1104,6 +1104,8 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/PowerShellTooling_2026-10-28.md',
             # Exact I54 integration record; broader runtime/performance holds remain separately owned.
             'Specs/Plans/Done/DependencyUpdateBatch_2026-10-29.md',
+            # Exact I55 implementation closeout; hosted acceptance remains owned by I56.
+            'Specs/Plans/Done/CI_OrganizationStandardization_2026-10-29.md',
             # Exact I49 guidance/package remediation record; no sibling admission or runtime qualification.
             'Specs/Plans/Done/AgentSkillsAudit_RedTeam_2026-10-24.md',
             # Exact local test-run retention closeout; no sibling or companion admission.

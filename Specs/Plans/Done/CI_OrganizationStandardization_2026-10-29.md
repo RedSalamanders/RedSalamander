@@ -1,13 +1,13 @@
 # I55 Unified CI policy for RedSalamanders
 
-Status: ACTIVE - S0-S3 implemented; engine v1.0.5 deployed to four public projects; two private candidates and remaining hosted/publication acceptance are open.
+Status: DONE - implementation. The owner separated hosted acceptance into I56 on 2026-10-31; this closeout is not all-six native or release qualification.
 Priority: P1 for the policy and validation gaps.
 Policy owner: repository/organization maintainer. Plan preparation: Codex.
 Prepared: 2026-10-29. Local planning checkout: ej/main-merges-review-20261028 at c363bf5ba3b289d95f596d88b27ef0c2c5891f2e.
 Integration preparation: 2026-10-30, ej/ci-organization-plan-20261030 from main at 6e4092d50eb892d15aa9c3b757c5d30d84266de2. The plan was delivered in PR #153; the owner subsequently authorized implementation across all six projects on 2026-10-30.
 Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 
-## Checklist
+## Implementation checklist (owner closeout split, 2026-10-31)
 
 - [x] Review current CI and record source identities for all six repositories.
 - [x] Challenge the alternatives and record the owner's answers to the eight original questions.
@@ -20,11 +20,11 @@ Scope: RedSalamander, DxUi, RedXe, RedPrism, RedTilde and RedMonitor.
 - [x] S1: shared input classifier and six reviewed project manifests; strict policy/complete-tree fixtures and local six-project conformance pass.
 - [x] S2: compiler-free PR checks, formatting patches and explicit formatting commits with fresh checks; live exact-head tooling/CodeQL/dependency-review witness passed.
 - [x] S3: five-minute main coordination, serialized admission and cumulative state; deterministic controls and live coalesced/stale/serialized RedMonitor and RedXe admissions verified.
-- [ ] S4: both native Release test branches, global test barrier, production ZIP/SDK and compiler-free security.
-- [ ] S5: explicit unchanged-artifact publication and winget preparation for the five applications.
-- [ ] S6: common engine pin, hosted witnesses, enforced gates and an explicit organization-owner PR-only emergency route across all six projects (four public rulesets configured; private capability pending).
-- [ ] S7: authoritative specs, instructions, inventories, validation evidence and plan closeout.
-- [ ] Verify all six against the same policy version and close the implementation record.
+- [x] S4 implementation: native Release test branches, global barrier, production ZIP/SDK and compiler-free security are delivered. Remaining actual project qualification and failures are owned by I56.
+- [x] S5 implementation: five-application artifact-only publication and winget preparation are delivered; positive Prepare and failed-run refusal controls executed. Remaining live eligibility and credential readiness are tracked in I56. DxUi has no publication workflow.
+- [x] S6 implementation: one v1.0.6 engine pin and coherent adapters/callers for all six, documented organization-owner PR-only emergency route, and four public rulesets. Private hosting/enforcement and final native witnesses remain explicit in I56.
+- [x] S7 implementation: current domain contracts, instructions, inventories, focused controls, exact Done-path admission and indexed hosted-acceptance successor are delivered together.
+- [x] Verify all six adapter/caller schemas and compiler-free conformance against shared policy 1 / engine v1.0.6; close implementation only, preserving I56 acceptance.
 
 ## 1. Requested outcome and authority
 
@@ -35,7 +35,7 @@ The owner's 2026-10-29 request establishes these requirements:
 3. Every PR receives clang-format feedback when applicable. Formatting can be committed through an explicit manual action.
 4. There are no daily or weekly builds.
 5. Multiple PR merges can share one build/test batch.
-6. ZIP releases cover all six projects, including a DxUi SDK. Winget covers RedSalamander, RedXe, RedPrism, RedTilde and RedMonitor; public release/winget publication requires an explicit manual action.
+6. ZIP artifacts cover all six projects, including a DxUi SDK; the five applications support public ZIP releases. Winget covers RedSalamander, RedXe, RedPrism, RedTilde and RedMonitor; public release/winget publication requires an explicit manual action.
 7. PRs run formatting and non-compiling tooling only. Meaningful native work runs once per admitted main batch after five quiet minutes.
 8. The automatic batch builds test-enabled Release and executes regression tests natively on x64 and ARM64. Both must pass before either production Release build starts; production ZIPs remain CI artifacts until manual publication.
 9. Long benchmarks and repeated stress tests use explicit manual qualification actions. Non-building dependency/security automation stays enabled and must be set up across all six.
@@ -80,10 +80,10 @@ Known delivery dependencies, to refresh rather than duplicate:
 
 - RedPrism and RedTilde runs were refused before execution by GitHub billing/spending controls. An administrator must restore execution; a workflow rewrite cannot qualify code while that block remains.
 - The public repository rules inspected did not require successful CI status checks. Private protection APIs reported account-plan restrictions. Organization policy and runner-administration APIs returned 403.
-- [I50](CodeReview_MainMerges_2026-10-28.md), merged PR #146 and [I52 Hosted CI repair](https://github.com/RedSalamanders/RedSalamander/blob/28e70e6940619f1c82eb07958da762de34c04b4e/Specs/Plans/WIP/HostedCiRepair_2026-10-28.md) own existing runtime, checkout and receipt repairs/qualification. Reconcile those results before replacing their workflows; merging a repair is not a fresh all-repository pass.
-- [I32](ScopedTesting_2026-10-05.md) owns scoped execution and PR delegation; update its manifest/digest accounting with the new conditional gates.
-- [I9](CI_FormatAutocommitRace_2026-08-25.md) describes an older automatic-format publication model. Current main is check-only. Reconcile/retire obsolete assumptions with that owner; do not implement its old bot behavior in parallel.
-- [I48](Msvc1452ReleaseOptimization_2026-10-23.md), [I53](NativeBuildPolicyCoherence_2026-10-28.md), DxUi's native-build work and the other products' build-policy owners govern compiler/build changes. [I54](../Done/DependencyUpdateBatch_2026-10-29.md) records the completed dependency integration and its separate remaining qualification holds. Preserve their approved toolchain decisions and refresh their delivery state.
+- [I50](../WIP/CodeReview_MainMerges_2026-10-28.md), merged PR #146 and [I52 Hosted CI repair](https://github.com/RedSalamanders/RedSalamander/blob/28e70e6940619f1c82eb07958da762de34c04b4e/Specs/Plans/WIP/HostedCiRepair_2026-10-28.md) own existing runtime, checkout and receipt repairs/qualification. Reconcile those results before replacing their workflows; merging a repair is not a fresh all-repository pass.
+- [I32](../WIP/ScopedTesting_2026-10-05.md) owns scoped execution and PR delegation; update its manifest/digest accounting with the new conditional gates.
+- [I9](../WIP/CI_FormatAutocommitRace_2026-08-25.md) describes an older automatic-format publication model. Current main is check-only. Reconcile/retire obsolete assumptions with that owner; do not implement its old bot behavior in parallel.
+- [I48](../WIP/Msvc1452ReleaseOptimization_2026-10-23.md), [I53](../WIP/NativeBuildPolicyCoherence_2026-10-28.md), DxUi's native-build work and the other products' build-policy owners govern compiler/build changes. [I54](DependencyUpdateBatch_2026-10-29.md) records the completed dependency integration and its separate remaining qualification holds. Preserve their approved toolchain decisions and refresh their delivery state.
 - RedSalamander adopted fold-on-main in PR #150. Refresh the other five repositories' delivery state rather than treating the earlier open proposals as current. The shared changelog files and submission semantics remain a separate owner; CI standardization must not introduce a competing changelog bot.
 
 ## 3. Owner decisions
@@ -104,6 +104,9 @@ The owner's answers and follow-up confirmations are recorded below. Recommendati
 | Q10 | Formatting revalidation | Trusted least-privileged write path and verified checks for the new head | Engineering proof belongs to S2. Use a strictly non-compiling PR revalidation mode; do not invoke the native qualification action. New app/credential administration is not performed during planning. |
 | Q11 | Compiler-dependent tooling | Move fixture/compiler tests out of PR checks into the main batch | Pure metadata evaluation must not escape into a compiler through imported scripts/targets. Non-compiling validators remain PR work. |
 | Q12 | Emergency bypass | PR merge checks only; explicitly confirmed by the owner on 2026-10-31 | Organization-owner PR override with the reviewed head and recorded reason. Both native test branches, production/SDK smoke, artifact identity and manual publication requirements remain mandatory. |
+| Q13 | DxUi publication | No publication workflow for DxUi | Retain native SDK ZIP/extracted-consumer qualification internally; remove SDK and gallery publication routes, including Prepare. This supersedes earlier SDK-release proposals, not the internal SDK artifact requirement. |
+| Q14 | Implementation closeout | Close implementation and track hosted acceptance separately | I55 moves to Done as implementation history; I56 owns failed/unavailable native runs, private capability, current-source Prepare and external readiness. No qualification or publication gate is waived. |
+| Q15 | Publication credential | Promote the existing RedSalamander token to an organization token | Explicit trusted-main promotion selects the five applications and excludes DxUi; retain repository overrides, verify metadata and preserve any missing administration permission as an operator prerequisite. Never log a secret value. |
 
 The three follow-up confirmations are explicit: both architectures pass before production starts; extended stress/benchmark work is manual; and PRs prohibit compiler-dependent tooling fixtures.
 
@@ -261,7 +264,7 @@ flowchart TD
     PA --> C
     C --> P[Explicit manual publication]
     P --> AP[Five applications: ZIP release and winget]
-    P --> SDK[DxUi: SDK ZIP release]
+    C --> SDK[DxUi: internal SDK ZIP artifacts]
 ```
 
 For each admitted meaningful main batch:
@@ -338,7 +341,7 @@ GitHub supports [CodeQL no-build analysis for C/C++](https://docs.github.com/en/
 
 ### 9.1 Promote the qualified artifacts
 
-Provide a single manual publication entry point for all six products, with winget disabled only for the DxUi library. Use no timer, tag-push or automatic release-published submission route.
+Provide a manual publication entry point for each of the five applications. DxUi has no publication workflow, including Prepare and gallery publication; its SDK ZIPs remain internal qualification artifacts. Use no timer, tag-push or automatic release-published submission route.
 
 Inputs identify the exact main batch/source/version and stage: validate, create GitHub release, and (for applications) submit winget. Mutating stages require explicit selection; the default validates/prepares without publication.
 
@@ -363,7 +366,7 @@ No additional source build is needed merely because the operator later chooses P
 | RedPrism | Production application ZIPs, x64/ARM64 | Required; readiness blocked until public installer URLs and package proof exist |
 | RedTilde | Production application ZIPs, x64/ARM64 | Required; readiness blocked until public installer URLs and package proof exist |
 | RedMonitor | Standalone production application ZIPs, x64/ARM64 | Required; qualify standalone package/launch/license/manifest contract |
-| DxUi | Production SDK ZIPs, x64/ARM64 | Not applicable: library SDK, not an application |
+| DxUi | Internal qualified SDK ZIP artifacts only; no publication workflow | Not applicable: library SDK |
 
 The owner intends RedPrism/RedTilde to become public. CI preparation does not change repository visibility. Keep desired publication coverage recorded as required and readiness as blocked until public-URL/account/package prerequisites pass, rather than silently dropping those products.
 
@@ -477,22 +480,16 @@ Collect elapsed time, setup/build/test phase durations, native-start count and s
 
 ## 14. Done criteria, rollback and stop conditions
 
-Implementation is complete only when:
+The owner's Q14 decision separates implementation closeout from hosted acceptance. This implementation record is complete when:
 
-- The selected Q1-Q12 policy, actual suite coverage and technical formatting-revalidation method are implemented and recorded.
-- All six repositories use the agreed policy version and reviewed adapter schema.
-- Every tested excluded-only change starts zero native restore/build/test work; meaningful assets/scripts/dependencies are correctly included.
-- A representative merge burst has real evidence of one matrix per admitted batch; later merges and failed attempts retain honest accounting.
-- Every PR has formatting feedback and a usable explicit formatting action; fresh commit checks are proven.
-- No retained timer can compile, run native tests or package products.
-- Required PR gates are actually enforced where the target policy requires them; private hosting/account restrictions are resolved.
-- Native test-enabled Release really executes required regressions on both architectures; its global gate precedes production Release, ZIP/SDK and native smoke. Manual Debug/ASan/extended obligations and failures remain explicit.
-- ZIP/SDK publication works for all six and winget for the five applications; it is manual, promotes the qualified bytes unchanged and has prepare-only/partial-failure proof.
-- Dependency/security monitoring is configured and capability-verified on all six without compiling on PRs or timers.
-- Current domain specs, instructions, tooling inventory/help/callers and PR-delegation manifests agree with the implementation.
-- Existing plan owners are reconciled; no duplicate active queue or silent coverage reduction remains.
-- The completed implementation record receives reviewed Done-path admission and moves to Specs/Plans/Done.
+- The accepted trigger, classification, quiet-window, formatting, native barrier, artifact and manual-operation code is delivered with meaningful behavior controls and coherent six-project engine pins.
+- DxUi has no hosted publication workflow; its SDK ZIP and extracted-consumer qualification remain internal.
+- Artifact-only Prepare has positive exact-byte and failed-run refusal evidence, with no public release or winget submission performed.
+- Publication credential metadata and the explicitly requested organization-token promotion route are recorded without exporting secret values.
+- Current domain specs, instructions, tooling classification/help, scoped manifests and exact Done-path admission agree with the implementation.
+- I56 is indexed as the single remaining hosted-acceptance owner, retaining all failed, unavailable and pending outcomes and existing runtime/platform/performance owners.
 
+The former combined all-six qualification, private enforcement/security, current successful five-application Prepare, credential readiness and six-of-six metadata coverage criteria remain mandatory in I56. They are not checked off by this archive. Actual public publication remains a separately selected operation.
 Rollback uses the previous engine/adapter pins and known workflow definitions. Restore source and gate behavior without automatically restoring prohibited timer triggers. Preserve receipts, failed attempts and already published assets. Keep publication disabled while eligibility is uncertain.
 
 Block the affected rollout/publication gate on conflicting active owners, unsupported required-check/security hosting capabilities, unavailable hosted execution, broken shared-engine access, missing public installer URLs, unreviewed input exclusions, inability to prove real Release test execution or bind source/version/artifacts, missing native ARM64 evidence, test/production contamination, or changes to sandbox/focus/publication authority beyond this scope. Continue independent implementation and validation under the owner's until-complete instruction; an external prerequisite is never a passing gate.
@@ -683,3 +680,17 @@ RedMonitor v1.0.5 [qualification 41136463768](https://github.com/RedSalamanders/
 DxUi v1.0.4 [qualification 41131787806](https://github.com/RedSalamanders/DxUi/actions/runs/41131787806) passed for source 299193409156976458c9a819db9504563eeb3341, SDK 0.1.762. Its selected x64/ARM64 regression scopes (23/21), active probes, barrier and production SDKs passed. Both native extracted consumers passed source/header closure, unchanged library and real first-party warning-control gates. Independent ZIP hashes and SDK receipts are retained under Z:/RedSalamander.Perf/evidence/unified-ci/DxUi-41131787806/independently-verified.json. Its final v1.0.5 run 41137013910 is still executing and is not yet qualified. RedSalamander's existing batch 41130003444 is still building, with later candidates queued; no active native work was cancelled.
 
 The visibility refresh still found RedPrism and RedTilde private. Their hosted/security/enforcement gates remain open. S4-S7 remain partial; these new positive receipts do not establish all-six or actual public-release/winget-install acceptance. Only prepare-only publication actions were dispatched during this verification.
+
+### Implementation closeout and explicit acceptance successor - 2026-10-31
+
+The owner explicitly requested artifact-only Prepare checks and credential verification, removed all DxUi publication workflows, selected promoting the existing RedSalamander token to the organization, and confirmed "Close implementation and track hosted acceptance separately." Q13-Q15 above supersede the former combined closeout boundary.
+
+Engine v1.0.6 is reviewed source 19710a8aeac979a82e83bec82e8b866cee3d3deb, merged through engine PR 10 as 57251e0f30d7eabfc9fe473e4d7fe94de1c0b922. Its local Windows controls passed 46 cases; hosted run 41196490242 passed Windows/Linux behavior, dependency review and lint. SDK publication is refused before remote calls/downloads, the real pin updater removes only an unchanged legacy SDK publisher, and custom workflow changes are preserved for review. DxUi documentation controls passed 26/26 before final integration; no product UI or gallery pixels changed.
+
+RedMonitor artifact-only Prepare 41196277999 passed against original successful main qualification 41147644322 (source c1a46d1fab31e98ceb8386781f45e87ee1d5bfaf, v1.0.5, version 0.1.60). Downloaded complete receipts and both ZIP hashes were independently verified under Z:/RedSalamander.Perf/evidence/unified-ci/closeout-20261031. RedXe Prepare 41196280434 and RedSalamander Prepare 41196282912 correctly rejected their latest failed qualifications before public writes. All release, install and submission jobs were skipped. These controls do not qualify the later v1.0.6 inputs.
+
+RedPrism PR 23 and RedTilde PRs 33/35 are merged. Their main CI still cannot start because of account billing/spending limits; both repositories remain private. Latest RedSalamander and RedXe qualification failures remain failed, while DxUi and RedMonitor have successful v1.0.5 native pipelines. The remaining failures, native v1.0.6 requalification, private security/rulesets, current five-application Prepare, organization credential execution/readiness and six-of-six dependency observation are explicitly retained in I56. No public product release, upstream winget change, billing/visibility change, consumer-pin update or local foreground test was performed.
+
+Final local implementation checks: all six exact v1.0.6 compiler-free adapters passed. RedSalamander's specification architecture/Done admission suite passed 73/73, with zero specification and tooling-inventory blockers. DxUi documentation controls passed 26/26, dependency/metadata controls passed 32/32, and all compiler-free validators passed. Its old equality check was corrected to validate the already independent vcpkg executable and ports revisions without changing either pin; moving, zero, truncated and malformed identities remain refused.
+
+Application integrations RedXe PR 69 (8c882636a0859782acb4108cffad252b9607a242), RedMonitor PR 23 (b206fc2db819099e3d211d841af1c2f75322b994), RedPrism PR 29 (e29d1ebd731f24533d703a9b51919c5667a4d7af) and RedTilde PR 36 (146a96493f2e69d02fbf00b78a468418031a9146) are merged. The two private integrations record the owner's implementation/hosted-acceptance split as a PR-check exception with exact heads, account blocker, rollback and I56 follow-up. Actual failed checks remain failed; no native or publication requirement is bypassed. These later implementation exceptions supersede the earlier historical statements that no merge-check exception had yet been exercised.
