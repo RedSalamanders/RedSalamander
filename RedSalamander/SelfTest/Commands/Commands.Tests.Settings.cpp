@@ -9420,7 +9420,7 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     if (foregroundBefore != inputWindow)
     {
         Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={} stage={} error={} "
-                          L"heldKey={} sent={}",
+                          L"heldKey={} sent={} requestAccepted={}",
                           reinterpret_cast<uintptr_t>(foregroundBefore),
                           reinterpret_cast<uintptr_t>(foregroundAfter),
                           reinterpret_cast<uintptr_t>(inputWindow),
@@ -9430,11 +9430,12 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                           admission.stage,
                           admission.win32Error,
                           admission.heldKey,
-                          admission.sentInputCount));
+                          admission.sentInputCount,
+                          admission.foregroundRequestAccepted));
     }
     state.Require(activated && foregroundAfter == inputWindow,
                   std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
-                              L"stage={}, error={}, heldKey={}, sent={}.",
+                              L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}.",
                               context,
                               reinterpret_cast<uintptr_t>(foregroundAfter),
                               foregroundProcess,
@@ -9442,7 +9443,8 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                               admission.stage,
                               admission.win32Error,
                               admission.heldKey,
-                              admission.sentInputCount));
+                              admission.sentInputCount,
+                              admission.foregroundRequestAccepted));
     if (! state.failure.empty())
     {
         return false;
