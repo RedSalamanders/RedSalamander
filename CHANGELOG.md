@@ -4,6 +4,14 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Adopt shared CI v1.0.6: DxUi SDK ZIPs stay internal with no publication workflow; application publication remains manual and artifact-only. Document the organization token route and separate implementation closeout from source-bound hosted acceptance; no product or winget publication is performed.
+- Record merged CI implementation closeout, removal of DxUi hosted publication and the executed token-promotion permission refusal. Keep native qualification, private hosting and organization-credential readiness explicitly open in I56; no product was published.
+- Extended the I50 review of `main` to `8f0563355` (PRs #146-#155) and re-checked every earlier finding.
+  The revision fixes H2, M29, M33 and M34 and records six partial fixes. It adds two High findings: a
+  Local Delete per-stream context that two workers share on machines with 16 or more CPUs, and hosted
+  ARM64 Commands failing every case at the foreground handoff. It also adds ten Medium and seventeen Low
+  findings, seven simplifications, the scheduled-run diagnosis and owner questions Q15-Q22. No product
+  code changed; `main` remains not production-ready.
 - Confirm emergency overrides apply to PR merge checks only, and record successful two-architecture RedXe/RedMonitor v1.0.5 qualification and prepare-only promotion plus DxUi v1.0.4 SDK proof; retain remaining all-project acceptance gates in the active CI plan.
 - Record the v1.0.5 rollout to four public projects, matching private candidates, verified emergency PR settings, real native barrier/ZIP/Prepare evidence and stale-engine publication refusal; retain pending hosted, visibility and publication acceptance in the active plan.
 - Pin the common CI engine to v1.0.5: verify native portable winget registration, every installed command alias, declared smoke probes and owned cleanup; retain the compiler-free custom dependency status observer and recorded owner-only emergency PR merge route. Publication remains an explicit action requiring both matching native Release regression and production ZIP receipts.
