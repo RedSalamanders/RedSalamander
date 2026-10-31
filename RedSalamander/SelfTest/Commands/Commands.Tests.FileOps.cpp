@@ -15642,51 +15642,107 @@ struct FileOperationsPopupTestFixture final
         FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL), cancelProvider.put()) &&
             cancelProvider && SUCCEEDED(cancelProvider.query_to(cancelFragment.put())) && cancelFragment && SUCCEEDED(cancelFragment->SetFocus()),
         L"The bottom conflict action must remain reachable by scrolling the short body.");
-    SendMessageW(fixture.popup, WM_VSCROLL, SB_TOP, 0);
-    redraw();
-    SendMessageW(fixture.popup, WM_KEYDOWN, VK_TAB, 0);
-    SendMessageW(fixture.popup, WM_KEYUP, VK_TAB, 0);
-    PumpPendingMessages();
-    redraw();
-    FileOperationsPopupInternal::PopupLayoutDebugSnapshot shortLayout{};
-    shortLayout.taskId = fixture.taskId.value();
-    wil::com_ptr_nothrow<IRawElementProviderSimple> moreProvider;
-    wil::com_ptr_nothrow<IRawElementProviderFragment> moreFragment;
-    UiaRect moreBounds{};
-    POINT origin{};
-    ClientToScreen(fixture.popup, &origin);
-    shortTask                       = {};
-    const bool shortLayoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
-    const bool shortTaskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), shortTask);
-    const bool overflowRevealed =
-        shortLayoutAvailable && shortLayout.scrollPosition > 0 &&
-        shortLayout.hostedFocusedAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                             static_cast<uint32_t>(FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore),
-                                                             fixture.taskId.value(),
-                                                             fixture.taskSnapshot.conflict.overflowActionCount,
-                                                             fixture.taskSnapshot.conflict.generation) &&
-        FindMatchingWindowHostRawProvider(
-            fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE), moreProvider.put()) &&
-        moreProvider && SUCCEEDED(moreProvider.query_to(moreFragment.put())) && SUCCEEDED(moreFragment->get_BoundingRectangle(&moreBounds)) &&
-        moreBounds.height > 0 && moreBounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
-        moreBounds.top + moreBounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
-    state.Require(
-        overflowRevealed,
-        std::format(L"Tab must reveal the overflow action above the footer: scroll={} focused={} overflowCount={} boundsTop={} height={} viewportBottom={} "
-                    L"layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
-                    shortLayout.scrollPosition,
-                    shortLayout.hostedFocusedAutomationId,
-                    fixture.taskSnapshot.conflict.overflowActionCount,
-                    moreBounds.top,
-                    moreBounds.height,
-                    shortLayout.listViewportRect.bottom,
-                    shortLayoutAvailable,
-                    shortTaskAvailable,
-                    fixture.fileOps->FindTask(fixture.taskId.value()) != nullptr,
-                    IsWindow(fixture.popup) != FALSE,
-                    IsWindowVisible(fixture.popup) != FALSE,
-                    shortTask.finished,
-                    shortTask.conflict.active));
+    // More precedes the primary actions, and Cancel is last. Traverse back
+    // through every published primary action to More, then forward again. Each
+    // step starts at the top scroll position with the previous exact focus ID.
+    using HitKind       = FileOperationsPopupInternal::PopupHitTest::Kind;
+    const auto actionId = [&](HitKind kind, uint32_t data)
+    { return std::format(L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(kind), fixture.taskId.value(), data, shortTask.conflict.generation); };
+    const size_t primaryCount = shortTask.conflict.primaryActionCount;
+    state.Require(primaryCount > 0u && primaryCount <= shortTask.conflict.primaryActions.size() && shortTask.conflict.overflowActionCount > 0u &&
+                      shortTask.conflict.primaryActions[primaryCount - 1u] == static_cast<uint8_t>(FileOperations::ConflictAction::Cancel),
+                  L"The short-viewport fixture must publish More before primary actions ending with Cancel.");
+    const auto revealByTab = [&](bool reverse, std::wstring_view fromId, std::wstring_view expectedId, std::wstring_view expectedName)
+    {
+        if (! state.failure.empty())
+            return;
+        SendMessageW(fixture.popup, WM_VSCROLL, SB_TOP, 0);
+        redraw();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot beforeTab{};
+        beforeTab.taskId = fixture.taskId.value();
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, beforeTab) && beforeTab.scrollPosition == 0 &&
+                          beforeTab.hostedFocusedAutomationId == fromId,
+                      L"Scrolling the short body must retain the exact previous task/action focus before traversal.");
+        std::array<BYTE, 256> savedKeys{};
+        const bool captured = GetKeyboardState(savedKeys.data()) != FALSE;
+        state.Require(captured, L"Unable to preserve thread keyboard state for short-body traversal.");
+        if (! captured || ! state.failure.empty())
+            return;
+        const auto restoreKeys = wil::scope_exit([&] noexcept { SetKeyboardState(savedKeys.data()); });
+        auto keys              = savedKeys;
+        for (const int key : {VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU})
+            keys[static_cast<size_t>(key)] &= 0x7fu;
+        if (reverse)
+        {
+            keys[VK_SHIFT] |= 0x80u;
+            keys[VK_LSHIFT] |= 0x80u;
+        }
+        state.Require(SetKeyboardState(keys.data()) != FALSE, L"Unable to set routed traversal modifiers.");
+        if (! state.failure.empty())
+            return;
+        SendMessageW(fixture.popup, WM_KEYDOWN, VK_TAB, 0);
+        SendMessageW(fixture.popup, WM_KEYUP, VK_TAB, 0);
+        PumpPendingMessages();
+        redraw();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot shortLayout{};
+        shortLayout.taskId = fixture.taskId.value();
+        wil::com_ptr_nothrow<IRawElementProviderSimple> provider;
+        wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
+        UiaRect bounds{};
+        POINT origin{};
+        ClientToScreen(fixture.popup, &origin);
+        FileOperationsPopupInternal::TaskSnapshot currentTask{};
+        const bool layoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
+        const bool taskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), currentTask);
+        const bool revealed =
+            layoutAvailable && taskAvailable && currentTask.conflict.active && currentTask.conflict.generation == shortTask.conflict.generation &&
+            GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > 0 &&
+            shortLayout.hostedFocusedAutomationId == expectedId &&
+            FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId) && provider &&
+            SUCCEEDED(provider.query_to(fragment.put())) && SUCCEEDED(fragment->get_BoundingRectangle(&bounds)) && bounds.height > 0 &&
+            bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
+            bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
+        state.Require(revealed,
+                      std::format(L"{} must reveal the published action above the footer: expected={} scroll={} focused={} boundsTop={} height={} "
+                                  L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
+                                  reverse ? L"Shift+Tab" : L"Tab",
+                                  expectedId,
+                                  shortLayout.scrollPosition,
+                                  shortLayout.hostedFocusedAutomationId,
+                                  bounds.top,
+                                  bounds.height,
+                                  shortLayout.listViewportRect.bottom,
+                                  layoutAvailable,
+                                  taskAvailable,
+                                  fixture.fileOps->FindTask(fixture.taskId.value()) != nullptr,
+                                  IsWindow(fixture.popup) != FALSE,
+                                  IsWindowVisible(fixture.popup) != FALSE,
+                                  currentTask.finished,
+                                  currentTask.conflict.active));
+    };
+    std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
+    for (size_t remaining = primaryCount; remaining > 0u && state.failure.empty(); --remaining)
+    {
+        const bool more       = remaining == 1u;
+        const auto action     = static_cast<FileOperations::ConflictAction>(shortTask.conflict.primaryActions[more ? 0u : remaining - 2u]);
+        const auto expectedId = actionId(more ? HitKind::TaskConflictMore : HitKind::TaskConflictAction,
+                                         more ? static_cast<uint32_t>(shortTask.conflict.overflowActionCount) : static_cast<uint32_t>(action));
+        const auto label =
+            more
+                ? LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE)
+                : FileOperations::FormatConflictActionLabel(action, static_cast<FileOperations::ConflictClass>(shortTask.conflict.bucket), shortTask.operation);
+        revealByTab(true, previousId, expectedId, label);
+        previousId = expectedId;
+    }
+    if (state.failure.empty())
+    {
+        const auto first = static_cast<FileOperations::ConflictAction>(shortTask.conflict.primaryActions[0]);
+        revealByTab(
+            false,
+            previousId,
+            actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(first)),
+            FileOperations::FormatConflictActionLabel(first, static_cast<FileOperations::ConflictClass>(shortTask.conflict.bucket), shortTask.operation));
+    }
     state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(fixture.popup, captures / L"short-body-focused-action__fr-FR.png")),
                   L"Capture the short viewport through the application harness.");
     SetWindowPos(fixture.popup,
