@@ -192,8 +192,9 @@ baseline, consumer lock and dependency floors remain unchanged. Compiler detecti
 product build or native qualification. Original failed/incomplete-clone evidence is retained beside the final
 resolution log; no incomplete clone was silently reused or removed.
 
-RedSalamander's full current Pester profile passed with 1112 passed, zero failed and three build-toolchain cases
-excluded from this local compiler-free run. TEMP and TestDrive were allocated inside the existing marked
+RedSalamander's current Pester profile, excluding the RequiresBuildToolchain tag, finished with 1112 passed,
+zero failed and three conditional skips: two require the product's pinned vcpkg checkout, and one requires a
+built ProductUiTests.exe. Those prerequisites remain native obligations. TEMP and TestDrive were allocated inside the existing marked
 sandbox. An earlier invocation used ordinary temporary paths and seven containment guards correctly refused
 them; its failed receipt is preserved. The successful rerun changed no sandbox guard. Static admission passed;
 affected planning conservatively selected native work and retained interactive obligations as pending.
