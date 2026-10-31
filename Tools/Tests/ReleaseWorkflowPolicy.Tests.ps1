@@ -983,24 +983,12 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Not Match '(?m)^\s*(contents|issues|pull-requests|deployments|packages|security-events):\s*write'
         $ghosttyProductWorkflow | Should Match 'runs-on:\s*windows-11-vs2026-arm'
         $ghosttyProductWorkflow | Should Match 'persist-credentials:\s*false'
-        $ghosttyProductWorkflow | Should Match "Get-Content -LiteralPath \.\\vcpkg\.json -Raw"
-        $ghosttyProductWorkflow | Should Match "'builtin-baseline'"
-        $ghosttyProductWorkflow | Should Match 'Get-Content -LiteralPath \.\\vcpkg-tool\.json -Raw'
-        $ghosttyProductWorkflow | Should Match 'foreach \(\$requiredCommit in @\(\$toolCommit, \$portsBaseline\)'
-        $ghosttyProductWorkflow | Should Match '\$toolMetadata = git show "\$\{toolCommit\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ghosttyProductWorkflow | Should Match '\$portsMetadata = git show "\$\{portsBaseline\}:scripts/vcpkg-tools\.json" \| ConvertFrom-Json'
-        $ghosttyProductWorkflow | Should Match '\$toolSchemaVersion -lt \$portsSchemaVersion'
-        $ghosttyProductWorkflow | Should Match 'Update vcpkg-tool\.json with the baseline'
-        $ghosttyProductWorkflow | Should Match 'git checkout --detach \$toolCommit'
-        $ghosttyProductWorkflow | Should Match 'actualToolCommit.*-cne \$toolCommit'
-        $ghosttyProductWorkflow | Should Match 'New-Item -ItemType Directory -Force -Path \.\\\.build'
-        $ghosttyProductWorkflow | Should Match 'git clone \$toolRepository \.\\\.build\\vcpkg-tool'
-        $ghosttyProductWorkflow | Should Match 'Push-Location \.\\\.build\\vcpkg-tool'
-        $ghosttyProductWorkflow | Should Match 'git worktree add --detach \.\.\\vcpkg-registry \$portsBaseline'
-        $ghosttyProductWorkflow | Should Match 'actualPortsBaseline.*-cne \$portsBaseline'
+        $ghosttyProductWorkflow | Should Match 'Import-Module.*VcpkgInstallSafety\.psm1'
+        $ghosttyProductWorkflow | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
+        $ghosttyProductWorkflow | Should Match 'VCPKG_REGISTRY_ROOT=.*\$context.RegistryRoot'
         $ghosttyProductWorkflow | Should Not Match '\$env:VCPKG_ROOT\s*='
         $ghosttyProductWorkflow | Should Match '(?s)vcpkg-install\.ps1.*?-Platform ARM64.*?-VcpkgExe \.\\\.build\\vcpkg-tool\\vcpkg\.exe.*?-VcpkgRoot \.\\\.build\\vcpkg-registry'
-        $ghosttyProductWorkflow.IndexOf('$toolSchemaVersion -lt $portsSchemaVersion') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('git checkout --detach $toolCommit')
+        $ghosttyProductWorkflow.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1')
         $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Build admitted Debug ARM64 product with tests')
         $ghosttyProductWorkflow | Should Match 'Configure pinned ARM64 vcpkg build integration'
         $ghosttyProductWorkflow | Should Match "Resolve-Path -LiteralPath \.\\\.build\\vcpkg_installed\\arm64"

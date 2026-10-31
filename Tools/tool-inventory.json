@@ -415,7 +415,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift, and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence.",
+      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift, and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence. Unified CI guards retain archived plan routing and scheduled dependency metadata without automatic pin adoption.",
       "usage": "Run with Pester or the current tooling aggregate after documentation, schema, shortcut or published capture changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -444,7 +444,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence, absolute native generator-cache paths with matching diagnostic boundaries, byte-verified identity staging beneath one artifact root, canonical native product profile receipt artifacts, complete native seed argv elements, fresh-profile WER parent initialization without replacing existing settings, and packaging contracts.",
+      "purpose": "Validate release artifact admission, distributable test surfaces, current immutable artifact action pins with an exact-byte sealed Gate0 exception, workflow evidence, absolute native generator-cache paths with matching diagnostic boundaries, byte-verified identity staging beneath one artifact root, canonical native product profile receipt artifacts, complete native seed argv elements, fresh-profile WER parent initialization without replacing existing settings, and packaging contracts. Native Ghostty diagnostics use the canonical independent executable/catalogue initializer.",
       "usage": "Run with Pester or the current tooling aggregate after artifact action, release, packaging or qualification workflow changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -3996,7 +3996,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce separation and exact identities for current versus sealed terminal tooling test profiles, and the exact Gate0-only Dependabot exclusion.",
+      "purpose": "Enforce exact current versus sealed terminal test-profile identities, the two exact frozen-workflow Dependabot exclusions and coordinated shared-engine pin updates.",
       "usage": "Executed by the current Tools Pester lane; it validates profile membership without running the historical cohorts.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -4789,7 +4789,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions.",
+      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics.",
       "usage": "Run through the current Tools Pester profile and Full; source guards complement native behavioral tests and do not replace them.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",

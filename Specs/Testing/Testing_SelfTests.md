@@ -793,6 +793,9 @@ Environment variables may select alternate test inputs such as profile names, bu
   and retains the previous/new HWND and process witness when a handoff was needed.
   An unsuccessful handoff fails the case; an ignored `SetForegroundWindow` result cannot
   establish keyboard/capture ownership. The exact static documentation capture bypass remains unchanged.
+  The case failure summary itself retains the admission stage, Win32 error, held key and sent-input count,
+  alongside the foreground/target HWND and process witness. A separate trace is insufficient when artifact
+  upload is unavailable; missing foreground admission never becomes executed case coverage.
   When ordinary foreground requests are refused, the same warned helper may use a temporary
   registered F24 hotkey on the owned warning's UI thread to obtain foreground permission. Refuse
   before input when the no-activation guard is active, the target is unowned, a modifier/key
