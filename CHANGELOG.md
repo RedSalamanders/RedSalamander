@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Repair stale CI contract checks for the shared compiler-free PR gate, manual qualification, canonical dependency restore and owned winget installation receipts. Preserve ARM64 foreground-admission diagnostics in case failures; native qualification and artifact-only publication preparation remain explicit I56 gates.
 - Record the successful trusted-main read-only check of the shared winget credential, verified public repository access excluding DxUi, and removal of repository overrides. Keep native, private repository and actual publication acceptance open in I56.
 - Replace the completed credential-promotion action with an explicit read-only authentication and scope check at its existing path. Keep organization secret access and repository overrides visible in hosted acceptance; native qualification and publication remain separate gates.
 - Adopt shared CI v1.0.6: DxUi SDK ZIPs stay internal with no publication workflow; application publication remains manual and artifact-only. Document the organization token route and separate implementation closeout from source-bound hosted acceptance; no product or winget publication is performed.

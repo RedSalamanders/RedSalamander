@@ -1,1 +1,0 @@
-- Repair stale CI contract checks for the shared compiler-free PR gate, manual qualification, canonical dependency restore and owned winget installation receipts. Preserve ARM64 foreground-admission diagnostics in case failures; native qualification and artifact-only publication preparation remain explicit I56 gates.
