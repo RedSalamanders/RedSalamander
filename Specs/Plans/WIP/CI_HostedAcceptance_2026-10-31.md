@@ -457,3 +457,8 @@ evidence, not native GUI/painting/UIA or hosted qualification. Source, compiler 
 results and the reproducer were copied and SHA-256 verified into durable evidence while its owner
 was alive; preliminary missing-include/Unicode fixture compilation failures remain separately retained.
 The existing test-harness source-contract suite passed all 213 checks with zero failures/skips.
+Static/workflow validation, clang-format 22.1.3, changelog and whitespace checks passed. Affected
+and PrePush explanations exited NOT_EVALUATED (2), retaining all applicable local obligations and
+four interactive groups; no desktop takeover or local GUI qualification occurred. The self-test
+guide's obsolete native-PR/nightly/weekly descriptions are reconciled with the existing unified
+policy and current manual-only legacy entrypoints; sanitizer and Full acceptance are preserved.
