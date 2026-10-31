@@ -703,6 +703,21 @@ $sample = ']('
         @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
     }
 
+    It 'admits only the reviewed I55 implementation record while rejecting hosted-acceptance companions' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/CI_OrganizationStandardization_2026-10-29.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# I55 Completed CI implementation`nHosted acceptance remains in I56.`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        foreach ($path in @('Specs/Plans/Done/CI_OrganizationStandardization_2026-10-30.md', 'Specs/Plans/Done/CI_HostedAcceptance_2026-10-31.md', 'Specs/Plans/Done/CI_OrganizationStandardization_2026-10-29/unreviewed.md')) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed closeout`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 3
+    }
+
     It 'admits only the reviewed dependency integration closeout record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/DependencyUpdateBatch_2026-10-29.md'
