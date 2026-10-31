@@ -144,12 +144,12 @@ deployed public pin; earlier v1.0.6 passes are retained history.
 - [x] Verify the four public rulesets require the same three compiler-free checks and retain the owner-only PR-merge emergency route.
 - [x] Re-run the central compiler-free observer to four-of-four public coverage; retain the two private access refusals as incomplete all-six coverage.
 - [ ] RedSalamander: fix current contract failures and complete both Release regression/probe branches, barrier, production and ZIP smoke.
-- [ ] RedXe: restore the independent pinned ports catalogue without changing either revision or lowering floors; complete the same native pipeline.
+- [x] RedXe: restore the independent pinned ports catalogue without changing either revision or lowering floors; complete the same native pipeline. Original 41207884174 passed both regression/probe branches, global barrier, production and ZIP smoke; retained evidence and all four ZIP hashes were independently verified.
 - [x] RedMonitor: qualify the v1.0.7 deployment on both architectures, retaining its v1.0.6 success separately. Original run 41206180882 passed; downloaded canonical receipts, ordering and both ZIPs were independently verified.
 - [ ] DxUi: qualify both native regression/probe and SDK consumer branches on v1.0.7; no publication or Prepare applies.
 - [ ] Independently validate source/engine-bound descriptors, counts, hashes and job ordering for these four public projects.
 - [ ] Complete artifact-only Prepare for RedSalamander from its current successful qualification; retain no public writes.
-- [ ] Complete artifact-only Prepare for RedXe from its current successful qualification; retain no public writes.
+- [x] Complete artifact-only Prepare for RedXe from its current successful qualification; retain no public writes. Run 41211864521 passed; the downloaded plan, four ZIPs and portable-only winget selection were independently verified. Release, install and submit were skipped.
 - [x] Complete artifact-only Prepare for RedMonitor from its current successful qualification; retain no public writes. Run 41208578017 passed and its downloaded plan/ZIPs were independently revalidated; release, install and submit were skipped.
 
 The fresh RedMonitor v1.0.6 qualification 41198030903 passed both native roles and all six scenarios per architecture.
@@ -275,3 +275,65 @@ Original v1.0.7 [run 41207884174](https://github.com/RedSalamanders/RedXe/action
 at 14:13:49 UTC and ARM64 at 14:15:41 UTC. This confirms the original catalogue blocker is repaired on both
 native hosts without changing the independent tool/baseline revisions or manifest floors. Both regression/probe
 steps are still executing at this checkpoint; no production, complete qualification or current Prepare pass is claimed.
+
+The ARM64 regression subsequently passed at 14:25:54 UTC: 15 discovered/executed suites, zero failures/skips and
+an active failure-probe pass. Downloaded normal-suites.json and completed.json match their retained canonical
+SHA-256 references; the suite list is complete and unfiltered. x64 remains executing, so production is still gated.
+These are explicit suite counts, not invented per-case totals. Frozen version is 1.0.429 and native digest is
+634ca46f6b3f35ddace6732895f3a5bd1c1d62deac2ea1ee54dd59ca18a3be9f.
+
+x64 subsequently passed the same 15 unfiltered suites with zero failures/skips and its active probe. Its original
+hosted log also confirms the complete independent tooling invocation, real filtered Git transport and long-port-path
+controls passed on the native host. Both downloaded regression receipts passed Test-Qualification -Phase Regression;
+their canonical JSON hashes were independently verified. Actual job ordering passed RedXe-v107-ordering-proof.json:
+both regressions finished before the global gate, and both production jobs started afterwards. Production ZIP smoke
+and complete artifact/Prepare acceptance are still pending at this checkpoint.
+
+### DxUi partial native confirmation
+
+Original [run 41206683035](https://github.com/RedSalamanders/DxUi/actions/runs/41206683035), source
+07ff5741cc0cbcd10f7aa5e9e120d0c4b0c16d92, passed both Release test-profile builds. x64 regression finished at
+14:30:01 UTC with 23 discovered/executed suites, zero expected skips and a passing active failure probe. Its
+downloaded receipt matches frozen version 0.1.778, v1.0.7 and native digest
+dea3fbb5054206fc2584ccf11079c6b0ba04c42b15d5eaaa1dbd841b431ff9ba. ARM64 regression and both production
+SDK/extracted-consumer roles remain pending; no DxUi Prepare or publisher exists.
+
+ARM64 subsequently passed all 21 native suites with zero failures/skips and an active failure-probe pass. x64's
+23 comprise those 21 suites plus MenuResourceScaling and MenuTextLayoutResources. Both regression receipts passed independent Regression validation;
+canonical JSON references were downloaded and hash-verified. The actual global barrier passed before either
+SDK production job started, as recorded in DxUi-v107-ordering-proof.json. Both production SDK and extracted-consumer
+roles are now executing; their result remains required before this project's native item can close.
+
+### Public credential refresh
+
+Trusted-main, read-only [verification 41209935675](https://github.com/RedSalamanders/RedSalamander/actions/runs/41209935675)
+passed on c0d5a4f6391991c37a17c7576b5e68fda07ad5aa. The effective organization token still authenticates and
+declares public repository scope. Fresh metadata confirms the unchanged 12:13:38 UTC secret update identity,
+sharing with RedSalamander, RedXe, RedMonitor and .github, exclusion of DxUi and the two still-private applications,
+and zero repository WINGET_TOKEN overrides. Only metadata and bounded verifier evidence were retained; no
+secret value or authenticated account response was exported. The operation exercised no write permission and
+changed no credential, visibility or publication state. Native installation and upstream publication remain separate gates.
+
+### RedXe v1.0.7 native acceptance
+
+Original qualification 41207884174 completed successfully on source 964cc69143f57b07a509b604ab253c806b1da693,
+version 1.0.429. Both native architectures executed all 15 ordinary regression suites with no failures/skips,
+passed active failure probes and then passed the global AND barrier. Both production profiles disable test mode
+and passed clean-extraction ZIP smoke. The downloaded descriptor, canonical evidence references, regression and
+production receipts, sizes and SHA-256 ZIP bytes passed independent Complete validation.
+
+| Qualified archive | Bytes | SHA-256 |
+|---|---:|---|
+| RedXe-1.0.429-x64-Portable.zip | 4557066 | 31cc81d88a59a0c3c956a06c33ae8ab0c6445fef4633607f749658f4bd59d36e |
+| RedXe-1.0.429-x64-Symbols.zip | 21888493 | 36072d3a4ff15c78987e2b1cfdf5a04e521f408c0ebb3f7eead260cb62162384 |
+| RedXe-1.0.429-ARM64-Portable.zip | 5428725 | 08905379097149fd74a1d1496df7bfa96d72a03cce3e08ebec17a5384b9ee5b3 |
+| RedXe-1.0.429-ARM64-Symbols.zip | 21155295 | 2dc8e2290aa69e11bc1afa3626d2f8393d886b347058da3cd6aa7a3fc1d9511a |
+
+Proofs are RedXe-v107-independent-artifact-proof.json and RedXe-v107-ordering-proof.json. Manual artifact-only
+[Prepare 41211864521](https://github.com/RedSalamanders/RedXe/actions/runs/41211864521) passed against this original
+qualification on trusted main 964cc69143f57b07a509b604ab253c806b1da693. Read-CiPublicationPlan independently
+revalidated all four original ZIP hashes/sizes and the frozen source/run/engine/version. The generated winget
+installer selects exactly the two portable ZIPs with their matching hashes and excludes the symbol ZIPs.
+Actual release, install and submit jobs were skipped. Downloaded bytes, job metadata and log are retained;
+RedXe-v107-prepare-proof.json records the result. This closes RedXe's public I56 Release/Prepare subset without
+claiming native winget installation, exercised write permission or upstream publication.

@@ -1,1 +1,1 @@
-- Record the public v1.0.7 deployment, verified merge gates, unchanged private sources and public dependency-observer coverage in I56. Native qualification and artifact-only preparation remain explicitly source-bound acceptance items.
+- Record verified x64/ARM64 native qualification and artifact-only Prepare acceptance for RedMonitor and RedXe, public engine/security/metadata deployment, and unchanged private sources in I56. Keep the remaining DxUi SDK and RedSalamander gates explicitly pending.
