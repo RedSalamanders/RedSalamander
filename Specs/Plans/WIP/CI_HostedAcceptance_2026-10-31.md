@@ -400,3 +400,65 @@ again 29 passed/zero warnings or errors; the old connector failed exactly the tw
 source/log/receipt files were copied and hash-verified into RS-native-harness-fixture under the continuation evidence
 root before the live owner exited; archive-manifest.json identifies this as a fresh rerun rather than reconstructed
 original evidence. These receipts still do not qualify the product or GUI restoration.
+
+### Explicitly approved obsolete-run cancellation
+
+After the old x64 branch had failed and ARM64 had spent more than three hours in regression, the owner explicitly
+approved cancelling only run 41198411091. The maintainer verified its original source
+a9c02b78847131e3dfdd1a2b08b0479d6b5ff526 and workflow identity before requesting cancellation once. GitHub
+reported the actual final result as cancelled: x64 failed, ARM64 cancelled, no successful production. This is one
+recorded owner exception to the default active-heavy-work preservation rule, not a native or publication bypass.
+No other run was cancelled under this authorization.
+
+The original complete x64 log (1390556 bytes), available cancelled ARM64 log (289356 bytes), before/after run and job
+metadata, and scoped authorization record are retained under the continuation evidence root. The old uploader
+retained only its admission artifact; cancelled ARM64 execution is unavailable acceptance evidence, never a pass.
+Queued stale candidates then exited through admission with regression, barrier, production and completion skipped;
+RS-first-stale-admission-jobs.json records this observed no-build behavior. Only the current source/engine batch
+may proceed to full native qualification.
+
+All nine stale candidates (41201296861, 41201961077, 41202473468, 41208769573, 41213619407, 41214206364,
+41215741126, 41216506783 and 41218502475) were individually verified: only admission executed; every regression,
+barrier, production and completion job was skipped. RS-nine-stale-admissions-proof.json and their retained job
+metadata establish zero native compilations for those queued entries.
+
+Original current-engine run 41219244102 admitted source 508e2dd6a8c53c4d4acca6501a46a87a1fac4a44 at 16:47 UTC,
+with native digest 7acb4b6631d438e0567486ad549d77f58ad461ed2146c03b72b129416feadcd2 and frozen version
+7.0.461. Its downloaded admission descriptor matches the reviewed v1.0.7 engine. Both native test-enabled Release
+branches are executing; no regression, production or Prepare success is inferred from admission.
+
+Both native test-enabled Release builds subsequently passed (x64 at 17:42:05 UTC and ARM64 at 18:10:28 UTC).
+RedSalamander-v107-both-builds-pass.json retains the job/step witnesses. Both regression/probe branches remain
+in progress; production and Prepare are still blocked by their unfinished runtime acceptance.
+
+### Remaining File Operations regression expectations
+
+Run 41219244102 subsequently failed x64 regression: 2704 checks, 2635 passed, two failed and 67 skipped.
+Tooling passed all 1115 checks; Compare/search passed 254 with 30 skipped; the Viewer suite passed.
+The two failures are `cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot` and
+`FileOps_DecisionMirror`. The failed-run uploader retained 69206786 bytes of canonical x64 evidence,
+independently downloaded beside the complete 1402316-byte job log. ARM64 remains executing; no
+production, active-probe or Prepare success is inferred from a successful build or partial suite.
+
+Source review found both cases still assumed the previous action order. The existing engine
+`ConflictActionPolicy::FinalizePresentation` moves Cancel to the final primary position; the popup
+places More before those actions; the modeless alert places its close affordance after all actions.
+These are existing requirements in UI_FileOperationsPopup.md, not changes to publication gates or
+product behavior. The repair preserves exact task/generation focus and safe default/Escape semantics,
+checks every reverse step from Cancel through the primary actions to More plus forward traversal,
+and covers the mirror's close affordance in both Tab directions and after focus returns. The full
+native run, production ZIPs and Prepare remain open until actual current-source execution succeeds.
+
+The noninteractive native action-order fixture compiled with MSVC 14.52.37025, `/Wall`, `/WX-` and the
+five existing reviewed notice exceptions, with zero warnings/errors. All 19 checks passed against
+the extracted actual policy, real AlertOverlay header and unchanged pinned DxUi traversal with an
+adapted control-tree boundary. Both obsolete expectations were independently rejected. This is model
+evidence, not native GUI/painting/UIA or hosted qualification. Source, compiler output, executable,
+results and the reproducer were copied and SHA-256 verified into durable evidence while its owner
+was alive; preliminary missing-include/Unicode fixture compilation failures remain separately retained.
+The existing test-harness source-contract suite passed all 213 checks with zero failures/skips.
+Static/workflow validation, clang-format 22.1.3, changelog and whitespace checks passed. Affected
+and PrePush explanations exited NOT_EVALUATED (2), retaining all applicable local obligations and
+four interactive groups; no desktop takeover or local GUI qualification occurred. The self-test
+guide's obsolete native-PR/nightly/weekly descriptions are reconciled with the existing unified
+policy and current manual-only legacy entrypoints; sanitizer and Full acceptance are preserved.

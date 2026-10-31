@@ -409,18 +409,26 @@ private:
         FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, firstPrompt->consentDetail, firstPrompt->sourcePath);
     if (mirror.pane != FolderWindow::Pane::Left || mirror.anchor != leftView || overlay.anchor != leftView || mirror.generation != firstPrompt->generation ||
         ! mirror.windowVisible || overlay.title != deleteTitle || overlay.rootUiaName != deleteTitle ||
-        overlay.message.find(expectedQuestion) == std::wstring::npos || overlay.buttonIds.size() != 2u || overlay.buttonIds[0] != cancelId ||
-        overlay.buttonIds[1] != deleteId || overlay.primaryButtonId != std::optional<uint32_t>{cancelId} ||
+        overlay.message.find(expectedQuestion) == std::wstring::npos || overlay.buttonIds.size() != 2u || overlay.buttonIds[0] != deleteId ||
+        overlay.buttonIds[1] != cancelId || overlay.primaryButtonId != std::optional<uint32_t>{cancelId} ||
         overlay.focusedButtonId != std::optional<uint32_t>{cancelId} ||
         overlay.escapeButtonId != std::optional<uint32_t>{FileOps::DebugDecisionMirrorEscapeButtonId()} || ! overlay.keysRequireFocus || mirror.tookFocus ||
         mirror.announced || overlay.keysGuarded)
-        return reject(std::format(L"the mirror did not render the card's decision: pane={} anchor={} title='{}' uia='{}' buttons={} default={} "
-                                  L"focused={} escape={} keysRequireFocus={} tookFocus={} announced={} guarded={}",
+        return reject(std::format(L"the mirror did not render the card's decision: pane={} anchor={} overlayAnchor={} generation={}/{} visible={} "
+                                  L"title='{}' uia='{}' question={} buttons={} first={} last={} default={} focused={} escape={} "
+                                  L"keysRequireFocus={} tookFocus={} announced={} guarded={}",
                                   static_cast<int>(mirror.pane),
                                   mirror.anchor == leftView,
+                                  overlay.anchor == leftView,
+                                  mirror.generation,
+                                  firstPrompt->generation,
+                                  mirror.windowVisible,
                                   overlay.title,
                                   overlay.rootUiaName,
+                                  overlay.message.find(expectedQuestion) != std::wstring::npos,
                                   overlay.buttonIds.size(),
+                                  overlay.buttonIds.empty() ? 0u : overlay.buttonIds.front(),
+                                  overlay.buttonIds.empty() ? 0u : overlay.buttonIds.back(),
                                   overlay.primaryButtonId.value_or(0u),
                                   overlay.focusedButtonId.value_or(0u),
                                   overlay.escapeButtonId.value_or(0u),
@@ -567,21 +575,28 @@ private:
     if (mirror.flashCount != flashBefore + 1u || mirror.foreground != mirror.overlay)
         return reject(std::format(L"the popup's taskbar button flashed {} time(s) for one new pending set while the mirror held the foreground",
                                   mirror.flashCount - flashBefore));
+    // Cancel is the final published action. The modeless close affordance follows
+    // it in Tab order; wrapping then reaches the first action, Permanently delete.
+    PressMirrorKey(mirror.overlay, VK_TAB, 0);
+    if (! OverlayState(mirror.overlay).focusedClose)
+        return reject(L"Tab from the final Cancel action did not reach the modeless close affordance");
     PressMirrorKey(mirror.overlay, VK_TAB, 0);
     if (OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{deleteId})
-        return reject(L"Tab immediately after show did not reach the next button without a click or Ctrl+Tab");
+        return reject(L"Tab from the close affordance did not wrap to the first published action");
     const bool shiftDown = SetMirrorKeyDown(VK_SHIFT, true);
     PressMirrorKey(mirror.overlay, VK_TAB, 0);
-    const bool shiftReleased = SetMirrorKeyDown(VK_SHIFT, false);
-    if (! shiftDown || ! shiftReleased || OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{cancelId})
-        return reject(L"Shift+Tab immediately after show did not return to Cancel");
+    const bool reverseClose = OverlayState(mirror.overlay).focusedClose;
     PressMirrorKey(mirror.overlay, VK_TAB, 0);
+    const bool shiftReleased = SetMirrorKeyDown(VK_SHIFT, false);
+    if (! shiftDown || ! shiftReleased || ! reverseClose || OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{cancelId})
+        return reject(L"Shift+Tab did not reverse through the close affordance to the final Cancel action");
     PressMirrorKey(mirror.overlay, VK_LEFT, 0);
-    if (OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{cancelId})
-        return reject(L"Left immediately after show did not return to Cancel");
-    PressMirrorKey(mirror.overlay, VK_RIGHT, 0);
     if (OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{deleteId})
-        return reject(L"Right immediately after show did not reach the next button");
+        return reject(L"Left from Cancel did not reach the preceding Permanently delete action");
+    PressMirrorKey(mirror.overlay, VK_RIGHT, 0);
+    if (OverlayState(mirror.overlay).focusedButtonId != std::optional<uint32_t>{cancelId})
+        return reject(L"Right from Permanently delete did not reach the final Cancel action");
+    PressMirrorKey(mirror.overlay, VK_LEFT, 0);
     PressMirrorKey(mirror.overlay, VK_ESCAPE, kMirrorKeyLateMs, true);
     overlay = OverlayState(mirror.overlay);
     if (! MirrorState(operations).visible || overlay.focusedButtonId != std::optional<uint32_t>{deleteId} || overlay.keysGuarded ||
@@ -632,6 +647,9 @@ private:
     static_cast<void>(SendMessageW(mirror.overlay, WM_SETFOCUS, reinterpret_cast<WPARAM>(leftView), 0));
     if (OverlayState(mirror.overlay).keysGuarded)
         return reject(L"a focus handed back to the mirror required a click or Ctrl+Tab");
+    PressMirrorKey(mirror.overlay, VK_TAB, 0);
+    if (! OverlayState(mirror.overlay).focusedClose)
+        return reject(L"Tab after focus returned did not reach the close affordance after Cancel");
     PressMirrorKey(mirror.overlay, VK_TAB, 0);
     overlay = OverlayState(mirror.overlay);
     if (overlay.focusedButtonId != std::optional<uint32_t>{deleteId} || MirrorState(operations).submitCount != submitsBefore ||
