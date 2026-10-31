@@ -1,1 +1,0 @@
-- Archive standalone harness evidence before disposable-run cleanup, record the fresh native fixture rerun and merged RedSalamander repairs, and keep hosted Release/Prepare acceptance open until actual successful receipts exist.
