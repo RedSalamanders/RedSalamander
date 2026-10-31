@@ -30,7 +30,7 @@ and the [shared engine contract](https://github.com/RedSalamanders/.github/blob/
 ## Checklist
 
 - [ ] Resolve RedSalamander's actual regression and evidence-upload failures with the existing native/test owners; retain original failing cases and receipts.
-- [x] Resolve RedXe's executable/catalogue source-role mismatch without changing pins or lowering dependency/native acceptance requirements. Both hosted Release test-profile restore/build steps passed in 41207884174; complete native regression/production acceptance remains a separate item.
+- [x] Resolve RedXe's executable/catalogue source-role mismatch without changing pins or lowering dependency/native acceptance requirements. Original run 41207884174 passed both native regressions/probes, the global barrier, production and ZIP smoke; its public Prepare acceptance is recorded below.
 - [ ] Owner resolves the RedPrism/RedTilde billing/visibility prerequisites; confirm real compiler-free CI, CodeQL and dependency review execute.
 - [ ] Apply and verify the common required checks, organization-owner PR-only emergency route, supported dependency/security settings and absence of duplicate managed native CodeQL in those two repositories.
 - [ ] Complete original successful main qualification against each approved deployed engine on native x64 and ARM64 for all six; verify actual regression counts, active failure probes, global barrier, production roles and ZIP/SDK smoke.
@@ -130,6 +130,21 @@ RedSalamander's compiler-free static admission and all 46 local engine controls 
 The owner explicitly requested completing I56 for the public projects only: RedSalamander, RedXe, RedMonitor and
 DxUi. RedPrism and RedTilde remain private and unchanged, including their deployed v1.0.6 pins. Their account,
 security, native and publication items above remain pending; this continuation does not close the whole six-project plan.
+
+Current public acceptance checkpoint:
+
+| Project | Original v1.0.7 native qualification | Artifact-only Prepare | Current disposition |
+|---|---|---|---|
+| RedSalamander | [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336) executing, frozen version 7.0.472 | Pending successful qualification | PR 197 and canonical fold PR 198 are merged; the admitted source, engine and repaired native digest match. Both native jobs are executing. |
+| RedXe | [41207884174](https://github.com/RedSalamanders/RedXe/actions/runs/41207884174), version 1.0.429 | [41211864521](https://github.com/RedSalamanders/RedXe/actions/runs/41211864521) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
+| RedMonitor | [41206180882](https://github.com/RedSalamanders/RedMonitor/actions/runs/41206180882), version 0.1.70 | [41208578017](https://github.com/RedSalamanders/RedMonitor/actions/runs/41208578017) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
+| DxUi | [41206683035](https://github.com/RedSalamanders/DxUi/actions/runs/41206683035), version 0.1.778 | Not applicable | Both native regression/probe and SDK consumer roles, ZIP/library hashes and actual ordering independently verified. No hosted publisher exists. |
+
+Live ci-state records for the three completed projects still identify those exact original successful runs.
+Later documentation-only mains retain their qualified native digest and engine; no version is restamped and
+no rebuild or public release is performed for those prose changes. Release, native installation and upstream
+submission remain skipped in both completed application Prepare runs. Local Full, Debug/ASan, interactive,
+device/provider and broader performance obligations retain their existing owners.
 
 The public projects are moving together to reviewed engine v1.0.7 source e32cf9f9b29f4e817decb09e1be44be7fc1a94de,
 [engine PR 12](https://github.com/RedSalamanders/.github/pull/12), merge 904e5daf2dc29b9bc824a9cd9b623d71656c7a38.
@@ -472,8 +487,10 @@ without an administrator override. The fold's optional Entire status reported mi
 and no blocking findings; its exact generated fragment fold was independently reviewed. I55's blob
 remains f4a767eab9599c04f6acdb7852a1139f589033dd.
 
-The owner was asked separately about cancelling superseded run 41219244102; no answer was received
-and no cancellation was performed. Its ARM64 branch finished naturally on 2026-10-31 at 21:04 UTC.
+The owner was asked separately about cancelling superseded run 41219244102. No answer had arrived
+when its ARM64 branch finished naturally on 2026-10-31 at 21:04 UTC. The owner's later 22:12 UTC
+approval covered only 41219244102; live verification confirmed that run was already completed and
+failed, so no cancellation was requested or transferred to another run.
 The actual aggregate is failed: 2704 checks, 1674 passed, 971 failed and 59 skipped. Tooling passed
 1115/1115 and Compare/search passed 260 with 24 skips. Commands reported 0 passed/968 failed because
 foreground admission was refused before case execution (hotkey-activation-refused, sent=2); these
@@ -481,6 +498,10 @@ are not 968 independently executed case defects. ViewerPE Interactive also repor
 activation failures. FileOps failed the known mirror-order expectation and
 R4A19_DiscoveryIndependentVolumes (overlap=0, 16 MiB copied by each task, isolated 1.219/1.203 seconds,
 concurrent 2.328 seconds against the unchanged 1.645650-second gate).
+
+The retained log also reports 968 focused Commands retry attempts after the initial foreground
+admission failures, two FileOps retries and one ViewerPE Interactive retry. These are observed retry
+counts, not measured per-retry durations or proof that every minute of the long run had the same cause.
 
 The complete 2111184-byte ARM64 job log and 42806930-byte canonical evidence artifact were retained
 under public-acceptance-20261031, separately from x64 and every newer candidate. No crash or timeout
@@ -509,7 +530,36 @@ changelog and whitespace checks passed. Local interactive and hosted acceptance 
 
 Run 41235457184 admitted the preceding folded source fe402964573357fb031280893de89e2abf11a891,
 native digest 6974c9313427abb7131bfc9aca65286776e35620dad5f00607a2158b9c69d961, version 7.0.468.
-It is a distinct pending acceptance attempt, not proof of the subsequent ARM admission repairs.
+The owner separately approved cancelling only that run after the ARM repairs were merged. Fresh
+identity verification preceded one normal cancellation request. GitHub confirmed its actual final
+result as cancelled: ARM64's test build had passed using existing dependency caches, x64's build
+was interrupted, and neither regression/probe branch qualified. The completion job explicitly
+refused cancelled qualification; production never executed. Both available raw job logs (175975
+x64 and 191088 ARM64 bytes), the cancelled finalizer log, full run/artifact metadata and 92
+downloaded artifact files are retained with SHA-256 manifests. This is a second precisely scoped
+owner cancellation exception, not authority to cancel another run or bypass an acceptance gate.
+
+[PR 197](https://github.com/RedSalamanders/RedSalamander/pull/197) merged those repairs as
+cd7f31226bdc8ce94f7c7baf379a3041be98d51c; canonical fold
+[PR 198](https://github.com/RedSalamanders/RedSalamander/pull/198) merged as
+eb779e0bd83694492cd1717bb39eaff3cdcee7cb. Both exact heads passed all three required checks.
+The fold's optional Entire result reported missing trail approval and no blocking findings; the
+generated fold was independently reviewed and merged normally, without an administrator override.
+The fold preserves native digest 8dc114ddee0c8b712991a07c6685351e66b50643e56d7ef322af7f29c8c3aa22.
+After five continuous quiet minutes, coordinator 41244534379 submitted candidate 41244955336 for
+that reviewed main. Its actual admission at 22:19 UTC matches the source, engine, 1402 meaningful
+inputs and native digest above, freezing version 7.0.472. Both native jobs are executing; successful
+regression, production and Prepare remain pending. ARM64's test-enabled Release build passed at
+23:38:08 UTC and x64's at 23:50:57 UTC; both architectures successfully saved their dependency
+and Terminal caches before starting regression. RS-41244955336-both-builds-passed.json retains
+the actual job/step witnesses. These build passes do not substitute for the unfinished tests.
+Two more superseded candidates, 41234747202
+and 41244527076, independently showed admission-only success and all four native/completion jobs
+skipped. Together with the earlier nine, eleven queued entries performed zero native compilations;
+RS-eleven-stale-admissions-proof.json retains these witnesses.
+An independent Online Ghostty preflight against that exact source returned update-observed, with
+the unchanged canonical lock hash dfd2d6bdf1b9006615b25e9ee75a50320da521ed2c252653d5febbd489b8b147.
+This read-only observation does not replace the future hosted artifact-only Prepare.
 
 Fresh read-only publication credential verification 41234037441 passed on trusted source
 3b6a4fe718de0306f82a8f019695b833e65949c4 at 19:24 UTC, exercising authentication/declared public_repo
