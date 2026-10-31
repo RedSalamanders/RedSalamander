@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Align the short File Operations and decision-mirror keyboard regressions with the specified More-first, Cancel-last order and modeless close affordance, retaining visible focus, safe defaults, Escape and decision-ownership assertions. Reconcile the self-test guide with compiler-free PR checks and manual extended qualification. Record the owner's single obsolete-run cancellation and nine admission-only skips; public native qualification and artifact-only publication acceptance remain explicit in I56.
 - Archive standalone harness evidence before disposable-run cleanup, record the fresh native fixture rerun and merged RedSalamander repairs, and keep hosted Release/Prepare acceptance open until actual successful receipts exist.
 - Harden the raw SearchService test connector against listener replacement and bound observation of asynchronous viewer foreground restoration without relaxing desktop ownership; retain exact File Operations failure diagnostics and record completed DxUi native SDK qualification. RedSalamander's full native qualification and artifact-only Prepare remain required.
 - Record verified x64/ARM64 native qualification and artifact-only Prepare acceptance for RedMonitor and RedXe, public engine/security/metadata deployment, and unchanged private sources in I56. Keep the remaining DxUi SDK and RedSalamander gates explicitly pending.
