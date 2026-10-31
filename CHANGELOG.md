@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Harden the raw SearchService test connector against listener replacement and bound observation of asynchronous viewer foreground restoration without relaxing desktop ownership; retain exact File Operations failure diagnostics and record completed DxUi native SDK qualification. RedSalamander's full native qualification and artifact-only Prepare remain required.
 - Record verified x64/ARM64 native qualification and artifact-only Prepare acceptance for RedMonitor and RedXe, public engine/security/metadata deployment, and unchanged private sources in I56. Keep the remaining DxUi SDK and RedSalamander gates explicitly pending.
 - Repair stale CI contract checks for the shared compiler-free PR gate, manual qualification, canonical dependency restore and owned winget installation receipts. Preserve ARM64 foreground-admission diagnostics in case failures; native qualification and artifact-only publication preparation remain explicit I56 gates.
 - Record the successful trusted-main read-only check of the shared winget credential, verified public repository access excluding DxUi, and removal of repository overrides. Keep native, private repository and actual publication acceptance open in I56.
