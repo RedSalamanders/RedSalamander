@@ -15790,8 +15790,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const auto resetInProgress = wil::scope_exit([]() noexcept { inProgress = false; });
             if (! RunFileOpsDecisionMirrorChecks(state))
             {
-                Fail(L"The decision mirror did not render the card's decision over the folder's pane, decided twice, stayed after an answer, a "
-                     L"navigation or a close, lost the pending segment, mishandled focus or Escape, or ignored its setting; see trace.");
+                Fail(state.phaseFailureMessage.empty() ? L"The decision mirror failed without a specific diagnostic; see trace."
+                                                       : std::wstring_view(state.phaseFailureMessage));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

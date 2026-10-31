@@ -1,0 +1,1 @@
+- Harden the raw SearchService test connector against listener replacement and bound observation of asynchronous viewer foreground restoration without relaxing desktop ownership; retain exact File Operations failure diagnostics and record completed DxUi native SDK qualification. RedSalamander's full native qualification and artifact-only Prepare remain required.

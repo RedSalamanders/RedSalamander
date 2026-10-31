@@ -146,7 +146,7 @@ deployed public pin; earlier v1.0.6 passes are retained history.
 - [ ] RedSalamander: fix current contract failures and complete both Release regression/probe branches, barrier, production and ZIP smoke.
 - [x] RedXe: restore the independent pinned ports catalogue without changing either revision or lowering floors; complete the same native pipeline. Original 41207884174 passed both regression/probe branches, global barrier, production and ZIP smoke; retained evidence and all four ZIP hashes were independently verified.
 - [x] RedMonitor: qualify the v1.0.7 deployment on both architectures, retaining its v1.0.6 success separately. Original run 41206180882 passed; downloaded canonical receipts, ordering and both ZIPs were independently verified.
-- [ ] DxUi: qualify both native regression/probe and SDK consumer branches on v1.0.7; no publication or Prepare applies.
+- [x] DxUi: qualify both native regression/probe and SDK consumer branches on v1.0.7. Original 41206683035 passed; both SDK ZIP/library hashes, extracted-consumer smoke, canonical receipts and actual global ordering were independently verified. No publication or Prepare applies.
 - [ ] Independently validate source/engine-bound descriptors, counts, hashes and job ordering for these four public projects.
 - [ ] Complete artifact-only Prepare for RedSalamander from its current successful qualification; retain no public writes.
 - [x] Complete artifact-only Prepare for RedXe from its current successful qualification; retain no public writes. Run 41211864521 passed; the downloaded plan, four ZIPs and portable-only winget selection were independently verified. Release, install and submit were skipped.
@@ -289,20 +289,30 @@ their canonical JSON hashes were independently verified. Actual job ordering pas
 both regressions finished before the global gate, and both production jobs started afterwards. Production ZIP smoke
 and complete artifact/Prepare acceptance are still pending at this checkpoint.
 
-### DxUi partial native confirmation
+### DxUi v1.0.7 native acceptance
 
 Original [run 41206683035](https://github.com/RedSalamanders/DxUi/actions/runs/41206683035), source
-07ff5741cc0cbcd10f7aa5e9e120d0c4b0c16d92, passed both Release test-profile builds. x64 regression finished at
-14:30:01 UTC with 23 discovered/executed suites, zero expected skips and a passing active failure probe. Its
-downloaded receipt matches frozen version 0.1.778, v1.0.7 and native digest
-dea3fbb5054206fc2584ccf11079c6b0ba04c42b15d5eaaa1dbd841b431ff9ba. ARM64 regression and both production
-SDK/extracted-consumer roles remain pending; no DxUi Prepare or publisher exists.
+07ff5741cc0cbcd10f7aa5e9e120d0c4b0c16d92, completed successfully at version 0.1.778 with exact v1.0.7 engine
+and native digest dea3fbb5054206fc2584ccf11079c6b0ba04c42b15d5eaaa1dbd841b431ff9ba. Both test-enabled
+Release builds, regression/probe branches, the global barrier and production SDK/extracted-consumer roles passed.
+No DxUi Prepare or publisher exists.
 
 ARM64 subsequently passed all 21 native suites with zero failures/skips and an active failure-probe pass. x64's
 23 comprise those 21 suites plus MenuResourceScaling and MenuTextLayoutResources. Both regression receipts passed independent Regression validation;
 canonical JSON references were downloaded and hash-verified. The actual global barrier passed before either
-SDK production job started, as recorded in DxUi-v107-ordering-proof.json. Both production SDK and extracted-consumer
-roles are now executing; their result remains required before this project's native item can close.
+SDK production job started, as recorded in DxUi-v107-ordering-proof.json. Downloaded receipts and both original
+SDK ZIPs passed independent Complete validation. The SDK smoke records bind the extracted library bytes, source,
+compiler, API revision 4 and archive hashes; test mode is disabled, tests are absent, and native consumer execution,
+first-party warning controls and public-header closure passed on both platforms.
+
+| Qualified internal SDK archive | Bytes | SHA-256 |
+|---|---:|---|
+| DxUi-SDK-0.1.778-x64.zip | 44490412 | bfb089bbed0c66b44e590e8857131baf1937d07d48eb7f544e8fb705ad86f32f |
+| DxUi-SDK-0.1.778-ARM64.zip | 44525005 | 0e2ddcbf0b8a062dddf73feb91269a3c455f591528a39ab9279239e55a407e2f |
+
+DxUi-v107-independent-artifact-proof.json records both archive/library hash checks. Public API header counts are
+385 on x64 and 374 on ARM64. This closes DxUi's public I56 native subset without adopting its producer pin in
+any consumer or creating a publication route.
 
 ### Public credential refresh
 
@@ -337,3 +347,37 @@ installer selects exactly the two portable ZIPs with their matching hashes and e
 Actual release, install and submit jobs were skipped. Downloaded bytes, job metadata and log are retained;
 RedXe-v107-prepare-proof.json records the result. This closes RedXe's public I56 Release/Prepare subset without
 claiming native winget installation, exercised write permission or upstream publication.
+
+### RedSalamander native regression repair in progress
+
+The completed x64 job 124529302469 in original v1.0.6 run 41198411091 retained an actual failed result: 2702
+cases total, 2622 passed, 12 failed and 68 conditionally skipped. Eight failures were obsolete tooling guards
+already repaired by PR 186. Native failures were search_service_multi_client_and_rebuild_control,
+cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot, FileOps_DecisionMirror and the interactive
+ViewerImgRaw parent foreground/focus restoration boundary. Commands admitted and passed 961 cases, so this
+observation does not reproduce the earlier all-case foreground admission failure. ARM64 remains independently
+required. The old combined evidence uploader failed; its original full x64 job log is preserved as
+RS-v106-x64-regression-failed-raw.log. A classification rerun also encountered a compiler-host Git fixture failure;
+its initial invocation passed, and neither result is silently discarded.
+
+The repair reuses one raw synchronous fixture connector for slow-partial and occupied-pipe cases, allowing only
+transient connection errors within the existing scaled deadlines. It removes the false assumption that a single
+WaitNamedPipe call waits while no listener instance exists. The parent viewer performs one admitted foreground
+request, then bounded read-only observation with identity/input/foreground interference refusal; exact saved focus
+is still mandatory. File Operations assertions remain intact. Their case summaries now retain the decision-mirror
+step reason and short-viewport window/task/layout witnesses so the next failed run is diagnosable even without a trace.
+
+The actual connector, new deterministic delayed-listener case, desktop ownership predicates and existing noninteractive ownership case were extracted from
+the candidate sources and compiled with native MSVC 14.52.37025 under /Wall and the existing reviewed native notice
+policy. The focused executable passed 29 checks with zero warnings/errors. Replacing only the connector with the
+old single-WaitNamedPipe implementation made both missing-listener and delayed-instance controls fail (exit 1),
+while the 27 ownership/event checks still passed. This proves focused test sensitivity, not GUI restoration or product
+qualification. The initial fixture-extraction failure and external-header notice receipts remain retained; the corrected
+extraction and existing Build/NativeBuildPolicy.targets notice policy were used for the passing run.
+
+All 213 existing TestHarnessSourceContracts checks passed with zero failures/skips in the marked sandbox. Compiler-free
+Static admission, the 16 workflow syntax checks, inventories and specification consistency passed with zero blocking findings.
+clang-format 22.1.3 and changelog validation passed. Source,
+fixture, compiler and control receipts are under the continuation evidence root. Both full native architectures,
+the two remaining File Operations outcomes, production ZIPs and RedSalamander Prepare remain open. No active
+heavy run was cancelled, no test was removed, and the unrelated review-remediation checkout was not modified.

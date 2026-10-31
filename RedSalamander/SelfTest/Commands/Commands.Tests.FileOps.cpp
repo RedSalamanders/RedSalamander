@@ -15631,6 +15631,9 @@ struct FileOperationsPopupTestFixture final
     GetWindowRect(fixture.popup, &shortRect);
     state.Require(shortRect.bottom - shortRect.top == MulDiv(420, static_cast<int>(popupDpi), 96),
                   L"A settled user resize must preserve the requested short height.");
+    FileOperationsPopupInternal::TaskSnapshot shortTask{};
+    state.Require(DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), shortTask) && shortTask.conflict.active,
+                  L"The short-viewport journey must retain its live conflict after resizing.");
     SendMessageW(fixture.popup, WM_VSCROLL, SB_BOTTOM, 0);
     redraw();
     wil::com_ptr_nothrow<IRawElementProviderSimple> cancelProvider;
@@ -15652,8 +15655,11 @@ struct FileOperationsPopupTestFixture final
     UiaRect moreBounds{};
     POINT origin{};
     ClientToScreen(fixture.popup, &origin);
+    shortTask                       = {};
+    const bool shortLayoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
+    const bool shortTaskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), shortTask);
     state.Require(
-        DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout) && shortLayout.scrollPosition > 0 &&
+        shortLayoutAvailable && shortLayout.scrollPosition > 0 &&
             shortLayout.hostedFocusedAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
                                                                  static_cast<uint32_t>(FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore),
                                                                  fixture.taskId.value(),
@@ -15665,13 +15671,21 @@ struct FileOperationsPopupTestFixture final
             moreBounds.height > 0 && moreBounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
             moreBounds.top + moreBounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <=
                 static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom,
-        std::format(L"Tab must reveal the overflow action above the footer: scroll={} focused={} overflowCount={} boundsTop={} height={} viewportBottom={}.",
+        std::format(L"Tab must reveal the overflow action above the footer: scroll={} focused={} overflowCount={} boundsTop={} height={} viewportBottom={} "
+                    L"layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
                     shortLayout.scrollPosition,
                     shortLayout.hostedFocusedAutomationId,
                     fixture.taskSnapshot.conflict.overflowActionCount,
                     moreBounds.top,
                     moreBounds.height,
-                    shortLayout.listViewportRect.bottom));
+                    shortLayout.listViewportRect.bottom,
+                    shortLayoutAvailable,
+                    shortTaskAvailable,
+                    fixture.fileOps->FindTask(fixture.taskId.value()) != nullptr,
+                    IsWindow(fixture.popup) != FALSE,
+                    IsWindowVisible(fixture.popup) != FALSE,
+                    shortTask.finished,
+                    shortTask.conflict.active));
     state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(fixture.popup, captures / L"short-body-focused-action__fr-FR.png")),
                   L"Capture the short viewport through the application harness.");
     SetWindowPos(fixture.popup,
