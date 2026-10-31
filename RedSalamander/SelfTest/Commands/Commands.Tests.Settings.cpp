@@ -9433,11 +9433,16 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                           admission.sentInputCount));
     }
     state.Require(activated && foregroundAfter == inputWindow,
-                  std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}.",
+                  std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
+                              L"stage={}, error={}, heldKey={}, sent={}.",
                               context,
                               reinterpret_cast<uintptr_t>(foregroundAfter),
                               foregroundProcess,
-                              reinterpret_cast<uintptr_t>(inputWindow)));
+                              reinterpret_cast<uintptr_t>(inputWindow),
+                              admission.stage,
+                              admission.win32Error,
+                              admission.heldKey,
+                              admission.sentInputCount));
     if (! state.failure.empty())
     {
         return false;

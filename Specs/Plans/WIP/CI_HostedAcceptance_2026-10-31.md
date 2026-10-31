@@ -17,9 +17,10 @@ The same owner removed all hosted publication workflows from DxUi. Both SDK ZIPs
 artifacts, including the native extracted-consumer checks. DxUi has no Prepare, public-release, winget or gallery
 publication action. The five applications retain explicit artifact-only publication.
 
-The current engine is v1.0.6, reviewed source 19710a8aeac979a82e83bec82e8b866cee3d3deb, delivered by
-[engine PR 10](https://github.com/RedSalamanders/.github/pull/10). Every project's manifest and reusable callers must
-agree. Prior v1.0.5 native receipts remain historical evidence and do not qualify the new engine identity.
+Engine deployment is phased under the owner's public-project continuation: the four public projects target v1.0.7
+source e32cf9f9b29f4e817decb09e1be44be7fc1a94de; the two private projects retain v1.0.6 source
+19710a8aeac979a82e83bec82e8b866cee3d3deb unchanged. Each project's manifest and reusable callers must agree.
+A receipt from an older engine identity never qualifies its changed deployment. Actual rollout and evidence are recorded below.
 
 Normative owners: [hosted CI](../../Build/Build_UnifiedCI.md), [build identity](../../Build/Build_Toolchain.md),
 [test evidence](../../Testing/Testing_ValidationEvidence.md), [self-tests](../../Testing/Testing_SelfTests.md),
@@ -29,10 +30,10 @@ and the [shared engine contract](https://github.com/RedSalamanders/.github/blob/
 ## Checklist
 
 - [ ] Resolve RedSalamander's actual regression and evidence-upload failures with the existing native/test owners; retain original failing cases and receipts.
-- [ ] Resolve RedXe's coherent vcpkg baseline/floor mismatch without silently lowering dependency or native acceptance requirements.
+- [ ] Resolve RedXe's executable/catalogue source-role mismatch without changing pins or lowering dependency/native acceptance requirements.
 - [ ] Owner resolves the RedPrism/RedTilde billing/visibility prerequisites; confirm real compiler-free CI, CodeQL and dependency review execute.
 - [ ] Apply and verify the common required checks, organization-owner PR-only emergency route, supported dependency/security settings and absence of duplicate managed native CodeQL in those two repositories.
-- [ ] Complete original successful v1.0.6 main qualification on native x64 and ARM64 for all six; verify actual regression counts, active failure probes, global barrier, production roles and ZIP/SDK smoke.
+- [ ] Complete original successful main qualification against each approved deployed engine on native x64 and ARM64 for all six; verify actual regression counts, active failure probes, global barrier, production roles and ZIP/SDK smoke.
 - [ ] Independently verify matching retained descriptors, receipts, SHA-256 ZIP bytes and actual job ordering. Admission-only green runs never satisfy this item.
 - [ ] Execute artifact-only Prepare against each of the five applications' current successful source/engine qualifications; preserve refusal tests and keep all public writes skipped.
 - [x] Verify repository credential metadata and execute the authorized promotion preflight: existing token authentication passed; organization-secret administration was refused before any secret changed.
@@ -123,3 +124,77 @@ The v1.0.6 RedXe qualification [41198036552](https://github.com/RedSalamanders/R
 Post-execution metadata reconfirmed the organization secret's unchanged 2026-10-31T12:13:38Z update identity, access for the four current public repositories except DxUi, no access for the two private repositories, and no repository WINGET_TOKEN overrides in any of the seven repositories. Credential result, execution log and metadata are retained as credential-verifier-result.json, credential-verifier-execution.log and credential-post-execution-access.json under the existing closeout evidence directory. The shared contract update [engine PR 11](https://github.com/RedSalamanders/.github/pull/11) merged as ee96f1377304a343f91fb8520f758ca86ecce791; its Windows/Linux behavior and dependency checks passed. This documentation change leaves every deployed v1.0.6 pin unchanged.
 
 RedSalamander's compiler-free static admission and all 46 local engine controls passed. Test-Changes.ps1 -Explain selected full native work conservatively for the workflow edit and retained four interactive entries as pending; no native or focus-taking tests were launched by that command. The explanation is retained as credential-affected-plan.json and credential-affected-plan.log. This does not waive the open native/runtime acceptance above. This proof-only follow-up changes prose/fragments, so it must preserve the merged verifier's native input digest and does not retry an existing admitted native identity.
+
+## Public-project continuation - 2026-10-31
+
+The owner explicitly requested completing I56 for the public projects only: RedSalamander, RedXe, RedMonitor and
+DxUi. RedPrism and RedTilde remain private and unchanged, including their deployed v1.0.6 pins. Their account,
+security, native and publication items above remain pending; this continuation does not close the whole six-project plan.
+
+The public projects are moving together to reviewed engine v1.0.7 source e32cf9f9b29f4e817decb09e1be44be7fc1a94de,
+[engine PR 12](https://github.com/RedSalamanders/.github/pull/12), merge 904e5daf2dc29b9bc824a9cd9b623d71656c7a38.
+It separates sandbox evidence from workspace diagnostic uploads in automatic and manual qualification. The original
+failure combined both roots, calculated a Windows drive-relative common ancestor, and rejected external sandbox files.
+The repair preserves the sandbox and every native/publication gate. All 47 local engine controls, Windows/Linux hosted
+behavior controls, dependency review and eight workflow syntax checks passed. Native evidence must match each newly
+deployed public pin; earlier v1.0.6 passes are retained history.
+
+- [ ] RedSalamander: fix current contract failures and complete both Release regression/probe branches, barrier, production and ZIP smoke.
+- [ ] RedXe: restore the independent pinned ports catalogue without changing either revision or lowering floors; complete the same native pipeline.
+- [ ] RedMonitor: qualify the v1.0.7 deployment on both architectures, retaining its v1.0.6 success separately.
+- [ ] DxUi: qualify both native regression/probe and SDK consumer branches on v1.0.7; no publication or Prepare applies.
+- [ ] Independently validate source/engine-bound descriptors, counts, hashes and job ordering for these four public projects.
+- [ ] Complete artifact-only Prepare for RedSalamander, RedXe and RedMonitor from their current successful qualifications; retain no public writes.
+
+The fresh RedMonitor v1.0.6 qualification 41198030903 passed both native roles and all six scenarios per architecture.
+[Prepare 41203473510](https://github.com/RedSalamanders/RedMonitor/actions/runs/41203473510) passed for source
+40db036f625a9746f50c6dfe508d6bde1c20ad51, version 0.1.68. Downloaded complete receipts and ZIP bytes were revalidated
+with Read-CiPublicationPlan. x64 SHA-256 is de7316cb2cdf160ad9abb70b517c9fd7b3abad41600909117129b30582f6e0ce;
+ARM64 is bb44fa7fe52d8124145ea7a70f7d2bb26ad8aebf614226a3d7743f701d2a94ad. Release, installation and submission
+were skipped. This does not qualify the upcoming v1.0.7 identity.
+
+The RedXe failure is a source-role mismatch, not a requirement to lower floors or make pins equal: the executable
+checkout's older version database was being used for the newer manifest baseline. The repair restores independent
+clean catalogue sources, selects them with --vcpkg-root and retains the existing tool, baseline and dependency floors.
+Actual Git controls cover distinct revisions, warm restore, port metadata, dirty/foreign/non-clone refusal, invalid
+identities, caller environment and deep port paths. Native dependency and runtime execution remain required.
+
+RedSalamander's failed tooling checks included obsolete pre-unification matrix/schedule assertions, a retired plan
+route, the former Dependabot layout, inline bootstrap details and winget logic now moved into tested modules.
+The guards are reconciled to current authority while preserving required suites, manual-only diagnostics, immutable
+pins, real native install receipts and owned cleanup. The existing I50 H6 foreground failure remains a real native gate;
+its admission diagnostics now enter the case failure summary instead of being available only in a separate trace.
+No case is removed or counted as executed after failed foreground admission.
+
+Evidence for this continuation is retained beneath Z:/RedSalamander.Perf/evidence/unified-ci/public-acceptance-20261031.
+The unrelated dirty review-remediation checkout is preserved. No active heavy workflow is cancelled and no private
+repository, product visibility, account setting, credential or public release is changed.
+
+### Public repair integration and local verification
+
+RedMonitor [PR 25](https://github.com/RedSalamanders/RedMonitor/pull/25), merge
+df1b3aacf37498e077dfa850e66f88edf8c7c72c, and its separate canonical fold PR 26, merge
+7e3e8bdf991b174359537b3d9de9cae9096800b1, passed the normal three required checks. Its original v1.0.7
+qualification 41206180882 is executing; x64 has actual six-of-six scenario execution and an active probe pass.
+ARM64, the global barrier and production remain pending at this observation.
+
+DxUi [PR 154](https://github.com/RedSalamanders/DxUi/pull/154), merge
+07ff5741cc0cbcd10f7aa5e9e120d0c4b0c16d92, and canonical fold PR 155, merge
+125dd9de766a861ab95ba6ca05863b763650b5ae, also passed normal checks. Native v1.0.7 run 41206683035 is
+executing. Its v1.0.6 run 41198401034 completed both regressions, barrier and SDK/extracted-consumer roles
+successfully; this historical pass does not replace v1.0.7 acceptance. No DxUi publisher was added.
+
+RedXe [PR 71](https://github.com/RedSalamanders/RedXe/pull/71), source
+81101ac3209e1af5256b9920d95768c3bec6cfd1, contains the independent catalogue repair and matching v1.0.7
+callers. The complete independent tooling invocation and compiler-free Static adapter passed. Actual pinned
+vcpkg dry runs resolved both x64 and ARM64 at curl 8.23.0, yyjson 0.13.0 and WIL 1.0.260126.7; executable,
+baseline, consumer lock and dependency floors remain unchanged. Compiler detection in that dry run is not a
+product build or native qualification. Original failed/incomplete-clone evidence is retained beside the final
+resolution log; no incomplete clone was silently reused or removed.
+
+RedSalamander's full current Pester profile passed with 1112 passed, zero failed and three build-toolchain cases
+excluded from this local compiler-free run. TEMP and TestDrive were allocated inside the existing marked
+sandbox. An earlier invocation used ordinary temporary paths and seven containment guards correctly refused
+them; its failed receipt is preserved. The successful rerun changed no sandbox guard. Static admission passed;
+affected planning conservatively selected native work and retained interactive obligations as pending.
+These local checks do not establish native runtime acceptance or waive I50 H6.
