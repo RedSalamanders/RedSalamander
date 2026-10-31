@@ -4459,27 +4459,8 @@ SelfTest::RunCase(options,
     // This client intentionally uses synchronous I/O so it can hold a partial frame open. The
     // readiness status request can consume the current server pipe instance, so wait for the
     // replacement instance instead of treating that normal hand-off as a test failure.
-    wil::unique_handle slowClient;
-    DWORD slowClientError = ERROR_FILE_NOT_FOUND;
-    const auto connectDeadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(2'000))};
-    while (std::chrono::steady_clock::now() < connectDeadline)
-    {
-        slowClient.reset(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (slowClient)
-        {
-            break;
-        }
-
-        slowClientError = ::GetLastError();
-        if (slowClientError != ERROR_FILE_NOT_FOUND && slowClientError != ERROR_PIPE_BUSY && slowClientError != ERROR_SEM_TIMEOUT)
-        {
-            break;
-        }
-
-        static_cast<void>(::WaitNamedPipeW(pipeName.c_str(), 50u));
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+    DWORD slowClientError         = ERROR_FILE_NOT_FOUND;
+    wil::unique_handle slowClient = ConnectSearchServiceFixturePipe(pipeName, 2'000u, slowClientError);
     state.Require(! ! slowClient,
                   std::format(L"Failed to connect slow partial client to search service pipe. error={}", static_cast<unsigned long>(slowClientError)));
     if (! slowClient)
@@ -12506,6 +12487,49 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"search_service_fixture_connect_retries_missing_instance",
+                  [](SelfTest::CaseState& state) noexcept
+{
+    const std::wstring pipeName = MakeUniquePipeName();
+    DWORD error                 = ERROR_SUCCESS;
+    const ULONGLONG started     = GetTickCount64();
+    const auto absent           = ConnectSearchServiceFixturePipe(pipeName, 100u, error);
+    const ULONGLONG elapsed     = GetTickCount64() - started;
+    state.Require(! absent && error == ERROR_FILE_NOT_FOUND && elapsed >= SelfTest::ScaleTimeout(90u) && elapsed < SelfTest::ScaleTimeout(2'000u),
+                  std::format(L"An absent listener must consume the bounded retry window. error={} elapsedMs={}", error, elapsed));
+    wil::unique_event_nothrow clientOpened;
+    clientOpened.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! state.Require(static_cast<bool>(clientOpened), L"The delayed-listener fixture must own its synchronization event."))
+        return false;
+    std::atomic<bool> serverMatched{false};
+    std::atomic<DWORD> serverError{ERROR_SUCCESS};
+    std::jthread server([&]() noexcept
+    {
+        Sleep(static_cast<DWORD>(SelfTest::ScaleTimeout(120u)));
+        wil::unique_handle pipe(
+            CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 512u, 512u, 0u, nullptr));
+        if (! pipe)
+        {
+            serverError.store(GetLastError(), std::memory_order_release);
+            return;
+        }
+        if (WaitForSingleObject(clientOpened.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(2'500u))) != WAIT_OBJECT_0)
+            return;
+        ULONG clientPid = 0u;
+        serverMatched.store(GetNamedPipeClientProcessId(pipe.get(), &clientPid) != FALSE && clientPid == GetCurrentProcessId(), std::memory_order_release);
+    });
+    auto occupied = ConnectSearchServiceFixturePipe(pipeName, 2'000u, error);
+    SetEvent(clientOpened.get());
+    server.join();
+    state.Require(occupied && error == ERROR_SUCCESS && serverMatched.load(std::memory_order_acquire),
+                  std::format(L"The fixture must connect to the replacement listener it owns. clientError={} serverError={}",
+                              error,
+                              serverError.load(std::memory_order_acquire)));
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"search_service_multi_client_and_rebuild_control",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -12574,9 +12598,9 @@ SelfTest::RunCase(options,
     // Exercise cancellation independently while the same occupied pipe remains busy.
     for (const bool cancelWhileBusy : {false, true})
     {
-        state.Require(::WaitNamedPipeW(pipeName.c_str(), 5'000u) != 0, L"Busy-pipe fixture did not find the isolated service listener.");
-        wil::unique_handle occupied(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-        state.Require(static_cast<bool>(occupied), L"Busy-pipe fixture could not occupy the isolated service connection.");
+        DWORD connectError          = ERROR_SUCCESS;
+        wil::unique_handle occupied = ConnectSearchServiceFixturePipe(pipeName, 5'000u, connectError);
+        state.Require(static_cast<bool>(occupied), std::format(L"Busy-pipe fixture could not occupy the isolated service connection. error={}", connectError));
         if (! occupied)
             return false;
         wil::unique_event_nothrow clientStarted;

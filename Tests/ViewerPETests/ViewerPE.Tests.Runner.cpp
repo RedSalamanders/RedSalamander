@@ -874,6 +874,17 @@ struct ViewerHarnessDesktopIdentity final
     return ! captured.focusWindow || (captured.focusPid == captured.foregroundPid && captured.focusThread == captured.foregroundThread);
 }
 
+[[nodiscard]] constexpr bool ViewerHarnessDesktopRestorationMayContinue(const ViewerHarnessDesktopIdentity& captured,
+                                                                        const ViewerHarnessDesktopIdentity& observed,
+                                                                        bool focusBelongsToForeground,
+                                                                        bool inputUnchanged,
+                                                                        uintptr_t initialForeground,
+                                                                        uintptr_t currentForeground) noexcept
+{
+    return IsViewerHarnessDesktopIdentityStable(captured, observed, focusBelongsToForeground) && ViewerHarnessFocusSharesForegroundThread(captured) &&
+           inputUnchanged && (! currentForeground || currentForeground == initialForeground || currentForeground == captured.foregroundWindow);
+}
+
 [[nodiscard]] constexpr bool IsViewerHarnessDesktopAlreadyRestored(const ViewerHarnessDesktopIdentity& captured,
                                                                    const ViewerHarnessDesktopIdentity& observed,
                                                                    bool focusBelongsToForeground,
@@ -907,6 +918,20 @@ struct ViewerHarnessDesktopIdentity final
     sameThread.focusThread = sameThread.foregroundThread;
     Check(observe(sameThread, sameThread), L"Exact saved same-thread focus remains observable", success);
     Check(ViewerHarnessFocusSharesForegroundThread(sameThread), L"Same-thread focus retains its existing restoration restriction", success);
+    for (const uintptr_t foreground : {uintptr_t{0u}, uintptr_t{3u}, sameThread.foregroundWindow})
+        Check(ViewerHarnessDesktopRestorationMayContinue(sameThread, sameThread, true, true, 3u, foreground),
+              L"An admitted handoff may observe no foreground, its initial foreground, or the exact saved foreground",
+              success);
+    Check(! ViewerHarnessDesktopRestorationMayContinue(sameThread, sameThread, true, false, 3u, sameThread.foregroundWindow),
+          L"New input stops asynchronous restoration observation even after the saved window becomes foreground",
+          success);
+    Check(! ViewerHarnessDesktopRestorationMayContinue(sameThread, sameThread, true, true, 3u, 4u),
+          L"An unrelated foreground aborts restoration observation",
+          success);
+    Check(! ViewerHarnessDesktopRestorationMayContinue(sameThread, sameThread, false, true, 3u, sameThread.foregroundWindow) &&
+              ! ViewerHarnessDesktopRestorationMayContinue(crossProcess, crossProcess, true, true, 3u, crossProcess.foregroundWindow),
+          L"Restoration observation never grants writes across the saved focus ownership boundary",
+          success);
 
     const auto rejectIdentityChange = [&](const ViewerHarnessDesktopIdentity& changed, std::wstring_view message) noexcept
     { Check(! observe(crossProcess, changed), message, success); };
@@ -1364,8 +1389,47 @@ struct ViewerHarnessTimeoutProbe final
             {
                 static_cast<void>(SetFocus(previousGui.hwndFocus));
             }
-            restored = activated != FALSE && GetForegroundWindow() == previousForeground && GetGUIThreadInfo(previousThread, &restoredGui) != FALSE &&
+            // A foreign input queue processes the foreground handoff
+            // asynchronously. Observe the exact saved boundary to a deadline;
+            // never repeat the write or continue after desktop interference.
+            bool restorationInterfered    = false;
+            const auto observeRestoration = [&]() noexcept
+            {
+                LASTINPUTINFO input{sizeof(LASTINPUTINFO)};
+                DWORD liveSavedPid          = 0u;
+                const DWORD liveSavedThread = GetWindowThreadProcessId(previousForeground, &liveSavedPid);
+                DWORD liveFocusPid          = 0u;
+                const DWORD liveFocusThread = previousGui.hwndFocus ? GetWindowThreadProcessId(previousGui.hwndFocus, &liveFocusPid) : 0u;
+                const ViewerHarnessDesktopIdentity liveIdentity{reinterpret_cast<uintptr_t>(previousForeground),
+                                                                reinterpret_cast<uintptr_t>(previousGui.hwndFocus),
+                                                                liveSavedPid,
+                                                                liveSavedThread,
+                                                                liveFocusPid,
+                                                                liveFocusThread};
+                const HWND currentForeground = GetForegroundWindow();
+                const bool focusStillBelongs = ! previousGui.hwndFocus || GetAncestor(previousGui.hwndFocus, GA_ROOT) == previousForeground;
+                restorationInterfered = ! ViewerHarnessDesktopRestorationMayContinue(capturedIdentity,
+                                                                                     liveIdentity,
+                                                                                     focusStillBelongs,
+                                                                                     GetLastInputInfo(&input) != FALSE && input.dwTime == previousInput.dwTime,
+                                                                                     reinterpret_cast<uintptr_t>(foreground),
+                                                                                     reinterpret_cast<uintptr_t>(currentForeground));
+                if (restorationInterfered)
+                    return true;
+                return currentForeground == previousForeground && GetGUIThreadInfo(previousThread, &restoredGui) != FALSE &&
                        restoredGui.hwndFocus == previousGui.hwndFocus;
+            };
+            restored = activated != FALSE && PumpUntil(observeRestoration, 2000ms, 16u) && ! restorationInterfered;
+            if (! restored)
+                std::wcout << std::format(L"[INFO] {} restoration did not settle: activated={} interference={} foreground=0x{:X} expected=0x{:X} "
+                                          L"focus=0x{:X} expectedFocus=0x{:X}\n",
+                                          testName,
+                                          activated != FALSE,
+                                          restorationInterfered,
+                                          reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                          reinterpret_cast<uintptr_t>(previousForeground),
+                                          reinterpret_cast<uintptr_t>(restoredGui.hwndFocus),
+                                          reinterpret_cast<uintptr_t>(previousGui.hwndFocus));
         }
         // These directed viewer cases do not move the pointer; do not reset an
         // untouched cursor.

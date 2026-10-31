@@ -326,9 +326,10 @@ private:
 [[nodiscard]] bool RunFileOpsDecisionMirrorChecks(SelfTestState& state) noexcept
 {
     using FileOps     = FolderWindow::FileOperationState;
-    const auto reject = [](std::wstring_view reason) noexcept
+    const auto reject = [&state](std::wstring_view reason) noexcept
     {
-        AppendLog(std::format(L"Decision mirror: {}", reason));
+        state.phaseFailureMessage = std::format(L"Decision mirror: {}", reason);
+        AppendLog(state.phaseFailureMessage);
         return false;
     };
     FolderWindow* folder = nullptr;

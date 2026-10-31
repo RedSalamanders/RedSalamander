@@ -211,6 +211,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_service_content_early_stop_stats",
     L"local_search_service_protocol_mismatch_falls_back_local_index",
     L"local_search_service_disconnect_falls_back_local_index",
+    L"search_service_fixture_connect_retries_missing_instance",
     L"search_service_multi_client_and_rebuild_control",
     L"search_service_rebuild_deleted_root_purges_index",
     L"search_text_helpers_decoding_and_binary",
@@ -3969,6 +3970,35 @@ private:
 [[nodiscard]] std::wstring MakeUniquePipeName() noexcept
 {
     return std::format(LR"(\\.\pipe\RedSalamander.SearchService.Test.{})", MakeGuidText());
+}
+
+// Raw protocol fixtures intentionally use synchronous I/O, unlike the broker's
+// cancellable overlapped client. Reuse this bounded connector when a fixture
+// must occupy an instance without sending a complete service request.
+[[nodiscard]] wil::unique_handle ConnectSearchServiceFixturePipe(std::wstring_view pipeName, uint32_t timeoutMs, DWORD& error) noexcept
+{
+    const std::wstring name(pipeName);
+    const ULONGLONG deadline = GetTickCount64() + SelfTest::ScaleTimeout(timeoutMs);
+    for (;;)
+    {
+        wil::unique_handle pipe(CreateFileW(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (pipe)
+        {
+            error = ERROR_SUCCESS;
+            return pipe;
+        }
+        error               = GetLastError();
+        const ULONGLONG now = GetTickCount64();
+        if ((error != ERROR_FILE_NOT_FOUND && error != ERROR_PIPE_BUSY && error != ERROR_SEM_TIMEOUT) || now >= deadline)
+            return {};
+
+        // WaitNamedPipe returns immediately while no instance exists; success
+        // also does not reserve that instance against another client.
+        static_cast<void>(WaitNamedPipeW(name.c_str(), static_cast<DWORD>((std::min<ULONGLONG>)(50u, deadline - now))));
+        const ULONGLONG afterWait = GetTickCount64();
+        if (afterWait < deadline)
+            Sleep(static_cast<DWORD>((std::min<ULONGLONG>)(10u, deadline - afterWait)));
+    }
 }
 
 // Freshly linked service images and cold SQLite stores can legitimately spend
