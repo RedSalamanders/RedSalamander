@@ -35,7 +35,8 @@ and the [shared engine contract](https://github.com/RedSalamanders/.github/blob/
 - [ ] Complete original successful v1.0.6 main qualification on native x64 and ARM64 for all six; verify actual regression counts, active failure probes, global barrier, production roles and ZIP/SDK smoke.
 - [ ] Independently verify matching retained descriptors, receipts, SHA-256 ZIP bytes and actual job ordering. Admission-only green runs never satisfy this item.
 - [ ] Execute artifact-only Prepare against each of the five applications' current successful source/engine qualifications; preserve refusal tests and keep all public writes skipped.
-- [ ] Execute and verify the requested organization WINGET_TOKEN promotion for exactly the five applications; record credential availability/authentication separately from actual publication permission and native installation proof.
+- [x] Verify repository credential metadata and execute the authorized promotion preflight: existing token authentication passed; organization-secret administration was refused before any secret changed.
+- [ ] Owner creates organization WINGET_TOKEN for exactly the five applications, excluding DxUi, as explicitly confirmed on 2026-10-31; verify selected access and retain actual publication/native-install readiness as separate evidence.
 - [ ] Re-run the central compiler-free dependency observer to readable six-of-six coverage and current immutable engine pins.
 - [ ] Reconcile this checklist and move this acceptance record to Done only after its actual applicable evidence exists.
 
@@ -89,3 +90,17 @@ Prepare/credential readiness, six-of-six metadata coverage, real branch/security
 records. Actual public release and upstream winget submission remain separately selected manual actions; do not
 publish merely to close this plan. Stop the affected qualification on invalid identity, failed/missing evidence,
 unsupported hosting, ownership drift or an unreviewed dependency change; continue independent work.
+
+## Implementation integration and credential execution - 2026-10-31
+
+I55 is now immutable implementation history on main through [PR 180](https://github.com/RedSalamanders/RedSalamander/pull/180), merge a9c02b78847131e3dfdd1a2b08b0479d6b5ff526. Its required compiler-free CI, CodeQL and dependency-review checks passed. All six project adapters now use reviewed engine v1.0.6 source 19710a8aeac979a82e83bec82e8b866cee3d3deb. The native v1.0.6 acceptance items above remain open; no source- or engine-mismatched old receipt was promoted.
+
+DxUi [PR 152](https://github.com/RedSalamanders/DxUi/pull/152), merge f2940cc265db79458b6615492779b839c5c1b94a, removed both SDK and gallery publication workflows; canonical fold PR 153 merged as be99b682ff67b847417b3dd27b56294a72e20d4e. GitHub's active workflow inventory confirms only the six project workflows (CI, formatting, main qualification, extended qualification, manual benchmark and compiler-free security), plus system-managed entries. No publisher remains. Local metadata validation now checks the existing independent executable and ports revisions without changing either pin; its 32 behavior controls and 26 documentation controls passed.
+
+The other v1.0.6 implementation PRs and their canonical folds are merged: RedXe 69/70, RedMonitor 23/24, RedPrism 29/30 and RedTilde 36/37. Private implementation/fold PRs retain exact-head merge-check exceptions under the owner's closeout split; account-blocked checks remain failed and native/publication gates remain enforced.
+
+[Credential promotion 41198028463](https://github.com/RedSalamanders/RedSalamander/actions/runs/41198028463) executed from trusted main a9c02b78847131e3dfdd1a2b08b0479d6b5ff526. The existing publication token authenticated successfully. GitHub then refused the read-only organization-secret permission preflight with HTTP 403: admin:org or the corresponding fine-grained Actions-secret permission is missing. Execution stopped before gh secret set, so no organization or repository secret was changed. No secret value was exported or logged. The owner explicitly chose to create the organization secret personally after this refusal. Organization-secret creation is therefore assigned to the owner, not completed or automatically retried; no broader permission is requested for the publication token. Existing repository overrides remain available as before.
+
+The retained log is Z:/RedSalamander.Perf/evidence/unified-ci/closeout-20261031/organization-token-promotion-41198028463.log. Requested organization access remains exactly RedSalamander, RedXe, RedMonitor, RedPrism and RedTilde; DxUi is excluded. Credential authentication does not prove a public release, native winget installation, cleanup or upstream submission.
+
+The owner-authenticated, read-only dependency inventory observed all six immutable default-branch trees with engine 19710a8aeac979a82e83bec82e8b866cee3d3deb. Its report is Z:/RedSalamander.Perf/evidence/unified-ci/closeout-20261031/owner-six-project-dependency-status.json. This confirms coordinated deployment using owner read access; it does not claim that the central workflow token can read the two still-private repositories, so the hosted six-of-six observer item remains open.
