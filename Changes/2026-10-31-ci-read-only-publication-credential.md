@@ -1,1 +1,0 @@
-- Replace the completed credential-promotion action with an explicit read-only authentication and scope check at its existing path. Keep organization secret access and repository overrides visible in hosted acceptance; native qualification and publication remain separate gates.
