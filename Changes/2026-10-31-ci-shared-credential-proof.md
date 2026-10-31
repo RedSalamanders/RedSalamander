@@ -1,0 +1,1 @@
+- Record the successful trusted-main read-only check of the shared winget credential, verified public repository access excluding DxUi, and removal of repository overrides. Keep native, private repository and actual publication acceptance open in I56.
