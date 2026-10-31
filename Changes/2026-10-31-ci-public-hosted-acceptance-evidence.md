@@ -1,1 +1,0 @@
-- Record verified x64/ARM64 native qualification and artifact-only Prepare acceptance for RedMonitor and RedXe, public engine/security/metadata deployment, and unchanged private sources in I56. Keep the remaining DxUi SDK and RedSalamander gates explicitly pending.
