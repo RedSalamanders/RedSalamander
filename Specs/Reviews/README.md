@@ -19,6 +19,8 @@ only to correct their historical metadata or routing banner, not to act as a rol
 
 Current routing:
 
+- WIP folder quality review, 1 November 2026, commit `eb779e0bd836`. Historical only; it authorizes no implementation:
+  `Specs/Reviews/WIP_FolderQuality_2026-11-01.md`
 - Completed July 21-to-August 4 independent review and disposition:
   `Specs/Plans/Done/CodeReview_July21ToAugust4_IndependentFindingsAndRemediation_2026-08-04.md`
 - Completed unified owner for the audited August 8, residual, Emberglass, and Floodgate remainder:
