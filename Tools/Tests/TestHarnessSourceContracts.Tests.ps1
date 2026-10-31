@@ -350,7 +350,7 @@ Describe 'Test harness source contracts' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $failure = [regex]::Match($source, '(?s)state\.Require\(activated && foregroundAfter == inputWindow,.*?\);')
         $failure.Success | Should Be $true
-        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount')) {
+        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted')) {
             $failure.Value | Should Match ([regex]::Escape('admission.' + $field))
         }
         $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'

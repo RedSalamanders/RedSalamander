@@ -462,3 +462,60 @@ and PrePush explanations exited NOT_EVALUATED (2), retaining all applicable loca
 four interactive groups; no desktop takeover or local GUI qualification occurred. The self-test
 guide's obsolete native-PR/nightly/weekly descriptions are reconciled with the existing unified
 policy and current manual-only legacy entrypoints; sanitizer and Full acceptance are preserved.
+
+### ARM64 diagnostic follow-through
+
+[PR 195](https://github.com/RedSalamanders/RedSalamander/pull/195) merged the action-order repair as
+4e9c773c93abeda7c2197e8caa4d6e3fbc29008f; canonical fold PR 196 merged as
+fe402964573357fb031280893de89e2abf11a891. Both exact heads passed the three required GitHub checks,
+without an administrator override. The fold's optional Entire status reported missing trail approval
+and no blocking findings; its exact generated fragment fold was independently reviewed. I55's blob
+remains f4a767eab9599c04f6acdb7852a1139f589033dd.
+
+The owner was asked separately about cancelling superseded run 41219244102; no answer was received
+and no cancellation was performed. Its ARM64 branch finished naturally on 2026-10-31 at 21:04 UTC.
+The actual aggregate is failed: 2704 checks, 1674 passed, 971 failed and 59 skipped. Tooling passed
+1115/1115 and Compare/search passed 260 with 24 skips. Commands reported 0 passed/968 failed because
+foreground admission was refused before case execution (hotkey-activation-refused, sent=2); these
+are not 968 independently executed case defects. ViewerPE Interactive also reported owned-window
+activation failures. FileOps failed the known mirror-order expectation and
+R4A19_DiscoveryIndependentVolumes (overlap=0, 16 MiB copied by each task, isolated 1.219/1.203 seconds,
+concurrent 2.328 seconds against the unchanged 1.645650-second gate).
+
+The complete 2111184-byte ARM64 job log and 42806930-byte canonical evidence artifact were retained
+under public-acceptance-20261031, separately from x64 and every newer candidate. No crash or timeout
+is inferred from the long overall run. The preceding live-log request returned BlobNotFound and is
+retained as an unavailable-log observation, not a test verdict.
+
+The independent-volume fixture inherited the product's default Queue admission and never selected
+Parallel. It now explicitly owns Parallel before either task starts and restores the exact previous
+mode on phase transition and cleanup, including failure/cancellation, without persisting settings or
+rescheduling live work. Exact tree/byte checks, overlapping progress, the 1.35 ratio and 30-second
+ceiling are unchanged. The foreground helper now uses an owned registered Alt+F24 shortcut, retains
+the 500 ms bound, refuses held/unowned/no-activation input, releases only inserted keys on partial
+insertion/release, and records the actual SetForegroundWindow BOOL. Its native control checks both
+keys at dispatch, both released afterward, exact hook/registration cleanup and no menu side effect.
+Actual Windows ARM64 success remains required; a changed protocol or model pass does not prove it.
+
+A local native fixture compiles the actual test-enabled helper header plus extracted input cleanup,
+queue admission and phase restoration. Its 27 behavioral checks passed with zero warnings/errors,
+using MSVC 14.52.37025 and the five existing reviewed notice exceptions. Win32 input and owner/task
+boundaries are adapted: no window, real input, native ARM or throughput qualification is claimed.
+Source/compiler/executable/results/reproducer bytes were archived and SHA-256 verified before owner
+exit; the initial rejected compile (including a caught WIL scope-exit misuse) remains retained.
+The updated test-harness source-contract suite passed 213/213 with no failures/skips; compiler-free
+Static/workflow/tool/spec validation reported zero blocking findings. Pinned clang-format 22.1.3,
+changelog and whitespace checks passed. Local interactive and hosted acceptance remain separate.
+
+Run 41235457184 admitted the preceding folded source fe402964573357fb031280893de89e2abf11a891,
+native digest 6974c9313427abb7131bfc9aca65286776e35620dad5f00607a2158b9c69d961, version 7.0.468.
+It is a distinct pending acceptance attempt, not proof of the subsequent ARM admission repairs.
+
+Fresh read-only publication credential verification 41234037441 passed on trusted source
+3b6a4fe718de0306f82a8f019695b833e65949c4 at 19:24 UTC, exercising authentication/declared public_repo
+scope only. Metadata confirmed one inherited token and zero overrides in each public application,
+and neither token nor override in DxUi. No write permission or publication was exercised. GitHub
+default CodeQL setup is not configured in all four public repositories; the shared compiler-free
+security workflows remain active. New documentation-only mains RedXe c61861ca771ac0c224273b47df3ccf25b5dad86a
+and DxUi 5f31f2b3fcee2528c5a32c83285ee1d656019a26 retain the exact qualified native digest and engine;
+their existing qualification/Prepare evidence remains applicable. Private projects are unchanged by this work.

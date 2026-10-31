@@ -1122,11 +1122,12 @@ struct SelfTestState
     bool r4a02LiveOutputQueueObserved     = false;
     bool inlineF2QueueModeOriginal        = true;
     bool r4a02QueueModeOriginal           = true;
-    HWND c1DeferredCloseTarget            = nullptr;
-    ULONGLONG c1HeartbeatStartTick        = 0;
-    unsigned c1HeartbeatTicks             = 0u;
-    uint64_t inlineF2PresentedBaseline    = 0;
-    uint64_t inlineF2SilentCleanBaseline  = 0;
+    std::optional<bool> r4A19IndependentQueueModeOriginal;
+    HWND c1DeferredCloseTarget           = nullptr;
+    ULONGLONG c1HeartbeatStartTick       = 0;
+    unsigned c1HeartbeatTicks            = 0u;
+    uint64_t inlineF2PresentedBaseline   = 0;
+    uint64_t inlineF2SilentCleanBaseline = 0;
     std::optional<std::uint64_t> queuePausedTask;
     RECT popupOriginalRect{};
     bool popupOriginalRectValid = false;
@@ -2799,8 +2800,22 @@ void RecordCurrentPhase(SelfTestState& state, SelfTest::SelfTestCaseResult::Stat
     return {};
 }
 
+// This asynchronous fixture spans presentation ticks. Restore only admission of
+// future tasks, including on failure/cancellation; never reschedule live tasks or
+// persist a preference merely to qualify the independent-volume control.
+void RestoreIndependentVolumeQueueMode(SelfTestState& state) noexcept
+{
+    if (! state.r4A19IndependentQueueModeOriginal.has_value())
+        return;
+    const bool original = state.r4A19IndependentQueueModeOriginal.value();
+    state.r4A19IndependentQueueModeOriginal.reset();
+    if (state.fileOps)
+        state.fileOps->SetQueueNewTasks(original);
+}
+
 void BeginPhase(SelfTestState& state, SelfTestState::Step step) noexcept
 {
+    RestoreIndependentVolumeQueueMode(state);
     if (state.phaseInProgress)
     {
         RecordCurrentPhase(state, state.phaseFailed ? SelfTest::SelfTestCaseResult::Status::failed : SelfTest::SelfTestCaseResult::Status::passed);
@@ -3082,6 +3097,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
 
 [[nodiscard]] bool PerformCleanup(SelfTestState& state) noexcept
 {
+    RestoreIndependentVolumeQueueMode(state);
     AppendLog(L"PerformCleanup: begin");
     SetFileOpsBridgeProducerDelayForSelfTest(0);
     SetFileOpsBridgeTraversalDepthLimitForSelfTest(0);

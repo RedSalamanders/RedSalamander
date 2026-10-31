@@ -239,13 +239,18 @@ retrying or weakening the immediate cleanup assertion.
 
 ## Warned foreground hotkey dispatch
 
-The registered-hotkey fallback dispatches `WM_HOTKEY` to a temporary subclass on the
+The registered Alt+F24 fallback dispatches `WM_HOTKEY` to a temporary subclass on the
 owned warning window and activates the process-owned target inside that window procedure.
 Removing the message from the queue is not a substitute for handling it. The warning must
 belong to the current UI thread. Subclass, registration and atom cleanup are scoped, the
-same 500 ms handshake bound applies, and no foreign input queue or system policy is changed.
+same 500 ms handshake bound applies. It attaches no foreign input queue and calls no
+foreground-lock policy API or system-setting write. Alt is part of the registered nontext
+shortcut; both keys stay down until its handler requests the owned foreground. Partial input
+insertion releases only the inserted prefix in reverse order; partial release cleanup sends
+only the remaining owned key-ups. Held caller input is refused before insertion.
 The native admission control independently witnesses exactly one hotkey window-procedure
-dispatch per forced handshake, actual foreground ownership, released input, registration
+dispatch per forced handshake, actual foreground ownership, both chord keys down at dispatch,
+released input, absence of a native menu side effect, registration
 cleanup and the existing conflict/no-activation/unowned-window refusals. This follows the
 [Windows hotkey activation contract](https://devblogs.microsoft.com/oldnewthing/20090226-00/?p=19013).
 
