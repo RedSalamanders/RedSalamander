@@ -30,7 +30,7 @@ and the [shared engine contract](https://github.com/RedSalamanders/.github/blob/
 ## Checklist
 
 - [ ] Resolve RedSalamander's actual regression and evidence-upload failures with the existing native/test owners; retain original failing cases and receipts.
-- [ ] Resolve RedXe's executable/catalogue source-role mismatch without changing pins or lowering dependency/native acceptance requirements.
+- [x] Resolve RedXe's executable/catalogue source-role mismatch without changing pins or lowering dependency/native acceptance requirements. Both hosted Release test-profile restore/build steps passed in 41207884174; complete native regression/production acceptance remains a separate item.
 - [ ] Owner resolves the RedPrism/RedTilde billing/visibility prerequisites; confirm real compiler-free CI, CodeQL and dependency review execute.
 - [ ] Apply and verify the common required checks, organization-owner PR-only emergency route, supported dependency/security settings and absence of duplicate managed native CodeQL in those two repositories.
 - [ ] Complete original successful main qualification against each approved deployed engine on native x64 and ARM64 for all six; verify actual regression counts, active failure probes, global barrier, production roles and ZIP/SDK smoke.
@@ -139,12 +139,18 @@ The repair preserves the sandbox and every native/publication gate. All 47 local
 behavior controls, dependency review and eight workflow syntax checks passed. Native evidence must match each newly
 deployed public pin; earlier v1.0.6 passes are retained history.
 
+- [x] Deploy the exact v1.0.7 manifest/caller pins to all four public projects; retain both private main commits and v1.0.6 pins unchanged.
+- [x] Reconcile and execute the public repair's local tooling/format/static controls without treating them as native acceptance.
+- [x] Verify the four public rulesets require the same three compiler-free checks and retain the owner-only PR-merge emergency route.
+- [x] Re-run the central compiler-free observer to four-of-four public coverage; retain the two private access refusals as incomplete all-six coverage.
 - [ ] RedSalamander: fix current contract failures and complete both Release regression/probe branches, barrier, production and ZIP smoke.
 - [ ] RedXe: restore the independent pinned ports catalogue without changing either revision or lowering floors; complete the same native pipeline.
-- [ ] RedMonitor: qualify the v1.0.7 deployment on both architectures, retaining its v1.0.6 success separately.
+- [x] RedMonitor: qualify the v1.0.7 deployment on both architectures, retaining its v1.0.6 success separately. Original run 41206180882 passed; downloaded canonical receipts, ordering and both ZIPs were independently verified.
 - [ ] DxUi: qualify both native regression/probe and SDK consumer branches on v1.0.7; no publication or Prepare applies.
 - [ ] Independently validate source/engine-bound descriptors, counts, hashes and job ordering for these four public projects.
-- [ ] Complete artifact-only Prepare for RedSalamander, RedXe and RedMonitor from their current successful qualifications; retain no public writes.
+- [ ] Complete artifact-only Prepare for RedSalamander from its current successful qualification; retain no public writes.
+- [ ] Complete artifact-only Prepare for RedXe from its current successful qualification; retain no public writes.
+- [x] Complete artifact-only Prepare for RedMonitor from its current successful qualification; retain no public writes. Run 41208578017 passed and its downloaded plan/ZIPs were independently revalidated; release, install and submit were skipped.
 
 The fresh RedMonitor v1.0.6 qualification 41198030903 passed both native roles and all six scenarios per architecture.
 [Prepare 41203473510](https://github.com/RedSalamanders/RedMonitor/actions/runs/41203473510) passed for source
@@ -199,3 +205,73 @@ sandbox. An earlier invocation used ordinary temporary paths and seven containme
 them; its failed receipt is preserved. The successful rerun changed no sandbox guard. Static admission passed;
 affected planning conservatively selected native work and retained interactive obligations as pending.
 These local checks do not establish native runtime acceptance or waive I50 H6.
+
+### Public deployment and metadata checkpoint - 14:04 UTC
+
+RedSalamander PR 186's reviewed source 4719744ed84ffd1b67b26ef2b94141318a55ca61 merged as
+1f434930303bc878888df2787014d166d972b134; canonical fold PR 187 merged as
+c0d5a4f6391991c37a17c7576b5e68fda07ad5aa. RedXe PR 71 merged as
+59bdd293af016fb9440bb4a4c0435057e225be23 and fold PR 72 as
+964cc69143f57b07a509b604ab253c806b1da693. Every merge used the exact reviewed head and all three normal
+required checks, with no administrator override. RedXe native run 41207884174 is executing from its folded main.
+RedSalamander's earlier v1.0.6 run 41198411091 remains active and was not cancelled; new candidates serialize behind it.
+
+The public ruleset snapshot public-required-checks-current.json confirms active enforcement of checks / ci-gate,
+security / codeql and security / dependency-review, with OrganizationAdmin bypass limited to pull_request.
+No automation or native/publication bypass was introduced.
+
+The original [central observer 41208002879](https://github.com/RedSalamanders/.github/actions/runs/41208002879)
+read all four public immutable trees at v1.0.7. Its actual overall result is failure because the automatic central
+token receives HTTP 404 for the two private siblings. Their unavailable rows remain explicit; the all-six observer
+criterion is still open. The owner-authenticated, read-only GitHub CLI transport separately returned six-of-six
+metadata coverage. It confirms unchanged private source d53625460ea7a177f02d4e666acac84e91505469 for RedPrism,
+978c41fefddec1a1c64c2e09ac36dde91d02b70c for RedTilde, and unchanged engine
+19710a8aeac979a82e83bec82e8b866cee3d3deb in both. No secret value was read and no private repository was changed.
+
+RedMonitor's current run 41206180882 passed both six-scenario Release branches and active probes. Downloaded
+regression receipts passed Test-Qualification -Phase Regression. Actual job timestamps prove both production jobs
+started after the successful global barrier. Its x64 production ZIP independently passed receipt, size and SHA-256
+verification: 82f28858e9fa7011c80599a2a46f8fc94457aaf2ea6b6bb640ac25bc249e5c5e, 2725178 bytes, version 0.1.70.
+ARM64 production and current Prepare remain pending at this checkpoint. RedMonitor PR 27, merge
+9aac0e5df4e9782b3390fbb50d5b12af374a568d, reconciles the credential specification without changing its native digest.
+
+### RedMonitor v1.0.7 native acceptance
+
+Original [qualification 41206180882](https://github.com/RedSalamanders/RedMonitor/actions/runs/41206180882),
+source df1b3aacf37498e077dfa850e66f88edf8c7c72c, completed successfully at version 0.1.70 with the exact v1.0.7
+engine. Both native Release test roles discovered and executed six scenarios, with zero failures/skips and active
+failure-probe passes. Downloaded canonical receipt SHA-256 values match their regression references. The actual
+global barrier completed after both regressions; both production jobs started later and passed ZIP smoke with
+test mode disabled. Test-Qualification -Phase Complete independently accepted the downloaded descriptor,
+regression/production receipts and ZIP bytes.
+
+The production ZIP SHA-256 values are x64 82f28858e9fa7011c80599a2a46f8fc94457aaf2ea6b6bb640ac25bc249e5c5e
+(2725178 bytes) and ARM64 50caf0a11e63cdff05770526ec5dc0692e1754771465877c4fac65b838c5f107 (3127817 bytes).
+Proof files are RedMonitor-v107-independent-artifact-proof.json and RedMonitor-v107-ordering-proof.json under
+the public-acceptance evidence directory. Native evidence and ZIPs are retained there separately from the
+historical v1.0.6 receipts.
+
+RedMonitor's credential documentation PR 27 and separate canonical fold PR 28 are merged; current main is
+7823b333908dd120382bf86ce474411d3ff3596e. Their prose/fragment changes preserve native digest
+5eb7ec9cce22ba51faf11fbf646987661efa4127a9533748f54b25af8ce40bad.
+
+Manual [Prepare 41208578017](https://github.com/RedSalamanders/RedMonitor/actions/runs/41208578017) passed against
+qualification 41206180882 from trusted main 7823b333908dd120382bf86ce474411d3ff3596e. The downloaded prepared
+plan passed Read-CiPublicationPlan, including both original production ZIP hashes/sizes above and exact source,
+run, engine and version binding. Actual release, install and submit jobs were all skipped. The separate local
+proof is RedMonitor-v107-prepare-proof.json; prepared-publication bytes, job metadata and execution log are retained.
+This completes RedMonitor's public I56 Release/Prepare subset, without claiming Debug/ASan, live ETW, native
+winget installation, exercised write permission or upstream publication.
+
+The subsequent prose/fold [CI run 41208545297](https://github.com/RedSalamanders/RedMonitor/actions/runs/41208545297)
+succeeded and explicitly retained qualification 41206180882 with no native work dispatched. Its original log is
+RedMonitor-docs-no-native-coordinator.log. The two credential-documentation merges therefore did not compile the
+same native inputs again; this is observed exclusion/reuse behavior, separate from the intentional test/production roles.
+
+### RedXe restore/build confirmation
+
+Original v1.0.7 [run 41207884174](https://github.com/RedSalamanders/RedXe/actions/runs/41207884174), source
+964cc69143f57b07a509b604ab253c806b1da693, passed the actual test-enabled Release restore/build step on x64
+at 14:13:49 UTC and ARM64 at 14:15:41 UTC. This confirms the original catalogue blocker is repaired on both
+native hosts without changing the independent tool/baseline revisions or manifest floors. Both regression/probe
+steps are still executing at this checkpoint; no production, complete qualification or current Prepare pass is claimed.

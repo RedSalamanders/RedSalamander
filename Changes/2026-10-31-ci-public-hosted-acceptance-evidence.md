@@ -1,0 +1,1 @@
+- Record the public v1.0.7 deployment, verified merge gates, unchanged private sources and public dependency-observer coverage in I56. Native qualification and artifact-only preparation remain explicitly source-bound acceptance items.
