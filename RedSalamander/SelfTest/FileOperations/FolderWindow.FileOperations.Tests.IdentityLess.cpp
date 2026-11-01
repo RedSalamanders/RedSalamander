@@ -2549,7 +2549,7 @@ struct QueuedByNameDelete final
 // and, where path.smb.primary is configured, on a per-run child of the registered share. The log and the perf record keep
 // the time from the start to the card (the pin listing) and from the answer to the end (the re-check listing,
 // the execution listing and the deletions); the case asserts only that the whole tree is deleted.
-[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecksImpl(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
     {
@@ -2688,6 +2688,56 @@ struct QueuedByNameDelete final
     if (! buildTree(child / L"tree"))
         return reject(std::format(L"NAS tree under '{}' unavailable", child.native()));
     return measure(L"nas", child / L"tree", child / L"tree");
+}
+
+// Own the live Local instance's temporary setting through the final worker quiet point, without
+// changing the user's persisted plugin configuration. Success includes a verified restoration.
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+{
+    auto* operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    if (! operations || ! state.fsLocal || ! state.infoLocal || ! CancelOutstandingSelfTestOperations(operations))
+        return false;
+    std::string original;
+    if (! BackupPluginConfiguration(state.infoLocal.get(), original))
+        return false;
+    const auto originalRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+    if (originalRoute.state != FileSystemRouteContract::QueryState::Available)
+        return false;
+    const uint32_t originalBudget = originalRoute.snapshot.deleteMaxConcurrency;
+    bool restored                 = false;
+    const auto restore            = [&]() noexcept
+    {
+        if (restored)
+            return true;
+        if (! CancelOutstandingSelfTestOperations(operations))
+        {
+            AppendLog(L"Pinned tree, scale: Local configuration was not restored because workers did not drain.");
+            return false;
+        }
+        if (FAILED(state.infoLocal->SetConfiguration(original.c_str())))
+        {
+            AppendLog(L"Pinned tree, scale: Local configuration restoration failed.");
+            return false;
+        }
+        std::string actual;
+        const auto route = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        restored         = BackupPluginConfiguration(state.infoLocal.get(), actual) && actual == original &&
+                           route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.deleteMaxConcurrency == originalBudget;
+        if (! restored)
+            AppendLog(L"Pinned tree, scale: Local configuration restoration verification failed.");
+        return restored;
+    };
+    const auto restoreOnExit = wil::scope_exit([&]() noexcept { static_cast<void>(restore()); });
+    if (FAILED(state.infoLocal->SetConfiguration(R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json")))
+        return false;
+    const auto requestedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+    AppendLog(std::format(L"Pinned tree, scale: Local Delete budget original={} requested=8 effective={}",
+                          originalBudget,
+                          requestedRoute.state == FileSystemRouteContract::QueryState::Available ? requestedRoute.snapshot.deleteMaxConcurrency : 0u));
+    if (requestedRoute.state != FileSystemRouteContract::QueryState::Available || requestedRoute.snapshot.deleteMaxConcurrency != 8u)
+        return false;
+    const bool passed = RunDeleteIdentityLessPinnedTreeScaleChecksImpl(state);
+    return restore() && passed;
 }
 
 // I35 S4 (red-team HIGH c and b, round 2): a folder deleted by name carries its last-write time in its

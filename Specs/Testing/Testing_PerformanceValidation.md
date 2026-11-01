@@ -975,6 +975,18 @@ nested prompt unwound, `value1=1` when the selected source remained untouched, a
 correctness fields must match exactly. This is a correctness and bounded-teardown characterization;
 it makes no baseline or latency-improvement claim.
 
+Local pinned by-name Delete emits bounded `FileOps.Local.ByNameWalk.*` aggregates when capture is enabled.
+Each row represents one child walk after its workers join. Its HRESULT is the child-walk status, not the
+provider's final result: an `S_OK` row does not prove root deletion or task completion. The final root
+disposition is outside these measurements and can still fail. `Budget` is the clamped requested
+walk concurrency (count), with peak active file-entry handlers in `value1`; `PassParallel` and the
+`PassInlineBudget`, `PassInlineSingle`, `PassInlineNested`, and `PassInlineNoWorkers` counters report pass
+selection. `OpenUs`, `FactsUs`, and `DispositionUs` are typed microsecond sums, with operation count in
+`value0` and maximum in `value1`; zero is still a duration. Open and facts include held folders as well as
+files. Disposition includes child folders and files, excludes the final root, and includes callbacks. These
+are application wrapper elapsed times, not kernel or server latency. The file-handler peak does not measure
+simultaneous I/O. These independent diagnostics do not justify weakening identity checks.
+
 Single-pass File Operations discovery emits one bounded terminal metric set per task:
 `FileOps.Discovery.OpenUs`, `CallbackCount`, `CallbackUs`, `LockWaitUs`, `MaxQueueDepth`,
 `StarvationCount`, `FirstMutationBeforeClose`, `FirstMutationUs`,

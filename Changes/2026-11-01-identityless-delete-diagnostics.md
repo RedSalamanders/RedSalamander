@@ -1,0 +1,1 @@
+- Make the identity-less Delete scale fixture use and restore an explicit Local provider concurrency, and record bounded per-walk diagnostics for its deletion stages.

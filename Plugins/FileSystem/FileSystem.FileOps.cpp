@@ -10529,6 +10529,47 @@ struct ByNameFolderNode final
     DeleteHandleSnapshot hold;    // held, sharing only reads, from its check to its own deletion
 };
 
+// Per-walk aggregates deliberately omit paths and are emitted only after the walk's workers have joined.
+// Independent relaxed counters are diagnostic only and never control scheduling or mutation.
+struct ByNameWalkMetrics final
+{
+    struct Stage final
+    {
+        std::atomic<uint64_t> count{0u}, totalUs{0u}, maxUs{0u};
+        void Record(std::chrono::steady_clock::time_point start) noexcept
+        {
+            const auto elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+            count.fetch_add(1u, std::memory_order_relaxed);
+            totalUs.fetch_add(elapsed, std::memory_order_relaxed);
+            uint64_t prior = maxUs.load(std::memory_order_relaxed);
+            while (prior < elapsed && ! maxUs.compare_exchange_weak(prior, elapsed, std::memory_order_relaxed))
+            {
+            }
+        }
+        void Emit(std::wstring_view metric, HRESULT childWalkHr) const noexcept
+        {
+            Debug::Perf::EmitDurationUs(metric,
+                                        L"child-walk-total",
+                                        totalUs.load(std::memory_order_relaxed),
+                                        count.load(std::memory_order_relaxed),
+                                        maxUs.load(std::memory_order_relaxed),
+                                        childWalkHr);
+        }
+    };
+    const bool enabled = Debug::Perf::IsCaptureEnabled();
+    std::atomic<uint64_t> active{0u}, peak{0u}, parallelPasses{0u}, inlineBudget{0u}, inlineSingle{0u}, inlineNested{0u}, inlineNoWorkers{0u};
+    Stage open, facts, disposition;
+    HRESULT childWalkHr = S_OK; // Set only by the joining thread; excludes final root disposition.
+    void Enter() noexcept
+    {
+        const uint64_t now = active.fetch_add(1u, std::memory_order_relaxed) + 1u;
+        uint64_t prior     = peak.load(std::memory_order_relaxed);
+        while (prior < now && ! peak.compare_exchange_weak(prior, now, std::memory_order_relaxed))
+        {
+        }
+    }
+};
+
 // The deletions of one pinned tree: its folders, the concurrency, the first stop and the entries deleted.
 struct ByNameTreeWalk final
 {
@@ -10537,6 +10578,21 @@ struct ByNameTreeWalk final
           root(rootPath),
           manifest(listed)
     {
+    }
+    ~ByNameTreeWalk() noexcept
+    {
+        if (! metrics.enabled)
+            return;
+        Debug::Perf::Emit(
+            L"FileOps.Local.ByNameWalk.Budget", L"child-walk", 0u, concurrency, metrics.peak.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassParallel", metrics.parallelPasses.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineBudget", metrics.inlineBudget.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineSingle", metrics.inlineSingle.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineNested", metrics.inlineNested.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineNoWorkers", metrics.inlineNoWorkers.load(std::memory_order_relaxed), metrics.childWalkHr);
+        metrics.open.Emit(L"FileOps.Local.ByNameWalk.OpenUs", metrics.childWalkHr);
+        metrics.facts.Emit(L"FileOps.Local.ByNameWalk.FactsUs", metrics.childWalkHr);
+        metrics.disposition.Emit(L"FileOps.Local.ByNameWalk.DispositionUs", metrics.childWalkHr);
     }
     ByNameTreeWalk(const ByNameTreeWalk&)            = delete;
     ByNameTreeWalk& operator=(const ByNameTreeWalk&) = delete;
@@ -10547,6 +10603,7 @@ struct ByNameTreeWalk final
     std::vector<ByNameFolderNode> nodes;
     unsigned int concurrency = 1u;
     size_t holdBudget        = kDeleteByNameHeldFolderBudget;
+    ByNameWalkMetrics metrics;
     std::atomic<uint64_t> deleted{0u};
     std::atomic<bool> stopped{false};
     std::mutex stopMutex;
@@ -10623,9 +10680,11 @@ struct ByNameTreeWalk final
 // ERROR_REVISION_MISMATCH. Every folder above it is held already, so its path cannot be redirected.
 [[nodiscard]] HRESULT OpenListedEntryForDeleteByName(const std::wstring& extendedPath,
                                                      const FileSystemInternal::LocalDeleteManifestEntry& listed,
-                                                     DeleteHandleSnapshot& snapshot) noexcept
+                                                     DeleteHandleSnapshot& snapshot,
+                                                     ByNameWalkMetrics& metrics) noexcept
 {
-    snapshot = {};
+    snapshot               = {};
+    const auto openStarted = metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     wil::unique_handle handle(::CreateFileW(extendedPath.c_str(),
                                             DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
                                             FILE_SHARE_READ,
@@ -10633,9 +10692,12 @@ struct ByNameTreeWalk final
                                             OPEN_EXISTING,
                                             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
                                             nullptr));
+    const DWORD openError = handle ? ERROR_SUCCESS : ::GetLastError();
+    if (metrics.enabled)
+        metrics.open.Record(openStarted);
     if (! handle)
     {
-        const DWORD error = ::GetLastError();
+        const DWORD error = openError;
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
         {
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
@@ -10643,9 +10705,14 @@ struct ByNameTreeWalk final
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_OPEN_FAILED);
     }
     BY_HANDLE_FILE_INFORMATION information{};
-    if (! ::GetFileInformationByHandle(handle.get(), &information))
+    const auto factsStarted = metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL factsOk      = ::GetFileInformationByHandle(handle.get(), &information);
+    const DWORD factsError  = factsOk ? ERROR_SUCCESS : ::GetLastError();
+    if (metrics.enabled)
+        metrics.facts.Record(factsStarted);
+    if (! factsOk)
     {
-        const DWORD error = ::GetLastError();
+        const DWORD error = factsError;
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
     }
     if (! FileSystemInternal::LocalDeleteManifestEntryMatches(listed, information))
@@ -10684,6 +10751,13 @@ struct ByNameTreeWalk final
 // A file or link of the pinned tree: checked on its own handle, then deleted through it.
 void DeleteByNameListedEntry(ByNameTreeWalk& walk, OperationContext& worker, const size_t entryIndex) noexcept
 {
+    if (walk.metrics.enabled)
+        walk.metrics.Enter();
+    const auto leave                                          = wil::scope_exit([&]() noexcept
+    {
+        if (walk.metrics.enabled)
+            walk.metrics.active.fetch_sub(1u, std::memory_order_relaxed);
+    });
     const FileSystemInternal::LocalDeleteManifestEntry& entry = walk.manifest.entries[entryIndex];
     const std::wstring display                                = AppendPath(walk.root.display, entry.relativePath);
     const std::wstring extended                               = AppendPath(walk.root.extended, entry.relativePath);
@@ -10692,13 +10766,16 @@ void DeleteByNameListedEntry(ByNameTreeWalk& walk, OperationContext& worker, con
         return;
     }
     DeleteHandleSnapshot child{};
-    HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, child);
+    HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, child, walk.metrics);
     if (FAILED(hr))
     {
         walk.Stop(hr, hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? L"compare-entry" : L"entry", display);
         return;
     }
-    hr = DeleteOpenedPathNoFollow(worker, child, true, extended);
+    const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    hr                            = DeleteOpenedPathNoFollow(worker, child, true, extended);
+    if (walk.metrics.enabled)
+        walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))
     {
         walk.Stop(hr, L"entry", display);
@@ -10719,7 +10796,7 @@ void HoldByNameListedFolder(ByNameTreeWalk& walk, OperationContext& worker, cons
     {
         return;
     }
-    const HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, folder.hold);
+    const HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, folder.hold, walk.metrics);
     if (FAILED(hr))
     {
         walk.Stop(hr, hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? L"compare-folder" : L"folder", display);
@@ -10737,7 +10814,10 @@ void DeleteByNameHeldFolder(ByNameTreeWalk& walk, OperationContext& worker, cons
     {
         return;
     }
-    const HRESULT hr = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path));
+    const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const HRESULT hr              = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path));
+    if (walk.metrics.enabled)
+        walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))
     {
         walk.Stop(hr, L"folder", display);
@@ -10759,6 +10839,15 @@ template <typename Step> void RunByNamePass(ByNameTreeWalk& walk, std::span<cons
     OperationContext& context = walk.context;
     const bool parallelPass =
         walk.concurrency > 1u && items.size() > 1u && context.parallel == nullptr && GetSharedFileOpsJobScheduler().EnsureWorkersAvailable();
+    if (walk.metrics.enabled)
+    {
+        auto& counter = parallelPass                  ? walk.metrics.parallelPasses
+                        : walk.concurrency <= 1u      ? walk.metrics.inlineBudget
+                        : items.size() <= 1u          ? walk.metrics.inlineSingle
+                        : context.parallel != nullptr ? walk.metrics.inlineNested
+                                                      : walk.metrics.inlineNoWorkers;
+        counter.fetch_add(1u, std::memory_order_relaxed);
+    }
     if (! parallelPass)
     {
         for (const size_t item : items)
@@ -11116,11 +11205,13 @@ HRESULT DeleteRootByNameInternal(OperationContext& context,
         hr = BuildByNameFolderTree(walk);
         if (FAILED(hr))
         {
+            walk.metrics.childWalkHr = hr;
             return stopHere(hr, L"tree", path.display);
         }
         DeleteByNameFolderContents(walk, 0u);
         if (walk.Stopped())
         {
+            walk.metrics.childWalkHr = walk.stopHr;
             return stopHere(walk.stopHr, walk.stopStep, walk.stopAt);
         }
     }

@@ -1343,6 +1343,11 @@ handle that performs the delete, and deletes only the entries of the pinned tree
 its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
 for identity-less locations (I35 R7.3, D-7.3).
 
+The pinned-tree scale selftest temporarily sets the actual Local provider to manual Delete concurrency 8,
+verifies the typed route, and restores and verifies the original provider configuration after its workers
+are quiet. Its 2,466-entry whole, chunked and configured NAS scenarios retain their existing identity checks
+and deadline. A failed worker drain or configuration restoration fails the case.
+
 Optional `IFileSystemObjectBinding`
 (`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
 (`5ed3921d-a486-42cc-a5c3-33d97f75c5b5`) implement:

@@ -3408,6 +3408,8 @@ The File Operations selftest and provider-contract matrix cover:
   (`Delete_IdentityLessPinnedTreeHolders`); and a tree of 2,466 entries is deleted by name on the loopback
   alias, whole and again with a test-only budget of four held folders (so it goes in chunks), and, where
   `path.smb.primary` is configured, on the share, its timings logged (`Delete_IdentityLessPinnedTreeScale`);
+  the case temporarily sets the actual Local provider to manual Delete concurrency 8, verifies the effective
+  budget, and restores and verifies the original configuration after workers are quiet;
   an expired scale-case wait reports missing completion as `E_PENDING` separately from the scenario's
   `ERROR_TIMEOUT`, with synchronized task/admission witnesses before case-induced cancellation. A missing
   completion must never be logged as a successful provider result; the existing waits and deletion assertions remain unchanged;
