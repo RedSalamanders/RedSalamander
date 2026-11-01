@@ -1,0 +1,83 @@
+{
+  "RunId": "diag31y-69352-22113359",
+  "ProcessId": 69352,
+  "PesterVersion": "3.4.0",
+  "PreviousFocusedTempLength": 146,
+  "ShortTemp": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\short-temp",
+  "ShortTempLength": 104,
+  "DeepTemp": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "DeepTempLength": 146,
+  "TestDrive": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2",
+  "TestDriveLength": 183,
+  "RunnerTemp": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日",
+  "RunnerTempLength": 195,
+  "InstallerScratch": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8",
+  "InstallerScratchLength": 239,
+  "LongExe": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8\\vs_BuildTools.exe",
+  "LongExeLength": 257,
+  "ShortExe": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\fixture-binary\\GuiBootstrapper.exe",
+  "ShortExeLength": 128,
+  "InstallRoot": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\VS-Msvc-14.52",
+  "InstallRootLength": 209,
+  "Marker": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\VS-Msvc-14.52\\installed.args",
+  "MarkerLength": 224,
+  "MarkerExists": true,
+  "CompileExitCode": 0,
+  "GuiSubsystem": 2,
+  "LongExecutableExit": -1,
+  "LongExecutableError": null,
+  "ShortExecutableExit": 0,
+  "ShortExecutableError": null,
+  "SameWorkingDirectory": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8",
+  "WorkingDirectoryLength": 239,
+  "InstallerLogs": [
+    {
+      "Path": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8\\long.stdout.log",
+      "Length": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "Text": null
+    },
+    {
+      "Path": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8\\long.stderr.log",
+      "Length": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "Text": null
+    },
+    {
+      "Path": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8\\short.stdout.log",
+      "Length": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "Text": null
+    },
+    {
+      "Path": "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\msvc-14.52-8866b916de7a41759378bc2230e0d2c8\\short.stderr.log",
+      "Length": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "Text": null
+    }
+  ],
+  "InstalledArguments": [
+    "--quiet",
+    "--wait",
+    "--norestart",
+    "--nocache",
+    "--installPath",
+    "Z:\\RedSalamander.Perf\\runs\\diag31y-69352-22113359\\scratch\\hosted-msvc-bootstrapper-diagnostic\\deep-temp\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\a5bc1498-5035-4f37-881b-66791b7578a2\\hosted 0 é日\\VS-Msvc-14.52",
+    "--add",
+    "Microsoft.VisualStudio.Workload.VCTools",
+    "--includeRecommended",
+    "--add",
+    "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+    "--add",
+    "Microsoft.VisualStudio.Component.VC.Preview.Tools.x86.x64",
+    "--add",
+    "Microsoft.VisualStudio.Component.VC.Preview.Tools.ARM64",
+    "--add",
+    "Microsoft.VisualStudio.Component.VC.ASAN",
+    "--add",
+    "Microsoft.VisualStudio.Component.VC.Llvm.Clang",
+    "--add",
+    "Microsoft.VisualStudio.Component.Windows11SDK.26100"
+  ],
+  "PathLength": 3678
+}

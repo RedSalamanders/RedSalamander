@@ -21,7 +21,7 @@ paint and requires semantic pixels through the existing bounded WGC capture help
 Its validation remains in progress; rejected images must never be used as UI illustrations.
 
 The application build and the fresh noninteractive PR gate pass, including the new layout
-tests. [Full evidence, limits and paired timings](../../../../../TestRuns/4cb089111a23/Validation/2026-09-23_094710_footer-wrap-release/README.md)
+tests. [Full evidence, limits and paired timings](../../../../../TestRuns/4cb089111a23/Validation/v03/README.md)
 include the 824 reported passes, zero failures/skips/audit findings, input/receipt identities,
 the cold measurement increase and the outstanding native/resource checks.
 

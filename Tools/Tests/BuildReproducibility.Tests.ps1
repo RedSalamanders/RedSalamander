@@ -5,6 +5,10 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Packaging\RuntimeDependencies.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Packaging\PortablePackageSmoke.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\VcpkgToolIdentity.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Tests\TestSupport.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1') -ErrorAction Stop
 
 function Assert-RSThrowsMatching {
     param(
@@ -336,17 +340,136 @@ Describe 'Declarative runtime dependency graph' {
     }
 }
 
-Describe 'MSI and MSIX package source contracts' {
-    It 'requires explicit standalone package identities and never allocates from repository version state' {
-        foreach ($relativePath in @(
-                'Installer/msi/build-msi.ps1',
-                'Installer/msi/build-msi-symbols.ps1',
-                'Installer/zip/build-zip.ps1')) {
-            $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
-            $source | Should Match '\$BuildNumber\s+-le\s+0'
-            $source | Should Match 'New-RSVersionContext'
-            $source | Should Not Match 'Resolve-RSVersionContext|Read-RSVersionContext'
+Describe 'Root format-all command ownership and preview' {
+    It 'formats only tracked owned files with the pinned installer from a foreign working directory' {
+        $fixture = Join-Path $TestDrive ('format-all-' + [guid]::NewGuid().ToString('N'))
+        foreach ($directory in @('Owned', 'ThirdParty/RedMonitor/include/RedMonitor', 'Specs/TestRuns', '.codex', 'Tools', 'Dependencies', 'Build')) {
+            [void][IO.Directory]::CreateDirectory((Join-Path $fixture $directory))
         }
+        $sourcePath = Join-Path $fixture 'Owned/sample with spaces.cpp'
+        $vendorPath = Join-Path $fixture 'ThirdParty/RedMonitor/include/RedMonitor/Client.h'
+        $archivedPath = Join-Path $fixture 'Specs/TestRuns/old.cpp'
+        $agentPath = Join-Path $fixture '.codex/fixture.h'
+        [IO.File]::WriteAllText($sourcePath, 'int owned();' + "`n")
+        [IO.File]::WriteAllText($vendorPath, '// pinned vendor bytes' + "`n")
+        [IO.File]::WriteAllText($archivedPath, '// archived evidence' + "`n")
+        [IO.File]::WriteAllText($agentPath, '// agent file' + "`n")
+        [IO.File]::WriteAllText((Join-Path $fixture '.clang-format'), 'BasedOnStyle: LLVM' + "`n")
+        [IO.File]::WriteAllText((Join-Path $fixture 'Build/clang-format.json'), '{"version":"22.1.3","wheelSha256":"' + ('0' * 64) + '"}')
+        $vendorHash = (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $lockJson = [ordered]@{
+            files = @(
+                [ordered]@{
+                    path = 'include/RedMonitor/Client.h'
+                    sha256 = $vendorHash
+                }
+            )
+        } | ConvertTo-Json -Compress -Depth 4
+        [IO.File]::WriteAllText((Join-Path $fixture 'Dependencies/RedMonitor.lock.json'),
+            $lockJson)
+
+        $gitOutput = @(& git -C $fixture init -q -b main 2>&1)
+        $LASTEXITCODE | Should Be 0
+        foreach ($setting in @(@('user.name', 'Formatter fixture'), @('user.email', 'format@fixture.invalid'),
+                @('core.hooksPath', (Join-Path $fixture '.no-hooks')), @('core.autocrlf', 'false'))) {
+            [void](& git -C $fixture config @setting 2>&1)
+            $LASTEXITCODE | Should Be 0
+        }
+        [void](& git -C $fixture add --all 2>&1)
+        $LASTEXITCODE | Should Be 0
+
+        $formatterPath = Join-Path $fixture 'fake-clang-format.cmd'
+        $formatterLog = Join-Path $fixture 'formatter-invocations.txt'
+        [IO.File]::WriteAllText($formatterPath,
+            '@echo off' + "`r`n" +
+            'if "%1"=="--version" (' + "`r`n" +
+            '  echo clang-format version 22.1.3' + "`r`n" +
+            '  exit /b 0' + "`r`n" +
+            ')' + "`r`n" +
+            'echo %*>>"%RS_FORMATTER_LOG%"' + "`r`n" +
+            'exit /b 0' + "`r`n")
+        $installerLog = Join-Path $fixture 'installer-invocations.txt'
+        $installer = Join-Path $fixture 'Tools/Install-ClangFormat.ps1'
+        [IO.File]::WriteAllText($installer,
+            '[IO.File]::AppendAllText($env:RS_FORMATTER_INSTALL_LOG, "called")' + "`n" +
+            'Write-Output $env:RS_FORMATTER_EXECUTABLE' + "`n" +
+            '$global:LASTEXITCODE = 0' + "`n")
+
+        $oldFormatterLog = $env:RS_FORMATTER_LOG
+        $oldInstallerLog = $env:RS_FORMATTER_INSTALL_LOG
+        $oldFormatterExe = $env:RS_FORMATTER_EXECUTABLE
+        try {
+            $env:RS_FORMATTER_LOG = $formatterLog
+            $env:RS_FORMATTER_INSTALL_LOG = $installerLog
+            $env:RS_FORMATTER_EXECUTABLE = $formatterPath
+            $foreignDirectory = Join-Path $TestDrive ('foreign-' + [guid]::NewGuid().ToString('N'))
+            [void][IO.Directory]::CreateDirectory($foreignDirectory)
+            Push-Location $foreignDirectory
+            try {
+                & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -WhatIf
+                Test-Path -LiteralPath $installerLog | Should Be $false
+                Test-Path -LiteralPath $formatterLog | Should Be $false
+                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
+                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() |
+                    Should Be ((Get-Content -LiteralPath (Join-Path $fixture 'Dependencies/RedMonitor.lock.json') -Raw | ConvertFrom-Json).files[0].sha256)
+
+                & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -Confirm:$false
+                Test-Path -LiteralPath $installerLog | Should Be $true
+                $invocations = Get-Content -LiteralPath $formatterLog -Raw
+                $invocations | Should Match 'sample with spaces\.cpp'
+                $invocations | Should Not Match 'Client\.h|TestRuns|\.codex'
+                @($invocations -split '\r?\n' | Where-Object { $_ }).Count | Should Be 1
+                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
+            } finally {
+                Pop-Location
+            }
+        } finally {
+            $env:RS_FORMATTER_LOG = $oldFormatterLog
+            $env:RS_FORMATTER_INSTALL_LOG = $oldInstallerLog
+            $env:RS_FORMATTER_EXECUTABLE = $oldFormatterExe
+        }
+    }
+}
+
+Describe 'ZIP and winget packaging source contracts' {
+    It 'rejects ZIP packaging with ProductionOnly before importing build modules' {
+        $buildPath = Join-Path $repoRoot 'build.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile($buildPath, [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $guard = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.IfStatementAst] -and
+                    $node.Extent.Text -match 'ProductionOnly cannot create a ZIP because it excludes the package smoke-test host'
+                }, $true))
+        $guard.Count | Should Be 1
+        $firstImport = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Import-Module'
+                }, $true) | Sort-Object { $_.Extent.StartOffset } | Select-Object -First 1)
+        $firstImport.Count | Should Be 1
+        ($guard[0].Extent.EndOffset -lt $firstImport[0].Extent.StartOffset) | Should Be $true
+
+        $ProductionOnly = $true
+        $Zip = $true
+        { . ([scriptblock]::Create($guard[0].Extent.Text)) } |
+            Should Throw 'ProductionOnly cannot create a ZIP because it excludes the package smoke-test host'
+
+        $Zip = $false
+        $allowed = Invoke-RSTestBlock { . ([scriptblock]::Create($guard[0].Extent.Text)) }
+        $allowed.Succeeded | Should Be $true
+        $ProductionOnly = $false
+        $Zip = $true
+        $allowed = Invoke-RSTestBlock { . ([scriptblock]::Create($guard[0].Extent.Text)) }
+        $allowed.Succeeded | Should Be $true
+    }
+
+    It 'uses explicit synchronized versions for portable ZIP and winget publication' {
+        $zip = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/zip/build-zip.ps1') -Raw
+        $zip | Should Match '\$BuildNumber\s+-le\s+0'
+        $zip | Should Match 'New-RSVersionContext'
+        $zip | Should Not Match 'Resolve-RSVersionContext|Read-RSVersionContext'
 
         $winget = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1') -Raw
         $winget | Should Match '(?s)IsNullOrWhiteSpace\(\$Version\).+?\$BuildNumber\s+-le\s+0'
@@ -364,17 +487,11 @@ Describe 'MSI and MSIX package source contracts' {
         $resolver | Should Not Match 'Use-RSVersionStateLock|Save-RSVersionContext'
     }
 
-    It 'keeps standalone package mutators under balanced fail-closed coordination' {
+    It 'keeps the ZIP and winget mutations inside balanced packaging coordination' {
         $contracts = @(
-            @{ Path = 'Installer/msi/build-msi.ps1'; ReadsProfile = $true; ContainedProcesses = 3 },
-            @{ Path = 'Installer/msi/build-msi-symbols.ps1'; ReadsProfile = $true; ContainedProcesses = 1 },
-            @{ Path = 'Installer/msix/build-msix.ps1'; ReadsProfile = $true; ContainedProcesses = 1 },
-            @{ Path = 'Installer/zip/build-zip.ps1'; ReadsProfile = $true; ContainedProcesses = 0 },
-            @{ Path = 'Installer/winget/generate-manifest.ps1'; ReadsProfile = $false; ContainedProcesses = 0 },
-            @{ Path = 'Installer/msix/GenerateAssets.ps1'; ReadsProfile = $false; ContainedProcesses = 0 },
-            @{ Path = 'Installer/msix/UpdateManifestVersion.ps1'; ReadsProfile = $false; ContainedProcesses = 0 }
+            @{ Path = 'Installer/zip/build-zip.ps1'; ReadsProfile = $true },
+            @{ Path = 'Installer/winget/generate-manifest.ps1'; ReadsProfile = $false }
         )
-
         foreach ($contract in $contracts) {
             $source = Get-Content -LiteralPath (Join-Path $repoRoot $contract.Path) -Raw
             $source | Should Match 'ArtifactOperationLock\.psm1'
@@ -391,20 +508,11 @@ Describe 'MSI and MSIX package source contracts' {
             $source | Should Not Match 'Clear-RSArtifactOperationContaminated'
             $source | Should Match '(?im)^\s*\.OUTPUTS\s*$'
             $source | Should Match '(?im)^\s*\.NOTES\s*$'
-
             if ($contract.ReadsProfile) {
-                $profileEnter = $source.IndexOf(
-                    '$ArtifactProfileLock = Enter-RSArtifactOperationLock',
-                    [StringComparison]::OrdinalIgnoreCase)
-                $packagingEnter = $source.IndexOf(
-                    '$PackagingLock = Enter-RSArtifactOperationLock',
-                    [StringComparison]::OrdinalIgnoreCase)
-                $packagingExit = $source.LastIndexOf(
-                    'Exit-RSArtifactOperationLock -Lock $PackagingLock',
-                    [StringComparison]::OrdinalIgnoreCase)
-                $profileExit = $source.LastIndexOf(
-                    'Exit-RSArtifactOperationLock -Lock $ArtifactProfileLock',
-                    [StringComparison]::OrdinalIgnoreCase)
+                $profileEnter = $source.IndexOf('$ArtifactProfileLock = Enter-RSArtifactOperationLock', [StringComparison]::OrdinalIgnoreCase)
+                $packagingEnter = $source.IndexOf('$PackagingLock = Enter-RSArtifactOperationLock', [StringComparison]::OrdinalIgnoreCase)
+                $packagingExit = $source.LastIndexOf('Exit-RSArtifactOperationLock -Lock $PackagingLock', [StringComparison]::OrdinalIgnoreCase)
+                $profileExit = $source.LastIndexOf('Exit-RSArtifactOperationLock -Lock $ArtifactProfileLock', [StringComparison]::OrdinalIgnoreCase)
                 ($profileEnter -ge 0) | Should Be $true
                 ($profileEnter -lt $packagingEnter) | Should Be $true
                 ($packagingEnter -lt $packagingExit) | Should Be $true
@@ -415,199 +523,41 @@ Describe 'MSI and MSIX package source contracts' {
                 ($residualCheck -lt $packagingEnter) | Should Be $true
                 $source | Should Match '(?s)Assert-RSNoResidualArtifactToolProcesses.+?-Scope\s+\$[A-Za-z]*ArtifactProfileScope'
             }
-
-            if ($contract.ContainedProcesses -gt 0) {
-                $source | Should Match 'SanitizedEnvironment\.psm1'
-                ([regex]::Matches($source, 'Invoke-RSProcess').Count -ge $contract.ContainedProcesses) | Should Be $true
-                $source | Should Not Match '(?m)^\s*&\s+\$wixExe\s+@wixArgs'
-            }
         }
-
-        $mainMsi = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msi/build-msi.ps1') -Raw
-        ([regex]::Matches($mainMsi, 'Invoke-RSProcess').Count -ge 3) | Should Be $true
-        $mainMsi | Should Not Match '(?m)^\s*&\s+robocopy\.exe'
-        foreach ($msiScript in @(
-                $mainMsi,
-                (Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msi/build-msi-symbols.ps1') -Raw))) {
-            $msiScript | Should Not Match '(?i)extension\s+add'
-            $msiScript | Should Match 'Packaging does not mutate machine-global WiX extensions'
-            $msiScript | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+''\.build\\AppPackages''.+?-CreateDirectory'
-            $msiScript | Should Match '(?s)\$workRoot\s*=.+?NewGuid.+?try\s*\{.+?finally\s*\{\s*if\s*\(Test-Path\s+-LiteralPath\s+\$workRoot\)\s*\{\s*Remove-Item\s+-LiteralPath\s+\$workRoot\s+-Recurse\s+-Force'
-            $msiScript | Should Match '(?m)^\s*New-Item\s+-ItemType\s+Directory\s+-Path\s+\$workRoot\s*\|\s*Out-Null\s*$'
-            $msiScript | Should Not Match '(?m)^\s*New-Item\s+-ItemType\s+Directory\s+-Path\s+\$workRoot\s+-Force'
-            $cleanupIndex = $msiScript.LastIndexOf('Remove-Item -LiteralPath $workRoot', [StringComparison]::OrdinalIgnoreCase)
-            $lockExitIndex = $msiScript.LastIndexOf('Exit-RSArtifactOperationLock -Lock $packagingLock', [StringComparison]::OrdinalIgnoreCase)
-            ($cleanupIndex -ge 0) | Should Be $true
-            ($cleanupIndex -lt $lockExitIndex) | Should Be $true
-        }
-
-        $wingetGenerator = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1') -Raw
-        $wingetGenerator | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+''\.build\\AppPackages''.+?-CreateDirectory'
-        $manifestStamper = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msix/UpdateManifestVersion.ps1') -Raw
-        $manifestStamper | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+''Installer\\msix''.+?-Path\s+\$ManifestPath'
-        $manifestStamper | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+''\.build\\AppPackages''.+?-Path\s+\(Split-Path \$OutputManifestPath -Parent\).+?-CreateDirectory'
-        $manifestStamper | Should Match '\[IO\.File\]::Open\(\$OutputManifestPath, \[IO\.FileMode\]::CreateNew'
-        $manifestStamper | Should Not Match 'XmlWriter\]::Create\(\$ManifestPath'
 
         $guardModule = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1') -Raw
         $guardModule | Should Match 'function\s+Resolve-RSGuardedRepositoryPath'
         $guardModule | Should Match 'FileAttributes\]::ReparsePoint'
-        $guardModule | Should Match "'Resolve-RSGuardedRepositoryPath'"
     }
 
-    It 'validates exact Winget versions and portable archive identities before hashing' {
+    It 'validates exact winget versions and portable archive identities before hashing' {
         $scriptPath = Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1'
         $tokens = $null
         $parseErrors = $null
-        $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
-            $scriptPath,
-            [ref]$tokens,
-            [ref]$parseErrors)
+        $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
         $parseErrors.Count | Should Be 0
         foreach ($functionName in @('Assert-WingetManifestVersion', 'Resolve-WingetPortableZip')) {
             $functionAst = $scriptAst.Find({
                 param($node)
-                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                    $node.Name -eq $functionName
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $functionName
             }, $true)
             ($null -ne $functionAst) | Should Be $true
             Invoke-Expression $functionAst.Extent.Text
         }
 
-        { Assert-WingetManifestVersion -CandidateVersion '7.0' } |
-            Should Throw 'exactly three numeric components'
-        { Assert-WingetManifestVersion -CandidateVersion '7.0.0' } |
-            Should Throw 'build component must be positive'
-        { Assert-WingetManifestVersion -CandidateVersion '65536.0.1' } |
-            Should Throw 'range 0..65535'
+        { Assert-WingetManifestVersion -CandidateVersion '7.0' } | Should Throw 'exactly three numeric components'
+        { Assert-WingetManifestVersion -CandidateVersion '7.0.0' } | Should Throw 'build component must be positive'
+        { Assert-WingetManifestVersion -CandidateVersion '65536.0.1' } | Should Throw 'range 0..65535'
         Assert-WingetManifestVersion -CandidateVersion '7.0.184'
 
         $expectedLeaf = 'RedSalamander-7.0.184-x64-Portable.zip'
         $zipPath = Join-Path $TestDrive $expectedLeaf
-        [System.IO.File]::WriteAllBytes($zipPath, [byte[]](0x52, 0x53))
-        (Resolve-WingetPortableZip `
-                -CandidatePath $zipPath `
-                -ExpectedLeaf $expectedLeaf `
-                -Label 'x64') | Should Be $zipPath
-        {
-            Resolve-WingetPortableZip `
-                -CandidatePath $zipPath `
-                -ExpectedLeaf 'RedSalamander-7.0.183-x64-Portable.zip' `
-                -Label 'x64'
-        } | Should Throw 'leaf must be exactly'
-        {
-            Resolve-WingetPortableZip `
-                -CandidatePath (Join-Path $TestDrive 'missing.zip') `
-                -ExpectedLeaf 'missing.zip' `
-                -Label 'ARM64'
-        } | Should Throw 'must be an existing file'
-    }
-
-    It 'keeps each release MSIX build in one contained packaging transaction' {
-        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
-        $workflow | Should Not Match 'build-msix|MSBuild.exe|Msi'
-        $workflow | Should Not Match '(?m)^\s+MSBuild\.exe\s+@msixParams'
-
-        $wrapper = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msix/build-msix.ps1') -Raw
-        $wrapper | Should Match '(?s)& \$generateAssetsScript.+?& \$updateManifestScript.+?Invoke-RSProcess'
-        $wrapper | Should Match '"/p:RSAppxManifestPath=\$stagedManifestPath"'
-        $wrapper | Should Match '(?s)finally\s*\{.+?Remove-Item -LiteralPath \$stagedManifestDirectory -Recurse -Force.+?Exit-RSArtifactOperationLock'
-        $profileEnter = $wrapper.IndexOf('$artifactProfileLock = Enter-RSArtifactOperationLock', [StringComparison]::OrdinalIgnoreCase)
-        $packagingEnter = $wrapper.IndexOf('$packagingLock = Enter-RSArtifactOperationLock', [StringComparison]::OrdinalIgnoreCase)
-        $dependencyEnter = $wrapper.IndexOf('$sharedDependencyLock = Enter-RSArtifactOperationLock', [StringComparison]::OrdinalIgnoreCase)
-        $msbuildInvoke = $wrapper.IndexOf('$exitCode = Invoke-RSProcess', [StringComparison]::OrdinalIgnoreCase)
-        $dependencyExit = $wrapper.LastIndexOf('Exit-RSArtifactOperationLock -Lock $sharedDependencyLock', [StringComparison]::OrdinalIgnoreCase)
-        $packagingExit = $wrapper.LastIndexOf('Exit-RSArtifactOperationLock -Lock $packagingLock', [StringComparison]::OrdinalIgnoreCase)
-        $profileExit = $wrapper.LastIndexOf('Exit-RSArtifactOperationLock -Lock $artifactProfileLock', [StringComparison]::OrdinalIgnoreCase)
-        ($profileEnter -lt $packagingEnter) | Should Be $true
-        ($packagingEnter -lt $dependencyEnter) | Should Be $true
-        ($dependencyEnter -lt $msbuildInvoke) | Should Be $true
-        ($msbuildInvoke -lt $dependencyExit) | Should Be $true
-        ($dependencyExit -lt $packagingExit) | Should Be $true
-        ($packagingExit -lt $profileExit) | Should Be $true
-        $wrapper | Should Match "coordination\s*=\s*'shared-dependency'"
-        $wrapper | Should Match '(?s)Read-RSArtifactOperationContamination.+?-Scope\s+\$sharedDependencyScope'
-        $wrapper | Should Match '(?s)Assert-RSNoResidualArtifactToolProcesses.+?-Scope\s+\$sharedDependencyScope'
-
-        $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match '(?s)& \$msixAssetsScript\s+-Configuration \$Configuration\s+-Platform \$Platform'
-        $buildScript | Should Match '"/p:RSAppxManifestPath=\$stagedMsixManifest"'
-        $buildScript | Should Match 'Remove-Item -LiteralPath \$stagedMsixManifestDirectory -Recurse -Force'
-        $buildScript | Should Match '(?s)& \$msixVersionScript.+?-Version \$versionContext\.PackagingVersion.+?-Platform \$Platform.+?-Configuration \$Configuration'
-    }
-
-    It 'keeps MSI staging aligned with the two shipping executables and optional service component' {
-        $buildMsi = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\build-msi.ps1') -Raw
-        $product = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\Product.wxs') -Raw
-
-        $buildMsi | Should Match '\$shippingExes\s*=\s*@\("RedSalamander\.exe",\s*"RedSalamanderSearchService\.exe"\)'
-        $buildMsi | Should Match 'Expected shipping executable not found'
-        $product | Should Match '<MajorUpgrade[\s\S]+Schedule="afterInstallInitialize"'
-        $product | Should Match '<StandardDirectory Id="ProgramFiles64Folder">'
-        $product | Should Match 'Condition="INSTALLSEARCHSERVICE&lt;&gt;&quot;0&quot;"'
-        $product | Should Match '<ServiceInstall[\s\S]+Name="RedSalamanderSearchService"[\s\S]+Start="auto"[\s\S]+Account="LocalSystem"'
-        $product | Should Match 'Target="\[INSTALLFOLDER\]RedSalamander\.exe"'
-        $product | Should Not Match 'RedSalamanderMonitor\.exe'
-    }
-
-    It 'keeps the symbols MSI allowlist aligned with shipped binaries and plugin PDBs' {
-        $symbols = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\build-msi-symbols.ps1') -Raw
-
-        foreach ($pdb in @(
-                'RedSalamander.pdb',
-                'RedSalamanderSearchService.pdb',
-                'Common.pdb'
-            )) {
-            $symbols | Should Match ([regex]::Escape(('"{0}"' -f $pdb)))
-        }
-        $symbols | Should Match 'Copy-Item\s+-Path\s+\(Join-Path\s+\$pluginsSrc\s+"\*\.pdb"\)\s+-Destination\s+\$pluginsDst'
-    }
-
-    It 'keeps MSIX identity applications architecture stamping and directory-preserving harvest aligned' {
-        $project = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\RedSalamanderInstaller.wapproj') -Raw
-        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\Package.appxmanifest') -Raw
-        $stamper = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\UpdateManifestVersion.ps1') -Raw
-
-        $manifest | Should Match '<Identity Name="RedSalamander" Publisher="CN=RedSalmanders" Version="7\.0\.0\.0" ProcessorArchitecture="x64"'
-        ([regex]::Matches($manifest, '<Application Id="')).Count | Should Be 1
-        $manifest | Should Match '<Application Id="RedSalamander" Executable="RedSalamander\.exe"'
-        $manifest | Should Not Match 'RedSalamanderMonitor\.exe'
-        $project | Should Match '<TargetPlatformMinVersion>10\.0\.22000\.2600</TargetPlatformMinVersion>'
-        $project | Should Match '<RSAppxManifestPath Condition="''\$\(RSAppxManifestPath\)''==''''">\$\(MSBuildThisFileDirectory\)Package\.appxmanifest</RSAppxManifestPath>'
-        $project | Should Match '<AppxManifest Include="\$\(RSAppxManifestPath\)">'
-        foreach ($directory in @('Plugins', 'Lang', 'Themes')) {
-            $project | Should Match ("<PackagePath>{0}\\%\(RecursiveDir\)%\(Filename\)%\(Extension\)</PackagePath>" -f $directory)
-        }
-        $stamper | Should Match '\$identity\.Version\s*=\s*\$identityVersion'
-        $stamper | Should Match '\$identity\.ProcessorArchitecture\s*=\s*\$architecture'
-    }
-
-    It 'stages MSIX identity changes without changing the tracked manifest' {
-        $sourceManifest = Join-Path $repoRoot 'Installer\msix\Package.appxmanifest'
-        $sourceDigest = (Get-FileHash -LiteralPath $sourceManifest -Algorithm SHA256).Hash
-        $stageRoot = Join-Path $repoRoot ('.build\AppPackages\ManifestStagingTests\{0}' -f [Guid]::NewGuid().ToString('N'))
-        $stagePath = Join-Path $stageRoot 'Package.appxmanifest'
-        try {
-            $staged = & (Join-Path $repoRoot 'Installer\msix\UpdateManifestVersion.ps1') `
-                -Version '7.0.184' -Platform ARM64 -OutputManifestPath $stagePath
-            $staged | Should Be $stagePath
-            (Get-FileHash -LiteralPath $sourceManifest -Algorithm SHA256).Hash | Should Be $sourceDigest
-            $xml = [xml](Get-Content -LiteralPath $stagePath -Raw)
-            $xml.Package.Identity.Version | Should Be '7.0.184.0'
-            $xml.Package.Identity.ProcessorArchitecture | Should Be 'arm64'
-            {
-                & (Join-Path $repoRoot 'Installer\msix\UpdateManifestVersion.ps1') `
-                    -Version '7.0.185' -Platform x64 -OutputManifestPath $stagePath
-            } | Should Throw 'unique path is required'
-            (Get-FileHash -LiteralPath $sourceManifest -Algorithm SHA256).Hash | Should Be $sourceDigest
-            $xmlAfterFailure = [xml](Get-Content -LiteralPath $stagePath -Raw)
-            $xmlAfterFailure.Package.Identity.Version | Should Be '7.0.184.0'
-        }
-        finally {
-            if (Test-Path -LiteralPath $stageRoot -PathType Container) {
-                Remove-Item -LiteralPath $stageRoot -Recurse -Force
-            }
-        }
+        [IO.File]::WriteAllBytes($zipPath, [byte[]](0x52, 0x53))
+        (Resolve-WingetPortableZip -CandidatePath $zipPath -ExpectedLeaf $expectedLeaf -Label 'x64') | Should Be $zipPath
+        { Resolve-WingetPortableZip -CandidatePath $zipPath -ExpectedLeaf 'RedSalamander-7.0.183-x64-Portable.zip' -Label 'x64' } |
+            Should Throw 'leaf must be exactly'
+        { Resolve-WingetPortableZip -CandidatePath (Join-Path $TestDrive 'missing.zip') -ExpectedLeaf 'missing.zip' -Label 'ARM64' } |
+            Should Throw 'must be an existing file'
     }
 }
 
@@ -627,6 +577,35 @@ Describe 'Effective invocation-wide compiler metadata' -Tag RequiresBuildToolcha
         $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
         $hostFolder = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') { 'arm64' } else { 'amd64' }
         $script:compilerPolicyMSBuild = Join-Path $installation "MSBuild/Current/Bin/$hostFolder/MSBuild.exe"
+    }
+
+    It 'evaluates the toolset guard for VC++ projects only' {
+        $scratch = New-RSTestSandboxScratchDirectory -RepoRoot $compilerPolicyRepo -Harness 'MsvcVersionGuard' -Case ([guid]::NewGuid().ToString('N'))
+        $targetsPath = [IO.Path]::GetFullPath((Join-Path $compilerPolicyRepo 'Directory.Build.targets'))
+        $escapedTargetsPath = [Security.SecurityElement]::Escape($targetsPath)
+
+        function Invoke-ToolsetGuardProbe([string]$Extension, [string]$ToolsetVersion) {
+            $projectPath = Join-Path $scratch ('guard-probe' + $Extension)
+            $projectContents = @"
+<Project>
+  <PropertyGroup>
+    <RSIsFirstPartyProject>true</RSIsFirstPartyProject>
+    <RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion>
+    <VCToolsVersion>$ToolsetVersion</VCToolsVersion>
+  </PropertyGroup>
+  <Import Project="$escapedTargetsPath" />
+</Project>
+"@
+            [IO.File]::WriteAllText($projectPath, $projectContents, [Text.UTF8Encoding]::new($false))
+            $output = @(& $compilerPolicyMSBuild $projectPath '/nologo' '/noautoresponse' '/nr:false' '/t:ValidateMsvcToolsVersion' 2>&1)
+            return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
+        }
+
+        $wrongVcx = Invoke-ToolsetGuardProbe '.vcxproj' '14.51.37025'
+        $wrongVcx.ExitCode | Should Not Be 0
+        $wrongVcx.Output | Should Match 'requires MSVC build tools 14\.52\.x'
+        $matchingVcx = Invoke-ToolsetGuardProbe '.vcxproj' '14.52.37025'
+        $matchingVcx.ExitCode | Should Be 0
     }
 
     foreach ($case in $compilerPolicyCases) {

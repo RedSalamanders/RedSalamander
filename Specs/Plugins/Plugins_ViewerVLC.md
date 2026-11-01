@@ -127,6 +127,7 @@ The close contract is responsiveness-sensitive: injected slow stop/release must 
 - deterministic cleanup allocation and submit failures draining through the pre-created dispatcher while `Close()` remains non-blocking;
 - forced parent destruction with delayed cleanup proving immediate child-HWND teardown, continued plugin mapping while callback code is active, and clean unload after the HWND-independent dispatcher completes;
 - delayed superseding loads rejecting stale request/window identities without stale attach/play;
+- one in-flight asynchronous libVLC load from the first open as well as media replacement; any opens during first initialization replace one pending path with the latest request, reuse the completed VLC state when possible, and never spawn parallel initial loaders;
 - parent/video HWND retention and hiding during delayed cleanup, followed by UI-thread destruction and one close callback;
 - repeated open/close/reopen cycles with a new per-window identity, including HWND-reuse pressure;
 - safe option-token acceptance, native-domain unsigned numeric clamping, and separator/control/option/module-loading/logfile/pidfile rejection;
@@ -142,6 +143,8 @@ The close contract is responsiveness-sensitive: injected slow stop/release must 
 The source contract additionally bans a null drawable, process-global DLL-directory APIs, `SearchPathW`, UI-thread install probing, synchronous loader fallback, inline `VlcAsyncLoadResult` player stop/release, and callback-body module-pin destruction. Any performance or closeout claim must cite a fresh archived run containing the focused `ViewerPETests` result and the corresponding `viewer.vlc.*` JSONL rows; an unavailable historical archive is not normative proof.
 
 The configured-preview Commands fixture holds the media worker on a duplicated manual-reset event. It retains the 900 ms source-focus/publication bounds while the worker is held, checks one worker plus one coalesced path and no UI-owned player, then releases it and proves the original instance/player is reused for the latest audio request. Decoder settlement remains a separate bounded predicate. Cancellation, close and injected submission/delivery failures must neither strand pending media state nor play obsolete content.
+
+The standalone VLC HUD contract also holds delayed first-load work through rapid opens. It requires exactly one accepted initial worker, one replaceable latest path (the superseded middle path is never published), sequential reuse/reload after the first worker returns, and terminal state with no stale player attachment. This case is noninteractive and uses only its marked synthetic WAV fixture.
 
 The real-player embedded long-path regression additionally injects media submission and completion-post failures, a failed post with a superseding coalesced request, keyboard Stop while media work is held, and Close while media work is held. Each observes actual branch counters and terminal ownership; Open/Stop/Close retain the 100 ms UI-return budget. Stop remains visibly available while a media load is pending. Close retains the hidden parent/video HWND chain until the held worker and cleanup drain. No activation or user media is required.
 

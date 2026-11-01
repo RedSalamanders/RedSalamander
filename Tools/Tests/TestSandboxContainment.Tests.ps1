@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $sandboxModulePath = Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1'
 Import-Module $sandboxModulePath -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 $containmentModule = Get-Module | Where-Object { $_.Path -eq $sandboxModulePath }
 if (@($containmentModule).Count -ne 1) { throw 'Expected one canonical TestSandbox module.' }
 $script:RSContainmentOwnedLinks = [Collections.Generic.List[object]]::new()
@@ -264,6 +265,41 @@ Describe 'TestSandbox fresh ordinary-path containment' {
         $relative = Join-Path $fixture.Directory 'relative-link'
         New-RSContainmentReparseFixture -Fixture $fixture -Link $relative -Target 'inside-target' -ItemType SymbolicLink
         (Assert-RSTestSandboxLinkTarget -Path $relative -Target 'inside-target') | Should Be $target
+    }
+
+    It 'validates and creates relative link paths against the same PowerShell location' {
+        $fixture = New-RSContainmentRegressionFixture
+        $target = Join-Path $fixture.Directory 'relative-path-target'
+        New-RSContainmentOrdinaryDirectory -Fixture $fixture -Path $target
+        $savedProcessDirectory = [Environment]::CurrentDirectory
+        $savedLocation = Get-Location
+        # No link is created: an old implementation would validate a sandbox path but pass an
+        # outside relative path to New-Item. The creator witness must remain unreachable there.
+        Mock New-Item { throw 'relative-path creator reached' } -ModuleName TestSandbox -ParameterFilter {
+            $Path -and $Path.EndsWith('relative-path-link')
+        }
+        try {
+            [Environment]::CurrentDirectory = $fixture.Directory
+            Set-Location -LiteralPath $repoRoot
+            $message = $null
+            try { [void](New-RSTestSandboxLink -Path 'relative-path-link' -Target $target -ItemType Junction) }
+            catch { $message = $_.Exception.Message }
+            $message | Should Match 'Refusing test link'
+            Assert-MockCalled New-Item -ModuleName TestSandbox -Times 0 -Exactly
+
+            [Environment]::CurrentDirectory = $repoRoot
+            Set-Location -LiteralPath $fixture.Directory
+            $message = $null
+            try { [void](New-RSTestSandboxLink -Path 'relative-path-link' -Target $target -ItemType Junction) }
+            catch { $message = $_.Exception.Message }
+            $message | Should Be 'relative-path creator reached'
+            Assert-MockCalled New-Item -ModuleName TestSandbox -Times 1 -Exactly -ParameterFilter {
+                [IO.Path]::IsPathFullyQualified($Path) -and $Path.EndsWith('\relative-path-link')
+            }
+        } finally {
+            Set-Location -LiteralPath $savedLocation.Path
+            [Environment]::CurrentDirectory = $savedProcessDirectory
+        }
     }
 
     It 'observes an ordinary ancestor replaced by a junction between successive calls' {
@@ -926,6 +962,10 @@ Describe 'Sandbox audit root authority' {
             & $auditModule { param($Body) Set-Item Function:script:Test-RSTestSandboxMarker -Value $Body } $original
         }
         (Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash | Should Be $markerHash
-        { Assert-RSTestSandboxContainedPath -TestRoot $fixture.Root -Path $fixture.Directory } | Should Not Throw
+        $contained = Invoke-RSTestBlock {
+            Assert-RSTestSandboxContainedPath -TestRoot $fixture.Root -Path $fixture.Directory
+        }
+        $contained.Succeeded | Should Be $true
+        (Test-Path -LiteralPath $fixture.Directory -PathType Container) | Should Be $true
     }
 }

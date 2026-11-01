@@ -1795,16 +1795,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return kDefaults;
 }
 
-[[nodiscard]] const Common::Settings::FileOperationsSettings& GetFileOperationsSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
-{
-    static const Common::Settings::FileOperationsSettings kDefaults{};
-    if (settings.fileOperations.has_value())
-    {
-        return settings.fileOperations.value();
-    }
-    return kDefaults;
-}
-
 [[nodiscard]] bool AreEquivalentShortcutBindings(const std::vector<Common::Settings::ShortcutBinding>& a,
                                                  const std::vector<Common::Settings::ShortcutBinding>& b) noexcept
 {
@@ -2100,8 +2090,8 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
         }
     }
     {
-        const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
-        const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
+        const auto& baselineFileOperations = PrefsFileOperations::GetFileOperationsSettingsOrDefault(state.baselineSettings);
+        const auto& workingFileOperations  = PrefsFileOperations::GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
             baselineFileOperations.showInformationalNotes != workingFileOperations.showInformationalNotes ||
             baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
@@ -2468,25 +2458,9 @@ struct PreferencesSaveResult final
         }
     }
     {
-        const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
-        const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
-        if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
-            baselineFileOperations.showInformationalNotes != workingFileOperations.showInformationalNotes ||
-            baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
-            baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
-            baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
-            baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
-            baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
-            baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||
-            baselineFileOperations.diagnosticsDebugEnabled != workingFileOperations.diagnosticsDebugEnabled ||
-            baselineFileOperations.maxIssueReportFiles != workingFileOperations.maxIssueReportFiles ||
-            baselineFileOperations.maxDiagnosticsInMemory != workingFileOperations.maxDiagnosticsInMemory ||
-            baselineFileOperations.maxDiagnosticsPerFlush != workingFileOperations.maxDiagnosticsPerFlush ||
-            baselineFileOperations.diagnosticsFlushIntervalMs != workingFileOperations.diagnosticsFlushIntervalMs ||
-            baselineFileOperations.diagnosticsCleanupIntervalMs != workingFileOperations.diagnosticsCleanupIntervalMs)
-        {
-            merged.fileOperations = state.workingSettings.fileOperations;
-        }
+        const auto& baselineFileOperations = PrefsFileOperations::GetFileOperationsSettingsOrDefault(state.baselineSettings);
+        const auto& workingFileOperations  = PrefsFileOperations::GetFileOperationsSettingsOrDefault(state.workingSettings);
+        PrefsFileOperations::MergePreferencesOwnedFileOperationsSettings(merged, baselineFileOperations, workingFileOperations);
     }
     if (! AreEquivalentConnectionsSettings(state.baselineSettings.connections, state.workingSettings.connections))
     {

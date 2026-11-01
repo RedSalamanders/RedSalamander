@@ -1,0 +1,62 @@
+{
+  "Schema": "codex-focused-pester.v1",
+  "RunId": "20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d",
+  "ProcessId": 57412,
+  "RepoRoot": "Z:\\src\\RedSalamander",
+  "TestRoot": "Z:\\RedSalamander.Perf",
+  "RunRoot": "Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d",
+  "Scratch": "Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory",
+  "Temp": "Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory",
+  "Tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory",
+  "PesterVersion": "3.4.0",
+  "Tests": [
+    "Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1",
+    "Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1"
+  ],
+  "Arguments": [
+    "-ExcludeTag",
+    "RequiresBuildToolchain"
+  ],
+  "StartedUtc": null,
+  "DurationMilliseconds": 22194.0,
+  "Passed": 26,
+  "Failed": 2,
+  "Skipped": 0,
+  "Pending": 0,
+  "Total": 28,
+  "Results": [
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1",
+      "Passed": 9,
+      "Failed": 2,
+      "Skipped": 0,
+      "Pending": 0,
+      "Total": 11,
+      "Failures": [
+        {
+          "Name": "waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits",
+          "Result": "Failed",
+          "FailureMessage": "Expected: {True}\nBut was:  {False}",
+          "StackTrace": "at line: 157 in Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1\n157:                     (Test-Path -LiteralPath $marker) | Should Be $true\r"
+        },
+        {
+          "Name": "adds timestamped deployment log paths while preserving helper exceptions",
+          "Result": "Failed",
+          "FailureMessage": "Expected: {Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory\\b80f12f7-4950-451e-a1f4-de02242185e4}\nBut was:  {Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory\\b80f12f7-4950-451e-a1f4-de02242185e4}",
+          "StackTrace": "at line: 555 in Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1\n555:         $script:scratchAllocation.RepoRoot | Should Be $TestDrive\r"
+        }
+      ]
+    },
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1",
+      "Passed": 17,
+      "Failed": 0,
+      "Skipped": 0,
+      "Pending": 0,
+      "Total": 17,
+      "Failures": []
+    }
+  ],
+  "SetupFailure": null,
+  "Transcript": "Z:\\RedSalamander.Perf\\runs\\20261031T162638Z-57412-de5389c22d914cf8ba3924972ba9425d\\scratch\\focused-tooling-pester\\process-streaming-tool-inventory\\pester-transcript.txt"
+}

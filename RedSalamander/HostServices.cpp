@@ -45,6 +45,9 @@ std::atomic<FolderWindow*> g_hostFolderWindow{nullptr};
 std::atomic<std::atomic<HWND>*> g_hostFolderWindowHwnd{nullptr};
 std::atomic<Common::Settings::Settings*> g_hostSettings{nullptr};
 std::atomic_bool g_hostPromptShutdown{false};
+#ifdef ENABLE_TESTS
+std::atomic<LPARAM> g_testLastSynchronousPayloadToken{0};
+#endif
 // Blocking prompts whose nested loop is running (I35 R8.4: a decision mirror never appears above one).
 std::atomic<uint32_t> g_hostBlockingPromptDepth{0u};
 
@@ -100,7 +103,7 @@ struct PendingPrompt
     HostPromptRequest request{};
     void* cookie             = nullptr;
     HostPromptResult* result = nullptr;
-    HRESULT dispatchResult   = E_PENDING;
+    HRESULT* dispatchResult  = nullptr;
     std::wstring title;
     std::wstring message;
 };
@@ -109,119 +112,17 @@ struct PendingConnectionManager
 {
     HostConnectionManagerRequest request{};
     HostConnectionManagerResult* result = nullptr;
-    HRESULT dispatchResult              = E_PENDING;
+    HRESULT* dispatchResult             = nullptr;
     std::wstring filterPluginId;
 };
 
-enum class SynchronousHostPayloadKind : uint8_t
+template <typename T> [[nodiscard]] HRESULT SendSynchronousHostPayload(HWND window, UINT message, std::unique_ptr<T> payload) noexcept
 {
-    Prompt,
-    ConnectionManager,
-};
-
-struct SynchronousHostPayloadEntry final
-{
-    void* payload                   = nullptr;
-    UINT message                    = 0;
-    SynchronousHostPayloadKind kind = SynchronousHostPayloadKind::Prompt;
-};
-
-struct SynchronousHostPayloadRegistry final
-{
-    SynchronousHostPayloadRegistry()                                                 = default;
-    SynchronousHostPayloadRegistry(const SynchronousHostPayloadRegistry&)            = delete;
-    SynchronousHostPayloadRegistry(SynchronousHostPayloadRegistry&&)                 = delete;
-    SynchronousHostPayloadRegistry& operator=(const SynchronousHostPayloadRegistry&) = delete;
-    SynchronousHostPayloadRegistry& operator=(SynchronousHostPayloadRegistry&&)      = delete;
-
-    std::mutex mutex;
-    std::unordered_map<LPARAM, SynchronousHostPayloadEntry> entriesByToken;
-    uintptr_t nextToken     = 1u;
-    LPARAM lastRetiredToken = 0;
-};
-
-[[nodiscard]] SynchronousHostPayloadRegistry& GetSynchronousHostPayloadRegistry() noexcept
-{
-    // Unlike PostMessagePayload, entries are non-owning and exist only while the sending thread
-    // is inside SendMessageW. Plugin shutdown reaches a quiet point before process teardown.
-    static SynchronousHostPayloadRegistry registry;
-    return registry;
-}
-
-[[nodiscard]] LPARAM RegisterSynchronousHostPayload(void* payload, UINT message, SynchronousHostPayloadKind kind) noexcept
-{
-    if (! payload)
-    {
-        return 0;
-    }
-
-    auto& registry = GetSynchronousHostPayloadRegistry();
-    std::scoped_lock lock(registry.mutex);
-    const size_t maxAttempts = registry.entriesByToken.size() + 1u;
-    for (size_t attempt = 0; attempt < maxAttempts; ++attempt)
-    {
-        const LPARAM token = static_cast<LPARAM>(registry.nextToken);
-        ++registry.nextToken;
-        if (registry.nextToken == 0)
-        {
-            registry.nextToken = 1u;
-        }
-        if (token != 0 && ! registry.entriesByToken.contains(token))
-        {
-            registry.entriesByToken.emplace(token, SynchronousHostPayloadEntry{.payload = payload, .message = message, .kind = kind});
-            return token;
-        }
-    }
-    return 0;
-}
-
-void UnregisterSynchronousHostPayload(LPARAM token) noexcept
-{
-    if (token == 0)
-    {
-        return;
-    }
-
-    auto& registry = GetSynchronousHostPayloadRegistry();
-    std::scoped_lock lock(registry.mutex);
-    if (registry.entriesByToken.erase(token) != 0u)
-    {
-        registry.lastRetiredToken = token;
-    }
-}
-
-template <typename T> [[nodiscard]] T* GetSynchronousHostPayload(LPARAM token, UINT message, SynchronousHostPayloadKind kind) noexcept
-{
-    if (token == 0)
-    {
-        return nullptr;
-    }
-
-    auto& registry = GetSynchronousHostPayloadRegistry();
-    std::scoped_lock lock(registry.mutex);
-    const auto it = registry.entriesByToken.find(token);
-    if (it == registry.entriesByToken.end() || it->second.message != message || it->second.kind != kind)
-    {
-        return nullptr;
-    }
-    return static_cast<T*>(it->second.payload);
-}
-
-template <typename T> [[nodiscard]] HRESULT SendSynchronousHostPayload(HWND window, UINT message, SynchronousHostPayloadKind kind, T& payload) noexcept
-{
-    const LPARAM token = RegisterSynchronousHostPayload(&payload, message, kind);
-    if (token == 0)
-    {
-        return E_OUTOFMEMORY;
-    }
-    const auto unregister = wil::scope_exit([token]() noexcept { UnregisterSynchronousHostPayload(token); });
-
-    static_cast<void>(SendMessageW(window, message, 0, token));
-    if (payload.dispatchResult == E_PENDING)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
-    }
-    return payload.dispatchResult;
+    HRESULT dispatchResult  = E_PENDING;
+    payload->dispatchResult = &dispatchResult;
+    static_cast<void>(SendMessagePayload(window, message, 0, std::move(payload)));
+    // A default window procedure or payload-registration failure must not look like S_OK.
+    return dispatchResult == E_PENDING ? E_NOTIMPL : dispatchResult;
 }
 
 struct PendingConnectionSecret
@@ -235,7 +136,8 @@ struct PendingConnectionSecret
     std::wstring connectionName;
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
     HWND ownerWindow              = nullptr;
-    wil::unique_cotaskmem_string secret;
+    wchar_t** secretOut           = nullptr;
+    HRESULT* dispatchResult       = nullptr;
 };
 
 struct PendingSetConnectionSecret
@@ -243,7 +145,8 @@ struct PendingSetConnectionSecret
     std::wstring connectionName;
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
     std::wstring secret;
-    BOOL persist = FALSE;
+    BOOL persist            = FALSE;
+    HRESULT* dispatchResult = nullptr;
 };
 
 struct PendingDeleteConnectionSecret
@@ -251,6 +154,7 @@ struct PendingDeleteConnectionSecret
     std::wstring connectionName;
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
     BOOL deletePersisted          = FALSE;
+    HRESULT* dispatchResult       = nullptr;
 };
 
 struct PendingConnectionJson
@@ -262,19 +166,22 @@ struct PendingConnectionJson
     PendingConnectionJson& operator=(PendingConnectionJson&&)      = delete;
 
     std::wstring connectionName;
-    wil::unique_cotaskmem_ptr<char> json;
+    char** jsonOut          = nullptr;
+    HRESULT* dispatchResult = nullptr;
 };
 
 struct PendingClearConnectionSecretCache
 {
     std::wstring connectionName;
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
+    HRESULT* dispatchResult       = nullptr;
 };
 
 struct PendingUpgradeFtpAnonymousToPassword
 {
     std::wstring connectionName;
-    HWND ownerWindow = nullptr;
+    HWND ownerWindow        = nullptr;
+    HRESULT* dispatchResult = nullptr;
 };
 
 struct PendingExecuteInPane
@@ -298,6 +205,7 @@ struct PendingOpenViewer
     std::vector<const wchar_t*> otherFilePointers;
     unsigned long focusedOtherFileIndex = 0;
     uint32_t viewerFlags                = 0;
+    HRESULT* dispatchResult             = nullptr;
 };
 
 [[nodiscard]] bool IsAutomationModeFromCommandLine() noexcept
@@ -741,7 +649,7 @@ public:
             data->request.title   = data->title.empty() ? nullptr : data->title.c_str();
             data->request.message = data->message.c_str();
 
-            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowPrompt, SynchronousHostPayloadKind::Prompt, *data);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowPrompt, std::move(data));
         }
 
         return ShowPromptOnUiThread(*request, cookie, result);
@@ -785,7 +693,7 @@ public:
             }
             data->request.filterPluginId = data->filterPluginId.empty() ? nullptr : data->filterPluginId.c_str();
 
-            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowConnectionManager, SynchronousHostPayloadKind::ConnectionManager, *data);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowConnectionManager, std::move(data));
         }
 
         return ShowConnectionManagerOnUiThread(*request, result);
@@ -814,20 +722,8 @@ public:
         {
             auto data            = std::make_unique<PendingConnectionJson>();
             data->connectionName = connectionName;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostGetConnectionJsonUtf8, 0, reinterpret_cast<LPARAM>(data.get()));
-            if (msgResult != 0)
-            {
-                return static_cast<HRESULT>(msgResult);
-            }
-
-            if (! data->json)
-            {
-                return E_FAIL;
-            }
-
-            *jsonUtf8 = data->json.release();
-            return S_OK;
+            data->jsonOut        = jsonUtf8;
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostGetConnectionJsonUtf8, std::move(data));
         }
 
         return BuildConnectionJsonUtf8(connectionName, jsonUtf8);
@@ -861,20 +757,8 @@ public:
             data->connectionName = connectionName;
             data->kind           = kind;
             data->ownerWindow    = ownerWindow;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostGetConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
-            if (msgResult != 0)
-            {
-                return static_cast<HRESULT>(msgResult);
-            }
-
-            if (! data->secret)
-            {
-                return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-            }
-
-            *secretOut = data->secret.release();
-            return S_OK;
+            data->secretOut      = secretOut;
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostGetConnectionSecret, std::move(data));
         }
 
         return GetConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut);
@@ -903,9 +787,7 @@ public:
             data->kind           = kind;
             data->secret         = secret;
             data->persist        = persist;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostSetConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
-            return static_cast<HRESULT>(msgResult);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostSetConnectionSecret, std::move(data));
         }
 
         return SetConnectionSecretOnUiThread(connectionName, kind, secret, persist);
@@ -930,9 +812,7 @@ public:
             data->connectionName  = connectionName;
             data->kind            = kind;
             data->deletePersisted = deletePersisted;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostDeleteConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
-            return static_cast<HRESULT>(msgResult);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostDeleteConnectionSecret, std::move(data));
         }
 
         return DeleteConnectionSecretOnUiThread(connectionName, kind, deletePersisted);
@@ -966,20 +846,12 @@ public:
             data->connectionName = connectionName;
             data->kind           = kind;
             data->ownerWindow    = ownerWindow;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostPromptConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
-            const HRESULT hr        = static_cast<HRESULT>(msgResult);
+            data->secretOut      = secretOut;
+            const HRESULT hr     = SendSynchronousHostPayload(hostWindow, WndMsg::kHostPromptConnectionSecret, std::move(data));
             if (FAILED(hr) || hr == S_FALSE)
             {
                 return hr;
             }
-
-            if (! data->secret)
-            {
-                return E_FAIL;
-            }
-
-            *secretOut = data->secret.release();
             return S_OK;
         }
 
@@ -1004,9 +876,7 @@ public:
             auto data            = std::make_unique<PendingClearConnectionSecretCache>();
             data->connectionName = connectionName;
             data->kind           = kind;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostClearCachedConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
-            return static_cast<HRESULT>(msgResult);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostClearCachedConnectionSecret, std::move(data));
         }
 
         return ClearCachedConnectionSecretOnUiThread(connectionName, kind);
@@ -1030,9 +900,7 @@ public:
             auto data            = std::make_unique<PendingUpgradeFtpAnonymousToPassword>();
             data->connectionName = connectionName;
             data->ownerWindow    = ownerWindow;
-
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostUpgradeFtpAnonymousToPassword, 0, reinterpret_cast<LPARAM>(data.get()));
-            return static_cast<HRESULT>(msgResult);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostUpgradeFtpAnonymousToPassword, std::move(data));
         }
 
         return UpgradeFtpAnonymousToPasswordOnUiThread(connectionName, ownerWindow);
@@ -1213,8 +1081,7 @@ public:
                 }
             }
 
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostOpenViewer, 0, reinterpret_cast<LPARAM>(data.get()));
-            return static_cast<HRESULT>(msgResult);
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostOpenViewer, std::move(data));
         }
 
         ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
@@ -1233,6 +1100,15 @@ public:
 
     bool TryHandleMessage(HWND hwnd, UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
     {
+#ifdef ENABLE_TESTS
+        if (message == WndMsg::kHostShowPrompt || message == WndMsg::kHostShowConnectionManager || message == WndMsg::kHostGetConnectionJsonUtf8 ||
+            message == WndMsg::kHostGetConnectionSecret || message == WndMsg::kHostSetConnectionSecret || message == WndMsg::kHostDeleteConnectionSecret ||
+            message == WndMsg::kHostPromptConnectionSecret || message == WndMsg::kHostClearCachedConnectionSecret ||
+            message == WndMsg::kHostUpgradeFtpAnonymousToPassword || message == WndMsg::kHostOpenViewer)
+        {
+            g_testLastSynchronousPayloadToken.store(lParam, std::memory_order_release);
+        }
+#endif
         if (message == WndMsg::kHostShowAlert)
         {
             auto data = TakeMessagePayload<PendingAlert>(hwnd, message, lParam);
@@ -1263,139 +1139,127 @@ public:
 
         if (message == WndMsg::kHostShowPrompt)
         {
-            auto* data = GetSynchronousHostPayload<PendingPrompt>(lParam, WndMsg::kHostShowPrompt, SynchronousHostPayloadKind::Prompt);
-            if (! data || ! data->result)
+            auto data = TakeMessagePayload<PendingPrompt>(hwnd, message, lParam);
+            if (! data || ! data->result || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            data->dispatchResult = ShowPromptOnUiThread(data->request, data->cookie, data->result);
-            result               = static_cast<LRESULT>(data->dispatchResult);
+            *data->dispatchResult = ShowPromptOnUiThread(data->request, data->cookie, data->result);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostShowConnectionManager)
         {
-            auto* data =
-                GetSynchronousHostPayload<PendingConnectionManager>(lParam, WndMsg::kHostShowConnectionManager, SynchronousHostPayloadKind::ConnectionManager);
-            if (! data || ! data->result)
+            auto data = TakeMessagePayload<PendingConnectionManager>(hwnd, message, lParam);
+            if (! data || ! data->result || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            data->dispatchResult = ShowConnectionManagerOnUiThread(data->request, data->result);
-            result               = static_cast<LRESULT>(data->dispatchResult);
+            *data->dispatchResult = ShowConnectionManagerOnUiThread(data->request, data->result);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostGetConnectionJsonUtf8)
         {
-            auto* data = reinterpret_cast<PendingConnectionJson*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingConnectionJson>(hwnd, message, lParam);
+            if (! data || ! data->jsonOut || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            char* rawJson    = nullptr;
-            const HRESULT hr = BuildConnectionJsonUtf8(data->connectionName.c_str(), &rawJson);
-            if (SUCCEEDED(hr))
-            {
-                data->json.reset(rawJson);
-                if (! data->json)
-                {
-                    result = static_cast<LRESULT>(E_FAIL);
-                    return true;
-                }
-            }
-
-            result = static_cast<LRESULT>(FAILED(hr) ? hr : 0);
+            *data->dispatchResult = BuildConnectionJsonUtf8(data->connectionName.c_str(), data->jsonOut);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostGetConnectionSecret)
         {
-            auto* data = reinterpret_cast<PendingConnectionSecret*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingConnectionSecret>(hwnd, message, lParam);
+            if (! data || ! data->secretOut || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = GetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secret.put());
-            result           = static_cast<LRESULT>(FAILED(hr) ? hr : 0);
+            *data->dispatchResult = GetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostSetConnectionSecret)
         {
-            auto* data = reinterpret_cast<PendingSetConnectionSecret*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingSetConnectionSecret>(hwnd, message, lParam);
+            if (! data || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = SetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->secret.c_str(), data->persist);
-            result           = static_cast<LRESULT>(hr);
+            *data->dispatchResult = SetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->secret.c_str(), data->persist);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostDeleteConnectionSecret)
         {
-            auto* data = reinterpret_cast<PendingDeleteConnectionSecret*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingDeleteConnectionSecret>(hwnd, message, lParam);
+            if (! data || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = DeleteConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->deletePersisted);
-            result           = static_cast<LRESULT>(hr);
+            *data->dispatchResult = DeleteConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->deletePersisted);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostPromptConnectionSecret)
         {
-            auto* data = reinterpret_cast<PendingConnectionSecret*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingConnectionSecret>(hwnd, message, lParam);
+            if (! data || ! data->secretOut || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = PromptForConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secret.put());
-            result           = static_cast<LRESULT>(hr);
+            *data->dispatchResult = PromptForConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostClearCachedConnectionSecret)
         {
-            auto* data = reinterpret_cast<PendingClearConnectionSecretCache*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingClearConnectionSecretCache>(hwnd, message, lParam);
+            if (! data || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = ClearCachedConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind);
-            result           = static_cast<LRESULT>(hr);
+            *data->dispatchResult = ClearCachedConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostUpgradeFtpAnonymousToPassword)
         {
-            auto* data = reinterpret_cast<PendingUpgradeFtpAnonymousToPassword*>(lParam);
-            if (! data)
+            auto data = TakeMessagePayload<PendingUpgradeFtpAnonymousToPassword>(hwnd, message, lParam);
+            if (! data || ! data->dispatchResult)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = UpgradeFtpAnonymousToPasswordOnUiThread(data->connectionName.c_str(), data->ownerWindow);
-            result           = static_cast<LRESULT>(hr);
+            *data->dispatchResult = UpgradeFtpAnonymousToPasswordOnUiThread(data->connectionName.c_str(), data->ownerWindow);
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
@@ -1418,10 +1282,21 @@ public:
 
         if (message == WndMsg::kHostOpenViewer)
         {
-            auto* data = reinterpret_cast<PendingOpenViewer*>(lParam);
-            if (! data || ! data->fileSystem || data->pluginId.empty() || data->focusedPath.empty())
+            auto data = TakeMessagePayload<PendingOpenViewer>(hwnd, message, lParam);
+            if (! data)
             {
-                result = static_cast<LRESULT>(E_INVALIDARG);
+                result = static_cast<LRESULT>(E_POINTER);
+                return true;
+            }
+            if (! data->dispatchResult)
+            {
+                result = static_cast<LRESULT>(E_POINTER);
+                return true;
+            }
+            if (! data->fileSystem || data->pluginId.empty() || data->focusedPath.empty())
+            {
+                *data->dispatchResult = E_INVALIDARG;
+                result                = static_cast<LRESULT>(E_INVALIDARG);
                 return true;
             }
 
@@ -1437,8 +1312,9 @@ public:
             context.focusedOtherFileIndex = data->focusedOtherFileIndex;
             context.flags                 = static_cast<ViewerOpenFlags>(data->viewerFlags);
 
-            const HRESULT hr = HostFolderWindow().OpenViewerWithPlugin(data->pluginId, context);
-            result           = static_cast<LRESULT>(hr);
+            const HRESULT hr      = HostFolderWindow().OpenViewerWithPlugin(data->pluginId, context);
+            *data->dispatchResult = hr;
+            result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
@@ -3151,16 +3027,36 @@ bool HostGetTestLastPromptDebugSnapshot(HostPromptDebugSnapshot& out) noexcept
 
 size_t HostGetTestSynchronousPayloadRegistrationCount() noexcept
 {
-    auto& registry = GetSynchronousHostPayloadRegistry();
+    auto& registry = ::detail::GetPostedMessagePayloadRegistry();
     std::scoped_lock lock(registry.mutex);
-    return registry.entriesByToken.size();
+    const HWND hostWindow = HostFolderWindowHwnd().load(std::memory_order_acquire);
+    return static_cast<size_t>(std::ranges::count_if(registry.entriesByToken,
+                                                     [hostWindow](const auto& entry) noexcept
+    {
+        if (entry.second.hwnd != hostWindow)
+        {
+            return false;
+        }
+        switch (entry.second.msg)
+        {
+            case WndMsg::kHostShowPrompt:
+            case WndMsg::kHostShowConnectionManager:
+            case WndMsg::kHostGetConnectionJsonUtf8:
+            case WndMsg::kHostGetConnectionSecret:
+            case WndMsg::kHostSetConnectionSecret:
+            case WndMsg::kHostDeleteConnectionSecret:
+            case WndMsg::kHostPromptConnectionSecret:
+            case WndMsg::kHostClearCachedConnectionSecret:
+            case WndMsg::kHostUpgradeFtpAnonymousToPassword:
+            case WndMsg::kHostOpenViewer: return true;
+            default: return false;
+        }
+    }));
 }
 
 LPARAM HostGetTestLastRetiredSynchronousPayloadToken() noexcept
 {
-    auto& registry = GetSynchronousHostPayloadRegistry();
-    std::scoped_lock lock(registry.mutex);
-    return registry.lastRetiredToken;
+    return g_testLastSynchronousPayloadToken.load(std::memory_order_acquire);
 }
 #endif
 

@@ -132,7 +132,7 @@ Next steps:
 - **Owner:** I29 File Operations qualification maintainer with the Windows security/test-harness owner.
 
 Source: [restoration guard (line 456)](../../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp).
-Evidence: [original Debug FileOps trace](../../TestRuns/7d3a1247382a/Validation/space_prepush_debug_failure_reports_20261009T201507Z/preserved-last-run/fileops/trace.txt). The native case remains retained after the failure; later gated/not-reached families are not successful coverage.
+Evidence: [original Debug FileOps trace](../../TestRuns/7d3a1247382a/Validation/v03/preserved-last-run/fileops/trace.txt). The native case remains retained after the failure; later gated/not-reached families are not successful coverage.
 
 Next steps:
 
@@ -150,7 +150,7 @@ Next steps:
 - **Owner:** S3 provider/test maintainer; coordinate I25 and I29.
 
 Source: [stalled-request proof (line 1503)](../../../Plugins/FileSystemS3/FileSystemS3.Tests.FakeS3.cpp), [prefix probing/listing (line 1505)](../../../Plugins/FileSystemS3/FileSystemS3.Directory.cpp), [request control (line 265)](../../../Plugins/FileSystemS3/FileSystemS3.Internal.h), [client creation (line 800)](../../../Plugins/FileSystemS3/FileSystemS3.Shared.cpp).
-Evidence: [Debug PluginContract log](../../TestRuns/7d3a1247382a/Validation/space_prepush_debug_failure_reports_20261009T201507Z/checkpoint/entries/standalone.plugin-contract/results/PluginContractTests.output.log).
+Evidence: [Debug PluginContract log](../../TestRuns/7d3a1247382a/Validation/v03/checkpoint/entries/standalone.plugin-contract/results/PluginContractTests.output.log).
 
 Preserve the current stimulus: 96-byte/40-ms dripping listing, initial parsed-GET polling window 10 seconds, 250-ms delay before Cancel, 15-second worker wait, less-than-3-second cancel assertion, configured connection/request timeout and provider watchdog. The fake recorded no parsed GET in its window. That does not prove bytes were actually arriving, which internal transport was used, or that a particular SDK control callback ran. The later endpoint stop occurs after the timing was sampled.
 
@@ -196,7 +196,7 @@ Next steps: record resolved absolute source root and file digest; independently 
 - **Owner:** native viewer harness/DxUi maintainer; coordinate I27.
 
 Source: [final restore predicate (line 1093)](../../../Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp).
-Evidence: [Debug native log](../../TestRuns/7d3a1247382a/Validation/space_prepush_debug_failure_reports_20261009T201507Z/checkpoint/entries/viewer-pe.interactive/results/ViewerPETests.Interactive.output.log) and [Release native log](../../TestRuns/7d3a1247382a/Validation/space_prepush_release_failure_reports_20261009T213050Z/checkpoint/entries/viewer-pe.interactive/results/ViewerPETests.Interactive.output.log).
+Evidence: [Debug native log](../../TestRuns/7d3a1247382a/Validation/v03/checkpoint/entries/viewer-pe.interactive/results/ViewerPETests.Interactive.output.log) and [Release native log](../../TestRuns/7d3a1247382a/Validation/v04/checkpoint/entries/viewer-pe.interactive/results/ViewerPETests.Interactive.output.log).
 
 The Debug Web child itself passed and retired its owned processes; saved identity/input and the immediate pre-restoration ownership checks passed. The final predicate failed, but the log lacks the activation API return and final foreground/focus values. It cannot identify which conjunct failed or prove user interference. The subsequent stop assertion is containment behavior, not another independent product cause. The Debug failure occurs before Space interaction in that suite; separate Space activation evidence remains valid.
 

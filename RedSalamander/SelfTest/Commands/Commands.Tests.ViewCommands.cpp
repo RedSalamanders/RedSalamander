@@ -8796,6 +8796,60 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     PumpPendingMessages();
 }
 
+// Reopen through the public IViewer contract while this ViewerSpace window remains alive.
+// Its private scan cache is scoped to that HWND lifetime, so cross-window Open tests must
+// never use this helper after CleanupStandaloneViewerPointerProbe has closed the window.
+[[nodiscard]] bool ReopenStandaloneViewerForPointerProbe(CaseState& state,
+                                                         std::wstring_view scenarioName,
+                                                         const std::filesystem::path& samplePath,
+                                                         StandaloneViewerPointerProbe& probe,
+                                                         bool deferPostOpenPump     = false,
+                                                         bool pumpObservationWindow = false) noexcept
+{
+    if (! probe.viewer || ! probe.fileSystem.fileSystem || ! probe.hwnd || IsWindow(probe.hwnd) == FALSE)
+    {
+        state.Require(false, std::format(L"{}: same-window Open requires a live ViewerSpace probe.", scenarioName));
+        return false;
+    }
+
+    const std::wstring samplePathText = samplePath.wstring();
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
+    context.fileSystem     = probe.fileSystem.fileSystem.get();
+    context.fileSystemName = L"File System";
+    context.focusedPath    = samplePathText.c_str();
+    context.flags          = VIEWER_OPEN_FLAG_NONE;
+
+    const HRESULT openHr = probe.viewer->Open(&context);
+    state.Require(SUCCEEDED(openHr),
+                  std::format(L"{}: same-window Open failed for '{}'. hr=0x{:08X}", scenarioName, samplePathText, static_cast<unsigned long>(openHr)));
+    state.Require(IsWindow(probe.hwnd) != FALSE && IsWindowVisible(probe.hwnd) != FALSE,
+                  std::format(L"{}: same-window Open did not retain its existing ViewerSpace window.", scenarioName));
+    if (FAILED(openHr) || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    if (! deferPostOpenPump)
+    {
+        if (pumpObservationWindow)
+        {
+            const auto observationDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{50};
+            while (std::chrono::steady_clock::now() < observationDeadline)
+            {
+                PumpPendingMessages();
+                std::this_thread::sleep_for(std::chrono::milliseconds{1});
+            }
+        }
+        else
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(std::chrono::milliseconds{50});
+        }
+        PumpPendingMessages();
+    }
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool ResizeStandaloneViewerClientToDip(CaseState& state,
                                                      HWND hwnd,
                                                      int widthDip,
@@ -22995,7 +23049,6 @@ struct FolderViewDummyPluginHandles
         return false;
     }
 
-    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
     const std::string config =
         R"({"topFilesPerDirectory":2048,"scanThreads":4,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":60,"cacheMaxEntries":4})";
 
@@ -23004,6 +23057,7 @@ struct FolderViewDummyPluginHandles
         OpenStandaloneViewerForPointerProbe(
             state, L"ViewerSpace cache-hit header restore first scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, firstProbe, config),
         L"Failed to open ViewerSpace cache-hit header restore first run.");
+    auto cleanupFirst = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(firstProbe); });
     if (! state.failure.empty())
     {
         return false;
@@ -23027,26 +23081,21 @@ struct FolderViewDummyPluginHandles
                               firstSnapshot.rootTotalBytes,
                               expectedTotalBytes,
                               firstSnapshot.scanCacheSnapshotBytes));
-    CleanupStandaloneViewerPointerProbe(firstProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
     }
 
-    StandaloneViewerPointerProbe secondProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace cache-hit header restore second scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, secondProbe, config),
-        L"Failed to open ViewerSpace cache-hit header restore second run.");
-    auto cleanupSecond = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(secondProbe); });
+    const std::uintmax_t cacheHitMetricOffset = FolderViewPerfMetricScanOffset();
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace cache-hit header restore second scan", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for its same-window cache-hit header restore.");
     if (! state.failure.empty())
     {
         return false;
     }
 
     WndMsg::ViewerSpacePerfDebugSnapshot secondSnapshot{};
-    state.Require(WaitForViewerSpacePerfSnapshot(secondProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  secondSnapshot,
                                                  [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done; },
@@ -23060,8 +23109,8 @@ struct FolderViewDummyPluginHandles
         return false;
     }
 
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) > 0u,
-                  L"ViewerSpace cache-hit header restore reopened scan was not served from the scan cache.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", cacheHitMetricOffset) == 1u,
+                  L"ViewerSpace same-window cache-hit header restore did not use exactly one retained scan snapshot.");
     state.Require(secondSnapshot.scannedFolders == firstSnapshot.scannedFolders,
                   std::format(L"ViewerSpace cache-hit header restore did not restore scanned-folder count. first={}, second={}.",
                               firstSnapshot.scannedFolders,
@@ -23121,28 +23170,31 @@ struct FolderViewDummyPluginHandles
     constexpr std::wstring_view kCacheHitMetric = L"viewer.space.scan.cache_hit";
     const std::uintmax_t metricScanOffset       = FolderViewPerfMetricScanOffset();
     const uint64_t cacheHitsAtStart             = FolderViewPerfMetricCountInRun(kCacheHitMetric, metricScanOffset);
-    const auto openAndValidate                  = [&](size_t rootIndex, bool expectCacheHit) noexcept
+    StandaloneViewerPointerProbe probe{};
+    auto cleanup               = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    bool viewerOpened          = false;
+    const auto openAndValidate = [&](size_t rootIndex, bool expectCacheHit) noexcept
     {
         const uint64_t hitsBeforeOpen = FolderViewPerfMetricCountInRun(kCacheHitMetric, metricScanOffset);
-        StandaloneViewerPointerProbe probe{};
-        const bool opened =
-            OpenStandaloneViewerForPointerProbe(state,
-                                                std::format(L"ViewerSpace four-root cache {} root {}", expectCacheHit ? L"reopen" : L"seed", rootIndex + 1u),
-                                                L"builtin/viewer-space",
-                                                L"RedSalamander.ViewerSpace",
-                                                roots[rootIndex],
-                                                probe,
-                                                kConfiguration,
-                                                nullptr,
-                                                false,
-                                                false,
-                                                true);
-        auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+        const std::wstring label = std::format(L"ViewerSpace same-window four-root cache {} root {}", expectCacheHit ? L"reopen" : L"seed", rootIndex + 1u);
+        const bool opened        = viewerOpened ? ReopenStandaloneViewerForPointerProbe(state, label, roots[rootIndex], probe)
+                                                : OpenStandaloneViewerForPointerProbe(state,
+                                                                                      label,
+                                                                                      L"builtin/viewer-space",
+                                                                                      L"RedSalamander.ViewerSpace",
+                                                                                      roots[rootIndex],
+                                                                                      probe,
+                                                                                      kConfiguration,
+                                                                                      nullptr,
+                                                                                      false,
+                                                                                      false,
+                                                                                      true);
         state.Require(opened, std::format(L"Failed to open ViewerSpace four-root cache root {}.", rootIndex + 1u));
         if (! opened || ! state.failure.empty())
         {
             return false;
         }
+        viewerOpened = true;
 
         WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
         const bool settled           = WaitForViewerSpacePerfSnapshot(probe.hwnd,
@@ -23225,6 +23277,7 @@ struct FolderViewDummyPluginHandles
     state.Require(OpenStandaloneViewerForPointerProbe(
                       state, L"ViewerSpace sliced cache-restore first scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, firstProbe, kConfig),
                   L"Failed to open ViewerSpace sliced cache-restore first run.");
+    auto cleanupProbe = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(firstProbe); });
     if (! state.failure.empty())
     {
         return false;
@@ -23239,8 +23292,6 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(20000ms)),
                   L"ViewerSpace sliced cache-restore first scan did not settle and cache.");
-    CleanupStandaloneViewerPointerProbe(firstProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23260,12 +23311,8 @@ struct FolderViewDummyPluginHandles
         return false;
     }
 
-    StandaloneViewerPointerProbe secondProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace sliced cache-restore second scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, secondProbe, kConfig),
-        L"Failed to open ViewerSpace sliced cache-restore second run.");
-    auto cleanupSecond = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(secondProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace sliced cache-restore second scan", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for sliced same-window cache restore.");
     if (! state.failure.empty())
     {
         return false;
@@ -23277,7 +23324,7 @@ struct FolderViewDummyPluginHandles
     {
         PumpPendingMessages();
         WndMsg::ViewerSpacePerfDebugSnapshot current{};
-        if (SendMessageW(secondProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) != FALSE)
+        if (SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) != FALSE)
         {
             observedRestorePhase |= current.scanState == WndMsg::ViewerSpacePerfScanState::Queued && current.cacheRestorePhase != 0u;
             if (current.cacheRestorePhase != 0u)
@@ -23295,7 +23342,7 @@ struct FolderViewDummyPluginHandles
 
     WndMsg::ViewerSpacePerfDebugSnapshot restored{};
     state.Require(observedRestorePhase, L"ViewerSpace cache reopen never exposed a queued cache-restore phase before reporting Done.");
-    state.Require(WaitForViewerSpacePerfSnapshot(secondProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  restored,
                                                  [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.cacheRestorePhase == 0u && snapshot.scanCacheRestoreBytes > 0u; },
@@ -23312,10 +23359,8 @@ struct FolderViewDummyPluginHandles
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", restoreMetricOffset) > 0u,
                   L"ViewerSpace cache restore did not emit per-turn telemetry.");
 
-    // Retire this viewer before the default-mode reopen, then explicitly unset the test cap even if the caller
-    // started with a value in its environment. The second reopen must exercise ordinary budgeted batching.
-    CleanupStandaloneViewerPointerProbe(secondProbe);
-    cleanupSecond.release();
+    // Explicitly unset the test cap even if the caller started with a value in its environment; the next
+    // public Open on this still-live window must exercise ordinary budgeted batching.
     phaseLimitEnvironment.reset();
 
     std::optional<RedSalamander::TestSupport::ScopedEnvironmentVariable> unsetPhaseLimitEnvironment;
@@ -23332,11 +23377,8 @@ struct FolderViewDummyPluginHandles
     }
 
     const std::uintmax_t defaultMetricOffset = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe defaultProbe{};
-    state.Require(OpenStandaloneViewerForPointerProbe(
-                      state, L"ViewerSpace cache-restore default batching", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, defaultProbe, kConfig),
-                  L"Failed to open ViewerSpace default-batching cache reopen.");
-    auto cleanupDefault = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(defaultProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace cache-restore default batching", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for default-mode cache batching.");
     if (! state.failure.empty())
     {
         return false;
@@ -23349,7 +23391,7 @@ struct FolderViewDummyPluginHandles
     {
         PumpPendingMessages();
         WndMsg::ViewerSpacePerfDebugSnapshot current{};
-        if (SendMessageW(defaultProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) == FALSE)
+        if (SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) == FALSE)
         {
             state.Require(false, L"ViewerSpace default-mode cache reopen could not read its restore snapshot.");
             break;
@@ -23373,8 +23415,6 @@ struct FolderViewDummyPluginHandles
     state.Require(defaultRestored.scanCacheRestoreUs > 0u, L"Default-mode cache restore did not report elapsed restore time.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_batched_turn", defaultMetricOffset) > 0u,
                   L"Default-mode cache restore emitted no per-turn witness for completing multiple phases in one timer turn.");
-    CleanupStandaloneViewerPointerProbe(defaultProbe);
-    cleanupDefault.release();
     if (! state.failure.empty())
     {
         return false;
@@ -23395,21 +23435,8 @@ struct FolderViewDummyPluginHandles
         return false;
     }
     const std::uintmax_t paintMetricOffset = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe paintProbe{};
-    state.Require(OpenStandaloneViewerForPointerProbe(state,
-                                                      L"ViewerSpace one-shot first-paint restore",
-                                                      L"builtin/viewer-space",
-                                                      L"RedSalamander.ViewerSpace",
-                                                      root,
-                                                      paintProbe,
-                                                      kConfig,
-                                                      nullptr,
-                                                      false,
-                                                      false,
-                                                      false,
-                                                      true),
-                  L"Failed to open the deterministic first-paint restore probe.");
-    auto cleanupPaint = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(paintProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace one-shot first-paint restore", root, firstProbe, true),
+                  L"Failed to reopen the live ViewerSpace for the deterministic first-paint restore probe.");
     if (! state.failure.empty())
     {
         return false;
@@ -23417,7 +23444,7 @@ struct FolderViewDummyPluginHandles
     const auto requireUncommitted = [&]() noexcept
     {
         WndMsg::ViewerSpacePerfDebugSnapshot current{};
-        state.Require(SendMessageW(paintProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) != FALSE,
+        state.Require(SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&current)) != FALSE,
                       L"Could not inspect the first-paint restore probe.");
         state.Require(current.scanState == WndMsg::ViewerSpacePerfScanState::Queued && current.cacheRestorePhase != 0u && ! current.layoutBuildActive &&
                           ! current.analysisBuildActive && current.drawItemCount == 0u && current.analysisRowCount == 0u &&
@@ -23427,26 +23454,26 @@ struct FolderViewDummyPluginHandles
     requireUncommitted();
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", paintMetricOffset) == 0u,
                   L"The first-paint probe must observe the cached generation before any restoration turn.");
-    SendMessageW(paintProbe.hwnd, WM_PAINT, 0, 0);
+    SendMessageW(firstProbe.hwnd, WM_PAINT, 0, 0);
     requireUncommitted();
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", paintMetricOffset) == 1u,
                   L"The first paint must advance exactly one existing bounded cache-restore turn.");
-    SendMessageW(paintProbe.hwnd, WM_PAINT, 0, 0);
+    SendMessageW(firstProbe.hwnd, WM_PAINT, 0, 0);
     requireUncommitted();
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", paintMetricOffset) == 1u,
                   L"Subsequent paints must not add cache-restore turns ahead of the timer cadence.");
     MSG savedRestoreContinuation{};
-    const bool foundRestoreContinuation = PeekMessageW(&savedRestoreContinuation, paintProbe.hwnd, WM_APP, 0xBFFFu, PM_REMOVE) != FALSE;
-    state.Require(foundRestoreContinuation && savedRestoreContinuation.hwnd == paintProbe.hwnd && savedRestoreContinuation.message >= WM_APP &&
+    const bool foundRestoreContinuation = PeekMessageW(&savedRestoreContinuation, firstProbe.hwnd, WM_APP, 0xBFFFu, PM_REMOVE) != FALSE;
+    state.Require(foundRestoreContinuation && savedRestoreContinuation.hwnd == firstProbe.hwnd && savedRestoreContinuation.message >= WM_APP &&
                       savedRestoreContinuation.message <= 0xBFFFu && savedRestoreContinuation.lParam != 0,
                   L"First cache paint did not queue one owned payload continuation for the probe window.");
     MSG extraRestoreContinuation{};
-    state.Require(PeekMessageW(&extraRestoreContinuation, paintProbe.hwnd, WM_APP, 0xBFFFu, PM_NOREMOVE) == FALSE,
+    state.Require(PeekMessageW(&extraRestoreContinuation, firstProbe.hwnd, WM_APP, 0xBFFFu, PM_NOREMOVE) == FALSE,
                   L"First cache paint queued more than one private continuation for the probe window.");
 
-    SendMessageW(paintProbe.hwnd, WM_KEYDOWN, VK_F5, 0);
+    SendMessageW(firstProbe.hwnd, WM_KEYDOWN, VK_F5, 0);
     WndMsg::ViewerSpacePerfDebugSnapshot replacement{};
-    state.Require(SendMessageW(paintProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&replacement)) != FALSE &&
+    state.Require(SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&replacement)) != FALSE &&
                       replacement.cacheRestorePhase == 0u && replacement.scanCacheRestoreBytes == 0u,
                   L"F5 did not cancel the queued cache generation before its replacement scan.");
     if (foundRestoreContinuation)
@@ -23455,7 +23482,7 @@ struct FolderViewDummyPluginHandles
         static_cast<void>(DispatchMessageW(&savedRestoreContinuation));
         WndMsg::ViewerSpacePerfDebugSnapshot afterStaleDispatch{};
         const bool readAfterStaleDispatch =
-            SendMessageW(paintProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&afterStaleDispatch)) != FALSE;
+            SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&afterStaleDispatch)) != FALSE;
         state.Require(readAfterStaleDispatch && afterStaleDispatch.scanState == replacement.scanState && afterStaleDispatch.cacheRestorePhase == 0u &&
                           afterStaleDispatch.scanCacheRestoreBytes == 0u && afterStaleDispatch.rootTotalBytes == replacement.rootTotalBytes &&
                           afterStaleDispatch.displayGeneration == replacement.displayGeneration &&
@@ -23464,7 +23491,7 @@ struct FolderViewDummyPluginHandles
                           FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", paintMetricOffset) == restoreTurnsBeforeStaleDispatch,
                       L"A stale-generation restore continuation changed or restarted the uncached F5 replacement.");
     }
-    state.Require(WaitForViewerSpacePerfSnapshot(paintProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  replacement,
                                                  [expectedTotalBytes](const auto& snapshot) noexcept
     {
@@ -23477,48 +23504,37 @@ struct FolderViewDummyPluginHandles
                   L"The uncached F5 replacement settled without exact corpus counts.");
 
     const std::uintmax_t closeReuseMetricOffset = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe closingProbe{};
-    state.Require(OpenStandaloneViewerForPointerProbe(state,
-                                                      L"ViewerSpace cache-restore close-before-continuation",
-                                                      L"builtin/viewer-space",
-                                                      L"RedSalamander.ViewerSpace",
-                                                      root,
-                                                      closingProbe,
-                                                      kConfig,
-                                                      nullptr,
-                                                      false,
-                                                      false,
-                                                      false,
-                                                      true),
-                  L"Failed to open the close-before-continuation cache-restore probe.");
-    auto cleanupClosing = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(closingProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace cache-restore close-before-continuation", root, firstProbe, true),
+                  L"Failed to reopen the live ViewerSpace before close-before-continuation.");
     if (! state.failure.empty())
     {
         return false;
     }
-    static_cast<void>(SendMessageW(closingProbe.hwnd, WM_PAINT, 0, 0));
+    static_cast<void>(SendMessageW(firstProbe.hwnd, WM_PAINT, 0, 0));
     WndMsg::ViewerSpacePerfDebugSnapshot closingSnapshot{};
-    state.Require(SendMessageW(closingProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&closingSnapshot)) != FALSE &&
+    state.Require(SendMessageW(firstProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&closingSnapshot)) != FALSE &&
                       closingSnapshot.scanState == WndMsg::ViewerSpacePerfScanState::Queued && closingSnapshot.cacheRestorePhase != 0u &&
                       ! closingSnapshot.layoutBuildActive && ! closingSnapshot.analysisBuildActive && closingSnapshot.drawItemCount == 0u &&
                       closingSnapshot.analysisRowCount == 0u && closingSnapshot.presentedLayoutGeneration == 0u,
                   L"Close-before-continuation first paint exposed an uncommitted cached model.");
     MSG drainedRestoreContinuation{};
-    const bool foundDrainedRestoreContinuation = PeekMessageW(&drainedRestoreContinuation, closingProbe.hwnd, WM_APP, 0xBFFFu, PM_REMOVE) != FALSE;
-    state.Require(foundDrainedRestoreContinuation && drainedRestoreContinuation.hwnd == closingProbe.hwnd && drainedRestoreContinuation.message >= WM_APP &&
+    const bool foundDrainedRestoreContinuation = PeekMessageW(&drainedRestoreContinuation, firstProbe.hwnd, WM_APP, 0xBFFFu, PM_REMOVE) != FALSE;
+    state.Require(foundDrainedRestoreContinuation && drainedRestoreContinuation.hwnd == firstProbe.hwnd && drainedRestoreContinuation.message >= WM_APP &&
                       drainedRestoreContinuation.message <= 0xBFFFu && drainedRestoreContinuation.lParam != 0,
                   L"Close-before-continuation first paint did not queue its owned opaque payload token.");
     MSG extraDrainedRestoreContinuation{};
-    state.Require(PeekMessageW(&extraDrainedRestoreContinuation, closingProbe.hwnd, WM_APP, 0xBFFFu, PM_NOREMOVE) == FALSE,
+    state.Require(PeekMessageW(&extraDrainedRestoreContinuation, firstProbe.hwnd, WM_APP, 0xBFFFu, PM_NOREMOVE) == FALSE,
                   L"Close-before-continuation first paint queued more than one private continuation.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
                   L"Close-before-continuation paint did not advance exactly one restore turn.");
-    CleanupStandaloneViewerPointerProbe(closingProbe);
-    cleanupClosing.release();
+    wil::com_ptr<IViewer> retainedViewer = firstProbe.viewer;
+    CleanupStandaloneViewerPointerProbe(firstProbe);
+    cleanupProbe.release();
 
+    const std::uintmax_t postCloseMetricOffset = FolderViewPerfMetricScanOffset();
     StandaloneViewerPointerProbe reusedProbe{};
     state.Require(OpenStandaloneViewerForPointerProbe(state,
-                                                      L"ViewerSpace cache-restore stale token after close",
+                                                      L"ViewerSpace cold reopen stale token after close",
                                                       L"builtin/viewer-space",
                                                       L"RedSalamander.ViewerSpace",
                                                       root,
@@ -23528,8 +23544,9 @@ struct FolderViewDummyPluginHandles
                                                       false,
                                                       false,
                                                       false,
-                                                      true),
-                  L"Failed to open the stale-token cache-restore probe.");
+                                                      true,
+                                                      std::addressof(retainedViewer)),
+                  L"Failed to open a fresh ViewerSpace window on the closed IViewer instance.");
     auto cleanupReused = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(reusedProbe); });
     if (! state.failure.empty())
     {
@@ -23538,10 +23555,8 @@ struct FolderViewDummyPluginHandles
     WndMsg::ViewerSpacePerfDebugSnapshot beforeStaleToken{};
     const bool readBeforeStaleToken =
         SendMessageW(reusedProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&beforeStaleToken)) != FALSE;
-    state.Require(readBeforeStaleToken && beforeStaleToken.scanState == WndMsg::ViewerSpacePerfScanState::Queued && beforeStaleToken.cacheRestorePhase != 0u &&
-                      ! beforeStaleToken.layoutBuildActive && ! beforeStaleToken.analysisBuildActive && beforeStaleToken.drawItemCount == 0u &&
-                      beforeStaleToken.analysisRowCount == 0u && beforeStaleToken.presentedLayoutGeneration == 0u,
-                  L"Reopened cache probe was not still before the cache-validation boundary.");
+    state.Require(readBeforeStaleToken && beforeStaleToken.cacheRestorePhase == 0u && beforeStaleToken.scanCacheRestoreBytes == 0u,
+                  L"New ViewerSpace window restored cache state after Close instead of starting cold.");
     if (foundDrainedRestoreContinuation)
     {
         static_cast<void>(
@@ -23549,48 +23564,29 @@ struct FolderViewDummyPluginHandles
         WndMsg::ViewerSpacePerfDebugSnapshot afterStaleToken{};
         const bool readAfterStaleToken =
             SendMessageW(reusedProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&afterStaleToken)) != FALSE;
-        state.Require(
-            readAfterStaleToken && afterStaleToken.scanState == beforeStaleToken.scanState &&
-                afterStaleToken.cacheRestorePhase == beforeStaleToken.cacheRestorePhase &&
-                afterStaleToken.scanCacheRestoreBytes == beforeStaleToken.scanCacheRestoreBytes &&
-                afterStaleToken.rootTotalBytes == beforeStaleToken.rootTotalBytes && afterStaleToken.layoutGeneration == beforeStaleToken.layoutGeneration &&
-                afterStaleToken.presentedLayoutGeneration == beforeStaleToken.presentedLayoutGeneration &&
-                afterStaleToken.drawItemCount == beforeStaleToken.drawItemCount && afterStaleToken.analysisRowCount == beforeStaleToken.analysisRowCount &&
-                FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
-            L"A drained opaque payload token changed the new window before its cache-validation boundary.");
-    }
-    static_cast<void>(SendMessageW(reusedProbe.hwnd, WM_PAINT, 0, 0));
-    WndMsg::ViewerSpacePerfDebugSnapshot reusedAfterFirstPaint{};
-    state.Require(SendMessageW(reusedProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&reusedAfterFirstPaint)) != FALSE &&
-                      reusedAfterFirstPaint.scanState == WndMsg::ViewerSpacePerfScanState::Queued && reusedAfterFirstPaint.cacheRestorePhase != 0u &&
-                      ! reusedAfterFirstPaint.layoutBuildActive && ! reusedAfterFirstPaint.analysisBuildActive && reusedAfterFirstPaint.drawItemCount == 0u &&
-                      reusedAfterFirstPaint.analysisRowCount == 0u && reusedAfterFirstPaint.presentedLayoutGeneration == 0u,
-                  L"Reopened cache probe exposed an uncommitted model after its first paint.");
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 2u,
-                  L"The reopened cache probe first paint did not add exactly one restore turn after stale-token delivery.");
-    if (foundDrainedRestoreContinuation)
-    {
-        static_cast<void>(
-            SendMessageW(reusedProbe.hwnd, drainedRestoreContinuation.message, drainedRestoreContinuation.wParam, drainedRestoreContinuation.lParam));
-        WndMsg::ViewerSpacePerfDebugSnapshot afterStaleTokenWithPending{};
-        state.Require(SendMessageW(reusedProbe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&afterStaleTokenWithPending)) !=
-                              FALSE &&
-                          afterStaleTokenWithPending.viewerOwnedBytes == reusedAfterFirstPaint.viewerOwnedBytes &&
-                          afterStaleTokenWithPending.cacheRestorePhase == reusedAfterFirstPaint.cacheRestorePhase &&
-                          FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 2u,
-                      L"A drained token cleared or advanced the new window's own pending continuation.");
+        state.Require(readAfterStaleToken && IsWindow(reusedProbe.hwnd) != FALSE && afterStaleToken.cacheRestorePhase == 0u &&
+                          afterStaleToken.scanCacheRestoreBytes == 0u &&
+                          FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", postCloseMetricOffset) == 0u &&
+                          FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
+                      L"A drained opaque payload token changed the fresh post-Close window.");
     }
     WndMsg::ViewerSpacePerfDebugSnapshot reusedRestored{};
     state.Require(WaitForViewerSpacePerfSnapshot(reusedProbe.hwnd,
                                                  reusedRestored,
                                                  [&first, expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     {
-        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.cacheRestorePhase == 0u && snapshot.scanCacheRestoreBytes > 0u &&
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.cacheRestorePhase == 0u && snapshot.scanCacheRestoreBytes == 0u &&
                snapshot.rootTotalBytes == expectedTotalBytes && snapshot.realDirectoryCount == first.realDirectoryCount &&
                snapshot.fileCandidateCount == first.fileCandidateCount;
     },
                                                  SelfTest::Scale(10000ms)),
-                  L"Reopened cache probe failed to settle the exact cached corpus after stale-token delivery.");
+                  L"Fresh post-Close ViewerSpace scan failed to settle exact provider totals after stale-token delivery.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", closeReuseMetricOffset) == 1u,
+                  L"Same-window restore before Close did not use exactly one cache hit.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", postCloseMetricOffset) == 0u,
+                  L"Fresh post-Close window recorded a ViewerSpace cache hit.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
+                  L"Fresh post-Close window unexpectedly performed cache-restore work.");
     CleanupStandaloneViewerPointerProbe(reusedProbe);
     cleanupReused.release();
     PumpPendingMessages();
@@ -23626,32 +23622,7 @@ struct FolderViewDummyPluginHandles
         return false;
     }
 
-    // A disabled cache configuration clears process-wide entries left by earlier cases before the low-cap assertion.
-    static constexpr std::string_view kClearCacheConfig =
-        R"({"topFilesPerDirectory":2048,"scanThreads":4,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":60,"cacheMaxEntries":0})";
-    StandaloneViewerPointerProbe clearProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace aggregate cache-cap clear", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, clearProbe, kClearCacheConfig),
-        L"Failed to open ViewerSpace aggregate cache-cap clear run.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-    WndMsg::ViewerSpacePerfDebugSnapshot cleared{};
-    state.Require(WaitForViewerSpacePerfSnapshot(clearProbe.hwnd,
-                                                 cleared,
-                                                 [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
-    { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done; },
-                                                 SelfTest::Scale(20000ms)),
-                  L"ViewerSpace aggregate cache-cap clear scan did not settle.");
-    CleanupStandaloneViewerPointerProbe(clearProbe);
-    PumpPendingMessages();
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
+    // A new ViewerSpace window starts with an empty private cache owner; no global cache flush is needed.
     const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
     static constexpr std::string_view kConfig =
         R"({"topFilesPerDirectory":2048,"scanThreads":4,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":60,"cacheMaxEntries":4})";
@@ -23706,6 +23677,7 @@ struct FolderViewDummyPluginHandles
     state.Require(OpenStandaloneViewerForPointerProbe(
                       state, L"ViewerSpace corrupt-cache-offset first scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, firstProbe, kConfig),
                   L"Failed to open ViewerSpace corrupt-cache-offset first run.");
+    auto cleanupProbe = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(firstProbe); });
     if (! state.failure.empty())
     {
         return false;
@@ -23720,8 +23692,6 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(20000ms)),
                   L"ViewerSpace corrupt-cache-offset fixture scan did not settle and cache.");
-    CleanupStandaloneViewerPointerProbe(firstProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23742,18 +23712,14 @@ struct FolderViewDummyPluginHandles
     });
     SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CORRUPT_CACHE_ROOT_STATE", L"1");
     const std::uintmax_t metricScanRootState = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe rootStateProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace corrupt-cache-root-state fallback scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, rootStateProbe, kConfig),
-        L"Failed to open ViewerSpace corrupt-cache-root-state second run.");
-    auto cleanupRootStateProbe = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(rootStateProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace corrupt-cache-root-state fallback scan", root, firstProbe),
+                  L"Failed to reopen the live ViewerSpace for the corrupt-root-state cache probe.");
     if (! state.failure.empty())
     {
         return false;
     }
     WndMsg::ViewerSpacePerfDebugSnapshot rootStateRecovered{};
-    state.Require(WaitForViewerSpacePerfSnapshot(rootStateProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  rootStateRecovered,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     {
@@ -23766,9 +23732,6 @@ struct FolderViewDummyPluginHandles
                   L"ViewerSpace nonterminal cached root state was not rejected.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanRootState) == 0u,
                   L"ViewerSpace nonterminal cached root state was reported as a cache hit.");
-    cleanupRootStateProbe.release();
-    CleanupStandaloneViewerPointerProbe(rootStateProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23787,19 +23750,15 @@ struct FolderViewDummyPluginHandles
     SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CORRUPT_CACHE_NAME_OFFSET", L"1");
 
     const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe secondProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace corrupt-cache-offset fallback scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, secondProbe, kConfig),
-        L"Failed to open ViewerSpace corrupt-cache-offset second run.");
-    auto cleanupSecond = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(secondProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace corrupt-cache-offset fallback scan", root, firstProbe),
+                  L"Failed to reopen the live ViewerSpace for the corrupt-cache-offset probe.");
     if (! state.failure.empty())
     {
         return false;
     }
 
     WndMsg::ViewerSpacePerfDebugSnapshot recovered{};
-    state.Require(WaitForViewerSpacePerfSnapshot(secondProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  recovered,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.rootTotalBytes == expectedTotalBytes; },
@@ -23809,9 +23768,6 @@ struct FolderViewDummyPluginHandles
                   L"ViewerSpace corrupt cache offset was not rejected by the extent validator.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == 0u,
                   L"ViewerSpace corrupt cache offset was reported as a successful cache hit.");
-    cleanupSecond.release();
-    CleanupStandaloneViewerPointerProbe(secondProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23830,19 +23786,15 @@ struct FolderViewDummyPluginHandles
     { SetEnvironmentVariableW(childOwnerFaultName, hadPreviousChildOwnerFault ? previousChildOwnerFaultValue.c_str() : nullptr); });
     SetEnvironmentVariableW(childOwnerFaultName, nullptr);
 
-    // The preceding corrupted-cache probes intentionally discard their cache entry. Ensure a clean cache is
-    // available before enabling the child-owner fault so this probe cannot silently become a cold scan.
-    StandaloneViewerPointerProbe childOwnerSeed{};
-    state.Require(OpenStandaloneViewerForPointerProbe(
-                      state, L"ViewerSpace child-owner cache seed", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, childOwnerSeed, kConfig),
-                  L"Failed to open ViewerSpace child-owner cache seed.");
-    auto cleanupChildOwnerSeed = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(childOwnerSeed); });
+    // Reopen on the same live window to ensure a valid cache snapshot is present before injecting the child-owner fault.
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace child-owner cache seed", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for the child-owner cache seed.");
     if (! state.failure.empty())
     {
         return false;
     }
     WndMsg::ViewerSpacePerfDebugSnapshot childOwnerSeeded{};
-    state.Require(WaitForViewerSpacePerfSnapshot(childOwnerSeed.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  childOwnerSeeded,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     {
@@ -23851,9 +23803,6 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(20000ms)),
                   L"ViewerSpace child-owner cache seed did not complete with a reusable snapshot.");
-    cleanupChildOwnerSeed.release();
-    CleanupStandaloneViewerPointerProbe(childOwnerSeed);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23862,22 +23811,14 @@ struct FolderViewDummyPluginHandles
     SetEnvironmentVariableW(childOwnerFaultName, L"1");
 
     const std::uintmax_t metricScanChildOwner = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe childOwnerProbe{};
-    state.Require(OpenStandaloneViewerForPointerProbe(state,
-                                                      L"ViewerSpace corrupt-cache-child-owner fallback scan",
-                                                      L"builtin/viewer-space",
-                                                      L"RedSalamander.ViewerSpace",
-                                                      root,
-                                                      childOwnerProbe,
-                                                      kConfig),
-                  L"Failed to open ViewerSpace corrupt-cache-child-owner run.");
-    auto cleanupChildOwner = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(childOwnerProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace corrupt-cache-child-owner fallback scan", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for the corrupt-cache-child-owner probe.");
     if (! state.failure.empty())
     {
         return false;
     }
     WndMsg::ViewerSpacePerfDebugSnapshot childOwnerRecovered{};
-    state.Require(WaitForViewerSpacePerfSnapshot(childOwnerProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  childOwnerRecovered,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.rootTotalBytes == expectedTotalBytes; },
@@ -23889,9 +23830,6 @@ struct FolderViewDummyPluginHandles
                   L"ViewerSpace wrong-owner cached child was not rejected by the topology validator.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanChildOwner) == 0u,
                   L"ViewerSpace wrong-owner cached child was reported as a successful cache hit.");
-    cleanupChildOwner.release();
-    CleanupStandaloneViewerPointerProbe(childOwnerProbe);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23909,17 +23847,14 @@ struct FolderViewDummyPluginHandles
     { SetEnvironmentVariableW(missingChildFaultName, hadPreviousMissingChildFault ? previousMissingChildFaultValue.c_str() : nullptr); });
     SetEnvironmentVariableW(missingChildFaultName, nullptr);
 
-    StandaloneViewerPointerProbe missingChildSeed{};
-    state.Require(OpenStandaloneViewerForPointerProbe(
-                      state, L"ViewerSpace missing-child cache seed", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, missingChildSeed, kConfig),
-                  L"Failed to open ViewerSpace missing-child cache seed.");
-    auto cleanupMissingChildSeed = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(missingChildSeed); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace missing-child cache seed", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for the missing-child cache seed.");
     if (! state.failure.empty())
     {
         return false;
     }
     WndMsg::ViewerSpacePerfDebugSnapshot missingChildSeeded{};
-    state.Require(WaitForViewerSpacePerfSnapshot(missingChildSeed.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  missingChildSeeded,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     {
@@ -23928,9 +23863,6 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(20000ms)),
                   L"ViewerSpace missing-child cache seed did not complete with a reusable snapshot.");
-    cleanupMissingChildSeed.release();
-    CleanupStandaloneViewerPointerProbe(missingChildSeed);
-    PumpPendingMessages();
     if (! state.failure.empty())
     {
         return false;
@@ -23938,18 +23870,14 @@ struct FolderViewDummyPluginHandles
 
     SetEnvironmentVariableW(missingChildFaultName, L"1");
     const std::uintmax_t metricScanMissingChild = FolderViewPerfMetricScanOffset();
-    StandaloneViewerPointerProbe missingChildProbe{};
-    state.Require(
-        OpenStandaloneViewerForPointerProbe(
-            state, L"ViewerSpace missing-child cache fallback scan", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, missingChildProbe, kConfig),
-        L"Failed to open ViewerSpace missing-child cache run.");
-    auto cleanupMissingChild = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(missingChildProbe); });
+    state.Require(ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace missing-child cache fallback scan", root, firstProbe),
+                  L"Failed to reopen ViewerSpace for the missing-child cache probe.");
     if (! state.failure.empty())
     {
         return false;
     }
     WndMsg::ViewerSpacePerfDebugSnapshot missingChildRecovered{};
-    state.Require(WaitForViewerSpacePerfSnapshot(missingChildProbe.hwnd,
+    state.Require(WaitForViewerSpacePerfSnapshot(firstProbe.hwnd,
                                                  missingChildRecovered,
                                                  [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     { return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.rootTotalBytes == expectedTotalBytes; },
@@ -23961,9 +23889,6 @@ struct FolderViewDummyPluginHandles
                   L"ViewerSpace omitted cached child was not rejected by topology validation.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanMissingChild) == 0u,
                   L"ViewerSpace omitted cached child was reported as a successful cache hit.");
-    cleanupMissingChild.release();
-    CleanupStandaloneViewerPointerProbe(missingChildProbe);
-    PumpPendingMessages();
     return state.failure.empty();
 }
 
@@ -25034,7 +24959,7 @@ struct FolderViewDummyPluginHandles
     using namespace std::chrono_literals;
     if (! EnvironmentVariables::IsTruthyFlagSet(L"REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200"))
     {
-        return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample cached first-map benchmark.");
+        return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample same-window cached first-map benchmark.");
     }
 
     static constexpr size_t kExpectedDirectories = 121u;
@@ -25075,13 +25000,13 @@ struct FolderViewDummyPluginHandles
     }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for cached first-map benchmark.");
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for same-window cached first-map benchmark.");
     if (suiteRoot.empty())
     {
         return false;
     }
 
-    static constexpr std::wstring_view kArtifactName = L"viewer_space_cached_reopen_200_first_map.json";
+    static constexpr std::wstring_view kArtifactName = L"viewer_space_same_window_reopen_200_first_map.json";
     const std::filesystem::path artifactPath         = SelfTest::GetPerfArtifactPath(kArtifactName);
     const std::uintmax_t metricScanOffset            = FolderViewPerfMetricScanOffset();
     std::vector<std::wstring> sampleRows;
@@ -25128,10 +25053,10 @@ struct FolderViewDummyPluginHandles
         }
         const uint64_t lifecycleUs = lifecycleStarted ? Debug::Perf::ElapsedUs(lifecycleStartedAt) : 0u;
         const std::wstring artifact =
-            std::format(L"{{\n  \"scenario\":\"viewer_space_cached_reopen_200_first_map\",\n"
+            std::format(L"{{\n  \"scenario\":\"viewer_space_same_window_reopen_200_first_map\",\n"
                         L"  \"status\":\"{}\",\"failurePhase\":\"{}\",\n"
                         L"  \"observerMode\":\"continuous-message-pump\",\"pumpedWindowMs\":50,\n"
-                        L"  \"configuration\":\"topK2048_threads8_volume1_cacheTTL600_entries1\",\n"
+                        L"  \"configuration\":\"topK2048_threads8_volume1_cacheTTL600_entries1_same-window-open\",\n"
                         L"  \"fixtureSetupUs\":{},\"lifecycleUs\":{},\"fixtureDirectories\":{},\"fixtureFiles\":{},\"fixtureRootBytes\":{},\n"
                         L"  \"cacheHitCount\":{},\"expectedSampleCount\":{},\"sampleCount\":{},\"completedSampleCount\":{},\"samples\":[\n{}  ]\n}}\n",
                         status,
@@ -25156,16 +25081,16 @@ struct FolderViewDummyPluginHandles
             artifactWritten = writeArtifact(L"failed");
             SelfTest::AppendSuiteTrace(
                 SelfTest::SelfTestSuite::Commands,
-                std::format(L"ViewerSpace cached first-map partial artifact path='{}' writeOk={}", artifactPath.native(), artifactWritten ? 1 : 0));
+                std::format(L"ViewerSpace same-window cached first-map partial artifact path='{}' writeOk={}", artifactPath.native(), artifactWritten ? 1 : 0));
         }
     });
 
-    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_cached_reopen_200_{}", GetTickCount64());
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_same_window_reopen_200_{}", GetTickCount64());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     const auto fixtureStartedAt = std::chrono::steady_clock::now();
     state.Require(CreateViewerSpaceProgressivePerfFixture(state, root, false, 30s),
-                  L"Failed to create the fixed 10,000-file/121-directory cached-reopen corpus.");
+                  L"Failed to create the fixed 10,000-file/121-directory same-window cache corpus.");
     fixtureCreationUs = Debug::Perf::ElapsedUs(fixtureStartedAt);
     if (! state.failure.empty())
     {
@@ -25182,7 +25107,7 @@ struct FolderViewDummyPluginHandles
     const std::uintmax_t seedMetricScanOffset = FolderViewPerfMetricScanOffset();
     StandaloneViewerPointerProbe seedProbe{};
     const bool seedOpened = OpenStandaloneViewerForPointerProbe(state,
-                                                                L"ViewerSpace cached first-map seed",
+                                                                L"ViewerSpace same-window cached first-map seed",
                                                                 L"builtin/viewer-space",
                                                                 L"RedSalamander.ViewerSpace",
                                                                 root,
@@ -25192,7 +25117,7 @@ struct FolderViewDummyPluginHandles
                                                                 false,
                                                                 true);
     auto seedCleanup      = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(seedProbe); });
-    state.Require(seedOpened, L"Failed to open the cached first-map seed viewer.");
+    state.Require(seedOpened, L"Failed to open the same-window cached first-map seed viewer.");
     if (! seedOpened || ! state.failure.empty())
     {
         observedCacheHitCount += FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", seedMetricScanOffset);
@@ -25215,16 +25140,12 @@ struct FolderViewDummyPluginHandles
     const uint64_t seedCacheHits = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", seedMetricScanOffset);
     observedCacheHitCount += seedCacheHits;
     const bool noSeedCacheHit = seedCacheHits == 0u && FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == cacheHitsBeforeSeed;
-    state.Require(seedSettled && noSeedCacheHit, L"Seed scan did not finish the exact corpus without a cache hit and present a clean meaningful map.");
+    state.Require(seedSettled && noSeedCacheHit, L"Same-window seed scan did not finish the exact corpus and present a clean meaningful map.");
     if (! seedSettled || ! noSeedCacheHit || ! state.failure.empty())
     {
         return false;
     }
-    rootBytes = seed.rootTotalBytes;
-    CleanupStandaloneViewerPointerProbe(seedProbe);
-    seedCleanup.release();
-    PumpPendingMessages();
-
+    rootBytes          = seed.rootTotalBytes;
     size_t sampleIndex = 0u;
     for (; sampleIndex < kSamples; ++sampleIndex)
     {
@@ -25232,21 +25153,11 @@ struct FolderViewDummyPluginHandles
         // Bound observer I/O to this open; prior-prefix reads can hold the UI before it presents.
         const std::uintmax_t sampleMetricScanOffset = FolderViewPerfMetricScanOffset();
         const auto openStartedAt                    = std::chrono::steady_clock::now();
-        StandaloneViewerPointerProbe probe{};
-        const bool opened = OpenStandaloneViewerForPointerProbe(state,
-                                                                std::format(L"ViewerSpace cached first-map sample {}", sampleIndex + 1u),
-                                                                L"builtin/viewer-space",
-                                                                L"RedSalamander.ViewerSpace",
-                                                                root,
-                                                                probe,
-                                                                kConfiguration,
-                                                                nullptr,
-                                                                false,
-                                                                true);
-        auto cleanup      = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+        const bool opened                           = ReopenStandaloneViewerForPointerProbe(
+            state, std::format(L"ViewerSpace same-window cached first-map sample {}", sampleIndex + 1u), root, seedProbe, false, true);
         if (! opened || ! state.failure.empty())
         {
-            state.Require(false, std::format(L"Failed opening cached first-map sample {}.", sampleIndex + 1u));
+            state.Require(false, std::format(L"Failed reopening the same-window cached first-map sample {}.", sampleIndex + 1u));
             WndMsg::ViewerSpacePerfDebugSnapshot openFailure{};
             observedCacheHitCount += FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", sampleMetricScanOffset);
             appendSampleRow(sampleIndex + 1u, L"open-failed", Debug::Perf::ElapsedUs(openStartedAt), openFailure, observedCacheHitCount);
@@ -25255,7 +25166,7 @@ struct FolderViewDummyPluginHandles
 
         WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
         failurePhase                   = L"sample-first-map";
-        const bool settled             = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+        const bool settled             = WaitForViewerSpacePerfSnapshot(seedProbe.hwnd,
                                                                         snapshot,
                                                                         [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
         {
@@ -25270,7 +25181,7 @@ struct FolderViewDummyPluginHandles
         observedCacheHitCount += sampleCacheHits;
         const bool samplePassed = settled && sampleCacheHits == 1u && observedCacheHitCount == cacheHitsBeforeSeed + sampleIndex + 1u;
         state.Require(samplePassed,
-                      std::format(L"Cached first-map sample {} failed exact counts, cache restore, clean presentation, or one-hit accounting. "
+                      std::format(L"Same-window cached first-map sample {} failed exact counts, cache restore, clean presentation, or one-hit accounting. "
                                   L"settled={}, cacheHits={}, restoreBytes={}, state={}, generation={}/{}, firstMeaningfulPaintUs={}",
                                   sampleIndex + 1u,
                                   settled ? 1 : 0,
@@ -25286,16 +25197,15 @@ struct FolderViewDummyPluginHandles
             return false;
         }
         ++completedSampleCount;
-        CleanupStandaloneViewerPointerProbe(probe);
-        cleanup.release();
         PumpPendingMessages();
     }
 
     failurePhase = L"final-check";
-    state.Require(sampleRows.size() == kSamples && completedSampleCount == kSamples, L"Cached first-map benchmark did not complete exactly 200 samples.");
+    state.Require(sampleRows.size() == kSamples && completedSampleCount == kSamples,
+                  L"Same-window cached first-map benchmark did not complete exactly 200 samples.");
     state.Require(observedCacheHitCount == cacheHitsBeforeSeed + kSamples &&
                       FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == observedCacheHitCount,
-                  L"Cached first-map benchmark did not record exactly 200 cache hits.");
+                  L"Same-window cached first-map benchmark did not record exactly 200 cache hits.");
     state.Require(std::chrono::steady_clock::now() < lifecycleDeadline, L"Cached first-map benchmark exceeded its separate 300-second lifecycle deadline.");
     const bool passed = state.failure.empty();
     failurePhase      = passed ? L"complete" : L"final-check";
@@ -25303,7 +25213,7 @@ struct FolderViewDummyPluginHandles
     state.Require(artifactWritten, L"Failed writing the cached first-map benchmark artifact.");
     return state.failure.empty();
 }
-[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsImpl([[maybe_unused]] HWND mainWindow, CaseState& state, bool retainViewerForReference) noexcept
+[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsImpl([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
     if (! EnvironmentVariables::IsTruthyFlagSet(L"REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY"))
@@ -25317,15 +25227,9 @@ struct FolderViewDummyPluginHandles
     static constexpr std::string_view kConfiguration =
         R"({"topFilesPerDirectory":512,"scanThreads":8,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":600,"cacheMaxEntries":4})";
     const uint32_t effectiveScanThreads = 8u;
-    wil::com_ptr<IViewer> retainedViewer;
-    const auto releaseRetainedViewer = wil::scope_exit([&]() noexcept
-    {
-        if (retainedViewer)
-        {
-            static_cast<void>(retainedViewer->Close());
-            retainedViewer.reset();
-        }
-    });
+    StandaloneViewerPointerProbe probe{};
+    auto cleanupProbe = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    bool viewerOpened = false;
     std::optional<RedSalamander::TestSupport::ScopedEnvironmentVariable> scanThreadsEnvironment;
     try
     {
@@ -25410,27 +25314,26 @@ struct FolderViewDummyPluginHandles
     {
         const uint64_t cacheHitsBeforeSeed = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
         const auto seedStartedAt           = std::chrono::steady_clock::now();
-        StandaloneViewerPointerProbe probe{};
-        const bool openedWindow = OpenStandaloneViewerForPointerProbe(state,
-                                                                      std::format(L"ViewerSpace memory-heavy seed {}", rootIndex + 1u),
-                                                                      L"builtin/viewer-space",
-                                                                      L"RedSalamander.ViewerSpace",
-                                                                      roots[rootIndex],
-                                                                      probe,
-                                                                      kConfiguration,
-                                                                      nullptr,
-                                                                      false,
-                                                                      false,
-                                                                      true,
-                                                                      false,
-                                                                      retainViewerForReference ? std::addressof(retainedViewer) : nullptr);
-        auto cleanup            = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+        const std::wstring label           = std::format(L"ViewerSpace same-window memory-heavy seed {}", rootIndex + 1u);
+        const bool openedWindow            = viewerOpened ? ReopenStandaloneViewerForPointerProbe(state, label, roots[rootIndex], probe)
+                                                          : OpenStandaloneViewerForPointerProbe(state,
+                                                                                                label,
+                                                                                                L"builtin/viewer-space",
+                                                                                                L"RedSalamander.ViewerSpace",
+                                                                                                roots[rootIndex],
+                                                                                                probe,
+                                                                                                kConfiguration,
+                                                                                                nullptr,
+                                                                                                false,
+                                                                                                false,
+                                                                                                true);
         state.Require(openedWindow, std::format(L"Failed opening four-root seed {}.", rootIndex + 1u));
         if (! openedWindow || ! state.failure.empty())
         {
             lifecycleOk = false;
             break;
         }
+        viewerOpened = true;
         WndMsg::ViewerSpacePerfDebugSnapshot seeded{};
         const bool seedSettled = WaitForViewerSpacePerfSnapshot(probe.hwnd,
                                                                 seeded,
@@ -25458,49 +25361,15 @@ struct FolderViewDummyPluginHandles
         state.Require(seeded.rootTotalBytes == expectedRootBytes &&
                           FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == cacheHitsBeforeSeed,
                       std::format(L"Root {} seed changed corpus bytes or unexpectedly hit cache.", rootIndex + 1u));
-        samplePhase(rootIndex,
-                    retainViewerForReference ? L"open-loaded" : L"seed-complete",
-                    seeded.rootTotalBytes,
-                    seeded.firstMeaningfulPaintUs,
-                    Debug::Perf::ElapsedUs(seedStartedAt));
-        const auto seedCloseStartedAt = std::chrono::steady_clock::now();
-        CleanupStandaloneViewerPointerProbe(probe);
-        cleanup.release();
-        const auto seedCloseDeadline = std::min(lifecycleDeadline, std::chrono::steady_clock::now() + 500ms);
-        while (std::chrono::steady_clock::now() < seedCloseDeadline)
-        {
-            PumpPendingMessages();
-            const auto current   = SampleSelfTestProcessMemory();
-            peak.privateBytes    = std::max(peak.privateBytes, current.privateBytes);
-            peak.workingSetBytes = std::max(peak.workingSetBytes, current.workingSetBytes);
-            std::this_thread::sleep_for(5ms);
-        }
-        samplePhase(rootIndex,
-                    retainViewerForReference ? L"seed-closed-object-retained" : L"seed-closed",
-                    seeded.rootTotalBytes,
-                    0u,
-                    Debug::Perf::ElapsedUs(seedCloseStartedAt));
+        samplePhase(rootIndex, L"seed-complete-same-window", seeded.rootTotalBytes, seeded.firstMeaningfulPaintUs, Debug::Perf::ElapsedUs(seedStartedAt));
     }
 
     for (size_t rootIndex = 0u; rootIndex < kRootCount && lifecycleOk; ++rootIndex)
     {
         const uint64_t cacheHitsBeforeOpen = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
         const auto cachedOpenStartedAt     = std::chrono::steady_clock::now();
-        StandaloneViewerPointerProbe probe{};
-        const bool openedWindow = OpenStandaloneViewerForPointerProbe(state,
-                                                                      std::format(L"ViewerSpace memory-heavy cached refresh {}", rootIndex + 1u),
-                                                                      L"builtin/viewer-space",
-                                                                      L"RedSalamander.ViewerSpace",
-                                                                      roots[rootIndex],
-                                                                      probe,
-                                                                      kConfiguration,
-                                                                      nullptr,
-                                                                      false,
-                                                                      false,
-                                                                      true,
-                                                                      false,
-                                                                      retainViewerForReference ? std::addressof(retainedViewer) : nullptr);
-        auto cleanup            = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+        const bool openedWindow            = ReopenStandaloneViewerForPointerProbe(
+            state, std::format(L"ViewerSpace same-window memory-heavy cached refresh {}", rootIndex + 1u), roots[rootIndex], probe);
         state.Require(openedWindow, std::format(L"Failed opening cached root {}.", rootIndex + 1u));
         if (! openedWindow || ! state.failure.empty())
         {
@@ -25528,11 +25397,7 @@ struct FolderViewDummyPluginHandles
             lifecycleOk = false;
             break;
         }
-        samplePhase(rootIndex,
-                    retainViewerForReference ? L"reopened-cached" : L"cached-reopen",
-                    cached.rootTotalBytes,
-                    cached.firstMeaningfulPaintUs,
-                    Debug::Perf::ElapsedUs(cachedOpenStartedAt));
+        samplePhase(rootIndex, L"same-window-cached-reopen", cached.rootTotalBytes, cached.firstMeaningfulPaintUs, Debug::Perf::ElapsedUs(cachedOpenStartedAt));
         const WndMsg::ViewerSpacePerfDebugSnapshot displayed = cached;
         const uint64_t cacheHitsBeforeRefresh                = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
         const auto refreshStartedAt                          = std::chrono::steady_clock::now();
@@ -25547,11 +25412,7 @@ struct FolderViewDummyPluginHandles
         {
             lifecycleOk = false;
         }
-        samplePhase(rootIndex, retainViewerForReference ? L"refresh-inflight" : L"refresh-retained-pending", refreshPending.rootTotalBytes, 0u, 0u);
-        if (retainViewerForReference)
-        {
-            phaseRows.back().insert(phaseRows.back().size() - 1u, std::format(L",\"scanState\":{}", static_cast<unsigned int>(refreshPending.scanState)));
-        }
+        samplePhase(rootIndex, L"refresh-inflight", refreshPending.rootTotalBytes, 0u, 0u);
         const bool refreshSettled    = WaitForViewerSpacePerfSnapshot(probe.hwnd,
                                                                       refreshPending,
                                                                       [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
@@ -25620,50 +25481,29 @@ struct FolderViewDummyPluginHandles
         if (! refreshSettled || ! noRefreshCacheHit || ! lifecycleOk)
         {
             lifecycleOk = false;
-            CleanupStandaloneViewerPointerProbe(probe);
-            cleanup.release();
             break;
         }
         samplePhase(rootIndex,
-                    retainViewerForReference ? L"refresh-done" : L"refresh-adopted",
+                    L"refresh-adopted-same-window",
                     refreshPending.rootTotalBytes,
                     refreshPending.firstMeaningfulPaintUs,
                     Debug::Perf::ElapsedUs(refreshStartedAt));
-        const auto refreshCloseStartedAt = std::chrono::steady_clock::now();
-        CleanupStandaloneViewerPointerProbe(probe);
-        cleanup.release();
-        const auto closeDeadline = std::min(lifecycleDeadline, std::chrono::steady_clock::now() + 500ms);
-        while (std::chrono::steady_clock::now() < closeDeadline)
-        {
-            PumpPendingMessages();
-            const auto current   = SampleSelfTestProcessMemory();
-            peak.privateBytes    = std::max(peak.privateBytes, current.privateBytes);
-            peak.workingSetBytes = std::max(peak.workingSetBytes, current.workingSetBytes);
-            std::this_thread::sleep_for(5ms);
-        }
-        samplePhase(rootIndex,
-                    retainViewerForReference ? L"refresh-closed-object-retained" : L"refresh-closed",
-                    expectedRootBytes,
-                    0u,
-                    Debug::Perf::ElapsedUs(refreshCloseStartedAt));
     }
 
-    SelfTestProcessMemorySnapshot finalOwnerRelease{};
-    if (retainViewerForReference && retainedViewer)
-    {
-        static_cast<void>(retainedViewer->Close());
-        retainedViewer.reset();
-        finalOwnerRelease    = SampleSelfTestProcessMemory();
-        peak.privateBytes    = std::max(peak.privateBytes, finalOwnerRelease.privateBytes);
-        peak.workingSetBytes = std::max(peak.workingSetBytes, finalOwnerRelease.workingSetBytes);
-        Debug::Perf::Emit(L"viewer.space.memory.process_phase", L"final-owner-release", 0u, finalOwnerRelease.privateBytes, finalOwnerRelease.workingSetBytes);
-        phaseRows.push_back(std::format(L"    "
-                                        L"{{\"root\":0,\"phase\":\"final-owner-release\",\"phaseUs\":0,\"privateBytes\":{},\"workingSetBytes\":{},"
-                                        L"\"rootBytes\":{},\"firstMeaningfulPaintUs\":0}}",
-                                        finalOwnerRelease.privateBytes,
-                                        finalOwnerRelease.workingSetBytes,
-                                        expectedRootBytes));
-    }
+    const auto closeStartedAt = std::chrono::steady_clock::now();
+    CleanupStandaloneViewerPointerProbe(probe);
+    cleanupProbe.release();
+    PumpPendingMessages();
+    const SelfTestProcessMemorySnapshot closedWindow = SampleSelfTestProcessMemory();
+    peak.privateBytes                                = std::max(peak.privateBytes, closedWindow.privateBytes);
+    peak.workingSetBytes                             = std::max(peak.workingSetBytes, closedWindow.workingSetBytes);
+    Debug::Perf::Emit(L"viewer.space.memory.process_phase", L"same-window-closed", 0u, closedWindow.privateBytes, closedWindow.workingSetBytes);
+    phaseRows.push_back(std::format(L"    {{\"root\":0,\"phase\":\"same-window-closed\",\"phaseUs\":{},\"privateBytes\":{},\"workingSetBytes\":{},"
+                                    L"\"rootBytes\":{},\"firstMeaningfulPaintUs\":0}}",
+                                    Debug::Perf::ElapsedUs(closeStartedAt),
+                                    closedWindow.privateBytes,
+                                    closedWindow.workingSetBytes,
+                                    expectedRootBytes));
 
     const SelfTestProcessMemorySnapshot after = SampleSelfTestProcessMemory();
     state.Require(lifecycleOk && std::chrono::steady_clock::now() < lifecycleDeadline,
@@ -25698,14 +25538,14 @@ struct FolderViewDummyPluginHandles
     std::wstring artifact =
         std::format(L"{{\n  \"scenario\":\"{}\",\n"
                     L"  \"rootSetupUs\":{},\"rootSetupPerRootUs\":{},\"lifecycleUs\":{},\"rootCount\":{},\"directoriesPerRoot\":{},\"filesPerRoot\":{},\n"
-                    L"  \"configuration\":\"topK512_threads8_volume1_cacheTTL600_entries4\",\n  \"effectiveScanThreads\":{},\n  "
+                    L"  \"configuration\":\"topK512_threads8_volume1_cacheTTL600_entries4_same-window-open\",\n  \"effectiveScanThreads\":{},\n  "
                     L"\"relativeRoots\":[\"root_00\",\"root_01\",\"root_02\",\"root_03\"],\n"
                     L"  \"fixtureDigestAlgorithm\":\"BLAKE3(relative UTF-8 path, NUL, payload, FF)\",\n  \"rootFixtureDigests\":{},\n"
                     L"  \"rootTotalBytes\":{},\"cacheHitCount\":{},\n"
                     L"  \"processBefore\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
                     L"  \"processPeak\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
                     L"  \"processAfter\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n  \"phases\":[\n{}  ]\n}}\n",
-                    retainViewerForReference ? L"viewer_space_memory_heavy_four_root_retained_reference" : L"viewer_space_memory_heavy_four_root_cache_refresh",
+                    L"viewer_space_memory_heavy_same_window_four_root_cache_refresh",
                     fixtureCreationUs,
                     rootSetupJson,
                     Debug::Perf::ElapsedUs(lifecycleStartedAt),
@@ -25723,9 +25563,7 @@ struct FolderViewDummyPluginHandles
                     after.workingSetBytes,
                     after.privateBytes,
                     phaseJson);
-    const std::filesystem::path artifactPath =
-        SelfTest::GetPerfArtifactPath(retainViewerForReference ? L"viewer_space_memory_heavy_four_root_retained_reference_metrics.json"
-                                                               : L"viewer_space_memory_heavy_four_root_metrics.json");
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"viewer_space_memory_heavy_same_window_four_root_metrics.json");
     state.Require(! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact),
                   L"Failed writing four-root ViewerSpace memory benchmark artifact.");
     return state.failure.empty();
@@ -25733,12 +25571,7 @@ struct FolderViewDummyPluginHandles
 
 [[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsOptIn(HWND mainWindow, CaseState& state) noexcept
 {
-    return TestViewerSpaceMemoryHeavyFourRootsImpl(mainWindow, state, false);
-}
-
-[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsRetainedReferenceOptIn(HWND mainWindow, CaseState& state) noexcept
-{
-    return TestViewerSpaceMemoryHeavyFourRootsImpl(mainWindow, state, true);
+    return TestViewerSpaceMemoryHeavyFourRootsImpl(mainWindow, state);
 }
 
 [[nodiscard]] bool TestViewerSpaceSameInstanceReopen([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
@@ -25773,6 +25606,7 @@ struct FolderViewDummyPluginHandles
         R"({"topFilesPerDirectory":16,"scanThreads":2,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":60,"cacheMaxEntries":4})";
     static constexpr uint64_t kFirstRootBytes          = 10u;
     static constexpr uint64_t kSecondRootBytes         = 20u;
+    static constexpr uint64_t kRefreshedFirstRootBytes = 25u;
     static constexpr std::wstring_view kCacheHitMetric = L"viewer.space.scan.cache_hit";
 
     StandaloneViewerPointerProbe probe{};
@@ -25784,6 +25618,10 @@ struct FolderViewDummyPluginHandles
     });
     const auto openRetained = [&](const std::filesystem::path& root, std::wstring_view label, bool deferPostOpenPump = false) noexcept
     {
+        if (probe.viewer && probe.hwnd && IsWindow(probe.hwnd) != FALSE)
+        {
+            return ReopenStandaloneViewerForPointerProbe(state, label, root, probe, deferPostOpenPump);
+        }
         return OpenStandaloneViewerForPointerProbe(state,
                                                    label,
                                                    L"builtin/viewer-space",
@@ -25841,8 +25679,6 @@ struct FolderViewDummyPluginHandles
         return false;
     }
     const uint32_t firstGeneration = first.displayGeneration;
-    CleanupStandaloneViewerPointerProbe(probe);
-    PumpPendingMessages();
 
     const std::uintmax_t secondMetricOffset = FolderViewPerfMetricScanOffset();
     WndMsg::ViewerSpacePerfDebugSnapshot second{};
@@ -25864,8 +25700,6 @@ struct FolderViewDummyPluginHandles
         return false;
     }
     const uint32_t secondGeneration = second.displayGeneration;
-    CleanupStandaloneViewerPointerProbe(probe);
-    PumpPendingMessages();
 
     const std::uintmax_t cachedMetricOffset = FolderViewPerfMetricScanOffset();
     WndMsg::ViewerSpacePerfDebugSnapshot cached{};
@@ -25912,7 +25746,31 @@ struct FolderViewDummyPluginHandles
     requireWindowTitleContains(firstRoot, L"Cached first-root return");
     state.Require(cached.displayGeneration != secondGeneration, L"Cached first-root return reused the second root's display-generation token.");
     state.Require(cached.scanCacheRestoreBytes > 0u && FolderViewPerfMetricCountInRun(kCacheHitMetric, cachedMetricOffset) == 1u,
-                  L"Cached first-root return did not restore exactly one cache entry.");
+                  L"Same-window first-root return did not restore exactly one private cache entry.");
+
+    state.Require(SelfTest::WriteTextFile(firstRoot / L"first-root.txt", "alpha refreshed") &&
+                      SelfTest::WriteTextFile(firstRoot / L"new-after-close.txt", "hotel"),
+                  L"Failed to change first-root provider contents before the post-Close Open.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CleanupStandaloneViewerPointerProbe(probe);
+    PumpPendingMessages();
+    const std::uintmax_t postCloseMetricOffset = FolderViewPerfMetricScanOffset();
+    WndMsg::ViewerSpacePerfDebugSnapshot postClose{};
+    state.Require(openRetained(firstRoot, L"ViewerSpace same-instance post-Close cold open"),
+                  L"Failed to open a fresh ViewerSpace window on the retained IViewer after Close.");
+    state.Require(waitForExactRoot(2u, 3u, kRefreshedFirstRootBytes, postClose),
+                  std::format(L"Post-Close ViewerSpace Open did not rescan changed provider contents. dirs={}, files={}, bytes={}",
+                              postClose.realDirectoryCount,
+                              postClose.fileCandidateCount,
+                              postClose.rootTotalBytes));
+    state.Require(postClose.scanCacheRestoreBytes == 0u && postClose.scanCacheSnapshotBytes > 0u &&
+                      FolderViewPerfMetricCountInRun(kCacheHitMetric, postCloseMetricOffset) == 0u,
+                  L"Post-Close Open reused ViewerSpace cache state instead of rebuilding from the provider.");
+    requireWindowTitleContains(firstRoot, L"Post-Close cold open");
 
     return state.failure.empty();
 }
@@ -34567,14 +34425,11 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"cmd_viewer_space_queue_storm_stays_bounded", [=](CaseState& state) noexcept {
         return TestViewerSpaceQueueStormStaysBounded(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_viewer_space_cache_reopen_200_first_map_optin", [=](CaseState& state) noexcept {
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_cache_reopen_200_same_window_first_map_optin", [=](CaseState& state) noexcept {
         return TestViewerSpaceCachedReopen200FirstMapOptIn(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_heavy_four_root_optin", [=](CaseState& state) noexcept {
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_heavy_same_window_four_root_optin", [=](CaseState& state) noexcept {
         return TestViewerSpaceMemoryHeavyFourRootsOptIn(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_heavy_four_root_retained_reference_optin", [=](CaseState& state) noexcept {
-        return TestViewerSpaceMemoryHeavyFourRootsRetainedReferenceOptIn(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_viewer_space_same_instance_reopen", [=](CaseState& state) noexcept {
         return TestViewerSpaceSameInstanceReopen(mainWindow, state);

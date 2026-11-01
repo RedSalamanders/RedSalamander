@@ -9,6 +9,527 @@ $script:RSTestRunArchiveContractCommit = '8b9e36191835cc71b5ee0dfeea4dddd5d942dd
 # Parentless snapshot of only pre-contract path/mode/blob triples still byte-identical
 # at the already-published source import. It carries no DualTail commit ancestry.
 $script:RSTestRunArchiveImportedBaselineCommit = '4a9489e9cb2d1190528b8ec35971fba885fd7792'
+$script:RSTestRunArchiveRelocationSourceCommit = '6b6f5646be297fbc232d137f1df6a00c5cb74461'
+$script:RSTestRunArchiveRelocationBaselineCommit = '8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a'
+$script:RSTestRunArchiveRelocationPathCount = 1394
+$script:RSTestRunArchiveCurrentRelocationPathCount = 1012
+
+function Get-RSTestRunArchiveWorktreeBlobMap {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Path
+    )
+
+    $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+    $result = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    $batchPaths = [Collections.Generic.List[string]]::new()
+    $fallbackPaths = [Collections.Generic.List[string]]::new()
+    foreach ($pathValue in $Path) {
+        if ([string]::IsNullOrWhiteSpace($pathValue) -or $pathValue -match '[\r\n]') {
+            $fallbackPaths.Add($pathValue)
+        } else {
+            $batchPaths.Add($pathValue)
+        }
+    }
+
+    if ($batchPaths.Count -gt 0) {
+        $hashRows = @($batchPaths.ToArray() | & git -C $root hash-object --stdin-paths 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $hashRows.Count -ne $batchPaths.Count) {
+            throw 'Git worktree hash batch failed or returned an incomplete result.'
+        }
+        for ($index = 0; $index -lt $batchPaths.Count; $index++) {
+            $hash = ([string]$hashRows[$index]).Trim()
+            if ($hash -notmatch '^[0-9a-fA-F]{40,64}$') {
+                throw "Git worktree hash batch returned an invalid object id for '$($batchPaths[$index])'."
+            }
+            if (-not $result.TryAdd($batchPaths[$index], $hash.ToLowerInvariant())) {
+                throw "Git worktree hash batch contained a duplicate path: $($batchPaths[$index])"
+            }
+        }
+    }
+
+    # Git's stdin-path format is newline-delimited. Retain exact attribute semantics
+    # for the exceptional legal pathname by hashing it through the per-path form.
+    foreach ($pathValue in $fallbackPaths) {
+        if ([string]::IsNullOrWhiteSpace($pathValue)) { continue }
+        $hashRow = & git -C $root hash-object "--path=$pathValue" -- $pathValue 2>$null
+        if ($LASTEXITCODE -ne 0 -or ([string]$hashRow).Trim() -notmatch '^[0-9a-fA-F]{40,64}$') {
+            throw "Git worktree hash failed for '$pathValue'."
+        }
+        if (-not $result.TryAdd($pathValue, ([string]$hashRow).Trim().ToLowerInvariant())) {
+            throw "Git worktree hash batch contained a duplicate path: $pathValue"
+        }
+    }
+
+    return ,$result
+}
+
+function Get-RSTestRunArchiveIndexStageMap {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Path
+    )
+
+    $targetByHex = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    foreach ($pathValue in $Path) {
+        $hex = [Convert]::ToHexString([Text.Encoding]::UTF8.GetBytes($pathValue))
+        if (-not $targetByHex.TryAdd($hex, $pathValue)) {
+            throw "Index snapshot request contains a duplicate path: $pathValue"
+        }
+    }
+    $result = [Collections.Generic.Dictionary[string, Collections.Generic.List[object]]]::new([StringComparer]::Ordinal)
+    if ($targetByHex.Count -eq 0) { return ,$result }
+
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = 'git.exe'
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.CreateNoWindow = $true
+    foreach ($value in @('-C', [IO.Path]::GetFullPath($RepoRoot), 'ls-files', '--stage', '-z', '--', 'Specs/TestRuns')) {
+        [void]$start.ArgumentList.Add($value)
+    }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    $memory = [IO.MemoryStream]::new()
+    try {
+        if (-not $process.Start()) { throw 'Unable to start the staged-index snapshot.' }
+        $copyTask = $process.StandardOutput.BaseStream.CopyToAsync($memory)
+        $errorTask = $process.StandardError.ReadToEndAsync()
+        $null = $copyTask.GetAwaiter().GetResult()
+        $errorText = $errorTask.GetAwaiter().GetResult()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "Git staged-index snapshot failed with exit $($process.ExitCode): $errorText"
+        }
+
+        $bytes = $memory.ToArray()
+        $offset = 0
+        while ($offset -lt $bytes.Length) {
+            $recordEnd = [Array]::IndexOf($bytes, [byte]0, $offset)
+            if ($recordEnd -lt 0) { throw 'Git staged-index snapshot omitted a NUL record terminator.' }
+            $tab = [Array]::IndexOf($bytes, [byte]9, $offset, $recordEnd - $offset)
+            if ($tab -lt 0) { throw 'Git staged-index snapshot omitted a path separator.' }
+            $header = [Text.Encoding]::ASCII.GetString($bytes, $offset, $tab - $offset)
+            $match = [regex]::Match($header, '^(?<mode>[0-7]{6}) (?<blob>[0-9a-fA-F]{40,64}) (?<stage>[0-3])$')
+            if (-not $match.Success) { throw "Malformed Git staged-index identity '$header'." }
+            $pathHex = [Convert]::ToHexString($bytes, $tab + 1, $recordEnd - $tab - 1)
+            if ($targetByHex.ContainsKey($pathHex)) {
+                $pathValue = $targetByHex[$pathHex]
+                if (-not $result.ContainsKey($pathValue)) {
+                    $result.Add($pathValue, [Collections.Generic.List[object]]::new())
+                }
+                $result[$pathValue].Add([pscustomobject]@{
+                        Mode = $match.Groups['mode'].Value
+                        Blob = $match.Groups['blob'].Value.ToLowerInvariant()
+                        Stage = [int]$match.Groups['stage'].Value
+                    })
+            }
+            $offset = $recordEnd + 1
+        }
+    } finally {
+        $memory.Dispose()
+        $process.Dispose()
+    }
+    return ,$result
+}
+
+function Get-RSTestRunArchiveGrandfatheredRelocationState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [string]$ManifestPath = 'Specs/Testing/ProtectedPathRelocations.json',
+        [string]$ExpectedSourceCommit = $script:RSTestRunArchiveRelocationSourceCommit,
+        [string]$ExpectedBaselineCommit = $script:RSTestRunArchiveRelocationBaselineCommit,
+        [int]$ExpectedPathCount = $script:RSTestRunArchiveRelocationPathCount,
+        [int]$ExpectedCurrentPathCount = $script:RSTestRunArchiveCurrentRelocationPathCount
+    )
+
+    $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+    $continuationMappings = [ordered]@{
+        '2026-07-01_223000_folderview_warpdrive_origin_commands_recheck' = 'c04'
+        '2026-07-02_124500_folderview_warpdrive_tracecleanup_tsf_crash_baton' = 'c05'
+        '2026-07-02_215000_folderview_warpdrive_commands_green_baton' = 'c06'
+        '2026-07-03_083500_folderview_warpdrive_compare_green_viewerpe_red_baton' = 'c07'
+        '2026-07-03_093804_folderview_warpdrive_full_red_after_convergence_baton' = 'c08'
+        '2026-07-03_100049_folderview_warpdrive_current_baton' = 'c1'
+        '2026-07-03_105945_folderview_warpdrive_commands_race_baton' = 'c2'
+        '2026-07-03_114630_folderview_warpdrive_preferences_keyboard_baton' = 'c3'
+        '2026-07-03_132317_folderview_warpdrive_fullsuite_compare_monitor_baton' = 'c09'
+        '2026-07-03_142650_folderview_warpdrive_compare_cache_crash_baton' = 'c10'
+        '2026-07-03_150535_folderview_warpdrive_worker_join_commands_status_baton' = 'c11'
+        '2026-07-03_155547_folderview_warpdrive_nav_focus_dpi_baton' = 'c12'
+        '2026-07-03_161500_folderview_warpdrive_commands_broad_crash' = 'c13'
+        '2026-07-03_162914_folderview_warpdrive_speedlimit_focus_baton' = 'c14'
+        '2026-07-03_181403_folderview_warpdrive_plugin_config_baton' = 'c15'
+        '2026-07-03_202302_folderview_warpdrive_full_closeout_red' = 'c16'
+        '2026-07-03_205410_folderview_warpdrive_compare_green_viewerpe_hud_baton' = 'c17'
+        '2026-07-03_214957_folderview_warpdrive_full_red_dxui_viewerpe_baton' = 'c18'
+        '2026-07-03_215953_folderview_warpdrive_dxui_pointer_root_baton' = 'c19'
+        '2026-07-03_225627_folderview_warpdrive_full_compare_ntfs_baton' = 'c20'
+        '2026-07-03_235801_folderview_warpdrive_full_red_compare_commands_baton' = 'c21'
+    }
+    $currentMappings = @(
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v01'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-09-23_082913_release-pr'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v02'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-09-23_094710_footer-wrap-release'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v03'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-09-23_footer-summary-release'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v04'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v05'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation'; NewPrefix='Specs/TestRuns/4cb089111a23/Validation/v06'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_debug_prepush_native_captures_20261009T201507Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v01'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_debug_viewerspace_noninteractive_children_20261009T201507Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v02'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_prepush_debug_failure_reports_20261009T201507Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v03'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_prepush_release_failure_reports_20261009T213050Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v04'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_prepush_release_viewer_diagnostics_20261009T213050Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v05'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Validation/space_release_prepush_native_captures_20261009T213050Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Validation/v06'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/Commands/viewer_space_same_instance_queued_path_debug_passed_20261009T195007Z'; NewPrefix='Specs/TestRuns/7d3a1247382a/Commands/m01'; Class='test-run-current-contract' },
+        [pscustomobject]@{ OldPrefix='Specs/TestRuns/7d3a1247382a/FileOps/2026-10-14_160135-i37-accounting-pr'; NewPrefix='Specs/TestRuns/7d3a1247382a/FileOps/f01'; Class='test-run-current-contract' }
+    )
+    $continuationTargetRoots = @($continuationMappings.Values | ForEach-Object { "Specs/TestRuns/4cb089111a23/Continuation/$_" })
+    $targetRoots = $continuationTargetRoots + @($currentMappings | ForEach-Object { $_.NewPrefix })
+    $targetExists = @($targetRoots | Where-Object {
+            Test-Path -LiteralPath (Join-Path $root ($_ -replace '/', [IO.Path]::DirectorySeparatorChar)) -PathType Container
+        }).Count -gt 0
+    $manifestFullPath = Join-Path $root ($ManifestPath -replace '/', [IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $manifestFullPath -PathType Leaf)) {
+        return [pscustomobject]@{
+            Available = $false
+            IsValid = -not $targetExists
+            Paths = @()
+            Errors = if ($targetExists) { @('Relocated continuation directories exist without their pinned manifest.') } else { @() }
+        }
+    }
+
+    $errors = [System.Collections.Generic.List[string]]::new()
+    try {
+        $manifest = Get-Content -LiteralPath $manifestFullPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        return [pscustomobject]@{
+            Available = $true; IsValid = $false; Paths = @()
+            Errors = @("Protected path-relocation manifest is invalid JSON: $($_.Exception.Message)")
+        }
+    }
+    if ($manifest.schema -cne 'red-salamander.immutable-path-relocations.v1' -or
+        [string]$manifest.source_commit -cne $ExpectedSourceCommit) {
+        $errors.Add('Protected path-relocation manifest schema or source commit is not the reviewed identity.')
+    }
+    $entries = @($manifest.entries | Where-Object { $_.class -ceq 'test-run-grandfathered' })
+    $currentEntries = @($manifest.entries | Where-Object { $_.class -ceq 'test-run-current-contract' })
+    Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
+    $blobSha256ByOid = Get-RSValidationGitBlobContentSha256Map `
+        -RepoRoot $root `
+        -BlobId @(@($entries) + @($currentEntries) | ForEach-Object { [string]$_.blob })
+    if ($entries.Count -ne $ExpectedPathCount) {
+        $errors.Add("Expected exactly $ExpectedPathCount grandfathered continuation paths; found $($entries.Count).")
+    }
+    if ($currentEntries.Count -ne $ExpectedCurrentPathCount) {
+        $errors.Add("Expected exactly $ExpectedCurrentPathCount current-contract relocation paths; found $($currentEntries.Count).")
+    }
+
+    $resolveRelocatedPath = {
+        param([string]$Path)
+        foreach ($mapping in $continuationMappings.GetEnumerator()) {
+            $oldPrefix = "Specs/TestRuns/4cb089111a23/Continuation/$($mapping.Key)"
+            if ($Path.StartsWith($oldPrefix + '/', [StringComparison]::Ordinal)) {
+                $newPath = $Path.Replace($oldPrefix, "Specs/TestRuns/4cb089111a23/Continuation/$($mapping.Value)")
+                if ($Path.EndsWith('commands_cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun_repro_20260703.log', [StringComparison]::Ordinal)) {
+                    $newPath = $newPath.Substring(0, $newPath.LastIndexOf('/') + 1) + 'find-dialog-restored.log'
+                }
+                if ($Path.EndsWith('runall_commands_cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal_focused_after_nav_menu_waits_20260703.run-all.json', [StringComparison]::Ordinal)) {
+                    $newPath = $newPath.Substring(0, $newPath.LastIndexOf('/') + 1) + 'nav-menu-waits.run-all.json'
+                }
+                return [pscustomobject]@{ Path=$newPath; Class='test-run-grandfathered' }
+            }
+        }
+        foreach ($mapping in $currentMappings) {
+            if (-not $Path.StartsWith($mapping.OldPrefix + '/', [StringComparison]::Ordinal)) { continue }
+            $newPath = $Path.Replace($mapping.OldPrefix, $mapping.NewPrefix)
+            if ($mapping.OldPrefix.EndsWith('CiNativeStandaloneFailure', [StringComparison]::Ordinal)) {
+                $runAlias = if ($Path.Contains('/x64-artifact/')) { 'r1' } else { 'r2' }
+                $newPath = $newPath.Replace('/x64-artifact/', '/x/').Replace('/arm64-artifact/', '/a/')
+                $parts = $newPath.Split('/')
+                for ($index = 1; $index -lt $parts.Length; $index++) {
+                    if (($parts[$index] -ceq 'runs' -or $parts[$index] -ceq 'completed-runs') -and $index + 1 -lt $parts.Length) {
+                        $parts[$index + 1] = $runAlias
+                        $index++
+                    }
+                }
+                $newPath = $parts -join '/'
+            }
+            return [pscustomobject]@{ Path=$newPath; Class=$mapping.Class }
+        }
+        return $null
+    }
+
+    foreach ($commit in @($ExpectedSourceCommit, $ExpectedBaselineCommit)) {
+        & git -C $root rev-parse --verify "$commit^{commit}" *> $null
+        if ($LASTEXITCODE -ne 0) {
+            $errors.Add("Required immutable relocation commit is unavailable: $commit")
+        }
+        if ($commit -ceq $ExpectedSourceCommit) {
+            & git -C $root merge-base --is-ancestor $commit HEAD *> $null
+            if ($LASTEXITCODE -ne 0) {
+                $errors.Add("Pinned relocation source commit is not an ancestor of HEAD: $commit")
+            }
+        }
+    }
+
+    $sourceTree = @{}
+    $baselineTree = @{}
+    foreach ($spec in @(
+            [pscustomobject]@{ Commit = $ExpectedSourceCommit; Destination = $sourceTree },
+            [pscustomobject]@{ Commit = $ExpectedBaselineCommit; Destination = $baselineTree }
+        )) {
+        $output = & git -C $root ls-tree -r --full-tree $spec.Commit -- Specs/TestRuns 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            $errors.Add("Cannot read immutable archive identities from $($spec.Commit).")
+            continue
+        }
+        foreach ($line in $output) {
+            if ($line -match '^(?<mode>[0-7]{6}) blob (?<blob>[0-9a-f]+)\t(?<path>.+)$') {
+                $spec.Destination[([string]$matches['path'] -replace '\\', '/')] = [pscustomobject]@{
+                    Mode = $matches['mode']; Blob = $matches['blob']
+                }
+            }
+        }
+    }
+
+    # Hash only paths whose source identity and exact destination are already
+    # selected by the immutable map. This prevents a malformed manifest from
+    # asking Git to read a path outside the repository.
+    $approvedWorktreePaths = [Collections.Generic.List[string]]::new()
+    $approvedWorktreePathSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in @($entries) + @($currentEntries)) {
+        $oldPath = [string]$entry.old_path -replace '\\', '/'
+        $newPath = [string]$entry.new_path -replace '\\', '/'
+        $expected = & $resolveRelocatedPath $oldPath
+        if ($null -eq $expected -or $expected.Path -cne $newPath -or -not $sourceTree.ContainsKey($oldPath)) { continue }
+        $newFullPath = Join-Path $root ($newPath -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $newFullPath -PathType Leaf)) { continue }
+        $file = Get-Item -LiteralPath $newFullPath -Force
+        if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+        if ($approvedWorktreePathSet.Add($newPath)) { $approvedWorktreePaths.Add($newPath) }
+    }
+    $worktreeBlobByPath = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    $worktreeHashError = $null
+    try {
+        $worktreeBlobByPath = Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $root -Path $approvedWorktreePaths.ToArray()
+    } catch {
+        $worktreeHashError = $_.Exception.Message
+    }
+    $indexRowsByPath = [Collections.Generic.Dictionary[string, Collections.Generic.List[object]]]::new([StringComparer]::Ordinal)
+    $indexSnapshotError = $null
+    try {
+        $indexRowsByPath = Get-RSTestRunArchiveIndexStageMap -RepoRoot $root -Path $approvedWorktreePaths.ToArray()
+    } catch {
+        $indexSnapshotError = $_.Exception.Message
+    }
+
+    $oldSeen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $newSeen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $expectedTargets = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $currentOldSeen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $currentNewSeen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $expectedCurrentTargets = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $entries) {
+        $oldPath = [string]$entry.old_path -replace '\\', '/'
+        $newPath = [string]$entry.new_path -replace '\\', '/'
+        if (-not $oldSeen.Add($oldPath) -or -not $newSeen.Add($newPath)) {
+            $errors.Add("Duplicate old or new grandfathered relocation identity: $oldPath -> $newPath")
+            continue
+        }
+        $expectedNewPath = $null
+        foreach ($mapping in $continuationMappings.GetEnumerator()) {
+            $oldPrefix = "Specs/TestRuns/4cb089111a23/Continuation/$($mapping.Key)"
+            if ($oldPath.StartsWith($oldPrefix + '/', [StringComparison]::Ordinal)) {
+                $expectedNewPath = $oldPath.Replace($oldPrefix, "Specs/TestRuns/4cb089111a23/Continuation/$($mapping.Value)")
+                if ($oldPath.EndsWith('commands_cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun_repro_20260703.log', [StringComparison]::Ordinal)) {
+                    $expectedNewPath = $expectedNewPath.Substring(0, $expectedNewPath.LastIndexOf('/') + 1) + 'find-dialog-restored.log'
+                }
+                if ($oldPath.EndsWith('runall_commands_cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal_focused_after_nav_menu_waits_20260703.run-all.json', [StringComparison]::Ordinal)) {
+                    $expectedNewPath = $expectedNewPath.Substring(0, $expectedNewPath.LastIndexOf('/') + 1) + 'nav-menu-waits.run-all.json'
+                }
+                break
+            }
+        }
+        if ($null -eq $expectedNewPath -or $newPath -cne $expectedNewPath) {
+            $errors.Add("Grandfathered relocation destination does not match the reviewed continuation mapping: $oldPath -> $newPath")
+            continue
+        }
+        [void]$expectedTargets.Add($newPath)
+        if ([string]$entry.baseline_commit -cne $ExpectedBaselineCommit) {
+            $errors.Add("Grandfathered relocation baseline identity is invalid: $oldPath")
+        }
+        foreach ($tree in @($sourceTree, $baselineTree)) {
+            $identity = $tree[$oldPath]
+            if ($null -eq $identity -or [string]$identity.Mode -cne [string]$entry.mode -or
+                [string]$identity.Blob -cne [string]$entry.blob) {
+                $errors.Add("Grandfathered relocation differs from its pinned source/baseline mode and blob: $oldPath")
+                break
+            }
+        }
+        if (Test-Path -LiteralPath (Join-Path $root ($oldPath -replace '/', [IO.Path]::DirectorySeparatorChar))) {
+            $errors.Add("Old grandfathered path remains present: $oldPath")
+        }
+        $newFullPath = Join-Path $root ($newPath -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $newFullPath -PathType Leaf)) {
+            $errors.Add("Mapped grandfathered path is missing: $newPath")
+            continue
+        }
+        $file = Get-Item -LiteralPath $newFullPath -Force
+        if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            $errors.Add("Relocated grandfathered file is a reparse point: $newPath")
+            continue
+        }
+        if ($null -ne $worktreeHashError -or -not $worktreeBlobByPath.ContainsKey($newPath) -or
+            $worktreeBlobByPath[$newPath] -cne [string]$entry.blob) {
+            $errors.Add("Relocated grandfathered file no longer produces its pinned Git blob: $newPath")
+        }
+        $blobSha256 = $blobSha256ByOid[[string]$entry.blob]
+        if ($blobSha256 -cne [string]$entry.blob_content_sha256) {
+            $errors.Add("Relocated grandfathered Git blob differs from its canonical SHA-256: $newPath")
+        }
+        if ($null -ne $indexSnapshotError) {
+            $errors.Add("Cannot inspect the staged identity of relocated grandfathered file: $newPath")
+        } else {
+            $indexRows = if ($indexRowsByPath.ContainsKey($newPath)) { @($indexRowsByPath[$newPath]) } else { @() }
+            if ($indexRows.Count -eq 0) { continue }
+            if ($indexRows.Count -ne 1) {
+                $errors.Add("Staged mode/blob differs from the pinned grandfathered identity: $newPath")
+            } elseif ($indexRows[0].Stage -ne 0) {
+                $errors.Add("Staged identity is malformed for relocated grandfathered file: $newPath")
+            } elseif ($indexRows[0].Mode -cne [string]$entry.mode -or $indexRows[0].Blob -cne [string]$entry.blob) {
+                $errors.Add("Staged mode/blob differs from the pinned grandfathered identity: $newPath")
+            }
+        }
+    }
+    foreach ($entry in $currentEntries) {
+        $oldPath = [string]$entry.old_path -replace '\\', '/'
+        $newPath = [string]$entry.new_path -replace '\\', '/'
+        if (-not $currentOldSeen.Add($oldPath) -or -not $currentNewSeen.Add($newPath)) {
+            $errors.Add("Duplicate current-contract relocation identity: $oldPath -> $newPath")
+            continue
+        }
+        $expected = & $resolveRelocatedPath $oldPath
+        if ($null -eq $expected -or $expected.Class -cne 'test-run-current-contract' -or $newPath -cne $expected.Path) {
+            $errors.Add("Current-contract Validation destination does not match the reviewed component map: $oldPath -> $newPath")
+            continue
+        }
+        [void]$expectedCurrentTargets.Add($newPath)
+        $sourceIdentity = $sourceTree[$oldPath]
+        if ($null -eq $sourceIdentity -or [string]$entry.mode -cne [string]$sourceIdentity.Mode -or
+            [string]$entry.blob -cne [string]$sourceIdentity.Blob) {
+            $errors.Add("Current-contract Validation relocation differs from its pinned source mode/blob: $oldPath")
+        }
+        if (Test-Path -LiteralPath (Join-Path $root ($oldPath -replace '/', [IO.Path]::DirectorySeparatorChar))) {
+            $errors.Add("Old current-contract Validation path remains present: $oldPath")
+        }
+        $newFullPath = Join-Path $root ($newPath -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $newFullPath -PathType Leaf)) {
+            $errors.Add("Mapped current-contract Validation path is missing: $newPath")
+            continue
+        }
+        $file = Get-Item -LiteralPath $newFullPath -Force
+        if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            $errors.Add("Relocated current-contract Validation file is a reparse point: $newPath")
+            continue
+        }
+        if ($null -ne $worktreeHashError -or -not $worktreeBlobByPath.ContainsKey($newPath) -or
+            $worktreeBlobByPath[$newPath] -cne [string]$entry.blob) {
+            $errors.Add("Current-contract Validation file no longer produces its pinned Git blob: $newPath")
+        }
+        $blobSha256 = $blobSha256ByOid[[string]$entry.blob]
+        if ($blobSha256 -cne [string]$entry.blob_content_sha256) {
+            $errors.Add("Current-contract Validation Git blob differs from its canonical SHA-256: $newPath")
+        }
+        if ($null -ne $indexSnapshotError) {
+            $errors.Add("Cannot inspect the staged identity of current-contract Validation file: $newPath")
+        } else {
+            $indexRows = if ($indexRowsByPath.ContainsKey($newPath)) { @($indexRowsByPath[$newPath]) } else { @() }
+            if ($indexRows.Count -eq 0) { continue }
+            if ($indexRows.Count -ne 1) {
+                $errors.Add("Staged mode/blob differs from the pinned current-contract Validation identity: $newPath")
+            } elseif ($indexRows[0].Stage -ne 0) {
+                $errors.Add("Staged identity is malformed for current-contract Validation file: $newPath")
+            } elseif ($indexRows[0].Mode -cne [string]$entry.mode -or $indexRows[0].Blob -cne [string]$entry.blob) {
+                $errors.Add("Staged mode/blob differs from the pinned current-contract Validation identity: $newPath")
+            }
+        }
+    }
+
+    foreach ($commitTree in @($sourceTree, $baselineTree)) {
+        $continuationEntries = @($commitTree.Keys | Where-Object {
+                $matchesRoot = $false
+                foreach ($rootName in $continuationMappings.Keys) {
+                    if ($_.StartsWith("Specs/TestRuns/4cb089111a23/Continuation/$rootName/", [StringComparison]::Ordinal)) {
+                        $matchesRoot = $true
+                        break
+                    }
+                }
+                $matchesRoot
+            })
+        if ($continuationEntries.Count -ne $ExpectedPathCount -or
+            @($continuationEntries | Where-Object { -not $oldSeen.Contains($_) }).Count -gt 0) {
+            $errors.Add('Pinned source or archive baseline contains missing/unmapped continuation identities.')
+        }
+    }
+    $sourceCurrentEntries = @($sourceTree.Keys | Where-Object {
+            $null -ne (& $resolveRelocatedPath $_) -and (& $resolveRelocatedPath $_).Class -ceq 'test-run-current-contract'
+        })
+    if ($sourceCurrentEntries.Count -ne $ExpectedCurrentPathCount -or
+        @($sourceCurrentEntries | Where-Object { -not $currentOldSeen.Contains($_) }).Count -gt 0) {
+        $errors.Add('Pinned source contains missing/unmapped current-contract relocation identities.')
+    }
+
+    $currentTargets = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($targetRoot in $continuationTargetRoots) {
+        $directory = Join-Path $root ($targetRoot -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $directory -PathType Container)) { continue }
+        foreach ($item in Get-ChildItem -LiteralPath $directory -Force -Recurse) {
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                $errors.Add("Reparse point exists inside relocated continuation tree: $($item.FullName)")
+                continue
+            }
+            if (-not $item.PSIsContainer) {
+                $relative = ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $item.FullName
+                [void]$currentTargets.Add(($relative -replace '\\', '/'))
+            }
+        }
+    }
+    if ($currentTargets.Count -ne $expectedTargets.Count -or
+        @($currentTargets | Where-Object { -not $expectedTargets.Contains($_) }).Count -gt 0) {
+        $errors.Add('Relocated continuation trees contain missing files or unreviewed siblings.')
+    }
+
+    $currentValidationTargets = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($validationPrefix in @($currentMappings | ForEach-Object { $_.NewPrefix })) {
+        $validationDirectory = Join-Path $root ($validationPrefix -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $validationDirectory -PathType Container)) { continue }
+        foreach ($item in Get-ChildItem -LiteralPath $validationDirectory -Force -Recurse) {
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                $errors.Add("Reparse point exists inside relocated Validation packet: $($item.FullName)")
+                continue
+            }
+            if (-not $item.PSIsContainer) {
+                $relative = ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $item.FullName
+                [void]$currentValidationTargets.Add(($relative -replace '\\', '/'))
+            }
+        }
+    }
+    if ($currentValidationTargets.Count -ne $expectedCurrentTargets.Count -or
+        @($currentValidationTargets | Where-Object { -not $expectedCurrentTargets.Contains($_) }).Count -gt 0) {
+        $errors.Add('Relocated Validation packet contains missing files or unreviewed siblings.')
+    }
+
+    return [pscustomobject]@{
+        Available = $true
+        IsValid = ($errors.Count -eq 0)
+        Paths = if ($errors.Count -eq 0) { @($expectedTargets | Sort-Object) } else { @() }
+        Errors = @($errors)
+    }
+}
 
 function ConvertTo-RSRepoRelativePath {
     param(
@@ -30,6 +551,16 @@ function ConvertTo-RSRepoRelativePath {
     }
 
     return $fullPath.Substring($root.Length + 1)
+}
+
+function Get-RSTestRunArchiveValidatedGrandfatheredRelocationPaths {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $state = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $RepoRoot
+    if (-not $state.IsValid) {
+        throw "Pinned grandfathered TestRuns relocation validation failed: $($state.Errors -join '; ')"
+    }
+    return @($state.Paths)
 }
 
 function New-RSTestRunArchiveViolation {
@@ -527,7 +1058,11 @@ function Get-RSChangedTestRunArchivePaths {
         }
     }
 
-    return @($paths | Sort-Object)
+    $grandfatheredPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($relocatedPath in Get-RSTestRunArchiveValidatedGrandfatheredRelocationPaths -RepoRoot $root) {
+        [void]$grandfatheredPaths.Add($relocatedPath)
+    }
+    return @($paths | Where-Object { -not $grandfatheredPaths.Contains($_) } | Sort-Object)
 }
 
 function Get-RSTestRunArchiveInventoryPaths {
@@ -588,9 +1123,14 @@ function Get-RSTestRunArchiveInventoryPaths {
                 }
             }
 
+            $grandfatheredPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($relocatedPath in Get-RSTestRunArchiveValidatedGrandfatheredRelocationPaths -RepoRoot $root) {
+                [void]$grandfatheredPaths.Add($relocatedPath)
+            }
             return @($trackedPaths |
                     Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
                     ForEach-Object { $_.Trim() } |
+                    Where-Object { -not $grandfatheredPaths.Contains($_) } |
                     Where-Object { Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf } |
                     Sort-Object -Unique)
         }
@@ -601,8 +1141,13 @@ function Get-RSTestRunArchiveInventoryPaths {
         return @()
     }
 
+    $grandfatheredPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($relocatedPath in Get-RSTestRunArchiveValidatedGrandfatheredRelocationPaths -RepoRoot $root) {
+        [void]$grandfatheredPaths.Add($relocatedPath)
+    }
     return @(Get-ChildItem -LiteralPath $testRunsRoot -File -Recurse -Force |
             ForEach-Object { ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $_.FullName } |
+            Where-Object { -not $grandfatheredPaths.Contains($_) } |
             Sort-Object -Unique)
 }
 

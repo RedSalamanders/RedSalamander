@@ -1,0 +1,15 @@
+{
+  "run_id": "ar31-14a0af16",
+  "log": "Z:\\RedSalamander.Perf\\runs\\pathmap31-63848\\scratch\\codex\\relocation\\test-run-archive-pester.log",
+  "total": 24,
+  "passed": 23,
+  "failed": 1,
+  "skipped": 0,
+  "failed_tests": [
+    {
+      "Name": "keeps the exact stock-Windows relocation map within path limits and current archive caps",
+      "FailureMessage": "The term 'Get-RSTestRunArchiveGrandfatheredRelocationState' is not recognized as a name of a cmdlet, function, script file, or executable program.\r\nCheck the spelling of the name, or if a path was included, verify that the path is correct and try again.",
+      "StackTrace": "at line: 601 in Z:\\src\\RedSalamander\\Tools\\Tests\\TestRunArchive.Tests.ps1"
+    }
+  ]
+}

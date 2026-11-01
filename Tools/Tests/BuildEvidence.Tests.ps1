@@ -203,6 +203,123 @@ Describe 'Operation Startrail build output formatting' {
 }
 
 Describe 'Operation Startrail build receipt records' {
+    It 'captures final native bytes and uniform test surface before the ZIP receipt is published' {
+        $root = Join-Path $TestDrive 'portable-receipt'
+        $output = Join-Path $root '.build\x64\Release'
+        [void][IO.Directory]::CreateDirectory($output)
+        $artifactPath = Join-Path $output 'App.exe'
+        $libraryPath = Join-Path $output 'Library.dll'
+        $sidecarPath = $artifactPath + '.DxUi.json'
+        [IO.File]::WriteAllBytes($artifactPath, [byte[]](7, 8, 9, 10, 11))
+        [IO.File]::WriteAllBytes($libraryPath, [byte[]](12, 13, 14, 15))
+        $artifactManifestDir = New-RSBuildArtifactManifestFixture -Root $root -Output $output `
+            -ProjectTarget @{ App = 'App.exe'; Library = 'Library.dll' } `
+            -TestsEnabled @{ App = $false; Library = $false }
+        Add-Content -LiteralPath (Join-Path $artifactManifestDir 'App.manifest') -Value ('runtime=' + $sidecarPath)
+        $toolchainIdentityPath = (New-RSToolchainIdentityFixture -Root $root -Output $output).Path
+
+        function Write-RSDxUiModuleProvenance {
+            param($RepoRoot, $ArtifactManifestDir, $Platform, $Configuration)
+            @{ moduleSha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash } |
+                ConvertTo-Json | Set-Content -LiteralPath $sidecarPath
+        }
+
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'), [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $nativeBuild = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Invoke-MSBuild' -and
+                    $node.Extent.Text -match '-Arguments\s+\$buildParams'
+                }, $true))
+        $nativeBuild.Count | Should Be 1
+        $statements = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+                    $node.Left.VariablePath.UserPath -in @('buildArtifacts', 'receiptTestsEnabled') -and
+                    $node.Extent.StartOffset -gt $nativeBuild[0].Extent.EndOffset
+                }, $true))
+        $statements += @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-RSDxUiModuleProvenance' -and
+                    $node.Extent.StartOffset -gt $nativeBuild[0].Extent.EndOffset
+                }, $true))
+        $SolutionDir = $root
+        $buildOutputDir = $output
+        $Platform = 'x64'
+        $Configuration = 'Release'
+        $ProjectName = ''
+        $resolvedProjectPath = ''
+        $artifactManifestDir = $artifactManifestDir
+        $buildArtifacts = @()
+        $receiptTestsEnabled = $false
+        $production = (@($statements | Sort-Object { $_.Extent.StartOffset } | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine)
+        . ([scriptblock]::Create($production))
+
+        foreach ($path in @($artifactPath, $libraryPath, $sidecarPath, $toolchainIdentityPath)) {
+            $relative = [IO.Path]::GetRelativePath($root, $path).Replace('\', '/')
+            $record = @($buildArtifacts | Where-Object relative_path -EQ $relative)
+            $record.Count | Should Be 1
+            $record[0].sha256 | Should Be (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $record[0].size_bytes | Should Be (Get-Item -LiteralPath $path).Length
+        }
+        $receiptTestsEnabled | Should Be $false
+        $sidecar = Get-Content -LiteralPath $sidecarPath -Raw | ConvertFrom-Json
+        $sidecar.moduleSha256 | Should Be (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+
+        $captureSurface = @($statements | Where-Object {
+                $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
+                $_.Left.VariablePath.UserPath -eq 'receiptTestsEnabled'
+            })
+        $captureSurface.Count | Should Be 1
+        $manifestPath = Join-Path $artifactManifestDir 'Library.manifest'
+        $manifestText = [IO.File]::ReadAllText($manifestPath)
+        [IO.File]::WriteAllText($manifestPath, $manifestText.Replace('tests_enabled=false', 'tests_enabled=true'))
+        { . ([scriptblock]::Create($captureSurface[0].Extent.Text)) } | Should Throw 'mixed test surfaces'
+        $appManifestPath = Join-Path $artifactManifestDir 'App.manifest'
+        $appManifestText = [IO.File]::ReadAllText($appManifestPath)
+        [IO.File]::WriteAllText($appManifestPath, $appManifestText.Replace('tests_enabled=false', 'tests_enabled=true'))
+        . ([scriptblock]::Create($captureSurface[0].Extent.Text))
+        $distributableGuard = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.IfStatementAst] -and
+                    $node.Extent.Text -match 'A distributable build contains a test-enabled output'
+                }, $true))
+        $distributableGuard.Count | Should Be 1
+        $Zip = $true
+        $GenerateWingetManifest = $OfficialRelease = $false
+        { . ([scriptblock]::Create($distributableGuard[0].Extent.Text)) } | Should Throw 'no package receipt will be published'
+        [IO.File]::WriteAllText($manifestPath, $manifestText.Replace('tests_enabled=false', 'tests_enabled=TRUE'))
+        { . ([scriptblock]::Create($captureSurface[0].Extent.Text)) } | Should Throw 'Invalid artifact test surface'
+        [IO.File]::WriteAllText($manifestPath, $manifestText)
+        [IO.File]::WriteAllText($appManifestPath, $appManifestText)
+        . ([scriptblock]::Create($captureSurface[0].Extent.Text))
+
+        $verification = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.ForEachStatementAst] -and
+                    $node.Variable.VariablePath.UserPath -eq 'capturedArtifact'
+                }, $true))
+        $receiptCreation = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'New-RSBuildReceipt'
+                }, $true))
+        $receiptPublication = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Publish-RSBuildReceipt'
+                }, $true))
+        $verification.Count | Should Be 1
+        $receiptCreation.Count | Should Be 1
+        $receiptPublication.Count | Should Be 1
+        ($verification[0].Extent.EndOffset -lt $receiptCreation[0].Extent.StartOffset) | Should Be $true
+        ($distributableGuard[0].Extent.EndOffset -lt $receiptCreation[0].Extent.StartOffset) | Should Be $true
+        ($receiptCreation[0].Extent.EndOffset -lt $receiptPublication[0].Extent.StartOffset) | Should Be $true
+        . ([scriptblock]::Create($verification[0].Extent.Text))
+        [IO.File]::WriteAllBytes($libraryPath, [byte[]](16, 17, 18, 19, 20, 21))
+        { . ([scriptblock]::Create($verification[0].Extent.Text)) } | Should Throw 'Build output changed after native artifact capture'
+    }
     It 'normalizes current vcpkg source tlogs and legacy destination tlogs to deployed outputs' {
         $root = Join-Path $TestDrive 'vcpkg-tlog-repo'
         $output = Join-Path $root '.build\x64\Release'

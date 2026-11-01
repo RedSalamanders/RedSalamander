@@ -8746,11 +8746,19 @@ case SelfTestState::Step::C1_InlineRenameNameRefusedOnCard:
         return false;
     }
     std::error_code ec;
-    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! std::filesystem::exists(source, ec) || std::filesystem::exists(root / L"after.", ec) ||
-        std::filesystem::exists(root / L"after", ec))
+    const bool hasTypedResult  = done->second.sourceItemResults.size() == 1u && done->second.sourceItemResults.front().has_value();
+    const bool typedNoMutation = hasTypedResult && done->second.sourceItemResults.front()->status == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) &&
+                                 done->second.sourceItemResults.front()->publication == FileOperations::PublicationState::NotPublished &&
+                                 done->second.sourceItemResults.front()->sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                 done->second.sourceItemResults.front()->completion == FileOperations::ItemCompletion::Failed;
+    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! typedNoMutation || ! std::filesystem::exists(source, ec) ||
+        std::filesystem::exists(root / L"after.", ec) || std::filesystem::exists(root / L"after", ec))
     {
-        Fail(std::format(L"C1 inline rename refused: Preparing must fail the task with ERROR_INVALID_NAME and leave the source untouched (hr=0x{:08X}).",
-                         static_cast<unsigned long>(done->second.hr)));
+        Fail(std::format(
+            L"C1 inline rename refused: Preparing must report typed Failed/NotPublished/Retained for ERROR_INVALID_NAME and leave the source untouched "
+            L"(hr=0x{:08X}, typed={}).",
+            static_cast<unsigned long>(done->second.hr),
+            typedNoMutation ? 1 : 0));
         return true;
     }
     static_cast<void>(SelfTest::RemoveAll(root));

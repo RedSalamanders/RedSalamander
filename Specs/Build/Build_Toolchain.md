@@ -24,7 +24,11 @@ contract in Specs/Core/Core_RedSalamanderMonitor.md. Standalone SDK qualificatio
 RedSalamander Preferences, runtime or packaging.
 
 
-The MSIX project declares Debug, Release and ASan Debug for both x64 and ARM64. Solution mappings preserve the selected configuration; an ASan build must never package Release or ordinary Debug executables. Packaging remains an explicit operation rather than an automatic side effect of a sanitizer solution build, consistent across both architectures.
+Portable package generation remains an explicit operation rather than an automatic side effect of a sanitizer solution build. A package must use the selected Release architecture and never reuse Debug or ASan binaries.
+
+`build.ps1 -ProductionOnly` excludes the package smoke-test host, so it cannot be
+combined with `-Zip`. Use a full tests-disabled Release build with `-Zip`, or the
+governed production CI adapter that separately verifies its matching smoke-host receipt.
 
 The reusable hosted build limits initial MSBuild fan-out to two workers following an ARM64 Release compiler heap-exhaustion failure. Native compilation remains a required gate; a worker bound does not establish that the previous failure is resolved until the complete profile builds successfully.
 
@@ -240,10 +244,9 @@ automatically. The lease is short-lived and MUST NOT span MSBuild or another nat
 Saved context is local reuse state, not proof that a particular artifact profile
 completed successfully. `New-RSVersionContext` is therefore a pure constructor for
 an explicit positive build number and requested configuration/platform; it performs
-no shared-state I/O. Standalone MSI, symbols MSI, and ZIP callers require that build
-number, Winget requires either a complete three-part version or build number, and the
-standalone MSIX wrapper requires a complete three-part version. Integrated
-`build.ps1` packaging passes the version already resolved for its compiled profile.
+no shared-state I/O. ZIP packaging and Winget manifest generation require the
+explicit build number or complete version they consume; `build.ps1` passes the
+version already resolved for its compiled profile.
 
 ### Build evidence authority (Operation Startrail implemented)
 
@@ -261,6 +264,19 @@ surface once, passes the exact `RSBuildEnableTests=true|false` value to every pr
 and binds that value into receipt identity. Debug and ASan Debug default to test-enabled;
 Release defaults to production/test-disabled, and an explicit caller override is honored
 in either direction.
+
+After native MSBuild completes, the root build captures DxUi module provenance,
+declared artifact hashes/sizes, effective test surface and launch summaries before
+portable ZIP staging. ZIP staging MUST NOT rebuild native project references or
+change the captured native outputs. Capture and publication require uniform manifest test-surface
+values through `Test-RSBuildArtifactManifestTestsEnabled -RequireUniform`; mixed
+surfaces fail rather than appearing production-disabled. Distributable flows also
+reject an entirely test-enabled final manifest.
+Before publishing the receipt, the build verifies that ZIP staging left the captured
+native closure, provenance and test surface unchanged. A successful compiler or
+packager exit is insufficient when the final files differ from the receipt. The
+receipt binds the actual final native bytes and newly produced ZIP package; it never
+reuses stale hashes or silently rebinds an already published receipt.
 
 `RSBuildCompilerDebugInformation` is an invocation-wide, receipt-bound build input with
 exact values `ProgramDatabase` (the default) or `Embedded`. `Embedded` maps first-party
@@ -306,9 +322,11 @@ from the lock. A real child-process regression executes the workflow's gate from
 foreign working directory against the normally restored source.
 
 When `RSBuildEnableTests` is false, projects beneath `Tests/` are evaluated as
-no-output utility nodes so a production Release solution build does not compile a test
-executable against production libraries that intentionally omit test hooks. When the
-value is true, those projects retain their declared application/library types. Individual
+no-output utility nodes, except the receipt-bound `PluginContractTests` package-smoke host
+described in `Specs/Installer/Installer_PortableZip.md`. That host is also compiled without
+test hooks and is never shipped. A production Release build must not compile a test-enabled
+executable against libraries that omit its hooks. When the value is true, test projects
+retain their declared application/library types. Individual
 projects MUST NOT override `RSBuildEnableTests`; mixed test surfaces inside one build graph
 invalidate both ABI assumptions and receipt truthfulness.
 
@@ -319,12 +337,11 @@ Test-enabled Release remains valid for validation (Full keeps `RSBuildEnableTest
 its outputs are never package inputs. Every distributable path builds with
 `RSBuildEnableTests=false` and fails closed rather than packaging a test surface:
 
-- `build.ps1` refuses `-Zip`, `-Msi`, `-Msix`, `-GenerateWingetManifest`, and
+- `build.ps1` refuses `-Zip`, `-GenerateWingetManifest`, and
   `-OfficialRelease` before any build when the effective tests setting would be true: the
   process `RSBuildEnableTests` is `true`, or it is unset and the configuration is not Release
-  (whose default is tests on). It and the standalone `Installer/msix/build-msix.ps1` pass
-  `/p:RSBuildEnableTests=false` to the MSIX packaging project so its project references cannot
-  be rebuilt test-enabled.
+  (whose default is tests on). Portable packages are staged only from a Release profile
+  built with `RSBuildEnableTests=false`.
 - The reusable build workflow fails a call that requests `official_release` together with
   `run_full_tests` or a configuration other than Release; the unified production adapter builds Release and never
   requests `run_full_tests`.
@@ -341,14 +358,9 @@ its outputs are never package inputs. Every distributable path builds with
   export-name scan does not review; the scan is defense in depth for C entry points.
 - `Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1` parses each packaged PE image without
   loading it and rejects the version marker, any reserved test export, and any malformed image.
-  Release portable ZIP packaging (the staged archive), MSI packaging (the staged directory),
-  MSIX packaging (the produced package), `build.ps1` package outputs, and the release workflow's
-  final artifact gate all run that check. MSBuild publishes an MSIX before it can be inspected,
-  so a rejected MSIX is deleted with its package folder beneath `.build\AppPackages` before the
-  failure is reported, while the packaging lease is held and never through a reparse point
-  (one refuses the removal and the package must not be distributed); checks made after the
-  lease is released never delete. Debug portable ZIPs are diagnostic, are never
-  published, and would fail the release gate.
+  Release portable ZIP staging, `build.ps1` package outputs, and the release workflow's final
+  artifact gate run that check. Debug portable ZIPs are diagnostic, are never published, and
+  would fail the release gate.
 
 For C++ projects, the evaluated `LibraryPath` used to materialize the build child's
 `LIB` environment MUST omit nonexistent directories. Missing optional
@@ -570,9 +582,12 @@ divergence is recorded. The offline pin contract (`Tools/Tests/VcpkgInstallSafet
 fails when the two differ, unless that exact baseline and tool pair is added to its reviewed-divergence table and to this
 section. It also fails when a direct `version>=` floor exceeds the exact override of the same port (vcpkg silently builds
 the override, so the manifest would advertise a version never built), when the `aws-sdk-cpp` override is not paired with
-its audited `aws-crt-cpp` override, when the Dependabot rules below are removed, and, whenever the executable checkout
-`.build/vcpkg-tool` is present at the pinned commit, when a floor or override has no exact entry in that checkout's
-version database.
+its audited `aws-crt-cpp` override, when the Dependabot rules below are removed, and when a floor or override has no
+exact entry in the immutable `vcpkg.json` `builtin-baseline` version database.
+The two offline data cases materialize only the required files from that exact Git commit into an owned TestSandbox
+fixture during execution, verify every materialized blob, and do not qualify executable checkout or bootstrap state.
+Git reads disable lazy fetching. Missing local commit/tree/blob objects remain explicit prerequisite skips; materialization
+or content mismatches fail. The native terminal policy still rejects these skips as incomplete qualification.
 
 Dependabot's vcpkg feed MUST NOT move these audit-gated pins. It ignores `github.com/microsoft/vcpkg` (the
 `builtin-baseline`), because it proposes the newest release tag, which can be older than the commit both pins name: it
@@ -599,7 +614,7 @@ Updating vcpkg dependencies is therefore a manual, single reviewed change:
    re-audit described in the AWS paragraph below and [FileSystem_S3.md](../FileSystem/FileSystem_S3.md).
 3. Prove availability with the governed installer gate: `vcpkg-install.ps1` against the new tool and baseline on a clean
    restore, and the offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`), which checks each floor and
-   override against the pinned checkout's version database.
+   override against the immutable builtin-baseline version database; those data checks do not attest a live executable checkout.
 4. Merge only with a green CI build.
 
 The governed installer pins every triplet it builds to the Visual Studio installation and the default MSVC toolset the
@@ -679,36 +694,28 @@ child is launched through the kill-on-close containment helper.
 
 Packaging has a separate repository-wide coordination scope because x64 and
 ARM64 packaging can both publish beneath `.build\AppPackages`. The lock is acquired
-only after compilation succeeds and
-is held through MSIX/MSI/ZIP/winget generation; ordinary builds and tests do not
-hold it. Standalone packaging entrypoints that mutate those locations MUST enter
+only after compilation succeeds and is held through portable ZIP and Winget manifest
+generation; ordinary builds and tests do not hold it. Standalone packaging entrypoints that mutate those locations MUST enter
 the same scope, so invoking a child from `build.ps1` is a balanced same-thread
 reentrant lease rather than an independent lock. Abandoned packaging ownership
-fails closed until a reviewer restores shared installer inputs/outputs and
+fails closed until a reviewer restores shared packaging inputs/outputs and
 explicitly removes the marker; a build-profile rebuild cannot silently clear it.
 
 A standalone packager that reads `.build\<platform>\<configuration>` acquires
 that artifact profile before packaging and releases packaging before the profile.
-The standalone MSIX transaction additionally acquires its platform
-`shared-dependency` scope after packaging and only around contained MSBuild,
-then releases dependency, packaging, and profile in reverse order. Caller-selected
-package destinations stay beneath this repository's `.build\AppPackages`, and the
-tracked `Installer\msix\Package.appxmanifest` is always read-only. MSIX version and
-architecture stamping writes a unique CreateNew manifest beneath
-`.build\AppPackages\ManifestStaging\<id>` and passes that exact path to the WAP project
-through `RSAppxManifestPath`. The integrated and standalone packagers remove only that
-validated staging directory in `finally` before releasing packaging coordination. A
-package failure or process interruption can leave at most a disposable staged copy and
-an abandoned-operation diagnostic; it cannot partially change or require reconstructing
-the tracked manifest. A repository lock does not authorize an arbitrary external path.
+The portable ZIP packager uses the same artifact-profile then packaging lock order.
+Caller-selected package destinations stay beneath this repository's `.build\AppPackages`.
+A package failure or process interruption leaves an abandoned-operation diagnostic for
+review; a build-profile rebuild cannot clear it. A repository lock does not authorize an
+arbitrary external path.
 Every existing component from the repository
 root through a caller-selected destination MUST be non-reparse before and after
 directory creation. Final package-file publication MUST use a unique validated
 same-directory staged file, revalidate the complete guarded path immediately before
 publication, and atomically move or replace the destination. A failed publication
 must leave the prior complete destination intact. Native packager children use the
-kill-on-close process helper. Ordinary packaging never mutates machine-global
-WiX extension state: required extensions are installed explicitly before entry.
+kill-on-close process helper. Portable packaging does not mutate machine-global
+installer state.
 
 The per-profile owner record MUST authenticate the owning PID instance with process
 start time and executable path, as well as the exact lock path and random token.
@@ -737,6 +744,25 @@ near-prefix or concatenated foreign paths do not match. MSBuild property evidenc
 parses separate switches and semicolon/comma combined property lists. The direct
 `Invoke-SanitizedMsbuild.ps1` command rejects an invocation without explicit
 Configuration and Platform properties rather than falling back to a broad scope.
+
+When an absolute MSBuild `.vcxproj` path is lexically beneath another repository
+root, generic Configuration/Platform evidence is attributed to a separate
+worktree only when that project is inside a verified linked Git worktree of this
+same repository, its `.git` admin directory has a valid backpointer and
+common-directory record, and its root `Directory.Build.props` is byte-identical
+to this checkout's canonical policy. The project, its ancestors through both
+repository roots, and both policy files must be free of reparse points. That text
+check does not prove evaluated output roots: inherited MSBuild properties,
+project properties, or later imports can redirect a build. Therefore the
+linked-worktree exception applies only to a strictly query-only invocation with
+exactly one absolute `.vcxproj`, one `-getProperty:<identifier-list>`, explicit
+`-noAutoResponse`, optional `-nologo`, and only the reviewed global properties
+`Configuration`, `Platform`, `PreferredToolArchitecture`, and `RSBuildEnableTests`.
+It rejects every target, build/clean/rebuild, restore, graph, logger, response-file,
+and unknown switch. Actual MSBuild build processes remain blockers unless their
+evaluated output and dependency roots are proven independent. Exact
+output/intermediate paths and exact vcpkg install/include evidence continue to
+take precedence and block even for a linked worktree.
 
 `build.ps1` MUST never terminate an independently launched application merely to
 replace its binary. If a process executable path exactly equals an output that the
@@ -801,7 +827,7 @@ The MSBuild executable must match the host: `MSBuild\Current\Bin\arm64\MSBuild.e
 ARM64 hosts and `Bin\amd64\MSBuild.exe` on x64 hosts, with `Bin\MSBuild.exe` (the 32-bit
 x86 MSBuild) only as a last resort. `build.ps1` (every discovery strategy: vswhere, the
 common installation roots, and `VSINSTALLDIR`), `Tools\Restore-DxUi.ps1`, the DxUi
-consumer test, the CI "Select MSBuild" step, and explicit MSIX packaging
+consumer test, the CI "Select MSBuild" step, and portable ZIP packaging
 all follow that order. The VC toolset
 (`Microsoft.Cpp.ToolsetLocation.props`) derives the compiler host from the MSBuild
 process's own `PROCESSOR_ARCHITECTURE`: it downgrades a requested `arm64` host to x86
@@ -817,7 +843,7 @@ Windows CI enables Git `core.longpaths` before checkout: retained test evidence 
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
 
 CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
-`Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
+`Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. The repository-root `format-all.ps1` compatibility entrypoint uses this installer and pin, selects only tracked first-party `.cpp` and `.h` files, and excludes `ThirdParty/`, `Specs/`, `advisor-plans/` and `.codex/`; its own `-WhatIf` previews without installing or formatting. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
 
 The PR build-policy test MUST verify the formatter job invokes this installer with `pwsh` and
 does not bootstrap Python or install pip packages in that job. This job-scoped wiring check

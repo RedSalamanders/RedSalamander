@@ -192,7 +192,7 @@ longer on this page. These defaults apply to newly created tasks. See
 
 - **Display** controls RedMonitor toolbar, line numbers, always-on-top, ids, and auto-scroll defaults.
 - **Filter** appears as one card before the settings-file link and controls the RedMonitor filter preset plus the Text, Error, Warning, Info, Perf, and Debug message-type toggles. There is no numeric mask field in Preferences; choose **Custom** and use the toggles for custom combinations.
-- **Open monitor settings file** is the final card and opens the current user's RedSalamanderMonitor JSON settings file with the default JSON editor.
+- **Open monitor settings file** is the final card and opens RedMonitor's legacy-compatible JSON settings file with the default JSON editor.
 - Apply or OK saves Monitor page changes to RedSalamanderMonitor-7.0.settings.json in every configuration, including Debug/ASan, matching the independently installed Release helper. The main RedSalamander settings file is separate.
 
 ## Common workflows

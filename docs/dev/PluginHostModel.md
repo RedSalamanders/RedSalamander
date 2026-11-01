@@ -96,20 +96,19 @@ Off-thread calls split by whether the caller needs a synchronous result:
 | Direction | Transport | Examples |
 |---|---|---|
 | Fire-and-forget (no result needed) | `PostMessagePayload` (async; payload ownership transferred with `std::move`) | `ShowAlert`, `ClearAlert`, `ExecuteInActivePane` |
-| Result-returning (must block) | `SendMessageW` (synchronous; window proc runs the handler and returns the `HRESULT` as the `LRESULT`) | `ShowPrompt`, `ShowConnectionManager`, `GetConnectionJsonUtf8`, `GetConnectionSecret`, `SetConnectionSecret`, `DeleteConnectionSecret`, `PromptForConnectionSecret`, `ClearCachedConnectionSecret`, `UpgradeFtpAnonymousToPassword`, `OpenViewer` |
+| Result-returning (must block) | `SendMessagePayload` / `TakeMessagePayload<T>` (synchronous; token-validated ownership transfer and `HRESULT` result) | `ShowPrompt`, `ShowConnectionManager`, `GetConnectionJsonUtf8`, `GetConnectionSecret`, `SetConnectionSecret`, `DeleteConnectionSecret`, `PromptForConnectionSecret`, `ClearCachedConnectionSecret`, `UpgradeFtpAnonymousToPassword`, `OpenViewer` |
 
-The blocking `SendMessageW` calls pass the caller-owned payload pointer in `lParam` and read back results (e.g. a
-`wil::unique_cotaskmem_string` secret) from the payload after the call returns. The async `PostMessagePayload` calls
-transfer the `std::unique_ptr` into the shared payload registry and place only an opaque nonzero token in the
-message queue. The receiver must never cast that token to a pointer.
+Both synchronous and asynchronous calls transfer a `std::unique_ptr` through the shared payload registry and put only
+an opaque nonzero token in `lParam`. The receiver uses `TakeMessagePayload<T>(hwnd, message, lParam)`; it must never
+cast the token to a pointer. Synchronous payloads may reference caller-owned output slots because the sender remains
+blocked until dispatch returns. If a synchronous request is not taken and completed, the caller returns a failure.
 
 ### kHost* dispatch
 
 The window proc calls `TryHandleHostServicesWindowMessage(message, wParam, lParam, result)`, which forwards to `HostServices::TryHandleMessage`. That method switches on the `WndMsg::kHost*` message ids and, for each, recovers the payload and invokes the matching `*OnUiThread` handler:
 
-- Posted payloads are recovered with `TakeMessagePayload<T>(lParam)` (takes ownership from the registry). A null
+- Payloads are recovered with `TakeMessagePayload<T>(hwnd, message, lParam)` (takes ownership from the registry). A null
   result from a nonzero token is stale, drained, unregistered, or type-mismatched and is ignored.
-- Sent payloads are recovered with a plain `reinterpret_cast<T*>(lParam)` (caller still owns the stack/heap object).
 
 Message ids include `kHostShowAlert`, `kHostClearAlert`, `kHostShowPrompt`, `kHostShowConnectionManager`, `kHostGetConnectionJsonUtf8`, `kHostGetConnectionSecret`, `kHostSetConnectionSecret`, `kHostDeleteConnectionSecret`, `kHostPromptConnectionSecret`, `kHostClearCachedConnectionSecret`, `kHostUpgradeFtpAnonymousToPassword`, `kHostExecuteInPane`, and `kHostOpenViewer`.
 

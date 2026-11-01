@@ -1,6 +1,8 @@
 #include "ViewerSpace.h"
 #include "FileMetadataFormatting.h"
+#include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
+#include "PathUtils.h"
 #include "UnicodeClipboard.h"
 #include "ViewerDxUiTheme.h"
 #include "ViewerSpace.ListingValidation.h"
@@ -53,6 +55,9 @@
 extern HINSTANCE g_hInstance;
 
 namespace Typography = DxUi::Typography;
+
+[[nodiscard]] bool TryReserveAtomicBudget(std::atomic_uint64_t& currentBytes, uint64_t requestedBytes, uint64_t byteLimit, uint64_t& admittedBytes) noexcept;
+[[nodiscard]] uint64_t ReleaseAtomicBudget(std::atomic_uint64_t& currentBytes, uint64_t releasedBytes) noexcept;
 
 namespace
 {
@@ -830,9 +835,6 @@ constexpr char kViewerSpaceSchemaJson[] = R"json({
 }
 
 std::atomic_uint32_t g_maxConcurrentScansPerVolume{1};
-std::atomic_bool g_cacheEnabled{true};
-std::atomic_uint32_t g_cacheTtlSeconds{60};
-std::atomic_uint32_t g_cacheMaxEntries{1};
 
 std::wstring_view CopyToArena(std::pmr::monotonic_buffer_resource& arena, std::wstring_view text) noexcept
 {
@@ -1415,8 +1417,23 @@ std::optional<std::filesystem::path> TryGetParentPathForNavigation(const std::fi
         return std::nullopt;
     }
 
-    const std::filesystem::path normalized = path.lexically_normal();
-    const std::filesystem::path root       = normalized.root_path();
+    std::filesystem::path normalized = path.lexically_normal();
+    // std::filesystem stops at a UNC server, but a provider route stops at its share.
+    if (Common::Paths::IsUncWindowsPath(normalized.native()))
+    {
+        std::wstring parent;
+        if (! Common::Paths::IsFullyAbsoluteWindowsPath(normalized.native()) ||
+            ! TryGetFileSystemParentPath(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(), normalized.native(), parent))
+        {
+            return std::nullopt;
+        }
+        return std::filesystem::path(parent);
+    }
+    while (normalized != normalized.root_path() && normalized.filename().empty())
+    {
+        normalized = normalized.parent_path();
+    }
+    const std::filesystem::path root = normalized.root_path();
     if (! root.empty() && normalized == root)
     {
         return std::nullopt;
@@ -1848,8 +1865,9 @@ struct ScanResultCacheNode final
     uint32_t nameLength           = 0;
 };
 
-constexpr uint8_t kScanResultCacheNodeContentNotMeasured = 0x01u;
-constexpr uint8_t kScanResultCacheNodeKnownFlags         = kScanResultCacheNodeContentNotMeasured;
+constexpr uint8_t kScanResultCacheNodeContentNotMeasured  = 0x01u;
+constexpr uint8_t kScanResultCacheNodeAggregateUnreadable = 0x02u;
+constexpr uint8_t kScanResultCacheNodeKnownFlags          = kScanResultCacheNodeContentNotMeasured | kScanResultCacheNodeAggregateUnreadable;
 
 struct ScanResultCacheFileRecord final
 {
@@ -1957,6 +1975,25 @@ std::wstring NormalizeRootPathForScanCache(const std::filesystem::path& rootPath
     return key;
 }
 
+// A reservation contains no scan data. Payloads remain window-owned while the
+// aggregate module admission bound continues to apply across live windows.
+std::atomic_uint64_t g_scanCacheReservedBytes{0u};
+struct ScanCacheReservation final
+{
+    explicit ScanCacheReservation(uint64_t value) noexcept : bytes(value)
+    {
+    }
+    ~ScanCacheReservation()
+    {
+        static_cast<void>(ReleaseAtomicBudget(g_scanCacheReservedBytes, bytes));
+    }
+    ScanCacheReservation(const ScanCacheReservation&)            = delete;
+    ScanCacheReservation(ScanCacheReservation&&)                 = delete;
+    ScanCacheReservation& operator=(const ScanCacheReservation&) = delete;
+    ScanCacheReservation& operator=(ScanCacheReservation&&)      = delete;
+    uint64_t bytes;
+};
+
 class ScanResultCache final
 {
 public:
@@ -1968,15 +2005,22 @@ public:
     ScanResultCache& operator=(ScanResultCache&&) = delete;
     ScanResultCache(ScanResultCache&&)            = delete;
 
+    void Configure(bool enabled, uint32_t ttlSeconds, uint32_t maxEntries) noexcept
+    {
+        // Cache policy and access belong to one viewer's UI thread.
+        _enabled    = enabled;
+        _ttlSeconds = ttlSeconds;
+        _maxEntries = maxEntries;
+        if (! enabled || maxEntries == 0u)
+            Clear();
+        else
+            TrimTo(maxEntries);
+    }
+
     void Clear() noexcept
     {
         std::scoped_lock lock(_mutex);
         _entries.clear();
-    }
-
-    void Shutdown() noexcept
-    {
-        Clear();
     }
 
     void TrimTo(uint32_t maxEntries) noexcept
@@ -1991,18 +2035,18 @@ public:
 
     std::shared_ptr<const ScanResultSnapshot> TryGet(const ScanResultCacheKey& key) noexcept
     {
-        if (! g_cacheEnabled.load(std::memory_order_acquire))
+        if (! _enabled)
         {
             return {};
         }
 
-        const uint32_t maxEntries = g_cacheMaxEntries.load(std::memory_order_acquire);
+        const uint32_t maxEntries = _maxEntries;
         if (maxEntries == 0)
         {
             return {};
         }
 
-        const uint32_t ttlSeconds = g_cacheTtlSeconds.load(std::memory_order_acquire);
+        const uint32_t ttlSeconds = _ttlSeconds;
         const auto now            = std::chrono::steady_clock::now();
 
         std::scoped_lock lock(_mutex);
@@ -2036,18 +2080,18 @@ public:
         {
             return false;
         }
-        if (! g_cacheEnabled.load(std::memory_order_acquire))
+        if (! _enabled)
         {
             return false;
         }
 
-        const uint32_t maxEntries = g_cacheMaxEntries.load(std::memory_order_acquire);
+        const uint32_t maxEntries = _maxEntries;
         if (maxEntries == 0)
         {
             return false;
         }
 
-        const uint32_t ttlSeconds = g_cacheTtlSeconds.load(std::memory_order_acquire);
+        const uint32_t ttlSeconds = _ttlSeconds;
         const auto now            = std::chrono::steady_clock::now();
 
         std::scoped_lock lock(_mutex);
@@ -2103,7 +2147,14 @@ public:
             return false;
         }
 
+        const uint64_t reservationBytes = ViewerSpaceScan::SaturatingAdd(additionalBytes, sizeof(Entry) + sizeof(ScanCacheReservation));
+        uint64_t admittedBytes          = 0u;
+        if (! TryReserveAtomicBudget(g_scanCacheReservedBytes, reservationBytes, maxResidentBytes, admittedBytes))
+            return false;
+        auto releaseReservation = wil::scope_exit([&]() noexcept { static_cast<void>(ReleaseAtomicBudget(g_scanCacheReservedBytes, reservationBytes)); });
         Entry entry;
+        entry.reservation = std::make_unique<ScanCacheReservation>(reservationBytes);
+        releaseReservation.release();
         entry.key      = std::move(key);
         entry.snapshot = std::move(snapshot);
         entry.lastUsed = now;
@@ -2135,6 +2186,25 @@ public:
 private:
     struct Entry final
     {
+        Entry()                        = default;
+        ~Entry()                       = default;
+        Entry(const Entry&)            = delete;
+        Entry& operator=(const Entry&) = delete;
+        Entry(Entry&&) noexcept        = default;
+        Entry& operator=(Entry&& other) noexcept
+        {
+            if (this != &other)
+            {
+                // Retire the old payload before releasing its module reservation.
+                key         = std::move(other.key);
+                snapshot    = std::move(other.snapshot);
+                lastUsed    = other.lastUsed;
+                reservation = std::move(other.reservation);
+            }
+            return *this;
+        }
+        // Destroyed last, after the charged payload and key have released their storage.
+        std::unique_ptr<ScanCacheReservation> reservation;
         ScanResultCacheKey key;
         std::shared_ptr<const ScanResultSnapshot> snapshot;
         std::chrono::steady_clock::time_point lastUsed;
@@ -2189,41 +2259,62 @@ private:
 
     std::mutex _mutex;
     std::vector<Entry> _entries;
+    bool _enabled        = true;
+    uint32_t _ttlSeconds = 60u;
+    uint32_t _maxEntries = 1u;
 };
-
-std::mutex g_scanResultCacheMutex;
-std::unique_ptr<ScanResultCache> g_scanResultCache;
-
-ScanResultCache& GetScanResultCache() noexcept
-{
-    std::scoped_lock lock(g_scanResultCacheMutex);
-    if (! g_scanResultCache)
-    {
-        g_scanResultCache = std::make_unique<ScanResultCache>();
-    }
-    return *g_scanResultCache;
-}
-
-void ShutdownScanResultCache() noexcept
-{
-    std::scoped_lock lock(g_scanResultCacheMutex);
-    if (! g_scanResultCache)
-    {
-        return;
-    }
-
-    g_scanResultCache->Shutdown();
-    g_scanResultCache.reset();
-}
 
 void ShutdownViewerSpaceModuleStateImpl() noexcept
 {
-    ShutdownScanResultCache();
     ShutdownScanScheduler();
     DestroyViewerSpaceClassBackgroundBrushState();
 }
 
 } // namespace
+
+struct ViewerSpace::ScanCacheOwner final
+{
+    ScanCacheOwner()                                 = default;
+    ~ScanCacheOwner()                                = default;
+    ScanCacheOwner(const ScanCacheOwner&)            = delete;
+    ScanCacheOwner(ScanCacheOwner&&)                 = delete;
+    ScanCacheOwner& operator=(const ScanCacheOwner&) = delete;
+    ScanCacheOwner& operator=(ScanCacheOwner&&)      = delete;
+    ScanResultCache cache;
+};
+
+ViewerSpace::ScanCacheOwner& ViewerSpace::GetScanCacheOwner() noexcept
+{
+    if (! _scanCacheOwner)
+    {
+        _scanCacheOwner = std::make_unique<ScanCacheOwner>();
+        _scanCacheOwner->cache.Configure(_config.cacheEnabled, _config.cacheTtlSeconds, _config.cacheMaxEntries);
+    }
+    return *_scanCacheOwner;
+}
+
+struct ViewerSpace::ScanWorkerReapContext final
+{
+    ScanWorkerReapContext()                                        = default;
+    ~ScanWorkerReapContext()                                       = default;
+    ScanWorkerReapContext(const ScanWorkerReapContext&)            = delete;
+    ScanWorkerReapContext(ScanWorkerReapContext&&)                 = delete;
+    ScanWorkerReapContext& operator=(const ScanWorkerReapContext&) = delete;
+    ScanWorkerReapContext& operator=(ScanWorkerReapContext&&)      = delete;
+    void Execute(PTP_CALLBACK_INSTANCE instance) noexcept
+    {
+        TransferModulePinToCallbackReturn(instance, modulePin);
+        static_cast<void>(CallbackMayRunLong(instance));
+        for (ScanWorker& worker : workers)
+        {
+            worker.thread.join();
+            g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel);
+        }
+        Debug::Perf::EmitValue(L"viewer.space.scan.worker_reaped_off_ui", workers.size());
+    }
+    wil::unique_hmodule modulePin;
+    std::vector<ScanWorker> workers;
+};
 
 const char* GetViewerSpaceStaticConfigurationSchema() noexcept
 {
@@ -2260,7 +2351,7 @@ ViewerSpace::ViewerSpace()
     _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     // Instance defaults precede the host's persisted settings; they must not
-    // trim other viewers' shared cache or change their admission policy.
+    // change other viewers' shared scan admission policy.
     static_cast<void>(ApplyConfiguration(nullptr, false));
 }
 
@@ -2565,19 +2656,9 @@ HRESULT ViewerSpace::ApplyConfiguration(const char* configurationJsonUtf8, bool 
     if (publishSharedPolicy)
     {
         g_maxConcurrentScansPerVolume.store(_config.maxConcurrentScansPerVolume, std::memory_order_release);
-        g_cacheEnabled.store(_config.cacheEnabled, std::memory_order_release);
-        g_cacheTtlSeconds.store(_config.cacheTtlSeconds, std::memory_order_release);
-        g_cacheMaxEntries.store(_config.cacheMaxEntries, std::memory_order_release);
-
-        if (! _config.cacheEnabled || _config.cacheMaxEntries == 0)
-        {
-            GetScanResultCache().Clear();
-        }
-        else
-        {
-            GetScanResultCache().TrimTo(_config.cacheMaxEntries);
-        }
     }
+    if (_scanCacheOwner)
+        _scanCacheOwner->cache.Configure(_config.cacheEnabled, _config.cacheTtlSeconds, _config.cacheMaxEntries);
 
     UpdateConfigurationJson();
     return S_OK;
@@ -2979,6 +3060,7 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->scanCacheSnapshotBytes       = _lastScanCacheSnapshotBytes;
             snapshot->scanCacheRestoreBytes        = _lastScanCacheRestoreBytes;
             snapshot->scanCacheResidentBytes       = _lastScanCacheResidentBytes;
+            snapshot->scanCacheModuleBytes         = g_scanCacheReservedBytes.load(std::memory_order_acquire);
             snapshot->scanCacheRestoreUs           = _lastScanCacheRestoreUs;
             snapshot->cacheRestorePhase            = _scanCacheRestorePhase;
             snapshot->viewerOwnedBytes             = ViewerOwnedBytes();
@@ -3174,6 +3256,7 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->originalViewBytes = view ? view->totalBytes : 0u;
             snapshot->shownViewBytes    = view ? ShownBytes(view->id, view->totalBytes) : 0u;
             snapshot->ownedBytes        = WorkspaceOwnedBytes();
+            snapshot->ownedExportBytes  = _workspaceExportOwnedBytes->load(std::memory_order_acquire);
             snapshot->exclusions        = _excludedPaths.size();
             snapshot->unresolved        = _workspaceUnresolved;
             snapshot->cleanupMarks      = _cleanupMarks.size();
@@ -3262,6 +3345,7 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 snapshot->parentId           = node.value().parentId;
                 snapshot->logicalBytes       = node.value().totalBytes;
                 snapshot->contentNotMeasured = node.value().contentNotMeasured;
+                snapshot->isError            = node.value().scanState == ScanState::Error;
                 const size_t count           = std::min(node.value().name.size(), std::size(snapshot->name) - 1u);
                 std::copy_n(node.value().name.begin(), count, snapshot->name);
                 snapshot->name[count] = L'\0';
@@ -3318,6 +3402,11 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_SYSKEYDOWN:
             if (! _embeddedMode && (wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
             {
+                return 0;
+            }
+            if (wp == VK_LEFT || wp == VK_RIGHT || wp == VK_UP || wp == VK_INSERT)
+            {
+                OnKeyDown(wp, true);
                 return 0;
             }
             break;
@@ -3481,32 +3570,38 @@ void ViewerSpace::OnDestroy()
     std::array<uint64_t, 9u> destructionStages{};
     const auto markDestructionStage = [&](size_t index) noexcept { destructionStages[index] = Debug::Perf::ElapsedUs(destructionStartedAt); };
     _workspaceLifetime.reset();
-    _excludedPaths.clear();
-    _excludedBelow.clear();
-    _excludedRoots.clear();
-    _workspaceNextExcludedBelow.clear();
-    _workspaceNextExcludedRoots.clear();
-    _workspaceBindingParts.clear();
+    decltype(_excludedPaths){}.swap(_excludedPaths);
+    decltype(_excludedBelow){}.swap(_excludedBelow);
+    decltype(_excludedRoots){}.swap(_excludedRoots);
+    decltype(_workspaceNextExcludedBelow){}.swap(_workspaceNextExcludedBelow);
+    decltype(_workspaceNextExcludedRoots){}.swap(_workspaceNextExcludedRoots);
+    decltype(_workspaceBindingParts){}.swap(_workspaceBindingParts);
     _workspaceGeneration        = 0u;
     _workspaceBindingGeneration = 0u;
     _workspaceRebinding         = false;
     _workspaceViewExcluded      = false;
     _workspaceUnresolved        = 0u;
     _workspaceResetBindings     = false;
-    _cleanupMarks.clear();
+    decltype(_cleanupMarks){}.swap(_cleanupMarks);
     _cleanupGeneration = 0u;
     _reviewingCleanup  = false;
     _showingProblems   = false;
-    _problemRows.clear();
+    decltype(_problemRows){}.swap(_problemRows);
     _problemCursor = 0u;
-    _workspaceFacts.clear();
-    _workspaceFactsNext.clear();
-    _workspaceFactsReady       = false;
-    _workspaceFactsBuilding    = false;
-    _workspaceFactsGeneration  = 0u;
-    _typeFilter                = 0u;
-    _ageFilter                 = 0u;
-    _exportProjectionRequested = false;
+    decltype(_workspaceFacts){}.swap(_workspaceFacts);
+    decltype(_workspaceFactsNext){}.swap(_workspaceFactsNext);
+    std::wstring{}.swap(_analysisFilter);
+    std::wstring{}.swap(_tooltipText);
+    _tooltipNodeId               = 0u;
+    _selectedItemId              = 0u;
+    _selectedGeneration          = 0u;
+    _workspaceScanStartedSeconds = 0.0;
+    _workspaceFactsReady         = false;
+    _workspaceFactsBuilding      = false;
+    _workspaceFactsGeneration    = 0u;
+    _typeFilter                  = 0u;
+    _ageFilter                   = 0u;
+    _exportProjectionRequested   = false;
     SubmitWorkspaceExport(false);
     if (_analysisResizeStartRatio.has_value())
     {
@@ -3532,6 +3627,11 @@ void ViewerSpace::OnDestroy()
     markDestructionStage(4u);
     DiscardDirectorySummaryStages();
     CancelScanCacheBuild();
+    // A closed window retains no private scan cache, even when this COM instance is reused.
+    _scanCacheOwner.reset();
+    std::wstring{}.swap(_scanCacheBuildRootKey);
+    std::wstring{}.swap(_scanCacheRestoreRootKey);
+    _lastScanCacheResidentBytes = 0u;
     // Hold only the free-threaded D3D device. Every HWND, immediate context,
     // swap chain and single-threaded D2D object is still released here.
     auto closingRendererDevice = CaptureClosingRendererDevice();
@@ -3558,6 +3658,30 @@ void ViewerSpace::OnDestroy()
     _refreshAdoptionPending   = false;
     _refreshPathLookupStarted = false;
     markDestructionStage(7u);
+    // Public COM owners may survive Close. Keep preferences and plugin metadata only; no
+    // navigation, path/header text, scan counters or reusable projections cross this boundary.
+    decltype(_navStack){}.swap(_navStack);
+    decltype(_navForwardStack){}.swap(_navForwardStack);
+    decltype(_refreshPathCandidates){}.swap(_refreshPathCandidates);
+    decltype(_refreshNextPathCandidates){}.swap(_refreshNextPathCandidates);
+    for (std::wstring* text : {&_viewPathText,
+                               &_scanProcessingFolderName,
+                               &_headerStatusText,
+                               &_headerCountsText,
+                               &_headerSizeText,
+                               &_headerViewText,
+                               &_headerProcessingText,
+                               &_scanInProgressWatermarkText,
+                               &_scanIncompleteWatermarkText,
+                               &_headerPathSourceText,
+                               &_headerPathDisplayText})
+        std::wstring{}.swap(*text);
+    _scanProgressBytes    = 0u;
+    _scanProgressFolders  = 0u;
+    _scanProgressFiles    = 0u;
+    _scanFailedFolders    = 0u;
+    _scanProcessingNodeId = 0u;
+    _overallState         = ScanState::NotStarted;
     NotifyViewerClosed();
     _hostPaneExecute.reset();
     markDestructionStage(8u);
@@ -3646,7 +3770,6 @@ void ViewerSpace::CreateNavigationHost(HWND hwnd)
     captions.path      = text(IDS_VIEWERSPACE_ANALYSIS_FIELD_PATH);
     captions.ancestors = text(IDS_VIEWERSPACE_NAV_ANCESTORS);
     captions.folders   = text(IDS_VIEWERSPACE_NAV_FOLDERS);
-    captions.mode      = text(IDS_VIEWERSPACE_ANALYSIS_MODE);
     captions.explorer  = text(IDS_VIEWERSPACE_MODE_EXPLORER);
     captions.analyst   = text(IDS_VIEWERSPACE_MODE_ANALYST);
     captions.hidePanel = text(IDS_VIEWERSPACE_HIDE_PANEL);
@@ -3717,23 +3840,25 @@ std::vector<ViewerSpaceNavigation::NavigationHost::Crumb> ViewerSpace::GetNaviga
     const Node* parent = TryGetRealNode(static_cast<uint32_t>(token));
     if (parent == nullptr)
         return folders;
+    constexpr size_t kMaximumFolders = 512u;
+    const auto less                  = [](const Host::Crumb& a, const Host::Crumb& b) noexcept { return NaturalSort::Less(a.text, b.text); };
     for (uint32_t id : GetRealNodeChildren(*parent))
     {
         const Node* child = TryGetRealNode(id);
         if (child != nullptr && child->isDirectory && ! child->isSynthetic)
         {
+            if (folders.size() == kMaximumFolders && ! NaturalSort::Less(child->name, std::wstring_view(folders.front().text)))
+                continue;
+            if (folders.size() == kMaximumFolders)
+            {
+                std::pop_heap(folders.begin(), folders.end(), less);
+                folders.pop_back();
+            }
             folders.push_back({(static_cast<uint64_t>(_displayGeneration) << 32u) | id, std::wstring(child->name)});
-            if (folders.size() == 512u)
-                break;
+            std::push_heap(folders.begin(), folders.end(), less);
         }
     }
-    std::sort(folders.begin(),
-              folders.end(),
-              [](const Host::Crumb& a, const Host::Crumb& b)
-    {
-        // Presentation collation must not change the literal names or generation-qualified targets.
-        return NaturalSort::Less(a.text, b.text);
-    });
+    std::sort_heap(folders.begin(), folders.end(), less);
     return folders;
 }
 
@@ -4069,7 +4194,7 @@ void ViewerSpace::OnPaint()
         const std::wstring& status = _headerStatusText;
 
         const float buttonSide           = kHeaderButtonWidthDip;
-        const bool showCancel            = scanActive;
+        const bool showCancel            = CanCancelScanFromHeader();
         const D2D1_RECT_F cancelButtonRc = showCancel ? D2D1::RectF(headerRc.right - buttonSide, headerTopDip, headerRc.right, headerBottomDip)
                                                       : D2D1::RectF(headerRc.right, headerTopDip, headerRc.right, headerBottomDip);
 
@@ -4433,6 +4558,7 @@ void ViewerSpace::OnPaint()
         D2D1::ColorF base              = baseColorForNode(nodeRef);
         const bool isOtherBucket       = nodeRef.isSynthetic;
         const bool isRealDirectory     = nodeRef.isDirectory && ! nodeRef.isSynthetic;
+        const bool hasUnreadableError  = nodeRef.scanState == ScanState::Error && (isRealDirectory || isOtherBucket);
         const bool incompleteDirectory = isRealDirectory && (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued ||
                                                              nodeRef.scanState == ScanState::Scanning);
         if (incompleteDirectory && ! highContrast)
@@ -4444,9 +4570,9 @@ void ViewerSpace::OnPaint()
             }
             base = Mix(base, bg, dimT);
         }
-        if (isRealDirectory && nodeRef.scanState == ScanState::Error && ! highContrast)
+        if (hasUnreadableError && ! highContrast)
         {
-            // A folder that could not be read keeps its own tile, tinted with the theme's error colour so it is not mistaken for Done.
+            // Unreadable retained folders and aggregate buckets carry the theme's error colour without changing their owner's state.
             base = Mix(base, errorTint, 0.45f);
         }
 
@@ -4592,15 +4718,16 @@ void ViewerSpace::OnPaint()
             const float dimT = darkMode ? 0.38f : 0.28f;
             base             = Mix(base, bg, dimT);
         }
-        const bool isRealDirectory = nodeRef.isDirectory && ! nodeRef.isSynthetic;
-        if (isRealDirectory && nodeRef.scanState == ScanState::Error && ! highContrast)
+        const bool isRealDirectory    = nodeRef.isDirectory && ! nodeRef.isSynthetic;
+        const bool expanded           = isRealDirectory && item.labelHeightDip > 0.0f;
+        const bool isOtherBucket      = nodeRef.isSynthetic;
+        const bool hasUnreadableError = nodeRef.scanState == ScanState::Error && (isRealDirectory || isOtherBucket);
+        if (hasUnreadableError && ! highContrast)
         {
             base = Mix(base, errorTint, 0.45f);
         }
-        const bool expanded      = isRealDirectory && item.labelHeightDip > 0.0f;
-        const bool isOtherBucket = nodeRef.isSynthetic;
-        const bool incomplete    = isRealDirectory && (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued ||
-                                                       nodeRef.scanState == ScanState::Scanning);
+        const bool incomplete = isRealDirectory && (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued ||
+                                                    nodeRef.scanState == ScanState::Scanning);
 
         const float areaFraction   = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
         const bool wantsTallHeader = incomplete && areaFraction >= largeTileAreaFractionThreshold;
@@ -4683,6 +4810,14 @@ void ViewerSpace::OnPaint()
 
             ID2D1StrokeStyle* strokeStyle = nullptr;
             D2D1::ColorF outline          = highContrast ? textColor : Mix(base, textColor, nodeRef.isDirectory ? 0.20f : 0.14f);
+            if (hasUnreadableError)
+            {
+                outline = highContrast ? textColor : errorTint;
+                if (highContrast)
+                {
+                    stroke = std::max(stroke, 2.2f);
+                }
+            }
             if (isOtherBucket)
             {
                 stroke      = std::max(stroke, 1.85f);
@@ -4735,6 +4870,12 @@ void ViewerSpace::OnPaint()
             else
             {
                 _renderTarget->DrawRectangle(rc, _brushOutline.get(), stroke, strokeStyle);
+            }
+
+            if (hasUnreadableError && highContrast && tileW >= 10.0f && tileH >= 10.0f)
+            {
+                const D2D1_RECT_F innerRc = D2D1::RectF(rc.left + 4.0f, rc.top + 4.0f, rc.right - 4.0f, rc.bottom - 4.0f);
+                _renderTarget->DrawRectangle(innerRc, _brushOutline.get(), 1.0f);
             }
         }
 
@@ -5441,27 +5582,63 @@ void ViewerSpace::OnKeyDown(WPARAM vk, bool alt) noexcept
     }
     if (! alt && (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_UP || vk == VK_DOWN))
     {
-        const auto current = std::find_if(_drawItems.begin(), _drawItems.end(), [this](const DrawItem& item) { return item.nodeId == _selectedItemId; });
-        const bool reverse = vk == VK_LEFT || vk == VK_UP;
-        if (! _drawItems.empty())
+        const auto bounds  = GetTreemapBounds();
+        const auto visible = [bounds](const DrawItem& item) noexcept
         {
-            size_t index = current == _drawItems.end() ? 0u : static_cast<size_t>(current - _drawItems.begin());
-            if (reverse && index > 0u)
+            return item.lod != DrawItem::Lod::Culled && item.currentRect.right > item.currentRect.left && item.currentRect.bottom > item.currentRect.top &&
+                   item.currentRect.right > bounds.left && item.currentRect.left < bounds.right && item.currentRect.bottom > bounds.top &&
+                   item.currentRect.top < bounds.bottom;
+        };
+        const auto current =
+            std::find_if(_drawItems.begin(), _drawItems.end(), [&](const DrawItem& item) noexcept { return item.nodeId == _selectedItemId && visible(item); });
+        if (current == _drawItems.end())
+        {
+            const auto first = std::find_if(_drawItems.begin(), _drawItems.end(), visible);
+            if (first != _drawItems.end())
             {
-                --index;
+                SelectItem(first->nodeId);
             }
-            else if (! reverse && index + 1u < _drawItems.size())
+            return;
+        }
+        const auto& from        = current->currentRect;
+        const bool horizontal   = vk == VK_LEFT || vk == VK_RIGHT;
+        const bool reverse      = vk == VK_LEFT || vk == VK_UP;
+        const DrawItem* nearest = nullptr;
+        float nearestDistance   = std::numeric_limits<float>::max();
+        bool nearestAligned     = false;
+        for (const DrawItem& item : _drawItems)
+        {
+            if (item.nodeId == current->nodeId || ! visible(item))
             {
-                ++index;
+                continue;
             }
-            SelectItem(_drawItems[index].nodeId);
+            const auto& to      = item.currentRect;
+            const float dx      = (to.left + to.right - from.left - from.right) * 0.5f;
+            const float dy      = (to.top + to.bottom - from.top - from.bottom) * 0.5f;
+            const float forward = (horizontal ? dx : dy) * (reverse ? -1.0f : 1.0f);
+            if (forward <= 0.0f)
+            {
+                continue;
+            }
+            const bool aligned   = horizontal ? to.top < from.bottom && to.bottom > from.top : to.left < from.right && to.right > from.left;
+            const float distance = dx * dx + dy * dy;
+            if (nearest == nullptr || (aligned && ! nearestAligned) ||
+                (aligned == nearestAligned && (distance < nearestDistance || (distance == nearestDistance && item.nodeId < nearest->nodeId))))
+            {
+                nearest         = &item;
+                nearestAligned  = aligned;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest != nullptr)
+        {
+            SelectItem(nearest->nodeId);
         }
         return;
     }
     if (vk == VK_ESCAPE)
     {
-        if (_deferredStartScan.has_value() || _refreshPending || _refreshAdoptionPending || _overallState == ScanState::Queued ||
-            _overallState == ScanState::Scanning)
+        if (CanCancelScanFromHeader())
         {
             CancelScanByUser();
             return;
@@ -5520,8 +5697,7 @@ void ViewerSpace::OnMouseMove(int x, int y) noexcept
     HeaderHit newHeaderHit = HeaderHit::None;
     if (yDip >= headerTop && yDip <= headerBottom)
     {
-        if ((_refreshPending || _refreshAdoptionPending || _overallState == ScanState::Queued || _overallState == ScanState::Scanning) &&
-            xDip >= DipFromPx(_clientSize.cx) - kHeaderButtonWidthDip)
+        if (CanCancelScanFromHeader() && xDip >= DipFromPx(_clientSize.cx) - kHeaderButtonWidthDip)
         {
             newHeaderHit = HeaderHit::Cancel;
         }
@@ -5619,8 +5795,7 @@ void ViewerSpace::OnLButtonDown(int x, int y) noexcept
     const float headerBottom = GetHeaderBottomDip();
     if (yDip >= headerTop && yDip <= headerBottom)
     {
-        if ((_refreshPending || _refreshAdoptionPending || _overallState == ScanState::Queued || _overallState == ScanState::Scanning) &&
-            xDip >= DipFromPx(_clientSize.cx) - kHeaderButtonWidthDip)
+        if (CanCancelScanFromHeader() && xDip >= DipFromPx(_clientSize.cx) - kHeaderButtonWidthDip)
         {
             CancelScanByUser();
         }
@@ -5639,6 +5814,12 @@ void ViewerSpace::OnLButtonDown(int x, int y) noexcept
         return;
     }
 
+    // A real click transfers keyboard routing inside the already foreground owner.
+    // Synthetic no-activation coverage never acquires foreground permission here.
+    if (_hWnd && GetForegroundWindow() == GetAncestor(_hWnd.get(), GA_ROOT))
+    {
+        SetFocus(_hWnd.get());
+    }
     const uint32_t nodeId = hit.value();
     BeginInputPresentation(InputPresentationKind::Selection, handlerStartedAt);
     SelectItem(nodeId);
@@ -6301,9 +6482,8 @@ bool ViewerSpace::CanStopAnimationTimer(double nowSeconds) noexcept
     }
 
     // Mirrors ContinueScanCacheBuild: a completed Win32 scan is copied into the scan cache a slice per tick.
-    const bool cacheApplicable = _config.cacheEnabled && ! _model->scanRootPath.empty() && _fileSystemIsWin32 &&
-                                 g_cacheEnabled.load(std::memory_order_acquire) && g_cacheMaxEntries.load(std::memory_order_acquire) != 0u &&
-                                 _overallState == ScanState::Done;
+    const bool cacheApplicable =
+        _config.cacheEnabled && ! _model->scanRootPath.empty() && _fileSystemIsWin32 && _config.cacheMaxEntries != 0u && _overallState == ScanState::Done;
     if (_scanCacheBuildSnapshot || (cacheApplicable && _scanCacheLastStoredGeneration != _scanGeneration.load(std::memory_order_acquire)))
     {
         return false;
@@ -7485,19 +7665,31 @@ void ViewerSpace::RefreshTooltipText() noexcept
         return;
     }
 
+    const auto schedulePaint = [this]() noexcept
+    {
+        if (_scanActive.load() || _overallState == ScanState::Queued || _overallState == ScanState::Scanning || _refreshAdoptionPending)
+        {
+            // Queue drains update the text; the existing 30 Hz progress timer owns its paint.
+            EnsureAnimationTimer();
+            Debug::Perf::EmitCounter(L"viewer.space.tooltip.progress_refresh_deferred");
+        }
+        else
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    };
+
     std::wstring text = BuildTooltipText(_tooltipNodeId);
     if (text.empty())
     {
         _tooltipNodeId = 0;
         _tooltipText.clear();
-        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        schedulePaint();
         return;
     }
 
     if (text != _tooltipText)
     {
         _tooltipText = std::move(text);
-        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        schedulePaint();
     }
 }
 
@@ -8092,12 +8284,13 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache, bool re
         _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
     }
 
-    _scanProgressBytes       = 0;
-    _scanPreviewPriorityJobs = 0u;
-    _scanProgressFolders     = 0;
-    _scanProgressFiles       = 0;
-    _scanFailedFolders       = 0;
-    _scanProcessingNodeId    = 0;
+    _scanProgressBytes           = 0;
+    _workspaceScanStartedSeconds = 0.0;
+    _scanPreviewPriorityJobs     = 0u;
+    _scanProgressFolders         = 0;
+    _scanProgressFiles           = 0;
+    _scanFailedFolders           = 0;
+    _scanProcessingNodeId        = 0;
     _scanProcessingFolderName.clear();
     _headerStatusId            = 0;
     _headerStatusFailedFolders = 0;
@@ -8130,7 +8323,7 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache, bool re
 
         if (! cacheKey.rootKey.empty())
         {
-            const std::shared_ptr<const ScanResultSnapshot> snapshot = GetScanResultCache().TryGet(cacheKey);
+            const std::shared_ptr<const ScanResultSnapshot> snapshot = GetScanCacheOwner().cache.TryGet(cacheKey);
 #ifdef ENABLE_TESTS
             if (snapshot && ReadPositiveUint32Environment(kTestCorruptCacheNameOffsetEnvVar).has_value() && snapshot->nodes.size() > 1u)
             {
@@ -8239,7 +8432,7 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache, bool re
             }
             if (snapshot)
             {
-                GetScanResultCache().DiscardIfMatches(cacheKey, snapshot);
+                GetScanCacheOwner().cache.DiscardIfMatches(cacheKey, snapshot);
                 Debug::Perf::EmitCounter(L"viewer.space.scan.cache_invalid_snapshot");
             }
             Debug::Perf::EmitCounter(L"viewer.space.scan.cache_miss");
@@ -8381,6 +8574,12 @@ void ViewerSpace::CancelScan() noexcept
     _scanActive.store(false);
 }
 
+bool ViewerSpace::CanCancelScanFromHeader() const noexcept
+{
+    return _deferredStartScan.has_value() || _refreshPending || _refreshAdoptionPending || _overallState == ScanState::Queued ||
+           _overallState == ScanState::Scanning;
+}
+
 void ViewerSpace::CancelScanByUser() noexcept
 {
     if (_deferredStartScan.has_value())
@@ -8454,7 +8653,8 @@ void ViewerSpace::AbandonScanWorkers() noexcept
 
     uint64_t reapedWorkers    = 0u;
     uint64_t abandonedWorkers = 0u;
-    const auto finishWorker   = [&reapedWorkers, &abandonedWorkers](ScanWorker& worker) noexcept
+    auto reaper               = std::make_unique<ScanWorkerReapContext>();
+    const auto finishWorker   = [&reapedWorkers, &reaper](ScanWorker& worker) noexcept
     {
         if (! worker.thread.joinable())
         {
@@ -8470,13 +8670,9 @@ void ViewerSpace::AbandonScanWorkers() noexcept
         }
         else
         {
-            // ReadDirectoryInfo is an untrusted provider boundary with no forced-cancel contract.
-            // The worker owns a ViewerSpace reference. Intentionally retain its unload gate after
-            // detach: there is no safe point inside a std::jthread lambda at which the last module
-            // pin could be released after the callback has returned. Runtime reload is therefore
-            // quarantined for this process after an uncooperative provider forces abandonment.
-            worker.thread.detach();
-            abandonedWorkers += 1u;
+            // The provider may ignore cancellation. Transfer its join and lifetime to a pinned
+            // callback; the UI never waits, and a cooperative return can reach a real quiet point.
+            reaper->workers.emplace_back(std::move(worker));
         }
         worker = {};
     };
@@ -8488,13 +8684,32 @@ void ViewerSpace::AbandonScanWorkers() noexcept
     }
     _retiredScanWorkers.clear();
 
+    const size_t pendingReaps = reaper->workers.size();
+    if (pendingReaps != 0u)
+    {
+        reaper->modulePin = AcquireModuleReferenceFromAddress(&kViewerSpaceModuleAnchor);
+        if (! reaper->modulePin || ! SubmitOwnedThreadpoolCallbackWithInstance(reaper))
+        {
+            // Allocation/submission refusal must never turn teardown into a UI join. Retain
+            // the unload gates only in this defensive fallback, until process shutdown.
+            for (ScanWorker& worker : reaper->workers)
+            {
+                worker.thread.detach();
+                abandonedWorkers += 1u;
+            }
+            Debug::Warning(L"ViewerSpace could not schedule scan retirement; module reload remains quarantined.");
+        }
+        else
+            Debug::Perf::EmitValue(L"viewer.space.scan.worker_reap_pending", pendingReaps);
+    }
+
     {
         std::scoped_lock lock(_updateMutex);
         _pendingUpdates.clear();
         _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
     }
 
-    if (reapedWorkers != 0u || abandonedWorkers != 0u)
+    if (reapedWorkers != 0u || abandonedWorkers != 0u || pendingReaps != 0u)
     {
         Debug::Perf::EmitValue(L"viewer.space.scan.worker_reaped", reapedWorkers);
         Debug::Perf::EmitValue(L"viewer.space.scan.worker_abandoned", abandonedWorkers);
@@ -9245,12 +9460,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         bool aggregateRoot      = false;
         uint32_t depth          = 0u;
         std::wstring path;
-        uint64_t bytes          = 0;
-        bool enumerated         = false;
-        bool failed             = false;
-        bool propagateFailure   = true;
-        bool contentNotMeasured = false;
-        size_t processedEntries = 0;
+        uint64_t bytes           = 0;
+        bool enumerated          = false;
+        bool failed              = false;
+        bool propagateFailure    = true;
+        bool contentNotMeasured  = false;
+        bool aggregateUnreadable = false;
+        size_t processedEntries  = 0;
         std::vector<ChildDir> children;
         std::vector<FileSummaryItem> topFiles;
         uint64_t stagingReservationBytes = 0u;
@@ -9356,9 +9572,10 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 item.contentNotMeasured = true;
                 return;
             }
-            // A folder that cannot be read is an Error in its own subtree only: its ancestors and the root still complete as Done,
-            // and the count is reported. Malformed provider buffers and scan-wide ceilings keep propagating (they remain whole-scan errors).
+            // A retained folder gets a local Error; an aggregated folder marks its owner's Other bucket. In both cases unrelated ancestors
+            // remain Done and the count is reported. Malformed provider buffers and scan-wide ceilings still propagate as whole-scan errors.
             SaturatingAtomicAdd(failedFolders, 1u);
+            item.aggregateUnreadable = item.modelNodeId == 0u;
             failProvider(ViewerSpaceScan::ValidationError::NullBuffer, failureHr, false);
             return;
         }
@@ -9667,6 +9884,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         bool displayError          = false;
         bool failed                = false;
         bool contentNotMeasured    = false;
+        bool aggregateUnreadable   = false;
     };
 
     std::mutex frontierMutex;
@@ -9933,6 +10151,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             bool displayError          = false;
             bool failed                = false;
             bool contentNotMeasured    = false;
+            bool aggregateUnreadable   = false;
             bool completedRoot         = false;
 
             {
@@ -9960,6 +10179,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 displayError         = completion.displayError;
                 failed               = completion.failed;
                 contentNotMeasured   = completion.contentNotMeasured;
+                aggregateUnreadable  = completion.aggregateUnreadable;
                 completedRoot        = traversalId == 1u;
                 if (completedRoot)
                 {
@@ -9988,6 +10208,16 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             }
 
             postDirectoryCompletion(modelNodeId, aggregateOwner, bytes, displayError ? ScanState::Error : ScanState::Done, contentNotMeasured);
+
+            if (modelNodeId != 0u && aggregateOwner == modelNodeId && aggregateUnreadable)
+            {
+                PendingUpdate unreadableUp;
+                unreadableUp.kind                        = PendingUpdate::Kind::UpdateAggregateUnreadable;
+                unreadableUp.generation                  = generation;
+                unreadableUp.nodeId                      = aggregateOwner;
+                unreadableUp.aggregateContainsUnreadable = true;
+                PostUpdate(std::move(unreadableUp));
+            }
 
             // The parent roll-up below adds these bytes unconditionally, so the "Other" summary must be posted even for a failed subtree;
             // otherwise the owner's total exceeds the sum of its tiles.
@@ -10033,8 +10263,12 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 parent.displayError         = parent.displayError || failed;
                 parent.failed               = parent.failed || failed;
                 parent.contentNotMeasured   = parent.contentNotMeasured || contentNotMeasured;
-                parentBytes                 = parent.bytes;
-                parentModelNodeId           = parent.modelNodeId;
+                if (parent.aggregateOwner == aggregateOwner)
+                {
+                    parent.aggregateUnreadable = parent.aggregateUnreadable || aggregateUnreadable;
+                }
+                parentBytes       = parent.bytes;
+                parentModelNodeId = parent.modelNodeId;
                 if (parent.pendingChildren > 0u)
                 {
                     parent.pendingChildren -= 1u;
@@ -10234,6 +10468,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             completion.displayError         = completion.displayError || item.failed;
             completion.failed               = completion.failed || (item.failed && item.propagateFailure);
             completion.contentNotMeasured   = completion.contentNotMeasured || item.contentNotMeasured;
+            completion.aggregateUnreadable  = completion.aggregateUnreadable || item.aggregateUnreadable;
 
             uint64_t childPathBytes = 0u;
             for (const ScanJob& childJob : childJobs)
@@ -11085,6 +11320,18 @@ void ViewerSpace::DrainUpdates() noexcept
                     }
                     break;
                 }
+                case PendingUpdate::Kind::UpdateAggregateUnreadable:
+                {
+                    Node* node = TryGetRealNode(update.nodeId);
+                    if (node != nullptr && update.aggregateContainsUnreadable && ! node->aggregateContainsUnreadable)
+                    {
+                        node->aggregateContainsUnreadable = true;
+                        layoutChanged                     = true;
+                        inspectorDirty =
+                            _selectedItemId == node->id || (IsSyntheticNodeId(_selectedItemId) && (_selectedItemId & kTreemapItemIdMask) == node->id);
+                    }
+                    break;
+                }
                 case PendingUpdate::Kind::UpdateState:
                 {
                     Node* node = TryGetRealNode(update.nodeId);
@@ -11500,7 +11747,7 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
         return;
     }
 
-    if (! g_cacheEnabled.load(std::memory_order_acquire) || g_cacheMaxEntries.load(std::memory_order_acquire) == 0)
+    if (_config.cacheMaxEntries == 0u)
     {
         CancelScanCacheBuild();
         return;
@@ -11707,7 +11954,8 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
             cachedNode.isDirectory          = node.isDirectory;
             cachedNode.isSynthetic          = node.isSynthetic;
             cachedNode.scanState            = static_cast<uint8_t>(node.scanState);
-            cachedNode.flags                = node.contentNotMeasured ? kScanResultCacheNodeContentNotMeasured : 0u;
+            cachedNode.flags                = static_cast<uint8_t>((node.contentNotMeasured ? kScanResultCacheNodeContentNotMeasured : 0u) |
+                                                                   (node.aggregateContainsUnreadable ? kScanResultCacheNodeAggregateUnreadable : 0u));
             cachedNode.totalBytes           = node.totalBytes;
             cachedNode.lastWriteTime        = node.lastWriteTime;
             cachedNode.observedOwnFileBytes = node.observedOwnFileBytes;
@@ -11803,9 +12051,8 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
         return;
     }
 
-    ScanResultCache& cache = GetScanResultCache();
-    if (! cache.Store(std::move(cacheKey), std::move(snapshot)) && g_cacheEnabled.load(std::memory_order_acquire) &&
-        g_cacheMaxEntries.load(std::memory_order_acquire) != 0u)
+    ScanResultCache& cache = GetScanCacheOwner().cache;
+    if (! cache.Store(std::move(cacheKey), std::move(snapshot)) && _config.cacheEnabled && _config.cacheMaxEntries != 0u)
     {
         Debug::Perf::EmitValue(L"viewer.space.model.cache_skipped_aggregate", snapshotBytes);
     }
@@ -11913,7 +12160,7 @@ void ViewerSpace::ContinueScanCacheRestore() noexcept
         ScanResultCacheKey key;
         key.rootKey              = _scanCacheRestoreRootKey;
         key.topFilesPerDirectory = _scanCacheRestoreTopFilesPerDirectory;
-        GetScanResultCache().DiscardIfMatches(key, snapshot);
+        GetScanCacheOwner().cache.DiscardIfMatches(key, snapshot);
         Debug::Perf::EmitCounter(L"viewer.space.scan.cache_invalid_snapshot");
         const std::wstring rootPath = _model->scanRootPath;
         CancelScanCacheRestore();
@@ -12250,11 +12497,12 @@ void ViewerSpace::ContinueScanCacheRestore() noexcept
                     {
                         const std::wstring_view name = ScanSnapshotName(*snapshot, cachedNode.nameOffset, cachedNode.nameLength);
                         Node node;
-                        node.id                   = cachedNode.id;
-                        node.parentId             = cachedNode.parentId;
-                        node.isDirectory          = cachedNode.isDirectory;
-                        node.isSynthetic          = cachedNode.isSynthetic;
-                        node.contentNotMeasured   = (cachedNode.flags & kScanResultCacheNodeContentNotMeasured) != 0u;
+                        node.id                          = cachedNode.id;
+                        node.parentId                    = cachedNode.parentId;
+                        node.isDirectory                 = cachedNode.isDirectory;
+                        node.isSynthetic                 = cachedNode.isSynthetic;
+                        node.contentNotMeasured          = (cachedNode.flags & kScanResultCacheNodeContentNotMeasured) != 0u;
+                        node.aggregateContainsUnreadable = (cachedNode.flags & kScanResultCacheNodeAggregateUnreadable) != 0u;
                         node.scanState            = cachedNode.id == _model->rootNodeId ? ScanState::Queued : static_cast<ScanState>(cachedNode.scanState);
                         node.name                 = CopyToArena(_model->nameArena, name);
                         node.totalBytes           = cachedNode.totalBytes;
@@ -12336,7 +12584,7 @@ void ViewerSpace::ContinueScanCacheRestore() noexcept
                                               static_cast<uint64_t>(_model->childrenArena.size()) * static_cast<uint64_t>(sizeof(uint32_t)) +
                                               static_cast<uint64_t>(snapshot->names.size()) * static_cast<uint64_t>(sizeof(wchar_t));
                 _lastScanCacheRestoreUs     = static_cast<uint64_t>(std::max(0.0, (NowSeconds() - _scanCacheRestoreStartedAtSeconds) * 1'000'000.0));
-                _lastScanCacheResidentBytes = GetScanResultCache().ResidentBytes();
+                _lastScanCacheResidentBytes = GetScanCacheOwner().cache.ResidentBytes();
                 Debug::Perf::EmitCounter(L"viewer.space.scan.cache_hit");
                 Debug::Perf::EmitValue(L"viewer.space.model.cache_restore_bytes", _lastScanCacheRestoreBytes);
                 Debug::Perf::EmitValue(L"viewer.space.model.cache_restore_us", _lastScanCacheRestoreUs);
@@ -13931,6 +14179,14 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
         if (! _fileSystem.try_query_to(previousIdentity.put()) || FAILED(context->fileSystem->QueryInterface(IID_PPV_ARGS(nextIdentity.put()))) ||
             previousIdentity.get() != nextIdentity.get())
         {
+            CancelScanCacheBuild();
+            CancelScanCacheRestore();
+            _scanCacheOwner.reset();
+            _scanCacheLastStoredGeneration = 0u;
+            _lastScanCacheSnapshotBytes    = 0u;
+            _lastScanCacheRestoreBytes     = 0u;
+            _lastScanCacheResidentBytes    = 0u;
+            _lastScanCacheRestoreUs        = 0u;
             RestoreExcludedItems();
             _cleanupMarks.clear();
             _reviewingCleanup = false;
@@ -14088,5 +14344,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexce
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 
+    // Embedded previews receive the host's regional-format broadcast through SetTheme.
+    OnSettingChange(L"intl");
     return S_OK;
 }

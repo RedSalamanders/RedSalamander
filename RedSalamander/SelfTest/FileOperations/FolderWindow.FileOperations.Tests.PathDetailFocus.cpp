@@ -92,7 +92,11 @@
     if (! detail || detail->GetText() != task.currentSourcePath || popupState->DebugPathDetailLogicalFocusForSelfTest() != textId)
         return reject(L"opening path detail did not retain its exact text target and full path");
 
-    const auto verifyAccessibleText = [&]() noexcept
+    const std::wstring expectedDetailName = FormatStringResource(nullptr,
+                                                                 IDS_FMT_FILEOPS_PATH_DETAIL_TITLE,
+                                                                 LoadStringResource(nullptr, IDS_FILEOPS_LABEL_FROM),
+                                                                 LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH));
+    const auto verifyAccessibleText       = [&]() noexcept
     {
         wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> root;
         root.attach(DxUi::CreateWindowHostAccessibilityProvider(popup.get()));
@@ -114,12 +118,16 @@
             {
                 wil::unique_variant controlType;
                 wil::unique_variant isOffscreen;
+                wil::unique_variant accessibleName;
                 wil::com_ptr_nothrow<IUnknown> textPattern;
                 UiaRect bounds{};
                 return SUCCEEDED(simple->GetPropertyValue(UIA_ControlTypePropertyId, &controlType)) && controlType.vt == VT_I4 &&
                        controlType.lVal == UIA_EditControlTypeId && SUCCEEDED(simple->GetPropertyValue(UIA_IsOffscreenPropertyId, &isOffscreen)) &&
-                       isOffscreen.vt == VT_BOOL && isOffscreen.boolVal == VARIANT_FALSE && SUCCEEDED(current->get_BoundingRectangle(&bounds)) &&
-                       bounds.width > 0.0 && bounds.height > 0.0 && SUCCEEDED(simple->GetPatternProvider(UIA_TextPatternId, textPattern.put())) && textPattern;
+                       isOffscreen.vt == VT_BOOL && isOffscreen.boolVal == VARIANT_FALSE &&
+                       SUCCEEDED(simple->GetPropertyValue(UIA_NamePropertyId, &accessibleName)) && accessibleName.vt == VT_BSTR && accessibleName.bstrVal &&
+                       expectedDetailName == std::wstring_view(accessibleName.bstrVal, SysStringLen(accessibleName.bstrVal)) &&
+                       SUCCEEDED(current->get_BoundingRectangle(&bounds)) && bounds.width > 0.0 && bounds.height > 0.0 &&
+                       SUCCEEDED(simple->GetPatternProvider(UIA_TextPatternId, textPattern.put())) && textPattern;
             }
             wil::com_ptr_nothrow<IRawElementProviderFragment> child;
             if (FAILED(current->Navigate(NavigateDirection_FirstChild, child.put())))
@@ -139,7 +147,81 @@
         return false;
     };
     if (! verifyAccessibleText())
-        return reject(L"the visible detail editor lost its UIA edit/TextPattern bounds");
+        return reject(L"the visible detail editor lost its subject-aware UIA Name or edit/TextPattern bounds");
+
+    const auto invokePathDetailCopy = [&](std::wstring_view targetId) noexcept
+    {
+        wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> root;
+        root.attach(DxUi::CreateWindowHostAccessibilityProvider(popup.get()));
+        wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
+        if (! root || FAILED(root.query_to(fragment.put())) || ! fragment)
+            return false;
+        std::vector<wil::com_ptr_nothrow<IRawElementProviderFragment>> pending;
+        pending.push_back(std::move(fragment));
+        size_t visited = 0u;
+        while (! pending.empty() && ++visited <= 512u)
+        {
+            auto current = std::move(pending.back());
+            pending.pop_back();
+            wil::com_ptr_nothrow<IRawElementProviderSimple> simple;
+            wil::unique_variant automationId;
+            if (FAILED(current.query_to(simple.put())) || ! simple || FAILED(simple->GetPropertyValue(UIA_AutomationIdPropertyId, &automationId)))
+                return false;
+            if (automationId.vt == VT_BSTR && automationId.bstrVal && targetId == std::wstring_view(automationId.bstrVal, SysStringLen(automationId.bstrVal)))
+            {
+                wil::com_ptr_nothrow<IUnknown> pattern;
+                wil::com_ptr_nothrow<IInvokeProvider> invoke;
+                return SUCCEEDED(simple->GetPatternProvider(UIA_InvokePatternId, pattern.put())) && pattern && SUCCEEDED(pattern.query_to(invoke.put())) &&
+                       invoke && SUCCEEDED(invoke->Invoke());
+            }
+            wil::com_ptr_nothrow<IRawElementProviderFragment> child;
+            if (FAILED(current->Navigate(NavigateDirection_FirstChild, child.put())))
+                return false;
+            size_t siblingCount = 0u;
+            while (child)
+            {
+                if (++siblingCount > 128u || visited + pending.size() >= 512u)
+                    return false;
+                wil::com_ptr_nothrow<IRawElementProviderFragment> next;
+                if (FAILED(child->Navigate(NavigateDirection_NextSibling, next.put())))
+                    return false;
+                pending.push_back(std::move(child));
+                child = std::move(next);
+            }
+        }
+        return false;
+    };
+
+    PopupLayoutDebugSnapshot copyAnnouncementLayout{};
+    copyAnnouncementLayout.taskId = taskId;
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), copyAnnouncementLayout))
+        return reject(L"the popup accessibility notification counter is unavailable");
+    const uint64_t announcementsBefore = copyAnnouncementLayout.hostedAccessibilityNotificationCount;
+    popupState->DebugSetPathDetailCopyResultForSelfTest(true);
+    if (! invokePathDetailCopy(copyId) ||
+        popupState->DebugPathDetailCopyAnnouncementForSelfTest() != LoadStringResource(nullptr, IDS_FILEOPS_PATH_DETAIL_COPY_SUCCEEDED))
+        return reject(L"UIA Invoke did not announce the successful full-path copy result");
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), copyAnnouncementLayout) ||
+        copyAnnouncementLayout.hostedAccessibilityNotificationCount <= announcementsBefore)
+        return reject(L"successful path copy did not raise an accessibility notification");
+    const uint64_t announcementsAfterSuccess = copyAnnouncementLayout.hostedAccessibilityNotificationCount;
+    popupState->DebugSetPathDetailCopyResultForSelfTest(false);
+    if (! invokePathDetailCopy(copyId) ||
+        popupState->DebugPathDetailCopyAnnouncementForSelfTest() != LoadStringResource(nullptr, IDS_FILEOPS_PATH_DETAIL_COPY_FAILED))
+        return reject(L"UIA Invoke did not announce the failed full-path copy result");
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), copyAnnouncementLayout) ||
+        copyAnnouncementLayout.hostedAccessibilityNotificationCount <= announcementsAfterSuccess)
+        return reject(L"failed path copy did not raise an accessibility notification");
+    popupState->DebugSetPathDetailCopyResultForSelfTest(std::nullopt);
+
+    if (! popupState->DebugPathDetailNeedsFocusForSelfTest() || ! popupState->DebugFocusPathDetailControlForSelfTest(popup.get(), copyId) ||
+        popupState->DebugPathDetailNeedsFocusForSelfTest())
+        return reject(L"a hosted Copy focus change did not clear pending initial text focus");
+    PopupLayoutDebugSnapshot retainedCopyFocus{};
+    retainedCopyFocus.taskId = taskId;
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), retainedCopyFocus) || retainedCopyFocus.hostedFocusedAutomationId != copyId)
+        return reject(L"path detail synchronization stole focus back from the Copy control");
 
     const std::array<std::wstring, 3u> logicalTargets{{textId, copyId, closeId}};
     for (size_t index = 0u; index < logicalTargets.size(); ++index)
@@ -425,6 +507,65 @@
     if (popupState->DebugHostedActionCountForSelfTest() != beforeGlobal + 1u || ! IsWindowVisible(popup.get()) || GetForegroundWindow() != foregroundBefore ||
         GetFocus() != focusBefore)
         return reject(L"Escape with global focus did not invoke exactly B's decision without hiding or activation");
+
+    // A single actionable decision below the list viewport is not an Escape target. Escape
+    // closes the popup without dispatching an action the user cannot see.
+    std::vector<TaskSnapshot> offscreenTasks;
+    for (uint64_t index = 0u; index < 8u; ++index)
+    {
+        TaskSnapshot task      = taskA;
+        task.taskId            = taskAId + 100u + index;
+        task.currentSourcePath = std::format(L"C:\\Escape\\BeforeDecision\\{}.raw", index);
+        offscreenTasks.push_back(std::move(task));
+    }
+    offscreenTasks.push_back(taskB);
+    popupState->DebugSetVisualScenario(std::move(offscreenTasks), false, true);
+    ShowWindow(popup.get(), SW_SHOWNOACTIVATE);
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    static_cast<void>(SendMessageW(popup.get(), WM_VSCROLL, SB_TOP, 0));
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), {}))
+        return reject(L"could not clear hosted focus before the offscreen Escape case");
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    PopupLayoutDebugSnapshot offscreenBinding{};
+    offscreenBinding.taskId = taskBId;
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), offscreenBinding) || offscreenBinding.hostedCancelAutomationId.size() != 0u ||
+        offscreenBinding.hostedDefaultAutomationId.empty())
+        return reject(L"offscreen Escape was not hidden while the independent Enter default remained published");
+    const uint64_t beforeOffscreenEscape = popupState->DebugHostedActionCountForSelfTest();
+    pressEscape();
+    if (IsWindowVisible(popup.get()) || popupState->DebugHostedActionCountForSelfTest() != beforeOffscreenEscape)
+        return reject(L"Escape on an offscreen decision invoked it instead of hiding the popup");
+
+    // Restore the two-card scenario for the focused-card routing controls below.
+    popupState->DebugSetVisualScenario({taskA, taskB}, false, true);
+    ShowWindow(popup.get(), SW_SHOWNOACTIVATE);
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    static_cast<void>(SendMessageW(popup.get(), WM_VSCROLL, SB_TOP, 0));
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    if (! DebugGetFileOperationsPopupTaskSnapshot(popup.get(), taskBId, projectedB) || projectedB.conflict.primaryActionCount < 3u)
+        return reject(L"task B's multi-action decision fixture was not republished");
+    const auto actionId = [&](uint8_t rawAction)
+    {
+        return std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                           static_cast<uint32_t>(PopupHitTest::Kind::TaskConflictAction),
+                           taskBId,
+                           rawAction,
+                           projectedB.conflict.generation);
+    };
+    const std::wstring firstActionId  = actionId(projectedB.conflict.primaryActions[0]);
+    const std::wstring secondActionId = actionId(projectedB.conflict.primaryActions[1]);
+    const std::wstring thirdActionId  = actionId(projectedB.conflict.primaryActions[2]);
+    if (! popupState->DebugSetHostedButtonEnabledForSelfTest(popup.get(), secondActionId, false) ||
+        ! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), firstActionId))
+        return reject(L"could not prepare an enabled-arrow target past a disabled decision button");
+    SendMessageW(popup.get(), WM_KEYDOWN, VK_RIGHT, 0);
+    PopupLayoutDebugSnapshot arrowBinding{};
+    arrowBinding.taskId = taskBId;
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), arrowBinding) || arrowBinding.hostedFocusedAutomationId != thirdActionId)
+        return reject(std::format(L"Right arrow stopped at the disabled action instead of the next enabled one (focused='{}', expected='{}')",
+                                  arrowBinding.hostedFocusedAutomationId,
+                                  thirdActionId));
+    static_cast<void>(popupState->DebugSetHostedButtonEnabledForSelfTest(popup.get(), secondActionId, true));
 
     // Focus A's own path region, as returning from its path detail does.
     const std::wstring pathIdA = std::format(L"FileOperations.Task.{}.Path.Source.0", taskAId);
@@ -917,6 +1058,32 @@
     const bool footerOk   = footer();
     const bool pathRowsOk = pathRows();
     const bool keysOk     = spaceKeys();
+    present({running});
+    PopupLayoutDebugSnapshot runningLayout{};
+    runningLayout.taskId = runId;
+    std::wstring runningAccessibleName;
+    const std::wstring runningText  = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_RUNNING);
+    const bool runningNamePublished = popupState->DebugHostedProgressAccessibleNameForSelfTest(runId, runningAccessibleName);
+    if (! layoutFor(runId, runningLayout) || ! runningNamePublished || runningAccessibleName != runningText ||
+        runningLayout.taskStatusChipPaintedText != runningText || ! runningLayout.taskStatusChipActuallyPainted)
+        return reject(L"a running task lost its localized UIA status name or concise visual chip");
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    if (! DebugEnterFileOperationsPopupFailureSurface(popup.get()))
+        return reject(L"could not prepare the native failure-surface Running fallback witness");
+    if (! layoutFor(runId, runningLayout) || runningLayout.failureSurfaceText.find(std::format(
+                                                 L"{}: {}", LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY), runningText)) == std::wstring::npos)
+        return reject(L"the failure surface left the Running status unnamed");
+
+    // A shutdown that arrives just before the prompt loop starts still destroys the prompt HWND
+    // while its DxUi host is alive; the prompt remains a no-activation test window.
+    HostResetPromptShutdown();
+    auto restorePromptShutdown = wil::scope_exit([]() noexcept { HostResetPromptShutdown(); });
+    HostBeginPromptShutdown();
+    DebugShowFileOperationsSpeedLimitPromptForGallery(state.mainWindow, folder->GetTheme());
+    if (GetFileOperationsSpeedLimitPromptHandle() != nullptr)
+        return reject(L"the speed-limit prompt HWND survived its shutdown-fenced modal call");
+    HostResetPromptShutdown();
+    static_cast<void>(restorePromptShutdown.release());
     if (GetForegroundWindow() != foregroundBefore || GetFocus() != focusBefore)
         return reject(L"the scenario changed native focus or foreground ownership");
     return announced && footerOk && pathRowsOk && keysOk;

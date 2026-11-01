@@ -1,0 +1,40 @@
+{
+  "utc": "2026-10-31T16:18:31.6258711Z",
+  "runId": "ck31-00ec6a71",
+  "method": "Direct SHA256 comparison of each checkout new_path to manifest blob_content_sha256; no Git subprocess",
+  "entries": 3002,
+  "bytes": 944671717,
+  "failureCount": 1279,
+  "firstFailures": [
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Continuation/c04/application-error-redsalamander-recent.txt",
+      "expectedSha256": "a89e123627fe0f5d0439021224f774a23f8fdc750885a442ce5ea34d79534ced",
+      "actualSha256": "e949144e7c13264eb32b05c584a817067e3a6a573c68d0617297c98da6c9341a",
+      "actualBytes": 1587
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Continuation/c04/commands-broad-after-repaint-assertion-20260701_2240.err.log",
+      "expectedSha256": "84c90fdd5d5ba8993e1b7f844911363eb65aba1641d6151547538b9efe47f44b",
+      "actualSha256": "77215952c5e391feb061cff567fb4484983d111b2c17f2022b006d661c13a01a",
+      "actualBytes": 26224070
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Continuation/c04/commands-broad-after-repaint-assertion-20260701_2240.exit.txt",
+      "expectedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "actualSha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+      "actualBytes": 3
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Continuation/c04/commands-broad-after-repaint-assertion-20260701_2240.out.log",
+      "expectedSha256": "103e34addfad503dc1f08f949bf316886bceb4badcff2d4b37e1a4a96233c314",
+      "actualSha256": "025aa2622cc3d1183ec5f6753048eb7796840e58aec84d557ec6fdb00f3c1680",
+      "actualBytes": 2985240
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Continuation/c04/commands-broad-after-repaint-assertion-20260701_2240.pid.txt",
+      "expectedSha256": "ac67e777772e72cddc3e0af749839b421aea5ac49e3bacf7e738113004f166dc",
+      "actualSha256": "dce26db52cc8f567ab7403239f32895a9b021c544e9848b1d141f99f0e96d681",
+      "actualBytes": 7
+    }
+  ]
+}

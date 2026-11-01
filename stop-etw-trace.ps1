@@ -121,7 +121,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host ""
-Write-Host "Note: RedSalamanderMonitor.exe displays ETW events in real-time" -ForegroundColor Cyan
+Write-Host "Note: the independently installed RedMonitor displays ETW events in real-time" -ForegroundColor Cyan
 Write-Host "      without needing external trace sessions." -ForegroundColor Cyan
 Write-Host ""
 if (-not $NoPause) {

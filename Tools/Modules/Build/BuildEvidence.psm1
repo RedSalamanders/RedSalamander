@@ -118,7 +118,7 @@ function Get-RSBuildArtifactRole {
     if ($extension -eq '.exe' -and $File.BaseName -in @('RedLauncher', 'RedSalamander')) { return 'launchable' }
     if ($extension -eq '.exe') { return 'test' }
     if ($extension -eq '.pdb') { return 'symbols' }
-    if ($extension -in @('.msix', '.msi', '.zip')) { return 'package' }
+    if ($extension -in @('.zip')) { return 'package' }
     if ($extension -eq '.dll' -and $File.Directory.Name -eq 'Plugins') { return 'plugin' }
     if ($extension -eq '.dll') { return 'library' }
     return 'runtime-data'
@@ -485,16 +485,28 @@ function Get-RSBuildArtifactManifestDeclarations {
 
 function Test-RSBuildArtifactManifestTestsEnabled {
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string]$ArtifactManifestDir)
+    param(
+        [Parameter(Mandatory = $true)][string]$ArtifactManifestDir,
+        [switch]$RequireUniform
+    )
 
     $files = @(Get-ChildItem -LiteralPath $ArtifactManifestDir -File -Filter '*.manifest' -ErrorAction Stop)
     if ($files.Count -eq 0) { throw "Build produced no artifact manifests: $ArtifactManifestDir" }
+    $firstValue = $null
     foreach ($file in $files) {
         $lines = @(Get-Content -LiteralPath $file.FullName -Encoding UTF8)
-        if ((Get-RSBuildManifestScalar -Line $lines -Name tests_enabled -ManifestPath $file.FullName) -ne 'true') {
+        $value = Get-RSBuildManifestScalar -Line $lines -Name tests_enabled -ManifestPath $file.FullName
+        if ($RequireUniform) {
+            if ($value -cnotin @('true', 'false')) { throw "Invalid artifact test surface in '$($file.FullName)': $value" }
+            if ($null -ne $firstValue -and $value -cne $firstValue) {
+                throw 'Build artifact manifests have mixed test surfaces; no uniform receipt can be published.'
+            }
+            $firstValue = $value
+        } elseif ($value -ne 'true') {
             return $false
         }
     }
+    if ($RequireUniform) { return $firstValue -ceq 'true' }
     return $true
 }
 

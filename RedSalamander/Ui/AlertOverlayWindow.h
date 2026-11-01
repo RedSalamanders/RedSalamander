@@ -168,6 +168,7 @@ struct AlertOverlayModelessSelfTestResult
     // helper, and the blocking hide that uses it.
     bool hiddenReturnFallsBackToAnchor = false;
     bool blockingHideFallsBackToAnchor = false;
+    bool blockingDecisionRejectsRepeat = false;
     // Alt+F4 (WM_CLOSE) on a modeless overlay closes its owner's window, never the overlay window.
     bool closeMessageForwardedToOwner = false;
     // The keyboard way out of the guard (I35 S5 second red-team): F6 or Shift+F6 hands the focus back to the

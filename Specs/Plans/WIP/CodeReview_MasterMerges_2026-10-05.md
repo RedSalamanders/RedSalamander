@@ -1,4 +1,180 @@
-# I36 review remediation — remaining work
+﻿ I36 review remediation — remaining work
+
+## Execution checklist (reopened 2026-10-31)
+
+Owner: current implementation session. User authorized challenge and implementation of remaining
+work. Starting identity: `6b6f5646b`, clean checkout. The staged-file directions below describe an
+older checkout; no staged candidate exists at this starting identity.
+Checked implementation items mean source, regressions and owning specifications are present;
+qualification remains a separate requirement.
+
+Owner delivery decision (2026-10-31): remove MSI and MSIX packaging from every
+project in the RedSalamander solution; retain portable ZIP and winget delivery.
+MSI/MSIX-specific repairs and acceptance gates below are historical and superseded.
+Other repositories and immutable historical evidence are preserved.
+
+- [x] Retire MSI/MSIX projects, commands, workflow paths and active contracts;
+  retain portable ZIP and winget delivery and their receipt/integrity guards.
+
+Retirement acceptance requires affected tooling checks and an actual Release ZIP
+build; their exact-source results are recorded in the shared execution packet.
+
+- [x] Repair the SearchService busy-pipe fixture's listener-recreation race within
+  its existing five-second acquisition budget; add a bounded missing-listener control.
+
+The subsequent Release PrePush passed 1,420 checks but failed that fixture once.
+Its original result remains preserved. The repair changes test acquisition only;
+production broker retry behavior and query/status/shutdown/cancel budgets are unchanged.
+Fresh focused/Compare qualification and final delivery results belong to the execution packet.
+
+- [x] Preserve the parallel search coordinator's final-batch callback failure after
+  worker quiescence; add deterministic success/abort/error/cancel coverage.
+
+The later affected repeat exposed a separate product race in `local_search_callback_contract`:
+it recorded `E_ABORT` after observing completed workers, then returned stale success.
+The candidate reconciles the first terminal status under the existing post-join lock.
+The root-scoped test-only join gate and perf row prove the last-batch ordering;
+fresh qualification remains separate from the preceding failed run.
+
+The current build captures native artifacts and module provenance after native
+compilation, then validates uniform test-surface metadata and final native bytes
+before publishing a receipt. ZIP staging must preserve that captured closure.
+The MSI/MSIX source was preserved before removal, including diagnostic failures
+that exposed excluded evidence during MSI staging and seven stale native hashes
+after MSIX project-reference compilation. Those historical installer repairs no
+longer define shipping requirements. The later Debug PrePush run was interrupted
+when the owner changed delivery scope; it is not a completed pass. Qualification
+results and remaining gates belong to the shared execution packet. Focus-taking
+work remains pending by request.
+
+- [x] Reconcile every residual wave and coverage gap with current code, delivered history,
+  the follow-up record and overlapping I50 findings; remove stale execution directions.
+- [x] Independently verify consequential reviewer conclusions and record rejected hypotheses.
+- [x] Implement confirmed remaining defects with meaningful regressions and owning specs.
+- [x] Review simplification proposals for current need and repair risk before implementation.
+- [x] Run noninteractive affected explanation, appropriate builds/tests and required
+  performance scenarios; retain exact-source results and original failures.
+- [x] Complete fresh noninteractive PrePush coverage accounting and record deferred gates.
+- [x] Validate both tests-disabled Release ZIPs, their receipt/integrity closure,
+  and stock Windows checkout compatibility.
+- [ ] Run foreground Commands, FileOperations, ViewerPE and ViewerSqlite acceptance
+  under the desktop lease at an agreed time; deferred by the owner.
+- [ ] Execute native ARM64 qualification and classify the ARM64-only WIC decode
+  discrepancy; explicitly pending by owner direction, not closed by a cross-build.
+- [ ] Complete approved physical-device and provider/environment checks, including
+  MTP, SMB and elevated/NTFS/live-journal prerequisites; explicitly pending.
+- [ ] Complete mixed-DPI, real assistive-technology and real shutdown/logoff acceptance.
+- [ ] Move to Done and update index/exact-file admission only after all required gates close.
+
+## Current acceptance checkpoint (2026-11-01)
+
+Owner authorized commit and PR publication with native ARM64 and physical-device
+checks left pending. The earlier decision to defer foreground tests also remains
+in force. Both plans stay ACTIVE in WIP until the unchecked acceptance gates close.
+Earlier checkpoints below are historical; this checkpoint and the shared execution
+packet own the current result.
+
+At qualified implementation snapshot
+`eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c`:
+
+- Fresh affected and PrePush execution each passed **1,421 / 0 failed / 31 accepted
+  capability skips**. All fourteen selected entries were executed and promoted;
+  none were incomplete, invalidated, provisional or reused. Source hashes before
+  and after each run match. The change verdict is PASSED; the repository verdict
+  remains NOT_EVALUATED because four foreground entries were deferred.
+- Complete Compare passed **252/0/31**, including both repaired search cases.
+  The forced final-batch regression proves four dispatches with zero remaining
+  workers and one queued result. PerformanceTests2 passed **15/15**, the compiler
+  lane **30/30**, and tooling **1,128/1,128** in both runs.
+- Native builds reported **zero warnings and zero errors**. Tests-disabled x64
+  and ARM64 production ZIPs each have 174 byte-verified receipt outputs, 175 ZIP
+  entries, no excluded build/test sidecars and no hash mismatches. The x64
+  fresh-extraction native package smoke passed; no ARM64 executable was run.
+- Stock Windows checkout proof `sf-daf065ef` passed with explicit long-path and
+  symlink support disabled: 28,032 regular files, maximum relative path 200 and
+  absolute path 251, no round-trip mismatches. All 3,002 historical relocation
+  blobs and 6,004 text/eol attribute comparisons match. Source index, status,
+  HEAD, shared indexes and object-store content remained unchanged during proof.
+- Final source, shipping-byte, archive, changelog, tool-inventory and whitespace
+  checks passed. The final archive guard checked 1,298 paths with zero violations.
+  Original failures, interrupted attempts and earlier snapshots remain preserved;
+  a passing repeat does not change their verdicts.
+
+The [execution packet](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md)
+contains the exact run IDs, receipts, source identities and remaining gates. This
+plan/status closeout follows the qualified snapshot. Integration with current main
+also preserves its newer test and CI policy changes and reuses its canonical pipe
+fixture connector with deterministic attempt observations. Merged-source validation
+is recorded separately; old receipts are not retagged as that integration or as
+native ARM64, physical-device, foreground, mixed-DPI, assistive-technology or real
+shutdown acceptance. I50 retains the incoming revision-2 review/routing scope.
+
+### Current-main integration verification (2026-11-01)
+
+Merge `ff1c31470e0caf19cdfa5dcfae7f5bd75570f944` preserves the newer main
+CI/test contracts without changing shipping product source relative to the
+validated implementation commit. At merged source snapshot
+`ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a`,
+x64 Release built with zero warnings/errors and 188 attested outputs (receipt
+`f046bd62`). Complete noninteractive Compare passed **253/0/31**, including
+the canonical connector's dedicated missing/recreated-listener control and both
+repaired search cases; four perf rows prove final-batch ordering. Before/after
+source hashes match. Raw native run:
+`20261101T110522Z-62312-dd0e95c82aed4f8388c282cb31fc6a51`.
+
+The merged tooling batch recorded 489 passes and one setup failure against an
+older ignored CI-engine checkout. Restoring the exact configured engine pin
+`e32cf9f9b29f4e817decb09e1be44be7fc1a94de` changed no project pin; the
+complete Winget file then passed **21/21** and release-policy file **38/38**.
+The original failed batch remains preserved. Hosted inventory additionally found
+twelve live links to renamed evidence; their exact manifest-mapped destinations
+were restored without editing protected historical payloads.
+The complete specification audit then reported zero blocking findings; existing
+informational diagnostics for protected historical records remain informational.
+
+These are integration-scoped results. The earlier 1,421-pass records and ZIP/
+stock-checkout proofs retain their original source identity. Later status and
+live-reference repairs are documentation changes; no result closes native ARM64,
+physical-device, foreground or incoming revision-2 acceptance.
+
+The final publication-candidate stock checkout proof `sf-f65668c1` passed with
+long paths and symlinks disabled: 28,099 regular files, maximum relative/absolute
+path 200/251, no round-trip mismatches, and all 3,002 relocation blobs plus 6,004
+attribute comparisons preserved. Source index/status/HEAD/object storage remained
+unchanged. Later compact metadata additions receive explicit path/cap validation.
+
+Hosted CodeQL analysis completed, but its separate `CodeQL` check reported two
+high annotations in the unchanged, relocated `Common_SearchServiceBroker.cpp`
+snapshots under historical `Continuation/c20` and `c21`. Those archived files
+are not product build inputs. The failed check remains visible and its annotation
+disposition is **open**; this publication does not dismiss alerts, disable queries
+or edit protected payloads. The execution packet records the exact check and paths.
+
+Qualification checkpoint before the final fixture edits: noninteractive PrePush
+`20261031T164304Z-21260-b7c1915171574a9abd900578f6a31e5b` failed with 1,433 passed,
+two failed result groups and 29 skips; twelve of fourteen entries were promoted and none
+invalidated. The compiled PluginContract, Compare (256/0/27 accepted capability skips), Curl
+and PerformanceTests2 (15/15) entries passed. The build-toolchain lane passed 30/30 and
+re-attested x64 Debug without diagnostics. Test-enabled x64 Release and all three ARM64
+cross-build profiles also have zero diagnostics at the same source; ARM64 execution is unverified.
+
+The candidate corrects the two ViewerSpace cache fixtures' build-versus-restore wait, using
+real provider-read and post-Close empty-state witnesses. It also checks immutable pinned
+vcpkg baseline data without altering the dirty managed checkout. The preceding tooling
+assertions were 1,137/0/2, but the native runner correctly rejected those two prerequisite skips.
+Pinned registry-data checks do not qualify the live tool/bootstrap state. Fresh results for
+these later test edits and all remaining gates belong to the
+[shared execution packet](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md).
+Focus-taking tests remain pending by request, so this plan remains WIP.
+
+Earlier integrated follow-up: a tagged relocated Debug fixture warning and an ordinal path-key
+collision for supplementary names were confirmed while qualifying I50/I36 together. The warning
+and key algorithm are repaired locally, with required-key availability and classifier controls;
+fresh native execution remains required. The interrupted PrePush attempt and original failing
+NLS oracle remain preserved in the shared execution packet. Focus-taking tests remain pending.
+Later build-only receipts `3c106a54` (x64 Debug) and `72d38756` (ARM64 Release cross-build)
+have zero diagnostics. The deployment-test capture-path correction is later source and still
+requires fresh qualification; neither an interrupted runner nor a cross-build is native acceptance.
 
 Status: ACTIVE. Renumbered from I30 to I36 on 2026-10-11: the archived delivered record claims I30 in its title and plan ranks are never reused (`Specs/README.md`, "Plan lifecycle"); the content below is unchanged and its ledger references still name the I30 delivery. Reconciled 2026-10-10 at `ab5f40b57`. Completed review and committed implementation are archived in [Done](../Done/CodeReview_MasterMerges_Delivered_2026-10-10.md). Delivery does not imply completed runtime, performance or release qualification.
 
@@ -109,14 +285,112 @@ shutdown fix or app-exit proof.
 
 ## Immediate execution sequence
 
-1. Preserve and review the 13 staged popup/path-detail/localization/test/spec files. They are unfinished work, not completed delivery. Verify focus restoration, UIA, teardown and localized placeholders; use Test-Changes.ps1 -Explain and affected tests before committing.
+1. Reconciled 2026-10-31: the previously staged popup/path-detail/localization candidate is historical; this checkout started clean. Re-read current code and delivered evidence instead of reconstructing that old staged state.
 2. Waves 0-3 now have implementation commits, including Escape routing, retarget feedback, admission failure reporting, popup recovery, stable controls and idle cadence. Run their outstanding regression/performance checks and update each finding with exact commit and evidence identity. Do not repeat delivered implementation.
-3. Wave 4 alert lifetime, forged-message and scroll/focus fixes landed in 69caa9dbb, ff2773d2b and 5e581d8c0. Finish residual accessibility/localization/mnemonic/leak/dead-code items below.
+3. Wave 4's own status note states all code work landed. Treat its repeated bullets as historical implementation scope and reconcile missing evidence; do not replace the deliberately adopted per-window hook with the old proposed SetWindowSubclass design.
 4. Wave 5 refresh/cancel fixes landed in 6442a5b91. Check production inspection cancellation callers, name-and-kind matching and test-only listener removal.
 5. Wave 6 localized projection, Apply-to-all aggregation and Issues ordering landed in bc7728fd5, ff888db98, 45779b0df and ab5f40b57. Finish residual UIA/localization/selection details below and acknowledge Q10's two-row presentation.
 6. Q14, Q18, Q2 and Q17 have implementation commits. Keep their remaining owner acknowledgments and verification obligations open in remediation-followups.md.
-7. Execute residual Waves 7-10, then the simplification track and twelve coverage-gap reviews below. Each item requires surrounding-callers review, meaningful regression coverage, authoritative spec updates and exact evidence.
-8. Run the agreed interactive window and elevated VHDX validation, tests-off Release smoke and I29 qualification. Complete PrePush coverage accounting before integration; no affected-only pass establishes production readiness.
+7. Implement the confirmed residuals in Waves 7-10 with surrounding-callers review, meaningful coverage and authoritative spec updates. Review the simplification track and twelve coverage gaps, retaining optional architecture leads and missing-prerequisite gates explicitly rather than treating every suggestion as a required rewrite.
+8. Run the authorized noninteractive checks and available build/Release/package acceptance, then complete PrePush accounting. The user explicitly kept focus-taking tests pending; elevated VHDX, native-platform and device gates retain their own prerequisites. No affected-only pass establishes production readiness.
+
+### Current revalidation ledger (2026-10-31)
+
+- `runtime-queue#3` overlaps I50 M2. One candidate synchronization repair and its boundary tests own
+  both entries; they must not become independent competing implementations.
+- `state-c#3` is already repaired at starting HEAD: Batch Rename uses
+  `kMaxCachedModifierAttemptsPerBucket = 1`, per-bucket attempt accounting and a forced fresh prompt
+  after its cached attempt. The earlier still-open verdict was rejected after re-reading HEAD.
+- `tests-fileops#2` is confirmed and repaired in the candidate: pure timing/telemetry rejection
+  fails the case without retaining scratch or suppressing later families. Failed worker quiet
+  points, byte integrity or settings restoration still retain/prohibit reuse. A real fixture
+  negative control injects a telemetry-only failure after exact bytes/cleanup and then runs the
+  following owned fixture; execution remains pending.
+- `fs-core#1` cold/warm followed-root identity differs in the current route cache. `fs-core#6`
+  retains per-instance characteristics indefinitely. Candidate resolves the lexical mount root and
+  fresh direct volume identity for every route/characteristics query and reuses only matching identity.
+  Unstable/unknown identities bypass persistent storage reuse. Cold/warm/nested/remount/SUBST and
+  failure controls are added; execution and actual query-cost evidence remain pending.
+- Wave 4 source work is delivered; the Wave 5-10 residuals are reconciled in the dispositions
+  below. The remaining inline-F2 queue-slot lead is not a confirmed defect without a contract
+  requiring Wait for others to exclude inline rename. G1-G12 are coverage obligations, not twelve
+  proven defects. Current dispositions retain G5 latency, G6 logoff/shutdown, G9 physical input,
+  G10 tests-off Release, G11 measurement, G3/G4 consumer acceptance and G8 provider-result execution
+  as explicit qualification work; source presence alone closes none of those gates.
+- The two-row Apply-to-all presentation keeps the explicit user choice separate from its cached
+  aggregate to preserve provenance. Do not merge them without evidence that the model stays unambiguous.
+- Follow-up claims are snapshot-specific, including the old Pester assertion investigation and
+  Recycle Bin incident. Never enumerate or empty the user's Recycle Bin to reconcile that prose.
+- User directed focus-taking tests to remain pending in this session. Elevated/device/platform and
+  release qualification retain their owning prerequisites; no affected pass closes them.
+- Wave 7's write-only 64-entry consent receipt table is removed, without weakening typed consent
+  scope/identity checks; the 65th-answer regression is added. Inline F2 now marks possible mutation
+  immediately before its actual provider rename. Execution pending.
+- Wave 9 cache policy is superseded by the owner: Close forgets all private ViewerSpace scan/cache/
+  workspace state. Only the same open window may reuse its cache. Embedded locale refresh and
+  tooltip progress repaint now use the existing locale path and 30-Hz timer; runtime evidence pending.
+- Wave 10's active positive `Should Not Throw` assertions are replaced with captured success/error
+  checks and a shared deliberate-error negative control. An AST guard covers positional and
+  parameter spellings without treating comments or explanatory strings as executable assertions;
+  focused execution remains required. Historical packets stay immutable.
+- G1's regex authorization/unready-store behavior and G2's alias-retention code are delivered at
+  HEAD; the relevant current native cases still need execution. G5's followed-path observation is
+  removed by the route repair, but lexical mount-manager latency still needs measurement. G7's
+  escaping/export fault coverage is extended with the L22 repair. G8's reducer remains conservative
+  when destructive proof is missing; never infer source deletion authority from HRESULT success.
+- G3/G4 dependency and DxUi acceptance attach to the current immutable pins and consumer tests,
+  not a replay of the obsolete upgrade range. G6 real end-session durability, G9 physical-input
+  coverage and G10 tests-off Release/native acceptance remain explicit gates. G11 is a performance
+  hypothesis until mutex/stage measurements show material cost. G12's current owner is
+  `RedSalamander/FileOperationsFooterLayout.h::Arrange`, which delegates to
+  `DxUi::ArrangeMeasuredActions`; the old out-of-range line number is rejected. Footer fit and
+  localized-width behavior remain owned by the existing popup layout/scenario tests.
+- The simplification track is advisory architecture work. Shared-helper reuse and dead-state removal
+  coupled to confirmed repairs proceed here; broad file decomposition, a second ConflictBroker or
+  speculative model rewrites are not prerequisites merely because the old review suggested them.
+
+The following additional residuals were checked against the current source and repaired in the
+local candidate. These entries describe implementation and test intent, not executed acceptance:
+
+| Residual | Current disposition |
+|---|---|
+| `common#1` | Preferences merges only fields edited from its baseline into the latest settings, preserving popup/Issues and JSON-only changes. A concurrent-field regression extends the existing settings case. |
+| `host#1`, `popup-c#1` | Explicit Show no longer rejects its own command key-up as unrelated input; foreground/focus ownership checks remain. Saved popup size is normalized against the created popup's actual DPI. Native focus and mixed-monitor acceptance remain pending. |
+| `popup-c#6`, `popup-c#7`, `x-ux#5` | Path detail names the source/destination subject, retains logical Copy/Close focus across synchronization, and raises localized success/failure feedback through the existing UIA notification helper. The existing path-detail fixture uses real provider Invoke with a clipboard-result fault seam. Physical focus/assistive-technology acceptance remains separate. |
+| `l10n#3`, `l10n#5`, `l10n#7`-`l10n#10`, `l10n#12`, `host#3`, `popup-b#6` | Counts use shared per-culture cardinal forms; result summaries retain typed formatting arguments and refresh on locale revision. Issues terminology, separators, unavailable speed/remaining text and progress nouns agree across code/resources/docs. A localization matrix and existing presentation/language-switch cases cover these contracts. Broader raw-diagnostic claims require typed-category evidence, rather than a blanket rewrite. |
+| Issues export / G7 | Log scanning occurs outside the operation-state mutex; exact writes publish through `LocalFileTransaction` with FailIfExists. Collision/write/flush/publish controls retain the existing target and avoid announcing success before Commit. The shared transaction now retains exact handle authority for both Ex and legacy rename and abort, with no close-then-path fallback. |
+| `tests-other#3`, `tests-other#4`, `tests-other#6` | Restart children receive child-only environment and run off the UI thread while owned messages pump; child completion precedes reading isolated settings. Clipboard format preflight emits explicit unsupported-prerequisite skips before mutation, with malformed/read failures still failures. UIA worker/deadline budgets use the existing timeout scale. Commands child execution retains its normal desktop admission. |
+| `tests-other#5` | Stopping a suite after an unsafe real-input desktop boundary remains deliberate containment. Nonactivation evidence cannot authorize another activation case. |
+| `tests-fileops#3`, `tests-fileops#5` | A redundant digest after an exact byte comparison is evidence overhead, not a correctness defect. Hand-built Task fixtures are model coverage and do not claim production admission coverage. Global Space injection in the throughput helper is replaced by owned popup message routing; its activation classification is retained. |
+| `fs-core#1`, `fs-core#6` debug fixtures | Synthetic storage probes and route caches are scoped to the executing test thread and a private cache. A second thread verifies that hooks/cached identities do not escape into another thread or mutate production cache state. |
+| `x-perf#6`, G11 | Full row reformatting on projectable revisions and localization-lock cost are performance leads. Nonprojectable diagnostics already avoid projection revisions; no incremental model/cache redesign is justified without measured cost. |
+| `build-tooling#4`, `build-tooling#5`, `x-spec#7` | Checkout-path repair uses exact immutable relocation identities. Old dependency/cache folders need their own lease/recovery inventory before cleanup; this work does not delete unrelated output trees. Historical evidence bytes and provenance remain preserved. |
+| `host#5` | Source/destination text selects shared display path rules across provider roots without weakening root-qualified strategy/admission equality. The caller and its common-parent/mismatched-rule regression use the same selection helper. |
+| Completion cache context / I50 L18 | A pane switch can unregister a task's retained provider pointer, causing metadata fallback to lose its nondefault instance context. Completion now supplies the admitted source/destination logical contexts through canonical cache notification overloads. A real cache A-task/A-keeper/B regression includes the legacy-route stale-entry control; this API fixture is not an end-to-end completion-callback claim. |
+| `x-ux#8` | Routine/informational reveals preserve an existing popup's minimized state and z-order. Actionable, interrupted-notice and explicit Show retain deliberate reveal behavior. The fake-clock deadline fixture uses the canonical guarded desktop observer and an owned nonactivating minimize/restore. |
+| `l10n#6` | The old Failed Items ID is already removed at HEAD. The remaining unused Discovering-as-needed ID/string is removed from the header and main/four satellite resources; no new orphan-resource framework is needed. |
+| `viewerspace#4` | Obsolete: the current header has no Up affordance; double-click reaches only Cancel/Problems. Navigation is hosted separately. The old two-level Up counterexample has no current caller. |
+| `viewerspace#5` | Capped/model-less read errors propagate to the visible owning Other bucket, including cached snapshots, tooltip/analysis Error state and high-contrast outline. The root/unrelated retained sibling keep their own truthful state. Synthetic provider coverage checks exact totals, one unreadable folder and the visible marker; high-contrast pixel acceptance remains separate. |
+| `viewers-dxui#1`, `viewers-dxui#2`, `viewers-dxui#6` | The cited ColorTextView source belongs to the independent RedMonitor owner repository and has no active source/build target here. Preserve the upstream lead; do not recreate a bundled viewer or change its pin without consumer qualification. |
+| `viewers-dxui#3`, `viewers-dxui#5` | ViewerText treats pre-attach/embedded menu absence as normal, preserves a native menu during initialization, and warns on a real post-attach fallback. The impossible embedded attach branch is removed. Existing noactivation open fixtures check embedded/standalone attachment state; shared menu-host failure coverage remains authoritative. |
+| `viewers-dxui#4` | ImgRaw's custom attach branch deliberately supports early/post-detach fault injection. The shared adapter already owns normal production callers; removing the test seam is optional, not a demonstrated repair. |
+| I50 M23 | A shared classifier oracle now runs through the existing exact noactivation remediation case with 256 real Local source files and production retained-anchor preparation. Fixture preparation is outside classifier timing. Disjoint and last-pair overlap outcomes are asserted; comparisons are measured, not required to remain Cartesian. The broader ProviderCapabilityMatrix desktop admission is unchanged. |
+
+Required focus/device/platform/performance gates above stay open even when a source repair is
+complete. Current commands, preserved failures, exact receipts and measurements are recorded in
+the [shared execution archive](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md).
+
+Current implementation and verification evidence is shared with the
+[I50 execution record](CodeReview_MainMerges_2026-10-28.md). Neither plan is Done while its remaining
+review, fixes or required qualification are unfinished.
+
+The latest shared checkpoint built x64 Debug with zero warnings/errors (receipt `561b2f04`),
+passed focused FileOps 3/0/0 and the exact cache API case 1/0/0, and passed focused tooling
+52/52 plus 315/315. Ten harness FileOps images were visually reviewed. These are focused results
+for the preceding snapshot; final breadcrumb compatibility/counter repairs and the Release paired
+classifier fixture require a new receipt and execution. The separate
+[delivery review](DeliveryReview_Remediation_2026-10-31.md) owns its W1/W2/W3 outcomes; there is
+one integrated implementation, with exact results retained in the shared archive above.
 
 ## Detailed residual checklist
 

@@ -391,8 +391,11 @@ function New-RSTestSandboxLink {
     if ($ItemType -ne 'SymbolicLink' -and -not [IO.Path]::IsPathFullyQualified($Target)) {
         throw "Refusing test $ItemType '$Path': target '$Target' must be a fully qualified path."
     }
-    [void](Assert-RSTestSandboxLinkTarget -Path $Path -Target $Target)
-    return (New-Item -ItemType $ItemType -Path $Path -Target $Target -ErrorAction Stop)
+    # Resolve once with PowerShell's provider/location semantics. IO.GetFullPath and New-Item
+    # can otherwise disagree when the process working directory differs from Get-Location.
+    $linkPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [void](Assert-RSTestSandboxLinkTarget -Path $linkPath -Target $Target)
+    return (New-Item -ItemType $ItemType -Path $linkPath -Target $Target -ErrorAction Stop)
 }
 
 function Get-RSTestSandboxTreeEntries {

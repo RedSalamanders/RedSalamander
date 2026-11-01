@@ -354,7 +354,7 @@ void ViewerSpace::RebuildLayout() noexcept
     }
     auto& build     = *_layoutBuild;
     auto heapLess   = [](const LayoutItem& a, const LayoutItem& b) noexcept { return a.weight > b.weight || (a.weight == b.weight && a.nodeId < b.nodeId); };
-    auto sortedLess = [](const LayoutItem& a, const LayoutItem& b) noexcept { return a.bytes > b.bytes || (a.bytes == b.bytes && a.nodeId < b.nodeId); };
+    auto sortedLess = [](const LayoutItem& a, const LayoutItem& b) noexcept { return a.weight > b.weight || (a.weight == b.weight && a.nodeId < b.nodeId); };
     auto taskLess   = [](const LayoutBuildState::Task& a, const LayoutBuildState::Task& b) noexcept
     { return Area(a.bounds) < Area(b.bounds) || (Area(a.bounds) == Area(b.bounds) && a.id > b.id); };
     auto addOther = [&](const LayoutItem& item) noexcept
@@ -519,17 +519,18 @@ void ViewerSpace::RebuildLayout() noexcept
                         build.names.push_back(FormatStringResource(
                             g_hInstance, IDS_VIEWERSPACE_OTHER_BUCKET_FORMAT, ViewerSpaceScan::SaturatingAdd(build.otherFolders, build.otherFiles)));
                         Node other;
-                        other.id                 = id;
-                        other.parentId           = build.task.id;
-                        other.isSynthetic        = true;
-                        const Node* parent       = TryGetRealNode(build.task.id);
-                        other.contentNotMeasured = parent != nullptr && parent->contentNotMeasured;
-                        other.scanState          = ScanState::Done;
-                        other.name               = build.names.back();
-                        other.totalBytes         = build.otherBytes;
-                        other.aggregateBytes     = build.otherBytes;
-                        other.aggregateFolders   = build.otherFolders;
-                        other.aggregateFiles     = build.otherFiles;
+                        other.id                          = id;
+                        other.parentId                    = build.task.id;
+                        other.isSynthetic                 = true;
+                        const Node* parent                = TryGetRealNode(build.task.id);
+                        other.contentNotMeasured          = parent != nullptr && parent->contentNotMeasured;
+                        other.aggregateContainsUnreadable = parent != nullptr && parent->aggregateContainsUnreadable;
+                        other.scanState                   = other.aggregateContainsUnreadable ? ScanState::Error : ScanState::Done;
+                        other.name                        = build.names.back();
+                        other.totalBytes                  = build.otherBytes;
+                        other.aggregateBytes              = build.otherBytes;
+                        other.aggregateFolders            = build.otherFolders;
+                        other.aggregateFiles              = build.otherFiles;
                         build.synthetic.emplace(id, other);
                         build.items.push_back({id, build.otherWeight, build.otherBytes});
                     }

@@ -98,7 +98,7 @@
     if (! state.Require(task != nullptr, L"Clipboard-ready token witness must find its published task."))
         return false;
 
-    const ULONGLONG readyDeadline = GetTickCount64() + 5'000ull;
+    const ULONGLONG readyDeadline = GetTickCount64() + static_cast<ULONGLONG>(SelfTest::Scale(std::chrono::milliseconds{5'000}).count());
     while (! task->_debugWorkerStartGateWaiting.load(std::memory_order_acquire) && GetTickCount64() < readyDeadline)
         Sleep(1u);
     if (! state.Require(task->_debugWorkerStartGateWaiting.load(std::memory_order_acquire) &&
@@ -155,7 +155,7 @@
     if (readyQueued)
         static_cast<void>(DispatchMessageW(&readyMessageRecord));
 
-    const ULONGLONG completionDeadline = GetTickCount64() + 5'000ull;
+    const ULONGLONG completionDeadline = GetTickCount64() + static_cast<ULONGLONG>(SelfTest::Scale(std::chrono::milliseconds{5'000}).count());
     while (! task->_taskFinished.load(std::memory_order_acquire) && GetTickCount64() < completionDeadline)
         Sleep(1u);
     const bool validReadyCompleted = readyQueued && task->_taskFinished.load(std::memory_order_acquire) &&

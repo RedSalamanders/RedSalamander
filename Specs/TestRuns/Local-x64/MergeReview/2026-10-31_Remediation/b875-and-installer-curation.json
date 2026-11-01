@@ -1,0 +1,72 @@
+{
+  "schema": "review-remediation.curated-byte-map.v1",
+  "run_id": "20261031T190808Z-61852-eea8749fce73427aab69cd848b3f0882",
+  "artifacts": [
+    {
+      "name": "d563-viewer-cache-repeat.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\focused-viewer-results.json",
+      "bytes": 1988,
+      "sha256": "46c520ff41281a81ae3945e4c2e0bbe79865e492580f299c3af41129ed3af3e7"
+    },
+    {
+      "name": "d563-viewer-cache-lifetime.log",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.out.log",
+      "bytes": 16631,
+      "sha256": "390aa6737bcf33db19b6983d4e6fd8127f94d4b99447be0d8b54c9d66bcf49a1"
+    },
+    {
+      "name": "d563-viewer-cache-ambient.log",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.out.log",
+      "bytes": 16651,
+      "sha256": "8d27091fc2b795060dac49412b0c51b5e064a3bc5a415671b10deef162992ffb"
+    },
+    {
+      "name": "b875-arm64-asan-pdb-failure.log",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T182734Z-74036-a6730a7f358e4fa89a8786c1a662740b\\scratch\\ARM64-ASanDebug-Rebuild\\current-source\\native-build.log",
+      "bytes": 33462,
+      "sha256": "2169c9b3b960c646ee64c9a3d79b1dc0510baabe2317f4e551a772f985e435aa"
+    },
+    {
+      "name": "b875-msi-raw-copy-arguments.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T185247Z-21384-cf705a201a7d49ba824f831a95c56c37\\msi-staging-trace\\before-first-robocopy.json",
+      "bytes": 37147,
+      "sha256": "1624116b82ebba657c18922f4638020df240db093b17f80f16b08b59db9a6c39"
+    },
+    {
+      "name": "msi-raw-normalized-comparison.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T185534Z-28488-eb89edd7f39644698b4444318f362018\\scratch\\msi-xd-raw-separators\\fixture\\raw-argument-ab-results.json",
+      "bytes": 19560,
+      "sha256": "fb84caa67834725421d3379813e89f77514da8c475a63b02227e0b686bebedab"
+    },
+    {
+      "name": "b875-portable-zip-inventory.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\pkgfinalinv-89768-29411375\\package-inventory.json",
+      "bytes": 18071,
+      "sha256": "95f992e524d471cba2ad185d2fcf743ce982e674b1702e089a68ac7bff00609d"
+    },
+    {
+      "name": "b875-msix-locked-output-failure.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\pkgmsix-89368-29286171\\package-result.json",
+      "bytes": 3353,
+      "sha256": "61935be417e931f3d5d38f8fd5b432a15a6c8925ed4ff9996100f152ae3ce9cf"
+    },
+    {
+      "name": "b875-msix-locked-output.log",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\pkgmsix-89368-29286171\\msix-transcript.log",
+      "bytes": 6458,
+      "sha256": "dab3a53a33515172dffa0f79bd5346e0656e68adebf6ddb596d05f04393d3267"
+    },
+    {
+      "name": "msi-actual-staging-red.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T190221Z-62656-ac21dda1f47c4b52b2fb1dcd991e844a\\scratch\\process-temp\\focused-pester-results.json",
+      "bytes": 2702,
+      "sha256": "4b2c3a019ef6245833603f011a7fc497c9e7456ed7a0e71d90f66e3e23394995"
+    },
+    {
+      "name": "installer-focused-repeat.json",
+      "canonical_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T190456Z-41600-6be1054aac134f2d80c59f6a900805ab\\scratch\\process-temp\\focused-pester-results.json",
+      "bytes": 57235,
+      "sha256": "888f1b9505a116a5dc3af60cb0ef85fa91969de959c3af0c098f41f4c8051b28"
+    }
+  ]
+}

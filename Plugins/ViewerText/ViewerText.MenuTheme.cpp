@@ -5,14 +5,15 @@
 
 void ViewerText::ApplyMenuTheme(HWND hwnd) noexcept
 {
-    static_cast<void>(hwnd);
     _menuBarHost.SetTheme(_hasTheme ? RedSalamander::MakeThemePaletteFromViewerTheme(_theme) : DxUi::MakeDefaultThemePalette(false));
     if (_menuBarHost.GetHwnd())
     {
         _menuBarHost.SyncMenuModel();
     }
-    else
+    else if (hwnd != nullptr && GetMenu(hwnd) != nullptr)
     {
-        Debug::Error(L"ApplyMenuTheme: DxUi menu bar host is missing");
+        // Theme application can run during WM_CREATE, before Open attaches the DxUi host.
+        // Preserve the native menu bar during that normal interval; embedded windows have no menu.
+        DrawMenuBar(hwnd);
     }
 }

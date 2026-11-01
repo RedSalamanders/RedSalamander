@@ -1,0 +1,16 @@
+{
+  "run_id": "20261101T040929Z-62072-fd5d5f1a80c14b68b80b7d332eeb5a5f",
+  "source_snapshot_id": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "source_stable": true,
+  "shipping_hash_mismatches": 0,
+  "archive_paths_checked": 1298,
+  "archive_violations": 0,
+  "stock_result": "pass",
+  "source_whitespace": "passed",
+  "changelog": "passed",
+  "tool_inventory": "passed",
+  "packet_bytes": 5194662,
+  "packet_cap_bytes": 5242880,
+  "final_evidence_sha256": "1ab17cea1a345887151bb5d8ebe70ff5ea134e4c49cf3f76bda06d442b272e7b",
+  "claim": "Noninteractive and package acceptance only; required deferred/environment-specific gates remain open"
+}

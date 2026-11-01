@@ -1483,16 +1483,23 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
             FileOperations::DeferredConsentRisk risk;
             ConflictBucket bucket;
             ConflictAction decision;
+            size_t itemIndex;
         };
-        constexpr std::array scenarios{
-            ConsentScenario{FileOperations::DeferredConsentRisk::InsufficientSpace, ConflictBucket::InsufficientSpace, ConflictAction::Proceed},
-            ConsentScenario{FileOperations::DeferredConsentRisk::SpaceUnknown, ConflictBucket::SpaceUnknown, ConflictAction::Proceed},
-            ConsentScenario{FileOperations::DeferredConsentRisk::EfsPlaintext, ConflictBucket::EfsPlaintext, ConflictAction::RetainSource},
-            ConsentScenario{FileOperations::DeferredConsentRisk::SparseInflation, ConflictBucket::SparseInflation, ConflictAction::Proceed},
-            ConsentScenario{FileOperations::DeferredConsentRisk::PlaceholderHydration, ConflictBucket::PlaceholderHydration, ConflictAction::Proceed},
-            ConsentScenario{FileOperations::DeferredConsentRisk::MetadataLoss, ConflictBucket::MetadataLoss, ConflictAction::RetainSource},
-            ConsentScenario{FileOperations::DeferredConsentRisk::RecycleEscalation, ConflictBucket::RecycleFailed, ConflictAction::PermanentDelete},
+        std::vector<ConsentScenario> scenarios{
+            ConsentScenario{FileOperations::DeferredConsentRisk::InsufficientSpace, ConflictBucket::InsufficientSpace, ConflictAction::Proceed, 0u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::SpaceUnknown, ConflictBucket::SpaceUnknown, ConflictAction::Proceed, 1u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::EfsPlaintext, ConflictBucket::EfsPlaintext, ConflictAction::RetainSource, 2u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::SparseInflation, ConflictBucket::SparseInflation, ConflictAction::Proceed, 3u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::PlaceholderHydration, ConflictBucket::PlaceholderHydration, ConflictAction::Proceed, 4u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::MetadataLoss, ConflictBucket::MetadataLoss, ConflictAction::RetainSource, 5u},
+            ConsentScenario{FileOperations::DeferredConsentRisk::RecycleEscalation, ConflictBucket::RecycleFailed, ConflictAction::PermanentDelete, 6u},
         };
+        // Exercise more distinct item-scoped consents than the removed write-only 64-slot table.
+        for (size_t itemIndex = 0u; itemIndex < 65u; ++itemIndex)
+        {
+            scenarios.push_back(ConsentScenario{
+                FileOperations::DeferredConsentRisk::InsufficientSpace, ConflictBucket::InsufficientSpace, ConflictAction::Proceed, 100u + itemIndex});
+        }
 
         Task consentTask(*state.fileOps);
         consentTask._taskId = 0x4'200u;
@@ -1503,8 +1510,10 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
             HRESULT workerHr              = E_PENDING;
             ConflictAction selectedAction = ConflictAction::None;
             const bool applyEligible      = scenario.risk != FileOperations::DeferredConsentRisk::RecycleEscalation;
-            std::jthread worker([&](std::stop_token) noexcept
-            { workerHr = consentTask.DebugRequestDeferredConsentForSelfTest(scenario.risk, applyEligible, true, 7u, true, 12'345u, &selectedAction); });
+            std::jthread worker([&](std::stop_token) noexcept {
+                workerHr = consentTask.DebugRequestDeferredConsentForSelfTest(
+                    scenario.risk, applyEligible, true, 7u, true, 12'345u, scenario.itemIndex, &selectedAction);
+            });
 
             std::optional<Task::ConflictPromptState> prompt;
             const ULONGLONG deadline = GetTickCount64() + 4'000ull;
@@ -1572,17 +1581,9 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
             }
         }
 
-        size_t receiptCount = 0u;
+        if (consentTask._perf.consentPromptCount != scenarios.size() || consentTask._perf.conflictPromptCount != 0u)
         {
-            std::scoped_lock lock(consentTask._conflictArbiter.mutex);
-            receiptCount = static_cast<size_t>(std::ranges::count_if(consentTask._conflictArbiter.consentReceipts,
-                                                                     [](const std::optional<FileOperations::DeferredConsentReceipt>& receipt) noexcept
-            { return receipt.has_value(); }));
-        }
-        if (receiptCount != scenarios.size() || consentTask._perf.consentPromptCount != scenarios.size() || consentTask._perf.conflictPromptCount != 0u)
-        {
-            Fail(std::format(L"Deferred-consent receipts/metrics mismatch: receipts={} consentPrompts={} conflictPrompts={}.",
-                             receiptCount,
+            Fail(std::format(L"Deferred-consent prompt metrics mismatch after >64 item-scoped decisions: consentPrompts={} conflictPrompts={}.",
                              consentTask._perf.consentPromptCount,
                              consentTask._perf.conflictPromptCount));
             return true;
@@ -1597,7 +1598,7 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
         std::jthread copyEfsWorker([&](std::stop_token) noexcept
         {
             copyEfsHr = copyEfsTask.DebugRequestDeferredConsentForSelfTest(
-                FileOperations::DeferredConsentRisk::EfsPlaintext, true, true, 7u, true, 12'345u, &copyEfsSelected);
+                FileOperations::DeferredConsentRisk::EfsPlaintext, true, true, 7u, true, 12'345u, 0u, &copyEfsSelected);
         });
         std::optional<Task::ConflictPromptState> copyEfsPrompt;
         const ULONGLONG copyEfsDeadline = GetTickCount64() + 4'000ull;
@@ -1639,7 +1640,7 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
         std::jthread invalidActionWorker([&](std::stop_token) noexcept
         {
             invalidActionHr = invalidActionTask.DebugRequestDeferredConsentForSelfTest(
-                FileOperations::DeferredConsentRisk::InsufficientSpace, true, false, 0u, false, 0u, &invalidSelected);
+                FileOperations::DeferredConsentRisk::InsufficientSpace, true, false, 0u, false, 0u, 0u, &invalidSelected);
         });
         const ULONGLONG invalidDeadline = GetTickCount64() + 4'000ull;
         while (! TryGetConflictPromptCopy(&invalidActionTask).has_value() && GetTickCount64() < invalidDeadline)
@@ -5893,6 +5894,14 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
 
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'000u);
         state.r1dPresentationBaseline = state.fileOps->DebugTaskPresentedCount();
+        state.fileOps->DebugEnsurePopupVisibleForSelfTest();
+        const HWND retainedPopup = state.fileOps->GetPopupHwndForSelfTest();
+        if (! retainedPopup || IsWindow(retainedPopup) == FALSE)
+        {
+            Fail(L"R1d routine reveal could not retain an existing owned popup for minimized-state coverage.");
+            return true;
+        }
+        state.r1dPopup = retainedPopup;
         HostResetTestPromptRequestCount();
         state.taskA                                          = StartFileOperationAndGetId(state.fileOps,
                                                                                           FILESYSTEM_COPY,
@@ -5938,22 +5947,69 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         }
         const FolderWindow::FileOperationState::Task* task = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const std::shared_ptr<const FileOperations::PreparationSnapshot> preparation = task == nullptr ? nullptr : task->LoadPreparationSnapshot();
+        const HWND popup                                                             = state.fileOps->GetPopupHwndForSelfTest();
+        if (! popup || popup != state.r1dPopup)
+        {
+            Fail(L"R1d retained popup disappeared before its routine reveal deadline.");
+            return true;
+        }
+        RedSalamander::TestSupport::ScopedWindowActivationBlocker activationBlocker;
+        if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! activationBlocker.Start())
+        {
+            Fail(L"R1d popup minimized-state no-activation guard could not start.");
+            return true;
+        }
+        RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+        if (! desktop.Start())
+        {
+            Fail(std::format(L"R1d process-owned no-activation observation could not start (failure={}).", static_cast<unsigned int>(desktop.Failure())));
+            return true;
+        }
+        ShowWindow(popup, SW_SHOWMINNOACTIVE);
+        const bool popupWasMinimized = IsIconic(popup) != FALSE;
+        const bool minimizeObserved  = desktop.Sample();
+        auto restorePopup            = wil::scope_exit([&]() noexcept
+        {
+            if (IsWindow(popup) != FALSE && IsIconic(popup) != FALSE)
+                ShowWindow(popup, SW_SHOWNOACTIVATE);
+        });
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'499u);
         static_cast<void>(state.fileOps->RefreshDeferredTaskPresentation());
-        const bool hiddenBeforeDeadline = task != nullptr && task->IsPresentationHidden();
+        const bool hiddenBeforeDeadline   = task != nullptr && task->IsPresentationHidden();
+        const bool beforeDeadlineObserved = desktop.Sample();
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'500u);
         static_cast<void>(state.fileOps->RefreshDeferredTaskPresentation());
         const bool revealedAtDeadline =
             task != nullptr && task->IsPresentationVisible() && state.fileOps->DebugTaskPresentedCount() == state.r1dPresentationBaseline + 1u;
+        const bool minimizedRoutineRevealRetained = IsIconic(popup) != FALSE;
+        const bool revealObserved                 = desktop.Sample();
+        ShowWindow(popup, SW_SHOWNOACTIVATE);
+        restorePopup.release();
+        const bool popupWasRestored           = IsIconic(popup) == FALSE;
+        const bool restoreObserved            = desktop.Sample();
+        const bool desktopObservationFinished = desktop.Finish();
         if (! state.r1dAdmissionReturnedBeforeReadiness || task == nullptr ||
             task->GetLifecyclePhase() != FileOperations::TaskLifecyclePhase::AwaitingAcceptance || ! preparation || preparation->selectedRootCount != 1u ||
             preparation->scopes.size() != 2u || preparation->endpoints.size() != 1u || preparation->strategies.size() != 1u || preparation->status != S_OK ||
-            ! hiddenBeforeDeadline || ! revealedAtDeadline || task->_selectedRootReadinessComplete.load(std::memory_order_acquire) ||
-            std::filesystem::exists(destinationRoot / copySource.filename()))
+            ! popupWasMinimized || ! minimizeObserved || ! hiddenBeforeDeadline || ! beforeDeadlineObserved || ! revealedAtDeadline ||
+            ! minimizedRoutineRevealRetained || ! revealObserved || ! popupWasRestored || ! restoreObserved || ! desktopObservationFinished ||
+            task->_selectedRootReadinessComplete.load(std::memory_order_acquire) || std::filesystem::exists(destinationRoot / copySource.filename()))
         {
             state.r1dPreparingGateRelease.store(true, std::memory_order_release);
             state.r1dPreparingGateRelease.notify_all();
-            Fail(L"R1d ordinary Copy crossed readiness or mutated while the common Preparing gate was unresolved.");
+            Fail(std::format(
+                L"R1d ordinary Copy crossed readiness, mutated, restored a minimized popup during routine reveal, or violated no-activation observation "
+                L"(minimized={}, beforeDeadline={}, presented={}, retainedMinimized={}, restored={}, observed={}/{}/{}/{}, desktopFailure={}).",
+                popupWasMinimized,
+                hiddenBeforeDeadline,
+                revealedAtDeadline,
+                minimizedRoutineRevealRetained,
+                popupWasRestored,
+                minimizeObserved,
+                beforeDeadlineObserved,
+                revealObserved,
+                restoreObserved,
+                static_cast<unsigned int>(desktop.Failure())));
             return true;
         }
         state.r1dPreparingGateRelease.store(true, std::memory_order_release);

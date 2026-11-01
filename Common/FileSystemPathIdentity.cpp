@@ -66,8 +66,7 @@ namespace
 [[nodiscard]] Common::Json::UniqueDocument ReadJsonDocument(const std::string_view jsonUtf8) noexcept
 {
     std::string jsonCopy(jsonUtf8);
-    return Common::Json::UniqueDocument{
-        yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr)};
+    return Common::Json::UniqueDocument{yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr)};
 }
 
 [[nodiscard]] std::optional<FileSystemPathCaseOnlyRename> ParseCaseOnlyRename(yyjson_val* value) noexcept
@@ -131,26 +130,31 @@ namespace
                 return true;
             }
 
-            const int sourceLength = static_cast<int>(component.size());
-            const int required = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, component.data(), sourceLength, nullptr, 0, nullptr, nullptr, 0);
-            // CompareStringOrdinal uses simple ordinal folding. Refuse expanding mappings so a
-            // locale-style multi-code-unit transform can never create a false hash collision.
-            if (required != sourceLength)
-            {
-                return false;
-            }
             const size_t originalSize = key.size();
-            key.resize(originalSize + static_cast<size_t>(required));
-            const int written = LCMapStringEx(LOCALE_NAME_INVARIANT,
-                                              LCMAP_UPPERCASE,
-                                              component.data(),
-                                              sourceLength,
-                                              key.data() + originalSize,
-                                              required,
-                                              nullptr,
-                                              nullptr,
-                                              0);
-            if (written != required)
+            // Ordinal comparison folds UTF-16 units, not supplementary Unicode scalars.
+            // Whole-string LCMap folds Deseret pairs that CompareStringOrdinal keeps distinct.
+            for (const wchar_t unit : component)
+            {
+                wchar_t folded = unit;
+                if (unit >= L'a' && unit <= L'z')
+                {
+                    folded = static_cast<wchar_t>(unit - L'a' + L'A');
+                }
+                else if (unit >= 0x80u && (unit < 0xD800u || unit > 0xDFFFu))
+                {
+                    // Keep the OS's single-unit uppercase table, and refuse an incompatible
+                    // mapping instead of changing the provider's ordinal equivalence class.
+                    if (LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, &unit, 1, &folded, 1, nullptr, nullptr, 0) != 1 ||
+                        CompareStringOrdinal(&unit, 1, &folded, 1, TRUE) != CSTR_EQUAL)
+                    {
+                        key.resize(originalSize);
+                        return false;
+                    }
+                }
+                key.push_back(folded);
+            }
+            const int sourceLength = static_cast<int>(component.size());
+            if (CompareStringOrdinal(component.data(), sourceLength, key.data() + originalSize, sourceLength, TRUE) != CSTR_EQUAL)
             {
                 key.resize(originalSize);
                 return false;
@@ -168,8 +172,7 @@ namespace
         return std::nullopt;
     }
 
-    const Common::Json::MemberResult<int64_t> documentVersion =
-        Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<int64_t> documentVersion = Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
     if (! documentVersion.HasValue() || documentVersion.value != 2)
     {
         return std::nullopt;
@@ -256,8 +259,7 @@ namespace
         return std::nullopt;
     }
 
-    const Common::Json::MemberResult<bool> casePreserving =
-        Common::Json::GetBoolMember(identity, "casePreserving", Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<bool> casePreserving = Common::Json::GetBoolMember(identity, "casePreserving", Common::Json::MemberRequirement::Required);
     if (! casePreserving.HasValue())
     {
         return std::nullopt;
@@ -287,8 +289,7 @@ FileSystemPathIdentity FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSyst
     };
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -306,15 +307,13 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContr
     return ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_doc_get_root(doc.get()), pluginId);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(
-    yyjson_val* root, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_val* root, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
     return ParseFileSystemPathIdentityFromRoot(root, false);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -332,8 +331,7 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
     return ParseFileSystemPathIdentityFromRoot(yyjson_doc_get_root(doc.get()), true);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -348,17 +346,15 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentit
         return std::nullopt;
     }
 
-    yyjson_val* root = yyjson_doc_get_root(doc.get());
-    const Common::Json::MemberResult<int64_t> version =
-        Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
+    yyjson_val* root                                  = yyjson_doc_get_root(doc.get());
+    const Common::Json::MemberResult<int64_t> version = Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
     if (! root || ! yyjson_is_obj(root) || ! version.HasValue() || version.value != 2)
     {
         return std::nullopt;
     }
 
-    yyjson_val* operations = yyjson_obj_get(root, "operations");
-    const Common::Json::MemberResult<bool> rename =
-        Common::Json::GetBoolMember(operations, "rename", Common::Json::MemberRequirement::Required);
+    yyjson_val* operations                        = yyjson_obj_get(root, "operations");
+    const Common::Json::MemberResult<bool> rename = Common::Json::GetBoolMember(operations, "rename", Common::Json::MemberRequirement::Required);
     if (! rename.HasValue() || ! rename.value)
     {
         return std::nullopt;
@@ -416,6 +412,57 @@ bool EquivalentPath(const FileSystemPathIdentity& identity, const std::wstring_v
     }
 }
 
+int CompareFileSystemPathsByComponents(const FileSystemPathIdentity& identity, const std::wstring_view lhs, const std::wstring_view rhs) noexcept
+{
+    size_t lhsOffset = 0u;
+    size_t rhsOffset = 0u;
+    for (;;)
+    {
+        const size_t lhsSeparator            = FindNextAcceptedSeparator(identity, lhs, lhsOffset);
+        const size_t rhsSeparator            = FindNextAcceptedSeparator(identity, rhs, rhsOffset);
+        const size_t lhsEnd                  = lhsSeparator == std::wstring_view::npos ? lhs.size() : lhsSeparator;
+        const size_t rhsEnd                  = rhsSeparator == std::wstring_view::npos ? rhs.size() : rhsSeparator;
+        const std::wstring_view lhsComponent = lhs.substr(lhsOffset, lhsEnd - lhsOffset);
+        const std::wstring_view rhsComponent = rhs.substr(rhsOffset, rhsEnd - rhsOffset);
+
+        int componentOrder = 0;
+        if (identity.componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase && ! lhsComponent.empty() && ! rhsComponent.empty() &&
+            lhsComponent.size() <= static_cast<size_t>((std::numeric_limits<int>::max)()) &&
+            rhsComponent.size() <= static_cast<size_t>((std::numeric_limits<int>::max)()))
+        {
+            const int comparison = ::CompareStringOrdinal(
+                lhsComponent.data(), static_cast<int>(lhsComponent.size()), rhsComponent.data(), static_cast<int>(rhsComponent.size()), TRUE);
+            if (comparison == CSTR_LESS_THAN)
+                componentOrder = -1;
+            else if (comparison == CSTR_GREATER_THAN)
+                componentOrder = 1;
+            else if (comparison != CSTR_EQUAL)
+                componentOrder = lhsComponent.compare(rhsComponent);
+        }
+        else if (identity.componentComparison == FileSystemPathComponentComparison::OrdinalCaseSensitive)
+        {
+            componentOrder = lhsComponent.compare(rhsComponent);
+        }
+        else
+        {
+            // Oversized/unrecognized identity is not an authority-bearing use. Retain a stable
+            // ordinal order so callers can still use the comparator as a deterministic fallback.
+            componentOrder = lhsComponent.compare(rhsComponent);
+        }
+
+        if (componentOrder != 0)
+            return componentOrder < 0 ? -1 : 1;
+
+        const bool lhsDone = lhsSeparator == std::wstring_view::npos;
+        const bool rhsDone = rhsSeparator == std::wstring_view::npos;
+        if (lhsDone || rhsDone)
+            return lhsDone == rhsDone ? 0 : (lhsDone ? -1 : 1);
+
+        lhsOffset = lhsSeparator + 1u;
+        rhsOffset = rhsSeparator + 1u;
+    }
+}
+
 namespace
 {
 // Length of the UNC share root (`\\server\share` or `\\?\UNC\server\share`) at the start of
@@ -436,8 +483,8 @@ namespace
     {
         serverStart = 8u;
     }
-    else if (path.size() > 2u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) &&
-             ! IsAcceptedSeparator(identity, path[2]) && path[2] != L'?' && path[2] != L'.')
+    else if (path.size() > 2u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) && ! IsAcceptedSeparator(identity, path[2]) &&
+             path[2] != L'?' && path[2] != L'.')
     {
         serverStart = 2u;
     }
@@ -457,9 +504,7 @@ namespace
 }
 } // namespace
 
-bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
-                                std::wstring_view path,
-                                std::wstring& parentOut) noexcept
+bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& parentOut) noexcept
 {
     parentOut.clear();
     if (path.empty() || identity.acceptedSeparators.empty())
@@ -497,9 +542,7 @@ bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
     return ! parentOut.empty();
 }
 
-bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
-                              std::wstring_view path,
-                              std::wstring& leafOut) noexcept
+bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& leafOut) noexcept
 {
     leafOut.clear();
     if (path.empty() || identity.acceptedSeparators.empty())
@@ -512,7 +555,7 @@ bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
         path.remove_suffix(1u);
     }
 
-    const size_t separator = path.find_last_of(identity.acceptedSeparators);
+    const size_t separator  = path.find_last_of(identity.acceptedSeparators);
     const size_t leafOffset = separator == std::wstring_view::npos ? 0u : separator + 1u;
     if (leafOffset >= path.size())
     {
@@ -539,9 +582,7 @@ std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, const st
     return result;
 }
 
-bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
-                            const std::wstring_view prefix,
-                            const std::wstring_view candidate) noexcept
+bool IsStrictDescendantPath(const FileSystemPathIdentity& identity, const std::wstring_view prefix, const std::wstring_view candidate) noexcept
 {
     if (! identity.pathTextStableIdentity || prefix.empty())
     {
@@ -556,9 +597,8 @@ bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
         const size_t candidateSeparator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
         const size_t prefixEnd          = prefixSeparator == std::wstring_view::npos ? prefix.size() : prefixSeparator;
         const size_t candidateEnd       = candidateSeparator == std::wstring_view::npos ? candidate.size() : candidateSeparator;
-        if (! EquivalentComponent(identity,
-                                  prefix.substr(prefixOffset, prefixEnd - prefixOffset),
-                                  candidate.substr(candidateOffset, candidateEnd - candidateOffset)))
+        if (! EquivalentComponent(
+                identity, prefix.substr(prefixOffset, prefixEnd - prefixOffset), candidate.substr(candidateOffset, candidateEnd - candidateOffset)))
         {
             return false;
         }
@@ -629,8 +669,8 @@ bool TryGetFileSystemRelativePath(const FileSystemPathIdentity& identity,
 
     while (candidateOffset < candidate.size())
     {
-        const size_t separator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
-        const size_t end       = separator == std::wstring_view::npos ? candidate.size() : separator;
+        const size_t separator            = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
+        const size_t end                  = separator == std::wstring_view::npos ? candidate.size() : separator;
         const std::wstring_view component = candidate.substr(candidateOffset, end - candidateOffset);
         if (component.empty())
         {
@@ -693,6 +733,43 @@ std::optional<std::wstring> TryMakeComponentKey(const FileSystemPathIdentity& id
     }
 
     return key;
+}
+
+std::optional<FileSystemPathKeyRelation> CompareFileSystemPathKeys(const FileSystemPathIdentity& identity,
+                                                                   const std::wstring_view leftKey,
+                                                                   const std::wstring_view rightKey) noexcept
+{
+    if (! identity.pathTextStableIdentity ||
+        (identity.componentComparison != FileSystemPathComponentComparison::OrdinalCaseSensitive &&
+         identity.componentComparison != FileSystemPathComponentComparison::OrdinalIgnoreCase) ||
+        identity.acceptedSeparators.find(identity.preferredSeparator) == std::wstring::npos)
+    {
+        return std::nullopt;
+    }
+    if (leftKey == rightKey)
+    {
+        return FileSystemPathKeyRelation::Equal;
+    }
+    // Empty relative suffix names only its anchor; unlike an ordinary path prefix, it does not
+    // establish ancestry over every non-empty suffix.
+    if (leftKey.empty() || rightKey.empty())
+    {
+        return FileSystemPathKeyRelation::Disjoint;
+    }
+    const auto isStrictKeyPrefix = [&](const std::wstring_view prefix, const std::wstring_view candidate) noexcept
+    {
+        return candidate.size() > prefix.size() && candidate.starts_with(prefix) &&
+               (prefix.back() == identity.preferredSeparator || candidate[prefix.size()] == identity.preferredSeparator);
+    };
+    if (isStrictKeyPrefix(leftKey, rightKey))
+    {
+        return FileSystemPathKeyRelation::LeftAncestor;
+    }
+    if (isStrictKeyPrefix(rightKey, leftKey))
+    {
+        return FileSystemPathKeyRelation::RightAncestor;
+    }
+    return FileSystemPathKeyRelation::Disjoint;
 }
 
 std::optional<std::wstring> TryMakePathKey(const FileSystemPathIdentity& identity, const std::wstring_view path) noexcept

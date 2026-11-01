@@ -401,6 +401,35 @@ It 'binds post-writer fingerprints to the restored receipt and matches seeded Re
 }
 }
 
+Describe 'Commands directory-cache no-activation admission' {
+    BeforeAll {
+        Import-Module $helperModule -Force -ErrorAction Stop
+    }
+
+    It 'admits only the exact unproven cache case without activation or a desktop lease' {
+        $caseName = 'cmd_directory_cache_invalidation_during_enumeration_is_retained'
+        foreach ($case in @($caseName, "$caseName`_", $caseName.ToUpperInvariant(), "$caseName ", "$caseName,cmd_natural_name_sorting_contracts", '')) {
+            $plan = @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
+            $exact = $case -ceq $caseName
+            $plan.Count | Should Be 1
+            $plan[0].RequiresInteractiveDesktop | Should Be (-not $exact)
+            ($plan[0].ResourceClasses -contains 'interactive-desktop') | Should Be (-not $exact)
+            ($plan[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be (-not $exact)
+            ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $exact
+        }
+
+        foreach ($proof in @('SelfTestFlakyProofCase', 'SelfTestOrderProofCase')) {
+            $arguments = @{ Suite='Commands'; RepoRoot=$repoRoot; Platform='x64'; Configuration='Debug';
+                RedSalamanderExePath=(Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe'); CaseFilter=$caseName }
+            $arguments[$proof] = $caseName
+            $entry = @(Get-RSTestRunPlan @arguments)[0]
+            $entry.RequiresInteractiveDesktop | Should Be $true
+            ($entry.Arguments -contains '--selftest-no-activate') | Should Be $false
+        }
+    }
+}
+
 Describe 'Run-AllTests plan helper' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
@@ -749,10 +778,40 @@ Describe 'Run-AllTests plan helper' {
         }
     }
 
-    It 'reports an all-pending non-interactive run as NOT_EVALUATED rather than PASSED' {
-        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
-        $runner | Should Match '(?s)elseif \(\$overallExitCode -eq 0 -and \$testPlan\.Count -eq 0\) \{[^}]*''NOT_EVALUATED''[^}]*\} elseif \(\$overallExitCode -eq 0\) \{\s*''PASSED'''
-        $runner | Should Match 'every selected entry requires the interactive desktop'
+    It 'executes the runner verdict for legacy focused, empty, complete and failed selections' {
+        $tokens = $null
+        $parseErrors = $null
+        $runnerAst = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $assignments = @($runnerAst.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+                    $node.Left.VariablePath.UserPath -eq 'terminalState'
+                }, $true))
+        $assignments.Count | Should Be 1
+        # Execute the actual runner decision, including its no-v2 fallback, rather than
+        # another implementation of the policy or only the aggregate-v2 helper.
+        $decide = [scriptblock]::Create(@'
+param($summaryForConsumers, $overallExitCode, $testPlan, $validationCoverageScope)
+Set-StrictMode -Version Latest
+'@ + "`n" + $assignments[0].Extent.Text + "`n" + '$terminalState')
+        $legacy = [pscustomobject]@{ schema = 'red-salamander.run-all-tests.v1' }
+        $entry = @([pscustomobject]@{ Id = 'selected.entry' })
+        foreach ($scope in @('filtered', 'family', 'capability-reduced')) {
+            (& $decide $legacy 0 $entry $scope) | Should Be 'NOT_EVALUATED'
+            (& $decide $legacy 1 $entry $scope) | Should Be 'FAILED'
+        }
+        (& $decide $legacy 0 @() 'complete') | Should Be 'NOT_EVALUATED'
+        (& $decide $legacy 1 @() 'complete') | Should Be 'FAILED'
+        (& $decide $legacy 0 $entry 'complete') | Should Be 'PASSED'
+        (& $decide $legacy 1 $entry 'complete') | Should Be 'FAILED'
+        foreach ($verdict in @('PASSED', 'FAILED', 'NOT_EVALUATED')) {
+            $v2 = [pscustomobject]@{ schema = 'red-salamander.run-all-tests.v2'; repository_verdict = $verdict }
+            (& $decide $v2 0 $entry 'complete') | Should Be $verdict
+        }
+        $runnerAst.Extent.Text | Should Match 'every selected entry requires the interactive desktop'
     }
 
     It 'keeps governed Commands family metadata equal to the native coordinator and emits a family-process plan' {
@@ -998,7 +1057,7 @@ Describe 'Run-AllTests plan helper' {
         }
     }
 
-    It 'defines Suite CI as the GitHub Actions gate through the unified runner' {
+    It 'keeps Suite CI selectable while hosted qualification follows the unified organization workflow' {
         $plan = Get-RSTestRunPlan `
             -Suite 'CI' `
             -RepoRoot $repoRoot `
@@ -1075,10 +1134,21 @@ Describe 'Run-AllTests plan helper' {
             -Message 'Viewer tests belong to the independent RedMonitor project.'
 
         $workflow = Get-Content -Path (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
-        $project = Get-Content (Join-Path $repoRoot '.ci/project.json') -Raw | ConvertFrom-Json
-        $pin = [regex]::Escape($project.engine.ref)
-        $workflow | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/pr\.yml@' + $pin)
-        $workflow | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/coordinate\.yml@' + $pin)
+        $project = Get-Content -Path (Join-Path $repoRoot '.ci\project.json') -Raw | ConvertFrom-Json
+        $engineRef = [string]$project.engine.ref
+        $engineRef | Should Match '^[0-9a-f]{40}$'
+        $workflow | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/pr.yml@$engineRef"))
+        $workflow | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/coordinate.yml@$engineRef"))
+        $workflow | Should Not Match '(?m)^\s*runs-on:\s*windows'
+        $workflow | Should Not Match '(?i)build\.ps1|Run-AllTests\.ps1'
+        $workflow | Should Not Match '(?m)^\s*schedule:'
+
+        $nightly = Get-Content -Path (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
+        $nightly | Should Match '(?m)^  workflow_dispatch:'
+        $nightly | Should Not Match '(?m)^  schedule:'
+        $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
+        $nightly | Should Match '(?m)^      scope: Full\s*$'
+        $pin = [regex]::Escape($engineRef)
         $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
         $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
         $native | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/native\.yml@' + $pin)
@@ -1328,6 +1398,111 @@ Describe 'Run-AllTests plan helper' {
         Assert-RSEqual -Actual $pesterNewerParameters.ContainsKey('Script') -Expected $false -Message 'Newer Pester should not receive legacy -Script when -Path exists.'
         Assert-RSEqual -Actual $pesterNewerParameters['Path'] -Expected 'C:\repo\Tools\Tests' -Message 'Newer Pester path should be preserved.'
         Assert-RSEqual -Actual $pesterNewerParameters['Tag'][0] -Expected 'Smoke' -Message 'Pester tags should be explicitly bound.'
+    }
+
+    It 'normalizes synthetic Pester failures with bounded messages, stacks, and case reasons' {
+        $normalized = Convert-RSPesterTestResults -TestResults @(
+            [pscustomobject]@{
+                Name = 'assertion-with-stack'
+                Result = 'Failed'
+                FailureMessage = 'Expected state A but observed state B.'
+                StackTrace = 'at Assertions.Tests.ps1:line 12'
+            },
+            [pscustomobject]@{
+                Name = 'assertion-without-stack'
+                Result = 'Failed'
+                FailureMessage = 'Expected count 3 but was 2.'
+                StackTrace = ''
+            },
+            [pscustomobject]@{
+                Name = 'failure-without-details'
+                Result = 'Failed'
+                FailureMessage = $null
+                StackTrace = $null
+            },
+            [pscustomobject]@{
+                Name = 'oversized-assertion'
+                Result = 'Failed'
+                FailureMessage = ('BEGIN ' + ('x' * 10000) + ' END')
+                StackTrace = 'at Oversized.Tests.ps1:line 44'
+            },
+            [pscustomobject]@{
+                Name = 'environment-skip'
+                Result = 'Skipped'
+                Reason = 'requires unsquashed repository history'
+            },
+            [pscustomobject]@{
+                Name = 'passing-case'
+                Result = 'Passed'
+            }
+        )
+
+        $normalized.Cases.Count | Should Be 6
+        $normalized.Cases[0].status | Should Be 'failed'
+        $normalized.Cases[0].reason | Should Match 'Expected state A but observed state B'
+        $normalized.Cases[0].reason | Should Match 'Assertions.Tests.ps1:line 12'
+        $normalized.Cases[1].reason | Should Match 'Expected count 3 but was 2'
+        $normalized.Cases[2].reason | Should Match 'without an assertion message or stack trace'
+        $normalized.Cases[3].reason.Length | Should BeLessThan 8193
+        $normalized.Cases[3].reason | Should Match 'BEGIN'
+        $normalized.Cases[3].reason | Should Match 'END'
+        $normalized.Cases[3].reason | Should Match '\[truncated \d+ characters\]'
+        $normalized.Cases[3].reason | Should Match 'Oversized.Tests.ps1:line 44'
+        $normalized.Cases[4].status | Should Be 'skipped'
+        $normalized.Cases[4].reason | Should Match 'requires unsquashed repository history'
+        $normalized.Cases[5].status | Should Be 'passed'
+        $normalized.Cases[5].reason | Should Be ''
+        $normalized.FailureReason.Length | Should BeLessThan 8193
+        $normalized.FailureReason | Should Match '\[assertion-with-stack\]'
+        $normalized.FailureReason | Should Match '\[oversized-assertion\]'
+    }
+
+    It 'keeps valid UTF-16 surrogate pairs intact when aggregate failure details are truncated' {
+        $firstName = 'boundary-head'
+        $secondName = 'boundary-tail'
+        $firstPrefix = "[$firstName] Failure: "
+        $firstStackPrefix = "$( [Environment]::NewLine )Stack: "
+        $firstMessageOffset = 1023 - $firstPrefix.Length
+        $firstMessage = ('h' * $firstMessageOffset) + [char]0xD83D + [char]0xDE00 + ('h' * (6000 - $firstMessageOffset - 2))
+        $firstStack = 's' * 1800
+        $firstDetailLength = $firstPrefix.Length + 6000 + $firstStackPrefix.Length + 1800
+        $secondPrefix = "[$secondName] Failure: "
+        $secondMessageStart = $firstDetailLength + [Environment]::NewLine.Length + $secondPrefix.Length
+        $aggregateLength = $firstDetailLength + [Environment]::NewLine.Length + $secondPrefix.Length + 6000 + $firstStackPrefix.Length + 1800
+        $tailStart = $aggregateLength - (8192 - 1024 - 96)
+        $secondMessageOffset = ($tailStart - 1) - $secondMessageStart
+        $secondMessage = ('t' * $secondMessageOffset) + [char]0xD83D + [char]0xDE00 + ('t' * (6000 - $secondMessageOffset - 2))
+        $secondStack = ('s' * (1800 - 9)) + 'STACK-END'
+
+        $normalized = Convert-RSPesterTestResults -TestResults @(
+            [pscustomobject]@{ Name = $firstName; Result = 'Failed'; FailureMessage = $firstMessage; StackTrace = $firstStack },
+            [pscustomobject]@{ Name = $secondName; Result = 'Failed'; FailureMessage = $secondMessage; StackTrace = $secondStack }
+        )
+
+        $normalized.FailureReason.Length | Should BeLessThan 8193
+        $normalized.FailureReason | Should Match '\[truncated \d+ characters\]'
+        $normalized.FailureReason | Should Match '\[boundary-head\]'
+        $normalized.FailureReason | Should Match 'STACK-END'
+        foreach ($case in $normalized.Cases) {
+            $case.reason.Length | Should BeLessThan 8193
+            $case.reason.Contains(([char]0xD83D).ToString() + [char]0xDE00) | Should Be $true
+            for ($index = 0; $index -lt $case.reason.Length; $index++) {
+                if ([char]::IsHighSurrogate($case.reason[$index])) {
+                    ($index + 1 -lt $case.reason.Length -and [char]::IsLowSurrogate($case.reason[$index + 1])) | Should Be $true
+                    $index++
+                } elseif ([char]::IsLowSurrogate($case.reason[$index])) {
+                    ($index -gt 0 -and [char]::IsHighSurrogate($case.reason[$index - 1])) | Should Be $true
+                }
+            }
+        }
+        for ($index = 0; $index -lt $normalized.FailureReason.Length; $index++) {
+            if ([char]::IsHighSurrogate($normalized.FailureReason[$index])) {
+                ($index + 1 -lt $normalized.FailureReason.Length -and [char]::IsLowSurrogate($normalized.FailureReason[$index + 1])) | Should Be $true
+                $index++
+            } elseif ([char]::IsLowSurrogate($normalized.FailureReason[$index])) {
+                ($index -gt 0 -and [char]::IsHighSurrogate($normalized.FailureReason[$index - 1])) | Should Be $true
+            }
+        }
     }
 
     It 'passes named build parameters to the build script' {

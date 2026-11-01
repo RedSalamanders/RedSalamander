@@ -434,7 +434,7 @@ template <typename VerifyProvider>
         decision.conflict.destinationMetadata.lastWriteTime -= 864'000'000'000ll;
         decision.conflict.overlapTaskId      = 2u;
         decision.conflict.overlapProblem     = static_cast<uint8_t>(FileOperations::SameHostOverlapProblem::RemovesRead);
-        decision.conflict.consentDetail      = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILE, 128ull, std::wstring_view(L"s"));
+        decision.conflict.consentDetail      = FormatFileOperationCountNoun(FileOperationCountNoun::File, 128ull);
         decision.conflict.factItemCountKnown = i >= 11u;
         decision.conflict.factItemCount      = 128u;
         decision.conflict.factBytesKnown     = i >= 11u;
@@ -1733,14 +1733,26 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
 [[nodiscard]] bool CaptureFileOpsDocumentation(SelfTestState& state)
 {
     using namespace FileOperationsPopupInternal;
-    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+    const auto reject = [](std::wstring_view stage) noexcept
+    {
+        AppendLog(std::format(L"DocumentationPrivacy: {}", stage));
         return false;
+    };
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+        return reject(L"the no-activation guard is unavailable");
     auto* folder           = TryGetFolderWindow(state.mainWindow);
     const auto monitors    = GetFileOpsGalleryMonitors();
     const auto output      = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, L"documentation");
     const auto breadcrumbs = output / L"empty-breadcrumbs";
     if (! folder || monitors.empty() || output.empty() || ! SelfTest::EnsureDirectory(output) || ! SelfTest::EnsureDirectory(breadcrumbs))
-        return false;
+        return reject(L"the owner, monitor or owned output directories are unavailable");
+    const auto capture = [&](HWND window, std::wstring_view filename) noexcept
+    {
+        const HRESULT hr = RedSalamander::TestSupport::SaveWindowScreenshot(window, output / filename);
+        if (FAILED(hr))
+            AppendLog(std::format(L"DocumentationPrivacy: capture={} hr=0x{:08X}", filename, static_cast<unsigned long>(hr)));
+        return SUCCEEDED(hr);
+    };
 
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui.value().language.empty() && g_settings.ui.value().language != L"system")
@@ -1752,7 +1764,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
         folder->ApplyTheme(previousTheme);
     });
     if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, L"en-US"})))
-        return false;
+        return reject(L"the English fixture language could not be applied");
     auto theme                  = ResolveAppTheme(ThemeMode::Dark, L"Documentation");
     theme.reducedMotionOverride = true;
     folder->ApplyTheme(theme);
@@ -1784,7 +1796,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     });
     auto* renderer          = popup ? reinterpret_cast<FileOperationsPopupState*>(GetWindowLongPtrW(popup.get(), GWLP_USERDATA)) : nullptr;
     if (! renderer)
-        return false;
+        return reject(L"the private popup renderer could not be created");
 
     TaskSnapshot task{};
     task.taskId         = 0xD0C1u;
@@ -1811,20 +1823,33 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     const auto subjectId = std::format(L"FileOperations.Task.{}.Subject", task.taskId);
     std::wstring name;
     std::wstring help;
-    bool valid = renderer->DebugHostedRegionAccessibleTextForSelfTest(subjectId, name, help) &&
-                 name == FormatStringResource(nullptr, IDS_FMT_FILEOPS_OPERATION_SUBJECT, LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY), subject);
+    const auto expectedSubject =
+        FormatStringResource(nullptr, IDS_FMT_FILEOPS_OPERATION_SUBJECT, LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY), subject);
+    const bool subjectRead = renderer->DebugHostedRegionAccessibleTextForSelfTest(subjectId, name, help);
+    bool valid             = subjectRead && name == expectedSubject;
+    if (! valid)
+        AppendLog(std::format(L"DocumentationPrivacy: subject read={} name='{}' expected='{}'", subjectRead, name, expectedSubject));
     for (const auto& [suffix, label] :
          std::array<std::pair<std::wstring_view, UINT>, 2u>{{{L"Source.0", IDS_FILEOPS_LABEL_FROM}, {L"Destination", IDS_FILEOPS_LABEL_TO}}})
     {
-        const auto expected = std::format(L"{} {}", LoadStringResource(nullptr, label), suffix == L"Source.0" ? sourcePath : destinationFolder);
-        valid = renderer->DebugHostedRegionAccessibleTextForSelfTest(std::format(L"FileOperations.Task.{}.Path.{}", task.taskId, suffix), name, help) &&
-                name == expected && help == expected && valid;
+        const auto expected = std::format(L"{}: {}", LoadStringResource(nullptr, label), suffix == L"Source.0" ? sourcePath : destinationFolder);
+        const bool read = renderer->DebugHostedRegionAccessibleTextForSelfTest(std::format(L"FileOperations.Task.{}.Path.{}", task.taskId, suffix), name, help);
+        const bool pathValid = read && name == expected && help == expected;
+        if (! pathValid)
+            AppendLog(std::format(L"DocumentationPrivacy: path={} read={} name='{}' help='{}' expected='{}'", suffix, read, name, help, expected));
+        valid = pathValid && valid;
     }
     PopupLayoutDebugSnapshot popupSnapshot{};
-    popupSnapshot.taskId = task.taskId;
-    valid                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), popupSnapshot) && ! popupSnapshot.taskHasVisibleButtonOverlap &&
-                           popupSnapshot.taskCountsText == L"Folders: 2/8 · Files: 12/240" && valid;
-    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / L"file-operations-popup.png")))
+    popupSnapshot.taskId   = task.taskId;
+    const bool layoutRead  = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), popupSnapshot);
+    const bool layoutValid = layoutRead && ! popupSnapshot.taskHasVisibleButtonOverlap && popupSnapshot.taskCountsText == L"Folders: 2/8 · Files: 12/240";
+    if (! layoutValid)
+        AppendLog(std::format(L"DocumentationPrivacy: running layout read={} overlap={} counts='{}'",
+                              layoutRead,
+                              popupSnapshot.taskHasVisibleButtonOverlap,
+                              popupSnapshot.taskCountsText));
+    valid = layoutValid && valid;
+    if (! valid || ! capture(popup.get(), L"file-operations-popup.png"))
         return false;
 
     auto counting                 = task;
@@ -1837,7 +1862,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     popupSnapshot        = {};
     popupSnapshot.taskId = counting.taskId;
     if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), popupSnapshot) || popupSnapshot.taskCountsText != L"Counting…")
-        return false;
+        return reject(std::format(L"empty counting text was '{}'", popupSnapshot.taskCountsText));
     counting.discoveredFileCount      = task.discoveredFileCount;
     counting.discoveredDirectoryCount = task.discoveredDirectoryCount;
     renderer->DebugSetVisualScenario({counting}, false, true);
@@ -1846,7 +1871,10 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     popupSnapshot.taskId = counting.taskId;
     valid                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), popupSnapshot) && ! popupSnapshot.taskHasVisibleButtonOverlap &&
                            popupSnapshot.taskCountsText == L"Counting… Folders: 8 · Files: 240";
-    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / L"file-operations-counting.png")))
+    if (! valid)
+        AppendLog(std::format(
+            L"DocumentationPrivacy: counting layout overlap={} counts='{}'", popupSnapshot.taskHasVisibleButtonOverlap, popupSnapshot.taskCountsText));
+    if (! valid || ! capture(popup.get(), L"file-operations-counting.png"))
         return false;
 
     // These private scenes exercise different count authorities and lifecycle
@@ -1946,7 +1974,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                   popupSnapshot.taskStatusChipPaintedText,
                                   popupSnapshot.taskStatusChipPaintedTextFits,
                                   popupSnapshot.conflictPromptVisibleWithoutClipping));
-        if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / additionalNames[scene])))
+        if (! valid || ! capture(popup.get(), additionalNames[scene]))
             return false;
     }
 
@@ -1975,7 +2003,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                               popupSnapshot.taskLastNoteFits,
                               popupSnapshot.taskLastNotePrecedesProgress,
                               popupSnapshot.taskHasVisibleButtonOverlap));
-    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / L"file-operations-wrapped-note.png")))
+    if (! valid || ! capture(popup.get(), L"file-operations-wrapped-note.png"))
         return false;
 
     FolderWindow::FileOperationState::CompletedTaskSummary summary{};
@@ -2000,7 +2028,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     operations.DebugAppendCompletedTaskForSelfTest(std::move(summary));
     issues.reset(FileOperationsIssuesPane::Create(&operations, folder, state.mainWindow, lifetime));
     if (! issues)
-        return false;
+        return reject(L"the private Issues pane could not be created");
     PlaceFileOpsGalleryWindow(issues.get(), monitors.front(), 900, 540);
     FileOperationsIssuesPane::SelfTestSnapshot issuesSnapshot{};
     valid = FileOperationsIssuesPane::SelfTestRefresh(issues.get(), true) && FileOperationsIssuesPane::SelfTestSelectTask(issues.get(), 0xD0C2u) &&
@@ -2024,7 +2052,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                               issuesSnapshot.detailTexts[5],
                               issuesSnapshot.detailTexts[8],
                               issuesSnapshot.selectedCells.empty() ? std::wstring_view{} : std::wstring_view(issuesSnapshot.selectedCells.front())));
-    if (! valid || FAILED(RedSalamander::TestSupport::SaveWindowScreenshot(issues.get(), output / L"file-operations-issues.png")))
+    if (! valid || ! capture(issues.get(), L"file-operations-issues.png"))
         return false;
     std::ofstream manifest(output / L"scenarios.tsv", std::ios::binary);
     manifest << "file\tscenario\tlanguage\ttheme\tclientWidthDip\tdpi\tidentity\n"
@@ -2041,10 +2069,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
              << "\tinvented Workshop media paths\n"
              << "file-operations-issues.png\tselected-source-missing-issue\ten-US\tdark\t900\t" << GetDpiForWindow(issues.get())
              << "\tinvented Workshop media paths\n";
+    if (! manifest.good())
+        return reject(L"the documentation scenario manifest could not be written");
     AppendLog(L"DocumentationPrivacy: ten private synthetic frames; exact invented names and paths; count authorities; lifecycle states; wrapped note; "
               L"conflict; one selected issue; no "
               L"redaction or personal data.");
-    return manifest.good();
+    return true;
 }
 
 // Exercise the production painter and hosted accessibility regions: a correct aggregate

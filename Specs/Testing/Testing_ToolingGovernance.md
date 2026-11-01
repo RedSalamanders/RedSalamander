@@ -90,6 +90,14 @@ Identity-input inventories therefore use PowerShell collection operators and ass
 Boolean result, retaining exact ordered-input equality and real-file existence checks.
 They MUST work from a foreign caller directory without treating relative identity paths
 as files in that directory.
+Positive exception checks MUST capture the action result and assert `Succeeded`; do not
+use `Should Not Throw`, whose behavior varies across supported Pester versions. A shared
+negative control must prove a deliberately thrown error produces a failed positive result.
+The test-source guard parses executable syntax for both positional and parameter forms of
+that unreliable assertion in the current tooling cohort; comments and explanatory string literals
+are not violations. The SHA-256-sealed Gate0/Round4 reproduction inputs are excluded using the sole
+`HistoricalTerminalProfiles.json` membership, matching the current profile. Their exact bytes remain
+owned by the historical integrity guard; do not rewrite those inputs to apply current assertion policy.
 
 ## Public command contract
 
@@ -125,6 +133,10 @@ Test tooling never creates,
 audits, or cleans runtime data outside this root. The maintenance cleaner accepts only
 one exact `runs\<runId>` child beneath a marked root; legacy outside-root cleanup is not
 part of the repository tool surface.
+
+The guarded link creator resolves a relative link path once using PowerShell's filesystem
+location, then passes that same fully qualified path to containment validation and creation.
+Process working-directory differences must never redirect creation to an unvalidated location.
 
 ## Compatibility and moves
 
@@ -289,18 +301,14 @@ configuration when protecting that shared dependency.
 
 Packaging uses the other reviewed shared scope. Build orchestration acquires
 repository-wide `coordination=packaging` only after compilation and keeps it
-through MSIX/MSI/ZIP/winget generation because platforms share installer inputs
-and `.build\AppPackages`. Standalone packaging mutators enter the same scope;
-ordinary build/test work remains outside it. Abandoned packaging state fails
-closed for explicit restoration and is not cleared by a profile rebuild.
+through portable ZIP and Winget manifest generation because platforms share
+package inputs and `.build\AppPackages`. Standalone packaging mutators enter the
+same scope; ordinary build/test work remains outside it. Abandoned packaging
+state fails closed for explicit restoration and is not cleared by a profile rebuild.
 Standalone packagers that read compiled outputs acquire the artifact-profile
-scope first and packaging second, then release in reverse. A dependency-capable
-MSIX project acquires its platform `shared-dependency` scope after packaging and
-only around contained MSBuild. Repository-scoped locks protect only reviewed
-repository descendants: configurable package outputs remain beneath
-`.build\AppPackages`, MSIX manifest mutation remains beneath `Installer\msix`,
-and machine-global WiX extension installation is a prerequisite rather than an
-ordinary packaging side effect. Package files are produced as unique same-directory
+scope first and packaging second, then release in reverse. Repository-scoped
+locks protect only reviewed repository descendants: configurable package outputs
+remain beneath `.build\AppPackages`. Package files are produced as unique same-directory
 staged files, validated before publication, and published with the shared guarded
 atomic-file helper only after immediate ancestor/final reparse revalidation;
 force-overwriting a live package path is outside the reviewed tooling contract.

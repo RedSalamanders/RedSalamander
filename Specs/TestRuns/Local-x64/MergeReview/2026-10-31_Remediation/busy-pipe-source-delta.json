@@ -1,0 +1,125 @@
+{
+  "schema": "red-salamander.review-fixture-source-delta.v1",
+  "run_id": "20261031T234958Z-62292-2a65673b9fb044e2915507ddd7d85dfb",
+  "before_snapshot": "11007c1c2cfa8fa44d5901bcc7dd562eef13267eae612eee5fb1669e02fdb013",
+  "after_snapshot": "a79ffed0f6cfe05c3fadeef759410cad5e9e39220e8c4102eb250f924a8142cd",
+  "changes": [
+    {
+      "path": "Changes/2026-11-01-search-service-pipe-fixture.md",
+      "before": null,
+      "after": {
+        "path": "Changes/2026-11-01-search-service-pipe-fixture.md",
+        "status": "untracked",
+        "base_sha256": null,
+        "base_mode": null,
+        "index_sha256": null,
+        "index_mode": null,
+        "worktree_sha256": "becd5218ef944dca8fccdd0ab021f749743edbd68b3de35e2474fae79022a788",
+        "worktree_size_bytes": 222,
+        "old_path": null
+      }
+    },
+    {
+      "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp",
+      "before": {
+        "base_mode": "100644",
+        "base_sha256": "7303b0c96f0f62883e9fe3a3b9b0da452ccba72eec87d6b794130c35181ff714",
+        "index_mode": "100644",
+        "index_sha256": "7303b0c96f0f62883e9fe3a3b9b0da452ccba72eec87d6b794130c35181ff714",
+        "old_path": null,
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp",
+        "status": "modified",
+        "worktree_sha256": "1d9a27747605ad75747fc25037d37bbf6eb34c1f3ce9b0cae0a1ab2d09165ee9",
+        "worktree_size_bytes": 828954
+      },
+      "after": {
+        "path": "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp",
+        "status": "modified",
+        "base_sha256": "7303b0c96f0f62883e9fe3a3b9b0da452ccba72eec87d6b794130c35181ff714",
+        "base_mode": "100644",
+        "index_sha256": "7303b0c96f0f62883e9fe3a3b9b0da452ccba72eec87d6b794130c35181ff714",
+        "index_mode": "100644",
+        "worktree_sha256": "751925c1cf50d34ca9b5e672ee776fe9c456965faa10aa173190ebf82493cb85",
+        "worktree_size_bytes": 831144,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/CodeReview_MainMerges_2026-10-28.md",
+      "before": {
+        "base_mode": "100644",
+        "base_sha256": "fe9a03748b257357b251724b40ed4316b2bb96dfb266a455e6e0716afc559e2a",
+        "index_mode": "100644",
+        "index_sha256": "fe9a03748b257357b251724b40ed4316b2bb96dfb266a455e6e0716afc559e2a",
+        "old_path": null,
+        "path": "Specs/Plans/WIP/CodeReview_MainMerges_2026-10-28.md",
+        "status": "modified",
+        "worktree_sha256": "51b15138688934a8616de573d4b7af900b8bcf7b7e6bedcbf6fc4562aa65d40a",
+        "worktree_size_bytes": 83663
+      },
+      "after": {
+        "path": "Specs/Plans/WIP/CodeReview_MainMerges_2026-10-28.md",
+        "status": "modified",
+        "base_sha256": "fe9a03748b257357b251724b40ed4316b2bb96dfb266a455e6e0716afc559e2a",
+        "base_mode": "100644",
+        "index_sha256": "fe9a03748b257357b251724b40ed4316b2bb96dfb266a455e6e0716afc559e2a",
+        "index_mode": "100644",
+        "worktree_sha256": "2595895404c0627669fee8204cdadd8fab602f714ba5e39ae249bc687f77b75f",
+        "worktree_size_bytes": 84189,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/CodeReview_MasterMerges_2026-10-05.md",
+      "before": {
+        "base_mode": "100644",
+        "base_sha256": "a9304285586cc5151d06b0b20883ea7d4335ed00ec7ad49bb8525b5262799524",
+        "index_mode": "100644",
+        "index_sha256": "a9304285586cc5151d06b0b20883ea7d4335ed00ec7ad49bb8525b5262799524",
+        "old_path": null,
+        "path": "Specs/Plans/WIP/CodeReview_MasterMerges_2026-10-05.md",
+        "status": "modified",
+        "worktree_sha256": "243c2348e34a730967884535d7fbb81ff9b930d4c4a10c6616fdec0c5dcd266d",
+        "worktree_size_bytes": 47606
+      },
+      "after": {
+        "path": "Specs/Plans/WIP/CodeReview_MasterMerges_2026-10-05.md",
+        "status": "modified",
+        "base_sha256": "a9304285586cc5151d06b0b20883ea7d4335ed00ec7ad49bb8525b5262799524",
+        "base_mode": "100644",
+        "index_sha256": "a9304285586cc5151d06b0b20883ea7d4335ed00ec7ad49bb8525b5262799524",
+        "index_mode": "100644",
+        "worktree_sha256": "fe94adc2e54583274efb69af4b5dea24bfb96ffacf6598b63660acb957e1d7f7",
+        "worktree_size_bytes": 48132,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Testing/Testing_SelfTests.md",
+      "before": {
+        "base_mode": "100644",
+        "base_sha256": "b95da02fe5e81a744c01ec910bb7a1e41c98a634fbdc4e170643d6e4669c9394",
+        "index_mode": "100644",
+        "index_sha256": "b95da02fe5e81a744c01ec910bb7a1e41c98a634fbdc4e170643d6e4669c9394",
+        "old_path": null,
+        "path": "Specs/Testing/Testing_SelfTests.md",
+        "status": "modified",
+        "worktree_sha256": "1e17c31f69accac664138ec10dfe54750ecd8d5faf42bea84cc586a161238ed9",
+        "worktree_size_bytes": 271248
+      },
+      "after": {
+        "path": "Specs/Testing/Testing_SelfTests.md",
+        "status": "modified",
+        "base_sha256": "b95da02fe5e81a744c01ec910bb7a1e41c98a634fbdc4e170643d6e4669c9394",
+        "base_mode": "100644",
+        "index_sha256": "b95da02fe5e81a744c01ec910bb7a1e41c98a634fbdc4e170643d6e4669c9394",
+        "index_mode": "100644",
+        "worktree_sha256": "ff0f10ec903b105f62c21611eda7fc614c6243e4d49062b8329e41bd06f949ec",
+        "worktree_size_bytes": 271688,
+        "old_path": null
+      }
+    }
+  ],
+  "scope": "One Compare selftest acquisition/control change plus owning test specification, active plan status and one dated fragment; no production implementation or build/tooling source changed.",
+  "qualification": "Prior failed broad run retains its source and verdict. Fresh fixture/Compare/build qualification must bind this later source; do not retag the preceding run."
+}

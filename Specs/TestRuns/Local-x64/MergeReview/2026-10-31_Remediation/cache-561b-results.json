@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-10-31T14:18:59.111Z",
+    "duration_ms": 1479,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_directory_cache_invalidation_during_enumeration_is_retained",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261031T141730Z-86436-f6d85d7c73a84a7ea945a66bfab17d39\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 887,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_directory_cache_invalidation_during_enumeration_is_retained",
+            "cases": [
+                {
+                    "name": "cmd_directory_cache_invalidation_during_enumeration_is_retained",
+                    "status": "passed",
+                    "duration_ms": 877,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

@@ -36,6 +36,13 @@ struct LanguagePreference final
     std::wstring culture;
 };
 
+enum class CardinalPluralCategory : uint8_t
+{
+    One,
+    Few,
+    Other,
+};
+
 struct ResourceLookupResult final
 {
     HINSTANCE instance = nullptr;
@@ -50,6 +57,11 @@ struct ResourceLookupResult final
 COMMON_API HRESULT RegisterResourceOwner(std::wstring_view ownerName, HINSTANCE embeddedInstance) noexcept;
 COMMON_API void UnregisterResourceOwner(HINSTANCE embeddedInstance) noexcept;
 COMMON_API HRESULT ApplyLanguagePreference(const LanguagePreference& preference) noexcept;
+// Returns the culture of the satellite actually loaded for this owner, or "en"
+// when embedded resources are active. This is a snapshot, not a resource lease.
+COMMON_API std::wstring GetEffectiveResourceCulture(HINSTANCE embeddedInstance) noexcept;
+// Selects the supported integer cardinal form for the culture whose resources are active.
+COMMON_API CardinalPluralCategory SelectCardinalPluralCategory(std::wstring_view culture, uint64_t value) noexcept;
 // Cache invalidation token, not a resource lease. Successful reapplication also
 // changes it because satellites are reloaded; rejected preferences do not.
 COMMON_API uint64_t GetLanguagePreferenceRevision() noexcept;

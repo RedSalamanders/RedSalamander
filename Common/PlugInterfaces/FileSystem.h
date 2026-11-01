@@ -1062,6 +1062,16 @@ interface __declspec(uuid("bcf04a7a-9c62-4aa8-9847-d756cf432669")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept = 0;
 };
 
+// Optional capability for identity-less destinations that can create a new final-path file without
+// atomic publication. Write() MUST remain private to the writer until Commit(). Commit() performs an
+// exclusive create at the final path and may leave partial final content when it fails. The provider
+// MUST return ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS, or ERROR_REVISION_MISMATCH only when it knows
+// no final-path mutation occurred. The host never uses this route for overwrite/replace grants.
+interface __declspec(uuid("c40c2400-9fd0-4f5c-a003-8e679120ad09")) __declspec(novtable) IFileSystemDirectFinalCreateWriter : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE SupportsDirectFinalCreate(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept = 0;
+};
+
 // Optional (C10): a provider without object binding that can still name the object at a path with a
 // stable identity (an object key with its version or ETag, a provider file id). While a Permanent
 // Delete prepares, the host resolves the identity of every selected root through

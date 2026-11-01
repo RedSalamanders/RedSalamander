@@ -321,6 +321,7 @@ The host keeps visible panes correct across plugin instances, panes, and mounted
 **Logical context identity:**
 - Cache and watch sharing are keyed by `pluginId + normalized instanceContext`, not by raw `IFileSystem*`.
 - Multiple live COM instances for the same logical context may coexist; the host shares cache entries and watch state across them.
+- A task may outlive registration of its pane's provider pointer. Completion invalidation therefore uses the task/admission-captured logical context for source and destination mutations; pointer-only fallback after unregistering loses `instanceContext` and must not be used for task completion.
 
 **Visible-pane correctness rules:**
 - If the direct child list of a visible folder changes, the host refreshes that folder.
@@ -957,6 +958,27 @@ and publishes through the returned exact stage authority; it never falls back to
 pathname. FileSystemDummy implements the atomic-final route because its writer buffers privately
 and commits one complete node while holding the provider mutex.
 
+`IFileSystemDirectFinalCreateWriter` is a separate optional capability for a destination that can
+create a new final-path file exclusively but cannot promise atomic publication. The host queries
+`SupportsDirectFinalCreate(path, flags, &supported)` with the final path and effective flags. It may
+use this route only without overwrite/replace grants and when the destination has no bound-object
+stage route. The writer's `Write()` must keep content private until `Commit()`; `Commit()` creates the
+final name directly and may leave partial content on failure. The provider may return
+`ERROR_ALREADY_EXISTS`, `ERROR_FILE_EXISTS`, or `ERROR_REVISION_MISMATCH` only when no final-path
+mutation occurred; the host keeps these as ordinary conflicts. Any other failed `Commit()` is
+publication Unknown and blocks automatic retry or pathname cleanup. The host does not infer this
+capability from provider IDs or capability JSON.
+
+```cpp
+interface __declspec(uuid("c40c2400-9fd0-4f5c-a003-8e679120ad09"))
+         __declspec(novtable)
+         IFileSystemDirectFinalCreateWriter : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE SupportsDirectFinalCreate(
+        const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept = 0;
+};
+```
+
 ```cpp
 interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41"))
          __declspec(novtable)
@@ -1165,12 +1187,16 @@ provider roots. A single-root configured instance MAY return one stable provider
 value is admission qualification, not object mutation authority; exact source/destination identity
 still comes from binding and boundary revalidation.
 
-Local's brief route cache may reuse a retained volume GUID only after observing the
-requested existing path's followed endpoint anew and revalidating the cached mount
-GUID. Lexical prefix matching is only an optimization filter. A known endpoint or
-mount GUID change forbids the old same-root cache hit; an unavailable observation
-uses the original system resolver. Observation handles stay query-local and do not
-replace no-follow mutation bindings or the operation-specific typed query.
+Local resolves the requested path's lexical volume root and queries that exact
+mount root's current volume GUID on every route query. A short-lived route cache
+may reuse the encoded root token only when both the lexical root and freshly
+observed GUID match its entry. It MUST NOT open the requested path to follow a
+final reparse point: route identity follows the same lexical mount-root semantics
+on cold and warm queries. If root resolution fails, return
+`local-provider-root`; if the direct GUID is unavailable, use that call's
+lexical root token and invalidate any retained GUID-backed entry. Route
+classification does not chase SUBST aliases to their backing volume. These facts
+do not replace no-follow mutation bindings or the operation-specific typed query.
 
 #### ABI-v2 operation control and object binding
 
@@ -1501,6 +1527,7 @@ Host obligations:
   into one `FileSystemPathIdentity` profile and reuse it only within the returned
   provider/profile/root identity.
 - Maps and caches MAY use folded keys for speed only when the helper owns the key algorithm; callers MUST verify key hits with the helper equality relation before treating them as equal.
+- The shared ordinal-ignore-case key builder folds UTF-16 units separately, preserves surrogate units, and validates each non-ASCII BMP mapping and the resulting component with `CompareStringOrdinal`. Whole-string Unicode uppercase mapping can merge supplementary names that the ordinal relation keeps distinct and is not a compatible key algorithm. Refused keys use the exact raw relation; valid supplementary names remain keyable for rename consumers that require component keys. Native regression coverage checks the complete single-unit UTF-16 space plus explicit supplementary, contextual and emoji samples; this is not an exhaustive arbitrary-string proof.
 - If `pathTextStableIdentity` is false, `comparison` is invalid, `normalization` is unsupported, or another required field is invalid, predictive planners reject before mutation rather than guessing.
 - User text features such as case-insensitive search/replace, sorting labels, or macro-name lookup are not path identity decisions. They MAY use UI text semantics, but those helpers MUST NOT be reused for collision/dependency/refresh/undo decisions.
 - For a provider whose `names.comparison` is `ordinalIgnoreCase` — notably the **local Windows file system** (`builtin/file-system`) and its local-equivalent (`builtin/file-system-dummy`) — the host MUST apply exactly Windows ordinal case-insensitive equality (`CompareStringOrdinal(left, -1, right, -1, TRUE) == CSTR_EQUAL`) at **every** path-identity decision site for that provider, with no per-site variation. The host MUST NOT substitute `CharUpper*`/uppercase folding, `LCMapStringEx`/invariant-lowercase folding, `_wcsicmp`, or `std::filesystem::path` equality for that relation. When a local pane has no live `IFileSystem` instance, the host MUST use the default local `ordinalIgnoreCase` profile rather than a guessed relation.
@@ -1577,6 +1604,17 @@ Normative rules:
 - Callers MUST initialize `FileSystemStorageCharacteristics::sizeBytes` before the call; implementations MUST validate it.
 - Plugins with non-volume-backed storage (cloud, virtual, memory) SHOULD still return a meaningful classification rather than a Win32-volume approximation.
 - The host treats this call as the authoritative plugin-to-host classification; it does not infer storage behavior from plugin type.
+
+Local's physical-medium probe cache is per provider instance and keyed by the
+case-folded lexical volume root. Before reuse, Local MUST resolve the current
+openable backing volume identity. A cache hit requires that stable volume GUID,
+lexical drive context, and drive type still match the retained entry. The probe
+MUST open the exact resolved identity used for that validation. A changed GUID
+replaces the entry for that lexical root; an unavailable stable GUID bypasses
+and clears reuse of the physical-probe entry. SUBST storage probes may resolve
+through the alias to its backing volume GUID, while route-root identity remains
+lexical as specified above. Network classifications do not require a physical
+medium probe or retained cache entry.
 
 Diagnostic/extension capabilities JSON (version 2; never executable route authority):
 
@@ -1718,7 +1756,7 @@ for every shipped profile: File Operations copies link payloads literally (`File
 | Curl `imap-mailbox` | `K=false`; Copy/Move/native/Delete/Rename/Recycle/write false; Read/properties true; Copy export only | `imapUid`, no revision or conditional delete/publication | Link proof false; metadata reported lost; Abort/deadline false; `uncontained/0`; provider-virtual directories | Inspection remains available. Every File Operations mutation route is rejected before task creation. |
 | Google Drive `google-drive` | `C/M/N/D/K/R/W=true`, Rename and Recycle true; Copy import/export `*`, no Move bridge | Provider file ID (`object: providerItemId`, `revision: version`); `pathTextStableIdentity: true` with the `[id:...]` decoration for duplicate names; no bound/conditional delete or conditional publication; committed size through the writer digest | Link objects are not representable; metadata reported lost; every transfer polls the host's operation control through libcurl's progress callback plus the connect and hard request timeouts, `providerWatchdog` with deadline (R0f-GDrive); provider-virtual directories | File Operations and Create Directory are admitted through the provider-owned watchdog; a read-only connection profile keeps the same profile id and its route read/export-only. Mutations resolve the file ID at commit; Permanent Delete pins the file ID while the task prepares and deletes only that file (`IFileSystemIdentityDelete`, C10). |
 | Microsoft Drive `microsoft-drive-graph` | `K=true`; Move/native Move/Rename/read/write and Recycle true; same-provider Copy and permanent Delete false; Copy import/export `*`, no Move bridge | Provider item ID + ETag (`object: providerItemId`, `revision: etag`); Recycle resolves and consumes one stable item ID; committed size through the writer digest; no bound/conditional permanent delete or conditional publication | Link objects are not representable; metadata reported lost; operation-control polling around every WinHTTP step plus the resolve/connect/send/receive timeouts, `providerWatchdog` with deadline (R0f-Graph); provider-virtual directories | Move, native Move, Rename, Recycle, Create Directory, and bridge Copy are admitted through the provider-owned watchdog. Delete is Recycle by stable item ID; no permanent-delete route exists. Overwrite resolves the occupant by item ID and ETag before the first write and fails closed on a zero modification time. |
-| MTP writable `mtp-device-storage` | `K=true`; Copy/Move/read/write true; native/Delete/Rename/Recycle false; Copy import/export, no Move bridge | Provider persistent ID, no revision; committed size; conditional replace through `IFileWriterExpectedReplacement` on the persistent ID resolved at the decision (C9); no bound/conditional delete or conditional publication | Link proof false; metadata reported lost; canonical checkpoints plus watchdog/backend cancel/quarantine and unload gating; `providerWatchdog/30000`; staged-file writer has zero private payload buffer, upload/relay buffers are at most 4 MiB, verification at most 8 MiB, reader request state at most 8 MiB; provider-virtual directories | Qualified Create Directory and transfer routes remain admitted through the provider-owned watchdog. Overwrite of an existing file is offered (R3-1): `SupportsAtomicWriterCommit` accepts the overwrite flag because the temp-sibling swap publishes atomically and deletes only the decided occupant. Overwrite recovery uses one exact-parent enumeration and a schema-v3 record containing complete device, temp, and original-destination identities. It mutates only the uniquely rebound temp object when the destination is proved absent or still carries the recorded destination PUID; path/name/size/time/hash hints never grant authority, and old, invalid, replacement-occupied, or ambiguous records are quarantined without mutation. Backend Delete/Rename method availability is not a central executable claim. The legacy Move entry point may choose WPD move or bounded device-stream copy/delete internally, so it is not native authority. Host-managed destructive Move is unavailable; an unproven transfer becomes Copy-only/source kept. |
+| MTP writable `mtp-device-storage` | `K=true`; Copy/Move/read/write true; native/Delete/Rename/Recycle false; Copy import/export, no Move bridge | Provider persistent ID, no revision; committed size; conditional replace through `IFileWriterExpectedReplacement` on the persistent ID resolved at the decision (C9); no bound/conditional delete or conditional publication | Link proof false; metadata reported lost; canonical checkpoints plus watchdog/backend cancel/quarantine and unload gating; `providerWatchdog/30000`; staged-file writer has zero private payload buffer, upload/relay buffers are at most 4 MiB, verification at most 8 MiB, reader request state at most 8 MiB; provider-virtual directories | Qualified Create Directory and transfer routes remain admitted through the provider-owned watchdog. New files use the typed `IFileSystemDirectFinalCreateWriter` route: writes remain private until Commit, which performs one exclusive direct upload and may leave partial content on failure. Known pre-mutation conflict HRESULTs retain the ordinary prompt; other failed Commits report publication Unknown and are not retried. Managed Move without exact publication proof retains its source. Overwrite of an existing file is offered (R3-1): `SupportsAtomicWriterCommit` accepts overwrite flags only because the guarded temp-sibling swap publishes atomically and deletes only the decided occupant. Overwrite recovery uses one exact-parent enumeration and a schema-v3 record containing complete device, temp, and original-destination identities. It mutates only the uniquely rebound temp object when the destination is proved absent or still carries the recorded destination PUID; path/name/size/time/hash hints never grant authority, and old, invalid, replacement-occupied, or ambiguous records are quarantined without mutation. Backend Delete/Rename method availability is not a central executable claim. The legacy Move entry point may choose WPD move or bounded device-stream copy/delete internally, so it is not native authority. Host-managed destructive Move is unavailable; an unproven transfer becomes Copy-only/source kept. |
 | MTP read-only/disconnected `mtp-device-storage` | `K=false`; writable operations/import false; Read/properties reflect the live readable profile; native always false | Same persistent-ID shape only when the device can produce it; no revision/delete/publication proof | Same loss/cancellation/directory declarations as the live profile | Capability is instance/device-state honest. No cached writable or Create Directory claim survives read-only, invalid-profile, or disconnected state. |
 | S3 `s3-flat-prefix` | `K=true`; Copy/Move/native/Delete/read/write true; Rename/Recycle false; Copy/Move import/export `*` | Object key + VersionId-or-ETag; committed size; public binding flags remain false while provider-native exact-revision logic owns the strategy | Link objects are not representable; metadata reported lost; the CRT continue handler polls the host's operation control on every request armed from the calling thread, plus bounded connect, stall-monitor, and retry policy, `providerWatchdog` with deadline (R0f-S3); the ranged reader implements the operation-control interface and arms every GetObject on its own thread, so a cancel ends an in-flight read within the bound (C8); known-size multipart reserve is exact and four 4-KiB writers retain at most 16 KiB; flat-prefix directories | Copy, Move, native Move, Delete, Create Directory, and bridge transfers are admitted through the provider-owned watchdog. The R0b conditional per-observation Delete and pinned-revision native Move are the provider's own algorithms; the host's exact-authority routes stay unavailable (`boundDelete`/`conditionalDelete` false), so Permanent Delete pins the object's version id or ETag while the task prepares and deletes only that revision (`IFileSystemIdentityDelete`, C10); a prefix keeps the per-observation conditional delete for its descendants. |
 | S3 Table `s3-table-read-only` | `K=false`; mutations/write/import false; Read/properties and Copy export true | No object/revision or publication/delete proof | Link proof false; metadata unknown; Abort/deadline false; `uncontained/0`; provider-virtual directories | Inspection remains available. File Operations mutation is rejected before task creation. It is not the S3 directory-bucket profile and never creates markers/directories. |
@@ -1910,7 +1948,7 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211"))
     virtual HRESULT STDMETHODCALLTYPE GetBuffer(FileInfo** ppFileInfo) noexcept = 0;
 
     // Returns how many bytes in the buffer are committed/used by valid FileInfo entries.
-    // This is the upper bound the host must use when walking NextEntryOffset.
+    // This is the committed-byte bound the host supplies to PackedFileInfoCursor.
     // Returns E_POINTER if pSize is nullptr.
     virtual HRESULT STDMETHODCALLTYPE GetBufferSize(unsigned long* pSize) noexcept = 0;
 
@@ -1966,36 +2004,51 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211"))
   reject odd UTF-16 byte counts, short/unaligned offsets, and offsets beyond the committed buffer with
   `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`.
 
-**Usage Pattern (Primary Method - NextEntryOffset Traversal):**
+**Usage Pattern (Primary Method - Bounded Cursor):**
 
-The recommended way to iterate through FileInfo entries is via `NextEntryOffset` linked-list traversal:
+Every host consumer of an ABI-provided `FileInfo` chain MUST check all query HRESULTs and pass the committed
+byte count and entry count to `Common::Plugins::PackedFileInfoCursor`. It MUST check that allocated capacity
+is at least the committed byte count, and it MUST NOT read any record field before `cursor.Next()` succeeds.
+An empty result is valid when count and committed bytes are both zero, even if the backing allocation has
+nonzero capacity. A count/byte mismatch or malformed chain fails closed. This is required even when the
+provider is expected to be trusted: the chain crosses the plugin ABI boundary.
 
 ```cpp
 wil::com_ptr<IFilesInformation> info;
 THROW_IF_FAILED(fileSystem->ReadDirectoryInfo(L"C:\\Users", info.put()));
 
-FileInfo* current = nullptr;
-THROW_IF_FAILED(info->GetBuffer(&current));
+unsigned long count = 0;
+unsigned long usedBytes = 0;
+unsigned long allocatedBytes = 0;
+THROW_IF_FAILED(info->GetCount(&count));
+THROW_IF_FAILED(info->GetBufferSize(&usedBytes));
+THROW_IF_FAILED(info->GetAllocatedSize(&allocatedBytes));
+if (allocatedBytes < usedBytes || (count == 0 && usedBytes != 0))
+    THROW_HR(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+FileInfo* buffer = nullptr;
+THROW_IF_FAILED(info->GetBuffer(&buffer));
+if (count != 0 && (buffer == nullptr || usedBytes < offsetof(FileInfo, FileName)))
+    THROW_HR(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
 
-while (current) {
-    // Process current entry (use FileNameSize; do not assume null-termination)
-    const size_t nameChars = static_cast<size_t>(current->FileNameSize) / sizeof(wchar_t);
-    const std::wstring_view name(current->FileName, nameChars);
-    ProcessFile(name, current->EndOfFile, current->FileAttributes);
-    
-    // Move to next entry via NextEntryOffset
-    if (current->NextEntryOffset == 0)
-        break;  // Last entry
-    current = reinterpret_cast<FileInfo*>(
-        reinterpret_cast<uint8_t*>(current) + current->NextEntryOffset
-    );
+Common::Plugins::PackedFileInfoCursor cursor(buffer, usedBytes, count);
+for (unsigned long index = 0; index < count; ++index) {
+    const FileInfo* entry = nullptr;
+    THROW_IF_FAILED(cursor.Next(&entry));
+    // Use FileNameSize; do not assume null-termination.
+    const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+    ProcessFile(std::wstring_view(entry->FileName, nameChars), entry->EndOfFile, entry->FileAttributes);
 }
 // info released automatically via wil::com_ptr
 ```
 
+The cursor validates the fixed header, UTF-16 byte count, entry advance and terminal record against both
+the advertised count and committed buffer size. Do not advance a raw pointer using provider-supplied
+`NextEntryOffset` in a consumer. The `Get(index)` convenience method remains available for isolated indexed
+access, but a full enumeration should use the cursor to avoid repeatedly traversing the chain.
+
 **Alternative Usage (Convenience Methods):**
 
-For simpler code, use the convenience methods `GetCount()` and `Get()`:
+For simpler code, use the convenience methods `GetCount()` and `Get()` for a small number of indexed reads:
 
 ```cpp
 wil::com_ptr<IFilesInformation> info;
@@ -2012,7 +2065,7 @@ for (unsigned long i = 0; i < count; i++) {
 // info released automatically via wil::com_ptr
 ```
 
-**Note:** The convenience methods (`GetCount`/`Get`) internally traverse the buffer using `NextEntryOffset`, so the primary method is more efficient for single-pass enumeration.
+**Note:** `Get(index)` internally traverses the buffer using `NextEntryOffset` and validates records. It does not replace the cursor for bulk iteration.
 
 ### 3. FileInfo Structure
 

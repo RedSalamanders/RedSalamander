@@ -204,6 +204,8 @@ If a byte color would be unreadable over the effective background, the glyph fal
 
 The visible top menu bar is rendered through the shared `RedSalamander.DxNativeMenuBar` host while the underlying command model continues to come from the hidden native viewer menu. `Alt`, `F10`, and menu mnemonics continue to work through that DxUi surface.
 
+Theme application may run during window creation before `Open()` attaches the DxUi menu host. A missing host during that interval, or in embedded mode, is normal: ViewerText redraws an existing native menu if present and otherwise remains quiet. Standalone `Open()` reports a genuine native-menu fallback from the final attachment result; embedded windows never attempt standalone menu attachment.
+
 The File menu follows Open, Save As, Refresh, Other Files, separator, Exit. The
 View menu is ordered as Text/Hex, parsed-diff presentation and navigation,
 Line Numbers/Wrap, then Go to Top/Bottom/Offset. Repetitive `Diff /` prefixes

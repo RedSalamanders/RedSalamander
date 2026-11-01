@@ -7,6 +7,7 @@ $archiveModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunArchive.psm1'
 $archiveValidator = Join-Path $repoRoot 'Tools\Test-TestRunArchive.ps1'
 Import-Module $testRunPlanModule -Force -ErrorAction Stop
 Import-Module $archiveModule -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force -ErrorAction Stop
 
 function New-RSArchiveContractRoot {
     return (New-RSTestSandboxScratchDirectory `
@@ -38,6 +39,57 @@ function New-RSArchiveMigrationFixture {
     & git -C $root commit --quiet -m 'new governed invalid fixture'
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create the post-contract archive fixture.' }
     return [pscustomobject]@{ Root = $root; Baseline = $baseline; Legacy = $legacy; New = $new }
+}
+
+function New-RSGrandfatheredRelocationFixture {
+    $root = New-RSArchiveContractRoot
+    & git -C $root init --quiet --initial-branch=main
+    & git -C $root config core.longpaths true
+    & git -C $root config user.email 'archive-relocation@example.invalid'
+    & git -C $root config user.name 'Archive Relocation'
+    $old = 'Specs/TestRuns/4cb089111a23/Continuation/2026-07-03_100049_folderview_warpdrive_current_baton/CONTINUATION.md'
+    $new = 'Specs/TestRuns/4cb089111a23/Continuation/c1/CONTINUATION.md'
+    $oldFull = Join-Path $root ($old -replace '/', '\')
+    New-Item -ItemType Directory -Path (Split-Path -Parent $oldFull) -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $root '.gitattributes'), "*.md text`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllBytes($oldFull, [Text.Encoding]::UTF8.GetBytes("retained historical bytes`n"))
+    & git -C $root add -- .gitattributes
+    & git -C $root add -- $old
+    & git -C $root commit --quiet -m 'immutable archive baseline'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to create the grandfathered relocation baseline fixture.' }
+    $baseline = (& git -C $root rev-parse HEAD).Trim()
+    $treeLine = & git -C $root ls-tree -r $baseline -- $old
+    if ($LASTEXITCODE -ne 0 -or $treeLine -notmatch '^(?<mode>[0-7]{6}) blob (?<blob>[0-9a-f]+)\t') {
+        throw 'Failed to read the fixture''s immutable archive identity.'
+    }
+    $mode = $matches['mode']
+    $blob = $matches['blob']
+    & git -C $root update-ref refs/remotes/origin/main $baseline
+    & git -C $root switch --quiet -c ej/archive-relocation
+    $oldDirectory = Split-Path -Parent $oldFull
+    $newDirectory = Join-Path $root 'Specs\TestRuns\4cb089111a23\Continuation\c1'
+    if (Test-Path -LiteralPath $newDirectory) { throw 'Fixture relocation destination unexpectedly exists.' }
+    Move-Item -LiteralPath $oldDirectory -Destination $newDirectory
+    $newFull = Join-Path $root ($new -replace '/', '\')
+    [IO.File]::WriteAllBytes($newFull, [Text.Encoding]::UTF8.GetBytes("retained historical bytes`r`n"))
+    $blobSha256 = Get-RSValidationGitBlobContentSha256 -RepoRoot $root -BlobId $blob
+    $manifest = [ordered]@{
+        schema = 'red-salamander.immutable-path-relocations.v1'
+        source_commit = $baseline
+        protected_done_baseline_commit = $baseline
+        test_run_archive_baseline_commit = $baseline
+        entries = @([ordered]@{
+                old_path = $old; new_path = $new; mode = $mode; blob = $blob
+                blob_content_sha256 = $blobSha256; class = 'test-run-grandfathered'; baseline_commit = $baseline
+            })
+    }
+    $manifestPath = Join-Path $root 'Specs\Testing\ProtectedPathRelocations.json'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $manifestPath) -Force | Out-Null
+    [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+    & git -C $root add --all
+    & git -C $root commit --quiet -m 'relocate exact grandfathered archive'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the relocated archive fixture.' }
+    return [pscustomobject]@{ Root = $root; Baseline = $baseline; Old = $old; New = $new; NewFull = $newFull; Manifest = $manifestPath }
 }
 
 function Get-RSArchiveMigrationFixtureInventory {
@@ -198,9 +250,9 @@ function Invoke-RSArchiveValidatorProcess {
 Describe 'TestRuns archive contract' {
     # Specs/TestRuns is gitignored evidence: the archives these contracts inspect exist only on the
     # machines that produced them. The inventory is governed from the archive contract commit, which a
-    # squashed or shallow clone without either immutable ancestor does not carry; there
-    # Get-RSTestRunArchiveInventoryPaths returns every tracked file, grandfathered evidence included.
-    # Skip those cases there instead of failing every clone (Testing_SelfTests.md).
+    # squashed or shallow clone without either immutable ancestor does not carry. Inventory omits only
+    # the exact, revalidated 1,394-path continuation relocation. Skip the inventory cases there instead
+    # of failing every clone (Testing_SelfTests.md).
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
     $archiveContractCommit = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveContractCommit }
     & git -C $repoRoot merge-base --is-ancestor $archiveContractCommit HEAD *> $null
@@ -462,6 +514,170 @@ Describe 'TestRuns archive contract' {
             $changed.Count | Should Be 2
             ($changed -contains $moved) | Should Be $true
         }
+    }
+
+    It 'omits only exact immutable continuation relocations from changed and inventory caps' {
+        $fixture = New-RSGrandfatheredRelocationFixture
+        $state = & (Get-Module TestRunArchive) {
+            param($root, $commit)
+            Get-RSTestRunArchiveGrandfatheredRelocationState `
+                -RepoRoot $root -ExpectedSourceCommit $commit -ExpectedBaselineCommit $commit `
+                -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+        } $fixture.Root $fixture.Baseline
+        $state.IsValid | Should Be $true
+        @($state.Paths).Count | Should Be 1
+        @($state.Paths)[0] | Should Be $fixture.New
+
+        $automatedPaths = & (Get-Module TestRunArchive) {
+            param($root, $commit)
+            $previousSource = $script:RSTestRunArchiveRelocationSourceCommit
+            $previousBaseline = $script:RSTestRunArchiveRelocationBaselineCommit
+            $previousCount = $script:RSTestRunArchiveRelocationPathCount
+            $previousCurrentCount = $script:RSTestRunArchiveCurrentRelocationPathCount
+            try {
+                $script:RSTestRunArchiveRelocationSourceCommit = $commit
+                $script:RSTestRunArchiveRelocationBaselineCommit = $commit
+                $script:RSTestRunArchiveRelocationPathCount = 1
+                $script:RSTestRunArchiveCurrentRelocationPathCount = 0
+                return [pscustomobject]@{
+                    Changed = @(Get-RSChangedTestRunArchivePaths -RepoRoot $root)
+                    Inventory = @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $root)
+                }
+            } finally {
+                $script:RSTestRunArchiveRelocationSourceCommit = $previousSource
+                $script:RSTestRunArchiveRelocationBaselineCommit = $previousBaseline
+                $script:RSTestRunArchiveRelocationPathCount = $previousCount
+                $script:RSTestRunArchiveCurrentRelocationPathCount = $previousCurrentCount
+            }
+        } $fixture.Root $fixture.Baseline
+        @($automatedPaths.Changed).Count | Should Be 0
+        @($automatedPaths.Inventory).Count | Should Be 0
+        $explicit = @(Get-RSTestRunArchivePathsForRuns -RepoRoot $fixture.Root -RunPath @(
+                Join-Path $fixture.Root 'Specs\TestRuns\4cb089111a23\Continuation\c1'))
+        $explicit.Count | Should Be 1
+        ($explicit[0] -replace '\\', '/') | Should Be $fixture.New
+        @((Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $explicit -MaxFileBytes 1).Kind |
+            Where-Object { $_ -eq 'FileSize' }).Count | Should Be 1
+    }
+
+    It 'rejects changed bytes, duplicate old copies, mode drift, and unreviewed relocation siblings' {
+        foreach ($mutation in @('bytes', 'duplicate', 'mode', 'sibling')) {
+            $fixture = New-RSGrandfatheredRelocationFixture
+            if ($mutation -eq 'bytes') {
+                [IO.File]::WriteAllText($fixture.NewFull, 'changed historical bytes')
+            } elseif ($mutation -eq 'duplicate') {
+                $oldFull = Join-Path $fixture.Root ($fixture.Old -replace '/', '\')
+                New-Item -ItemType Directory -Path (Split-Path -Parent $oldFull) -Force | Out-Null
+                [IO.File]::WriteAllText($oldFull, 'duplicate old copy')
+            } elseif ($mutation -eq 'mode') {
+                $manifest = Get-Content -LiteralPath $fixture.Manifest -Raw | ConvertFrom-Json
+                $manifest.entries[0].mode = '100755'
+                [IO.File]::WriteAllText($fixture.Manifest, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+            } else {
+                $sibling = Join-Path $fixture.Root 'Specs\TestRuns\4cb089111a23\Continuation\c1\unreviewed.txt'
+                [IO.File]::WriteAllText($sibling, 'unreviewed sibling')
+            }
+            $state = & (Get-Module TestRunArchive) {
+                param($root, $commit)
+                Get-RSTestRunArchiveGrandfatheredRelocationState `
+                    -RepoRoot $root -ExpectedSourceCommit $commit -ExpectedBaselineCommit $commit `
+                    -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+            } $fixture.Root $fixture.Baseline
+            $state.IsValid | Should Be $false
+            @($state.Paths).Count | Should Be 0
+            @($state.Errors).Count | Should BeGreaterThan 0
+        }
+    }
+
+    It 'batches worktree and index identity reads while retaining byte, stage, and mode rejection' {
+        $root = New-RSArchiveContractRoot
+        & git -C $root init --quiet --initial-branch=main
+        & git -C $root config core.autocrlf false
+        & git -C $root config user.email 'archive-batch@example.invalid'
+        & git -C $root config user.name 'Archive Batch'
+        [IO.File]::WriteAllText((Join-Path $root '.gitattributes'), "*.txt text`n*.raw -text`n", [Text.UTF8Encoding]::new($false))
+        $textPath = 'Specs/TestRuns/batch-fixture/text.txt'
+        $rawPath = 'Specs/TestRuns/batch-fixture/raw.raw'
+        foreach ($path in @($textPath, $rawPath)) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $root $path)) -Force | Out-Null
+        }
+        [IO.File]::WriteAllBytes((Join-Path $root $textPath), [Text.Encoding]::UTF8.GetBytes("normalized text`r`n"))
+        [IO.File]::WriteAllBytes((Join-Path $root $rawPath), [Text.Encoding]::UTF8.GetBytes("raw bytes`r`n"))
+        & git -C $root add -- .gitattributes $textPath $rawPath
+        & git -C $root commit --quiet -m 'create batched identity fixture'
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the batched archive identity fixture.' }
+        $textTree = (& git -C $root ls-tree HEAD -- $textPath).Trim()
+        $rawTree = (& git -C $root ls-tree HEAD -- $rawPath).Trim()
+        $textBlob = [regex]::Match($textTree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
+        $rawBlob = [regex]::Match($rawTree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
+        $snapshot = & (Get-Module TestRunArchive) {
+            param($FixtureRoot, $Paths)
+            [pscustomobject]@{
+                Worktree = Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $FixtureRoot -Path $Paths
+                Index = Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path $Paths
+            }
+        } $root @($textPath, $rawPath)
+        $snapshot.Worktree[$textPath] | Should Be $textBlob
+        $snapshot.Worktree[$rawPath] | Should Be $rawBlob
+        $snapshot.Index[$textPath].Count | Should Be 1
+        $snapshot.Index[$textPath][0].Stage | Should Be 0
+        $snapshot.Index[$textPath][0].Mode | Should Be '100644'
+        $snapshot.Index[$textPath][0].Blob | Should Be $textBlob
+
+        [IO.File]::WriteAllBytes((Join-Path $root $textPath), [Text.Encoding]::UTF8.GetBytes("changed text`r`n"))
+        $changed = & (Get-Module TestRunArchive) {
+            param($FixtureRoot, $Path)
+            Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $FixtureRoot -Path @($Path)
+        } $root $textPath
+        ($changed[$textPath] -cne $textBlob) | Should Be $true
+        & git -C $root add -- $textPath
+        $changedIndex = & (Get-Module TestRunArchive) {
+            param($FixtureRoot, $Path)
+            Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
+        } $root $textPath
+        ($changedIndex[$textPath][0].Blob -cne $textBlob) | Should Be $true
+        & git -C $root update-index --chmod=+x -- $rawPath
+        $modeDrift = & (Get-Module TestRunArchive) {
+            param($FixtureRoot, $Path)
+            Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
+        } $root $rawPath
+        $modeDrift[$rawPath][0].Mode | Should Be '100755'
+        & git -C $root update-index --force-remove -- $rawPath
+        $missingIndex = & (Get-Module TestRunArchive) {
+            param($FixtureRoot, $Path)
+            Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
+        } $root $rawPath
+        $missingIndex.ContainsKey($rawPath) | Should Be $false
+    }
+
+    It 'keeps the exact stock-Windows relocation map within path limits and current archive caps' {
+        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\ProtectedPathRelocations.json') -Raw | ConvertFrom-Json
+        @($manifest.entries).Count | Should Be 3002
+        @($manifest.entries | Where-Object class -eq 'protected-done').Count | Should Be 596
+        @($manifest.entries | Where-Object class -eq 'test-run-grandfathered').Count | Should Be 1394
+        $currentEntries = @($manifest.entries | Where-Object class -eq 'test-run-current-contract')
+        $currentEntries.Count | Should Be 1012
+        (($manifest.entries | Measure-Object { $_.new_path.Length } -Maximum).Maximum) | Should BeLessThan 201
+
+        $state = & (Get-Module TestRunArchive) {
+            param($Root)
+            Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $Root
+        } $repoRoot
+        $state.IsValid | Should Be $true
+        @($state.Paths).Count | Should Be 1394
+
+        $inventory = @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot)
+        foreach ($entry in $currentEntries) {
+            ($inventory -contains $entry.new_path) | Should Be $true
+            (@($state.Paths) -contains $entry.new_path) | Should Be $false
+        }
+        $sizeViolations = @(Get-RSTestRunArchiveViolations -RepoRoot $repoRoot -Paths @($currentEntries | ForEach-Object new_path) |
+            Where-Object { $_.Kind -eq 'FileSize' -or $_.Kind -eq 'RunSize' })
+        $sizeViolations.Count | Should Be 0
+
+        $tracked = @(& git -C $repoRoot ls-files)
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to inspect the effective tracked path set.' }
+        (($tracked | Measure-Object Length -Maximum).Maximum) | Should BeLessThan 201
     }
 
     It 'fails closed when an imported baseline object is present but is not an ancestor' {

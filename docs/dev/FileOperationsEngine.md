@@ -151,7 +151,7 @@ Cross-filesystem Move is Copy + Delete, and the source is deleted only after the
 
 ## I27 follow-up ownership seams
 
-The [I27 plan](../../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md)'s [original gallery and protected interaction](../../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/gallery.html)
+The [I27 plan](../../Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md)'s [original gallery and protected interaction](../../Specs/Plans/Done/I27/implementation/g/g1/gallery.html)
 retain frozen build/source bindings, native display metadata and original assertions.
 They cover deterministic synthetic File Operations and Issues presentation; protected
 foreground interaction has a separate receipt. Later production viewer-menu ownership

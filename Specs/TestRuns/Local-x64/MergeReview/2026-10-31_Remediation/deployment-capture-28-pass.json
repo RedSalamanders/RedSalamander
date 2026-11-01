@@ -1,0 +1,53 @@
+{
+  "Schema": "codex-focused-pester.v1",
+  "RunId": "20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163",
+  "ProcessId": 57520,
+  "RepoRoot": "Z:\\src\\RedSalamander",
+  "Head": "6b6f5646be297fbc232d137f1df6a00c5cb74461",
+  "TestRoot": "Z:\\RedSalamander.Perf",
+  "RunRoot": "Z:\\RedSalamander.Perf\\runs\\20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163",
+  "Scratch": "Z:\\RedSalamander.Perf\\runs\\20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163\\scratch\\process-temp",
+  "Temp": "Z:\\RedSalamander.Perf\\runs\\20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163\\scratch\\process-temp",
+  "Tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163\\scratch\\process-temp",
+  "PathLength": 3678,
+  "PathSegmentCount": 61,
+  "PathSha256": "7FA33A0E60C38C9090187684C062F3F1E520737AA9D9162231BE2B5D2A4EB044",
+  "PesterVersion": "3.4.0",
+  "Tests": [
+    "Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1",
+    "Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1"
+  ],
+  "Arguments": [
+    "-ExcludeTag",
+    "RequiresBuildToolchain"
+  ],
+  "StartedUtc": "2026-10-31T16:34:33.8023501Z",
+  "DurationMilliseconds": 15081.0,
+  "Passed": 28,
+  "Failed": 0,
+  "Skipped": 0,
+  "Pending": 0,
+  "Total": 28,
+  "Results": [
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ProcessStreaming.Tests.ps1",
+      "Passed": 11,
+      "Failed": 0,
+      "Skipped": 0,
+      "Pending": 0,
+      "Total": 11,
+      "Failures": []
+    },
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1",
+      "Passed": 17,
+      "Failed": 0,
+      "Skipped": 0,
+      "Pending": 0,
+      "Total": 17,
+      "Failures": []
+    }
+  ],
+  "SetupFailure": null,
+  "Transcript": "Z:\\RedSalamander.Perf\\runs\\20261031T163433Z-57520-5fdfb1afb1ff48d9a0513a3f59b66163\\scratch\\process-temp\\pester-transcript.txt"
+}

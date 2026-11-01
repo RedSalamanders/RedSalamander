@@ -178,7 +178,7 @@ private:
     bool StartPlayback(const std::filesystem::path& path) noexcept;
     bool StartPlaybackWithLoadedVlc() noexcept;
     void BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept;
-    void QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique_ptr<VlcState> state, uint64_t requestId) noexcept;
+    void QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique_ptr<VlcState> state, uint64_t requestId, bool initialLoad = false) noexcept;
     void CancelPendingMediaOpen() noexcept;
     void OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept;
     void BeginDeferredClose() noexcept;
@@ -359,10 +359,14 @@ private:
     bool _closeNotificationSent        = false;
     bool _destroyingAfterCleanup       = false;
     uint64_t _pendingLoadWorkCount     = 0;
-    bool _mediaSwitchInFlight          = false;
-    bool _mediaSwitchRestartRequested  = false;
-    uint64_t _mediaSwitchRequestId     = 0;
-    uint64_t _mediaSwitchCoalesced     = 0;
+    bool _initialLoadInFlight          = false;
+    bool _initialLoadRestartRequested  = false;
+    uint64_t _initialLoadCoalesced     = 0;
+    std::filesystem::path _pendingInitialLoadPath;
+    bool _mediaSwitchInFlight         = false;
+    bool _mediaSwitchRestartRequested = false;
+    uint64_t _mediaSwitchRequestId    = 0;
+    uint64_t _mediaSwitchCoalesced    = 0;
     std::filesystem::path _pendingMediaPath;
     std::shared_ptr<std::atomic_bool> _mediaSwitchCanceled;
     uint64_t _pendingCloseCleanupCount = 0;

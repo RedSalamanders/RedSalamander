@@ -156,7 +156,22 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncPathDetail(HWND 
         _pathDetailCopy->SetOnClick([this, hwnd]
         {
             if (_pathDetailField && ! _pathDetailId.empty())
-                static_cast<void>(Common::Clipboard::TrySetUnicodeText(hwnd, _pathDetailField->GetText(), Common::Clipboard::EmptyUnicodeTextPolicy::Reject));
+            {
+                bool copied = false;
+#ifdef ENABLE_TESTS
+                if (_debugPathDetailCopyResult.has_value())
+                    copied = _debugPathDetailCopyResult.value();
+                else
+#endif
+                    copied = Common::Clipboard::TrySetUnicodeText(hwnd, _pathDetailField->GetText(), Common::Clipboard::EmptyUnicodeTextPolicy::Reject);
+                const UINT messageId            = copied ? IDS_FILEOPS_PATH_DETAIL_COPY_SUCCEEDED : IDS_FILEOPS_PATH_DETAIL_COPY_FAILED;
+                const std::wstring announcement = LoadStringResource(nullptr, messageId);
+#ifdef ENABLE_TESTS
+                _debugPathDetailCopyAnnouncement = announcement;
+#endif
+                if (DxUi::RaiseWindowHostAccessibilityNotification(hwnd, announcement, L"FileOperations.PathDetail.Copy"))
+                    ++_hostedAccessibilityNotificationCount;
+            }
         });
         _pathDetailClose = _pathDetailPanel->AddChild<DxUi::Button>();
         _pathDetailClose->SetAccessibleAutomationId(L"FileOperations.PathDetail.Close");
@@ -167,9 +182,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncPathDetail(HWND 
         _pathDetailField->SetText(descriptor->copyPath);
         _pathDetailField->SetSelectionRange(descriptor->copyPath.size(), 0u);
     }
-    const auto title = LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH);
-    _pathDetailTitle->SetText(title);
-    _pathDetailField->SetAccessibleName(title);
+    const auto title        = LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH);
+    const auto subjectTitle = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_DETAIL_TITLE, descriptor->copyPathSubject, title);
+    _pathDetailTitle->SetText(subjectTitle);
+    _pathDetailField->SetAccessibleName(subjectTitle);
     _pathDetailField->SetAccessibleHelpText(LoadStringResource(nullptr, IDS_FILEOPS_PATH_DETAIL_HELP));
     _pathDetailCopy->SetText(LoadStringResource(nullptr, IDS_FILEOPS_PATH_DETAIL_COPY));
     _pathDetailClose->SetText(LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLOSE));

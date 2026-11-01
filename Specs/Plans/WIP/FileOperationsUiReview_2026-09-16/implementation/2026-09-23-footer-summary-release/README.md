@@ -17,7 +17,7 @@ after that failure; the eight new summary fixtures are present. Of 277 images
 shared with the retained pre-change baseline, 276 are byte-identical. The one
 changed shared image is the rejected black confirmation. Nothing substitutes
 for the missing images. See [comparison](gallery-comparison.json) and
-[complete validation evidence](../../../../../TestRuns/4cb089111a23/Validation/2026-09-23_footer-summary-release/README.md).
+[complete validation evidence](../../../../../TestRuns/4cb089111a23/Validation/v04/README.md).
 
 ## Narrow footer-only views
 

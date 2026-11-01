@@ -1,0 +1,11 @@
+{
+  "run_id": "20261031T141120Z-75668-9279d796d7fe40fcbb43042d68b2c4cd",
+  "raw_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T141120Z-75668-9279d796d7fe40fcbb43042d68b2c4cd\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "raw_sha256": "102c83d73c55b21067466181bcbe22b49b7cb81d18531150145b6045782a4853",
+  "raw_bytes": 13066266,
+  "raw_rows": 33553,
+  "selected_rows": 4,
+  "selection": "Original-order rows with metric prefix FileOps.Interlock.Classifier, plus ProviderPathKeyCandidateStorage with 512 keys",
+  "scope": "Debug observations only; scope prep excluded; no controlled baseline gain or Release qualification claim",
+  "build_receipt": "561b2f04049400ba8abfd0cd2ed14411139df7c0afa65e07b467b708dc6e1388"
+}

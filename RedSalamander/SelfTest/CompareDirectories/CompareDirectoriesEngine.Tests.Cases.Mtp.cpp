@@ -2778,10 +2778,9 @@ SelfTest::RunCase(options,
                                         [&](SelfTest::CaseState& state) noexcept
 {
     // C9 / R3-1: the device declares its temp-sibling swap as an atomic-final overwrite so the host
-    // offers Replace and carries the occupant through IFileWriterExpectedReplacement; a plain create
-    // is atomic-final too (I35 XP-01: temp upload, then a rename onto the free name), a read-only
-    // device declares nothing, and an expectation on a name that is gone is refused before the first
-    // Write.
+    // offers Replace and carries the occupant through IFileWriterExpectedReplacement. New files use
+    // direct-final create; a read-only device declares neither route, and an expectation on a name that
+    // is gone is refused before the first Write.
     constexpr std::wstring_view kPhotoPath  = L"/Fake Phone/Internal Storage/DCIM/Camera/photo001.txt";
     constexpr std::wstring_view kAbsentPath = L"/Fake Phone/Internal Storage/DCIM/Camera/absent-c9.txt";
     CreatedFileSystemInstance created;
@@ -2808,8 +2807,7 @@ SelfTest::RunCase(options,
     state.Require(SUCCEEDED(hr) && supported == TRUE, L"MTP atomic writer: an overwrite of an existing file is an atomic-final temp-sibling swap.");
     supported = TRUE;
     hr        = atomicWriter->SupportsAtomicWriterCommit(kPhotoPath.data(), FILESYSTEM_FLAG_NONE, &supported);
-    state.Require(SUCCEEDED(hr) && supported == TRUE,
-                  L"MTP atomic writer: a plain create is atomic-final (temp upload, then a rename onto the free name; I35 XP-01).");
+    state.Require(SUCCEEDED(hr) && supported == FALSE, L"MTP atomic writer: a plain create is not atomic-final.");
     CreatedFileSystemInstance readOnly;
     const HRESULT readOnlyHr = TryCreateFakeMtpFileSystemInstance("{}", R"json({"readOnly":true})json", L"/", readOnly);
     state.Require(SUCCEEDED(readOnlyHr) && readOnly.fileSystem, L"MTP atomic writer: the read-only fixture must create.");
@@ -2821,6 +2819,12 @@ SelfTest::RunCase(options,
         state.Require(readOnlyAtomic && SUCCEEDED(readOnlyAtomic->SupportsAtomicWriterCommit(kPhotoPath.data(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, &supported)) &&
                           supported == FALSE,
                       L"MTP atomic writer: a read-only device declares no atomic overwrite.");
+        wil::com_ptr<IFileSystemDirectFinalCreateWriter> readOnlyDirect;
+        static_cast<void>(readOnly.fileSystem->QueryInterface(__uuidof(IFileSystemDirectFinalCreateWriter), readOnlyDirect.put_void()));
+        supported = TRUE;
+        state.Require(readOnlyDirect && SUCCEEDED(readOnlyDirect->SupportsDirectFinalCreate(kPhotoPath.data(), FILESYSTEM_FLAG_NONE, &supported)) &&
+                          supported == FALSE,
+                      L"MTP direct create: a read-only device declares no direct-final create.");
     }
     wil::com_ptr<IFileSystemIO> io;
     state.Require(CreateFileSystemIo(created.fileSystem, io), L"MTP atomic writer: missing IFileSystemIO.");
@@ -2850,116 +2854,123 @@ SelfTest::RunCase(options,
 }));
 SelfTest::RunCase(options,
                   suite,
-                  L"mtp_create_temp_route_fallbacks",
-                  WithMtpJournalSandbox(L"mtp_create_temp_route_fallbacks",
+                  L"mtp_direct_final_create_contract",
+                  WithMtpJournalSandbox(L"mtp_direct_final_create_contract",
                                         [&](SelfTest::CaseState& state) noexcept
 {
-    // I35 XP-01: a device that refuses the hidden create temp (its upload or its rename) still gets
-    // the new file through the direct upload, and the session remembers it, so the next create uploads
-    // once; a rename the device applied but reported as failed is decided from the device and is not
-    // uploaded again. No create temp is left behind in any case.
     constexpr std::wstring_view kFolder = L"/Fake Phone/Internal Storage/DCIM/Camera";
     const std::wstring guid             = MakeGuidText();
-    state.Require(! guid.empty(), L"MTP create fallbacks: failed to generate unique file names.");
+    state.Require(! guid.empty(), L"MTP direct create: failed to generate unique file names.");
     if (guid.empty())
     {
         return false;
     }
-    struct Scenario final
+    CreatedFileSystemInstance created;
+    const HRESULT createHr = TryCreateFakeMtpFileSystemInstance("{}", R"json({"readOnly":false})json", L"/", created);
+    if (createHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
     {
-        std::wstring_view name;
-        std::string fakeOptions;
-        uint64_t firstCreateWrites  = 0u; // upload calls the first create makes
-        uint64_t secondCreateWrites = 0u; // upload calls the next create makes on the same session
+        return state.Skip(L"MTP fake backend export is available only in debug plugin builds.");
+    }
+    state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                  std::format(L"MTP direct create: fixture creation failed. hr=0x{:08X}.", static_cast<unsigned long>(createHr)));
+    if (FAILED(createHr) || ! created.fileSystem)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IFileSystemAtomicWriter> atomicWriter;
+    wil::com_ptr<IFileSystemDirectFinalCreateWriter> directWriter;
+    state.Require(SUCCEEDED(created.fileSystem->QueryInterface(IID_PPV_ARGS(atomicWriter.put()))) && atomicWriter &&
+                      SUCCEEDED(created.fileSystem->QueryInterface(IID_PPV_ARGS(directWriter.put()))) && directWriter,
+                  L"MTP direct create: atomic and direct-final typed capabilities must be available.");
+    if (! atomicWriter || ! directWriter)
+    {
+        return false;
+    }
+
+    const std::wstring first  = std::wstring(kFolder) + L"/direct-create-a-" + guid + L".txt";
+    const std::wstring second = std::wstring(kFolder) + L"/direct-create-b-" + guid + L".txt";
+    const auto cleanup        = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(created.fileSystem->DeleteItem(first.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr));
+        static_cast<void>(created.fileSystem->DeleteItem(second.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr));
+    });
+    BOOL supported            = TRUE;
+    HRESULT hr                = atomicWriter->SupportsAtomicWriterCommit(first.c_str(), FILESYSTEM_FLAG_NONE, &supported);
+    state.Require(SUCCEEDED(hr) && supported == FALSE, L"MTP direct create must not claim atomic-final publication.");
+    supported = FALSE;
+    hr        = directWriter->SupportsDirectFinalCreate(first.c_str(), FILESYSTEM_FLAG_NONE, &supported);
+    state.Require(SUCCEEDED(hr) && supported == TRUE, L"MTP advertises direct-final create for a new path.");
+    supported = TRUE;
+    hr        = directWriter->SupportsDirectFinalCreate(first.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, &supported);
+    state.Require(SUCCEEDED(hr) && supported == FALSE, L"MTP direct-final create must reject overwrite grants.");
+    supported = FALSE;
+    hr        = atomicWriter->SupportsAtomicWriterCommit(first.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, &supported);
+    state.Require(SUCCEEDED(hr) && supported == TRUE, L"MTP retains guarded atomic replacement when the PUID route is available.");
+
+    wil::com_ptr<IFileSystemIO> io;
+    state.Require(CreateFileSystemIo(created.fileSystem, io), L"MTP direct create: missing IFileSystemIO.");
+    if (! io)
+    {
+        return false;
+    }
+    const auto writeCalls = [&](const std::wstring& path) noexcept -> std::optional<uint64_t>
+    {
+        const char* properties = nullptr;
+        if (FAILED(io->GetItemProperties(path.c_str(), &properties)) || properties == nullptr)
+        {
+            return std::nullopt;
+        }
+        return extractJsonUInt(properties, "writeFileCalls");
     };
-    const std::array<Scenario, 3> scenarios{{
-        // E_NOTIMPL from the rename: temp upload, then the direct upload; the next create uploads once.
-        {L"rename refused", R"json({"createRenameFailHr":2147500033})json", 2u, 1u},
-        // ERROR_INVALID_NAME (0x8007007B) for the hidden temp itself: refused upload, then the direct one.
-        {L"temp refused", R"json({"createTempWriteFailHr":2147942523})json", 2u, 1u},
-        // ERROR_ACCESS_DENIED after the device applied the rename: one upload, nothing repeated.
-        {L"rename applied then failed", R"json({"createRenameFailHr":2147942405,"createRenameAppliesBeforeFailure":true})json", 1u, 1u},
-    }};
-    for (const Scenario& scenario : scenarios)
+    const auto before        = writeCalls(std::wstring(kFolder));
+    const bool firstWritten  = WritePluginFileText(io.get(), first.c_str(), FILESYSTEM_FLAG_NONE, "first direct payload", state, L"MTP direct create first");
+    const auto afterFirst    = writeCalls(first);
+    const bool secondWritten = WritePluginFileText(io.get(), second.c_str(), FILESYSTEM_FLAG_NONE, "second direct payload", state, L"MTP direct create second");
+    const auto afterSecond   = writeCalls(second);
+    state.Require(firstWritten && secondWritten && before.has_value() && afterFirst.has_value() && afterSecond.has_value() &&
+                      afterFirst.value() == before.value() + 1u && afterSecond.value() == afterFirst.value() + 1u,
+                  L"MTP direct create commits each new file with exactly one device upload.");
+    std::string firstText;
+    std::string secondText;
+    state.Require(ReadPluginFileText(io.get(), first.c_str(), firstText, state, L"MTP direct create first read") &&
+                      ReadPluginFileText(io.get(), second.c_str(), secondText, state, L"MTP direct create second read") &&
+                      firstText == "first direct payload" && secondText == "second direct payload",
+                  L"MTP direct create publishes each complete payload.");
+
+    const std::string replacement = "must not replace";
+    wil::com_ptr<IFileWriter> writer;
+    hr                         = io->CreateFileWriter(first.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+    unsigned long bytesWritten = 0u;
+    if (SUCCEEDED(hr) && writer)
     {
-        CreatedFileSystemInstance created;
-        const HRESULT createHr = TryCreateFakeMtpFileSystemInstance(scenario.fakeOptions, R"json({"readOnly":false})json", L"/", created);
-        if (createHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
+        hr = writer->Write(replacement.data(), static_cast<unsigned long>(replacement.size()), &bytesWritten);
+        if (SUCCEEDED(hr) && bytesWritten == replacement.size())
         {
-            return state.Skip(L"MTP fake backend export is available only in debug plugin builds.");
-        }
-        state.Require(SUCCEEDED(createHr) && created.fileSystem,
-                      std::format(L"MTP create fallbacks ({}): fixture creation failed. hr=0x{:08X}.", scenario.name, static_cast<unsigned long>(createHr)));
-        wil::com_ptr<IFileSystemIO> io;
-        if (FAILED(createHr) || ! created.fileSystem || ! CreateFileSystemIo(created.fileSystem, io))
-        {
-            return false;
-        }
-        const auto writeCalls = [&](const std::wstring& path) noexcept -> std::optional<uint64_t>
-        {
-            const char* properties = nullptr;
-            if (FAILED(io->GetItemProperties(path.c_str(), &properties)) || properties == nullptr)
-            {
-                return std::nullopt;
-            }
-            return extractJsonUInt(properties, "writeFileCalls");
-        };
-        const std::wstring first             = std::wstring(kFolder) + L"/create-fallback-a-" + guid + L".txt";
-        const std::wstring second            = std::wstring(kFolder) + L"/create-fallback-b-" + guid + L".txt";
-        const auto cleanup                   = wil::scope_exit([&]() noexcept
-        {
-            static_cast<void>(created.fileSystem->DeleteItem(first.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr));
-            static_cast<void>(created.fileSystem->DeleteItem(second.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr));
-        });
-        const std::optional<uint64_t> before = writeCalls(std::wstring(kFolder));
-        const bool firstWritten =
-            WritePluginFileText(io.get(), first.c_str(), FILESYSTEM_FLAG_NONE, "first create payload", state, L"MTP create fallbacks first");
-        const std::optional<uint64_t> afterFirst = writeCalls(first);
-        const bool secondWritten =
-            WritePluginFileText(io.get(), second.c_str(), FILESYSTEM_FLAG_NONE, "second create payload", state, L"MTP create fallbacks second");
-        const std::optional<uint64_t> afterSecond = writeCalls(second);
-        if (! firstWritten || ! secondWritten || ! before.has_value() || ! afterFirst.has_value() || ! afterSecond.has_value())
-        {
-            state.Require(false, std::format(L"MTP create fallbacks ({}): a create failed or the upload counter is unreadable.", scenario.name));
-            return false;
-        }
-        const uint64_t firstWrites  = afterFirst.value() - before.value();
-        const uint64_t secondWrites = afterSecond.value() - afterFirst.value();
-        state.Require(firstWrites == scenario.firstCreateWrites && secondWrites == scenario.secondCreateWrites,
-                      std::format(L"MTP create fallbacks ({}): uploads first={} (expected {}) second={} (expected {}).",
-                                  scenario.name,
-                                  firstWrites,
-                                  scenario.firstCreateWrites,
-                                  secondWrites,
-                                  scenario.secondCreateWrites));
-        std::string firstText;
-        std::string secondText;
-        state.Require(ReadPluginFileText(io.get(), first.c_str(), firstText, state, L"MTP create fallbacks first read") &&
-                          ReadPluginFileText(io.get(), second.c_str(), secondText, state, L"MTP create fallbacks second read") &&
-                          firstText == "first create payload" && secondText == "second create payload",
-                      std::format(L"MTP create fallbacks ({}): the created files must hold their payloads.", scenario.name));
-        wil::com_ptr<IFilesInformation> files;
-        FileInfo* head = nullptr;
-        bool leftover  = false;
-        if (SUCCEEDED(created.fileSystem->ReadDirectoryInfo(kFolder.data(), files.put())) && files && SUCCEEDED(files->GetBuffer(&head)))
-        {
-            for (FileInfo* entry = head; entry != nullptr;)
-            {
-                const std::wstring_view name(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
-                leftover = leftover || name.find(L".rs-mtp-create-") != std::wstring_view::npos;
-                if (entry->NextEntryOffset == 0u)
-                {
-                    break;
-                }
-                entry = reinterpret_cast<FileInfo*>(reinterpret_cast<unsigned char*>(entry) + entry->NextEntryOffset);
-            }
-        }
-        state.Require(! leftover, std::format(L"MTP create fallbacks ({}): a hidden create temp was left behind.", scenario.name));
-        if (! state.failure.empty())
-        {
-            return false;
+            hr = writer->Commit();
         }
     }
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), L"MTP direct create preserves the ordinary known no-commit collision result.");
+    state.Require(ReadPluginFileText(io.get(), first.c_str(), firstText, state, L"MTP direct create collision read") && firstText == "first direct payload",
+                  L"MTP direct create never changes the occupant after an exclusive-create collision.");
+
+    wil::com_ptr<IFilesInformation> files;
+    FileInfo* head = nullptr;
+    bool leftover  = false;
+    if (SUCCEEDED(created.fileSystem->ReadDirectoryInfo(kFolder.data(), files.put())) && files && SUCCEEDED(files->GetBuffer(&head)))
+    {
+        for (FileInfo* entry = head; entry != nullptr;)
+        {
+            const std::wstring_view name(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
+            leftover = leftover || name.find(L".rs-mtp-create-") != std::wstring_view::npos;
+            if (entry->NextEntryOffset == 0u)
+            {
+                break;
+            }
+            entry = reinterpret_cast<FileInfo*>(reinterpret_cast<unsigned char*>(entry) + entry->NextEntryOffset);
+        }
+    }
+    state.Require(! leftover, L"MTP direct create does not create a hidden temp sibling.");
     return state.failure.empty();
 }));
 SelfTest::RunCase(options,

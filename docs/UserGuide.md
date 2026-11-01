@@ -141,7 +141,7 @@ When a workflow is not visible in the first screen, check these command surfaces
 - The **Edit** menu for selection masks, saved selections, hide/show-name filters, clipboard commands, and path-copy helpers.
 - The **Commands** menu for search, compare, occupied space, make file list, opened-files list, shared directories, connections, shell/command-line helpers, and File Explorer shortcuts.
 - The **Plugins** menu for plugin management and plugin-provided commands.
-- The **View** menu for theme, fullscreen, File Operations Failed Items, menu/function bar toggles, and Preferences.
+- The **View** menu for theme, fullscreen, File Operation Issues, menu/function bar toggles, and Preferences.
 - `F1` / **Help -> Display Shortcuts** for the binding-centric shortcut list: aliases appear as separate key rows.
 - `Ctrl+Shift+P` for the global, command-centric RedSalamander Command Palette: one searchable icon-and-text row per command with its current shortcut chips. It works from panes, navigation, previews, and Terminals.
 
@@ -305,7 +305,7 @@ The file and command menus include several everyday workflow helpers:
 - **Make File List** opens an options dialog for the current selection, focused item, or current folder. It can recurse into folders, write JSON/CSV/text, choose which fields are included, use text macros such as `{fullPath}` and `{size}`, and save the result to the clipboard or a UTF-8 file. The last selected options are remembered.
 - **Shared Directories** (`Ctrl+Shift+F9`) opens a modeless list of local Windows disk shares. The dialog shows share name, local path, type, and remark, can open reachable local share paths in the focused pane, and offers the Windows Shared Folders management console.
 - **Connect Network Drive** (`F11`) and **Disconnect** (`F12`) use Windows network-drive integration from local `file:` panes.
-- **File Operations Failed Items** (`Ctrl+J`) opens the issues pane for failed copy/move/delete work.
+- **File Operation Issues** (`Ctrl+J`) opens the issues pane for copy/move/delete outcomes and diagnostics.
 
 ### Folder Size and Space Usage
 

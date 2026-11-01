@@ -139,6 +139,121 @@ function New-RSPesterInvokeParameters {
     return $parameters
 }
 
+function Get-RSPesterBoundedText {
+    param(
+        [AllowEmptyString()]
+        [string]$Value = '',
+
+        [ValidateRange(128, 8192)]
+        [int]$MaximumCharacters = 8192
+    )
+
+    $text = [string]$Value
+    if ($text.Length -le $MaximumCharacters) {
+        return $text
+    }
+
+    $headCharacters = [Math]::Min(1024, [int]($MaximumCharacters / 4))
+    $tailCharacters = $MaximumCharacters - $headCharacters - 96
+    $tailStart = $text.Length - $tailCharacters
+
+    # Keep valid UTF-16 surrogate pairs intact when either truncation cut would
+    # otherwise leave one half in the retained head or tail.
+    if ($headCharacters -gt 0 -and
+        $headCharacters -lt $text.Length -and
+        [char]::IsHighSurrogate($text[$headCharacters - 1]) -and
+        [char]::IsLowSurrogate($text[$headCharacters])) {
+        $headCharacters--
+    }
+    if ($tailStart -gt 0 -and
+        $tailStart -lt $text.Length -and
+        [char]::IsHighSurrogate($text[$tailStart - 1]) -and
+        [char]::IsLowSurrogate($text[$tailStart])) {
+        $tailStart++
+        $tailCharacters--
+    }
+
+    $omittedCharacters = $tailStart - $headCharacters
+    return $text.Substring(0, $headCharacters) +
+        [Environment]::NewLine + "...[truncated $omittedCharacters characters]..." +
+        [Environment]::NewLine + $text.Substring($tailStart, $tailCharacters)
+}
+
+function Convert-RSPesterTestResults {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [object[]]$TestResults = @()
+    )
+
+    $cases = [Collections.Generic.List[object]]::new()
+    $failureDetails = [Collections.Generic.List[string]]::new()
+    foreach ($testResult in @($TestResults)) {
+        if ($null -eq $testResult) {
+            continue
+        }
+
+        $nameProperty = $testResult.PSObject.Properties['Name']
+        $name = if ($null -ne $nameProperty) { [string]$nameProperty.Value } else { '(unnamed Pester case)' }
+        $resultProperty = $testResult.PSObject.Properties['Result']
+        $caseResult = if ($null -ne $resultProperty) { [string]$resultProperty.Value } else { '' }
+        $status = switch ($caseResult) {
+            'Passed' { 'passed' }
+            'Failed' { 'failed' }
+            'Skipped' { 'skipped' }
+            default { 'inconclusive' }
+        }
+
+        $reason = ''
+        if ($status -eq 'failed') {
+            $messageProperty = $testResult.PSObject.Properties['FailureMessage']
+            $stackProperty = $testResult.PSObject.Properties['StackTrace']
+            $message = if ($null -ne $messageProperty) { [string]$messageProperty.Value } else { '' }
+            $stack = if ($null -ne $stackProperty) { [string]$stackProperty.Value } else { '' }
+            if ([string]::IsNullOrWhiteSpace($message) -and [string]::IsNullOrWhiteSpace($stack)) {
+                $reason = 'Pester marked this case failed without an assertion message or stack trace.'
+            } else {
+                $message = Get-RSPesterBoundedText -Value $message -MaximumCharacters 6000
+                $stack = Get-RSPesterBoundedText -Value $stack -MaximumCharacters 1800
+                $reasonParts = [Collections.Generic.List[string]]::new()
+                if (-not [string]::IsNullOrWhiteSpace($message)) {
+                    $reasonParts.Add("Failure: $($message.Trim())")
+                }
+                if (-not [string]::IsNullOrWhiteSpace($stack)) {
+                    $reasonParts.Add("Stack: $($stack.Trim())")
+                }
+                $reason = Get-RSPesterBoundedText -Value ($reasonParts -join [Environment]::NewLine) -MaximumCharacters 8192
+            }
+            $failureDetails.Add("[$name] $reason")
+        } elseif ($status -eq 'skipped') {
+            $reasonProperty = $testResult.PSObject.Properties['Reason']
+            if ($null -ne $reasonProperty) {
+                $reason = Get-RSPesterBoundedText -Value ([string]$reasonProperty.Value) -MaximumCharacters 2048
+            }
+        }
+
+        $cases.Add([pscustomobject]@{
+                name = $name
+                status = $status
+                reason = $reason
+            })
+    }
+
+    $failureReason = ''
+    if ($failureDetails.Count -gt 0) {
+        $selectedDetails = @($failureDetails | Select-Object -First 4)
+        if ($failureDetails.Count -gt $selectedDetails.Count) {
+            $selectedDetails += "Additional $($failureDetails.Count - $selectedDetails.Count) Pester failures omitted."
+        }
+        $failureReason = Get-RSPesterBoundedText -Value ($selectedDetails -join [Environment]::NewLine) -MaximumCharacters 8192
+    }
+
+    return [pscustomobject]@{
+        Cases = @($cases)
+        FailureReason = $failureReason
+    }
+}
+
 function Get-RSBuildScriptArguments {
     param(
         [Parameter(Mandatory = $true)]
@@ -464,6 +579,7 @@ Export-ModuleMember -Function @(
     'Get-RSSelfTestArguments',
     'Get-RSSelfTestListArguments',
     'New-RSPesterInvokeParameters',
+    'Convert-RSPesterTestResults',
     'Get-RSBuildScriptArguments',
     'Get-RSBuildEnvironmentOverrides',
     'Test-RSSelfTestResultCoverage',

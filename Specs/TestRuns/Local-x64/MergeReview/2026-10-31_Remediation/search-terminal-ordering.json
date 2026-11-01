@@ -1,0 +1,78 @@
+{
+  "scope": "Test-only deterministic ordering witness; no throughput improvement claim",
+  "source_snapshot_id": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "run_id": "20261101T015404Z-74204-6cc3f764d11f49b8bdcf158d6f8b4418",
+  "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+  "expected_dispatches": 4,
+  "observed_dispatches": 4,
+  "gate_rows": [
+    {
+      "timestamp": "2026-11-01T01:55:28.718Z",
+      "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+      "durationUs": 0,
+      "value0": 0,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.719Z",
+      "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+      "durationUs": 0,
+      "value0": 0,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.72Z",
+      "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+      "durationUs": 0,
+      "value0": 0,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.72Z",
+      "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+      "durationUs": 0,
+      "value0": 0,
+      "value1": 1,
+      "hr": 0
+    }
+  ],
+  "parallel_scope_rows": [
+    {
+      "timestamp": "2026-11-01T01:55:28.718Z",
+      "metric": "FileSystem.Search.ParallelDirectoryWalk",
+      "durationUs": 576,
+      "value0": 1,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.719Z",
+      "metric": "FileSystem.Search.ParallelDirectoryWalk",
+      "durationUs": 283,
+      "value0": 1,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.72Z",
+      "metric": "FileSystem.Search.ParallelDirectoryWalk",
+      "durationUs": 274,
+      "value0": 1,
+      "value1": 1,
+      "hr": 0
+    },
+    {
+      "timestamp": "2026-11-01T01:55:28.72Z",
+      "metric": "FileSystem.Search.ParallelDirectoryWalk",
+      "durationUs": 255,
+      "value0": 1,
+      "value1": 1,
+      "hr": 0
+    }
+  ],
+  "raw_perf_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T015404Z-74204-6cc3f764d11f49b8bdcf158d6f8b4418\\artifacts\\archive\\4cb089111a23\\CompareDirectories\\2026-11-01_025528\\perf\\perf_metrics.jsonl",
+  "raw_perf_sha256": "48ded773aa2ce2a5fe04ea09aabb2d2283ff6a36daaea0cbcc0ebf62c6614514"
+}

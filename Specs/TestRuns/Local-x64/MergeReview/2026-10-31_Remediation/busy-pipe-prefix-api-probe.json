@@ -1,0 +1,11 @@
+{
+  "run_id": "20261031T234407Z-40080-8ac349e292a54e09aaa368e6ee48cdac",
+  "scope": "Deterministic pre-fix Win32 contract witness; no listener ever created; no native artifact or production state mutated",
+  "api": "WaitNamedPipeW",
+  "requested_timeout_ms": 5000,
+  "success": false,
+  "last_error": 2,
+  "elapsed_ms": 3.9671,
+  "source_snapshot_id": "11007c1c2cfa8fa44d5901bcc7dd562eef13267eae612eee5fb1669e02fdb013",
+  "conclusion": "A missing pipe instance returns immediately with ERROR_FILE_NOT_FOUND, so one-shot readiness cannot span the listener recreation gap."
+}

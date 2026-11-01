@@ -146,6 +146,167 @@
     return state.failure.empty();
 }
 
+struct DirectoryCachePrewaitGateForSelfTest final
+{
+    DirectoryCachePrewaitGateForSelfTest(HANDLE enteredEvent, HANDLE releaseEvent, std::stop_token token) noexcept
+        : entered(enteredEvent),
+          release(releaseEvent),
+          stopToken(std::move(token))
+    {
+    }
+    DirectoryCachePrewaitGateForSelfTest(const DirectoryCachePrewaitGateForSelfTest&)            = delete;
+    DirectoryCachePrewaitGateForSelfTest(DirectoryCachePrewaitGateForSelfTest&&)                 = delete;
+    DirectoryCachePrewaitGateForSelfTest& operator=(const DirectoryCachePrewaitGateForSelfTest&) = delete;
+    DirectoryCachePrewaitGateForSelfTest& operator=(DirectoryCachePrewaitGateForSelfTest&&)      = delete;
+
+    // Borrowed events outlive the joined waiter; this context owns no Windows handles.
+    HANDLE entered = nullptr;
+    HANDLE release = nullptr;
+    std::stop_token stopToken;
+    std::atomic_bool timedOut{false};
+};
+
+void DirectoryCacheEnsureLoadedPrewaitHookForSelfTest(void* context) noexcept
+{
+    auto* const gate = static_cast<DirectoryCachePrewaitGateForSelfTest*>(context);
+    if (gate == nullptr)
+        return;
+    SetEvent(gate->entered);
+    if (WaitForSingleObject(gate->release, static_cast<DWORD>(SelfTest::ScaleTimeout(10'000u))) != WAIT_OBJECT_0)
+        gate->timedOut.store(true, std::memory_order_release);
+}
+
+[[nodiscard]] bool TestDirectoryCacheTaskContextMutation(CaseState& state,
+                                                         DirectoryInfoCache& cache,
+                                                         const std::filesystem::path& root,
+                                                         const wil::com_ptr<IFileSystem>& base) noexcept
+{
+    // Match the delegated Local metadata so the negative control isolates the lost
+    // instance context rather than a deliberately different plugin identifier.
+    constexpr std::wstring_view pluginId = L"builtin/file-system";
+    constexpr std::wstring_view shortId  = L"file";
+    constexpr std::wstring_view contextA = L"mount-A";
+    constexpr std::wstring_view contextB = L"mount-B";
+    const auto logicalContextA           = DirectoryInfoCache::MakeContextKey(pluginId, shortId, contextA);
+    const auto logicalContextB           = DirectoryInfoCache::MakeContextKey(pluginId, shortId, contextB);
+    const auto folder                    = root / L"task-context-mutation";
+    const auto item                      = folder / L"removed.txt";
+    if (! state.Require(base && std::wstring_view(logicalContextA.pluginId) == pluginId && logicalContextA.instanceContext == contextA &&
+                            logicalContextB.instanceContext == contextB && logicalContextA.instanceContextKey != logicalContextB.instanceContextKey,
+                        L"Could not build distinct canonical provider context keys.") ||
+        ! state.Require(SelfTest::EnsureDirectory(folder) && SelfTest::WriteTextFile(item, "profile payload"),
+                        L"Could not seed the context-isolation cache fixture."))
+        return false;
+
+    wil::com_ptr<IFileSystem> taskProvider  = CreateBatchRenameCountingReadDirectoryFileSystem(base, nullptr);
+    wil::com_ptr<IFileSystem> contextKeeper = CreateBatchRenameCountingReadDirectoryFileSystem(base, nullptr);
+    wil::com_ptr<IFileSystem> liveProvider  = CreateBatchRenameCountingReadDirectoryFileSystem(base, nullptr);
+    if (! state.Require(taskProvider && contextKeeper && liveProvider, L"Could not create three independent cache providers."))
+        return false;
+
+    cache.RegisterProvider(taskProvider.get(), pluginId, shortId, contextA);
+    cache.RegisterProvider(contextKeeper.get(), pluginId, shortId, contextA);
+    cache.RegisterProvider(liveProvider.get(), pluginId, shortId, contextB);
+    const auto unregisterProviders = wil::scope_exit([&]() noexcept
+    {
+        cache.UnregisterProvider(taskProvider.get());
+        cache.UnregisterProvider(contextKeeper.get());
+        cache.UnregisterProvider(liveProvider.get());
+    });
+
+    const auto snapshotNames = [](IFilesInformation* info, std::vector<std::wstring>& names) noexcept -> HRESULT
+    {
+        names.clear();
+        if (! info)
+            return E_POINTER;
+        FileInfo* buffer         = nullptr;
+        unsigned long bufferSize = 0u;
+        unsigned long count      = 0u;
+        HRESULT hr               = info->GetBuffer(&buffer);
+        if (FAILED(hr))
+            return hr;
+        hr = info->GetBufferSize(&bufferSize);
+        if (FAILED(hr))
+            return hr;
+        hr = info->GetCount(&count);
+        if (FAILED(hr))
+            return hr;
+        Common::Plugins::PackedFileInfoCursor cursor(buffer, bufferSize, count);
+        for (unsigned long index = 0u; index < count; ++index)
+        {
+            const FileInfo* entry = nullptr;
+            hr                    = cursor.Next(&entry);
+            if (FAILED(hr) || ! entry)
+                return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            names.emplace_back(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
+        }
+        const FileInfo* extra = nullptr;
+        if (cursor.Next(&extra) != HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES) || extra != nullptr)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        std::ranges::sort(names);
+        return S_OK;
+    };
+
+    wil::com_ptr<IFilesInformation> originalA;
+    wil::com_ptr<IFilesInformation> originalB;
+    const std::vector<std::wstring> expected{L"removed.txt"};
+    {
+        auto a = cache.BorrowDirectoryInfo(taskProvider.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        std::vector<std::wstring> names;
+        state.Require(a.Status() == S_OK && snapshotNames(a.Get(), names) == S_OK && names == expected,
+                      L"Task provider did not establish the initial mount-A snapshot.");
+        originalA = a.Get();
+    }
+    {
+        auto a = cache.BorrowDirectoryInfo(contextKeeper.get(), folder, DirectoryInfoCache::BorrowMode::CacheOnly);
+        state.Require(a.Status() == S_OK && a.Get() == originalA.get(), L"Second mount-A provider did not share the logical cache entry.");
+    }
+    {
+        auto b = cache.BorrowDirectoryInfo(liveProvider.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        std::vector<std::wstring> names;
+        state.Require(b.Status() == S_OK && snapshotNames(b.Get(), names) == S_OK && names == expected,
+                      L"Live mount-B provider did not establish its isolated same-path snapshot.");
+        originalB = b.Get();
+    }
+
+    cache.UnregisterProvider(taskProvider.get()); // models pane replacement while its operation still owns the provider
+    {
+        auto warmA = cache.BorrowDirectoryInfo(contextKeeper.get(), folder, DirectoryInfoCache::BorrowMode::CacheOnly);
+        state.Require(warmA.Status() == S_OK && warmA.Get() == originalA.get(),
+                      L"Mount-A cache entry did not remain available through the independent context keeper.");
+    }
+    std::error_code ec;
+    const bool removed = std::filesystem::remove(item, ec);
+    if (! state.Require(removed && ! ec, L"Could not remove the owned item after warming both logical contexts."))
+        return false;
+
+    // This is the former completion route after UnregisterProvider: the task pointer
+    // resolves only to provider metadata and the empty/default instance context.
+    cache.NotifyPathDeleted(taskProvider.get(), item);
+    {
+        auto wrongContext = cache.BorrowDirectoryInfo(contextKeeper.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        std::vector<std::wstring> names;
+        state.Require(wrongContext.Status() == S_OK && snapshotNames(wrongContext.Get(), names) == S_OK && names == expected &&
+                          wrongContext.Get() == originalA.get(),
+                      L"Legacy pointer-only notification unexpectedly invalidated mount-A after its provider pointer was unregistered.");
+    }
+
+    cache.NotifyPathDeleted(logicalContextA, item);
+    {
+        auto refreshedA = cache.BorrowDirectoryInfo(contextKeeper.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        std::vector<std::wstring> names;
+        state.Require(refreshedA.Status() == S_OK && snapshotNames(refreshedA.Get(), names) == S_OK && names.empty() && refreshedA.Get() != originalA.get(),
+                      L"Task-captured mount-A notification did not replace its deleted-item snapshot.");
+    }
+    {
+        auto untouchedB = cache.BorrowDirectoryInfo(liveProvider.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        std::vector<std::wstring> names;
+        state.Require(untouchedB.Status() == S_OK && snapshotNames(untouchedB.Get(), names) == S_OK && names == expected && untouchedB.Get() == originalB.get(),
+                      L"Mount-A invalidation dirtied or replaced the same-path mount-B cache entry.");
+    }
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestDirectoryCacheInvalidationDuringEnumerationIsRetained(CaseState& state) noexcept
 {
     std::filesystem::path root;
@@ -232,7 +393,166 @@
                       elapsed,
                       names(firstSnapshot.get()).size(),
                       names(refreshed.Get()).size()));
-    return state.failure.empty();
+
+    // Exercise the exact stop-notification gap: the second borrower has observed
+    // loading==true and holds the cache mutex immediately before condition_variable::wait.
+    const std::filesystem::path waitRoot = root / L"waiter-race";
+    state.Require(SelfTest::EnsureDirectory(waitRoot) && SelfTest::WriteTextFile(waitRoot / L"entry.txt", "waiter"),
+                  L"Could not seed the stopped cache-waiter fixture.");
+    wil::unique_handle loadReady(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle loadRelease(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle waiterDone(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle prewaitEntered(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle prewaitRelease(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle stopStarted(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle stopDone(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! state.Require(loadReady && loadRelease && waiterDone && prewaitEntered && prewaitRelease && stopStarted && stopDone,
+                        L"Could not create deterministic cache-waiter race gates."))
+        return false;
+
+    std::atomic_uint32_t waitRaceCalls{0u};
+    auto* const waitRaceWrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, &waitRaceCalls);
+    if (! state.Require(waitRaceWrapper != nullptr, L"Could not create the stopped cache-waiter provider."))
+        return false;
+    wil::com_ptr<IFileSystem> waitRaceProvider;
+    waitRaceProvider.attach(waitRaceWrapper);
+    waitRaceWrapper->SetReadDirectoryInfoSnapshotGate(loadReady.get(), loadRelease.get());
+    cache.RegisterProvider(waitRaceProvider.get(), L"selftest/cache-wait-cancel", L"file", waitRoot.native());
+    const auto unregisterWaitRace = wil::scope_exit([&]() noexcept { cache.UnregisterProvider(waitRaceProvider.get()); });
+
+    HRESULT loaderStatus = E_PENDING;
+    HRESULT waiterStatus = E_PENDING;
+    wil::com_ptr<IFilesInformation> loadedSnapshot;
+    std::stop_source waiterStop;
+    DirectoryCachePrewaitGateForSelfTest prewaitGate(prewaitEntered.get(), prewaitRelease.get(), waiterStop.get_token());
+    std::jthread loader;
+    std::jthread waiter;
+    std::jthread stopper;
+    const auto releaseWaitRace = wil::scope_exit([&]() noexcept
+    {
+        SetEvent(loadRelease.get());
+        SetEvent(prewaitRelease.get());
+    });
+    loader                     = std::jthread([&]() noexcept
+    {
+        [[maybe_unused]] const auto com = wil::CoInitializeEx(COINIT_MULTITHREADED);
+        auto borrowed                   = cache.BorrowDirectoryInfo(waitRaceProvider.get(), waitRoot, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+        loaderStatus                    = borrowed.Status();
+        loadedSnapshot                  = borrowed.Get();
+    });
+    const bool loaderEntered   = WaitForSingleObject(loadReady.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(10'000u))) == WAIT_OBJECT_0;
+    state.Require(loaderEntered, L"The first cache load did not reach its immutable-snapshot gate.");
+    if (loaderEntered)
+    {
+        cache.SetEnsureLoadedPrewaitHookForSelfTest(&DirectoryCacheEnsureLoadedPrewaitHookForSelfTest, &prewaitGate);
+        waiter                = std::jthread([&]() noexcept
+        {
+            [[maybe_unused]] const auto com = wil::CoInitializeEx(COINIT_MULTITHREADED);
+            auto borrowed = cache.BorrowDirectoryInfo(waitRaceProvider.get(), waitRoot, DirectoryInfoCache::BorrowMode::AllowEnumerate, waiterStop.get_token());
+            waiterStatus  = borrowed.Status();
+            SetEvent(waiterDone.get());
+        });
+        const bool reachedGap = WaitForSingleObject(prewaitEntered.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(10'000u))) == WAIT_OBJECT_0;
+        state.Require(reachedGap, L"The second borrower did not reach the predicate-to-wait boundary.");
+        if (reachedGap)
+        {
+            stopper               = std::jthread([&]() noexcept
+            {
+                SetEvent(stopStarted.get());
+                static_cast<void>(waiterStop.request_stop());
+                SetEvent(stopDone.get());
+            });
+            const bool stopIssued = WaitForSingleObject(stopStarted.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(1000u))) == WAIT_OBJECT_0;
+            state.Require(stopIssued, L"The cache-waiter stop request did not start.");
+            const ULONGLONG stopDeadline = GetTickCount64() + SelfTest::ScaleTimeout(1000u);
+            while (! prewaitGate.stopToken.stop_requested() && GetTickCount64() < stopDeadline)
+                Sleep(0u);
+            const bool stopObservedInsideGap = prewaitGate.stopToken.stop_requested();
+            state.Require(stopObservedInsideGap, L"The stop source was not set while the waiter held the prewait mutex.");
+            // The hook holds _mutex after the predicate was observed false. Releasing it
+            // lets wait atomically unlock; the stop callback's mutex barrier must then notify.
+            SetEvent(prewaitRelease.get());
+            const bool waiterWoke = WaitForSingleObject(waiterDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(3000u))) == WAIT_OBJECT_0;
+            if (! waiterWoke)
+            {
+                cache.WakeWaitersForSelfTest(); // Bounded rescue so a regression cannot strand the selftest thread.
+            }
+            state.Require(waiterWoke, L"A stop delivered in the cache predicate-to-wait gap was lost.");
+            state.Require(WaitForSingleObject(stopDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(3000u))) == WAIT_OBJECT_0,
+                          L"The cache stop callback did not leave its mutex barrier.");
+        }
+    }
+    SetEvent(prewaitRelease.get());
+    SetEvent(loadRelease.get());
+    if (waiter.joinable())
+        waiter.join();
+    if (stopper.joinable())
+        stopper.join();
+    if (loader.joinable())
+        loader.join();
+    cache.SetEnsureLoadedPrewaitHookForSelfTest(nullptr, nullptr);
+    state.Require(! prewaitGate.timedOut.load(std::memory_order_acquire), L"The cache-waiter prewait gate timed out.");
+    state.Require(loaderStatus == S_OK && loadedSnapshot.get() != nullptr && waitRaceCalls.load(std::memory_order_acquire) == 1u,
+                  L"The original cache loader must complete exactly once despite the other borrower's cancellation.");
+    state.Require(waiterStatus == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"The stopped cache waiter returned 0x{:08X}, expected ERROR_CANCELLED.", static_cast<unsigned long>(waiterStatus)));
+    if (! state.failure.empty())
+        return false;
+
+    // The legacy provider path gets bounded cancellation for pending synchronous
+    // Win32 I/O through the shared cancel watch. An open anonymous-pipe writer makes
+    // this ReadFile pending until the watch issues CancelSynchronousIo.
+    wil::unique_handle blockedReadPipe;
+    wil::unique_handle blockedWritePipe;
+    wil::unique_handle blockedEntered(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle blockedDone(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    state.Require(CreatePipe(blockedReadPipe.put(), blockedWritePipe.put(), nullptr, 0u) != FALSE && blockedEntered && blockedDone,
+                  L"Could not create the bounded synchronous-I/O cancellation fixture.");
+    if (! state.failure.empty())
+        return false;
+    std::atomic_uint32_t blockedCalls{0u};
+    std::atomic<HRESULT> blockedProviderStatus{E_PENDING};
+    auto* const blockedWrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, &blockedCalls);
+    if (! state.Require(blockedWrapper != nullptr, L"Could not create the legacy blocking provider."))
+        return false;
+    wil::com_ptr<IFileSystem> blockedProvider;
+    blockedProvider.attach(blockedWrapper);
+    blockedWrapper->SetReadDirectoryInfoBlockingPipe(blockedReadPipe.get(), blockedEntered.get(), &blockedProviderStatus);
+    const std::filesystem::path blockedRoot = root / L"blocked-legacy-read";
+    cache.RegisterProvider(blockedProvider.get(), L"selftest/cache-blocked-read", L"file", blockedRoot.native());
+    const auto unregisterBlocked = wil::scope_exit([&]() noexcept { cache.UnregisterProvider(blockedProvider.get()); });
+    std::stop_source blockedStop;
+    HRESULT blockedBorrowStatus = E_PENDING;
+    std::jthread blockedLoader;
+    const auto releaseBlockedRead = wil::scope_exit([&]() noexcept { blockedWritePipe.reset(); });
+    blockedLoader                 = std::jthread([&]() noexcept
+    {
+        [[maybe_unused]] const auto com = wil::CoInitializeEx(COINIT_MULTITHREADED);
+        auto borrowed = cache.BorrowDirectoryInfo(blockedProvider.get(), blockedRoot, DirectoryInfoCache::BorrowMode::AllowEnumerate, blockedStop.get_token());
+        blockedBorrowStatus = borrowed.Status();
+        SetEvent(blockedDone.get());
+    });
+    const bool blockedReadEntered = WaitForSingleObject(blockedEntered.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(5000u))) == WAIT_OBJECT_0;
+    state.Require(blockedReadEntered, L"The legacy provider did not enter its synchronous pipe read.");
+    if (blockedReadEntered)
+        static_cast<void>(blockedStop.request_stop());
+    bool interrupted = WaitForSingleObject(blockedDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(8000u))) == WAIT_OBJECT_0;
+    if (! interrupted)
+    {
+        blockedWritePipe.reset(); // EOF is a bounded cleanup release if the cancel-watch regression strands the call.
+        interrupted = WaitForSingleObject(blockedDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(2000u))) == WAIT_OBJECT_0;
+    }
+    state.Require(interrupted, L"A stop request did not retire the legacy synchronous Win32 call within its bound.");
+    if (blockedLoader.joinable())
+        blockedLoader.join();
+    state.Require(blockedProviderStatus.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED),
+                  std::format(L"The blocked provider returned 0x{:08X}; expected CancelSynchronousIo's ERROR_OPERATION_ABORTED.",
+                              static_cast<unsigned long>(blockedProviderStatus.load(std::memory_order_acquire))));
+    state.Require(
+        blockedBorrowStatus == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+        std::format(L"The stopped legacy cache borrow returned 0x{:08X}, expected ERROR_CANCELLED.", static_cast<unsigned long>(blockedBorrowStatus)));
+    state.Require(blockedCalls.load(std::memory_order_acquire) == 1u, L"The stopped legacy cache borrow must issue exactly one provider call.");
+    return TestDirectoryCacheTaskContextMutation(state, cache, root, base) && state.failure.empty();
 }
 
 [[nodiscard]] bool TestNaturalNameSortingContracts(CaseState& state) noexcept
