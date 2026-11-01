@@ -331,8 +331,9 @@ Describe 'Historical audit governance contracts' {
         $match = [regex]::Match($prefix, $pattern)
         if ($match.Success -and (Get-RSMarkdownCodeMask -Text $prefix).Substring($match.Groups['alert'].Index, $match.Groups['alert'].Length) -ne $match.Groups['alert'].Value) { return $false }
         if (-not $match.Success) { return $false }
-        $opening = $match.Groups['banner'].Value
+        $opening = Get-RSMarkdownHtmlCommentMask -Text $match.Groups['banner'].Value
         if ($opening -match '(?m)^ {0,3}>[ \t]*(`{3,}|~{3,})') { return $false }
+        if ($opening -match '(?m)^ {0,3}>[ \t]*>') { return $false }
         if ($opening -notmatch 'Historical snapshot — not a live work queue' -or
             $opening -notmatch 'Specs/Plans/WIP/README\.md') { return $false }
         if ($Legacy) {
@@ -360,6 +361,15 @@ Describe 'Historical audit governance contracts' {
     It 'rejects missing or misplaced review provenance without assigning the July ledger to later reviews' {
         $later = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** Reviewed repository commit ``eb779e0bd836`` (31 October 2026). Live work: Specs/Plans/WIP/README.md.`n"
         (Test-ReviewSnapshotBanner $later $false) | Should Be $true
+        $warning = '> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.** '
+        $metadata = 'Reviewed repository commit `eb779e0bd836` (31 October 2026). Live work: Specs/Plans/WIP/README.md.'
+        (Test-ReviewSnapshotBanner ($warning + '<!-- ' + $metadata + ' -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!-- Specs/Plans/WIP/README.md -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!--' + "`n" + '> Specs/Plans/WIP/README.md' + "`n" + '> -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n" + '> > ' + $metadata + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '<!-- harmless note --> ' + $metadata + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (2026-10-31). Live work: `Specs/Plans/WIP/README.md`.' + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later + "`n<!-- later historical note -->`n") $false) | Should Be $true
         (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '  >') $false) | Should Be $true
         (Test-ReviewSnapshotBanner ([string][char]0xFEFF + "`r`n# Historical review`r`n`r`n" + ($later -replace "`n", "`r`n")) $false) | Should Be $true
         (Test-ReviewSnapshotBanner ('```text' + "`n" + $later + '```' + "`n") $false) | Should Be $false
