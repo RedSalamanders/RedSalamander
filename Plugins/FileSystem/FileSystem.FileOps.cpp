@@ -10535,6 +10535,12 @@ struct ByNameWalkMetrics final
 {
     struct Stage final
     {
+        Stage() noexcept               = default;
+        Stage(const Stage&)            = delete;
+        Stage(Stage&&)                 = delete;
+        Stage& operator=(const Stage&) = delete;
+        Stage& operator=(Stage&&)      = delete;
+
         std::atomic<uint64_t> count{0u}, totalUs{0u}, maxUs{0u};
         void Record(std::chrono::steady_clock::time_point start) noexcept
         {
@@ -10556,6 +10562,12 @@ struct ByNameWalkMetrics final
                                         childWalkHr);
         }
     };
+    ByNameWalkMetrics() noexcept                           = default;
+    ByNameWalkMetrics(const ByNameWalkMetrics&)            = delete;
+    ByNameWalkMetrics(ByNameWalkMetrics&&)                 = delete;
+    ByNameWalkMetrics& operator=(const ByNameWalkMetrics&) = delete;
+    ByNameWalkMetrics& operator=(ByNameWalkMetrics&&)      = delete;
+
     const bool enabled = Debug::Perf::IsCaptureEnabled();
     std::atomic<uint64_t> active{0u}, peak{0u}, parallelPasses{0u}, inlineBudget{0u}, inlineSingle{0u}, inlineNested{0u}, inlineNoWorkers{0u};
     Stage open, facts, disposition;
