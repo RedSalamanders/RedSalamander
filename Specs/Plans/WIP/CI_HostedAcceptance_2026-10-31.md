@@ -605,7 +605,10 @@ visible product window, global input, UIA, real pane rendering, native ARM or fu
 is claimed. Source/compiler/executable/reproducer bytes were archived and verified before owner
 exit; rejected fixture compiles (missing canonical include paths, callback type, baseline entrypoint
 and WIL address-of misuse) remain retained. Test-harness source contracts passed 213/213 without
-failures/skips. Full current-source hosted acceptance remains required.
+failures/skips; compiler-free Static validation passed with zero blocking findings and the four
+C++ files use pinned clang-format 22.1.3. Affected and PrePush Explain each exited 2 (NOT_EVALUATED),
+retaining four interactive groups as pending and no PR equivalence for local native obligations.
+Neither explanation launched product builds or tests. Full current-source hosted acceptance remains required.
 
 RedXe's later documentation-only PR 74 merged as 3a8b3b19be24682ecc386e1204eac2f3fc438d4f.
 Its recomputed native digest remains 634ca46f6b3f35ddace6732895f3a5bd1c1d62deac2ea1ee54dd59ca18a3be9f
