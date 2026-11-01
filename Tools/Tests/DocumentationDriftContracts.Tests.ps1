@@ -322,11 +322,17 @@ Describe 'Historical audit governance contracts' {
             '_CampaignSummary.md'
     )
     function Test-ReviewSnapshotBanner([string]$Text, [bool]$Legacy) {
-        # Limit provenance checks to the opening banner rather than matching a later citation.
+        # This deliberately checks only the documented opening form, not arbitrary
+        # Markdown blocks: optional BOM, blank lines and one ATX title may precede it.
+        # Code masking is shared with the documentation inventory; the exact opening
+        # grammar also rules out later citations, nested quotes and indented code.
         $prefix = $Text.Substring(0, [Math]::Min($Text.Length, 2048))
-        $match = [regex]::Match($prefix, '(?m)^> \[!IMPORTANT\]\r?\n(?<banner>(?:^>[^\r\n]*(?:\r?\n|$))+)')
+        $pattern = '\A\uFEFF?(?:[ \t]*\r?\n)*(?: {0,3}#[ \t]+[^\r\n]+\r?\n(?:[ \t]*\r?\n)*)?(?<alert> {0,3}> \[!IMPORTANT\])\r?\n(?<banner> {0,3}> \*\*Historical snapshot — not a live work queue\.\*\*[^\r\n]*(?:\r?\n|$)(?: {0,3}>[^\r\n]*(?:\r?\n|$))*)'
+        $match = [regex]::Match($prefix, $pattern)
+        if ($match.Success -and (Get-RSMarkdownCodeMask -Text $prefix).Substring($match.Groups['alert'].Index, $match.Groups['alert'].Length) -ne $match.Groups['alert'].Value) { return $false }
         if (-not $match.Success) { return $false }
         $opening = $match.Groups['banner'].Value
+        if ($opening -match '(?m)^ {0,3}>[ \t]*(`{3,}|~{3,})') { return $false }
         if ($opening -notmatch 'Historical snapshot — not a live work queue' -or
             $opening -notmatch 'Specs/Plans/WIP/README\.md') { return $false }
         if ($Legacy) {
@@ -354,6 +360,16 @@ Describe 'Historical audit governance contracts' {
     It 'rejects missing or misplaced review provenance without assigning the July ledger to later reviews' {
         $later = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** Reviewed repository commit ``eb779e0bd836`` (31 October 2026). Live work: Specs/Plans/WIP/README.md.`n"
         (Test-ReviewSnapshotBanner $later $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '  >') $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ([string][char]0xFEFF + "`r`n# Historical review`r`n`r`n" + ($later -replace "`n", "`r`n")) $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ('```text' + "`n" + $later + '```' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("~~~markdown`n" + $later + "~~~`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("Review prose first.`n`n" + $later) $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ('> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.**' + "`n" + '> ```' + "`n" + ($later -replace '(?m)^> ', '> ') + '> ```' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("<!--`n" + $later + "-->`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '    >') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '> >') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '\*\*Historical snapshot — not a live work queue\.\*\*', '`Historical snapshot — not a live work queue.`') $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($later -replace 'eb779e0bd836', 'not-a-commit') $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', 'undated') $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '99 October 2026') $false) | Should Be $false
@@ -363,7 +379,7 @@ Describe 'Historical audit governance contracts' {
         (Test-ReviewSnapshotBanner ($later -replace 'Specs/Plans/WIP/README.md', 'other') $false) | Should Be $false
         (Test-ReviewSnapshotBanner (('x' * 2048) + $later) $false) | Should Be $false
         (Test-ReviewSnapshotBanner $later $true) | Should Be $false
-        $legacy = "> [!IMPORTANT]`n> Historical snapshot — not a live work queue; 2026-07-17; f4e0c8c3bed8; Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md; Specs/Plans/WIP/README.md`n"
+        $legacy = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** 2026-07-17; f4e0c8c3bed8; Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md; Specs/Plans/WIP/README.md`n"
         (Test-ReviewSnapshotBanner $legacy $true) | Should Be $true
         (Test-ReviewSnapshotBanner ($legacy -replace 'f4e0c8c3bed8', 'eb779e0bd836') $true) | Should Be $false
         (Test-ReviewSnapshotBanner ($legacy -replace 'Operation_Observatory', 'Operation_Other') $true) | Should Be $false
