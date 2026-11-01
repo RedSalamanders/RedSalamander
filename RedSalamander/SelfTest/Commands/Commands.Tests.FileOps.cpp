@@ -16829,7 +16829,7 @@ struct FileOperationsPopupTestFixture final
         wil::com_ptr_nothrow<IRawElementProviderSimple> cancelProvider;
         wil::com_ptr_nothrow<IRawElementProviderFragment> cancelFragment;
         if (! FindExactFileOperationsActionForSelfTest(
-                fixture.popup, Hit::TaskConflictAction, taskId, task.conflict.escapeAction, IDS_FILEOPS_CONFLICT_BTN_CANCEL, cancelProvider) ||
+                fixture.popup, Hit::TaskConflictAction, taskId, task.conflict.escapeAction, IDS_FILEOP_BTN_CANCEL, cancelProvider) ||
             ! cancelProvider || FAILED(cancelProvider.query_to(cancelFragment.put())) || ! cancelFragment || FAILED(cancelFragment->SetFocus()))
             return failSetup(L"exact Cancel lookup or focus");
         RedrawWindow(fixture.popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
