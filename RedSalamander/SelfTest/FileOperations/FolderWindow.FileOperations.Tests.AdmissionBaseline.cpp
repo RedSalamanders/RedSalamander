@@ -653,11 +653,63 @@ struct Route final
                                               counts[10],
                                               counts[17],
                                               counts[18]));
-                        const auto entered = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-                            return gate->entered.load(std::memory_order_acquire);
-                        }, {.timeout = SelfTest::Scale(std::chrono::seconds(60)), .operationName = L"F7 actual admission preconsumption gate"});
-                        if (! entered.conditionMet)
+                        // Completion is owner-thread delivered; task flags and selected view use
+                        // synchronized access. These are diagnostic observations, not one atomic snapshot.
+                        const auto entered = RedSalamander::TestSupport::PumpMessagesUntil(
+                            [&]() noexcept
+                        {
+                            if (gate->entered.load(std::memory_order_acquire) || completed != 0u)
+                                return true;
+                            const auto* current = operations->FindTask(taskId);
+                            return current && current->_taskFinished.load(std::memory_order_acquire);
+                        },
+                            {.timeout = SelfTest::Scale(std::chrono::seconds(60)), .operationName = L"F7 actual admission preconsumption gate"});
+                        const bool gateEntered = gate->entered.load(std::memory_order_acquire);
+                        if (! entered.conditionMet || ! gateEntered)
+                        {
+                            const auto* current    = operations->FindTask(taskId);
+                            const bool finished    = current && current->_taskFinished.load(std::memory_order_acquire);
+                            const auto selected    = current ? current->LoadSelectedAdmission() : nullptr;
+                            const auto preparation = selected ? selected->preparation : nullptr;
+                            const auto interlock   = selected ? selected->interlock : nullptr;
+                            const bool active      = operations->DebugAreBothAdmissionsActiveForSelfTest(taskId, taskId);
+                            AppendLog(std::format(
+                                L"F7 GATE FAILURE {} task={} gateEntered={} completed={} completionHr=0x{:08X} "
+                                L"taskPresent={} finished={} resultHr=0x{:08X} lifecycle={} started={} reserved={} entered={} "
+                                L"waiting={} waitingOthers={} overlapQueued={} queuePaused={} identityWait={} parallelWait={} exclusiveWait={} "
+                                L"readinessComplete={} readinessHr=0x{:08X} preparation={} preparationHr=0x{:08X} "
+                                L"interlock={} interlockKey={} scopeCount={} activeAdmission={}",
+                                tag,
+                                taskId,
+                                gateEntered,
+                                completed,
+                                static_cast<unsigned long>(result),
+                                current != nullptr,
+                                finished,
+                                static_cast<unsigned long>(finished ? current->GetResult() : E_PENDING),
+                                current ? static_cast<unsigned int>(current->GetLifecyclePhase()) : 0u,
+                                current && current->HasStarted(),
+                                current && current->HasReservedOperation(),
+                                current && current->HasEnteredOperation(),
+                                current && current->IsWaitingInQueue(),
+                                current && current->IsWaitingForOthers(),
+                                current && current->IsOverlapQueued(),
+                                current && current->IsQueuePaused(),
+                                current && current->_waitingForIdentityInterlock.load(std::memory_order_acquire),
+                                current && current->_waitingForParallelTransferSlot.load(std::memory_order_acquire),
+                                current && current->_waitingForExclusiveTransfer.load(std::memory_order_acquire),
+                                current && current->_selectedRootReadinessComplete.load(std::memory_order_acquire),
+                                static_cast<unsigned long>(current ? current->_selectedRootReadinessStatus.load(std::memory_order_acquire) : E_PENDING),
+                                preparation != nullptr,
+                                static_cast<unsigned long>(preparation ? preparation->status : E_PENDING),
+                                interlock != nullptr,
+                                interlock ? interlock->key : 0u,
+                                interlock && interlock->scopes ? interlock->scopes->size() : 0u,
+                                active));
+                            if (! gateEntered && (completed != 0u || finished))
+                                return reject(L"F7 task terminated before the required preconsumption gate; see task witness above.");
                             return reject(entered.timeoutDiagnostic);
+                        }
                         uint32_t planCount    = 0u;
                         uint32_t strategyMask = 0u;
                         if (! DebugGetPreparedTransferPlanShapeForSelfTest(taskId, &planCount, &strategyMask))

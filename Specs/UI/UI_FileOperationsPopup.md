@@ -1219,6 +1219,16 @@ Keyboard behavior is:
   the global Options control is used only when that task is gone.
   Outside a bound decision, `Escape` hides the popup. Window Close always hides without resolving a
   decision.
+  Positive two-task UIA binding tests establish each task's visible decision row before its
+  asserted transaction, then focus global Options and require no implicit decision target.
+  Acquire a fresh exact inspection provider from that settled tree. Its focus, default and
+  cancel identities must update synchronously with no render between the focus call and
+  observation. Setup may paint between task legs; a pending scroll alone does not make an
+  offscreen action a valid Escape target.
+  Separately switch directly from A to B and back to A without a render. Require exact task
+  focus and Enter authority throughout, with Escape matching actual primary-decision visibility
+  observed through UIA bounds. The independent visible-row checks retain positive Cancel coverage
+  for both tasks.
 - Window Close is the caption Close of the global File Operations popup, not a task action. It MUST
   remain hide-only and MUST NOT cancel the focused task or all tasks. The hidden surface remains
   reachable through **View > File Operations**, `cmd/app/showFileOperations`, and the default

@@ -1,1 +1,1 @@
-- Record per-task UIA focus results, exact keyboard bindings, rendered decision bounds and frame counters when validating synchronous two-task conflict focus.
+- Establish visible decision controls and fresh UIA providers before validating synchronous two-task conflict focus, preserving exact keyboard bindings and proving no render repairs the asserted transaction.

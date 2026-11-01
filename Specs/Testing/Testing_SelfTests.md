@@ -2042,6 +2042,13 @@ ephemeral provider cache. Warm-requested retains prime age and actual per-call c
 a recent single entry is not an all-hit cache, and a prime older than the two-second TTL is
 labelled expired. Inventory readback occurs after cold cancellation and after prime+warm
 cancellation, so the readback itself does not age the intended warm ingress.
+The preconsumption gate keeps its 60-second deadline. Success requires both the wait's
+in-deadline condition result and the actual entered flag; a later gate entry does not repair a
+timeout. A matching owner-thread completion or synchronized terminal task state before the
+gate is a failure, reported immediately with its actual status. Failure diagnostics include
+the exact task ID, lifecycle/readiness, queue and interlock waits, immutable preparation and
+admission identity, and queue-locked active membership. These independently sampled facts
+must not be presented as one coherent lifecycle snapshot or as proof of a timeout's cause.
 Capture the foreground HWND and its owning PID/thread before the matrix. Every
 sample and final cleanup require that same identity; a reused HWND with a different
 owner is not preservation. Failure diagnostics retain the captured owner and the
