@@ -1,4 +1,4 @@
-# Main/master review remediation execution
+﻿ Main/master review remediation execution
 
 This packet records the authorized revalidation and local implementation of I50/I36, starting at
 `6b6f5646be297fbc232d137f1df6a00c5cb74461` on `ej/review-remediation-20261031`.
@@ -13,6 +13,54 @@ exclusions and stock Windows checkout compatibility. Focus-taking tests remain p
 All live scratch, logs and raw test receipts remain under the existing marked
 `Z:\RedSalamander.Perf`. Curated files here are compact promotions; historical failures are retained.
 No test takes desktop focus, injects physical input or uses a manual screenshot in this session.
+
+## PR publication integration (2026-11-01)
+
+Implementation commit `f58f8c475` and current-main merge `ff1c31470` were published
+for review in draft PR #202. Both requested plans remain in WIP, with native ARM64,
+physical-device and foreground acceptance explicitly pending. Main also expanded
+I50 revision 2; its unresolved existing findings retain their routing, including
+the distinct H5 Delete stream-context race. The earlier source-bound passing
+records below are not blanket closure of that incoming scope.
+
+At merged snapshot
+`ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a`,
+x64 Release built with zero warnings/errors and 188 attested outputs, receipt
+`f046bd62`. Complete noninteractive Compare passed **253/0/31**. The canonical
+SearchService fixture connector retains actual-open attempt diagnostics and the
+dedicated missing/recreated-listener control; all three relevant regressions
+passed and four perf rows prove final-batch ordering. Source hashes before/after
+match. `search-terminal-main-integration.json` records the exact native scope.
+
+The first nine-file tooling batch passed 489 cases and failed one Describe setup
+against an older ignored CI-engine checkout. Restoring the exact configured
+`e32cf9f9b29f4e817decb09e1be44be7fc1a94de` pin changed no project pin; complete
+Winget and release-policy repeats passed **21/21** and **38/38**. The failed run
+is preserved. Hosted tooling then found twelve live links still naming relocated
+evidence. Their exact manifest targets were restored in eight mutable documents;
+no protected payload changed. The full local specification audit now has **zero
+blocking findings**. Original CI failures retain their original verdicts.
+
+Later status/reference repairs are documentation changes and do not retag native
+receipts. Shipping source is unchanged by the main/test integration; current-main
+CI and pending platform, desktop, device and expanded-review qualification remain
+separate from the pre-publication implementation results below.
+
+The final publication-candidate stock checkout proof `sf-f65668c1` passed with
+long paths and symlinks disabled: 28,099 regular files, maximum relative/absolute
+path 200/251, no round-trip mismatches, and all 3,002 relocation blobs plus 6,004
+attribute comparisons preserved. Source index/status/HEAD/object storage remained
+unchanged. Later compact metadata additions receive explicit path/cap validation.
+
+Hosted CodeQL analysis completed, but its separate `CodeQL` check reported two
+high annotations in the unchanged, relocated `Common_SearchServiceBroker.cpp`
+snapshots under historical `Continuation/c20` and `c21`. Those archived files
+are not product build inputs. The failed check remains visible and its annotation
+disposition is **open**; this publication does not dismiss alerts, disable queries
+or edit protected payloads. The execution packet records the exact check and paths.
+
+Publication audit record: `search-terminal-publication-audits.json`. The stock
+result is preserved separately as `search-terminal-publication-stock.json`.
 
 ## Delivery retirement and current validation
 

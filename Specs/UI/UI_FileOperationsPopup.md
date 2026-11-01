@@ -2905,7 +2905,7 @@ association fallbacks.
 The earlier Inline Rename association was qualified in focused x64 Debug tests. The additional
 Batch Rename and exact Recycle carriers pass matched red-to-green x64 Release fixtures in
 [the September 26 evidence](../TestRuns/4cb089111a23/Validation/2026-09-26_exact-bound-results/README.md),
-including malformed receipt rejection. The [additional Recycle Skip round](../TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery/README.md)
+including malformed receipt rejection. The [additional Recycle Skip round](../TestRuns/4cb089111a23/Validation/v05/README.md)
 also passes: the real file remains intact, the result is separately `Skipped`, and task/popup/export
 retain `S_FALSE` completed-with-notes truth rather than a false failure or removal.
 Both carriers also pass the [broad x64 Debug/Release FileOps runs](../TestRuns/4cb089111a23/Validation/2026-09-27_default-family-dispatch/README.md).

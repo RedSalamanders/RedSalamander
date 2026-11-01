@@ -2004,7 +2004,7 @@ and requires host/attachment counts to return after destruction.
 samples, actual client geometry/DPI and a semantic workload digest. Compare deltas within stages;
 reject unequal workload, fixture bytes, dimensions or DPI. Redraw wall time is neither presented FPS
 nor a frame interval. Surface allocation, newer selected-detail/graph-disclosure behavior and the
-full consumer resource gate require separate evidence. The first [runtime smoke](../TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery/README.md)
+full consumer resource gate require separate evidence. The first [runtime smoke](../TestRuns/4cb089111a23/Validation/v05/README.md)
 passes but does not establish paired non-regression; retain original P0 and equal-feature baselines.
 The [original-P0/current comparison](../TestRuns/4cb089111a23/Validation/2026-09-27_common-p0-current/README.md)
 retains five fresh processes per revision, all ten passing at matching 144 DPI, dimensions and

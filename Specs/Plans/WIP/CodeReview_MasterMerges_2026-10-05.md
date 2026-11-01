@@ -1,4 +1,4 @@
-# I36 review remediation — remaining work
+﻿ I36 review remediation — remaining work
 
 ## Execution checklist (reopened 2026-10-31)
 
@@ -108,6 +108,47 @@ fixture connector with deterministic attempt observations. Merged-source validat
 is recorded separately; old receipts are not retagged as that integration or as
 native ARM64, physical-device, foreground, mixed-DPI, assistive-technology or real
 shutdown acceptance. I50 retains the incoming revision-2 review/routing scope.
+
+### Current-main integration verification (2026-11-01)
+
+Merge `ff1c31470e0caf19cdfa5dcfae7f5bd75570f944` preserves the newer main
+CI/test contracts without changing shipping product source relative to the
+validated implementation commit. At merged source snapshot
+`ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a`,
+x64 Release built with zero warnings/errors and 188 attested outputs (receipt
+`f046bd62`). Complete noninteractive Compare passed **253/0/31**, including
+the canonical connector's dedicated missing/recreated-listener control and both
+repaired search cases; four perf rows prove final-batch ordering. Before/after
+source hashes match. Raw native run:
+`20261101T110522Z-62312-dd0e95c82aed4f8388c282cb31fc6a51`.
+
+The merged tooling batch recorded 489 passes and one setup failure against an
+older ignored CI-engine checkout. Restoring the exact configured engine pin
+`e32cf9f9b29f4e817decb09e1be44be7fc1a94de` changed no project pin; the
+complete Winget file then passed **21/21** and release-policy file **38/38**.
+The original failed batch remains preserved. Hosted inventory additionally found
+twelve live links to renamed evidence; their exact manifest-mapped destinations
+were restored without editing protected historical payloads.
+The complete specification audit then reported zero blocking findings; existing
+informational diagnostics for protected historical records remain informational.
+
+These are integration-scoped results. The earlier 1,421-pass records and ZIP/
+stock-checkout proofs retain their original source identity. Later status and
+live-reference repairs are documentation changes; no result closes native ARM64,
+physical-device, foreground or incoming revision-2 acceptance.
+
+The final publication-candidate stock checkout proof `sf-f65668c1` passed with
+long paths and symlinks disabled: 28,099 regular files, maximum relative/absolute
+path 200/251, no round-trip mismatches, and all 3,002 relocation blobs plus 6,004
+attribute comparisons preserved. Source index/status/HEAD/object storage remained
+unchanged. Later compact metadata additions receive explicit path/cap validation.
+
+Hosted CodeQL analysis completed, but its separate `CodeQL` check reported two
+high annotations in the unchanged, relocated `Common_SearchServiceBroker.cpp`
+snapshots under historical `Continuation/c20` and `c21`. Those archived files
+are not product build inputs. The failed check remains visible and its annotation
+disposition is **open**; this publication does not dismiss alerts, disable queries
+or edit protected payloads. The execution packet records the exact check and paths.
 
 Qualification checkpoint before the final fixture edits: noninteractive PrePush
 `20261031T164304Z-21260-b7c1915171574a9abd900578f6a31e5b` failed with 1,433 passed,
