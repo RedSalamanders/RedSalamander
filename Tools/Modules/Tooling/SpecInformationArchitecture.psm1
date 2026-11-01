@@ -146,21 +146,19 @@ function Get-RSMarkdownCodeMask {
     return -join $maskedLines
 }
 
-# Mask rendered-away HTML comments without changing offsets or masking literal
-# comment delimiters inside code. An unclosed comment hides the remaining text.
-# This visibility guard accepts only bounded opening fragments (at most 2,048 UTF-16 units).
-function Get-RSMarkdownHtmlCommentMask {
+# Conservative provenance policy, not a Markdown renderer: mask every raw
+# comment-shaped span, even inside code-looking text, without changing offsets.
+# Opening fragments are bounded to 2,048 UTF-16 units; unclosed spans mask to end.
+function Get-RSMarkdownCommentDelimiterMask {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
 
     if ($Text.Length -eq 0) { return '' }
-    if ($Text.Length -gt 2048) { throw "HTML comment visibility input exceeds 2048 UTF-16 units." }
+    if ($Text.Length -gt 2048) { throw "Markdown comment delimiter input exceeds 2048 UTF-16 units." }
     $characters = $Text.ToCharArray()
     $offset = 0
     while ($offset -lt $Text.Length) {
-        # Previously masked comments must not contribute backticks or fences to later code state.
-        $codeMask = Get-RSMarkdownCodeMask -Text (-join $characters)
-        $start = $codeMask.IndexOf('<!--', $offset, [StringComparison]::Ordinal)
+        $start = $Text.IndexOf('<!--', $offset, [StringComparison]::Ordinal)
         if ($start -lt 0) { break }
         $close = $Text.IndexOf('-->', $start + 4, [StringComparison]::Ordinal)
         $end = if ($close -lt 0) { $Text.Length } else { $close + 3 }
@@ -1617,7 +1615,7 @@ function Get-RSSpecInventory {
 Export-ModuleMember -Function @(
     'ConvertTo-RSGitHubHeadingSlug',
     'Get-RSMarkdownCodeMask',
-    'Get-RSMarkdownHtmlCommentMask',
+    'Get-RSMarkdownCommentDelimiterMask',
     'Get-RSMarkdownHeadings',
     'Get-RSMarkdownLinks',
     'Get-RSSpecAuthorityClass',

@@ -331,9 +331,13 @@ Describe 'Historical audit governance contracts' {
         $match = [regex]::Match($prefix, $pattern)
         if ($match.Success -and (Get-RSMarkdownCodeMask -Text $prefix).Substring($match.Groups['alert'].Index, $match.Groups['alert'].Length) -ne $match.Groups['alert'].Value) { return $false }
         if (-not $match.Success) { return $false }
-        $opening = Get-RSMarkdownHtmlCommentMask -Text $match.Groups['banner'].Value
+        $opening = Get-RSMarkdownCommentDelimiterMask -Text $match.Groups['banner'].Value
         if ($opening -match '(?m)^ {0,3}>[ \t]*(`{3,}|~{3,})') { return $false }
         if ($opening -match '(?m)^ {0,3}>[ \t]*>') { return $false }
+        # The supported banner format excludes raw HTML. This one historical
+        # inline-code placeholder is literal text in two existing review banners.
+        $withoutDomainExample = $opening.Replace('`Specs/<Domain>/`', '')
+        if ($withoutDomainExample.Contains('<')) { return $false }
         if ($opening -notmatch 'Historical snapshot — not a live work queue' -or
             $opening -notmatch 'Specs/Plans/WIP/README\.md') { return $false }
         if ($Legacy) {
@@ -364,9 +368,19 @@ Describe 'Historical audit governance contracts' {
         $warning = '> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.** '
         $metadata = 'Reviewed repository commit `eb779e0bd836` (31 October 2026). Live work: Specs/Plans/WIP/README.md.'
         (Test-ReviewSnapshotBanner ($warning + '<!-- ' + $metadata + ' -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\`<!-- ' + $metadata + ' -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\`<!--' + "`n" + '> ' + $metadata + "`n" + '> -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ('# Review \`sample`' + "`n`n" + $later) $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + '`<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!-- Specs/Plans/WIP/README.md -->' + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!--' + "`n" + '> Specs/Plans/WIP/README.md' + "`n" + '> -->' + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + "`n" + '> > ' + $metadata + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\\`<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\``<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '`open' + "`n" + '> closes` then `<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '<span style="display:none">' + $metadata + '</span>' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '<script>' + $metadata + '</script>' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + $metadata + ' See `Specs/<Domain>/`.' + "`n") $false) | Should Be $true
         (Test-ReviewSnapshotBanner ($warning + '<!-- harmless note --> ' + $metadata + "`n") $false) | Should Be $true
         (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (2026-10-31). Live work: `Specs/Plans/WIP/README.md`.' + "`n") $false) | Should Be $true
         (Test-ReviewSnapshotBanner ($later + "`n<!-- later historical note -->`n") $false) | Should Be $true
