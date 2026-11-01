@@ -8881,8 +8881,8 @@ struct ThroughputRestartSettingsSnapshot final
         const auto childSettingsPath      = ThroughputRestartSettingsPath(childRun);
         const auto childSettingsDirectory = childSettingsPath.parent_path();
         state.Require(SelfTest::EnsureDirectory(childSettingsDirectory), L"Could not create the isolated child settings directory.");
-        constexpr std::string_view seedSettingsJson = R"json({"schemaVersion":16,"fileOperations":{"popupThroughputExpanded":false}})json";
-        state.Require(SelfTest::WriteTextFile(childSettingsPath, seedSettingsJson), L"Could not seed the child-only collapsed popup preference.");
+        constexpr std::string_view seedSettingsJson = R"json({"schemaVersion":16})json";
+        state.Require(SelfTest::WriteTextFile(childSettingsPath, seedSettingsJson), L"Could not seed child-only settings with the default popup preference.");
         if (! state.failure.empty())
             return false;
         const auto executable = wil::GetModuleFileNameW();
@@ -10249,16 +10249,41 @@ struct ThroughputRestartSettingsSnapshot final
     wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
     wil::unique_bstr documentText;
     traceDetailState(L"before full-document UIA read");
-    state.Require(FindMatchingWindowHostRawProvider(popup.get(),
-                                                    UIA_EditControlTypeId,
-                                                    LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH),
-                                                    detailProvider.put(),
-                                                    L"FileOperations.PathDetail.Text") &&
-                      detailProvider && SUCCEEDED(detailProvider->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put())) && textPatternUnknown &&
-                      SUCCEEDED(textPatternUnknown.query_to(textPattern.put())) && textPattern &&
-                      SUCCEEDED(textPattern->get_DocumentRange(documentRange.put())) && documentRange &&
-                      SUCCEEDED(documentRange->GetText(-1, documentText.put())) && documentText && std::wstring_view(documentText.get()) == longDetailPath,
-                  L"Multiline TextPattern must expose the complete Unicode document, including the final suffix.");
+    const std::wstring expectedDetailName =
+        FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_DETAIL_TITLE, fromLabel, LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH));
+    const bool providerFound =
+        FindMatchingWindowHostRawProvider(popup.get(), UIA_EditControlTypeId, expectedDetailName, detailProvider.put(), L"FileOperations.PathDetail.Text");
+    HRESULT patternHr = E_PENDING;
+    HRESULT queryHr   = E_PENDING;
+    HRESULT rangeHr   = E_PENDING;
+    HRESULT textHr    = E_PENDING;
+    if (providerFound && detailProvider)
+        patternHr = detailProvider->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put());
+    if (SUCCEEDED(patternHr) && textPatternUnknown)
+        queryHr = textPatternUnknown.query_to(textPattern.put());
+    if (SUCCEEDED(queryHr) && textPattern)
+        rangeHr = textPattern->get_DocumentRange(documentRange.put());
+    if (SUCCEEDED(rangeHr) && documentRange)
+        textHr = documentRange->GetText(-1, documentText.put());
+    const size_t actualLength = documentText ? static_cast<size_t>(SysStringLen(documentText.get())) : 0u;
+    const bool exactText      = documentText && std::wstring_view(documentText.get(), actualLength) == longDetailPath;
+    state.Require(providerFound && detailProvider && SUCCEEDED(patternHr) && textPatternUnknown && SUCCEEDED(queryHr) && textPattern && SUCCEEDED(rangeHr) &&
+                      documentRange && SUCCEEDED(textHr) && exactText,
+                  std::format(L"Multiline TextPattern must expose the complete Unicode document, including the final suffix: found={} provider={} "
+                              L"patternHr=0x{:08X} pattern={} queryHr=0x{:08X} interface={} rangeHr=0x{:08X} range={} textHr=0x{:08X} "
+                              L"actualLength={} expectedLength={} exact={}.",
+                              providerFound,
+                              static_cast<bool>(detailProvider),
+                              static_cast<unsigned long>(patternHr),
+                              static_cast<bool>(textPatternUnknown),
+                              static_cast<unsigned long>(queryHr),
+                              static_cast<bool>(textPattern),
+                              static_cast<unsigned long>(rangeHr),
+                              static_cast<bool>(documentRange),
+                              static_cast<unsigned long>(textHr),
+                              actualLength,
+                              longDetailPath.size(),
+                              exactText));
     traceDetailState(L"after full-document UIA read");
     if (! state.failure.empty())
         return false;
@@ -11079,6 +11104,7 @@ struct FileOperationsPopupTestFixture final
     FolderWindow::FileOperationState* fileOps = nullptr;
     HWND popup                                = nullptr;
     std::optional<uint64_t> taskId;
+    uint64_t completedBeforeConflictId = 0u;
     FileOperationsPopupInternal::TaskSnapshot taskSnapshot{};
     std::filesystem::path root;
     std::filesystem::path sourceDir;
@@ -11112,7 +11138,8 @@ struct FileOperationsPopupTestFixture final
                                                             FileOperationsPopupTestFixture& fixture,
                                                             const bool hideBeforeActionablePublish = false,
                                                             const bool secondCollision             = false,
-                                                            const bool expectFailureSurface        = false) noexcept
+                                                            const bool expectFailureSurface        = false,
+                                                            const bool completeCopyBeforeConflict  = false) noexcept
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
@@ -11253,6 +11280,46 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
+    if (completeCopyBeforeConflict)
+    {
+        // This real success must precede the exclusive conflicting Copy; it
+        // remains retained when that later prompt is presented.
+        const auto completedSource = sourceDir / L"cancel-all-finished.txt";
+        const auto completedDest   = destDir / completedSource.filename();
+        if (! state.Require(SelfTest::WriteTextFile(completedSource, "finished payload"), L"Seed the retained successful Copy before the conflict."))
+            return false;
+        const HRESULT completeHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                           FolderWindow::Pane::Left,
+                                                           FolderWindow::Pane::Right,
+                                                           leftFileSystem,
+                                                           {completedSource},
+                                                           destDir,
+                                                           FILESYSTEM_FLAG_NONE,
+                                                           false,
+                                                           0,
+                                                           FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                           false,
+                                                           rightFileSystem,
+                                                           &fixture.completedBeforeConflictId);
+        RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
+        wait.timeout            = SelfTest::Scale(5000ms);
+        wait.maxMessagesPerPump = 16u;
+        const bool completed    = SUCCEEDED(completeHr) && fixture.completedBeforeConflictId != 0u &&
+                                  RedSalamander::TestSupport::PumpMessagesUntil(
+                                      [&]() noexcept
+        {
+            std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+            fileOps->CollectCompletedTasks(summaries);
+            const auto found = std::ranges::find(summaries, fixture.completedBeforeConflictId, &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+            return found != summaries.end() && found->resultHr == S_OK && found->completedBytes > 0u &&
+                   TextFileEqualsForFileOpsPrompt(completedDest, "finished payload");
+        },
+                                   wait)
+                                      .conditionMet;
+        if (! state.Require(completed, L"The preceding Copy must finish and retain its exact successful output before conflict admission."))
+            return false;
+        existingTaskIds.insert(fixture.completedBeforeConflictId);
+    }
     const auto metadataPauseBailout = SelfTest::Scale(10'000ms);
     SetFileOpsConflictMetadataPauseForSelfTest(true, static_cast<ULONGLONG>(metadataPauseBailout.count()));
     const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
@@ -15767,6 +15834,30 @@ struct FileOperationsPopupTestFixture final
     // an invisible control under that footer. No action is invoked here.
     RECT savedRect{};
     GetWindowRect(fixture.popup, &savedRect);
+    // Real informational producers precede operations in the retained list. Their
+    // owned cards force overflow even when the conflict comparison fits by itself.
+    std::array<uint64_t, 3> viewportTaskIds{};
+    const auto clearViewportTasks = [&]() noexcept
+    {
+        for (auto& taskId : viewportTaskIds)
+        {
+            fixture.fileOps->DismissInformationalTask(taskId);
+            taskId = 0u;
+        }
+    };
+    const auto clearViewportTasksOnExit = wil::scope_exit([&]() noexcept { clearViewportTasks(); });
+    for (size_t index = 0u; index < viewportTaskIds.size(); ++index)
+    {
+        FolderWindow::InformationalTaskUpdate update{};
+        update.kind                     = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+        update.title                    = std::format(L"Photo archive {}", index + 1u);
+        update.changeCaseEnumerating    = true;
+        update.changeCaseScannedEntries = 8u + index;
+        viewportTaskIds[index]          = fixture.fileOps->CreateOrUpdateInformationalTask(update);
+        state.Require(viewportTaskIds[index] != 0u, L"Create the owned informational card for the overflow fixture.");
+    }
+    if (! state.failure.empty())
+        return false;
     const UINT popupDpi = GetDpiForWindow(fixture.popup);
     SendMessageW(fixture.popup, WM_ENTERSIZEMOVE, 0, 0);
     SetWindowPos(fixture.popup,
@@ -15815,6 +15906,21 @@ struct FileOperationsPopupTestFixture final
         state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, beforeTab) && beforeTab.scrollPosition == 0 &&
                           beforeTab.hostedFocusedAutomationId == fromId,
                       L"Scrolling the short body must retain the exact previous task/action focus before traversal.");
+        const auto* popupState =
+            reinterpret_cast<const FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(fixture.popup, GWLP_USERDATA));
+        D2D1_RECT_F beforeBounds{};
+        const bool boundsAvailable = popupState && popupState->DebugHostedDecisionActionBoundsForSelfTest(fixture.taskId.value(), beforeBounds, expectedId);
+        const float pixelsPerDip   = static_cast<float>(popupDpi) / 96.0f;
+        state.Require(boundsAvailable && beforeBounds.bottom > beforeBounds.top && beforeBounds.top * pixelsPerDip >= beforeTab.listViewportRect.bottom,
+                      std::format(L"The exact next decision must start below the viewport before traversal: expected={} available={} "
+                                  L"topDip={} bottomDip={} viewportBottom={}.",
+                                  expectedId,
+                                  boundsAvailable,
+                                  beforeBounds.top,
+                                  beforeBounds.bottom,
+                                  beforeTab.listViewportRect.bottom));
+        if (! state.failure.empty())
+            return;
         std::array<BYTE, 256> savedKeys{};
         const bool captured = GetKeyboardState(savedKeys.data()) != FALSE;
         state.Require(captured, L"Unable to preserve thread keyboard state for short-body traversal.");
@@ -15872,19 +15978,21 @@ struct FileOperationsPopupTestFixture final
         FileOperationsPopupInternal::TaskSnapshot currentTask{};
         const bool layoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
         const bool taskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), currentTask);
+        const bool providerFound   = FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId);
+        const HRESULT fragmentHr   = providerFound && provider ? provider.query_to(fragment.put()) : E_NOINTERFACE;
+        const HRESULT boundsHr     = SUCCEEDED(fragmentHr) && fragment ? fragment->get_BoundingRectangle(&bounds) : E_NOINTERFACE;
         const bool revealed =
             layoutAvailable && taskAvailable && currentTask.conflict.active && currentTask.conflict.generation == shortTask.conflict.generation &&
-            GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > 0 &&
+            GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > beforeTab.scrollPosition &&
             shortLayout.hostedFocusedAutomationId == expectedId && shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u &&
-            (shortLayout.hostedModifierState & MK_SHIFT) == 0u &&
-            FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId) && provider &&
-            SUCCEEDED(provider.query_to(fragment.put())) && SUCCEEDED(fragment->get_BoundingRectangle(&bounds)) && bounds.height > 0 &&
-            bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
+            (shortLayout.hostedModifierState & MK_SHIFT) == 0u && providerFound && provider && SUCCEEDED(fragmentHr) && fragment && SUCCEEDED(boundsHr) &&
+            bounds.height > 0 && bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
             bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
         state.Require(revealed,
                       std::format(L"{} must reveal the published action above the footer: expected={} scroll={} focused={} boundsTop={} height={} "
                                   L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={} "
-                                  L"modifiersBefore={} modifiersAfter={} nativeTabsBefore={} nativeTabsAfter={}.",
+                                  L"modifiersBefore={} modifiersAfter={} nativeTabsBefore={} nativeTabsAfter={} providerFound={} "
+                                  L"fragmentHr=0x{:08X} boundsHr=0x{:08X}.",
                                   reverse ? L"Shift+Tab" : L"Tab",
                                   expectedId,
                                   shortLayout.scrollPosition,
@@ -15902,7 +16010,10 @@ struct FileOperationsPopupTestFixture final
                                   routedModifiers.hostedModifierState,
                                   shortLayout.hostedModifierState,
                                   beforeTab.hostedNativeTabCount,
-                                  shortLayout.hostedNativeTabCount));
+                                  shortLayout.hostedNativeTabCount,
+                                  providerFound,
+                                  static_cast<unsigned long>(fragmentHr),
+                                  static_cast<unsigned long>(boundsHr)));
     };
     std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
     for (size_t remaining = primaryCount; remaining > 0u && state.failure.empty(); --remaining)
@@ -15937,6 +16048,7 @@ struct FileOperationsPopupTestFixture final
                  savedRect.bottom - savedRect.top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     SendMessageW(fixture.popup, WM_VSCROLL, SB_TOP, 0);
+    clearViewportTasks();
     redraw();
     if (! state.failure.empty())
         return false;
@@ -16452,10 +16564,11 @@ struct FileOperationsPopupTestFixture final
     const auto aContext = fixture.taskSnapshot.conflict.inspection;
     const auto bSource  = fixture.sourceDir / L"identity-b.txt";
     const auto bDest    = fixture.destDir / bSource.filename();
-    state.Require(SelfTest::WriteTextFile(bSource, "new B") && SelfTest::WriteTextFile(bDest, "existing B"), L"Seed separate same-root Copy collision B.");
+    state.Require(SelfTest::WriteTextFile(bSource, "new B") && SelfTest::WriteTextFile(bDest, "existing B"),
+                  L"Seed separate same-root native Move collision B.");
     if (! state.failure.empty())
         return false;
-    const HRESULT admitted = fileOps->AdmitOperation(FILESYSTEM_COPY,
+    const HRESULT admitted = fileOps->AdmitOperation(FILESYSTEM_MOVE,
                                                      FolderWindow::Pane::Left,
                                                      FolderWindow::Pane::Right,
                                                      fixture.leftFileSystem,
@@ -16467,7 +16580,7 @@ struct FileOperationsPopupTestFixture final
                                                      FolderWindow::FileOperationState::ExecutionMode::PerItem,
                                                      false,
                                                      fixture.rightFileSystem);
-    if (! state.Require(SUCCEEDED(admitted), L"Admit second real pending Copy in parallel mode."))
+    if (! state.Require(SUCCEEDED(admitted), L"Admit second real pending Move in parallel mode."))
         return false;
     const auto bId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, std::unordered_set<uint64_t>{aId}, SelfTest::Scale(5000ms));
     if (! state.Require(bId.has_value() && bId.value() != aId, L"Second collision must publish a distinct task ID."))
@@ -16484,6 +16597,21 @@ struct FileOperationsPopupTestFixture final
     },
                             wait)
                                   .conditionMet;
+    // Verify the immutable admitted route and frozen capacity classification before
+    // accepting the intended concurrent scenario. Native Move cannot fall back to
+    // copying; its object/path interlocks remain in force.
+    const auto* bTask         = fileOps->FindTask(bId.value());
+    const auto bAdmission     = bTask ? bTask->LoadSelectedAdmission() : nullptr;
+    const bool nativeOnlyMove = bAdmission && bAdmission->plans && ! bAdmission->plans->empty() && bAdmission->interlock &&
+                                ! bAdmission->interlock->hasDataTransfers &&
+                                std::ranges::all_of(*bAdmission->plans,
+                                                    [](const auto& plan) noexcept
+    {
+        const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
+        return transfer && transfer->intent == FileOperations::TransferIntent::Move && transfer->strategy == FileOperations::OperationStrategy::Native;
+    });
+    if (! state.Require(nativeOnlyMove, L"B must retain an immutable native-only Move admission with no data-transfer capacity."))
+        return false;
     if (! state.Require(bReady && fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
                             fileOps->IsPendingConflictInspectionCurrent(
                                 bId.value(), CurrentConflictPromptGenerationForSelfTest(fileOps, bId.value()), bBefore.conflict.inspection) &&
@@ -16646,7 +16774,7 @@ struct FileOperationsPopupTestFixture final
                 std::ranges::none_of(diagnostics, [&](const Entry& entry) noexcept { return entry.taskId == aId && entry.acceptedDecision.has_value(); }) &&
                 fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
                 TextFileEqualsForFileOpsPrompt(bSource, "new B") && TextFileEqualsForFileOpsPrompt(bDest, "existing B"),
-            L"Only B must record a typed user Skip; A stays pending and both destinations retain bytes."))
+            L"Only B must record a typed user Skip; A stays pending and B source and destination retain their exact bytes."))
         return false;
     // B is finished now; the second A route still has to return to A's own control.
     // Do not call inspectA here because its B-pending predicate is intentionally false.
@@ -18386,26 +18514,44 @@ namespace
                       ! hasTransactionTemporary() && readReport(successful.front(), afterCollision) && afterCollision == originalText,
                   L"A deterministic report-name collision must fail without overwriting the existing completed report.");
 
-    struct ExportTransactionFault final
     {
-        void (*inject)(HRESULT) noexcept;
-        std::wstring_view label;
-    };
-    constexpr ExportTransactionFault transactionFaults[]{{Common::Files::Testing::FailNextLocalFileTransactionWrite, L"write"},
-                                                         {Common::Files::Testing::FailNextLocalFileTransactionFlush, L"flush"},
-                                                         {Common::Files::Testing::FailNextLocalFileTransactionPublish, L"publish"}};
-    for (const ExportTransactionFault& fault : transactionFaults)
-    {
-        std::wstring afterFailure;
-        std::filesystem::path failedOutput;
-        fault.inject(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
-        const bool exported = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &failedOutput, false);
-        const auto files    = reportFiles();
-        state.Require(! exported && failedOutput.empty() && files.size() == 1u && files.front() == successful.front() &&
-                          readReport(successful.front(), afterFailure) && afterFailure == originalText && ! hasTransactionTemporary(),
-                      std::format(L"Injected {} failure must leave no partial report or transaction sibling and preserve the prior report.", fault.label));
-        if (! state.failure.empty())
-            return finish();
+        // The collision route must not short-circuit the transaction fault witnesses.
+        // Clear the one-shot seams and fixed filename before fixture teardown.
+        const auto resetFaults = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionWriteFailure());
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionFlushFailure());
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
+            fileOps->DebugConfigureIssuesExportRouteForSelfTest(reportDir, false);
+        });
+        fileOps->DebugConfigureIssuesExportRouteForSelfTest(reportDir, false, L"fault-witness.txt");
+        struct ExportTransactionFault final
+        {
+            void (*inject)(HRESULT) noexcept;
+            HRESULT (*take)() noexcept;
+            std::wstring_view label;
+        };
+        constexpr ExportTransactionFault transactionFaults[]{
+            {Common::Files::Testing::FailNextLocalFileTransactionWrite, Common::Files::Testing::TakeNextLocalFileTransactionWriteFailure, L"write"},
+            {Common::Files::Testing::FailNextLocalFileTransactionFlush, Common::Files::Testing::TakeNextLocalFileTransactionFlushFailure, L"flush"},
+            {Common::Files::Testing::FailNextLocalFileTransactionPublish, Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure, L"publish"}};
+        for (const ExportTransactionFault& fault : transactionFaults)
+        {
+            if (! state.failure.empty())
+                break;
+            std::wstring afterFailure;
+            std::filesystem::path failedOutput;
+            fault.inject(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
+            const bool exported             = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &failedOutput, false);
+            const HRESULT unconsumedFailure = fault.take();
+            const auto files                = reportFiles();
+            state.Require(unconsumedFailure == S_OK && ! exported && failedOutput.empty() && files.size() == 1u && files.front() == successful.front() &&
+                              readReport(successful.front(), afterFailure) && afterFailure == originalText && ! hasTransactionTemporary(),
+                          std::format(L"Injected {} failure must be consumed and leave no partial report or transaction sibling and preserve the prior report.",
+                                      fault.label));
+            if (! state.failure.empty())
+                break;
+        }
     }
     if (! state.failure.empty())
         return finish();
@@ -18718,8 +18864,8 @@ namespace
 }
 
 // Exercise the hosted footer buttons and their actual DxUI menu-item callbacks.
-// The fixture holds a real Copy at an actionable conflict, so a second Copy can
-// prove that Queue/Parallel changes admission and release, not just footer text.
+// The real conflict holds exclusive admission: changing Queue to Parallel must
+// preserve that guard, then the same queued Copy runs after the conflict resolves.
 [[nodiscard]] bool TestFileOperationsPopupFooterMenuActionRoutes(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -18852,9 +18998,20 @@ namespace
                   L"Queue selected through the menu must hold the second Copy behind the active conflict without writing its destination.");
     state.Require(choose(openMenu(Hit::FooterQueueMode, queueLabel()), IDS_FILEOPS_BTN_MODE_PARALLEL) && ! fileOps->GetQueueNewTasks(),
                   L"The Parallel UIA menu item must apply Parallel mode through its callback.");
-    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }) &&
-                      waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
-                  L"Parallel selected through the menu must release the queued Copy and update the rendered selector.");
+    state.Require(queuedId.has_value() &&
+                      waitFor(
+                          [&]() noexcept
+    {
+        auto* task = fileOps->FindTask(queuedId.value());
+        std::error_code ec;
+        return task && ! task->HasEnteredOperation() && task->_waitingForExclusiveTransfer.load(std::memory_order_acquire) &&
+               ! std::filesystem::exists(queuedDestination, ec) && ! ec;
+    }) && waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
+                  L"Parallel must update the selector while the second Copy remains behind the exclusive conflict without publishing bytes.");
+    if (! state.failure.empty() || ! ResolveInitialFileOperationsPopupConflict(fixture))
+        return false;
+    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }),
+                  L"The same queued Copy must publish its exact bytes after the exclusive conflict resolves.");
     const auto retainedSecondCopy = [&]() noexcept
     {
         if (! queuedId.has_value())
@@ -18864,6 +19021,39 @@ namespace
         return std::ranges::find(completed, queuedId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId) != completed.end();
     };
     state.Require(waitFor(retainedSecondCopy), L"The second Copy must reach a retained successful completion while auto-dismiss is off.");
+    if (! state.failure.empty())
+        return false;
+    // Re-establish a real unresolved conflict after the queued success. The
+    // remaining Options checks still run against that exact live card and the
+    // retained completed neighbor; no two transfers overlap.
+    uint64_t replacementTaskId  = 0u;
+    const HRESULT replacementHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                          FolderWindow::Pane::Left,
+                                                          FolderWindow::Pane::Right,
+                                                          fixture.leftFileSystem,
+                                                          {fixture.source},
+                                                          fixture.destDir,
+                                                          FILESYSTEM_FLAG_NONE,
+                                                          false,
+                                                          0,
+                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                          false,
+                                                          fixture.rightFileSystem,
+                                                          &replacementTaskId);
+    if (! state.Require(SUCCEEDED(replacementHr) && replacementTaskId != 0u && replacementTaskId != queuedId.value(),
+                        L"Admit a fresh exact conflict beside the already-retained success."))
+        return false;
+    FileOperationsPopupInternal::TaskSnapshot replacement{};
+    const bool replacementReady = waitFor([&]() noexcept
+    {
+        return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, replacementTaskId, replacement) && replacement.conflict.active &&
+               replacement.conflict.inspection && replacement.conflict.buttonsPublishable;
+    });
+    if (! state.Require(replacementReady && TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload"),
+                        L"The replacement conflict must be actionable and preserve the original destination."))
+        return false;
+    fixture.taskId       = replacementTaskId;
+    fixture.taskSnapshot = replacement;
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Footer menu route fixture did not clean after scheduling failure.");
@@ -19024,7 +19214,7 @@ namespace
 {
     using namespace std::chrono_literals;
     FileOperationsPopupTestFixture fixture(state);
-    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture))
+    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture, false, false, false, true))
         return false;
     auto* const fileOps                  = fixture.fileOps;
     const uint64_t taskId                = fixture.taskId.value();
@@ -19044,33 +19234,19 @@ namespace
                    fixture.popup, FileOperationsPopupInternal::PopupHitTest::Kind::FooterCancelAll, 0u, 0u, IDS_FILEOPS_BTN_CANCEL_ALL);
     };
     RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
-    wait.timeout                 = SelfTest::Scale(5000ms);
-    wait.maxMessagesPerPump      = 16u;
-    const bool originalQueueMode = fileOps->GetQueueNewTasks();
-    const auto restoreQueueMode  = wil::scope_exit([&]() noexcept
+    wait.timeout                  = SelfTest::Scale(5000ms);
+    wait.maxMessagesPerPump       = 16u;
+    const bool originalQueueMode  = fileOps->GetQueueNewTasks();
+    const auto restoreQueueMode   = wil::scope_exit([&]() noexcept
     {
         // Drain the owned cohort before restoring Parallel can release a queued
         // task on an early failure. Report cleanup failures even on that path.
         state.Require(fixture.Cleanup(), L"Mixed Cancel-all fixture did not clean its owned cohort.");
         fileOps->ApplyQueueMode(originalQueueMode);
     });
-    const auto completedSource   = fixture.sourceDir / L"cancel-all-finished.txt";
-    const auto completedDest     = fixture.destDir / completedSource.filename();
-    state.Require(SelfTest::WriteTextFile(completedSource, "finished payload"), L"Could not seed the finished Cancel-all cohort item.");
-    uint64_t completedId          = 0u;
-    const HRESULT completeHr      = fileOps->AdmitOperation(FILESYSTEM_COPY,
-                                                            FolderWindow::Pane::Left,
-                                                            FolderWindow::Pane::Right,
-                                                            fixture.leftFileSystem,
-                                                            {completedSource},
-                                                            fixture.destDir,
-                                                            FILESYSTEM_FLAG_NONE,
-                                                            false,
-                                                            0,
-                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                            false,
-                                                            fixture.rightFileSystem,
-                                                            &completedId);
+    const auto completedSource    = fixture.sourceDir / L"cancel-all-finished.txt";
+    const auto completedDest      = fixture.destDir / completedSource.filename();
+    const uint64_t completedId    = fixture.completedBeforeConflictId;
     const auto completedUnchanged = [&]() noexcept
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
@@ -19079,7 +19255,7 @@ namespace
         return found != completed.end() && found->resultHr == S_OK && found->completedBytes > 0u &&
                TextFileEqualsForFileOpsPrompt(completedDest, "finished payload");
     };
-    state.Require(SUCCEEDED(completeHr) && completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
+    state.Require(completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
                   L"Cancel-all cohort requires a real retained successful Copy.");
     if (! state.failure.empty())
         return false;

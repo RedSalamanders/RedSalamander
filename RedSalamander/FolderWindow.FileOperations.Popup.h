@@ -1076,15 +1076,18 @@ public:
             count += hit.kind == kind && hit.taskId == taskId ? 1u : 0u;
         return count;
     }
-    // Union of retained decision-button bounds in DIPs, before viewport clipping.
-    [[nodiscard]] bool DebugHostedDecisionActionBoundsForSelfTest(uint64_t taskId, D2D1_RECT_F& bounds) const noexcept
+    // Union of retained primary decision bounds in DIPs, before viewport clipping.
+    // An exact automation ID also admits the overflow decision button.
+    [[nodiscard]] bool DebugHostedDecisionActionBoundsForSelfTest(uint64_t taskId, D2D1_RECT_F& bounds, std::wstring_view automationId = {}) const noexcept
     {
         bool found = false;
         for (size_t index = 0u; index < _hostedButtons.size() && index < _hostedButtonHits.size(); ++index)
         {
             const DxUi::Button* button = _hostedButtons[index];
             const auto& hit            = _hostedButtonHits[index];
-            if (! button || hit.taskId != taskId || hit.kind != PopupHitTest::Kind::TaskConflictAction)
+            const bool decision =
+                hit.kind == PopupHitTest::Kind::TaskConflictAction || (! automationId.empty() && hit.kind == PopupHitTest::Kind::TaskConflictMore);
+            if (! button || hit.taskId != taskId || ! decision || (! automationId.empty() && button->GetAccessibleAutomationId() != automationId))
                 continue;
             const auto current = button->GetBounds();
             if (! found)

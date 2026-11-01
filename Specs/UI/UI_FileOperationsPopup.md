@@ -293,6 +293,11 @@ must reveal each preceding primary action and then More; forward Tab from More m
 primary action. Each step first restores the top scroll position and verifies the previous focus
 identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
 above the footer. Traversal never submits an action or changes foreground ownership.
+Owned informational cards force the real conflict below the short viewport. Before each
+Tab, inspect the exact retained decision button's unclipped bounds and prove it starts below
+the viewport; a fixed window height alone does not establish overflow. Remove only those
+fixture-owned informational IDs on success or early failure. Collect the post-Tab UIA bounds
+independently of the scroll assertion so failure diagnostics show the actual provider result.
 Routed modifier tests deliver owned Shift key messages to the retained host as well as setting
 the thread keyboard table used by native shortcut checks. The host caches modifiers from its
 message stream; changing the table alone does not establish reverse traversal. The debug layout

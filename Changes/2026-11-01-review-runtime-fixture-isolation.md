@@ -1,0 +1,1 @@
+- Correct review regression fixtures to consume and clear transaction faults, respect exclusive transfer admission, measure actual offscreen keyboard targets, isolate Find queue ordering, and verify ViewerSpace cold-window and same-window cache lifecycles with the existing performance limits.
