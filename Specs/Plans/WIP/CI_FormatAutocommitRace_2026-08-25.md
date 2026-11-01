@@ -1,6 +1,6 @@
 # CI Format Autocommit Race Hardening
 
-> **NON-NORMATIVE RESIDUAL VALIDATION PLAN.** [I55](CI_OrganizationStandardization_2026-10-29.md) owns the shared check-only PR formatter and explicit manual writer. This record retains unmatched operator witnesses; its old automatic mutation design is superseded. The 2026-08-04 write-up is frozen history at `Specs/Plans/Done/CI_FormatAutocommitRace_2026-08-04.md`. Historical root `plans/012-format-autocommit-race.md` is `Specs/Plans/Done/AdvisorPlan_012-format-autocommit-race_2026-06-11.md`. Do not recreate `plans/` or a second formatting implementation.
+> **NON-NORMATIVE RESIDUAL VALIDATION PLAN.** [I55](../Done/CI_OrganizationStandardization_2026-10-29.md) owns the shared check-only PR formatter and explicit manual writer. This record retains unmatched operator witnesses; its old automatic mutation design is superseded. The 2026-08-04 write-up is frozen history at `Specs/Plans/Done/CI_FormatAutocommitRace_2026-08-04.md`. Historical root `plans/012-format-autocommit-race.md` is `Specs/Plans/Done/AdvisorPlan_012-format-autocommit-race_2026-06-11.md`. Do not recreate `plans/` or a second formatting implementation.
 
 ## Status
 

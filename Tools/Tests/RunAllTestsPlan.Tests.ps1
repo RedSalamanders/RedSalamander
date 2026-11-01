@@ -1075,25 +1075,23 @@ Describe 'Run-AllTests plan helper' {
             -Message 'Viewer tests belong to the independent RedMonitor project.'
 
         $workflow = Get-Content -Path (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
-        # The native matrix is one fromJSON expression: the pull-request branch first, then the push branch.
-        $matrixBranches = [System.Collections.Generic.List[object]]::new()
-        foreach ($match in [regex]::Matches($workflow, "'(\[\{[^']*\}\])'")) {
-            $matrixBranches.Add(@(ConvertFrom-Json -InputObject $match.Groups[1].Value | ForEach-Object { "$($_.platform)|$($_.configuration)|$($_.runner)" }))
+        $project = Get-Content (Join-Path $repoRoot '.ci/project.json') -Raw | ConvertFrom-Json
+        $pin = [regex]::Escape($project.engine.ref)
+        $workflow | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/pr\.yml@' + $pin)
+        $workflow | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/coordinate\.yml@' + $pin)
+        $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
+        $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
+        $native | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/native\.yml@' + $pin)
+        $native | Should Match 'cancel-in-progress: false'
+        $adapter = Get-Content (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $adapter | Should Match "else \{ 'CI' \}"
+        $adapter | Should Match "Run 'Tools/Run-AllTests.ps1'"
+        $adapter | Should Match 'Invoke-CiAssertionProbe'
+        foreach ($manual in @('nightly-ci.yml','nightly-flake.yml')) {
+            $diagnostic = Get-Content (Join-Path $repoRoot ('.github/workflows/' + $manual)) -Raw
+            $diagnostic | Should Match 'workflow_dispatch:'
+            $diagnostic | Should Not Match '(?m)^  (schedule|push|pull_request):'
         }
-        Assert-RSEqual -Actual $matrixBranches.Count -Expected 2 -Message 'ci.yml selects the native matrix by event.'
-        $pullRequestProfiles = @($matrixBranches[0])
-        $pushProfiles = @($matrixBranches[1])
-        Assert-RSSequenceEqual -Actual $pullRequestProfiles `
-            -Expected @('x64|Debug|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm') `
-            -Message 'Pull requests build and test one Debug profile per architecture on native runners.'
-        Assert-RSSequenceEqual -Actual $pushProfiles `
-            -Expected @('x64|Debug|windows-2025-vs2026', 'x64|Release|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm', 'ARM64|Release|windows-11-vs2026-arm') `
-            -Message 'Pushes to main add both Release profiles on native runners.'
-        Assert-RSEqual -Actual ($workflow -match 'run_full_tests: true') -Expected $true -Message 'Every profile runs the receipt-verified native suite.'
-        Assert-RSEqual -Actual ($workflow -match 'test_suite: PR\s*\r?\n') -Expected $true -Message 'Pull requests and pushes to main run Suite PR; Suite Full stays the local closeout gate.'
-        $nightly = Get-Content -Path (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
-        Assert-RSEqual -Actual ($nightly -match 'test_suite: CI\s*\r?\n') -Expected $true -Message 'Suite CI runs nightly from nightly-ci.yml on every native profile.'
-        Assert-RSEqual -Actual ($nightly -match 'schedule:') -Expected $true -Message 'The nightly lane is scheduled, not event-driven.'
 
     }
 

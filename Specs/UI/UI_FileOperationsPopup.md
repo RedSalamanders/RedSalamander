@@ -278,6 +278,12 @@ and its child controls retire on the first frame, even while their height transi
 Consecutive focus requests before the next paint MUST translate retained bounds from their painted
 scroll origin to the pending native offset before deciding whether to scroll. The final focused
 control and its focus chrome must remain visible; an already valid pending offset is preserved.
+The short-viewport keyboard witness follows the published action order: `More...` precedes the
+primary actions and Cancel is last. Starting at the exact task/prompt Cancel control, reverse Tab
+must reveal each preceding primary action and then More; forward Tab from More must reveal the first
+primary action. Each step first restores the top scroll position and verifies the previous focus
+identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
+above the footer. Traversal never submits an action or changes foreground ownership.
 First-frame collapse tests MUST inspect the actual raw provider tree, including offscreen children,
 after witnessing each case-owned task before collapse. Missing roots, traversal failures and logical
 visibility flags alone cannot establish that providers retired.
@@ -688,6 +694,11 @@ with the card: `FolderWindow.FileOperations.PromptText.{h,cpp}`.
   the published overflow actions in a menu; the Apply to all option (Off/On) appears only when the prompt
   is eligible; a close glyph. The published default is the primary button and carries the initial focus
   ring.
+- **Keyboard order.** Cancel remains the final action and the initial safe focus/default where
+  published by the engine. A modeless mirror's Tab sequence includes its close affordance after the
+  final action, then wraps to the first action; reverse Tab covers the same sequence backwards.
+  Arrow keys traverse action buttons in their published order. The decision-mirror regression must
+  exercise both routes, including immediately after focus returns, without answering the decision.
 - **Answering (R8.5, R8.6).** A button submits its action with the shown generation and the Primary or
   Overflow placement; Escape submits only the prompt's own escape action with the Escape placement, so one
   keypress can never target another task. Whatever the broker returns (accepted, already decided, canceled,

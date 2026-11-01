@@ -1123,11 +1123,12 @@ struct SelfTestState
     bool r4a02LiveOutputQueueObserved     = false;
     bool inlineF2QueueModeOriginal        = true;
     bool r4a02QueueModeOriginal           = true;
-    HWND c1DeferredCloseTarget            = nullptr;
-    ULONGLONG c1HeartbeatStartTick        = 0;
-    unsigned c1HeartbeatTicks             = 0u;
-    uint64_t inlineF2PresentedBaseline    = 0;
-    uint64_t inlineF2SilentCleanBaseline  = 0;
+    std::optional<bool> r4A19IndependentQueueModeOriginal;
+    HWND c1DeferredCloseTarget           = nullptr;
+    ULONGLONG c1HeartbeatStartTick       = 0;
+    unsigned c1HeartbeatTicks            = 0u;
+    uint64_t inlineF2PresentedBaseline   = 0;
+    uint64_t inlineF2SilentCleanBaseline = 0;
     std::optional<std::uint64_t> queuePausedTask;
     RECT popupOriginalRect{};
     bool popupOriginalRectValid = false;
@@ -2803,8 +2804,22 @@ void RecordCurrentPhase(SelfTestState& state, SelfTest::SelfTestCaseResult::Stat
     return {};
 }
 
+// This asynchronous fixture spans presentation ticks. Restore only admission of
+// future tasks, including on failure/cancellation; never reschedule live tasks or
+// persist a preference merely to qualify the independent-volume control.
+void RestoreIndependentVolumeQueueMode(SelfTestState& state) noexcept
+{
+    if (! state.r4A19IndependentQueueModeOriginal.has_value())
+        return;
+    const bool original = state.r4A19IndependentQueueModeOriginal.value();
+    state.r4A19IndependentQueueModeOriginal.reset();
+    if (state.fileOps)
+        state.fileOps->SetQueueNewTasks(original);
+}
+
 void BeginPhase(SelfTestState& state, SelfTestState::Step step) noexcept
 {
+    RestoreIndependentVolumeQueueMode(state);
     if (state.phaseInProgress)
     {
         RecordCurrentPhase(state, state.phaseFailed ? SelfTest::SelfTestCaseResult::Status::failed : SelfTest::SelfTestCaseResult::Status::passed);
@@ -3086,6 +3101,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
 
 [[nodiscard]] bool PerformCleanup(SelfTestState& state) noexcept
 {
+    RestoreIndependentVolumeQueueMode(state);
     AppendLog(L"PerformCleanup: begin");
     SetFileOpsBridgeProducerDelayForSelfTest(0);
     SetFileOpsBridgeTraversalDepthLimitForSelfTest(0);
@@ -15814,8 +15830,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const auto resetInProgress = wil::scope_exit([]() noexcept { inProgress = false; });
             if (! RunFileOpsDecisionMirrorChecks(state))
             {
-                Fail(L"The decision mirror did not render the card's decision over the folder's pane, decided twice, stayed after an answer, a "
-                     L"navigation or a close, lost the pending segment, mishandled focus or Escape, or ignored its setting; see trace.");
+                Fail(state.phaseFailureMessage.empty() ? L"The decision mirror failed without a specific diagnostic; see trace."
+                                                       : std::wstring_view(state.phaseFailureMessage));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

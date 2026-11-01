@@ -5208,6 +5208,14 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 
     if (state.stepState == 0u)
     {
+        // Queue is the product default. This control measures independent
+        // operations, so it must establish Parallel admission explicitly rather
+        // than inheriting a previous case's mode or racing the first worker.
+        state.r4A19IndependentQueueModeOriginal = state.fileOps->GetQueueNewTasks();
+        state.fileOps->SetQueueNewTasks(false);
+        AppendLog(std::format(L"R4-A19 independent-volume admission: originalQueue={} fixtureQueue={}",
+                              state.r4A19IndependentQueueModeOriginal.value(),
+                              state.fileOps->GetQueueNewTasks()));
         std::wstring alternateDetail;
         const std::optional<std::filesystem::path> alternate = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateDetail, true);
         if (! alternate.has_value())

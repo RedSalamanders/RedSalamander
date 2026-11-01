@@ -287,10 +287,13 @@ Describe 'Historical audit governance contracts' {
         }
 
         $wipIndex = Get-RSText -Path 'Specs\Plans\WIP\README.md'
-        $wipIndex | Should Match 'CI_FormatAutocommitRace_2026-08-25\.md'
+        $wipIndex | Should Match '`I55` records the completed'
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs/Plans/Done/CI_OrganizationStandardization_2026-10-29.md') | Should Be $true
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs/Plans/WIP/CI_OrganizationStandardization_2026-10-29.md') | Should Be $false
+        $wipIndex | Should Match 'CI_HostedAcceptance_2026-10-31\.md'
         $wipIndex | Should Match 'CI_FormatAutocommitRace_2026-08-04\.md'
         $wipIndex | Should Match 'AdvisorPlan_012-format-autocommit-race_2026-06-11\.md'
-        $wipIndex | Should Match 'only live owner'
+        $wipIndex | Should Match 'I9.*retains.*operator acceptance'
         $wipIndex | Should Match '(?i)do not recreate `plans/`'
         $wipIndex | Should Match 'Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25\.md'
         $wipIndex | Should Match 'Product_WhimFilesRemainingDecisions_2026-08-25\.md'
@@ -372,21 +375,15 @@ Describe 'Historical audit governance contracts' {
         $trackedDist.Count | Should Be 0
     }
 
-    It 'keeps the vcpkg Dependabot group limited to direct manifest dependencies' {
+    It 'retains scheduled vcpkg metadata monitoring without automatic pin adoption' {
         $dependabot = Get-RSText -Path '.github\dependabot.yml'
-        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg.json') -Raw | ConvertFrom-Json
-        $directDependencies = @($manifest.dependencies | ForEach-Object {
-                if ($_ -is [string]) { $_ } else { $_.name }
-            })
-        $group = [regex]::Match($dependabot, '(?ms)^\s{6}core-stack:\s*\r?\n\s{8}patterns:\s*\r?\n(?<patterns>(?:\s{10}-[^\r\n]+\r?\n)+)')
-        $group.Success | Should Be $true
-        $patterns = @([regex]::Matches($group.Groups['patterns'].Value, '(?m)^\s+-\s+([^\s#]+)') | ForEach-Object { $_.Groups[1].Value })
-
-        foreach ($pattern in $patterns) {
-            ($directDependencies -contains $pattern) | Should Be $true
-        }
-        ($patterns -contains 'wil') | Should Be $true
-        ($patterns -contains 'yyjson') | Should Be $true
+        $vcpkg = [regex]::Match($dependabot, '(?ms)^  - package-ecosystem: vcpkg\r?\n(?<settings>.*?)(?=^  - package-ecosystem:|\z)')
+        $vcpkg.Success | Should Be $true
+        $vcpkg.Groups['settings'].Value | Should Match 'interval: weekly'
+        $vcpkg.Groups['settings'].Value | Should Match "dependency-name: '\*'"
+        $contract = Get-RSText -Path 'Specs\Build\Build_UnifiedCI.md'
+        $contract | Should Match 'weekly.*metadata observer'
+        $contract | Should Match 'never restores or compiles native dependencies, edits pins'
     }
 }
 

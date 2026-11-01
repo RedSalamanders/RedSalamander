@@ -75,6 +75,8 @@ and product-specific color contrast thresholds remain distinct until their contr
 | Commands clipboard fixture quiescence | `WaitForClipboardQuietForSelfTest` in `RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp` | Test setup waits for an unchanged clipboard sequence and no open owner for 250 ms, then probes availability; the total wait is bounded to three scaled seconds. Clear/seed operations use it before the single product action. It never retries product commands or changes DxUi clipboard policy. |
 | Commands Unicode clipboard readback | `OpenClipboardForSelfTest` / `ReadClipboardUnicodeText` in `RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp` | Reuse bounded test-only opening and readback. Optional diagnostics capture the immediate transport error and distinguish system reads from debug fallback. The Viewers reordered-copy and throughput-disclosure path-detail fixtures require the system witness; other legacy callers retain their existing fallback policy. Clear setup uses the captured open error. The Viewers fixture checks the existing quiet point and rechecks selection/focus after message pumping. Never retry product copy or log clipboard contents. |
 | Commands cooperative queue servicing | `PumpPendingMessages` in `RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp`, delegating to `TestSupport::PumpPendingMessages` | Commands-specific wait policy: service one message at a time, then yield when 512 messages or ten milliseconds between callbacks are reached. A pending callback is serviced even if the caller was preempted; an executing window procedure cannot be preempted. This adapter keeps continuously replenished paint traffic from swallowing the caller's deadline and ownership checks. The canonical TestSupport retrieval/dispatch and other suites' existing policy remain unchanged. |
+| Raw SearchService fixture connection | `ConnectSearchServiceFixturePipe` in `RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Runner.cpp` | Test-only synchronous raw-protocol connection with a scaled total deadline; tolerates missing/busy listener replacement and reports the terminal Win32 error. Both the slow-partial-frame and occupied-client fixtures reuse it. Production uses the broker's separate cancellable overlapped I/O and operation-deadline policy. |
+| Fresh-viewer parent desktop ownership | `IsViewerHarnessDesktopIdentityStable`, `IsViewerHarnessDesktopAlreadyRestored` and `ViewerHarnessDesktopRestorationMayContinue` in `Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp` | Local parent-process policy distinguishes exact read-only observation from restoration authority. A single admitted write is followed by bounded read-only observation; input, foreground and saved identity interference abort it. Cross-process/thread child-focus observation never grants foreign focus writes. The shared desktop observer retains its separate no-write contract. |
 | File Operations OLE read contention | `RetryFileOperationsClipboardReadForSelfTest` / `ReadFileOperationsClipboardMediumForSelfTest` in `RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp` | Test-only readback retries CLIPBRD_E_CANT_OPEN at most three times using the canonical quiet wait; owner/sequence changes abort. Other errors return immediately. Temporary media remain WIL-owned. No publication or product command is retried. |
 | File Operations owned OLE flush | `FlushOwnedFileOperationsClipboardForSelfTest` in `RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp` | Reuses the canonical clipboard quiet point, requires `OleIsCurrentClipboard` identity and the fixture's recorded owner/sequence, then retries only CLIPBRD_E_CANT_OPEN materialization failures up to three attempts without republishing. `FileOperationsClipboardGeneration` tracks admitted publication/materialization and detects interference before further copies/restoration; it is not an atomic clipboard lease. Reports contention/ownership failure; no clipboard contents are logged. |
 | File Operations conflict display facts | `FileOperations::ResolveConflictPathDisplay` in `RedSalamander/FolderWindow.FileOperations.cpp` | Selects the admitted flattened transfer/delete item and reuses canonical `TryGetFileSystemLeafName` / `TryGetFileSystemParentPath` for each endpoint. This application adapter adds plan/item ownership; it is not a second path parser. Empty pairs require exact-path fallback and never grant action authority. |
@@ -238,13 +240,18 @@ retrying or weakening the immediate cleanup assertion.
 
 ## Warned foreground hotkey dispatch
 
-The registered-hotkey fallback dispatches `WM_HOTKEY` to a temporary subclass on the
+The registered Alt+F24 fallback dispatches `WM_HOTKEY` to a temporary subclass on the
 owned warning window and activates the process-owned target inside that window procedure.
 Removing the message from the queue is not a substitute for handling it. The warning must
 belong to the current UI thread. Subclass, registration and atom cleanup are scoped, the
-same 500 ms handshake bound applies, and no foreign input queue or system policy is changed.
+same 500 ms handshake bound applies. It attaches no foreign input queue and calls no
+foreground-lock policy API or system-setting write. Alt is part of the registered nontext
+shortcut; both keys stay down until its handler requests the owned foreground. Partial input
+insertion releases only the inserted prefix in reverse order; partial release cleanup sends
+only the remaining owned key-ups. Held caller input is refused before insertion.
 The native admission control independently witnesses exactly one hotkey window-procedure
-dispatch per forced handshake, actual foreground ownership, released input, registration
+dispatch per forced handshake, actual foreground ownership, both chord keys down at dispatch,
+released input, absence of a native menu side effect, registration
 cleanup and the existing conflict/no-activation/unowned-window refusals. This follows the
 [Windows hotkey activation contract](https://devblogs.microsoft.com/oldnewthing/20090226-00/?p=19013).
 

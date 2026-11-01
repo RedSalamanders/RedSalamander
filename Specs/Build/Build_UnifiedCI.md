@@ -56,12 +56,12 @@ qualify.yml run with complete matching receipts and retained ZIPs for both nativ
 promotes those exact bytes without building, restamping, signing afterwards or substituting an older green
 run for a later failure. Missing/expired artifacts require a fresh explicit qualification. Existing conflicting
 tags, assets or winget submissions are retained for review and never overwritten. Product releases publish
-ZIP assets only. Applications support winget; the DxUi SDK does not. winget requires anonymous immutable
+ZIP assets only. Only the five application products have hosted publication and winget support; DxUi SDK ZIPs remain internal artifacts and DxUi has no publication workflow. winget requires anonymous immutable
 release URLs, matching ZIP hashes, the configured nested executable, an explicit product license and a working
 publication credential. Private visibility or unavailable credentials are readiness gates, never permission
 to change visibility, billing, licensing or access.
 
-The implementation remains unqualified until the organization rollout plan records actual hosted acceptance.
+Implementation closeout does not qualify a product. Actual hosted acceptance remains source-bound and is tracked separately in the organization hosted-acceptance plan.
 Source changes, tests written, static checks, and the shared engine's own behavior tests alone do not establish
 that all six native product pipelines passed.
 
@@ -84,3 +84,14 @@ Follow the common [emergency merge runbook](https://github.com/RedSalamanders/.g
 ## Dependency metadata coverage
 
 The organization's shared engine runs a weekly and explicit manual metadata observer across all six default branches. It inventories the coordinated engine SHA, vcpkg baseline/tool/floors/overrides and custom dependency locks, and reports available producer updates as advisories. It never restores or compiles native dependencies, edits pins or treats an upstream main commit as qualified. Missing/private or undeployed repositories remain explicit incomplete coverage. Built-in dependency review and security alerts retain their supported scopes; custom lock inventory is not a native/transitive vulnerability scan. See the common [dependency status contract](https://github.com/RedSalamanders/.github/blob/main/Specs/CI.md).
+
+Application publication uses WINGET_TOKEN. The owner's 2026-10-31 access policy selects the current public organization repositories except DxUi; reconcile that selection when repository visibility changes or a repository is added. The two private applications remain excluded until their separate readiness work and public transition. Repository secrets take precedence over the organization secret; remove an existing override only with the owner's explicit authorization. An organization owner manages the shared secret through GitHub settings; the publication token requires public_repo, not organization-secret administration. GitHub Free does not deliver organization secrets to private repositories, so repository selection alone does not establish their hosted readiness. See [GitHub's secret setup](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
+
+The explicitly dispatched trusted-main RedSalamander promote-publication-credential.yml path now performs read-only credential verification, retaining its historical filename for compatibility. It authenticates the effective WINGET_TOKEN through GET /user and requires the classic token's declared public_repo or repo scope. It never prints account data, exports a token, checks out code, compiles, changes secrets, creates a fork or publishes a product. A successful result proves authentication and declared scope only; it does not exercise write access or establish native installation, artifact or publication acceptance. Existing overrides must be accounted for before claiming the shared organization credential was checked. Missing permissions or failed native eligibility remain open acceptance gates.
+
+## Evidence upload roots
+
+The adapter's governed sandbox evidence is uploaded separately from workspace build logs and reports. Never combine
+these roots in one upload path list: a Windows drive-root common ancestor can resolve as a drive-relative workspace
+path and cause the artifact client to reject sandbox files. Keep test evidence in its marked sandbox, upload that
+single explicit directory only when emitted, and retain workspace diagnostics independently after early failure.

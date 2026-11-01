@@ -30,10 +30,11 @@ class DirectedSelfTestInputWarning final
 public:
     struct ForegroundAdmissionDiagnostics final
     {
-        const wchar_t* stage = L"not-started";
-        DWORD win32Error     = ERROR_SUCCESS;
-        int heldKey          = 0;
-        UINT sentInputCount  = 0u;
+        const wchar_t* stage           = L"not-started";
+        DWORD win32Error               = ERROR_SUCCESS;
+        int heldKey                    = 0;
+        UINT sentInputCount            = 0u;
+        bool foregroundRequestAccepted = false;
     };
 
     explicit DirectedSelfTestInputWarning(HWND owner = nullptr, bool enabled = true) noexcept
@@ -138,7 +139,8 @@ public:
         ForegroundHotkeyRequest request{.target = target, .warning = warning, .threadId = threadId};
         if (! requireHotkey && request.Activate())
         {
-            observed.stage = L"direct-activation";
+            observed.stage                     = L"direct-activation";
+            observed.foregroundRequestAccepted = request.foregroundRequestAccepted;
             return true;
         }
 
@@ -176,36 +178,52 @@ public:
             return false;
         }
         observed.stage = L"hotkey-registration";
-        if (! RegisterHotKey(warning, static_cast<int>(request.id), MOD_NOREPEAT, VK_F24))
+        if (! RegisterHotKey(warning, static_cast<int>(request.id), MOD_ALT | MOD_NOREPEAT, VK_F24))
         {
             observed.win32Error = GetLastError();
             return false;
         }
         const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(warning, static_cast<int>(request.id)); });
+        // Keep ALT inside the registered nontext chord. A bare F24 notification
+        // can arrive while the hosted console retains foreground permission.
+        // Activation still occurs only in this owned window's real WM_HOTKEY.
         std::array<INPUT, 2u> input{};
-        input[0].type       = INPUT_KEYBOARD;
-        input[0].ki.wVk     = VK_F24;
-        input[1]            = input[0];
-        input[1].ki.dwFlags = KEYEVENTF_KEYUP;
-        // Keep the hotkey depressed until its receiving handler has attempted
-        // the handoff. An earlier key-up can be routed to the previous foreground
-        // process before WM_HOTKEY is dispatched, losing last-input permission.
-        const UINT sent         = SendInput(1u, input.data(), sizeof(INPUT));
+        input[0].type           = INPUT_KEYBOARD;
+        input[0].ki.wVk         = VK_MENU;
+        input[1]                = input[0];
+        input[1].ki.wVk         = VK_F24;
+        const UINT sent         = SendInput(static_cast<UINT>(input.size()), input.data(), sizeof(INPUT));
         observed.sentInputCount = sent;
         observed.stage          = L"hotkey-input";
-        if (sent != 1u)
+        const DWORD inputError  = sent == input.size() ? ERROR_SUCCESS : GetLastError();
+        std::array<INPUT, 2u> release{};
+        release[0]            = input[1];
+        release[0].ki.dwFlags = KEYEVENTF_KEYUP;
+        release[1]            = input[0];
+        release[1].ki.dwFlags = KEYEVENTF_KEYUP;
+        // SendInput inserts a prefix. Release only keys this call inserted,
+        // including partial insertion and partial release, in reverse order.
+        const UINT releaseStart = sent == input.size() ? 0u : 1u;
+        const UINT releaseCount = (std::min)(sent, static_cast<UINT>(release.size()));
+        UINT released           = 0u;
+        const auto releaseKeys  = [&]() noexcept
         {
-            observed.win32Error = GetLastError();
+            if (released < releaseCount)
+            {
+                const UINT count = SendInput(releaseCount - released, release.data() + releaseStart + released, sizeof(INPUT));
+                released += count;
+                observed.sentInputCount += count;
+            }
+        };
+        const auto releaseOnExit = wil::scope_exit([&]() noexcept { releaseKeys(); });
+        if (sent != input.size())
+        {
+            observed.win32Error = inputError;
             return false;
         }
-        bool keyReleased      = false;
-        const auto releaseKey = wil::scope_exit([&]() noexcept
-        {
-            if (! keyReleased)
-                observed.sentInputCount += SendInput(1u, &input[1], sizeof(INPUT));
-        });
-        const auto deadline   = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
-        observed.stage        = L"hotkey-dispatch-timeout";
+        // Both chord keys remain down through the notified foreground request.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
+        observed.stage      = L"hotkey-dispatch-timeout";
         while (std::chrono::steady_clock::now() < deadline)
         {
             MSG message{};
@@ -222,10 +240,8 @@ public:
             }
             static_cast<void>(MsgWaitForMultipleObjectsEx(0u, nullptr, 10u, QS_HOTKEY, MWMO_INPUTAVAILABLE));
         }
-        const UINT released = SendInput(1u, &input[1], sizeof(INPUT));
-        observed.sentInputCount += released;
-        keyReleased = released == 1u;
-        if (! keyReleased)
+        releaseKeys();
+        if (released != releaseCount)
         {
             observed.stage      = L"hotkey-key-release";
             observed.win32Error = GetLastError();
@@ -233,8 +249,9 @@ public:
         }
         if (! request.handled)
             return false;
-        const bool activated = request.activated && GetForegroundWindow() == target;
-        observed.stage       = activated ? L"hotkey-activation" : L"hotkey-activation-refused";
+        observed.foregroundRequestAccepted = request.foregroundRequestAccepted;
+        const bool activated               = request.activated && GetForegroundWindow() == target;
+        observed.stage                     = activated ? L"hotkey-activation" : L"hotkey-activation-refused";
         return activated;
     }
 
@@ -249,14 +266,15 @@ private:
 
     struct ForegroundHotkeyRequest final
     {
-        HWND target    = nullptr;
-        HWND warning   = nullptr;
-        DWORD threadId = 0u;
-        UINT_PTR id    = 0u;
-        bool handled   = false;
-        bool activated = false;
+        HWND target                    = nullptr;
+        HWND warning                   = nullptr;
+        DWORD threadId                 = 0u;
+        UINT_PTR id                    = 0u;
+        bool handled                   = false;
+        bool activated                 = false;
+        bool foregroundRequestAccepted = false;
 
-        [[nodiscard]] bool Activate() const noexcept
+        [[nodiscard]] bool Activate() noexcept
         {
             DWORD currentOwner = 0u;
             if (GetWindowThreadProcessId(target, &currentOwner) != threadId || currentOwner != GetCurrentProcessId() || ! IsWindowVisible(warning))
@@ -264,7 +282,7 @@ private:
             ShowWindow(target, SW_SHOWNORMAL);
             BringWindowToTop(target);
             SetActiveWindow(target);
-            static_cast<void>(Common::RequestForegroundWindow(target));
+            foregroundRequestAccepted = Common::RequestForegroundWindow(target) != FALSE;
             SetFocus(target);
             SetWindowPos(target, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
             SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
