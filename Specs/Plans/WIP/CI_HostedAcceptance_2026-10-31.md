@@ -135,7 +135,7 @@ Current public acceptance checkpoint:
 
 | Project | Original v1.0.7 native qualification | Artifact-only Prepare | Current disposition |
 |---|---|---|---|
-| RedSalamander | [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336), version 7.0.472: x64 regression failed; ARM64 pending | Pending successful qualification | Both builds passed. x64 retained two Commands failures; FileOps, Viewer and tooling passed. Fixture-protocol follow-through is under verification; no production or Prepare acceptance is claimed. |
+| RedSalamander | [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336), version 7.0.472: both regressions failed | Pending fresh successful qualification | Both test-enabled builds passed; x64 retained two Commands failures and ARM64 retained foreground-admission, FileOps and Viewer failures. The test gate and production were skipped. Fresh dual-architecture qualification and Prepare remain required. |
 | RedXe | [41207884174](https://github.com/RedSalamanders/RedXe/actions/runs/41207884174), version 1.0.429 | [41211864521](https://github.com/RedSalamanders/RedXe/actions/runs/41211864521) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
 | RedMonitor | [41206180882](https://github.com/RedSalamanders/RedMonitor/actions/runs/41206180882), version 0.1.70 | [41208578017](https://github.com/RedSalamanders/RedMonitor/actions/runs/41208578017) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
 | DxUi | [41206683035](https://github.com/RedSalamanders/DxUi/actions/runs/41206683035), version 0.1.778 | Not applicable | Both native regression/probe and SDK consumer roles, ZIP/library hashes and actual ordering independently verified. No hosted publisher exists. |
@@ -548,8 +548,8 @@ generated fold was independently reviewed and merged normally, without an admini
 The fold preserves native digest 8dc114ddee0c8b712991a07c6685351e66b50643e56d7ef322af7f29c8c3aa22.
 After five continuous quiet minutes, coordinator 41244534379 submitted candidate 41244955336 for
 that reviewed main. Its actual admission at 22:19 UTC matches the source, engine, 1402 meaningful
-inputs and native digest above, freezing version 7.0.472. Both native jobs are executing; successful
-regression, production and Prepare remain pending. ARM64's test-enabled Release build passed at
+inputs and native digest above, freezing version 7.0.472. At that checkpoint both native jobs were executing; successful
+regression, production and Prepare remained pending. ARM64's test-enabled Release build passed at
 23:38:08 UTC and x64's at 23:50:57 UTC; both architectures successfully saved their dependency
 and Terminal caches before starting regression. RS-41244955336-both-builds-passed.json retains
 the actual job/step witnesses. These build passes do not substitute for the unfinished tests.
@@ -577,8 +577,8 @@ skipped. The normal File Operations suite passed 295 with 27 skips, including th
 and independent-volume controls; Viewer and all 1115 tooling checks passed. Commands reported
 960 passed, two failed and six skipped. The current raw job log (1405304 bytes), 77209391-byte
 canonical artifact, complete initial/retry records and a SHA-256 manifest of 16494 retained files
-are preserved separately from previous runs. ARM64 is still executing and no production, active
-probe or Prepare pass is inferred.
+are preserved separately from previous runs. At that checkpoint ARM64 was still executing; no production, active
+probe or Prepare pass was inferred.
 
 The short-viewport failure again focused the forward footer target instead of the preceding
 published action. Source inspection found the pinned retained host reads its cached modifier mask,
@@ -614,3 +614,27 @@ RedXe's later documentation-only PR 74 merged as 3a8b3b19be24682ecc386e1204eac2f
 Its recomputed native digest remains 634ca46f6b3f35ddace6732895f3a5bd1c1d62deac2ea1ee54dd59ca18a3be9f
 with engine e32cf9f9b29f4e817decb09e1be44be7fc1a94de; live ci-state still identifies original
 successful qualification 41207884174. Its existing qualification and Prepare remain applicable.
+
+### Original qualification terminal outcome - 2026-11-01
+
+Original run [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336)
+completed **failure** at 02:28:50 UTC on source `eb779e0bd83694492cd1717bb39eaff3cdcee7cb`.
+Both test-enabled Release builds passed, but both regression jobs failed. The test gate and production
+were skipped and the completion job failed. The earlier executing observations above describe their
+respective checkpoints, not the terminal result.
+
+ARM64 reported 2704 checks: 1680 passed, 970 failed and 54 skipped. Commands reported 0 passed and
+968 failed because notified foreground handoff was refused before case execution (hotkey-activation-refused,
+sent=4); its 968 focused retry attempts also failed. File Operations reported 291 passed, one failed and
+30 skipped: `R4A19_DiscoveryIndependentVolumes` completed both 16 MiB copies but observed no overlap,
+with isolated times 1.140 and 1.203 seconds and concurrent 2.312 seconds against the unchanged 1.624050-second
+gate; its one retry also failed. ViewerPETests.Interactive failed with exit code 1 in both initial and retry
+execution; the retained output identifies the ViewerSpace keyboard test's owned-window activation assertion.
+Compare reported 260 passed and 24 skipped; tooling passed 1115/1115. These failures remain original evidence,
+not proof of a single common root cause or of successful subsequent repairs.
+
+The raw x64 and ARM64 job logs, completion log, run/job/artifact metadata, original artifact ZIPs
+(13065637131 and 13065969559), extracted ARM64 aggregate and Viewer output, and SHA-256 manifest are retained
+under `Z:/RedSalamander.Perf/evidence/pr200-201-review-20261101/original-main-41244955336/`. Fresh successful
+current-source qualification on both architectures, the active probes and production roles, and artifact-only
+Prepare remain required. No new qualification, release or publication is claimed.

@@ -483,6 +483,8 @@ all broader or modified selections retain the ordinary Commands classification.
 viewer fixtures; `TestViewerSpaceLifecycleCaptures --no-activate` covers Space.
 These focused captures do not qualify keyboard interaction or a Full run.
 
+Historical review guards preserve the exact July campaign roster and routing provenance while later reviews require their own bounded commit, date, historical banner and live-index link.
+
 `Tests/DocumentationDriftContracts.Tests.ps1` runs through the current tooling
 profile. It binds the ten public File Operations PNGs to adjacent native capture
 provenance, matching SHA-256, invented fixture paths, no activation and a recorded

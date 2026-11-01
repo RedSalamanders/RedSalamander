@@ -290,18 +290,83 @@ Describe 'File Operations popup documentation drift contracts' {
 }
 
 Describe 'Historical audit governance contracts' {
-    It 'marks every review campaign document as a non-live historical snapshot' {
-        $reviewFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Specs\Reviews') -File -Filter '*.md')
-        $reviewFiles.Count | Should BeGreaterThan 0
+    # The July routing reconciliation applies to this frozen set, not to later reviews.
+    # Require the exact roster so removing a campaign file cannot silently drop its guard.
+    $legacyReviewFiles = @(
+            'AppShell-Audit.md',
+            'AppShell-Findings.md',
+            'Command-System-Audit.md',
+            'Command-System-Findings.md',
+            'DxUi-Audit.md',
+            'DxUi-Findings.md',
+            'FS-Subsystem-Audit.md',
+            'FS-Subsystem-Findings.md',
+            'FileSystemBridge-2026-07-07-Findings.md',
+            'FolderView-Audit.md',
+            'FolderView-Findings.md',
+            'Monitor-Audit.md',
+            'Monitor-Findings.md',
+            'NavigationView-Audit.md',
+            'NavigationView-Findings.md',
+            'Preferences-Audit.md',
+            'Preferences-Findings.md',
+            'README.md',
+            'Settings-Persistence-Audit.md',
+            'Settings-Persistence-Findings.md',
+            'Squad-Decisions-Archive.md',
+            'ThreeDayDiff-2026-07-05-Findings.md',
+            'ThreeDayDiff-2026-07-06-Findings.md',
+            'Viewer-Plugins-Audit.md',
+            'Viewer-Plugins-Findings.md',
+            '_AuditProgress.md',
+            '_CampaignSummary.md'
+    )
+    function Test-ReviewSnapshotBanner([string]$Text, [bool]$Legacy) {
+        # Limit provenance checks to the opening banner rather than matching a later citation.
+        $prefix = $Text.Substring(0, [Math]::Min($Text.Length, 2048))
+        $match = [regex]::Match($prefix, '(?m)^> \[!IMPORTANT\]\r?\n(?<banner>(?:^>[^\r\n]*(?:\r?\n|$))+)')
+        if (-not $match.Success) { return $false }
+        $opening = $match.Groups['banner'].Value
+        if ($opening -notmatch 'Historical snapshot — not a live work queue' -or
+            $opening -notmatch 'Specs/Plans/WIP/README\.md') { return $false }
+        if ($Legacy) {
+            return $opening -match '2026-07-17' -and $opening -match 'f4e0c8c3bed8' -and
+                   $opening -match 'Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15\.md'
+        }
+        $provenance = [regex]::Match($opening, 'Reviewed repository commit\s+`[0-9a-fA-F]{12,40}`\s*\((?<date>\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})\b')
+        if (-not $provenance.Success) { return $false }
+        $parsedDate = [datetime]::MinValue
+        return [datetime]::TryParseExact($provenance.Groups['date'].Value, [string[]]@('yyyy-MM-dd', 'd MMMM yyyy'),
+            [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AllowWhiteSpaces, [ref]$parsedDate)
+    }
 
+    It 'marks each review with its own bounded historical provenance and live index' {
+        $reviewFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Specs\Reviews') -File -Filter '*.md')
+        foreach ($name in $legacyReviewFiles) {
+            Test-Path -LiteralPath (Join-Path $repoRoot "Specs\Reviews\$name") -PathType Leaf | Should Be $true
+        }
         foreach ($file in $reviewFiles) {
             $text = Get-Content -LiteralPath $file.FullName -Raw
-            $text | Should Match 'Historical snapshot — not a live work queue'
-            $text | Should Match '2026-07-17'
-            $text | Should Match 'f4e0c8c3bed8'
-            $text | Should Match 'Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15\.md'
-            $text | Should Match 'Specs/Plans/WIP/README\.md'
+            (Test-ReviewSnapshotBanner $text ($file.Name -in $legacyReviewFiles)) | Should Be $true
         }
+    }
+
+    It 'rejects missing or misplaced review provenance without assigning the July ledger to later reviews' {
+        $later = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** Reviewed repository commit ``eb779e0bd836`` (31 October 2026). Live work: Specs/Plans/WIP/README.md.`n"
+        (Test-ReviewSnapshotBanner $later $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later -replace 'eb779e0bd836', 'not-a-commit') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', 'undated') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '99 October 2026') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '2026-10-31') $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '2026-02-30') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace 'Historical snapshot — not a live work queue', 'Current plan') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace 'Specs/Plans/WIP/README.md', 'other') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner (('x' * 2048) + $later) $false) | Should Be $false
+        (Test-ReviewSnapshotBanner $later $true) | Should Be $false
+        $legacy = "> [!IMPORTANT]`n> Historical snapshot — not a live work queue; 2026-07-17; f4e0c8c3bed8; Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md; Specs/Plans/WIP/README.md`n"
+        (Test-ReviewSnapshotBanner $legacy $true) | Should Be $true
+        (Test-ReviewSnapshotBanner ($legacy -replace 'f4e0c8c3bed8', 'eb779e0bd836') $true) | Should Be $false
+        (Test-ReviewSnapshotBanner ($legacy -replace 'Operation_Observatory', 'Operation_Other') $true) | Should Be $false
     }
 
     It 'records that the legacy root plans queue was archived to Done and deleted' {
