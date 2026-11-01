@@ -16704,29 +16704,68 @@ struct FileOperationsPopupTestFixture final
                 SUCCEEDED(focusAProvider.query_to(focusA.put())) && SUCCEEDED(focusBProvider.query_to(focusB.put())),
             L"Acquire exact A and B focus providers before checking synchronous decision bindings."))
         return false;
-    const auto focusOwnsDecision = [&](IRawElementProviderFragment& provider, uint64_t taskId) noexcept
+    const auto focusOwnsDecision = [&](IRawElementProviderFragment& provider, uint64_t taskId, std::wstring_view leg) noexcept
     {
-        if (FAILED(provider.SetFocus()))
-            return false;
+        const auto* popupState =
+            reinterpret_cast<const FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(fixture.popup, GWLP_USERDATA));
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot before{};
+        before.taskId              = taskId;
+        const bool beforeAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, before);
+        D2D1_RECT_F beforeDecisions{};
+        const bool beforeBounds      = popupState && popupState->DebugHostedDecisionActionBoundsForSelfTest(taskId, beforeDecisions);
+        const uint64_t rendersBefore = popupState ? popupState->DebugHostedRenderCount() : 0u;
+        const HRESULT focusHr        = provider.SetFocus();
         FileOperationsPopupInternal::TaskSnapshot task{};
         FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
-        layout.taskId = taskId;
-        return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, task) && task.conflict.active && task.conflict.buttonsPublishable &&
-               DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, layout) &&
-               layout.hostedFocusedAutomationId ==
-                   std::format(L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), taskId, task.conflict.generation) &&
-               layout.hostedDefaultAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                               static_cast<uint32_t>(Hit::TaskConflictAction),
-                                                               taskId,
-                                                               task.conflict.defaultAction,
-                                                               task.conflict.generation) &&
-               layout.hostedCancelAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                              static_cast<uint32_t>(Hit::TaskConflictAction),
-                                                              taskId,
-                                                              task.conflict.escapeAction,
-                                                              task.conflict.generation);
+        layout.taskId              = taskId;
+        const bool taskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, task);
+        const bool layoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, layout);
+        const std::wstring expectedFocus =
+            std::format(L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), taskId, task.conflict.generation);
+        const std::wstring expectedDefault = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                         static_cast<uint32_t>(Hit::TaskConflictAction),
+                                                         taskId,
+                                                         task.conflict.defaultAction,
+                                                         task.conflict.generation);
+        const std::wstring expectedCancel  = std::format(
+            L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(Hit::TaskConflictAction), taskId, task.conflict.escapeAction, task.conflict.generation);
+        const bool exact = SUCCEEDED(focusHr) && taskAvailable && task.conflict.active && task.conflict.buttonsPublishable && layoutAvailable &&
+                           layout.hostedFocusedAutomationId == expectedFocus && layout.hostedDefaultAutomationId == expectedDefault &&
+                           layout.hostedCancelAutomationId == expectedCancel;
+        Trace(std::format(L"TwoPending synchronous focus {}: task={} hr=0x{:08X} before={} taskAvailable={} layoutAvailable={} operation={} generation={} "
+                          L"focus='{}' expectedFocus='{}' default='{}' expectedDefault='{}' cancel='{}' expectedCancel='{}' "
+                          L"scroll={}->{} viewport=({},{},{},{}) decisionBoundsDip=({},{},{},{}) boundsAvailable={} renders={}->{} exact={}",
+                          leg,
+                          taskId,
+                          static_cast<unsigned long>(focusHr),
+                          beforeAvailable,
+                          taskAvailable,
+                          layoutAvailable,
+                          static_cast<uint32_t>(task.operation),
+                          task.conflict.generation,
+                          layout.hostedFocusedAutomationId,
+                          expectedFocus,
+                          layout.hostedDefaultAutomationId,
+                          expectedDefault,
+                          layout.hostedCancelAutomationId,
+                          expectedCancel,
+                          before.scrollPosition,
+                          layout.scrollPosition,
+                          before.listViewportRect.left,
+                          before.listViewportRect.top,
+                          before.listViewportRect.right,
+                          before.listViewportRect.bottom,
+                          beforeDecisions.left,
+                          beforeDecisions.top,
+                          beforeDecisions.right,
+                          beforeDecisions.bottom,
+                          beforeBounds,
+                          rendersBefore,
+                          popupState ? popupState->DebugHostedRenderCount() : 0u,
+                          exact));
+        return exact;
     };
-    if (! state.Require(focusOwnsDecision(*focusB, bId.value()) && focusOwnsDecision(*focusA, aId),
+    if (! state.Require(focusOwnsDecision(*focusB, bId.value(), L"B") && focusOwnsDecision(*focusA, aId, L"A"),
                         L"UIA focus must synchronously rebind exact B then A default/cancel identities without pumping a frame."))
         return false;
 

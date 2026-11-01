@@ -1,0 +1,1 @@
+- Record per-task UIA focus results, exact keyboard bindings, rendered decision bounds and frame counters when validating synchronous two-task conflict focus.
