@@ -988,7 +988,9 @@ are application wrapper elapsed times, not kernel or server latency. The file-ha
 simultaneous I/O. Within that disposition wrapper, `DispositionExUs`, `DispositionLegacyUs`, `CloseUs`,
 `ReadonlyClearUs`, `ReadonlyRollbackUs`, and `CompletionCallbackUs` measure individual wrapper calls using
 the same sum/count/max fields. The completion measurement includes the callback wrapper and its lock, even
-when no callback is installed. The six `ExSuccess`, `ExInvalidParameter`, `ExNotSupported`, `ExOtherFailure`,
+when no callback is installed. Close measures explicit handle closes after successful disposition; snapshot
+destruction on a failed walk and final-root close are outside that measurement. The six `ExSuccess`,
+`ExInvalidParameter`, `ExNotSupported`, `ExOtherFailure`,
 `LegacySuccess`, and `LegacyFailure` count metrics record the selected disposition outcomes; zero counts are
 valid, including builds without the extended disposition call. These independent diagnostics do not justify
 weakening identity checks.

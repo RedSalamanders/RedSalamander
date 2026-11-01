@@ -1,0 +1,33 @@
+{
+  "schema": "red-salamander.curated-fileops-result.v1",
+  "sourceRunId": "20261101T202407Z-16996-4a921098be464b72a66871ba8fbba80c",
+  "run_started_utc": "2026-11-01T20:24:43.488Z",
+  "suite": "FileOperations",
+  "duration_ms": 396297,
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "failureMessage": "A delete by name of a tree of a few thousand entries did not delete it; see trace.",
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1235,
+      "repeat_index": 1
+    },
+    {
+      "name": "Delete_IdentityLessPinnedTreeScale",
+      "status": "failed",
+      "duration_ms": 394953,
+      "repeat_index": 1,
+      "reason": "A delete by name of a tree of a few thousand entries did not delete it; see trace."
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 109,
+      "repeat_index": 1
+    }
+  ],
+  "timeout_scale": 1.0
+}

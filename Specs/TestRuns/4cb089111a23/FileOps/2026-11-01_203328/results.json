@@ -1,0 +1,32 @@
+{
+  "schema": "red-salamander.curated-fileops-result.v1",
+  "sourceRunId": "20261101T203328Z-23512-df0e03b81777490784720e8f84a28879",
+  "run_started_utc": "2026-11-01T20:34:03.309Z",
+  "suite": "FileOperations",
+  "duration_ms": 1422,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "failureMessage": null,
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1203,
+      "repeat_index": 1
+    },
+    {
+      "name": "FileOps_QueuedAdmissionContracts",
+      "status": "passed",
+      "duration_ms": 188,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 31,
+      "repeat_index": 1
+    }
+  ],
+  "timeout_scale": 1.0
+}
