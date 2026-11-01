@@ -2365,12 +2365,16 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
         if (ready)
         {
             RemoveFromQueue(task._taskId);
-            if (waitForOthers)
-                task._waitForOthers.store(false, std::memory_order_release);
-            task.SetWaitingInQueue(false);
             EraseMutationInterlockAdmission(_preparedMutationInterlocks, admissionKey);
             _activeMutationInterlocks.push_back(ActiveMutationInterlock{.taskId = task._taskId, .task = &task, .admission = admission});
             task._reservedOperation.store(true, std::memory_order_release);
+            // Publish the monotonic preparation phase before withdrawing queue presentation;
+            // strict acquisition and confirmation must never appear as transfer execution.
+            if (admission->hasDeferredDirectoryDeletes)
+                task.PublishLifecyclePhase(FileOperations::TaskLifecyclePhase::PreparingExecution);
+            if (waitForOthers)
+                task._waitForOthers.store(false, std::memory_order_release);
+            task.SetWaitingInQueue(false);
             ++_activeOperations;
             task._perf.queueActiveOperations = _activeOperations;
             const uint64_t waitUs            = waited ? PerfElapsedUs(queueWaitStartUs) : 0u;

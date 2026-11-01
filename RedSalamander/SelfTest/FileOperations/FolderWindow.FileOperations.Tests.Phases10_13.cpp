@@ -1228,11 +1228,17 @@ case SelfTestState::Step::Phase10_PermanentDelete:
         const std::filesystem::path renamed = delDir / L"recursive-delete-renamed";
         const BOOL moved                    = MoveFileExW(recursiveDeleteRoot.c_str(), renamed.c_str(), MOVEFILE_WRITE_THROUGH);
         const DWORD moveError               = GetLastError();
+        const auto* directoryTask           = state.fileOps->FindTask(state.taskC.value());
+        const bool stillPreparing           = directoryTask && directoryTask->HasReservedOperation() && ! directoryTask->HasEnteredOperation() &&
+                                              directoryTask->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::PreparingExecution;
         ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
         SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
-        if (moved != FALSE || moveError != ERROR_SHARING_VIOLATION)
+        if (moved != FALSE || moveError != ERROR_SHARING_VIOLATION || ! stillPreparing)
         {
-            Fail(std::format(L"The confirmed directory Delete must retain its strict root lease (moved={}, error={}).", moved != FALSE, moveError));
+            Fail(std::format(L"The confirmed directory Delete must retain its strict root lease before execution (moved={}, error={}, preparing={}).",
+                             moved != FALSE,
+                             moveError,
+                             stillPreparing));
             return true;
         }
         state.stepState = 6;

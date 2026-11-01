@@ -230,8 +230,9 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
                         L"Directory pin handoff requires its own synthetic files."))
         return false;
     FileOperations::QualifiedEndpoint endpoint;
-    if (! state.Require(FileOperations::TryQualifyEndpointForSelfTest(fileSystem, directory.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"", endpoint),
-                        L"Directory handoff must use the acquired sandbox's qualified Local path profile."))
+    if (! state.Require(
+            FileOperations::TryQualifyEndpointForSelfTest(fileSystem, directory.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"host/default", endpoint),
+            L"Directory handoff must use the acquired sandbox's qualified Local path profile."))
         return false;
     const auto bind = [&](const std::filesystem::path& path, FileSystemBindFlags flags) noexcept
     { return FileOperations::BindObjectAuthority(fileSystem.get(), path.native(), endpoint.profileId, flags); };
@@ -436,6 +437,7 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
     auto entered                  = operations.EnterOperation(*confirmed, {});
     accepted                      = std::move(entered.accepted);
     if (! state.Require(entered.outcome == State::OperationEntryOutcome::Entered && confirmed->HasReservedOperation() && ! confirmed->HasEnteredOperation() &&
+                            confirmed->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::PreparingExecution &&
                             confirmed->AcquireDeferredDirectoryDeleteAuthoritiesForExecution() == S_OK,
                         L"Directory confirmation reserves overlapping admission and acquires the checked strict lease before execution."))
         return false;
@@ -500,7 +502,7 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
         return false;
     FileOperations::QualifiedEndpoint sandboxEndpoint;
     if (! state.Require(fixture.fsLocal && FileOperations::TryQualifyEndpointForSelfTest(
-                                               fixture.fsLocal, sandbox.root.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"", sandboxEndpoint),
+                                               fixture.fsLocal, sandbox.root.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"host/default", sandboxEndpoint),
                         L"Queued admission must inspect the acquired sandbox's Local identity support."))
         return false;
     const auto sandboxIdentity =

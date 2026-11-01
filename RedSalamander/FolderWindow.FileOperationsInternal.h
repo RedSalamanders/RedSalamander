@@ -307,6 +307,7 @@ enum class TaskLifecyclePhase : uint8_t
     AwaitingAcceptance,
     Ready,
     Waiting,
+    PreparingExecution,
     Running,
     Stopping,
     Terminal,

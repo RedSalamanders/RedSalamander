@@ -458,7 +458,8 @@ the operation/status fallback. The exact accessible status remains available ind
 
 The card consumes the engine-owned `TaskLifecyclePhase`; it MUST NOT infer Preparing from missing
 progress, zero totals, or a worker that has not emitted a transfer callback. `Preparing` and
-`AwaitingAcceptance` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
+`AwaitingAcceptance` and `PreparingExecution` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
+after queue reservation, `PreparingExecution` covers strict directory acquisition and consent without regressing the engine lifecycle.
 `Terminal` remains an engine fact. The normal finalizer also enters lifecycle `Stopping`, so
 that phase alone MUST NOT imply cancellation. The popup snapshots `Task::CancelRequestedDurable`
 as cancellation authority, published before `RequestCancel` exposes the lifecycle phase. An
@@ -653,7 +654,7 @@ which objects two paths name, so it serializes without naming a problem).
 A Permanent Delete asks its confirmation on the card, not in a modal at ingress. A Local
 plain-directory task first queues with a nonblocking metadata identity witness, then reserves
 overlapping admission and acquires checked strict Delete handles after its predecessors finish.
-It shows Preparing (`AwaitingAcceptance`) while confirming that reserved task; execution has not
+It shows Preparing (`PreparingExecution`) around the reserved consent, with Waiting for decision while the question is active; execution has not
 entered, and queue-reorder and Start now actions cannot change the reservation. With every selected
 root strictly pinned, the card shows "Permanent delete" with the question the modal used
 ("Permanently delete {what} from {where}. This cannot be undone."), and its actions are **Cancel**

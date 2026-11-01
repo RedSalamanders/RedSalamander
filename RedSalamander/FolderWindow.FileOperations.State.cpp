@@ -12483,7 +12483,6 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         HRESULT deferredHr = AcquireDeferredDirectoryDeleteAuthoritiesForExecution();
         if (SUCCEEDED(deferredHr))
         {
-            PublishLifecyclePhase(TaskLifecyclePhase::AwaitingAcceptance);
             deferredHr = RunPermanentDeleteConfirmation();
         }
         if (SUCCEEDED(deferredHr))

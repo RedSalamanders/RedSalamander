@@ -1499,7 +1499,8 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
         return false;
     }
     const auto phase = static_cast<FileOperations::TaskLifecyclePhase>(task.lifecyclePhase);
-    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
+    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance ||
+           phase == FileOperations::TaskLifecyclePhase::PreparingExecution;
 }
 
 [[nodiscard]] bool TaskHasSkippedOutcome(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
@@ -17247,6 +17248,14 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     using FileOperationsPopupInternal::RateHistory;
     using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
     using Status   = Snapshot::StatusKind;
+    Snapshot reserved{};
+    reserved.operation      = FILESYSTEM_DELETE;
+    reserved.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::PreparingExecution);
+    if (! TaskShowsPreparingStatus(reserved) || ResolveTaskStatusKind(reserved) != Status::Preparing)
+        return false;
+    reserved.conflict.active = true;
+    if (! TaskShowsPreparingStatus(reserved) || ResolveTaskStatusKind(reserved) != Status::Conflict)
+        return false;
     Snapshot task{};
     task.started            = true;
     task.operationStartTick = 1u;
