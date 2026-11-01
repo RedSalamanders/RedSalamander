@@ -3,7 +3,7 @@
 ## Goals
 
 - Improve startup visibility with **ETW-backed metrics** (no-op when ETW is not active).
-- Keep **RedSalamanderMonitor** as an **ETW-only** viewer (no shared-memory crash plumbing).
+- Use the independently installed RedMonitor helper as an optional ETW viewer; the application owns no viewer target.
 - Provide a **delayed splash screen** for slow startups that does not add startup tax for fast runs.
 - Provide an **in-process crash front door** with **minidumps** and a **crash-on-next-launch** UX.
 
@@ -102,19 +102,21 @@ Implementation:
 - Code: `RedSalamander/CrashHandler.h`, `RedSalamander/CrashHandler.cpp`
 - Strings: `IDS_CRASH_DETECTED_*` in `RedSalamander/RedSalamander.rc`
 
-## Debug-only: Auto-launch RedSalamanderMonitor
+## Debug-only: Optional installed RedMonitor helper
 
-To capture startup ETW events during development, RedSalamander debug builds:
+Debug bare startup may asynchronously launch an available installed RedMonitor Release helper to view the
+application's ETW events. Discovery checks only `%LOCALAPPDATA%\Programs\RedMonitor\RedMonitor.exe` and
+`%ProgramFiles%\RedMonitor\RedMonitor.exe`. Missing or invalid helpers do not delay or fail application startup.
+Explicit `--redmonitor` uses the same discovery. Release, help, test and probe command lines do not auto-launch.
+The application never searches PATH, the application directory or `.build`, rebuilds the standalone viewer,
+waits synchronously for it, or terminates an independently launched helper. See
+[`Core_RedSalamanderMonitor.md`](Core_RedSalamanderMonitor.md) for the consumer contract.
 
-- Attempt to launch `RedSalamanderMonitor.exe` asynchronously as early as possible.
-- Avoid launching if the monitor instance mutex exists:
-  - `Local\\RedSalamanderMonitor_Instance`
-- Release startup ETW capture is opt-in: launch `RedSalamander.exe --etw`. Debug and ASan Debug enable it by default.
-- Release startup JSONL perf capture is opt-in: launch `RedSalamander.exe --perf` or `RedSalamander.exe --perf=PATH`. Debug and ASan Debug write the default JSONL path by default.
+ETW and JSONL capture switches remain independent of helper discovery: Release ETW requires `--etw`, Release
+JSONL capture uses `--perf` or `--perf=PATH`, and Debug/ASan Debug retain their documented defaults.
 
-Implementation:
-
-- Code: `QueueRedSalamanderMonitorLaunch()` in `RedSalamander/RedSalamander.cpp`
+Implementation: `RedMonitor::LaunchInstalledViewer()` and `RedMonitor::IsOrdinaryStartup()` in
+`RedSalamander/RedSalamander.cpp`.
 
 ## Shutdown (Debug-layer safe)
 

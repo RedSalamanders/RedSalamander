@@ -1,0 +1,29 @@
+{
+  "run_id": "20261101T003109Z-13272-d6e07ef4ac834e7497b28cb2496fcc09",
+  "source": "a79ffed0f6cfe05c3fadeef759410cad5e9e39220e8c4102eb250f924a8142cd",
+  "failed_parent": "20261101T000842Z-85964-43fc10ab7cae40eb80119686dfe2bdd0",
+  "failed_internal": "20261101T000911Z-85964-64c59339d2b64746b6b9109402edcac1",
+  "verdict": "Compiler/toolchain27passed3failed after targeted child900000ms timeout; parentblocked4;sourceStable; no valid mutable receipt.",
+  "observation": "ARM64 compilation overlapped part of this run and completed before the timeout. This is not a proven causal diagnosis.",
+  "repair": "Preserve partial executable, native log and contamination markers; use canonical build.ps1 -Rebuild. Do not remove markers or execute partial output.",
+  "files": [
+    {
+      "path": ".build\\x64\\Release\\RedSalamander.exe",
+      "bytes": 2097152,
+      "sha256": "5647f05ec18958947d32874eeb788fa396a05d0bab7c1b71f112ceb7e9b31eee",
+      "copy": "Z:\\RedSalamander.Perf\\runs\\20261101T003109Z-13272-d6e07ef4ac834e7497b28cb2496fcc09\\scratch\\deployment-timeout-forensics\\RedSalamander.exe"
+    },
+    {
+      "path": ".build\\logs\\msbuild-20261101_011513_733-pid81604-41b8e7c7.log",
+      "bytes": 33003,
+      "sha256": "829c71cf88d1806166999432563a04584977ced5d788a5e2960666d7c5b2e69f",
+      "copy": "Z:\\RedSalamander.Perf\\runs\\20261101T003109Z-13272-d6e07ef4ac834e7497b28cb2496fcc09\\scratch\\deployment-timeout-forensics\\msbuild-20261101_011513_733-pid81604-41b8e7c7.log"
+    },
+    {
+      "path": ".build\\artifact-operations\\shared-dependency-x64-634c3ff6af81.contaminated.json",
+      "bytes": 941,
+      "sha256": "6028fe5608873d749e35981bdc2b187f48584f113792cba69ea14a74494570c0",
+      "copy": "Z:\\RedSalamander.Perf\\runs\\20261101T003109Z-13272-d6e07ef4ac834e7497b28cb2496fcc09\\scratch\\deployment-timeout-forensics\\shared-dependency-x64-634c3ff6af81.contaminated.json"
+    }
+  ]
+}

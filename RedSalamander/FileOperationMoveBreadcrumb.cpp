@@ -8,8 +8,10 @@
 #include "StringConversion.h"
 #include "YyjsonHelpers.h"
 
+#include <TlHelp32.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <limits>
 #include <mutex>
@@ -29,6 +31,8 @@ constexpr std::wstring_view kContextInstanceIdPrefix = L"host/context/";
 #ifdef ENABLE_TESTS
 std::mutex g_rootMutex;
 std::filesystem::path g_rootOverride;
+std::atomic<WriterObservationForSelfTest> g_writerObservationForSelfTest{WriterObservationForSelfTest::UseSystem};
+std::atomic<LegacyPeerObservationForSelfTest> g_legacyPeerObservationForSelfTest{LegacyPeerObservationForSelfTest::UseSystem};
 #endif
 
 [[nodiscard]] std::filesystem::path ResolveRoot() noexcept
@@ -54,6 +58,107 @@ std::filesystem::path g_rootOverride;
     value.LowPart  = now.dwLowDateTime;
     value.HighPart = now.dwHighDateTime;
     return value.QuadPart;
+}
+
+[[nodiscard]] HRESULT ProcessStartedFileTime(HANDLE process, uint64_t& value) noexcept
+{
+    FILETIME created{}, exited{}, kernel{}, user{};
+    if (! GetProcessTimes(process, &created, &exited, &kernel, &user))
+        return HRESULT_FROM_WIN32(GetLastError());
+    value = (static_cast<uint64_t>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
+    return value != 0u ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+}
+
+enum class WriterState : uint8_t
+{
+    Active,
+    Exited,
+    Unverified
+};
+
+enum class LegacyPeerState : uint8_t
+{
+    NoOtherProcess,
+    OtherProcess,
+    Uncertain
+};
+
+[[nodiscard]] WriterState ObserveWriter(const Record& record) noexcept
+{
+#ifdef ENABLE_TESTS
+    switch (g_writerObservationForSelfTest.load(std::memory_order_acquire))
+    {
+        case WriterObservationForSelfTest::Active: return WriterState::Active;
+        case WriterObservationForSelfTest::Exited: return WriterState::Exited;
+        case WriterObservationForSelfTest::Unverified: return WriterState::Unverified;
+        case WriterObservationForSelfTest::UseSystem: break;
+    }
+#endif
+    // Legacy records have no writer proof. Preserve them, but do not call a potentially
+    // live operation interrupted or acknowledge its record on another writer's behalf.
+    if (record.writerProcessId == 0u || record.writerStartedFileTime == 0u)
+        return WriterState::Unverified;
+    wil::unique_handle process(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, record.writerProcessId));
+    if (! process)
+        return GetLastError() == ERROR_INVALID_PARAMETER ? WriterState::Exited : WriterState::Unverified;
+    uint64_t started = 0u;
+    if (FAILED(ProcessStartedFileTime(process.get(), started)))
+        return WriterState::Unverified;
+    if (started != record.writerStartedFileTime)
+        return WriterState::Exited; // A recycled PID is a different writer.
+    const DWORD state = WaitForSingleObject(process.get(), 0u);
+    return state == WAIT_OBJECT_0 ? WriterState::Exited : state == WAIT_TIMEOUT ? WriterState::Active : WriterState::Unverified;
+}
+
+[[nodiscard]] LegacyPeerState ObserveLegacyPeerProcess() noexcept
+{
+#ifdef ENABLE_TESTS
+    switch (g_legacyPeerObservationForSelfTest.load(std::memory_order_acquire))
+    {
+        case LegacyPeerObservationForSelfTest::NoOtherProcess: return LegacyPeerState::NoOtherProcess;
+        case LegacyPeerObservationForSelfTest::OtherProcess: return LegacyPeerState::OtherProcess;
+        case LegacyPeerObservationForSelfTest::Uncertain: return LegacyPeerState::Uncertain;
+        case LegacyPeerObservationForSelfTest::UseSystem: break;
+    }
+#endif
+
+    // Schema 1 has no writer PID. Any other same-named process could be an older
+    // writer; do not compare its wall-clock process FILETIME to the record timestamp.
+    // A failed/incomplete Toolhelp snapshot also cannot prove that the writer is gone.
+    wil::unique_handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0u));
+    if (! snapshot)
+    {
+        return LegacyPeerState::Uncertain;
+    }
+
+    PROCESSENTRY32W process{};
+    process.dwSize = sizeof(process);
+    SetLastError(ERROR_SUCCESS);
+    if (Process32FirstW(snapshot.get(), &process) == FALSE)
+    {
+        return LegacyPeerState::Uncertain;
+    }
+
+    for (;;)
+    {
+        if (process.th32ProcessID != GetCurrentProcessId())
+        {
+            const int imageNameComparison = CompareStringOrdinal(process.szExeFile, -1, L"RedSalamander.exe", -1, TRUE);
+            if (imageNameComparison == 0)
+            {
+                return LegacyPeerState::Uncertain;
+            }
+            if (imageNameComparison == CSTR_EQUAL)
+            {
+                return LegacyPeerState::OtherProcess;
+            }
+        }
+        SetLastError(ERROR_SUCCESS);
+        if (Process32NextW(snapshot.get(), &process) == FALSE)
+        {
+            return GetLastError() == ERROR_NO_MORE_FILES ? LegacyPeerState::NoOtherProcess : LegacyPeerState::Uncertain;
+        }
+    }
 }
 
 [[nodiscard]] HRESULT MakeRecordPath(const std::filesystem::path& root, const uint64_t taskId, std::filesystem::path& out) noexcept
@@ -183,9 +288,11 @@ std::filesystem::path g_rootOverride;
     const bool boundedRootsAreConsistent = (! record.sourceRootSamplesTruncated && record.sourceRootCount == record.sourceRootSamples.size()) ||
                                            (record.sourceRootSamplesTruncated && record.sourceRootSamples.size() == kMaximumPersistedSourceRootSamples &&
                                             record.sourceRootCount > record.sourceRootSamples.size());
-    if (record.schemaVersion != kSchemaVersion || record.taskId == 0u || record.createdFileTime == 0u || ! haveAdmittedItem || record.sourceRootCount == 0u ||
-        record.sourceRootSamples.empty() || record.sourceRootSamples.size() > kMaximumPersistedSourceRootSamples || ! boundedRootsAreConsistent ||
-        ! IsValidQualifiedLocation(record.destination) || ! std::ranges::all_of(record.sourceRootSamples, IsValidQualifiedLocation))
+    if (record.schemaVersion != kSchemaVersion || record.taskId == 0u || record.createdFileTime == 0u || record.writerProcessId == 0u ||
+        record.writerStartedFileTime == 0u || record.singleItemName.size() > kMaximumTextCharacters || ! haveAdmittedItem || record.sourceRootCount == 0u ||
+        record.sourceRootCount > AdmittedItemCount(record.admittedStrategies) || record.sourceRootSamples.empty() ||
+        record.sourceRootSamples.size() > kMaximumPersistedSourceRootSamples || ! boundedRootsAreConsistent || ! IsValidQualifiedLocation(record.destination) ||
+        ! std::ranges::all_of(record.sourceRootSamples, IsValidQualifiedLocation))
     {
         return E_INVALIDARG;
     }
@@ -209,6 +316,12 @@ std::filesystem::path g_rootOverride;
         hr = E_OUTOFMEMORY;
     if (SUCCEEDED(hr) && ! yyjson_mut_obj_add_uint(document.get(), root, "createdFileTime", record.createdFileTime))
         hr = E_OUTOFMEMORY;
+    if (SUCCEEDED(hr) && ! yyjson_mut_obj_add_uint(document.get(), root, "writerProcessId", record.writerProcessId))
+        hr = E_OUTOFMEMORY;
+    if (SUCCEEDED(hr) && ! yyjson_mut_obj_add_uint(document.get(), root, "writerStartedFileTime", record.writerStartedFileTime))
+        hr = E_OUTOFMEMORY;
+    if (SUCCEEDED(hr))
+        hr = AddWideString(document.get(), root, "singleItemName", record.singleItemName);
     if (SUCCEEDED(hr))
         hr = AddUtf8String(document.get(), root, "phase", PhaseName(record.phase));
     if (SUCCEEDED(hr))
@@ -356,8 +469,8 @@ std::filesystem::path g_rootOverride;
     uint64_t schema                = 0u;
     Record parsed{};
     if (! kind.has_value() || kind.value() != kRecordKind || ! phase.has_value() || ! sourcePane.has_value() || ! destinationPane.has_value() ||
-        ! ReadUint64(root, "schemaVersion", schema) || schema != kSchemaVersion || ! ReadUint64(root, "taskId", parsed.taskId) || parsed.taskId == 0u ||
-        ! ReadUint64(root, "createdFileTime", parsed.createdFileTime) || parsed.createdFileTime == 0u ||
+        ! ReadUint64(root, "schemaVersion", schema) || (schema != 1u && schema != kSchemaVersion) || ! ReadUint64(root, "taskId", parsed.taskId) ||
+        parsed.taskId == 0u || ! ReadUint64(root, "createdFileTime", parsed.createdFileTime) || parsed.createdFileTime == 0u ||
         ! ReadUint64(root, "nativeItems", parsed.admittedStrategies.nativeItems) ||
         ! ReadUint64(root, "managedItems", parsed.admittedStrategies.managedItems) ||
         ! ReadUint64(root, "copyOnlyItems", parsed.admittedStrategies.copyOnlyItems) || ! ReadUint64(root, "sourceRootCount", parsed.sourceRootCount) ||
@@ -365,7 +478,18 @@ std::filesystem::path g_rootOverride;
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    parsed.schemaVersion   = static_cast<uint32_t>(schema);
+    parsed.schemaVersion = static_cast<uint32_t>(schema);
+    if (schema == kSchemaVersion)
+    {
+        uint64_t writerProcessId  = 0u;
+        const auto singleItemName = ReadWideString(root, "singleItemName");
+        if (! ReadUint64(root, "writerProcessId", writerProcessId) || writerProcessId == 0u || writerProcessId > MAXDWORD ||
+            ! ReadUint64(root, "writerStartedFileTime", parsed.writerStartedFileTime) || parsed.writerStartedFileTime == 0u || ! singleItemName.has_value() ||
+            singleItemName.value().size() > kMaximumTextCharacters)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        parsed.writerProcessId = static_cast<uint32_t>(writerProcessId);
+        parsed.singleItemName  = singleItemName.value();
+    }
     parsed.phase           = phase.value();
     parsed.sourcePane      = sourcePane.value();
     parsed.destinationPane = destinationPane.value();
@@ -393,7 +517,7 @@ std::filesystem::path g_rootOverride;
     const bool boundedRootsAreConsistent = (! parsed.sourceRootSamplesTruncated && parsed.sourceRootCount == parsed.sourceRootSamples.size()) ||
                                            (parsed.sourceRootSamplesTruncated && parsed.sourceRootSamples.size() == kMaximumPersistedSourceRootSamples &&
                                             parsed.sourceRootCount > parsed.sourceRootSamples.size());
-    if (! haveAdmittedItem || ! boundedRootsAreConsistent)
+    if (! haveAdmittedItem || ! boundedRootsAreConsistent || parsed.sourceRootCount > AdmittedItemCount(parsed.admittedStrategies))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
@@ -401,6 +525,13 @@ std::filesystem::path g_rootOverride;
     return S_OK;
 }
 } // namespace
+
+uint64_t AdmittedItemCount(const StrategyCounts& counts) noexcept
+{
+    constexpr uint64_t maximum      = std::numeric_limits<uint64_t>::max();
+    const uint64_t nativeAndManaged = counts.managedItems > maximum - counts.nativeItems ? maximum : counts.nativeItems + counts.managedItems;
+    return counts.copyOnlyItems > maximum - nativeAndManaged ? maximum : nativeAndManaged + counts.copyOnlyItems;
+}
 
 std::optional<std::wstring> TryDecodeNavigationInstanceContext(const std::wstring_view canonicalInstanceId)
 {
@@ -420,8 +551,12 @@ HRESULT Breadcrumb::Create(Record record, Breadcrumb& out) noexcept
     const std::filesystem::path root = ResolveRoot();
     if (root.empty())
         return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-    record.schemaVersion = kSchemaVersion;
-    record.phase         = DurablePhase::Admitted;
+    record.schemaVersion   = kSchemaVersion;
+    record.writerProcessId = GetCurrentProcessId();
+    const HRESULT writerHr = ProcessStartedFileTime(GetCurrentProcess(), record.writerStartedFileTime);
+    if (FAILED(writerHr))
+        return writerHr;
+    record.phase = DurablePhase::Admitted;
     if (record.createdFileTime == 0u)
         record.createdFileTime = CurrentFileTime();
     std::filesystem::path path;
@@ -483,6 +618,9 @@ HRESULT Breadcrumb::LoadInterrupted(std::vector<LoadedRecord>& out, LoadStats* c
             ++collected.rejectedRecords;
         }
     }
+    // The complete path list predates this lazy observation. A process started after
+    // it cannot be the writer of an already enumerated random-named legacy record.
+    std::optional<LegacyPeerState> legacyPeerObservation;
     for (const std::filesystem::path& path : files)
     {
         if (path.extension() != L".json" || ! path.filename().native().ends_with(L".move.json"))
@@ -497,10 +635,50 @@ HRESULT Breadcrumb::LoadInterrupted(std::vector<LoadedRecord>& out, LoadStats* c
             ++collected.rejectedRecords;
             continue;
         }
+        if (record.schemaVersion == 1u)
+        {
+            if (! legacyPeerObservation.has_value())
+            {
+                const auto probeStartedAt = std::chrono::steady_clock::now();
+                legacyPeerObservation     = ObserveLegacyPeerProcess();
+                ++collected.legacyPeerObservations;
+                const auto probeUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - probeStartedAt).count();
+                Debug::Perf::Emit(L"fileops.move_breadcrumb.legacy_peer_probe.us",
+                                  L"load-eligibility",
+                                  static_cast<uint64_t>((std::max)(probeUs, int64_t{0})),
+                                  collected.legacyPeerObservations,
+                                  static_cast<uint64_t>(legacyPeerObservation.value()),
+                                  S_OK);
+            }
+            if (legacyPeerObservation.value() != LegacyPeerState::NoOtherProcess)
+            {
+                ++collected.legacyRecordsWithheld;
+                continue;
+            }
+        }
+        else
+        {
+            const WriterState writer = ObserveWriter(record);
+            if (writer == WriterState::Active)
+            {
+                ++collected.activeWriterRecords;
+                continue;
+            }
+            if (writer == WriterState::Unverified)
+            {
+                ++collected.unverifiedWriterRecords;
+                continue;
+            }
+        }
         if (record.phase == DurablePhase::Terminal)
         {
-            if (SUCCEEDED(Acknowledge(path)))
+            // Reuse the post-enumeration legacy proof for terminal paths from this
+            // same list. Standalone acknowledgement always takes a fresh observation.
+            const HRESULT acknowledgeHr = record.schemaVersion == 1u ? FileOperationDurableStore::RemoveDirectRegularFile(root, path) : Acknowledge(path);
+            if (SUCCEEDED(acknowledgeHr))
+            {
                 ++collected.terminalRecordsRemoved;
+            }
             continue;
         }
         out.push_back(LoadedRecord{path, std::move(record)});
@@ -508,14 +686,16 @@ HRESULT Breadcrumb::LoadInterrupted(std::vector<LoadedRecord>& out, LoadStats* c
     }
     if (stats)
         *stats = collected;
+    const HRESULT resultHr =
+        collected.rejectedRecords == 0u && collected.unverifiedWriterRecords == 0u && collected.legacyRecordsWithheld == 0u ? S_OK : S_FALSE;
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
     Debug::Perf::Emit(L"fileops.move_breadcrumb.load.us",
-                      collected.rejectedRecords == 0u ? L"loaded" : L"partial",
+                      resultHr == S_OK ? L"loaded" : L"partial",
                       static_cast<uint64_t>((std::max)(elapsed, int64_t{0})),
                       collected.interruptedRecords,
                       collected.recordsScanned,
-                      S_OK);
-    return collected.rejectedRecords == 0u ? S_OK : S_FALSE;
+                      resultHr);
+    return resultHr;
 }
 
 HRESULT Breadcrumb::Persist(const std::wstring_view detail, const bool failIfExists) noexcept
@@ -566,17 +746,48 @@ HRESULT Breadcrumb::Finalize() noexcept
         _record.phase = previous;
         return persistHr;
     }
-    return Acknowledge(_path);
+    // This writer owns the record and has just published Terminal; restart acknowledgement
+    // deliberately refuses records whose writer is still alive.
+    return FileOperationDurableStore::RemoveDirectRegularFile(ResolveRoot(), _path);
 }
 
 HRESULT Acknowledge(const std::filesystem::path& path) noexcept
 {
     if (! IsDirectBreadcrumbChild(path))
         return E_INVALIDARG;
+    Record record;
+    const HRESULT readHr = Breadcrumb::Load(path, record);
+    if (FAILED(readHr))
+        return readHr;
+    if ((record.schemaVersion == 1u && ObserveLegacyPeerProcess() != LegacyPeerState::NoOtherProcess) ||
+        (record.schemaVersion != 1u && ObserveWriter(record) != WriterState::Exited))
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
     return FileOperationDurableStore::RemoveDirectRegularFile(ResolveRoot(), path);
 }
 
 #ifdef ENABLE_TESTS
+void SetWriterObservationForSelfTest(const WriterObservationForSelfTest observation) noexcept
+{
+    g_writerObservationForSelfTest.store(observation, std::memory_order_release);
+}
+
+void SetLegacyPeerObservationForSelfTest(const LegacyPeerObservationForSelfTest observation) noexcept
+{
+    g_legacyPeerObservationForSelfTest.store(observation, std::memory_order_release);
+}
+
+HRESULT Breadcrumb::SimulateExitedWriterForSelfTest() noexcept
+{
+    {
+        std::scoped_lock lock(g_rootMutex);
+        if (g_rootOverride.empty())
+            return E_ACCESSDENIED;
+    }
+    // Keep the PID valid and alive while making its creation stamp provably different.
+    _record.writerStartedFileTime ^= 1u;
+    return Persist(L"selftest-exited-writer");
+}
+
 void SetRootForSelfTest(const std::filesystem::path& root) noexcept
 {
     std::scoped_lock lock(g_rootMutex);

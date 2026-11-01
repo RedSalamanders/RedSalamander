@@ -3087,7 +3087,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             FileOperations::MutationInterlockScope sameLeafScope        = publishScope;
             FileOperations::MutationInterlockScope distinctSiblingScope = publishScope;
             distinctSiblingScope.providerPath                           = (copyOnlyDestinationRoot / L"different-sibling.bin").native();
-            bool rebuiltDistinctAnchors                                 = true;
+            distinctSiblingScope.providerPathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), distinctSiblingScope.providerPath);
+            bool rebuiltDistinctAnchors          = true;
             for (FileOperations::MutationInterlockAnchor& anchor : distinctSiblingScope.anchors)
             {
                 rebuiltDistinctAnchors = rebuiltDistinctAnchors && anchor.authority &&
@@ -3101,6 +3102,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
             FileOperations::MutationInterlockScope ancestorScope = publishScope;
             ancestorScope.providerPath                           = copyOnlyDestinationRoot.native();
+            ancestorScope.providerPathKey                        = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), ancestorScope.providerPath);
             ancestorScope.anchors.resize(1u);
             ancestorScope.anchors.front().relativePath.clear();
             ancestorScope.anchors.front().relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), L"");
@@ -3121,6 +3123,115 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                               ! FileOperations::DebugMutationScopesOverlapForSelfTest(sameLeafScope, sharedReadScope),
                           L"Anchored interlocks must serialize the same or ancestor target, admit distinct siblings, fail unsupported identity domains "
                           L"conservatively, and share reads."))
+            {
+                return true;
+            }
+
+            const auto makeIndexedScope = [&](std::wstring_view relativePath, FileOperations::MutationInterlockAccess access)
+            {
+                FileOperations::MutationInterlockScope scope = publishScope;
+                scope.access                                 = access;
+                scope.providerPath                           = (copyOnlyDestinationRoot / std::wstring(relativePath)).native();
+                scope.providerPathKey                        = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), scope.providerPath);
+                scope.anchors.resize(1u);
+                scope.anchors.front().relativePath    = relativePath;
+                scope.anchors.front().relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), relativePath);
+                return scope;
+            };
+            const auto indexedPairwiseOracle =
+                [](const std::vector<FileOperations::MutationInterlockScope>& left, const std::vector<FileOperations::MutationInterlockScope>& right) noexcept
+            {
+                return std::ranges::any_of(left,
+                                           [&](const FileOperations::MutationInterlockScope& leftScope) noexcept
+                {
+                    return std::ranges::any_of(right, [&](const FileOperations::MutationInterlockScope& rightScope) noexcept {
+                        return FileOperations::DebugMutationScopesOverlapForSelfTest(leftScope, rightScope);
+                    });
+                });
+            };
+
+            // Regression: raw lexical order puts DIR-OLD between DIR and DIR\X. The read/read
+            // duplicate at DIR must not hide the later write/read conflict beneath that ancestor.
+            const std::vector<FileOperations::MutationInterlockScope> ancestorReads{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+            };
+            const std::vector<FileOperations::MutationInterlockScope> interleavedScopes{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR-OLD", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR/X", FileOperations::MutationInterlockAccess::WriteSource),
+            };
+            uint64_t interleavedComparisons = 0u;
+            const bool interleavedOverlap = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, interleavedScopes, interleavedComparisons);
+            const bool interleavedOracle  = indexedPairwiseOracle(ancestorReads, interleavedScopes);
+            if (! require(interleavedOverlap && interleavedOverlap == interleavedOracle && interleavedComparisons > 0u,
+                          L"Indexed interlocks must match the pairwise oracle when a read/read ancestor is interleaved with a sibling before a nested writer."))
+            {
+                return true;
+            }
+
+            auto unkeyableInterleavedScopes = interleavedScopes;
+            unkeyableInterleavedScopes[1].anchors.front().relativePathKey.reset();
+            uint64_t fallbackComparisons = 0u;
+            const bool fallbackOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, unkeyableInterleavedScopes, fallbackComparisons);
+            if (! require(fallbackOverlap && fallbackOverlap == indexedPairwiseOracle(ancestorReads, unkeyableInterleavedScopes) && fallbackComparisons > 0u,
+                          L"Unkeyable interlock scopes must retain pairwise-oracle behavior for the interleaved ancestor/writer case."))
+            {
+                return true;
+            }
+
+            const std::vector<FileOperations::MutationInterlockScope> caseInsensitiveReads{
+                makeIndexedScope(L"Dir", FileOperations::MutationInterlockAccess::ReadSource),
+            };
+            const std::vector<FileOperations::MutationInterlockScope> caseInsensitiveWrites{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR-OLD", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"dir\\X", FileOperations::MutationInterlockAccess::WriteSource),
+            };
+            uint64_t caseInsensitiveComparisons = 0u;
+            const bool caseInsensitiveOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(caseInsensitiveReads, caseInsensitiveWrites, caseInsensitiveComparisons);
+            if (! require(caseInsensitiveOverlap && caseInsensitiveOverlap == indexedPairwiseOracle(caseInsensitiveReads, caseInsensitiveWrites),
+                          L"Indexed interlocks must keep case-insensitive path profiles aligned with the pairwise oracle."))
+            {
+                return true;
+            }
+
+            auto caseSensitiveReads                                               = caseInsensitiveReads;
+            auto caseSensitiveWrites                                              = caseInsensitiveWrites;
+            caseSensitiveReads.front().endpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveReads)
+            {
+                scope.anchors.front().relativePath    = L"Dir";
+                scope.anchors.front().relativePathKey = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            }
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveWrites)
+            {
+                scope.endpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+                scope.anchors.front().relativePathKey            = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            }
+            caseSensitiveWrites[0].anchors.front().relativePath = L"Dir";
+            caseSensitiveWrites[1].anchors.front().relativePath = L"Dir-OLD";
+            caseSensitiveWrites[2].anchors.front().relativePath = L"dir\\X";
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveWrites)
+                scope.anchors.front().relativePathKey = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            uint64_t caseSensitiveComparisons = 0u;
+            const bool caseSensitiveOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(caseSensitiveReads, caseSensitiveWrites, caseSensitiveComparisons);
+            if (! require(! caseSensitiveOverlap && caseSensitiveOverlap == indexedPairwiseOracle(caseSensitiveReads, caseSensitiveWrites) &&
+                              caseSensitiveComparisons > 0u,
+                          L"Indexed interlocks must not invent an ancestor conflict for case-sensitive sibling components."))
+            {
+                return true;
+            }
+
+            auto differentProfileScopes = interleavedScopes;
+            for (FileOperations::MutationInterlockScope& scope : differentProfileScopes)
+                scope.endpoint.profileId = L"other-profile";
+            uint64_t profileComparisons = 0u;
+            const bool profileOverlap   = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, differentProfileScopes, profileComparisons);
+            if (! require(! profileOverlap && profileOverlap == indexedPairwiseOracle(ancestorReads, differentProfileScopes),
+                          L"Indexed interlocks must preserve provider-profile identity-domain separation."))
             {
                 return true;
             }
@@ -3216,8 +3327,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
                 retainedPublishScopes.emplace_back(scope);
                 FileOperations::MutationInterlockScope siblingScope = scope;
-                siblingScope.providerPath = (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
-                bool rebuiltAnchors       = true;
+                siblingScope.providerPath    = (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
+                siblingScope.providerPathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), siblingScope.providerPath);
+                bool rebuiltAnchors          = true;
                 for (FileOperations::MutationInterlockAnchor& anchor : siblingScope.anchors)
                 {
                     rebuiltAnchors         = rebuiltAnchors && anchor.authority &&
@@ -3252,6 +3364,13 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             Debug::Perf::Emit(L"FileOps.Interlock.CheckUs", L"selftest-local-256x256-disjoint-publish-leaves", comparisonUs, scopeComparisons, 1u, S_OK);
             Debug::Perf::Emit(L"FileOps.Interlock.ScopeComparisons", L"selftest-local-256x256-disjoint-publish-leaves", 0u, scopeComparisons, 1u, S_OK);
             Debug::Perf::Emit(L"FileOps.Interlock.ActiveCandidates", L"selftest-local-256x256-disjoint-publish-leaves", 0u, 1u, scopeComparisons, S_OK);
+
+            if (! RunFileOpsSameHostOverlapClassifierAssertions(retainedPublishScopes, disjointPublishScopes))
+            {
+                Fail(L"The actual overlap classifier failed its 256x256 disjoint and last-pair assertions.");
+                return true;
+            }
+
             Debug::Perf::Emit(L"FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes",
                               L"local-256-top-level-items",
                               retentionPrepareUs,

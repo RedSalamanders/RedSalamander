@@ -12,7 +12,7 @@ Describe 'Repository source scanner module' {
         $root = Join-Path $TestDrive 'scanner'
         New-Item -ItemType Directory -Path (Join-Path $root 'Source\Nested') -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root 'Source\Generated') -Force | Out-Null
-        'TOKEN alpha' | Set-Content -LiteralPath (Join-Path $root 'Source\One.cpp') -Encoding UTF8
+        '    TOKEN alpha   ' | Set-Content -LiteralPath (Join-Path $root 'Source\One.cpp') -Encoding UTF8
         'TOKEN beta' | Set-Content -LiteralPath (Join-Path $root 'Source\Nested\Two.h') -Encoding UTF8
         'TOKEN ignored extension' | Set-Content -LiteralPath (Join-Path $root 'Source\Nested\Three.txt') -Encoding UTF8
         'TOKEN ignored tree' | Set-Content -LiteralPath (Join-Path $root 'Source\Generated\Four.cpp') -Encoding UTF8
@@ -30,6 +30,7 @@ Describe 'Repository source scanner module' {
         $matches[0].PatternName | Should Be 'Token'
         $matches[0].Path | Should Be 'Source/One.cpp'
         $matches[0].LineNumber | Should Be 1
+        $matches[0].Line | Should Be 'TOKEN alpha'
     }
 }
 
@@ -67,6 +68,73 @@ Describe 'Test-run reporting module' {
         (Get-RSTestRunSummaryColor 1 0) | Should Be 'Red'
         (Get-RSTestRunSummaryColor 0 1) | Should Be 'Yellow'
         (Get-RSTestRunSummaryColor 0 0) | Should Be 'Green'
+    }
+}
+
+Describe 'Positive test-block success assertion' {
+    It 'preserves successful output and makes a deliberate exception fail the success result' {
+        $success = Invoke-RSTestBlock { 'success-value' }
+        $success.Succeeded | Should Be $true
+        @($success.Output).Count | Should Be 1
+        $success.Output[0] | Should Be 'success-value'
+        $null -eq $success.Error | Should Be $true
+
+        $failure = Invoke-RSTestBlock { throw 'intentional positive-assertion negative control' }
+        $failure.Succeeded | Should Be $false
+        $failure.Error.Exception.Message | Should Be 'intentional positive-assertion negative control'
+    }
+
+    It 'rejects unreliable positive Throw assertions in executable test syntax' {
+        $findUnsafeAssertions = {
+            param([System.Management.Automation.Language.Ast]$Ast)
+            @($Ast.FindAll({
+                param($node)
+                if ($node -isnot [System.Management.Automation.Language.CommandAst] -or
+                    $node.GetCommandName() -ine 'Should') { return $false }
+
+                $parameters = @($node.CommandElements | Where-Object {
+                    $_ -is [System.Management.Automation.Language.CommandParameterAst]
+                } | ForEach-Object { $_.ParameterName })
+                if ($parameters -contains 'Not' -and $parameters -contains 'Throw') { return $true }
+
+                $operators = @($node.CommandElements | Select-Object -Skip 1 -First 2 | ForEach-Object {
+                    if ($_ -is [System.Management.Automation.Language.CommandParameterAst]) { $_.ParameterName }
+                    elseif ($_ -is [System.Management.Automation.Language.StringConstantExpressionAst]) { $_.Value }
+                })
+                return $operators.Count -eq 2 -and $operators -contains 'Not' -and $operators -contains 'Throw'
+            }, $true))
+        }
+        $fixture = @'
+{ throw 'seed' } | Should Not Throw
+{ throw 'seed' } | Should -Not -Throw
+{ throw 'seed' } | Should -Throw -Not
+{ throw 'seed' } | Should -Not Throw
+'Should Not Throw' | Should Match 'literal'
+# Should Not Throw is permitted in explanatory comments.
+'@
+        $tokens = $null
+        $parseErrors = $null
+        $fixtureAst = [System.Management.Automation.Language.Parser]::ParseInput($fixture, [ref]$tokens, [ref]$parseErrors)
+        $parseErrors.Count | Should Be 0
+        @(& $findUnsafeAssertions $fixtureAst).Count | Should Be 4
+
+        # These reproduction inputs are byte-sealed, excluded from the current tooling
+        # profile, and checked by HistoricalTerminalProfile.Tests.ps1. Apply current
+        # assertion policy to the active cohort without rewriting historical evidence.
+        $historicalProfiles = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/TerminalEngine/HistoricalTerminalProfiles.json') -Raw | ConvertFrom-Json
+        $historicalPaths = @($historicalProfiles.historicalTests.path)
+        $historicalPaths.Count | Should Be 20
+        $violations = @()
+        foreach ($file in @(Get-RSRepositorySourceFiles -RepositoryRoot $repoRoot `
+                -SourceRoots @('Tools/Tests') -Extensions @('.ps1') -ExcludedRelativePaths $historicalPaths |
+                Where-Object Name -Like '*.Tests.ps1')) {
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            $parseErrors.Count | Should Be 0
+            foreach ($command in @(& $findUnsafeAssertions $ast)) {
+                $violations += '{0}:{1}: {2}' -f $file.FullName, $command.Extent.StartLineNumber, $command.Extent.Text
+            }
+        }
+        ($violations -join "`n") | Should BeNullOrEmpty
     }
 }
 

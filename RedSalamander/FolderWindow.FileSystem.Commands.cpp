@@ -5,6 +5,7 @@
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
 #include "FileOperationArtifactRegistry.h"
+#include "FileOperationConfirmation.h"
 #include "FileSystemRouteContract.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
@@ -9172,8 +9173,6 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
         return true;
     }
 
-    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
-
     auto ensureTrailingSeparator = [](std::wstring text) noexcept -> std::wstring
     {
         if (text.empty())
@@ -9203,8 +9202,7 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     };
 
     const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
-    const std::wstring_view itemSuffix = suffixFor(itemCount);
-    const std::wstring what            = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, itemCount, itemSuffix);
+    const std::wstring what            = FormatFileOperationCountNoun(FileOperationCountNoun::Item, itemCount);
 
     std::wstring fromText;
     if (sourcePaths.size() == 1u)
@@ -12163,12 +12161,8 @@ void FolderWindow::CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT
     }
 
     const unsigned long long count = static_cast<unsigned long long>(lines.size());
-    const std::wstring_view suffix = count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s");
-    std::wstring message           = FormatStringResource(nullptr, IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED, count, suffix);
-    if (message.empty())
-    {
-        message = std::format(L"Copied {} item{} to clipboard.", count, suffix);
-    }
+    std::wstring message =
+        FormatStringResource(nullptr, IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED, FormatFileOperationCountNoun(FileOperationCountNoun::Item, count));
 
     ShowPaneAlertOverlay(
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Information, std::move(title), std::move(message), S_OK, false, false);

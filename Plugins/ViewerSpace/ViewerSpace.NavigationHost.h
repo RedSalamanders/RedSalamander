@@ -29,7 +29,6 @@ public:
         std::wstring path;
         std::wstring ancestors;
         std::wstring folders;
-        std::wstring mode;
         std::wstring explorer;
         std::wstring analyst;
         std::wstring hidePanel;
@@ -116,7 +115,6 @@ private:
     DxUi::Button* _forwardButton = nullptr;
 
     DxUi::Button* _analysisButton  = nullptr;
-    DxUi::ComboBox* _modeCombo     = nullptr;
     DxUi::ComboBox* _ancestorCombo = nullptr;
     std::array<DxUi::Button*, kVisibleCrumbButtons> _crumbButtons{};
     std::array<DxUi::Button*, kVisibleCrumbButtons> _folderButtons{};

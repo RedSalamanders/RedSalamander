@@ -185,6 +185,71 @@ Describe 'Operation Startrail dependency closure' {
 }
 
 Describe 'Operation Startrail workspace snapshots' {
+    It 'hashes canonical Git blob bytes independently of checkout line endings' {
+        $scratch = New-RSTestSandboxScratchDirectory `
+            -RepoRoot $repoRoot -Harness 'tools-pester' -Case "git-blob-sha256-$([guid]::NewGuid().ToString('N'))"
+        $fixture = New-RSValidationGitFixture -Root (Join-Path $scratch 'git-fixture')
+        $attributes = Join-Path $fixture.Root '.gitattributes'
+        [IO.File]::WriteAllText($attributes, "*.md text`n", [Text.UTF8Encoding]::new($false))
+        $markdown = Join-Path $fixture.Root 'history.md'
+        [IO.File]::WriteAllBytes($markdown, [Text.Encoding]::UTF8.GetBytes("immutable blob bytes`n"))
+        & git -C $fixture.Root add -- .gitattributes history.md
+        & git -C $fixture.Root commit --quiet -m 'add text-normalized blob fixture'
+        $LASTEXITCODE | Should Be 0
+        $tree = & git -C $fixture.Root ls-tree HEAD -- history.md
+        $tree | Should Match '^100644 blob [0-9a-f]{40}\thistory\.md$'
+        $blob = [regex]::Match($tree, '^100644 blob (?<oid>[0-9a-f]{40})\t').Groups['oid'].Value
+        $expected = Get-RSValidationGitBlobContentSha256 -RepoRoot $fixture.Root -BlobId $blob
+        $digestMap = Get-RSValidationGitBlobContentSha256Map -RepoRoot $fixture.Root -BlobId @($blob, $blob)
+        $digestMap[$blob] | Should Be $expected
+
+        [IO.File]::WriteAllBytes($markdown, [Text.Encoding]::UTF8.GetBytes("immutable blob bytes`r`n"))
+        $checkoutHash = & git -C $fixture.Root hash-object --path=history.md -- history.md
+        $LASTEXITCODE | Should Be 0
+        ([string]$checkoutHash).Trim() | Should Be $blob
+        (Get-RSValidationGitBlobContentSha256 -RepoRoot $fixture.Root -BlobId $blob) | Should Be $expected
+        (Get-FileHash -LiteralPath $markdown -Algorithm SHA256).Hash.ToLowerInvariant() | Should Not Be $expected
+    }
+
+    It 'chunks canonical blob hashing by measured object bytes and rejects missing blob identities' {
+        $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'bounded blob batches')
+        $paths = @('a.bin', 'b.bin', 'c.bin')
+        $payloads = @([byte[]](1, 2, 3, 4), [byte[]](5, 6, 7, 8), [byte[]](9, 10, 11, 12, 13, 14, 15))
+        for ($index = 0; $index -lt $paths.Count; $index++) {
+            [IO.File]::WriteAllBytes((Join-Path $fixture.Root $paths[$index]), $payloads[$index])
+        }
+        & git -C $fixture.Root add -- $paths
+        & git -C $fixture.Root commit --quiet -m 'create measured blob batches'
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the blob-batch fixture.' }
+        $blobIds = @($paths | ForEach-Object {
+                $tree = (& git -C $fixture.Root ls-tree HEAD -- $_).Trim()
+                [regex]::Match($tree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
+            })
+        $cache = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+        $batchCount = & (Get-Module ValidationFingerprint) {
+            param($FixtureRoot, $Ids, $DigestCache)
+            $objects = @($Ids | ForEach-Object { [pscustomobject]@{ Type='blob'; Oid=$_ } })
+            Add-RSValidationGitBlobSha256Batches `
+                -RepoRoot $FixtureRoot -Object $objects -Cache $DigestCache -MaximumBatchBytes 10
+        } $fixture.Root $blobIds $cache
+        $batchCount | Should Be 2
+        foreach ($blob in $blobIds) {
+            $expected = Get-RSValidationGitBlobContentSha256 -RepoRoot $fixture.Root -BlobId $blob
+            $cache["blob:$blob"] | Should Be $expected
+        }
+
+        $missingBlob = 'f'.PadLeft(40, '0')
+        (Test-RSActionThrows {
+                $missingCache = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+                & (Get-Module ValidationFingerprint) {
+                    param($FixtureRoot, $Blob, $DigestCache)
+                    $objects = @([pscustomobject]@{ Type='blob'; Oid=$Blob })
+                    Add-RSValidationGitBlobSha256Batches `
+                        -RepoRoot $FixtureRoot -Object $objects -Cache $DigestCache -MaximumBatchBytes 10
+                } $fixture.Root $missingBlob $missingCache
+            }) | Should Be $true
+    }
+
     It 'keeps the CI managed tool checkout outside product source identity' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'managed build checkout')
         [IO.File]::WriteAllText((Join-Path $fixture.Root '.gitignore'), ".build/`n", [Text.UTF8Encoding]::new($false))

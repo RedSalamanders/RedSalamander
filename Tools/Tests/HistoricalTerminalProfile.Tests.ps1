@@ -114,7 +114,11 @@ Describe 'Historical Terminal profile integrity' {
             ForEach-Object { $_.Groups['path'].Value.Trim() })
         $paths.Count | Should Be 1
         $paths[0] | Should Be '.github/workflows/terminal-engine-gate0.yml'
-        $actions.Groups['settings'].Value | Should Not Match '(?m)^    ignore:'
+        $actionIgnore = [regex]::Match($actions.Groups['settings'].Value,
+            '(?ms)^    ignore:\r?\n(?<rules>.*?)(?=^    [A-Za-z-]+:|\z)')
+        $actionIgnore.Success | Should Be $true
+        $actionIgnore.Groups['rules'].Value | Should Match 'dependency-name: RedSalamanders/\.github'
+        $actionIgnore.Groups['rules'].Value | Should Not Match 'dependency-name: \*|update-types:'
     }
 
     It 'classifies the unused generic lifecycle facade without deleting its stable paths' {

@@ -4,6 +4,32 @@
 #include "HostServices.h"
 #include "resource.h"
 
+std::wstring FormatFileOperationCountNoun(const FileOperationCountNoun noun, const unsigned long long count) noexcept
+{
+    const Localization::CardinalPluralCategory category = Localization::SelectCardinalPluralCategory(Localization::GetEffectiveResourceCulture(nullptr), count);
+    UINT resourceId                                     = 0u;
+    switch (noun)
+    {
+        case FileOperationCountNoun::Item:
+            resourceId = static_cast<UINT>(category == Localization::CardinalPluralCategory::One   ? IDS_FMT_FILEOPS_COUNT_ITEM_ONE
+                                           : category == Localization::CardinalPluralCategory::Few ? IDS_FMT_FILEOPS_COUNT_ITEM_FEW
+                                                                                                   : IDS_FMT_FILEOPS_COUNT_ITEM);
+            break;
+        case FileOperationCountNoun::File:
+            resourceId = static_cast<UINT>(category == Localization::CardinalPluralCategory::One   ? IDS_FMT_FILEOPS_COUNT_FILE_ONE
+                                           : category == Localization::CardinalPluralCategory::Few ? IDS_FMT_FILEOPS_COUNT_FILE_FEW
+                                                                                                   : IDS_FMT_FILEOPS_COUNT_FILE);
+            break;
+        case FileOperationCountNoun::Folder:
+            resourceId = static_cast<UINT>(category == Localization::CardinalPluralCategory::One   ? IDS_FMT_FILEOPS_COUNT_FOLDER_ONE
+                                           : category == Localization::CardinalPluralCategory::Few ? IDS_FMT_FILEOPS_COUNT_FOLDER_FEW
+                                                                                                   : IDS_FMT_FILEOPS_COUNT_FOLDER);
+            break;
+    }
+
+    return resourceId != 0u ? FormatStringResource(nullptr, resourceId, count) : std::wstring{};
+}
+
 std::wstring FormatFileOperationConfirmationSource(const std::vector<std::filesystem::path>& sourcePaths,
                                                    const NonRevertableFileOperationPromptCounts& counts,
                                                    const FileSystemPathIdentity* sourceIdentity) noexcept
@@ -60,30 +86,26 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
         return true;
     }
 
-    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
-
     const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
     std::wstring what;
     if (counts.unknownCount > 0)
     {
-        const std::wstring_view itemSuffix = suffixFor(itemCount);
-        what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, itemCount, itemSuffix);
+        what = FormatFileOperationCountNoun(FileOperationCountNoun::Item, itemCount);
     }
     else if (counts.fileCount > 0 && counts.folderCount > 0)
     {
-        const std::wstring_view fileSuffix   = suffixFor(counts.fileCount);
-        const std::wstring_view folderSuffix = suffixFor(counts.folderCount);
-        what = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS, counts.fileCount, fileSuffix, counts.folderCount, folderSuffix);
+        what = FormatStringResource(nullptr,
+                                    IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS,
+                                    FormatFileOperationCountNoun(FileOperationCountNoun::File, counts.fileCount),
+                                    FormatFileOperationCountNoun(FileOperationCountNoun::Folder, counts.folderCount));
     }
     else if (counts.fileCount > 0)
     {
-        const std::wstring_view fileSuffix = suffixFor(counts.fileCount);
-        what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILE, counts.fileCount, fileSuffix);
+        what = FormatFileOperationCountNoun(FileOperationCountNoun::File, counts.fileCount);
     }
     else
     {
-        const std::wstring_view folderSuffix = suffixFor(counts.folderCount);
-        what                                 = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FOLDER, counts.folderCount, folderSuffix);
+        what = FormatFileOperationCountNoun(FileOperationCountNoun::Folder, counts.folderCount);
     }
 
     const std::wstring fromText = FormatFileOperationConfirmationSource(sourcePaths, counts, sourceIdentity);

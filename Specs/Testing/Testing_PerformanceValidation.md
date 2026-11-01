@@ -2096,7 +2096,7 @@ This source reconstruction does not attest the historical raw checkout or execut
 The older F6 and v2 comparison also had different non-DxUi dependency outputs; retain
 that whole-product comparison limit. Neither comparison isolates I27 changes from
 dependency differences or replaces the unchanged v2 workload and five-process criteria.
-The [I27 qualification report](../TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation/ReviewRemediation.md)
+The [I27 qualification report](../TestRuns/4cb089111a23/Validation/v06/ReviewRemediation.md)
 binds implementation, paired measurement, Full results and their remaining platform limits.
 
 The File Operations case `cmd_pane_fileops_popup_resource_lifetime` measures five warm-up and

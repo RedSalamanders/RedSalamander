@@ -1374,6 +1374,7 @@ private:
     require(result.hiddenReturnFallsBackToAnchor, L"a hidden focus-return target did not fall back to the alert's anchor");
     require(result.blockingHideFallsBackToAnchor,
             L"a blocking alert whose captured focus window was hidden did not give the focus to its own anchor when it hid");
+    require(result.blockingDecisionRejectsRepeat, L"a blocking decision accepted held Enter/Escape, or failed to accept a fresh press after release");
     require(result.closeMessageForwardedToOwner, L"Alt+F4 on the modeless overlay did not go to its owner's top-level window");
     require(result.f6IgnoresRepeatTypeaheadAndHeld, L"a guarded overlay acted on an F6 held since the show, typed within the typeahead window or repeated");
     require(result.f6ReturnsFocusToPane, L"a fresh F6 did not hand the focus back to the pane without answering, the overlay staying shown");

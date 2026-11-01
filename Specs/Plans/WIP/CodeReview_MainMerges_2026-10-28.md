@@ -1,8 +1,349 @@
 # I50 Review of main merges 2026-10-18..2026-10-28
 
-Status: ACTIVE. Review record and remediation routing. No product code has been changed by this plan.
-Owner: next engineering owner chosen by the product owner. Reviewed at `8ea956a7e` (main) against the
+## Execution checklist (reopened 2026-10-31)
+
+Owner: current implementation session. User authorized revalidation and implementation of the
+confirmed remaining work. Historical ratings and proposed repairs below are evidence to challenge,
+not an instruction to repeat delivered work. Starting identity: `6b6f5646b`, clean checkout.
+Checked implementation items mean source, regressions and owning specifications are present;
+qualification remains a separate requirement.
+
+Owner delivery decision (2026-10-31): remove MSI and MSIX packaging from every
+project in the RedSalamander solution; retain portable ZIP and winget delivery.
+This supersedes the MSI/MSIX-specific implementation and qualification work in
+the historical checkpoints below. Other repositories, historical evidence and
+the independently launched applications remain outside this change.
+
+- [x] Retire MSI/MSIX projects, commands, workflow paths and active contracts;
+  retain portable ZIP and winget delivery and their receipt/integrity guards.
+
+Retirement acceptance requires affected tooling checks and an actual Release ZIP
+build; their exact-source results are recorded in the shared execution packet.
+
+- [x] Repair the SearchService busy-pipe fixture's listener-recreation race within
+  its existing five-second acquisition budget; add a bounded missing-listener control.
+
+The subsequent Release PrePush passed 1,420 checks but failed that fixture once.
+Its original result remains preserved. The repair changes test acquisition only;
+production broker retry behavior and query/status/shutdown/cancel budgets are unchanged.
+Fresh focused/Compare qualification and final delivery results belong to the execution packet.
+
+- [x] Preserve the parallel search coordinator's final-batch callback failure after
+  worker quiescence; add deterministic success/abort/error/cancel coverage.
+
+The later affected repeat exposed a separate product race in `local_search_callback_contract`:
+it recorded `E_ABORT` after observing completed workers, then returned stale success.
+The candidate reconciles the first terminal status under the existing post-join lock.
+The root-scoped test-only join gate and perf row prove the last-batch ordering;
+fresh qualification remains separate from the preceding failed run.
+
+The current build captures native artifacts and module provenance after native
+compilation, then validates uniform test-surface metadata and final native bytes
+before publishing a receipt. ZIP staging must preserve that captured closure.
+The MSI/MSIX source was preserved before removal, including diagnostic failures
+that exposed excluded evidence during MSI staging and seven stale native hashes
+after MSIX project-reference compilation. Those historical installer repairs no
+longer define shipping requirements. The later Debug PrePush run was interrupted
+when the owner changed delivery scope; it is not a completed pass. Qualification
+results and remaining gates belong to the shared execution packet. Focus-taking
+work remains pending by request.
+
+- [x] Revalidate High/Medium findings against current code, callers, tests and current contracts;
+  record fixed, rejected, superseded and confirmed residuals with evidence.
+- [x] Review Low findings and simplifications; distinguish actual defects from optional refactoring.
+- [x] Implement confirmed residuals with meaningful regressions and authoritative spec updates.
+- [x] Run noninteractive affected explanation, appropriate builds/tests and required
+  performance scenarios; retain exact-source results and original failures.
+- [x] Complete fresh noninteractive PrePush coverage accounting and record deferred gates.
+- [x] Validate both tests-disabled Release ZIPs, their receipt/integrity closure,
+  and stock Windows checkout compatibility.
+- [ ] Run foreground Commands, FileOperations, ViewerPE and ViewerSqlite acceptance
+  under the desktop lease at an agreed time; deferred by the owner.
+- [ ] Execute native ARM64 qualification and classify the ARM64-only WIC decode
+  discrepancy; explicitly pending by owner direction, not closed by a cross-build.
+- [ ] Complete approved physical-device and provider/environment checks, including
+  MTP, SMB and elevated/NTFS/live-journal prerequisites; explicitly pending.
+- [ ] Complete mixed-DPI, real assistive-technology and real shutdown/logoff acceptance.
+- [ ] Move to Done and update index/exact-file admission only after all required gates close.
+
+## Current acceptance checkpoint (2026-11-01)
+
+Owner authorized commit and PR publication with native ARM64 and physical-device
+checks left pending. The earlier decision to defer foreground tests also remains
+in force. Both plans stay ACTIVE in WIP until the unchecked acceptance gates close.
+Earlier checkpoints below are historical; this checkpoint and the shared execution
+packet own the current result.
+
+At qualified implementation snapshot
+`eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c`:
+
+- Fresh affected and PrePush execution each passed **1,421 / 0 failed / 31 accepted
+  capability skips**. All fourteen selected entries were executed and promoted;
+  none were incomplete, invalidated, provisional or reused. Source hashes before
+  and after each run match. The change verdict is PASSED; the repository verdict
+  remains NOT_EVALUATED because four foreground entries were deferred.
+- Complete Compare passed **252/0/31**, including both repaired search cases.
+  The forced final-batch regression proves four dispatches with zero remaining
+  workers and one queued result. PerformanceTests2 passed **15/15**, the compiler
+  lane **30/30**, and tooling **1,128/1,128** in both runs.
+- Native builds reported **zero warnings and zero errors**. Tests-disabled x64
+  and ARM64 production ZIPs each have 174 byte-verified receipt outputs, 175 ZIP
+  entries, no excluded build/test sidecars and no hash mismatches. The x64
+  fresh-extraction native package smoke passed; no ARM64 executable was run.
+- Stock Windows checkout proof `sf-daf065ef` passed with explicit long-path and
+  symlink support disabled: 28,032 regular files, maximum relative path 200 and
+  absolute path 251, no round-trip mismatches. All 3,002 historical relocation
+  blobs and 6,004 text/eol attribute comparisons match. Source index, status,
+  HEAD, shared indexes and object-store content remained unchanged during proof.
+- Final source, shipping-byte, archive, changelog, tool-inventory and whitespace
+  checks passed. The final archive guard checked 1,298 paths with zero violations.
+  Original failures, interrupted attempts and earlier snapshots remain preserved;
+  a passing repeat does not change their verdicts.
+
+The [execution packet](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md)
+contains the exact run IDs, receipts, source identities and remaining gates. This
+plan/status publication follows the qualified snapshot and changes documentation
+only; its commit does not retag old receipts or establish native ARM64, physical-device,
+foreground, mixed-DPI, assistive-technology or real shutdown acceptance.
+
+Qualification checkpoint before the final fixture edits: noninteractive PrePush
+`20261031T164304Z-21260-b7c1915171574a9abd900578f6a31e5b` failed with 1,433 passed,
+two failed result groups and 29 skips. Twelve of fourteen entries were promoted, with no
+invalidated entries. The complete PluginContract suite passed, including the compiled native
+65,536-unit key check and 648,025 Local path pairs. Compare passed 256/0/27 with accepted
+capability skips, Curl passed, and PerformanceTests2 passed 15/15. The build-toolchain lane
+passed 30/30 and re-attested x64 Debug with zero diagnostics (`982ef303`). Test-enabled x64
+Release (`9a054250`) and all three ARM64 cross-build profiles also have zero diagnostics
+at the same `e8bdf1d6` source snapshot; no ARM64 executable was run.
+
+The failed ViewerPE group contains two cache-lifetime fixtures that incorrectly waited for
+snapshot-build bytes during a cache restore. Their candidate now distinguishes build/restore
+phases, proves reuse without another provider read, and gates the fresh post-Close read to
+verify empty state. The tooling assertions reported 1,137/0/2, but the terminal contract rightly
+rejected both vcpkg prerequisite skips. Their candidate checks immutable pinned baseline data
+without modifying the dirty managed checkout; it does not establish live tool/bootstrap identity.
+These test changes are newer source and need fresh qualification. The dated
+[execution packet](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md)
+owns subsequent exact results and outstanding gates. Focus-taking work remains pending by request.
+
+Earlier candidate follow-up: the first noninteractive PrePush attempt is preserved as interrupted,
+not passed. Its tagged fixture exposed a Debug linker warning, now repaired with Debug-only
+incremental linking and a zero-diagnostic assertion. Independent native-NLS checking also found
+a supplementary-character key collision. The candidate now folds UTF-16 units separately,
+preserves surrogate units and raw-confirms positive overlap keys. Required-key rename consumers
+keep valid supplementary names. Receipt `a7e7cd13` compiled the new controls with zero warnings/errors;
+the exact noactivation FileOps case passed 3/0/0, including the retained-ancestor classifier controls.
+The native unit-space PluginContract execution remains pending. The separate scratch oracle passes
+its stated unit/sample scope. The broad tooling run reported 1,133/3/2; strict-mode empty audits,
+two accidentally edited sealed test inputs and two missing localized menu keys are now repaired.
+Historical bytes are restored, and assertion policy applies only to the current cohort. These
+later tooling/resource edits require fresh receipt/validation. Exact results and failures belong
+to the execution packet; no preceding focused result establishes complete qualification.
+
+The next Debug full build (`3c106a54`, zero warnings/errors) and ARM64 Release cross-build
+(`72d38756`, zero warnings/errors, no ARM64 execution) bind the preceding snapshot. The second
+PrePush attempt is preserved as interrupted after discovering that the targeted deployment
+test captured stdout/stderr under repository `.build/logs`. Those test captures now allocate
+canonical run scratch only when the tagged test executes; the underlying build's own outputs
+retain their build owner. A fresh source receipt and remaining native tests are still required.
+The preceding stock-checkout probe materialized 28,009 paths, max relative/absolute length
+200/253 and no links, but its overall script failed on invalid stat-status/raw-byte assertions.
+The corrected final candidate proof must check clean-filter mode/blob/stage/path parity,
+all 3,002 relocation identities and old/new text/eol policies, while recording the four
+pre-existing physical Windows autocrlf conversions separately. Setup/oracle failures remain
+preserved; a preceding path-only result does not complete this gate.
+
+Status: ACTIVE. Revalidation and implementation authorized 2026-10-31; candidate changes are local
+and unqualified until the execution ledger below records their actual results.
+Owner: current implementation session. Originally reviewed at `8ea956a7e` (main) against the
 pre-window baseline `0f6cd8ddb`. Date: 2026-10-28.
+
+## Reconciliation and decisions (2026-10-31)
+
+The verdict, workflow names, counts, line references and ratings in the original review below
+describe `8ea956a7e`; they are not a fresh verdict at `6b6f5646b`. The unified-CI migration and
+hosted-repair work have since changed the qualification workflow. Do not recreate removed release
+workflows or repeat already-delivered repairs. Independent reviewers supplied leads; the lead
+reopened consequential code before integration. Source inspection alone is not a reproduced failure.
+
+Owner decisions in this session:
+
+- Escape targets a decision only on a visible card; otherwise it hides the popup.
+- Interrupted-Move notices belong to their writer and remain until explicitly dismissed.
+- Incomplete leftover scans report errors; recent or in-use stages are not preselected.
+- Oversized diagnostics are truncated with a marker; installers exclude build receipts/test sidecars.
+- Shorten tracked evidence paths for stock Windows Git compatibility, retaining historical bytes
+  and provenance and updating current references through the governed migration.
+- Focus-taking validation remains pending. No desktop lease/input execution is authorized now.
+- MTP new-file creation uses non-atomic direct copy. Atomic-create capability must be false;
+  known pre-mutation collisions remain retryable, but uncertain/partial publication is never replayed.
+- Escape in ViewerSpace's analysis panel clears a nonempty filter, then hides the panel.
+- Closing ViewerSpace forgets its private scans, cache and workspace state. Reuse is restricted to
+  the same still-open window; any future cross-close cache belongs to RedSalamander, not the plugin.
+
+| IDs | Current disposition and evidence |
+|---|---|
+| H1, M24 | Confirmed: three IDs missing from FolderWindow dispatch; eight remaining synchronous handlers trust pointer lParam. Candidate migrates them to the existing payload registry and routes all services; worker roundtrip/forged-message coverage required. |
+| H3 | Confirmed: toolset target lacks the VC++ project gate. Candidate adds the extension guard; evaluated-project positive/negative coverage required. |
+| H2 | Original mechanism fixed: current already-restored observation uses savedObservationIdentityValid, allowing stable cross-thread focus to be observed without desktop writes. The same-thread restriction still guards restoration write authority deliberately; removing it would weaken ownership. Existing cross-thread identity controls cover the separation. Lead rejected the delegated still-open verdict after tracing both paths. |
+| M28 | Foreign-foreground restoration still uses one write and immediate observation. Bounded settling/diagnostics remain a separate harness investigation; do not conflate this with H2 or relax input/ownership assertions. |
+| H4 | Old workflow allegations are superseded by current long-path checkout configuration. The immutable-path migration preserves all 3,002 files and passed stock Git checkout with longpaths disabled (27,926 files; longest relative path 200). Later source additions retain the same path budget. |
+| X1 | Historical qualification gap, not one source bug. Current native/platform/interactive acceptance must be accounted for separately; pending hosted work is not a green result. |
+| M1 | Confirmed: viewer Delete lacks Recursive in the common dispatch. Candidate repair must cover nonempty-folder Delete and recycle escalation. |
+| M2 / I36 runtime-queue#3 | Confirmed wait-registration race mechanism. One repair owns scheduler/queue/bridge predicate synchronization; deterministic boundary coverage and lock-order review required. |
+| M3 | Confirmed: Preferences duplicates an incomplete default predicate. Candidate uses the canonical settings helper and covers view-state-only settings. |
+| M4, M5, M6 | Confirmed: source Hidden cleared at publication; overlong/predictable copy stages and overlong backup leaves; advisory PrintName changes preserved link targets and extended prefixes misconvert. Candidate repairs these together, including new/legacy leftover-name recognition and long-leaf/Hidden/effective-target regressions. |
+| M7 | Original retry claim unsupported: each retry reprobes source size. Refusing a changed source is consistent with exact-byte publication; do not remove the size guard merely to copy an actively changing file. Retain as a source-stability scenario to validate, not a confirmed repair. |
+| M8, L32 | Owner superseded the atomic-create requirement. Candidate removes create-temp rename/fallback/memo, adds an additive direct-final-create capability, and retains guarded overwrite. Host/fake MTP regressions cover partial publication, collisions and source retention; execution pending. |
+| M9, M10, L16-L18 | Candidate schema-2 breadcrumbs carry PID and creation time, reject live/unverified writers, project notices through weak process claims, retain 24 notices separately from ordinary history, and use admitted item counts/display names. Task cancellation token identity is immutable before publication. Native live-writer/ack/claim/eviction/selection controls added; execution pending. |
+| M11 | Confirmed pre-mutation Inline Rename refusals were marked possibly mutated. Candidate moves the mutation gate to the actual RenameIfUnchanged call and keeps unknown post-call outcomes conservative; meaningful typed-refusal regression added, execution pending. |
+| M12 | Existing sole-decision fallback matched the previous spec. New owner visibility decision authorizes a behavior/spec change; regression remains required. |
+| M13 | Candidate supplies localized Running status to accessibility/failure surfaces without changing compact visual status. Nonactivation presentation regression added; execution pending. |
+| M14 | Candidate reuses PackedFileInfoCursor and checked count/buffer HRESULTs in three consumers. One canonical safe child-component helper protects path joins without rejecting valid provider display names. Decoder and malformed provider regressions added; execution pending. |
+| M15, M16 | Candidate separates provider-owned scan context from UI state, retires its worker through a pinned background join and drains typed completion payloads. Partial scan errors retain valid/base rows and are visible. Held-provider teardown, error and conservative preselection regressions added; execution pending. |
+| M17 | Cross-host in-use filtering remains a hypothesis needing a concurrent witness; owner chose conservative preselection. |
+| M18 | Candidate pairs each enumeration generation with an immutable stop token, forwards lifetime cancellation outside locks and uses the canonical synchronous-I/O cancel watch. Cache wait registration uses its actual predicate mutex. Exact noactivation cache race/blocked-read/logical-context controls passed on receipt 561b (1/0/0, 1.6s native). Later source requires a fresh run; arbitrary provider calls still require provider cooperation. |
+| M19-M21 | Candidate removes the dead mode-control branch, accounts workspace/export memory once to the owning viewer, uses private window-lifetime caches with a shared payload budget, and stops parent navigation at UNC share roots. Native and public Open/Close fixtures updated; execution pending. |
+| M22 | Candidate transfers active scan workers to a pinned background reaper. Ordinary provider return can reach an unload quiet point; only submission/pin refusal keeps defensive quarantine. Held-provider regression checks both held and retired gates; execution pending. |
+| M23 | The actual Local 256-by-256 fixture first measured 17.98s disjoint / 20.07s last-pair in Debug. The bounded key-reuse candidate preserves exact fallback, aliases and first-conflict/by-name priority; receipt 561b observed 1.76s / 1.91s with 185,856 bytes of provider-key UTF-16 payload. These are differently loaded Debug observations, not a controlled gain. Test-enabled Release now has paired same-binary keyed/keyless measurements; their execution and memory acceptance remain required. |
+| L8, L28, L29, L42 | Mechanisms exist, but cost/regression claims lack measurements. Keep current synchronization and responsiveness contracts; collect existing stage/cadence/build metrics before scheduling an optimization. These remain performance investigations. |
+| M25 | Confirmed root formatter includes the pinned vendor header and chooses an unpinned executable. Candidate uses tracked owned paths/pinned installer; behavior checks required. |
+| M26, M27 | Archive failure and pending-interactive handling are already repaired. The focused legacy PASSED/0 discrepancy is corrected; an executable regression of the actual no-v2 decision passed within the 315-case focused tooling cohort. A real post-build focused invocation must still confirm exit 2. |
+| M29, M30, M33 | Already fixed in current code: journal-unavailable rebuild uses root traversal; queries have a bounded 30s contention window; per-item workers add the scheduler reserve. Current root-scoped rebuild, multi-client/rebuild and exact noactivation SelectionShapeLocal cases are selected for execution. Source coverage is not a passed run. |
+| M31 | Missing DxUi restore is fixed in the manual shuffle workflow. Bare-false predicate detail is diagnostic polish: the caller names blocked attestation and recovery. No concrete remaining recovery defect was established; optional richer diagnostics are not a merge gate. |
+| M32 | Empty-root fallback is fixed. The workflow is manual-only. Its remaining whole-sandbox upload is now limited to evidence/live artifacts with scratch, work and virtual-disk exclusions; focused workflow verification remains. |
+| M34 | Fixed: current reusable build passes overlay triplets/ARM64 overlay ports and hashes the port closure. |
+| L31, L33, L38, L40 | Confirmed stale startup docs, shipping fake backend, oversized diagnostic loss and duplicate pending-fragment collapse. Bounded candidate fixes in progress. |
+| L41 | Confirmed by lead after rejecting the delegated fixed verdict: target policy had changed, but link Path still used IO current-directory validation and PowerShell-location creation. Candidate resolves Path once with PowerShell and supplies the same absolute path to both operations; tests separate those two directories without creating an outside link. |
+| L47 | Rejected: current Monitor spec explicitly marks retained requirements as historical origin; its leading installed-helper contract owns behavior. |
+| L1-L6, L9, L10, L12, L14 | Candidate aligns Cancel drawing/hits, own-window canvas focus, visible spatial arrow navigation and Alt routing; fixes rate restart and file-count weighting, translates header problems, preserves deferred root selection and selects the naturally first 512 folders. Analysis Escape follows the owner decision. Native boundary/message coverage added; real keyboard focus acceptance stays pending. |
+| L7 | A canceled provider that has not returned still owns its serialized volume permit. Releasing it early would allow concurrent calls on that provider. Keep safe serialization; an explanatory queued-state UX is optional, not a reason to invent a quiet point. |
+| L11 | Already repaired at starting HEAD: ExportCurrentView clears the projection request on WAIT/LIMIT exits. Preserve it. |
+| L13 | Fail-closed export for unrepresentable UTF-16 is intentional; substituting a different filename would change report identity. No silent replacement is authorized or implemented. |
+| L15, L19, L20, L24, L26 | Candidates remove the write-only 64-consent table, order indexed path scopes by components, skip disabled arrow targets and close the speed HWND before its host. Completion notifications now use admitted source/destination logical cache contexts: a retained provider pointer alone loses its nondefault context after pane unregistration. The exact noactivation cache case adds A-task/A-keeper/B isolation and a legacy-pointer negative control; real cache API execution and direct completion integration remain distinct evidence. |
+| L21, L22, L34, L35, L37 | Confirmed current residuals: locale-specific counts, atomic Issues export/log-lock scope, initial VLC single-flight loading, visible WebView profile refusal and identity-safe abandoned-writer cleanup. Bounded repairs and meaningful failure controls are in progress. |
+| L23, L25, L30 | L23 is a localization/composition polish lead, not an established broken sentence. L25's current focus-visible helper intentionally keeps the focused hosted control visible. L30 uses a presentation-only host with explicit custom input routing; no missing required message was reproduced. Broad forwarding/refocus changes are not justified by the original excerpts alone. |
+| L27 | Confirmed blocking prompt repeat gap. Candidate ignores held/repeated Enter/Escape in the shared blocking overlay and proves fresh presses still work through its real handler. Physical keyboard acceptance remains pending. |
+| L36, L39, L44 | Lower-case extended UNC handling is repaired in the candidate. L39's Ready branch is redundant but preserves semantics; defer cosmetic churn. L44 homepage is already correct at starting HEAD; same-basename hooks/fixtures are separately inventoried and not a link/compile defect. |
+| L43, L45-L47 | Historical evidence bytes stay preserved by owner direction and protected-history policy; do not redact or rewrite them as a code repair. Current long paths are migrated under exact identity checks. Verifier reparse rejection is an explicit conservative input boundary, not evidence of corrupted client bytes. Dead Monitor constants/friendly launch text are cleaned; legacy provider/settings IDs remain intentional. L47 is rejected as above. |
+| L48, L49 | Candidate installers exclude receipts/test sidecars through shared policy and synthetic harvest coverage; actual package qualification remains. ARM64-only WIC decode failure remains unclassified: a passing retry is not a diagnosis, and x64 cannot close the native ARM64 gate. |
+| S1-S12 | Apply shared helpers and remove confirmed dead state where coupled to a fix. God-file splits, a new shared matcher, broad UI skeleton extraction, duplicate license/shim removal and speculative cache rewrites are optional architecture projects; they add review/risk without repairing a demonstrated defect here. They are not automatic delivery requirements. |
+
+Candidate regression source is not executed evidence. Build/test commands, failures, exact profiles,
+curated archives and remaining qualification gates will be recorded here as execution proceeds.
+
+### Execution evidence to date
+
+- Initial documentation-only `Test-Changes.ps1 -Explain -TestRoot Z:/RedSalamander.Perf`
+  selected no advisory native build and printed pending desktop entries. It exited 1 rather than
+  the documented explain category; retained `Z:/RedSalamander.Perf/evidence/explain-plan.json`.
+  This is planning output, not passed tests or qualification.
+- `TestSandboxContainment.Tests.ps1`: first candidate 25/3/0 because the new creator mock leaked
+  into subsequent cases; bounded parameter filtering corrected that test isolation defect.
+  Corrected run 28/0/0 at `20261031T104706Z-63036-ced096ef5c98428596f9ac1b840ba35a`.
+- `Test-ChangelogWorkflow.ps1`: 33/0 shared behavior cases at
+  `20261031T104937Z-73680-eb1c3eec12724c938003d3e3de76f798`. All remotes/GitHub calls were fixtures;
+  no product changelog, remote publication or actual pull request was changed.
+- Focused formatter/compiler-policy Pester: 13/1/0 at
+  `20261031T104828Z-68244-3f78a3cf2e2547ff9c982df23cacde0a`; formatter fixture JSON used unescaped
+  format-string braces. The evaluated toolset probes passed; fixture correction/repeat pending.
+- Monitor/harness source Pester: 218/2/0 at
+  `20261031T104948Z-64280-0cb9b58a2b9a4aedaac64e8e2f092e99`; one obsolete prohibition on the new
+  safe synchronous payload helper and one pre-existing scheduled-flake assertion conflict with
+  current unified CI. Contract reconciliation/repeat pending.
+- First x64 Debug solution build failed (2m57s): 6 private-access errors in the new queue test
+  helper, 3 errors from an unavailable test lookup function, and 8 implicit-deleted-special-member
+  warnings in new host test structs. Retained
+  `.build/logs/msbuild-20261031_114829_611-pid58248-289b98f6.log`. This is a failed build, not
+  runnable qualification; fix and repeat with zero warnings/errors required.
+- Corrected formatter/compiler Pester: 14/0/0 at
+  `20261031T105225Z-6436-11bb52a4ff0e442d94c7462615463197`; corrected monitor/harness
+  source contracts: 220/0/0 at `20261031T105403Z-29880-5a74dea8f1304c5f84e304112149f034`.
+- First corrected full x64 Debug build passed with zero warnings/errors (4m14s):
+  `.build/logs/msbuild-20261031_115410_085-pid74156-87f0c8ab.log`, receipt
+  `b9666fb669301ecf77e7a84428f8e9deb17839e0f39ff245cfb8b9677a0d22a7`. This precedes the
+  later integrated ViewerSpace, provider, breadcrumb and lifecycle candidates and cannot qualify them.
+- Focused `FileOps_ReviewRemediationContracts` at that receipt passed 3/0/0, run
+  `20261031T105821Z-74180-398861ecf36946c7ac243bbc03fdef24` (37.1s native, 61s wall).
+  Its filtered legacy PASSED/0 conflicts with v2 scope semantics; it is focused evidence only.
+- Broad PR/noninteractive run `20261031T110058Z-63848-18d88350187d422dbd06b888af75f49e`
+  FAILED: 1119 passed / 7 failed / 2 skipped, 15m22.6s wall, 16 disk-audit issues.
+  ViewerPE failed two export-close lifetime assertions, PluginContract exited with access violation
+  `0xC0000005`, and five Tooling Pester cases failed. Original raw/terminal artifacts remain under
+  the selected sandbox's `evidence/completed-runs/<run-id>`. Later isolated passes do not erase it.
+- Isolated old-binary ViewerSpace close baseline
+  `20261031T112040Z-78176-04f93478851f4d42b922364792f40c76` passed without activation in 8.9s;
+  exact hashes and all perf rows are retained. Close measured 35,880us, destruction stages 3,023us,
+  NC destruction 114us. This neither diagnoses the broader failure nor establishes a candidate gain.
+- PluginContract crash investigation found no dump/second-chance reproduction. A debugger helper
+  probe lost child output through non-inheritable handles and is inconclusive. Exact old binaries/PDBs
+  were hash-preserved beneath `20261031T112644Z-45032-6dda3305d6e146b99d9c06f3da224527` before
+  rebuild. The debug fixture's long-leaf I/O spelling was corrected; the original access violation
+  remains unexplained until a trustworthy focused repeat/forensic result exists.
+- The forensic helper abandoned its Debug artifact-operation lease. The required full x64 Debug
+  `-Rebuild` attempt on the integrated candidate failed with four stale telemetry identifier errors,
+  zero warnings, 2m30s; log `.build/logs/msbuild-20261031_130217_670-pid28696-92239977.log`.
+  The source error is corrected. The contamination marker remains until a successful governed
+  rebuild; no deletion, manual receipt promotion or lock bypass is permitted.
+- The next full rebuild failed with unresolved component-comparison helpers in the Local plugin,
+  zero warnings, 2m30s; log `.build/logs/msbuild-20261031_131853_200-pid77540-65de65f8.log`.
+  Its project now includes the canonical `Common/FileSystemPathIdentity.cpp` implementation.
+  The following rebuild failed with one template-deduction error, zero warnings, 2m49s;
+  log `.build/logs/msbuild-20261031_134406_964-pid81960-a1fe6f25.log`. The long-leaf writer
+  now supplies the helper's explicit character type. Neither failed build publishes acceptance.
+- Trustworthy old-binary Local failure probe at
+  `20261031T124759Z-85312-88f624e6311946a0b4e7e34ea1b1a3ed`: the first attempt could not
+  load the copied binary closure (`0xC0000135`, missing `blake3.dll`) and is retained. The second
+  verified that external DLL against the original receipt, preserved the original binary/PDB
+  identities, and used corrected debugger handle/stdio ownership. It reproduced the Local
+  long-path fixture failure (231 passed / 1 failed) but no second-chance exception or dump.
+  Other absent plugin DLLs make this a diagnostic subset, not a test-suite pass. The original
+  broad-run access violation is still unexplained; do not attribute it to that fixture failure.
+- Agent-focused Tooling repeats report DocumentationDrift 29/29, HistoricalTerminalProfile 5/5,
+  ReleaseWorkflowPolicy 45/45, RunAllTestsPlan 77/77, BuildReproducibility 25/25 (toolchain-tagged
+  cases excluded), synthetic vcpkg 5/5 and inventory 223/223. Lead review and final source-bound
+  runner execution remain required. The first RunAllTestsPlan subprocess returned unexplained 1
+  instead of 2; the retained diagnostic rerun passed and is not a causal explanation.
+- Integrated rebuild `.build/logs/msbuild-20261031_140419_169-pid12604-a5a25f72.log`
+  reached the main app and failed after 3m38s with 27 compiler error lines and 39 warning lines
+  (including repeated template context). Root causes were missing test type/helper declarations,
+  untyped COM pattern/QueryInterface output use, const guards being released, undefined draft/test
+  variables and numeric conversions. Candidate corrections preserve 64-bit breadcrumb counts,
+  explicitly type the notice claim byte and delete the test gate's unavailable special members;
+  no warning suppression was added. Another governed full rebuild remains required.
+- Further cache review confirmed that the same open ViewerSpace could reuse another provider's
+  same-path snapshot. Provider identity changes now cancel pending cache work and clear its owner;
+  the public Open/Close fixture also checks a second provider on the same path. This is candidate
+  source/coverage until executed, not an already passed cache result.
+- The next integrated rebuild failed after 4m33s with one C5046 warning and its two linker
+  diagnostics: `.build/logs/msbuild-20261031_141815_440-pid72344-4eeb3fcc.log`.
+  A new shared header was included from a fixture inside the runner's anonymous namespace;
+  it now belongs to the runner's global includes. All previously reported compile roots passed
+  this attempt, but no current accepted receipt was published.
+- Checkout migration now maps 3,002 immutable files (596 protected Done, 1,394 exact
+  grandfathered, 1,012 current-contract), preserving 944,671,687 raw bytes. First full guard
+  failed because one packet lost its old `-text` policy and its new index blobs normalized,
+  and a set check mixed grandfathered/current targets. The 120 exact packet targets were
+  force-renormalized to their pinned blobs, the sets were separated, and the original wildcard
+  attribute rules were retained for 16 unmoved sibling archives. Final guard/caps/stock-Git
+  proof are pending; a raw move hash alone is not checkout acceptance.
+
+Integration remains ACTIVE. Required current-source native runs, performance archives, package/tests-off
+Release acceptance, PrePush accounting and platform gates are not satisfied by the earlier receipt.
+Focus-taking acceptance remains pending by explicit owner direction, so this plan stays in WIP.
+The [shared execution archive](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md)
+owns subsequent exact receipts, failed attempts and measured results for this candidate. Its evidence
+may advance without changing this implementation/qualification distinction.
+
+Latest integration checkpoint (2026-10-31): Debug receipt `561b2f04` built with zero warnings/errors;
+the exact FileOps remediation case passed 3/0/0 and the cache case passed 1/0/0. Their ten actual
+FileOps captures were visually reviewed. Archive/fingerprint Pester passed 52/52; corrected runner,
+harness and inventory Pester passed 315/315. These precede the final legacy-breadcrumb and task-ID
+repairs, so they cannot qualify those later bytes. The separate [delivery review](DeliveryReview_Remediation_2026-10-31.md)
+identified the two defects; this session rejected its wall-clock-order shortcut, integrated conservative
+legacy peer observation and same-mutex notice allocation, and added bounded native/source controls.
+Its W3 current-receipt gate remains required. The earlier Explain exit 1 was outer PowerShell
+`-Command` exit collapse, confirmed by a child-process probe; it was not a runner verdict defect.
 
 Drift check (run first):
 
@@ -67,7 +408,7 @@ Operations result reducer and conflict broker. What blocks a production claim:
 | H1 | Host services | pre-existing | CONFIRMED (routing); PLAUSIBLE (MS Drive effect) | `IHostConnections::SetConnectionSecret`, `DeleteConnectionSecret` and `IHostViewers::OpenViewer` called off the UI thread do `SendMessageW` to the FolderWindow, whose `WndProc` has no case for `kHostSetConnectionSecret`/`kHostDeleteConnectionSecret`/`kHostOpenViewer`; `DefWindowProcW` returns 0, the sender returns it as `S_OK`. Microsoft Drive stores rotated/new OAuth refresh tokens this way from provider operations, so a token can silently never be saved or deleted (repeated sign-in). | `RedSalamander/FolderWindow.cpp:1404-1413` (only dispatcher), `RedSalamander/HostServices.cpp:907,934,1216` (senders), `:1332,1346,1419` (unreachable handlers), caller `Plugins/FileSystemMicrosoftDrive/FileSystemMicrosoftDrive.cpp:7909,7936,7956`, reached from `MicrosoftDriveFileWriter::UploadSimple` (`:7516-7519`) on a copy worker |
 | H2 | Test harness | new | CONFIRMED (code + CI log) | ViewerPE desktop-restoration identity requires the saved focus HWND to belong to the foreground window's thread. A focus child created by another thread of the same process (same pid, same GA_ROOT) fails `savedIdentityValid`, the no-write shortcut is also skipped, and the Viewer suite aborts. This is the ARM64 nightly failure (`savedFocusTid=1448`, `savedTid=7896`, same pid 3196, input unchanged). | `Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp:1021-1044` |
 | H3 | Packaging | new | CONFIRMED (target condition; reviewer ran the target) | `ValidateMsvcToolsVersion` runs for every first-party project, including the MSIX `.wapproj`, which imports no VC props, so `VCToolsVersion` is empty and the build stops with "requires MSVC build tools 14.52.x; selected ." No MSIX can be produced (`build.ps1 -Msix`, `release.yml` package-msix). `RSVerifyRedMonitorClient` beside it already filters on `.vcxproj`. | `Directory.Build.targets:324-326` |
-| H4 | Repository / CI | new | CONFIRMED | 607 tracked paths (up to 288 characters) under `Specs/Plans/Done/.../visual-gallery/` and `Specs/TestRuns` exceed MAX_PATH on a default Windows checkout; none did at the baseline. Workflows without `core.longpaths` fail at Checkout: Ghostty runtime status and Nightly Flake (logs), and by the same mechanism every `release.yml` job and `winget-release.yml` (not yet run). Contributors on stock Windows git cannot clone. | `.github/workflows/ghostty-runtime-status.yml:26-31`, `nightly-flake.yml:19-24`, `release.yml:42,75,174,219,404`, `winget-release.yml:77,83` |
+| H4 | Repository / CI | new | CONFIRMED | 607 tracked paths (up to 288 characters) under `Specs/Plans/Done/I27/implementation/g/g1/fileops/visual-gallery/` and `Specs/TestRuns` exceed MAX_PATH on a default Windows checkout; none did at the baseline. Workflows without `core.longpaths` fail at Checkout: Ghostty runtime status and Nightly Flake (logs), and by the same mechanism every `release.yml` job and `winget-release.yml` (not yet run). Contributors on stock Windows git cannot clone. | `.github/workflows/ghostty-runtime-status.yml:26-31`, `nightly-flake.yml:19-24`, `release.yml:42,75,174,219,404`, `winget-release.yml:77,83` |
 | X1 | Qualification | process | CONFIRMED | See verdict item 1. Runs: Nightly Native 40660649657 (build passes; suite fails 17-18 cases on x64 and 59-66 on ARM64), ASan 40484804050 (ARM64 59 failures; x64 FileOps suite silent for 4 h 10 min until the 6 h job limit, cause not diagnosed), Flake 40691121033, Ghostty 40665991855. Earlier "successful" nightlies were 8-second skips; the only real baseline run (35498140593 at `0f6cd8ddb`) failed the same cluster. The "Manifest validation failed" and "Merge of test-triplet" log lines come from passing Pester tests, not failures. | `.github/workflows/*`, `Specs/Plans/WIP/Msvc1452ReleaseOptimization_2026-10-23.md`, `RedMonitor_Extraction_2026-10-21.md` |
 
 ## Medium
@@ -200,9 +541,9 @@ Ordered by value. Each item is behavior-neutral unless it names the finding it a
 | S12 | CI and RedMonitor packaging: one composite "Windows checkout" action instead of eight copies of the long-path step; ship one license file instead of the byte-identical `ThirdParty/RedMonitor/LICENSE.txt` copy; keep one of the two `-text` rules for `ThirdParty/RedMonitor`; retire the `Restore-RedMonitor.ps1` / `RedMonitorDependency.psm1` shims if the inventory allows; delete the dead Monitor constants and stale list entries (L46). | about -100 lines | low | H4, L46 |
 | S11 | Search: `MatchNamePattern`/`MatchFileContent` exist twice (`Plugins/FileSystem/FileSystem.Search.cpp:1301`, `RedSalamander/SearchFallbackEngine.cpp:509`, pre-existing); a header-only shared matcher in `Common/` would keep plugin and fallback results identical. | about -80 lines | low | none |
 
-## Remediation slices
+## Original remediation proposals (historical; use the current ledger above)
 
-Execute in order; each slice is one reviewable change with its own focused validation. Respect the
+These proposals describe the original review snapshot and are superseded where the current ledger or owner decisions disagree. In particular, do not remove restoration ownership checks, reintroduce MTP create-temp fallback, or relax exact-byte copy validation. Respect the
 scoped-testing policy (`Test-Changes.ps1 -Explain`, affected execution, `-Mode PrePush`) and record
 each change as a `Changes/` fragment.
 
@@ -254,7 +595,7 @@ each change as a `Changes/` fragment.
 
 ## Questions for the owner
 
-Answers change what the slices do; until answered, the slice keeps the current behavior.
+The current owner decisions above and implementation ledger answer or conservatively resolve this historical question list. It is not a fresh permission gate. Focus-taking acceptance remains explicitly pending.
 
 1. **Release gate.** Is "production-ready" defined as green scheduled workflows plus a Fresh Full
    in x64 Debug, Release and ASan Debug at one `main` identity (slice 1 exit)? Do native ARM64
@@ -313,7 +654,8 @@ Answers change what the slices do; until answered, the slice keeps the current b
 ## Out of scope and stop conditions
 
 - This plan authorizes no push, PR, release, workflow re-run or change in another repository
-  (DxUi, RedMonitor). Each slice is executed only after the owner picks it.
+  (DxUi, RedMonitor). The user selected revalidation and implementation of confirmed residuals on
+  2026-10-31; obsolete slice-selection pauses do not apply to that authorized work.
 - Stop if the drift check shows an in-scope file changed and the cited excerpt no longer matches;
   re-verify the finding first.
 - Stop a data-path slice (4, 5, 6, 8) if any FileOps family regresses; preserve the failed run.

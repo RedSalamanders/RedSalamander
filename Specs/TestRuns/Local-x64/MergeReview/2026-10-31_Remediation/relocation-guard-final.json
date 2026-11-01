@@ -1,0 +1,10 @@
+{
+  "started_utc": "2026-10-31T13:23:15.0647852Z",
+  "finished_utc": "2026-10-31T13:26:03.1963842Z",
+  "elapsed_seconds": 168.129,
+  "powershell_pid": 73020,
+  "process_peak_working_set_bytes": 3783471104,
+  "is_valid": true,
+  "paths": 1394,
+  "errors": null
+}

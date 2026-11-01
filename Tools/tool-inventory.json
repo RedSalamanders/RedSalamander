@@ -66,7 +66,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
-      "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes. Restore the pinned DxUi source and materialize .build/vcpkg-tool at its locked commit for the required integration checks.",
+      "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes. Restore pinned DxUi source for the module mirror check; data-only floor/override and ARM64 overlay assertions materialize selected files from immutable builtin-baseline Git objects into marked TestSandbox scratch.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
         "Tools/Run-AllTests.ps1"
@@ -76,10 +76,10 @@
         "Visual Studio MSBuild and CMake/Ninja",
         "Initialized marked test root",
         "Restored pinned DxUi source for the module mirror check",
-        "Pinned .build/vcpkg-tool checkout for the manifest version-database check"
+        "Git with --no-lazy-fetch support and local objects for vcpkg.json builtin-baseline (otherwise data-only cases report prerequisite skips)"
       ],
       "sideEffects": [
-        "Creates owned sandbox/configuration fixtures",
+        "Creates owned sandbox/configuration fixtures, including byte-verified immutable baseline files only when their data cases execute",
         "Evaluates MSBuild and CMake source properties without native product compilation"
       ],
       "outputs": [
@@ -383,7 +383,7 @@
         "Tools/Test-Changelog.ps1",
         "Tools/Test-ChangelogWorkflow.ps1"
       ],
-      "purpose": "Shared fragment validation, exact-fold comparison with a base ref, deterministic merge and recoverable staged folding, identical across the six projects."
+      "purpose": "Shared fragment validation, exact-fold comparison with a base ref, deterministic merge, refusal of ambiguous duplicate pending text and recoverable staged folding, identical across the six projects."
     },
     {
       "lifecycle": "active",
@@ -415,7 +415,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift, and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence.",
+      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift; validate strict-mode UI audits and exact Win32 residual classifications; and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence.",
       "usage": "Run with Pester or the current tooling aggregate after documentation, schema, shortcut or published capture changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -782,7 +782,7 @@
       "outputs": [
         "Markdown-style console audit"
       ],
-      "ownerSpec": "Specs/Plans/Done/UI_Win32CommonControlsAudit_2026-05-13.md",
+      "ownerSpec": "Specs/UI/UI_VisibleComctlAudit.md",
       "tests": [
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
@@ -793,8 +793,8 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Inventory and optionally reject remaining Win32/GDI UI findings in owned product/test source; retired DxUi residual entries are not consumer allowlist exceptions.",
-      "usage": "Run during Win32 UI retirement reviews; use -FailOnFindings for policy enforcement. The shared native test-warning exceptions follow Tests/TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h.",
+      "purpose": "Inventory and optionally reject remaining Win32/GDI UI findings in owned product/test source; each allowance matches exact category, path, and line pattern with reviewed owner and exit condition; retired DxUi residual entries are not consumer exceptions.",
+      "usage": "Run during Win32 UI retirement reviews; use -FailOnFindings for policy enforcement. Residuals require exact category/path/line-pattern matches with visibility, owner, reason, and exit condition; the shared native test-warning exception stays scoped to Tests/TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h.",
       "usedBy": [
         "UI maintainers",
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
@@ -802,9 +802,10 @@
       "prerequisites": [],
       "sideEffects": [],
       "outputs": [
-        "PowerShell objects or Markdown audit"
+        "Structured finding objects or Markdown audit",
+        "Information-stream category summary in default mode"
       ],
-      "ownerSpec": "Specs/Plans/Done/UI_RemainingWin32UiDependencyRetirementPlan.md",
+      "ownerSpec": "Specs/UI/UI_VisibleNativeAudit.md",
       "tests": [
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
@@ -828,7 +829,7 @@
       "outputs": [
         "Markdown-style console audit"
       ],
-      "ownerSpec": "Specs/Plans/Done/UI_Win32CommonControlsAudit_2026-05-13.md",
+      "ownerSpec": "Specs/UI/UI_VisibleNativeAudit.md",
       "tests": [
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
@@ -1187,6 +1188,7 @@
       "tests": [
         "Tools/Tests/SanitizedEnvironment.Tests.ps1",
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
+        "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
         "Tools/Tests/BuildOutputProcess.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
@@ -1860,15 +1862,10 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Coordinate profile artifacts, platform-scoped vcpkg install roots, repository-shared packaging, native immediate-child-authenticated delegation, guarded output paths, and same-directory atomic file publication without blocking unrelated work.",
+      "purpose": "Coordinate profile artifacts, platform-scoped vcpkg install roots, ZIP and winget packaging, native immediate-child-authenticated delegation, guarded output paths, and same-directory atomic file publication; ignore only strict no-auto-response property queries from verified linked worktrees; keep MSBuild build processes blocking without evaluated output-root proof while retaining exact output/dependency protection.",
       "usage": "Import from artifact-mutating orchestration and pass explicit configuration/platform plus the narrow reviewed coordination scope; delegation requires a one-use token, verified immediate parent, and kill-on-close containment; use guarded path/publication helpers for caller-selected repository outputs.",
       "usedBy": [
         "build.ps1",
-        "Installer/msi/build-msi-symbols.ps1",
-        "Installer/msi/build-msi.ps1",
-        "Installer/msix/build-msix.ps1",
-        "Installer/msix/GenerateAssets.ps1",
-        "Installer/msix/UpdateManifestVersion.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
@@ -1930,7 +1927,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -1981,10 +1978,11 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Choose safe MSBuild invocation and classify optional-code diagnostic headers once for log counts and replay colors.",
-      "usage": "Import from build.ps1 and focused build-output tests; do not invoke as a command.",
+      "usage": "Import from build.ps1 and focused build-output tests, including the relocated native fixture; do not invoke as a command.",
       "usedBy": [
         "build.ps1",
-        "Tools/Tests/MSBuildInvocation.Tests.ps1"
+        "Tools/Tests/MSBuildInvocation.Tests.ps1",
+        "Tools/Tests/RelocatedTestSandbox.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -1996,6 +1994,7 @@
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
+        "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
         "Tools/Tests/BuildOutputProcess.Tests.ps1"
       ],
       "replacement": null
@@ -2011,8 +2010,11 @@
         ".github/actions/setup-msvc/Setup.ps1",
         "build.ps1",
         "Tools/Run-AllTests.ps1",
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
         "Tools/Tests/BuildRuntimeClean.Tests.ps1",
-        "Tools/Tests/MSBuildInvocation.Tests.ps1"
+        "Tools/Tests/MSBuildInvocation.Tests.ps1",
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
+        "Tools/Tests/RelocatedTestSandbox.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -2024,6 +2026,7 @@
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/ProcessStreaming.Tests.ps1",
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/BuildOutputProcess.Tests.ps1"
       ],
       "replacement": null
@@ -2037,15 +2040,13 @@
       "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread; historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
       "usedBy": [
         "build.ps1",
-        "Installer/msi/build-msi.ps1",
-        "Installer/msi/build-msi-symbols.ps1",
-        "Installer/msix/build-msix.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/Modules/Build/ProcessStreaming.psm1",
         "Tools/Modules/Packaging/PortablePackageSmoke.psm1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
         "Tools/Run-AllTests.ps1",
-        "Tools/SanitizedEnvironment.ps1"
+        "Tools/SanitizedEnvironment.ps1",
+        "Tools/Tests/BuildReproducibility.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -2087,7 +2088,8 @@
       "sideEffects": [
         "Merge functions copy validated vcpkg outputs into caller-selected safe roots",
         "The overlay function writes a triplet file beneath the caller-selected directory only when its bytes change",
-        "Managed tool bootstrap acquires a repository-local provisioning lock, fetches pinned Git objects and preserves incomplete restored directories beneath .build"
+        "Managed tool bootstrap acquires a repository-local provisioning lock, fetches pinned Git objects and preserves incomplete restored directories beneath .build",
+        "The vcpkg merge synthetic test writes fixtures beneath its unique marked TestSandbox run and removes only that exact run; it does not use or clean .build fixture paths"
       ],
       "outputs": [
         "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset",
@@ -2136,8 +2138,6 @@
         "build.ps1",
         "Tools/ResolveVersionForMsbuild.ps1",
         ".github/workflows/release.yml",
-        "Installer/msi/build-msi.ps1",
-        "Installer/msi/build-msi-symbols.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1"
       ],
@@ -2196,19 +2196,16 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Centralize release version, platform, artifact-name, checksum, and package policy, including the fail-closed distributable test-surface (ENABLE_TESTS marker and reserved test-export) check.",
-      "usage": "Import from the release workflow, build.ps1 packaging, the ZIP/MSI/MSIX packagers, and focused release-policy tests.",
+      "usage": "Import from build.ps1 ZIP packaging, the portable ZIP packager, and focused release-policy tests.",
       "usedBy": [
         ".github/workflows/release.yml",
         "build.ps1",
         "Installer/zip/build-zip.ps1",
-        "Installer/msi/build-msi.ps1",
-        "Installer/msix/build-msix.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
-        "Checksum functions write and validate the release checksum file",
-        "Assert-RSProducedMsixHasNoTestSurface and Assert-RSMsixPackagingOutput delete a rejected newly produced MSIX and its package folder beneath AppPackages without following any reparse point"
+        "Checksum functions write and validate the release checksum file"
       ],
       "outputs": [
         "Validated release artifact metadata and checksum files"
@@ -2343,7 +2340,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct self-test, Pester, and build invocation parameters, including explicit no-activation requests, and classify execution results.",
+  "purpose": "Construct self-test, Pester, and build invocation parameters, normalize bounded Pester case failure/skip details, including explicit no-activation requests, and classify execution results.",
       "usage": "Loaded through the TestRunPlan facade; domain modules import it when they need shared invocation or result semantics.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2353,9 +2350,9 @@
       ],
       "prerequisites": [],
       "sideEffects": [],
-      "outputs": [
-        "Invocation arguments, no-activation selection, environment overrides, coverage results, and retry classifications"
-      ],
+  "outputs": [
+    "Invocation arguments, no-activation selection, environment overrides, normalized Pester case reasons capped at 8 KiB per case, coverage results, and retry classifications"
+  ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
@@ -2421,7 +2418,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds and unchanged pre-contract inventory boundaries across the source-snapshot migration, with identical environments except an explicitly matched reviewed Zig transition.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
@@ -2482,18 +2479,21 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards.",
-      "usage": "Import through its declared repository consumers; use create-only publication for immutable content-addressed records and the derived dependency closure for runner fingerprints.",
+      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots, canonical Git-blob SHA-256 with measured-size blob batches for large immutable inventories, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards.",
+      "usage": "Import through its declared repository consumers; use canonical Git-blob digests for cross-platform immutable-byte identity, create-only publication for immutable content-addressed records, and the derived dependency closure for runner fingerprints.",
       "consumerClosure": "derived-references",
       "usedBy": [
         "build.ps1",
         ".github/workflows/build-reusable.yml",
+        "Specs/TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/stock-final-recipe.ps1",
         "Tools/Run-AllTests.ps1",
         "Tools/Modules/Build/BuildEvidence.psm1",
         "Tools/Modules/Testing/TestRunPlan.Common.psm1",
         "Tools/Modules/Testing/TestRunSummary.psm1",
         "Tools/Modules/Testing/ValidationEvidence.psm1",
         "Tools/Modules/Testing/ValidationImpact.psm1",
+        "Tools/Modules/Testing/TestRunArchive.psm1",
+        "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
         "Tools/TerminalEngine/GhosttyCandidateOverlay.psm1",
         "Tools/TerminalEngine/GhosttyCandidateReview.psm1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
@@ -2502,9 +2502,11 @@
         "Tools/Tests/GhosttyCandidateOverlay.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+        "Tools/Tests/TestRunArchive.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
-        "Tools/Tests/ValidationImpact.Tests.ps1"
+        "Tools/Tests/ValidationImpact.Tests.ps1",
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer for Startrail evidence operations",
@@ -2516,6 +2518,7 @@
         "Atomic writer functions either replace one explicitly selected mutable record or create one immutable record after schema validation"
       ],
       "outputs": [
+        "Canonical Git-blob SHA-256 digests and batched digest maps",
         "Canonical JSON bytes and SHA-256 digests",
         "Workspace snapshots with phase timings",
         "Versioned component entry fingerprints and build-receipt binding digests",
@@ -2669,7 +2672,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, retain v1 sidecars, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance.",
+      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance.",
       "usage": "Loaded through the TestRunPlan facade; summary consumers must prefer v2, treat BLOCKED as corrupt evidence, and retain explicit v1 compatibility handling during migration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2686,7 +2689,7 @@
         "Typed validation exit codes",
         "Case-history rows, JSONL text, dashboard Markdown, and GitHub step-summary Markdown"
       ],
-      "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
+      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
@@ -2701,12 +2704,13 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Own fail-closed exact X:/RedSalamander.Perf authorization, ownership markers, fresh uncached reparse-component checks and contained output validation, sandbox-confined test link creation (New-RSTestSandboxLink), run contexts, exact/stale-run removal, and live-owner-consistent root-local disk audits that require current root authority even when a requested path is absent. Preserve completed and abandoned runs through create-only, owner-checked, verified same-volume evidence archival.",
-      "usage": "Loaded through the TestRunPlan facade; every test-data consumer uses the same marked fixed-local-drive root. Synthetic liveness cleanup requires an explicit CandidateRunIds allowlist.",
+      "purpose": "Own fail-closed exact X:/RedSalamander.Perf authorization, ownership markers, fresh uncached reparse-component checks and contained output validation, sandbox-confined test link creation with one PowerShell-resolved absolute link path for validation and creation (New-RSTestSandboxLink), run contexts, exact/stale-run removal, and live-owner-consistent root-local disk audits that require current root authority even when a requested path is absent. Preserve completed and abandoned runs through create-only, owner-checked, verified same-volume evidence archival.",
+      "usage": "Loaded through the TestRunPlan facade or imported by an executing test fixture that allocates scratch; every test-data consumer uses the same marked fixed-local-drive root. Synthetic liveness cleanup requires an explicit CandidateRunIds allowlist.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Clean-TestSandbox.ps1",
-        "Tools/Run-AllTests.ps1"
+        "Tools/Run-AllTests.ps1",
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer on Windows",
@@ -2732,6 +2736,7 @@
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/TestSandboxContainment.Tests.ps1",
+        "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"
       ],
       "replacement": null
@@ -2802,7 +2807,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks.",
+      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, plus the manifest-pinned one-to-one I27 relocation guard for stock-Windows path compatibility, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks.",
       "usage": "Import through Get-SpecInventory.ps1 or focused specification tests.",
       "usedBy": [
         "Tools/Get-SpecInventory.ps1",
@@ -2938,7 +2943,8 @@
       "usedBy": [
         "Tools/TerminalEngine/Invoke-HistoricalTerminalTests.ps1",
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
-        "Tools/Tests/HistoricalTerminalProfile.Tests.ps1"
+        "Tools/Tests/HistoricalTerminalProfile.Tests.ps1",
+        "Tools/Tests/SharedToolingModules.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [],
@@ -4619,8 +4625,8 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide shared text/equality assertions and the hermetic Startrail Git-state fixture for Tools Pester suites.",
-      "usage": "Import from Tools tests instead of redefining shared assertions or dirty/staged/untracked/delete/rename fixture construction.",
+      "purpose": "Provide shared text/equality assertions, explicit positive test-block results, and hermetic Git/filesystem fixtures for Tools Pester suites.",
+      "usage": "Import from Tools tests instead of redefining shared assertions, positive exception handling, or dirty/staged/untracked/delete/rename fixture construction.",
       "usedBy": [
         "Tools/Tests/*.Tests.ps1"
       ],
@@ -4632,6 +4638,7 @@
       ],
       "outputs": [
         "Shared Pester helper functions",
+        "Explicit success/output/error results for positive test actions",
         "Hermetic validation Git fixture metadata",
         "Unique marked run-archive filesystem fixtures"
       ],
@@ -4891,6 +4898,33 @@
       "replacement": null
     },
     {
+      "path": "Tools/Tests/BuildEvidence.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Guard canonical artifact and receipt identity, uniform test-surface metadata, final native-byte capture and pre-publication drift rejection.",
+      "usage": "Current tooling profile; execute the whole file so its fingerprint command-surface setup is retained.",
+      "usedBy": [
+        "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"
+      ],
+      "prerequisites": [
+        "PowerShell with Pester",
+        "Git",
+        "Existing marked sandbox"
+      ],
+      "sideEffects": [
+        "Creates isolated artifact, provenance and receipt fixtures inside the marked TestSandbox; a deterministic provenance writer feeds production capture, manifest, and drift-guard statements"
+      ],
+      "outputs": [
+        "Pester results"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "self"
+      ],
+      "replacement": null
+    },
+    {
       "path": "Tools/Tests/BuildReproducibility.Tests.ps1",
       "kind": "test",
       "visibility": "internal",
@@ -4906,7 +4940,7 @@
         "Visual Studio MSBuild for the RequiresBuildToolchain cohort"
       ],
       "sideEffects": [
-        "Creates and retains contained package fixtures and read-only MSBuild evaluation output in the marked sandbox"
+        "Creates build/runtime fixtures only in the marked TestSandbox; read-only compiler-policy evaluation writes under that sandbox"
       ],
       "outputs": [
         "Pester results, package fixtures and effective compiler metadata JSON"

@@ -117,11 +117,6 @@ void NavigationHost::Detach() noexcept
     }
     if (_analysisButton != nullptr)
         _analysisButton->SetOnClick({});
-    if (_modeCombo != nullptr)
-    {
-        _modeCombo->SetOnSelectionChanged({});
-        _modeCombo->SetOnPopupRequested({});
-    }
     if (_backButton != nullptr)
     {
         _backButton->SetOnClick({});
@@ -158,13 +153,12 @@ void NavigationHost::Detach() noexcept
     _forwardButton = nullptr;
 
     _analysisButton = nullptr;
-    _modeCombo      = nullptr;
     _folderButtons.fill(nullptr);
     _ancestorCombo = nullptr;
     _crumbButtons.fill(nullptr);
     _visibleCrumbTokens.fill(0u);
-    _crumbs.clear();
-    _ancestorTokens.clear();
+    decltype(_crumbs){}.swap(_crumbs);
+    decltype(_ancestorTokens){}.swap(_ancestorTokens);
     _canBack         = false;
     _canForward      = false;
     _analysisVisible = true;
@@ -398,14 +392,9 @@ LRESULT NavigationHost::HandleWindowMessage(HWND hwnd, UINT message, WPARAM wPar
     const ViewerSpaceHosts::ScopedHostDiagnostics diagnostics;
     if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
     {
-        const bool control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-        const bool alt     = (GetKeyState(VK_MENU) & 0x8000) != 0;
-        if (_host.GetFocusControl() == _modeCombo && ! control && ! alt && (wParam == VK_UP || wParam == VK_DOWN))
-        {
-            InvokeModeChanged(wParam == VK_DOWN);
-            return 0;
-        }
-        const bool comboPopupOpen = (_modeCombo != nullptr && _modeCombo->IsPopupOpen()) || (_ancestorCombo != nullptr && _ancestorCombo->IsPopupOpen());
+        const bool control        = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool alt            = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        const bool comboPopupOpen = _ancestorCombo != nullptr && _ancestorCombo->IsPopupOpen();
         const bool dismissCombo   = comboPopupOpen && (wParam == VK_ESCAPE || (alt && wParam == VK_UP));
         if (! dismissCombo && (wParam == VK_ESCAPE || wParam == VK_F5 || wParam == VK_BACK || (control && (wParam == '1' || wParam == '2')) ||
                                (alt && (wParam == VK_LEFT || wParam == VK_RIGHT || wParam == VK_UP))))

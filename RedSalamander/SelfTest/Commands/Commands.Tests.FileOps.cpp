@@ -6832,7 +6832,29 @@ public:
     slash.acceptedSeparators     = L"/";
     slash.preferredSeparator     = L'/';
     slash.componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive;
-    const std::wstring longName  = std::wstring(320u, L'\u00E9') + L"_r\u00E9vision_\u6771\u4EAC_\U0001F600";
+    FileOperations::QualifiedEndpoint firstDisplayEndpoint{};
+    firstDisplayEndpoint.pluginId                                 = L"builtin/file-system";
+    firstDisplayEndpoint.instanceId                               = L"host/default";
+    firstDisplayEndpoint.profileId                                = L"local-paths";
+    firstDisplayEndpoint.rootId                                   = L"volume/first";
+    firstDisplayEndpoint.pathIdentity                             = local;
+    FileOperations::QualifiedEndpoint secondDisplayEndpoint       = firstDisplayEndpoint;
+    secondDisplayEndpoint.rootId                                  = L"volume/second";
+    FileOperations::QualifiedEndpoint incompatibleDisplayEndpoint = secondDisplayEndpoint;
+    incompatibleDisplayEndpoint.pathIdentity                      = slash;
+    const std::vector<std::filesystem::path> sameParentDifferentRoots{L"C:\\Parent\\Mounted", L"C:\\Parent\\Ordinary"};
+    NonRevertableFileOperationPromptCounts sameParentCounts{};
+    sameParentCounts.folderCount                          = 2u;
+    const FileSystemPathIdentity* selectedDisplayIdentity = FileOperations::SelectSharedDisplayPathIdentity(firstDisplayEndpoint, secondDisplayEndpoint);
+    const std::wstring groupedSameParent = FormatFileOperationConfirmationSource(sameParentDifferentRoots, sameParentCounts, selectedDisplayIdentity);
+    if (! state.Require(
+            ! FileOperations::QualifiedEndpointsHaveSamePathContract(firstDisplayEndpoint, secondDisplayEndpoint) &&
+                selectedDisplayIdentity == &firstDisplayEndpoint.pathIdentity.value() &&
+                FileOperations::SelectSharedDisplayPathIdentity(firstDisplayEndpoint, incompatibleDisplayEndpoint) == nullptr &&
+                groupedSameParent == L"C:\\Parent\\",
+            L"Same-provider/profile roots with matching path rules must retain common-parent display grouping without weakening root-qualified admission."))
+        return false;
+    const std::wstring longName = std::wstring(320u, L'\u00E9') + L"_r\u00E9vision_\u6771\u4EAC_\U0001F600";
     struct PathCase final
     {
         std::wstring_view name;
@@ -6927,18 +6949,18 @@ public:
         for (const PathCase& test : cases)
         {
             NonRevertableFileOperationPromptCounts counts{};
-            counts.folderCount                   = test.folderCount;
-            counts.fileCount                     = static_cast<unsigned long long>(test.sources.size()) - test.folderCount;
-            counts.hasSampleFile                 = counts.fileCount > 0u;
-            counts.sampleFile                    = test.sources.front();
-            const std::wstring_view fileSuffix   = counts.fileCount == 1u ? L"" : L"s";
-            const std::wstring_view folderSuffix = counts.folderCount == 1u ? L"" : L"s";
-            const std::wstring what =
-                counts.fileCount > 0u && counts.folderCount > 0u
-                    ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS, counts.fileCount, fileSuffix, counts.folderCount, folderSuffix)
-                    : (counts.fileCount > 0u ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILE, counts.fileCount, fileSuffix)
-                                             : FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FOLDER, counts.folderCount, folderSuffix));
-            const auto sourceBefore              = test.sources;
+            counts.folderCount      = test.folderCount;
+            counts.fileCount        = static_cast<unsigned long long>(test.sources.size()) - test.folderCount;
+            counts.hasSampleFile    = counts.fileCount > 0u;
+            counts.sampleFile       = test.sources.front();
+            const std::wstring what = counts.fileCount > 0u && counts.folderCount > 0u
+                                          ? FormatStringResource(nullptr,
+                                                                 IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS,
+                                                                 FormatFileOperationCountNoun(FileOperationCountNoun::File, counts.fileCount),
+                                                                 FormatFileOperationCountNoun(FileOperationCountNoun::Folder, counts.folderCount))
+                                          : (counts.fileCount > 0u ? FormatFileOperationCountNoun(FileOperationCountNoun::File, counts.fileCount)
+                                                                   : FormatFileOperationCountNoun(FileOperationCountNoun::Folder, counts.folderCount));
+            const auto sourceBefore = test.sources;
             const std::wstring destinationBefore = test.destination.native();
             for (const auto operation : {FILESYSTEM_COPY, FILESYSTEM_MOVE})
             {
@@ -6978,7 +7000,7 @@ public:
         const bool fallbackAccepted =
             ConfirmNonRevertableFileOperation(mainWindow, static_cast<IFileSystem*>(nullptr), FILESYSTEM_COPY, fallbackSources, L"bucket/Out\\key");
         HostPromptDebugSnapshot fallbackPrompt{};
-        const std::wstring fallbackWhat = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, 1ull, L"");
+        const std::wstring fallbackWhat = FormatFileOperationCountNoun(FileOperationCountNoun::Item, 1ull);
         const std::wstring fallbackExpected =
             FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_COPY, fallbackWhat, L"C:/Cloud/key\\part", L"bucket/Out\\key");
         state.Require(! fallbackAccepted && HostGetTestPromptRequestCount() == 1u && HostGetTestLastPromptDebugSnapshot(fallbackPrompt) &&
@@ -7338,7 +7360,7 @@ public:
         {
             ExecuteBoundedUiaWorker(observed,
                                     token,
-                                    12'000u,
+                                    static_cast<uint32_t>(SelfTest::Scale(12'000ms).count()),
                                     [observed, mainWindow, operation, token]() noexcept
             {
                 constexpr std::wstring_view overlayClass = L"RedSalamander.AlertOverlayWindow";
@@ -7494,7 +7516,8 @@ public:
         invokeForFocusedItem(name, command);
         modalReturned.store(true, std::memory_order_release);
         modalWatchdog.join();
-        const bool workerCompleted = WaitForBoundedUiaWorker(automation, observed->lifetime, 12'000u, L"file-operation confirmation", name);
+        const bool workerCompleted = WaitForBoundedUiaWorker(
+            automation, observed->lifetime, static_cast<uint32_t>(SelfTest::Scale(12'000ms).count()), L"file-operation confirmation", name);
         state.Require(workerCompleted && observed->opened && observed->changed && observed->accepted && HostGetTestPromptRequestCount() == 1u &&
                           ! HostIsPromptShutdown(),
                       std::format(L"Live Copy/Move confirmation must acknowledge every changed option and accept exactly once: "
@@ -7901,7 +7924,9 @@ template <typename Read> [[nodiscard]] HRESULT RetryFileOperationsClipboardReadF
                   L"Create an owned clipboard snapshot before keyboard copy.");
     if (! state.failure.empty())
         return false;
-    bool clipboardSnapshotComplete = false;
+    bool clipboardSnapshotComplete   = false;
+    constexpr DWORD supportedMediums = TYMED_HGLOBAL | TYMED_ISTREAM | TYMED_GDI;
+    constexpr DWORD knownMediums     = supportedMediums | TYMED_FILE | TYMED_ISTORAGE | TYMED_MFPICT | TYMED_ENHMF;
     for (size_t index = 0u; index <= 256u; ++index)
     {
         FORMATETC format{};
@@ -7914,9 +7939,36 @@ template <typename Read> [[nodiscard]] HRESULT RetryFileOperationsClipboardReadF
         }
         if (FAILED(next) || index == 256u)
             break;
-        if (! state.Require(! format.ptd && format.dwAspect == DVASPECT_CONTENT && format.lindex == -1,
-                            L"Directed clipboard tests require persistable unindexed content formats before mutation."))
+        const auto skipUnsupportedDescriptor = [&]() noexcept
+        {
+            state.Skip(std::format(
+                L"Clipboard fixture skipped before mutation: cfFormat={} tymed=0x{:08X} targetDevice={} aspect={} lindex={} is not preserved exactly.",
+                format.cfFormat,
+                static_cast<unsigned long>(format.tymed),
+                format.ptd != nullptr,
+                format.dwAspect,
+                format.lindex));
             return false;
+        };
+        if (format.ptd || format.dwAspect != DVASPECT_CONTENT || format.lindex != -1)
+            return skipUnsupportedDescriptor();
+        const DWORD advertisedMediums = static_cast<DWORD>(format.tymed);
+        if (advertisedMediums == 0u || (advertisedMediums & ~knownMediums) != 0u)
+        {
+            state.Require(false,
+                          std::format(L"Clipboard format {} has a malformed advertised medium mask 0x{:08X}.",
+                                      format.cfFormat,
+                                      static_cast<unsigned long>(format.tymed)));
+            return false;
+        }
+        DWORD requestedMediums = advertisedMediums & supportedMediums;
+        if (format.cfFormat == CF_PALETTE)
+            requestedMediums &= ~static_cast<DWORD>(TYMED_GDI);
+        if (requestedMediums == 0u)
+            return skipUnsupportedDescriptor();
+        // FORMATETC.tymed is an acceptable-carrier mask. Ask the source only
+        // for carriers this fixture can preserve, while retaining every format.
+        format.tymed = static_cast<TYMED>(requestedMediums);
         wil::unique_stg_medium medium;
         const HRESULT read = ReadFileOperationsClipboardMediumForSelfTest(source, format, medium);
         if (SUCCEEDED(read) && medium.tymed == TYMED_ISTREAM && medium.pstm)
@@ -8123,8 +8175,9 @@ struct FileOperationsClipboardFlushProbe
     wil::com_ptr<IDataObject> saved;
     size_t savedFormats = 0u;
     std::vector<FileOperationsClipboardFormatBytes> savedBytes;
-    if (! RetainFileOperationsClipboardFormats(*original, saved, savedFormats, state, &savedBytes) ||
-        ! state.Require(generation.MatchesCurrent(), L"Clipboard changed during the complete format snapshot; do not invoke Copy detail."))
+    if (! RetainFileOperationsClipboardFormats(*original, saved, savedFormats, state, &savedBytes))
+        return state.failure.empty() && ! state.skipped.empty();
+    if (! state.Require(generation.MatchesCurrent(), L"Clipboard changed during the complete format snapshot; do not invoke Copy detail."))
         return false;
     const auto restoreNow = [&]() noexcept
     {
@@ -8334,7 +8387,7 @@ struct FileOperationsClipboardFlushProbe
         size_t count = 0u;
         std::vector<FileOperationsClipboardFormatBytes> expected;
         if (! RetainFileOperationsClipboardFormats(*source, retained, count, state, &expected))
-            return false;
+            return state.failure.empty() && ! state.skipped.empty();
         if (round == 0u)
         {
             constexpr std::array<unsigned char, payload.size()> replacementHtml{};
@@ -8699,6 +8752,62 @@ struct FileOperationsClipboardFlushProbe
     return state.failure.empty();
 }
 
+struct ThroughputRestartSettingsSnapshot final
+{
+    bool popupExpanded = true;
+    std::array<std::string, 2u> popupPlacements;
+};
+
+[[nodiscard]] std::filesystem::path ThroughputRestartSettingsPath(const std::filesystem::path& childRun) noexcept
+{
+#ifdef _DEBUG
+    constexpr std::wstring_view settingsFileName = L"RedSalamander-debug.settings.json";
+#else
+    const std::wstring settingsFileName = std::format(L"RedSalamander-{}.{}.settings.json", VERSINFO_MAJOR, VERSINFO_MINOR);
+#endif
+    return childRun / L"scratch" / L"settings-store" / L"RedSalamander" / L"Settings" / settingsFileName;
+}
+
+[[nodiscard]] bool ReadThroughputRestartSettings(const std::filesystem::path& path, ThroughputRestartSettingsSnapshot& snapshot) noexcept
+{
+    std::error_code fileSizeError;
+    const uintmax_t fileBytes                = std::filesystem::file_size(path, fileSizeError);
+    constexpr uintmax_t maximumSettingsBytes = 4u * 1024u * 1024u;
+    if (fileSizeError || fileBytes == 0u || fileBytes > maximumSettingsBytes || fileBytes > std::numeric_limits<size_t>::max())
+        return false;
+
+    std::ifstream settingsFile(path, std::ios::binary);
+    if (! settingsFile)
+        return false;
+    std::string settingsJson(static_cast<size_t>(fileBytes), '\0');
+    settingsFile.read(settingsJson.data(), static_cast<std::streamsize>(settingsJson.size()));
+    if (! settingsFile || settingsFile.gcount() != static_cast<std::streamsize>(settingsJson.size()))
+        return false;
+
+    Common::Settings::JsonValue settingsRoot;
+    if (FAILED(Common::Settings::ParseJsonValue(settingsJson, settingsRoot)))
+        return false;
+    const Common::Settings::JsonValue* fileOperations = Common::Settings::FindMember(settingsRoot, "fileOperations");
+    if (fileOperations)
+    {
+        const auto expanded = Common::Settings::GetBool(*fileOperations, "popupThroughputExpanded");
+        if (expanded.has_value())
+            snapshot.popupExpanded = expanded.value();
+    }
+
+    const Common::Settings::JsonValue* windows = Common::Settings::FindMember(settingsRoot, "windows");
+    if (! windows)
+        return false;
+    constexpr std::array<std::string_view, 2u> placementIds{{"FileOperationsPopup", "FileOperationsPopupExpanded"}};
+    for (size_t index = 0u; index < placementIds.size(); ++index)
+    {
+        const Common::Settings::JsonValue* placement = Common::Settings::FindMember(*windows, placementIds[index]);
+        if (! placement || FAILED(Common::Settings::SerializeJsonValue(*placement, snapshot.popupPlacements[index])))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestFileOperationsPopupThroughputRestart(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace FileOperationsPopupInternal;
@@ -8766,25 +8875,64 @@ struct FileOperationsClipboardFlushProbe
         const auto root = ResolveTestSandboxBase(rootError);
         if (! state.Require(! rootError && ! root.empty(), L"The validated child test sandbox root is unavailable."))
             return false;
-        const std::wstring runId = std::format(L"throughput-restart-{}-{}", GetCurrentProcessId(), GetTickCount64());
-        ScopedEnvironmentVariable isolatedRoot(kTestRootEnvironmentVariable, std::wstring_view(root.native()));
-        ScopedEnvironmentVariable isolatedRun(kTestRunIdEnvironmentVariable, std::wstring_view(runId));
-        const auto childRun = root / L"runs" / runId;
-        const auto cleanup  = wil::scope_exit([&] { static_cast<void>(SelfTest::RemoveAll(childRun)); });
-        Common::Settings::Settings seed{};
-        seed.theme.currentThemeId = L"builtin/dark";
-        state.Require(SUCCEEDED(Common::Settings::SaveSettings(L"RedSalamander", seed)), L"Could not seed default settings in the isolated child run.");
+        const std::wstring runId          = std::format(L"throughput-restart-{}-{}", GetCurrentProcessId(), GetTickCount64());
+        const auto childRun               = root / L"runs" / runId;
+        const auto cleanup                = wil::scope_exit([&] { static_cast<void>(SelfTest::RemoveAll(childRun)); });
+        const auto childSettingsPath      = ThroughputRestartSettingsPath(childRun);
+        const auto childSettingsDirectory = childSettingsPath.parent_path();
+        state.Require(SelfTest::EnsureDirectory(childSettingsDirectory), L"Could not create the isolated child settings directory.");
+        constexpr std::string_view seedSettingsJson = R"json({"schemaVersion":16,"fileOperations":{"popupThroughputExpanded":false}})json";
+        state.Require(SelfTest::WriteTextFile(childSettingsPath, seedSettingsJson), L"Could not seed the child-only collapsed popup preference.");
+        if (! state.failure.empty())
+            return false;
         const auto executable = wil::GetModuleFileNameW();
         if (! state.Require(static_cast<bool>(executable), L"The restart executable path is unavailable.") || ! state.failure.empty())
             return false;
-        std::array<std::optional<Common::Settings::WindowPlacement>, 2> savedPlacements{};
+        std::array<std::optional<std::string>, 2u> savedPlacements{};
         for (const auto* childMode : {L"default-collapse", L"collapsed-expand", L"expanded"})
         {
-            ScopedEnvironmentVariable childModeEnvironment(modeEnvironment, std::wstring_view(childMode));
-            const auto result = RunChildProcess(
-                {.executablePath = executable.get(),
-                 .arguments      = {L"--commands-selftest", L"--selftest-timeout-multiplier=3", L"--selftest-case=cmd_pane_fileops_popup_throughput_restart"},
-                 .timeout        = SelfTest::Scale(std::chrono::milliseconds(30000))});
+            const auto childTimeout = SelfTest::Scale(std::chrono::milliseconds(30000));
+            RedSalamander::TestSupport::ChildProcessResult result{};
+            std::atomic<bool> childCompleted{false};
+            RedSalamander::TestSupport::ChildProcessOptions childOptions{
+                .executablePath = executable.get(),
+                .arguments      = {L"--commands-selftest", L"--selftest-timeout-multiplier=3", L"--selftest-case=cmd_pane_fileops_popup_throughput_restart"},
+                .timeout        = childTimeout,
+                .environmentOverrides = {{std::wstring(kTestRootEnvironmentVariable), root.native()},
+                                         {std::wstring(kTestRunIdEnvironmentVariable), runId},
+                                         {std::wstring(modeEnvironment), std::wstring(childMode)}}};
+            std::jthread childRunner;
+            try
+            {
+                childRunner = std::jthread([&](std::stop_token stopToken) noexcept
+                {
+                    childOptions.cancellationToken = stopToken;
+                    result                         = RunChildProcess(childOptions);
+                    childCompleted.store(true, std::memory_order_release);
+                });
+            }
+            catch (const std::system_error& error)
+            {
+                state.Require(false, std::format(L"Could not start the contained throughput restart child runner: {}.", error.code().value()));
+                return false;
+            }
+            const auto childWait = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return childCompleted.load(std::memory_order_acquire);
+            }, {.timeout = childTimeout + SelfTest::Scale(std::chrono::milliseconds(5000)), .operationName = L"throughput restart child runner"});
+            if (! childWait.conditionMet)
+            {
+                childRunner.request_stop();
+                const auto cancelWait = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                    return childCompleted.load(std::memory_order_acquire);
+                }, {.timeout = SelfTest::Scale(std::chrono::milliseconds(5000)), .operationName = L"throughput restart child containment"});
+                if (! cancelWait.conditionMet)
+                {
+                    state.Require(false, std::format(L"{}; child runner did not return after its owned-job cancellation.", childWait.timeoutDiagnostic));
+                    return false;
+                }
+            }
+            if (childRunner.joinable())
+                childRunner.join();
             const auto receipt = std::format("mode={}\nprocessId={}\nexitCode={}\nelapsedMs={}\ncompleted={}\n",
                                              Common::Strings::Utf8FromUtf16ReplacingInvalid(childMode),
                                              result.processId,
@@ -8793,37 +8941,42 @@ struct FileOperationsClipboardFlushProbe
                                              result.Completed());
             state.Require(SelfTest::WriteTextFile(artifactRoot / (std::wstring(childMode) + L".txt"), receipt),
                           L"Could not preserve the restart child receipt.");
+            if (! result.Completed())
+            {
+                state.Require(
+                    false,
+                    std::format(
+                        L"Throughput restart child '{}' failed: {} (status {}).", childMode, result.diagnostic, static_cast<unsigned int>(result.status)));
+                return false;
+            }
             std::error_code copyError;
             const auto childResults = childRun / L"artifacts" / L"selftest" / L"last_run" / L"commands" / L"results.json";
             const bool copied       = std::filesystem::copy_file(
                 childResults, artifactRoot / (std::wstring(childMode) + L"-results.json"), std::filesystem::copy_options::overwrite_existing, copyError);
-            state.Require(copied && ! copyError, L"Could not preserve the child assertions before restarting it.");
-            state.Require(result.Completed() && result.exitCode == 0u,
-                          std::format(L"Throughput restart child '{}' failed: {} (exit {}).", childMode, result.diagnostic, result.exitCode));
+            state.Require(copied && ! copyError,
+                          std::format(L"Could not preserve child assertions: {} (exit {}, status {}).",
+                                      result.diagnostic,
+                                      result.exitCode,
+                                      static_cast<unsigned int>(result.status)));
+            state.Require(result.exitCode == 0u,
+                          std::format(L"Throughput restart child '{}' returned exit {}: {}.", childMode, result.exitCode, result.diagnostic));
             if (! state.failure.empty())
                 return false;
-            Common::Settings::Settings saved{};
-            state.Require(SUCCEEDED(Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", saved)),
-                          L"The parent must read the child settings after process shutdown.");
+            ThroughputRestartSettingsSnapshot saved{};
+            state.Require(ReadThroughputRestartSettings(childSettingsPath, saved),
+                          L"The parent must parse the child settings through its explicit isolated path.");
             const bool expectedExpanded = std::wstring_view(childMode) != L"default-collapse";
-            state.Require((! saved.fileOperations || saved.fileOperations->popupThroughputExpanded) == expectedExpanded,
-                          L"Process shutdown must preserve the disclosure saved by the child UI.");
+            state.Require(saved.popupExpanded == expectedExpanded, L"Process shutdown must preserve the disclosure saved by the child UI.");
             size_t index = 0u;
             for (const auto* id : {L"FileOperationsPopup", L"FileOperationsPopupExpanded"})
             {
-                const auto found = saved.windows.find(id);
-                if (! state.Require(found != saved.windows.end(), L"The restarted process must retain both placement records on disk."))
-                    return false;
-                const auto& actual = found->second;
+                const size_t placementIndex = index;
                 if (savedPlacements[index])
                 {
-                    const auto& expected = *savedPlacements[index];
-                    state.Require(actual.state == expected.state && actual.bounds.x == expected.bounds.x && actual.bounds.y == expected.bounds.y &&
-                                      actual.bounds.width == expected.bounds.width && actual.bounds.height == expected.bounds.height &&
-                                      actual.dpi == expected.dpi,
-                                  L"Restart and disclosure changes must preserve each saved position, dimensions, state and DPI.");
+                    state.Require(saved.popupPlacements[placementIndex] == savedPlacements[placementIndex].value(),
+                                  std::format(L"Restart and disclosure changes must preserve the '{}' placement record.", id));
                 }
-                savedPlacements[index++] = actual;
+                savedPlacements[index++] = std::move(saved.popupPlacements[placementIndex]);
             }
             if (! state.failure.empty())
                 return false;
@@ -8972,17 +9125,8 @@ struct FileOperationsClipboardFlushProbe
                                   IsWindowVisible(popup.get()) != FALSE,
                                   inputInfo.dwTime,
                                   (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0));
-                std::array<INPUT, 2> keys{};
-                for (auto& key : keys)
-                {
-                    key.type           = INPUT_KEYBOARD;
-                    key.ki.wVk         = VK_SPACE;
-                    key.ki.dwExtraInfo = 0x49543237u;
-                }
-                keys[1].ki.dwFlags  = KEYEVENTF_KEYUP;
-                const UINT inserted = SendInput(static_cast<UINT>(keys.size()), keys.data(), sizeof(INPUT));
-                Trace(std::format(L"Throughput Space submitted: inserted={} expected={} inputTag=0x{:X}", inserted, keys.size(), keys[0].ki.dwExtraInfo));
-                state.Require(inserted == keys.size(), L"Send the owned throughput disclosure's Space press and release.");
+                SendMessageW(popup.get(), WM_KEYDOWN, VK_SPACE, 0);
+                SendMessageW(popup.get(), WM_KEYUP, VK_SPACE, 0);
             }
         }
         else
@@ -9540,7 +9684,7 @@ struct FileOperationsClipboardFlushProbe
     // other active streams); otherwise both repeat the labelled value.
     const auto requirePath = [&](std::wstring_view label, std::wstring_view path, std::wstring_view suffix, std::wstring_view expectedHelp = {})
     {
-        const std::wstring fullText = std::format(L"{} {}", label, path);
+        const std::wstring fullText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, label, path);
         const std::wstring helpText = expectedHelp.empty() ? fullText : std::wstring(expectedHelp);
         wil::com_ptr_nothrow<IRawElementProviderSimple> provider;
         const bool found = FindMatchingWindowHostRawProvider(popup.get(), 0, fullText, provider.put()) && provider;
@@ -9613,7 +9757,8 @@ struct FileOperationsClipboardFlushProbe
     const auto requireMissingPath = [&](std::wstring_view label, std::wstring_view path)
     {
         wil::com_ptr_nothrow<IRawElementProviderSimple> provider;
-        state.Require(! FindMatchingWindowHostRawProvider(popup.get(), 0, std::format(L"{} {}", label, path), provider.put()),
+        state.Require(! FindMatchingWindowHostRawProvider(
+                          popup.get(), 0, FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, label, path), provider.put()),
                       L"A replaced or hidden path must leave the current UIA tree.");
     };
     for (const int widthDip : {480, 640, 760, 480})
@@ -9763,7 +9908,7 @@ struct FileOperationsClipboardFlushProbe
     size_t retainedFormats = 0u;
     std::vector<FileOperationsClipboardFormatBytes> expectedClipboard;
     if (! RetainFileOperationsClipboardFormats(*clipboardBeforePathKeys, retainedClipboard, retainedFormats, state, &expectedClipboard))
-        return false;
+        return state.failure.empty() && ! state.skipped.empty();
     if (! state.Require(clipboardGeneration.MatchesCurrent(),
                         L"Clipboard changed during snapshot; preserve the newer contents without starting directed mutation."))
         return false;
@@ -9879,7 +10024,7 @@ struct FileOperationsClipboardFlushProbe
     const auto sourceHelp = [&]()
     {
         if (task.inFlightFileCount <= 1u)
-            return std::format(L"{} {}", fromLabel, task.inFlightFiles[0].sourcePath);
+            return FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, fromLabel, task.inFlightFiles[0].sourcePath);
         std::wstring others;
         for (size_t index = 1u; index < task.inFlightFileCount; ++index)
             others += std::format(L"{}{}", others.empty() ? L"" : L"\n", task.inFlightFiles[index].sourcePath);
@@ -9924,7 +10069,7 @@ struct FileOperationsClipboardFlushProbe
     wil::com_ptr_nothrow<IRawElementProviderFragment> focusedPathFragment;
     UiaRect focusedPathBounds{};
     POINT focusedClientOrigin{};
-    const std::wstring focusedPathText = std::format(L"{} {}", fromLabel, task.inFlightFiles[0].sourcePath);
+    const std::wstring focusedPathText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, fromLabel, task.inFlightFiles[0].sourcePath);
     if (! state.Require(FindMatchingWindowHostRawProvider(popup.get(), 0, focusedPathText, focusedPathProvider.put()) && focusedPathProvider &&
                             SUCCEEDED(focusedPathProvider.query_to(focusedPathFragment.put())) && focusedPathFragment &&
                             SUCCEEDED(focusedPathFragment->get_BoundingRectangle(&focusedPathBounds)) && ClientToScreen(popup.get(), &focusedClientOrigin),
@@ -10390,7 +10535,11 @@ struct FileOperationsClipboardFlushProbe
         {
             wil::com_ptr_nothrow<IRawElementProviderSimple> rowProvider;
             if (! state.Require(
-                    FindMatchingWindowHostRawProvider(popup.get(), 0, std::format(L"{} {}", fromLabel, longDetailPath), rowProvider.put(), detailRowId) &&
+                    FindMatchingWindowHostRawProvider(popup.get(),
+                                                      0,
+                                                      FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, fromLabel, longDetailPath),
+                                                      rowProvider.put(),
+                                                      detailRowId) &&
                         rowProvider,
                     L"Resolve the exact current path row for invocation."))
                 return false;
@@ -14041,8 +14190,11 @@ struct FileOperationsPopupTestFixture final
                             task.conflict.primaryActionCount));
             // Inspect the real hosted tree: policy flags alone missed the stale painted
             // transfer rows and their mini-progress while a decision was pending.
-            for (const auto& ordinaryPath : {std::format(L"{} {}", LoadStringResource(nullptr, IDS_FILEOPS_LABEL_FROM), task.currentSourcePath),
-                                             std::format(L"{} {}", LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), task.destinationFolder.wstring())})
+            for (const auto& ordinaryPath :
+                 {FormatStringResource(
+                      nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, LoadStringResource(nullptr, IDS_FILEOPS_LABEL_FROM), task.currentSourcePath),
+                  FormatStringResource(
+                      nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), task.destinationFolder.wstring())})
             {
                 wil::com_ptr_nothrow<IRawElementProviderSimple> staleProvider;
                 state.Require(! FindMatchingWindowHostRawProvider(fixture.popup, 0, ordinaryPath, staleProvider.put()),
@@ -17893,6 +18045,77 @@ namespace
 }
 
 // M27: drive the completed More button and Export issues menu item through
+[[nodiscard]] bool TestLocalizedFileOperationCountForms(CaseState& state) noexcept
+{
+    Localization::LanguagePreference previousLanguage{};
+    if (g_settings.ui.has_value() && ! g_settings.ui->language.empty() && g_settings.ui->language != L"system")
+        previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui->language};
+    const auto restoreLanguage = wil::scope_exit([&]() noexcept { static_cast<void>(Localization::ApplyLanguagePreference(previousLanguage)); });
+
+    struct FormCase final
+    {
+        std::wstring_view culture;
+        FileOperationCountNoun noun;
+        unsigned long long count;
+        std::wstring_view expected;
+    };
+    constexpr FormCase forms[]{{L"en-US", FileOperationCountNoun::Item, 1u, L"1 item"},         {L"en-US", FileOperationCountNoun::Item, 2u, L"2 items"},
+                               {L"fr-FR", FileOperationCountNoun::Item, 0u, L"0 élément"},      {L"fr-FR", FileOperationCountNoun::Item, 1u, L"1 élément"},
+                               {L"fr-FR", FileOperationCountNoun::Item, 2u, L"2 éléments"},     {L"cs-CZ", FileOperationCountNoun::Item, 0u, L"0 položek"},
+                               {L"cs-CZ", FileOperationCountNoun::Item, 1u, L"1 položka"},      {L"cs-CZ", FileOperationCountNoun::Item, 2u, L"2 položky"},
+                               {L"cs-CZ", FileOperationCountNoun::Item, 4u, L"4 položky"},      {L"cs-CZ", FileOperationCountNoun::Item, 5u, L"5 položek"},
+                               {L"cs-CZ", FileOperationCountNoun::Item, 21u, L"21 položek"},    {L"cs-CZ", FileOperationCountNoun::File, 2u, L"2 soubory"},
+                               {L"cs-CZ", FileOperationCountNoun::Folder, 5u, L"5 složek"},     {L"sk-SK", FileOperationCountNoun::Item, 0u, L"0 položiek"},
+                               {L"sk-SK", FileOperationCountNoun::Item, 1u, L"1 položka"},      {L"sk-SK", FileOperationCountNoun::Item, 2u, L"2 položky"},
+                               {L"sk-SK", FileOperationCountNoun::Item, 4u, L"4 položky"},      {L"sk-SK", FileOperationCountNoun::Item, 5u, L"5 položiek"},
+                               {L"sk-SK", FileOperationCountNoun::Item, 21u, L"21 položiek"},   {L"sk-SK", FileOperationCountNoun::File, 2u, L"2 súbory"},
+                               {L"sk-SK", FileOperationCountNoun::Folder, 5u, L"5 priečinkov"}, {L"ja-JP", FileOperationCountNoun::Item, 1u, L"1 アイテム"},
+                               {L"ja-JP", FileOperationCountNoun::Item, 2u, L"2 アイテム"},     {L"ja-JP", FileOperationCountNoun::File, 21u, L"21 ファイル"},
+                               {L"ja-JP", FileOperationCountNoun::Folder, 4u, L"4 フォルダー"}};
+
+    std::wstring activeCulture;
+    for (const FormCase& test : forms)
+    {
+        if (activeCulture != test.culture)
+        {
+            if (! state.Require(SUCCEEDED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(test.culture)})),
+                                std::format(L"{} count-form resources must load", test.culture)))
+                return false;
+            activeCulture.assign(test.culture);
+            const std::wstring effectiveCulture = Localization::GetEffectiveResourceCulture(nullptr);
+            if (test.culture == L"en-US")
+                state.Require(effectiveCulture == L"en", L"embedded English is the effective count-form culture");
+            else
+                state.Require(effectiveCulture == test.culture, std::format(L"{} satellite is the effective count-form culture", test.culture));
+        }
+
+        const std::wstring actual = FormatFileOperationCountNoun(test.noun, test.count);
+        state.Require(actual == test.expected, std::format(L"{} count {} expected '{}', got '{}'", test.culture, test.count, test.expected, actual));
+    }
+
+    for (const std::wstring_view culture :
+         {std::wstring_view(L"en-US"), std::wstring_view(L"fr-FR"), std::wstring_view(L"cs-CZ"), std::wstring_view(L"sk-SK"), std::wstring_view(L"ja-JP")})
+    {
+        state.Require(SUCCEEDED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(culture)})),
+                      std::format(L"{} format shells must load", culture));
+        const std::wstring itemPhrase      = FormatFileOperationCountNoun(FileOperationCountNoun::Item, 2u);
+        const std::wstring filePhrase      = FormatFileOperationCountNoun(FileOperationCountNoun::File, 2u);
+        const std::wstring folderPhrase    = FormatFileOperationCountNoun(FileOperationCountNoun::Folder, 2u);
+        const std::wstring copyMessage     = FormatStringResource(nullptr, IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED, itemPhrase);
+        const std::wstring filesAndFolders = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS, filePhrase, folderPhrase);
+        const std::wstring selectedFiles   = FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FILES, filePhrase, L"sample.txt");
+        const std::wstring selectedMixed   = FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FOLDERS_FILES, folderPhrase, filePhrase, L"sample.txt");
+        state.Require(! copyMessage.empty() && copyMessage.find(itemPhrase) != std::wstring::npos && ! filesAndFolders.empty() &&
+                          filesAndFolders.find(filePhrase) != std::wstring::npos && filesAndFolders.find(folderPhrase) != std::wstring::npos &&
+                          ! selectedFiles.empty() && selectedFiles.find(filePhrase) != std::wstring::npos &&
+                          selectedFiles.find(L"sample.txt") != std::wstring::npos && ! selectedMixed.empty() &&
+                          selectedMixed.find(folderPhrase) != std::wstring::npos && selectedMixed.find(filePhrase) != std::wstring::npos &&
+                          selectedMixed.find(L"sample.txt") != std::wstring::npos,
+                      std::format(L"{} confirmation, copy and status formats consume localized count phrases", culture));
+    }
+    return state.failure.empty();
+}
+
 // owned UIA. The per-state seam only owns the output directory and prevents
 // ShellExecuteW; the menu callback and actual TSV writer remain production code.
 [[nodiscard]] bool TestFileOperationsCompletedExportActionRoute(HWND mainWindow, CaseState& state) noexcept
@@ -18040,6 +18263,47 @@ namespace
                       originalText.contains(L"Accepted decision (JSON v1)") && successObservation.suppressedLaunches == 1u &&
                       successObservation.refusedCreates == 0u,
                   L"Export callback must write one bounded UTF-16 task report with exact source, destination and typed decision columns; no app launch.");
+    if (! state.failure.empty())
+        return finish();
+
+    const auto hasTransactionTemporary = [&]() noexcept
+    {
+        std::error_code ec;
+        for (std::filesystem::directory_iterator it(reportDir, ec), end; ! ec && it != end; it.increment(ec))
+            if (it->path().filename().native().starts_with(L".$rs-transaction-"))
+                return true;
+        return static_cast<bool>(ec);
+    };
+    fileOps->DebugConfigureIssuesExportRouteForSelfTest(reportDir, false, successful.front().filename().native());
+    std::filesystem::path collisionOutput;
+    const bool collisionExported = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &collisionOutput, false);
+    std::wstring afterCollision;
+    const auto collisionFiles = reportFiles();
+    state.Require(! collisionExported && collisionOutput.empty() && collisionFiles.size() == 1u && collisionFiles.front() == successful.front() &&
+                      ! hasTransactionTemporary() && readReport(successful.front(), afterCollision) && afterCollision == originalText,
+                  L"A deterministic report-name collision must fail without overwriting the existing completed report.");
+
+    struct ExportTransactionFault final
+    {
+        void (*inject)(HRESULT) noexcept;
+        std::wstring_view label;
+    };
+    constexpr ExportTransactionFault transactionFaults[]{{Common::Files::Testing::FailNextLocalFileTransactionWrite, L"write"},
+                                                         {Common::Files::Testing::FailNextLocalFileTransactionFlush, L"flush"},
+                                                         {Common::Files::Testing::FailNextLocalFileTransactionPublish, L"publish"}};
+    for (const ExportTransactionFault& fault : transactionFaults)
+    {
+        std::wstring afterFailure;
+        std::filesystem::path failedOutput;
+        fault.inject(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
+        const bool exported = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &failedOutput, false);
+        const auto files    = reportFiles();
+        state.Require(! exported && failedOutput.empty() && files.size() == 1u && files.front() == successful.front() &&
+                          readReport(successful.front(), afterFailure) && afterFailure == originalText && ! hasTransactionTemporary(),
+                      std::format(L"Injected {} failure must leave no partial report or transaction sibling and preserve the prior report.", fault.label));
+        if (! state.failure.empty())
+            return finish();
+    }
     if (! state.failure.empty())
         return finish();
 
@@ -19073,8 +19337,9 @@ namespace
     wil::com_ptr<IDataObject> saved;
     size_t savedFormats = 0u;
     std::vector<FileOperationsClipboardFormatBytes> savedBytes;
-    if (! RetainFileOperationsClipboardFormats(*original, saved, savedFormats, state, &savedBytes) ||
-        ! state.Require(generation.MatchesCurrent(), L"Preserve a newer clipboard generation without starting recovery input."))
+    if (! RetainFileOperationsClipboardFormats(*original, saved, savedFormats, state, &savedBytes))
+        return state.failure.empty() && ! state.skipped.empty();
+    if (! state.Require(generation.MatchesCurrent(), L"Preserve a newer clipboard generation without starting recovery input."))
         return false;
     const auto restoreClipboardNow = [&]() noexcept
     {
@@ -22569,6 +22834,8 @@ void RunFileOpsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_completed_group_and_navigation", [=](CaseState& state) noexcept {
         return TestFileOperationsPopupCompletedGroupAndNavigation(mainWindow, state);
     });
+    SelfTest::RunCase(
+        options, suite, L"cmd_pane_fileops_localized_count_forms", [](CaseState& state) noexcept { return TestLocalizedFileOperationCountForms(state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_completed_export_action_route", [=](CaseState& state) noexcept {
         return TestFileOperationsCompletedExportActionRoute(mainWindow, state);
     });

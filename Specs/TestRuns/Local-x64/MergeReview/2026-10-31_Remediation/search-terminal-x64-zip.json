@@ -1,0 +1,21 @@
+{
+  "run_id": "20261101T035755Z-78260-df93e57911584b59b801e4962a01f620",
+  "scope": "Full x64 Release tests-disabled ZIP with extraction smoke; local unsigned artifact, no publication",
+  "source_snapshot_before": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "build_exit": 0,
+  "zip_entries": 175,
+  "excluded_entries": [],
+  "source_snapshot_after": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "receipt_id": "ef19a2cd1b79a412386de525dba7bf9312455f78d377de2ba31ad66247d026d5",
+  "receipt_outputs": 174,
+  "artifact_hash_mismatches": 0,
+  "tests_enabled": false,
+  "package": {
+    "path": ".build/AppPackages/RedSalamander-7.0.1-x64-Portable.zip",
+    "bytes": 26040672,
+    "sha256": "e4af357b6c19c41ae983fa5ecb6c530411effdb56ae226ac2e8ae066644f68bf"
+  },
+  "status": "passed",
+  "exit_code": 0,
+  "transcript_sha256": "c6277d3a787ac949c7c631055da76948a7b78102892b5de8c12d4661cb984505"
+}

@@ -1,0 +1,14 @@
+{
+  "RunId": "pl31-7174435d",
+  "ProcessId": 86408,
+  "StartedUtc": "2026-10-31T14:21:40.8345750Z",
+  "FinishedUtc": "2026-10-31T14:23:47.7637444Z",
+  "ExitCode": 0,
+  "PeakPesterHostWorkingSetBytes": 523812864,
+  "WorkingSetSamples": 124,
+  "ChildScript": "Z:\\RedSalamander.Perf\\runs\\pl31-7174435d\\scratch\\codex\\runner-guards-pester\\Invoke-RunnerGuardPester.ps1",
+  "StdoutLog": "Z:\\RedSalamander.Perf\\runs\\pl31-7174435d\\scratch\\codex\\runner-guards-pester\\pester.stdout.log",
+  "StderrLog": "Z:\\RedSalamander.Perf\\runs\\pl31-7174435d\\scratch\\codex\\runner-guards-pester\\pester.stderr.log",
+  "Results": "Z:\\RedSalamander.Perf\\runs\\pl31-7174435d\\scratch\\codex\\runner-guards-pester\\pester-results.json",
+  "LaunchEnvironment": "Z:\\RedSalamander.Perf\\runs\\pl31-7174435d\\scratch\\codex\\runner-guards-pester\\launch-environment.json"
+}

@@ -1,0 +1,25 @@
+{
+  "scope": "Release expected assertion rejection proof; not a passed regression case or Full qualification",
+  "expected_exit_code": 21,
+  "marker_observed": true,
+  "run_id": "20261031T201520Z-11780-36e51ffbfe1e42deacdfeaa3b2081a9e",
+  "configuration": "Release",
+  "platform": "x64",
+  "build_receipt_id": "bc572e7b3400ae440e078f57a08dce996ca8a9e6befcfd82be10b0cf4b3b5399",
+  "source_snapshot_id": "ce9a63824be65a183c7a6fb55f03eaecc93c5a0ae50df554ba14cfa7196087de",
+  "source_and_artifacts_stable": true,
+  "exit_code": 0,
+  "cases": [
+    {
+      "case": "ci-assertion-probe",
+      "exit_code": 21,
+      "timed_out": false,
+      "harness_error": "",
+      "duration_ms": 118,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T201520Z-11780-36e51ffbfe1e42deacdfeaa3b2081a9e\\scratch\\process-temp\\ci-assertion-probe.out.log",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T201520Z-11780-36e51ffbfe1e42deacdfeaa3b2081a9e\\scratch\\process-temp\\ci-assertion-probe.err.log",
+      "stderr_sha256": "bb63bb6d7591e4431c2a094849d261d5ec22b22936b64887450f5a655098ba2b"
+    }
+  ]
+}

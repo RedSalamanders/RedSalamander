@@ -3,6 +3,7 @@
 #include "ConnectionProfileUtils.h"
 #include "FileMetadataFormatting.h"
 #include "FileOperationArtifactRegistry.h"
+#include "FileOperationConfirmation.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "HwndRenderTargetResources.h"
@@ -1025,21 +1026,20 @@ std::wstring BuildSelectionSummaryText(const FolderView::SelectionStats& stats,
         return BuildSingleItemSummaryText(stats.singleItem.value(), selectionSizeText);
     }
 
-    const std::wstring_view folderSuffix = stats.selectedFolders == 1 ? std::wstring_view{} : std::wstring_view{L"s"};
-    const std::wstring_view fileSuffix   = stats.selectedFiles == 1 ? std::wstring_view{} : std::wstring_view{L"s"};
+    const std::wstring folderCount = FormatFileOperationCountNoun(FileOperationCountNoun::Folder, stats.selectedFolders);
+    const std::wstring fileCount   = FormatFileOperationCountNoun(FileOperationCountNoun::File, stats.selectedFiles);
 
     if (stats.selectedFiles > 0 && stats.selectedFolders > 0)
     {
-        return FormatStringResource(
-            nullptr, IDS_FMT_STATUS_SELECTED_FOLDERS_FILES, stats.selectedFolders, folderSuffix, stats.selectedFiles, fileSuffix, selectionSizeText);
+        return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FOLDERS_FILES, folderCount, fileCount, selectionSizeText);
     }
 
     if (stats.selectedFiles > 0)
     {
-        return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FILES, stats.selectedFiles, fileSuffix, selectionSizeText);
+        return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FILES, fileCount, selectionSizeText);
     }
 
-    return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FOLDERS, stats.selectedFolders, folderSuffix, selectionSizeText);
+    return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_FOLDERS, folderCount, selectionSizeText);
 }
 
 std::wstring BuildSortIndicatorText(FolderView::SortBy sortBy, FolderView::SortDirection direction, bool useFluentIcons)

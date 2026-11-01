@@ -1,0 +1,232 @@
+{
+  "schema": "red-salamander.review-build-matrix.v1",
+  "scope": "Historical pre-retirement native build receipts; not current source qualification and not ARM64 execution",
+  "report_run": "20261031T223153Z-80016-970bec07df054841831b661f9524c72b",
+  "profiles": [
+    {
+      "profile": "x64 Release unsigned production",
+      "run_id": "20261031T211446Z-46224-918e110442974399bd428a8d1a75aa1b",
+      "receipt_id": "792e6932ffa808fb7c0593f53ffbcef66e41610eaddbea5bef8eacfaf186721f",
+      "receipt_sha256": "a2372a5630b1ecd63c8372787e924d761b7c053561cdb853c0b8460e6bb400d7",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "x64",
+      "configuration": "Release",
+      "tests_enabled": false,
+      "exit_code": 0,
+      "duration_ms": 392036,
+      "outputs": 174,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=programdatabase",
+        "tests-enabled=false"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_221552_740-pid57380-6ea0f062.log",
+          "bytes": 34824,
+          "sha256": "3115831c5d7a4ba8d7b5f2665611b29782b8fdec6045ea35e09b719d2d6f5db9",
+          "warnings": 0,
+          "errors": 0
+        },
+        {
+          "name": "msbuild-20261031_222100_879-pid57380-6a2184cf.log",
+          "bytes": 3685,
+          "sha256": "e7eeecc768579533577f417df7a0a4d32670f3b4703aed71b78c623938b02af6",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "Native+WAPcompile0/0;receipt174byteverified;all3packagecontent+ZIPsmokeacceptedseparatefinalizer213010."
+    },
+    {
+      "profile": "x64 Debug full validation",
+      "run_id": "20261031T212639Z-41384-a13a805586034c86993f707023df8ca1",
+      "receipt_id": "b324e2c43635b1db260250ce04eaaf484b6aab8b1abe796ce5f2e7a4035ff806",
+      "receipt_sha256": "ea46413140b5eef2991e59d77f572d92d272a0cf6eb743eb2d02baf905916621",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "x64",
+      "configuration": "Debug",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 369915,
+      "outputs": 188,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=embedded",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_222724_422-pid41384-aa931876.log",
+          "bytes": 36793,
+          "sha256": "fd940b4561deee836127b0356beabebe51a4eb9d79ce2199cdea4fc087117d97",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "Full build in the interrupted Debug PrePush; build evidence only, not a completed PrePush verdict."
+    },
+    {
+      "profile": "ARM64 Debug repair",
+      "run_id": "20261031T212659Z-33140-897c10f1b9204d94ab4c10420ea0e003",
+      "receipt_id": "8c029ec273582a8e7042919c5d112778ad97b8eb9fd58ef2c31a2431b21b7a51",
+      "receipt_sha256": "9468e7220e83e7d7bec691f72d6a187b97c87d138afc2094432155ac3cfdbda8",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "ARM64",
+      "configuration": "Debug",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 398869,
+      "outputs": 188,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=programdatabase",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_222740_758-pid72624-11b43cee.log",
+          "bytes": 37097,
+          "sha256": "ed09595f66920117fcd9f29fd25672508559fe2f30686f7b71b3d1d56b18f7a4",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "RebuildrepairsfailedPDBprofile;ProgramDatabasemode;x64Embeddedoverlaprecorded;188outputs398869ms0/0."
+    },
+    {
+      "profile": "ARM64 Release",
+      "run_id": "20261031T213602Z-64184-cedfd1d6b5c14c4a883c245924c23538",
+      "receipt_id": "b3d8a9f05b96b89c799ec627a86c8a853f4fbc1fe92ad4c7dfa4765049d9603c",
+      "receipt_sha256": "504d00d35cdeda162a75bcf09c581fd7ce1f8647388c640a53ff80dbabefd06c",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "ARM64",
+      "configuration": "Release",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 480519,
+      "outputs": 188,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=programdatabase",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_223645_966-pid66588-24d82d36.log",
+          "bytes": 38455,
+          "sha256": "799d253472385edd021806843adfb5cb918f53c4e47327eaf6a0b1137a172d58",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "188outputs480519ms0/0;ProgramDatabaseoverlapwithx64Embeddedrecorded,nonativeexecution."
+    },
+    {
+      "profile": "ARM64 ASan Debug governed verification",
+      "run_id": "20261031T215443Z-54628-f9c867c7a7894367b6b0175339c06f74",
+      "receipt_id": "f6aa0035a81e7962d078a10a490c184fc3be0ba2bd50f9d5b13773228b356fe9",
+      "receipt_sha256": "7b7043e04e6007eab76c6a15eb2497134be0996938956068fe1d2aa569030910",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "ARM64",
+      "configuration": "ASan Debug",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 266183,
+      "outputs": 189,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=programdatabase",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_225528_060-pid54628-abe0f7b0.log",
+          "bytes": 31338,
+          "sha256": "ba0fa2dd82258bc7503f0ad1440157f000ffd5944bdbbf5d22a0e66f29df2f72",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "RootliteralcanonicalBuildactuallyrecompilednativeoutputs,189outputs266183ms0/0.New cleanqualificationafterpreservedbadlauncher;notmanualretag."
+    },
+    {
+      "profile": "x64 Debug post-writer re-attestation",
+      "run_id": "20261031T212639Z-41384-a13a805586034c86993f707023df8ca1",
+      "receipt_id": "2a530ed1de64c79afac4f74f875964685e0bd59a0268cefbb3c1b9b5f250e6dc",
+      "receipt_sha256": "8d05f151e67b3af80af13411196453849abf1d1980ada62146bf5ebadabc807f",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "x64",
+      "configuration": "Debug",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 345025,
+      "outputs": 188,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=embedded",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_225334_325-pid41384-3a1eab3e.log",
+          "bytes": 36793,
+          "sha256": "f2bf470c2c52a51a148baac15a769895072405b0936604b70ac1150dae6b41d3",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "Zero-diagnostic profile re-attestation; enclosing Debug PrePush was interrupted by owner delivery scope change."
+    },
+    {
+      "profile": "x64 ASan Debug",
+      "run_id": "20261031T221025Z-84044-3cbacc38f8e8421988c680537ca0d892",
+      "receipt_id": "76cbf6bf4f08598569400388f26664c26b5e1aef2c8c7d588bed3283b45cc8c1",
+      "receipt_sha256": "8c82ea06a93c38ecbe217458478e1ed56661145ddb573e7f8c6c2c31288d2950",
+      "source_snapshot_id": "3a31e2686d0e2715d2200412c5ef558d329f0329af20296745e865dfcdb74a5d",
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "tests_enabled": true,
+      "exit_code": 0,
+      "duration_ms": 313923,
+      "outputs": 189,
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "production-only=false",
+        "compiler-debug-information=programdatabase",
+        "tests-enabled=true"
+      ],
+      "logs": [
+        {
+          "name": "msbuild-20261031_231106_243-pid84044-90c7af92.log",
+          "bytes": 37550,
+          "sha256": "50d709f78adf94ce34c89418a08152b3241de3fa2430419d9c3466792131a4c6",
+          "warnings": 0,
+          "errors": 0
+        }
+      ],
+      "notes": "Native build only at pre-retirement source; no fresh ASan runtime proof executed at that snapshot."
+    }
+  ],
+  "artifact_byte_validation": "Original execution verified its then-current artifacts; current output directories have since changed. This report rechecks immutable receipt metadata and complete native logs only."
+}

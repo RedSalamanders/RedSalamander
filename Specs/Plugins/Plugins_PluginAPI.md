@@ -71,7 +71,7 @@ point. The source-tree host and shipped plugins use the same ABI revision.
 
 `HostViewerActionRequest` has one leading `sizeBytes` and reserved tail. The host rejects undersized records, accepts larger records while ignoring unknown tail bytes, requires 1–128 nonempty real provider paths (each at most 32768 UTF-16 units), and validates the action before dispatch. Stable action values are `OPEN_OTHER_PANE=1`, `RECYCLE=2`, `DELETE=3`, `OPEN_FOCUS_PANE=4`. Both pane actions require one directory path; optional `focusItemDisplayName` is a nonempty single leaf, prohibited for cleanup actions.
 
-The host matches COM identity to a current pane's exact filesystem instance and snapshots plugin ID, short ID and instance context before navigation/confirmation can pump messages. No match or conflicting contexts fail with `ERROR_NOT_SUPPORTED`. Focus targets the active pane and optionally reveals its leaf. Other pane targets the opposite active pane. Recycle/Delete enter normal File Operations with confirmation and return the accepted task ID; this is not completion or proof that data changed. Cancellation and unavailable bindings must not fall back to direct plugin mutation. Synthetic aggregate paths are never valid inputs.
+The host matches COM identity to a current pane's exact filesystem instance and snapshots plugin ID, short ID and instance context before navigation/confirmation can pump messages. No match or conflicting contexts fail with `ERROR_NOT_SUPPORTED`. Focus targets the active pane and optionally reveals its leaf. Other pane targets the opposite active pane. Recycle/Delete enter normal File Operations with recursive semantics and confirmation, and return the accepted task ID; this is not completion or proof that data changed. Cancellation and unavailable bindings must not fall back to direct plugin mutation. Synthetic aggregate paths are never valid inputs.
 
 ### ABI evolution policy
 
@@ -185,7 +185,7 @@ those declarations.
 ### Behavioral contract
 
 - **Threading**: plugins MAY call host UI services from any thread; the host MUST marshal to the UI thread internally.
-- **Synchronous marshaling**: blocking, result-bearing UI calls use a dedicated non-owning token registry around `SendMessageW`. The caller thread retains the request/result storage for the full synchronous dispatch; the receiving window validates the opaque nonzero token against both message and payload kind. These tokens are never interpreted as pointers and are never passed to the owning `PostMessagePayload` registry.
+- **Synchronous marshaling**: blocking, result-bearing UI calls use `SendMessagePayload` and `TakeMessagePayload<T>`, the same opaque-token ownership contract used by posted host calls. The receiving window validates the destination HWND, message and payload type before taking ownership; `lParam` is never interpreted as a pointer. Caller-owned output storage may be referenced by a payload only for the duration of the synchronous call. A missing or rejected dispatch MUST return a failure result rather than report success.
 - **Lifetime**: the host MUST copy strings before returning; plugins may free inputs immediately after the call.
 - **Localization**:
   - host-owned alerts must use `.rc` resources (per project guidelines),

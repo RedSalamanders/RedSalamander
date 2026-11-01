@@ -260,6 +260,16 @@ Case 'retry after publication cleans fragments without duplicate entries' {
     $text = [IO.File]::ReadAllText((Join-Path $r 'CHANGELOG.md'))
     Assert ([regex]::Matches($text, '(?m)^- Existing\.$').Count -eq 1) 'Retry duplicated a published entry'
 }
+Case 'identical pending fragments are refused before publishing or removing either input' {
+    param($r)
+    Put $r 'Changes/2026-10-21-first.md' "- Shared entry.`n  Same details.`n"
+    Put $r 'Changes/2026-10-22-second.md' "- Shared entry.`n  Same details.`n"
+    $before = Snapshot $r
+    Refuses { & $fold -Root $r }
+    Assert ((Snapshot $r) -ceq $before) 'Ambiguous duplicate fragments changed the changelog or removed an input'
+    Assert ([IO.File]::Exists((Join-Path $r 'Changes/2026-10-21-first.md'))) 'First duplicate fragment was removed'
+    Assert ([IO.File]::Exists((Join-Path $r 'Changes/2026-10-22-second.md'))) 'Second duplicate fragment was removed'
+}
 foreach ($separator in @(@{Name='space'; Text=' '}, @{Name='tab'; Text="`t"})) {
     Case "released heading with $($separator.Name) does not suppress a new entry" {
         param($r)

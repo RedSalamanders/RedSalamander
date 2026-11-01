@@ -248,22 +248,24 @@ enum class NormalizeTextResult : uint8_t
 
 struct DebugSnapshot
 {
-    uint32_t sizeBytes             = sizeof(DebugSnapshot);
-    DocumentRoute route            = DocumentRoute::None;
-    BOOL scriptsEnabled            = FALSE;
-    BOOL privateOrigin             = FALSE;
-    BOOL stagedFileTracked         = FALSE;
-    BOOL navigationCompleted       = FALSE;
-    BOOL navigationSucceeded       = FALSE;
-    BOOL generatedOutputRejected   = FALSE;
-    uint64_t loadedSourceBytes     = 0u;
-    uint64_t pendingCleanupCount   = 0u;
-    uint64_t generatedOutputBytes  = 0u;
-    uint64_t generatedOutputLimit  = 0u;
-    uint64_t asyncLoadPostFailures = 0u;
-    uint64_t asyncSavePostFailures = 0u;
-    BOOL loadPostFailureTerminal   = FALSE;
-    BOOL saveInProgress            = FALSE;
+    uint32_t sizeBytes                    = sizeof(DebugSnapshot);
+    DocumentRoute route                   = DocumentRoute::None;
+    BOOL scriptsEnabled                   = FALSE;
+    BOOL privateOrigin                    = FALSE;
+    BOOL stagedFileTracked                = FALSE;
+    BOOL navigationCompleted              = FALSE;
+    BOOL navigationSucceeded              = FALSE;
+    BOOL generatedOutputRejected          = FALSE;
+    uint64_t loadedSourceBytes            = 0u;
+    uint64_t pendingCleanupCount          = 0u;
+    uint64_t generatedOutputBytes         = 0u;
+    uint64_t generatedOutputLimit         = 0u;
+    uint64_t asyncLoadPostFailures        = 0u;
+    uint64_t asyncSavePostFailures        = 0u;
+    BOOL loadPostFailureTerminal          = FALSE;
+    BOOL saveInProgress                   = FALSE;
+    HRESULT testProfileAdmissionFailureHr = S_OK;
+    std::array<wchar_t, 512u> statusMessage{};
     std::array<wchar_t, 512u> allowedDocumentUrl{};
     std::array<wchar_t, 512u> webViewSourceUrl{};
     std::array<wchar_t, 512u> webViewUserDataFolder{};

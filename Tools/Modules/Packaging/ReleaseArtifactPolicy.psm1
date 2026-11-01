@@ -39,20 +39,6 @@ function Get-RSPortableReleaseFileName {
     return "RedSalamander-$ReleaseVersion-$Platform-Portable.zip"
 }
 
-function Get-RSMsixReleaseFileName {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ReleaseVersion,
-
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('x64', 'ARM64')]
-        [string]$Platform
-    )
-
-    Assert-RSReleaseVersion -ReleaseVersion $ReleaseVersion
-    return "RedSalamander-$ReleaseVersion-$Platform.msix"
-}
-
 function Read-RSExactBytes {
     param(
         [Parameter(Mandatory = $true)]
@@ -290,7 +276,7 @@ function Test-RSShippingBinaryName {
 function Find-RSShippingTestSurface {
     <#
     .SYNOPSIS
-        Lists the ENABLE_TESTS surface in a staged package directory, portable ZIP, or MSIX.
+        Lists the ENABLE_TESTS surface in a staged package directory or portable ZIP.
     .DESCRIPTION
         Inspects every .exe and .dll beneath a directory or inside a ZIP-format package and
         returns one finding per binary that carries the test-enabled version marker or a
@@ -379,271 +365,6 @@ function Assert-RSShippingPackageHasNoTestSurface {
         $LiteralPath, ($details -join "`n  "))
 }
 
-function Assert-RSProducedMsixHasNoTestSurface {
-    <#
-    .SYNOPSIS
-        Checks an MSIX that packaging just wrote beneath AppPackages and removes it when rejected.
-    .DESCRIPTION
-        MSBuild publishes the package at its normal output path before it can be inspected, so a
-        rejected package is deleted together with its package folder (the packaging project writes
-        each package into its own RedSalamanderInstaller_<version>_<platform>_Test folder) before
-        the rejection is rethrown. A package directly in AppPackages is removed alone. The removal
-        never follows a link: a reparse point at the AppPackages root, on the way to the package or
-        anywhere beneath its folder refuses it, and the rejection then says the package must not be
-        distributed.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$LiteralPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$AppPackagesRoot
-    )
-
-    $packagePath = [IO.Path]::GetFullPath($LiteralPath)
-    $root = [IO.Path]::GetFullPath($AppPackagesRoot).TrimEnd([char[]]@('\', '/')) + '\'
-    if (-not $packagePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Produced MSIX is not beneath the AppPackages root '$root': $packagePath"
-    }
-
-    try {
-        Assert-RSShippingPackageHasNoTestSurface -LiteralPath $packagePath
-    }
-    catch {
-        $rejection = $_.Exception.Message
-        $packageFolder = [IO.Path]::GetDirectoryName($packagePath).TrimEnd([char[]]@('\', '/')) + '\'
-        $removalTarget = if ($packageFolder.Length -gt $root.Length) { $packageFolder.TrimEnd('\') } else { $packagePath }
-        try {
-            if (Test-Path -LiteralPath $removalTarget) {
-                Remove-RSRejectedMsixWithoutFollowingLinks -AppPackagesRoot $root -Target $removalTarget
-            }
-        }
-        catch {
-            throw "$rejection`nThe rejected package could not be removed and must not be distributed: $removalTarget ($($_.Exception.Message))"
-        }
-        throw "$rejection`nThe rejected package was removed: $removalTarget"
-    }
-}
-
-function Get-RSRejectedMsixTreeEntries {
-    param([Parameter(Mandatory = $true)][string]$Directory)
-
-    # Default EnumerationOptions skip Hidden/System entries; a removal walk must see them.
-    $options = [IO.EnumerationOptions]::new()
-    $options.AttributesToSkip = [IO.FileAttributes]0
-    $options.RecurseSubdirectories = $false
-    $options.IgnoreInaccessible = $false
-    return @([IO.DirectoryInfo]::new($Directory).GetFileSystemInfos('*', $options))
-}
-
-function Remove-RSRejectedMsixWithoutFollowingLinks {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$AppPackagesRoot,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Target
-    )
-
-    # Mirrors TestSandbox.psm1's Remove-RSTestSandboxTreeWithoutFollowingLinks; kept local because
-    # this production packaging module must not import test tooling.
-    # Never delete through a link: the AppPackages root, every component down to the target and
-    # every entry beneath it must be a plain file or directory. Any reparse point refuses the
-    # whole removal before anything is deleted.
-    $root = $AppPackagesRoot.TrimEnd([char[]]@('\', '/'))
-    $components = [Collections.Generic.List[string]]::new()
-    $components.Add($root)
-    $current = $root
-    foreach ($segment in @($Target.Substring($root.Length).Split([char[]]@('\', '/'), [StringSplitOptions]::RemoveEmptyEntries))) {
-        $current = Join-Path $current $segment
-        $components.Add($current)
-    }
-    foreach ($component in $components) {
-        if (([IO.File]::GetAttributes($component) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "refusing to delete through the reparse point '$component'"
-        }
-    }
-
-    $targetAttributes = [IO.File]::GetAttributes($Target)
-    if (($targetAttributes -band [IO.FileAttributes]::Directory) -eq 0) {
-        if (($targetAttributes -band [IO.FileAttributes]::ReadOnly) -ne 0) {
-            [IO.File]::SetAttributes($Target, $targetAttributes -band (-bnot [IO.FileAttributes]::ReadOnly))
-        }
-        [IO.File]::Delete($Target)
-        return
-    }
-
-    $pending = [Collections.Generic.Stack[string]]::new()
-    $pending.Push($Target)
-    while ($pending.Count -gt 0) {
-        foreach ($entry in (Get-RSRejectedMsixTreeEntries -Directory $pending.Pop())) {
-            if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw "refusing to delete a package folder that contains the reparse point '$($entry.FullName)'"
-            }
-            if (($entry.Attributes -band [IO.FileAttributes]::Directory) -ne 0) {
-                $pending.Push($entry.FullName)
-            }
-        }
-    }
-
-    # Delete post-order with non-recursive deletes. Each directory is re-read before it is
-    # enumerated, so one replaced by a link since the scan fails the removal instead of being entered.
-    $directories = [Collections.Generic.List[string]]::new()
-    $pending.Push($Target)
-    while ($pending.Count -gt 0) {
-        $directory = $pending.Pop()
-        if (([IO.File]::GetAttributes($directory) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "refusing to enumerate a package directory that became a reparse point: '$directory'"
-        }
-        $directories.Add($directory)
-        foreach ($entry in (Get-RSRejectedMsixTreeEntries -Directory $directory)) {
-            $attributes = $entry.Attributes
-            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw "refusing to delete a package folder that contains the reparse point '$($entry.FullName)'"
-            }
-            if (($attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) {
-                $entry.Attributes = $attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
-            }
-            if (($attributes -band [IO.FileAttributes]::Directory) -ne 0) {
-                $pending.Push($entry.FullName)
-            }
-            else {
-                [IO.File]::Delete($entry.FullName)
-            }
-        }
-    }
-    for ($index = $directories.Count - 1; $index -ge 0; --$index) {
-        [IO.Directory]::Delete($directories[$index], $false)
-    }
-}
-
-function Get-RSMsixOutputSnapshot {
-    <#
-    .SYNOPSIS
-        Records each MSIX beneath AppPackages as Length|LastWriteTimeUtc before packaging runs.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$AppPackagesRoot
-    )
-
-    $snapshot = @{}
-    if (Test-Path -LiteralPath $AppPackagesRoot -PathType Container) {
-        foreach ($existing in @(Get-ChildItem -LiteralPath $AppPackagesRoot -Filter *.msix -File -Recurse)) {
-            $snapshot[$existing.FullName] = '{0}|{1}' -f $existing.Length, $existing.LastWriteTimeUtc.Ticks
-        }
-    }
-    return $snapshot
-}
-
-function Assert-RSMsixPackagingOutput {
-    <#
-    .SYNOPSIS
-        Checks the MSIX one packaging run produced, or the up-to-date package MSBuild left in place.
-    .DESCRIPTION
-        Every MSIX that is new or changed since the snapshot is checked with
-        Assert-RSProducedMsixHasNoTestSurface (a rejected one is removed). When MSBuild found the
-        package up to date and wrote nothing (a re-run with the same version), the existing package
-        whose identity matches this version and platform is checked without being removed, and the
-        run succeeds when it is clean, as build.ps1 does for an unchanged package. Only when no such
-        package exists does the run fail for producing no MSIX.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$AppPackagesRoot,
-
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Before,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ReleaseVersion,
-
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('x64', 'ARM64')]
-        [string]$Platform
-    )
-
-    Assert-RSReleaseVersion -ReleaseVersion $ReleaseVersion
-    $current = Get-RSMsixOutputSnapshot -AppPackagesRoot $AppPackagesRoot
-    $produced = @($current.Keys | Where-Object {
-            -not $Before.ContainsKey($_) -or $Before[$_] -ne $current[$_]
-        } | Sort-Object)
-    foreach ($msix in $produced) {
-        Assert-RSProducedMsixHasNoTestSurface -LiteralPath $msix -AppPackagesRoot $AppPackagesRoot
-    }
-    if ($produced.Count -gt 0) {
-        return
-    }
-
-    $expectedVersion = "$ReleaseVersion.0"
-    $expectedArchitecture = if ($Platform -eq 'ARM64') { 'arm64' } else { 'x64' }
-    $upToDate = @($current.Keys | Sort-Object | Where-Object {
-            $identity = $null
-            try {
-                $identity = Get-RSMsixIdentity -PackagePath $_
-            }
-            catch {
-                # An unreadable package is not this run's package; it is never selected.
-            }
-            $null -ne $identity -and
-            $identity.Name -ceq 'RedSalamander' -and
-            $identity.Version -ceq $expectedVersion -and
-            $identity.ProcessorArchitecture -ieq $expectedArchitecture
-        })
-    if ($upToDate.Count -eq 0) {
-        throw "MSIX build reported success but produced no new MSIX, and no up-to-date $expectedVersion $Platform MSIX exists beneath $AppPackagesRoot"
-    }
-    foreach ($msix in $upToDate) {
-        Assert-RSShippingPackageHasNoTestSurface -LiteralPath $msix
-    }
-}
-
-function Get-RSMsixIdentity {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$PackagePath
-    )
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
-    try {
-        $entries = @($archive.Entries | Where-Object {
-                [string]::Equals($_.FullName, 'AppxManifest.xml', [StringComparison]::OrdinalIgnoreCase)
-            })
-        if ($entries.Count -ne 1) {
-            throw "MSIX must contain exactly one root AppxManifest.xml: $PackagePath"
-        }
-
-        $stream = $entries[0].Open()
-        $reader = [System.IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
-        try {
-            $manifest = [xml]$reader.ReadToEnd()
-        }
-        finally {
-            $reader.Dispose()
-            $stream.Dispose()
-        }
-
-        $identity = $manifest.Package.Identity
-        if (-not $identity) {
-            throw "MSIX AppxManifest.xml has no package Identity: $PackagePath"
-        }
-
-        return [pscustomobject]@{
-            Name = [string]$identity.Name
-            Publisher = [string]$identity.Publisher
-            Version = [string]$identity.Version
-            ProcessorArchitecture = [string]$identity.ProcessorArchitecture
-        }
-    }
-    finally {
-        $archive.Dispose()
-    }
-}
-
 function Assert-RSReleaseArtifacts {
     [CmdletBinding()]
     param(
@@ -654,10 +375,7 @@ function Assert-RSReleaseArtifacts {
         [string]$ReleaseVersion,
 
         [Parameter(Mandatory = $true)]
-        [bool]$BuildArm64,
-
-        [Parameter(Mandatory = $true)]
-        [bool]$BuildMsix
+        [bool]$BuildArm64
     )
 
     Assert-RSReleaseVersion -ReleaseVersion $ReleaseVersion
@@ -665,25 +383,14 @@ function Assert-RSReleaseArtifacts {
         throw "Release artifacts directory not found: $ArtifactsRoot"
     }
 
-    $expected = [System.Collections.Generic.List[object]]::new()
-    foreach ($platform in Get-RSReleasePlatforms -BuildArm64 $BuildArm64) {
-        $expected.Add([pscustomobject]@{
-                Kind = 'Portable'
-                Platform = $platform
-                Name = Get-RSPortableReleaseFileName -ReleaseVersion $ReleaseVersion -Platform $platform
-            })
-        if ($BuildMsix) {
-            $expected.Add([pscustomobject]@{
-                    Kind = 'MSIX'
-                    Platform = $platform
-                    Name = Get-RSMsixReleaseFileName -ReleaseVersion $ReleaseVersion -Platform $platform
-                })
+    $expected = @(foreach ($platform in Get-RSReleasePlatforms -BuildArm64 $BuildArm64) {
+        [pscustomobject]@{
+            Kind = 'Portable'
+            Platform = $platform
+            Name = Get-RSPortableReleaseFileName -ReleaseVersion $ReleaseVersion -Platform $platform
         }
-    }
-
-    $actual = @(Get-ChildItem -LiteralPath $ArtifactsRoot -File -Recurse | Where-Object {
-            $_.Extension -ieq '.zip' -or $_.Extension -ieq '.msix'
-        })
+    })
+    $actual = @(Get-ChildItem -LiteralPath $ArtifactsRoot -File -Recurse | Where-Object { $_.Extension -ieq '.zip' })
     if ($actual.Count -ne $expected.Count) {
         $actualNames = @($actual | ForEach-Object { $_.Name } | Sort-Object) -join ', '
         $expectedNames = @($expected | ForEach-Object { $_.Name } | Sort-Object) -join ', '
@@ -696,51 +403,25 @@ function Assert-RSReleaseArtifacts {
         if ($matches.Count -ne 1) {
             throw "Expected exactly one release artifact named '$($item.Name)'; found $($matches.Count)."
         }
-
         $file = $matches[0]
-        if ($file.Length -le 0) {
-            throw "Release artifact is empty: $($item.Name)"
+        if ($file.Length -le 0) { throw "Release artifact is empty: $($item.Name)" }
+        $expectedMachine = if ($item.Platform -eq 'ARM64') { 0xAA64 } else { 0x8664 }
+        $actualMachine = Get-RSPortableArchiveMachine -ArchivePath $file.FullName
+        if ($actualMachine -ne $expectedMachine) {
+            throw ("Portable artifact '{0}' has PE machine 0x{1:X4}; expected 0x{2:X4} for {3}." -f
+                $item.Name, $actualMachine, $expectedMachine, $item.Platform)
         }
-
-        if ($item.Kind -eq 'Portable') {
-            $expectedMachine = if ($item.Platform -eq 'ARM64') { 0xAA64 } else { 0x8664 }
-            $actualMachine = Get-RSPortableArchiveMachine -ArchivePath $file.FullName
-            if ($actualMachine -ne $expectedMachine) {
-                throw ("Portable artifact '{0}' has PE machine 0x{1:X4}; expected 0x{2:X4} for {3}." -f
-                    $item.Name, $actualMachine, $expectedMachine, $item.Platform)
-            }
-        }
-        else {
-            $identity = Get-RSMsixIdentity -PackagePath $file.FullName
-            $expectedArchitecture = if ($item.Platform -eq 'ARM64') { 'arm64' } else { 'x64' }
-            if ($identity.Name -cne 'RedSalamander') {
-                throw "MSIX '$($item.Name)' has unexpected Identity Name '$($identity.Name)'."
-            }
-            if ($identity.Publisher -cne 'CN=RedSalmanders') {
-                throw "MSIX '$($item.Name)' has unexpected Identity Publisher '$($identity.Publisher)'."
-            }
-            if ($identity.Version -cne "$ReleaseVersion.0") {
-                throw "MSIX '$($item.Name)' has Identity Version '$($identity.Version)'; expected '$ReleaseVersion.0'."
-            }
-            if ($identity.ProcessorArchitecture -cne $expectedArchitecture) {
-                throw "MSIX '$($item.Name)' has architecture '$($identity.ProcessorArchitecture)'; expected '$expectedArchitecture'."
-            }
-        }
-
         Assert-RSShippingPackageHasNoTestSurface -LiteralPath $file.FullName
-
         $validated.Add([pscustomobject]@{
-                Name = $item.Name
-                FullName = $file.FullName
-                Length = [long]$file.Length
-                Kind = $item.Kind
-                Platform = $item.Platform
-            })
+            Name = $item.Name
+            FullName = $file.FullName
+            Length = [long]$file.Length
+            Kind = $item.Kind
+            Platform = $item.Platform
+        })
     }
-
     return @($validated)
 }
-
 function New-RSReleaseChecksumFile {
     [CmdletBinding()]
     param(
@@ -753,17 +434,13 @@ function New-RSReleaseChecksumFile {
         [Parameter(Mandatory = $true)]
         [bool]$BuildArm64,
 
-        [Parameter(Mandatory = $true)]
-        [bool]$BuildMsix,
-
         [string]$OutputPath = (Join-Path $ArtifactsRoot 'checksums.sha256')
     )
 
     $artifacts = @(Assert-RSReleaseArtifacts `
             -ArtifactsRoot $ArtifactsRoot `
             -ReleaseVersion $ReleaseVersion `
-            -BuildArm64 $BuildArm64 `
-            -BuildMsix $BuildMsix)
+            -BuildArm64 $BuildArm64)
     $lines = @($artifacts | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
             "$hash  $($_.Name)"
@@ -787,9 +464,6 @@ function Assert-RSReleaseChecksumFile {
         [Parameter(Mandatory = $true)]
         [bool]$BuildArm64,
 
-        [Parameter(Mandatory = $true)]
-        [bool]$BuildMsix,
-
         [string]$ChecksumPath = (Join-Path $ArtifactsRoot 'checksums.sha256')
     )
 
@@ -800,8 +474,7 @@ function Assert-RSReleaseChecksumFile {
     $artifacts = @(Assert-RSReleaseArtifacts `
             -ArtifactsRoot $ArtifactsRoot `
             -ReleaseVersion $ReleaseVersion `
-            -BuildArm64 $BuildArm64 `
-            -BuildMsix $BuildMsix)
+            -BuildArm64 $BuildArm64)
     $expectedLines = @($artifacts | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
             "$hash  $($_.Name)"
@@ -822,14 +495,10 @@ function Assert-RSReleaseChecksumFile {
 
 Export-ModuleMember -Function @(
     'Get-RSPortableReleaseFileName',
-    'Get-RSMsixReleaseFileName',
     'Assert-RSReleaseArtifacts',
     'Get-RSPeTestSurface',
     'Find-RSShippingTestSurface',
     'Assert-RSShippingPackageHasNoTestSurface',
-    'Assert-RSProducedMsixHasNoTestSurface',
-    'Get-RSMsixOutputSnapshot',
-    'Assert-RSMsixPackagingOutput',
     'New-RSReleaseChecksumFile',
     'Assert-RSReleaseChecksumFile'
 )

@@ -269,7 +269,7 @@ Advanced logging options (retention and verbosity) are in Preferences → **Adva
 
 When operations encounter errors, they can be reviewed in the issues UI:
 
-- Toggle: **View → File Operations Failed Items** (default `Ctrl+J`)
+- Toggle: **View → File Operation Issues** (default `Ctrl+J`)
 - Issues are listed oldest first until you sort a column. Select one to see its details: only the facts that apply are shown (a delete has no destination, and an ordinary failure has no decision or result). **Copy details** copies the selected issue.
 - A partial Move can leave some items already copied to the destination and some originals left in place. Review each item's source, destination, and cleanup result before retrying or removing either copy.
 

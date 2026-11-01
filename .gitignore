@@ -28,7 +28,7 @@ x64/
 *.exp
 *.sbr
 
-# Packaging leftovers (Visual Studio Store/MSIX output)
+# Historical installer outputs and private local signing credentials
 AppPackages/
 BundleArtifacts/
 Package.StoreAssociation.xml

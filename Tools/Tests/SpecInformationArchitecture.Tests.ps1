@@ -105,7 +105,8 @@ function Get-RSFixtureInventory {
         -RepositoryRoot $Root `
         -Root Specs `
         -ConsistencyLedgerPath 'Specs/NormativeConsistency.json' `
-        -ProtectedDoneBaseCommit 'HEAD'
+        -ProtectedDoneBaseCommit 'HEAD' `
+        -ProtectedDoneRelocationManifestPath ''
 }
 
 function Get-RSFindingCount {
@@ -432,6 +433,15 @@ $sample = ']('
 
         (Get-RSFindingCount -Inventory $inventory -Code 'LINK_MISSING_TARGET' -Severity 'Information') | Should Be 1
         (Get-RSFindingCount -Inventory $inventory -Code 'LINK_MISSING_TARGET' -Severity 'Error') | Should Be 0
+    }
+
+    It 'validates the exact pinned I27 stock-Windows history relocation map' {
+        $protectedDone = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot
+
+        $protectedDone.Relocations.Available | Should Be $true
+        $protectedDone.Relocations.IsValid | Should Be $true
+        $protectedDone.Relocations.Count | Should Be 596
+        @($protectedDone.Unexpected | Where-Object { $_ -like 'Specs/Plans/Done/I27/*' }).Count | Should Be 0
     }
 
     It 'rejects a modified protected Done file' {
@@ -968,7 +978,7 @@ $sample = ']('
 
     It 'admits reviewed I27 gallery companions and rejects an unreviewed image in the same collection' {
         $root = New-RSSpecFixtureRepository
-        $collection = 'Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463'
+        $collection = 'Specs/Plans/Done/I27/implementation/g/g1'
         $navigation = "$collection/gallery.html"
         $capture = "$collection/fileops/visual-gallery/01-empty__dark__480dip__fr-FR__display1__144dpi.png"
         Set-RSFixtureFile -Root $root -RelativePath $navigation -Content 'Reviewed navigation path fixture'

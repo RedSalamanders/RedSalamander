@@ -1455,6 +1455,34 @@ const Common::Settings::FileOperationsSettings& GetFileOperationsSettingsOrDefau
     return kDefaults;
 }
 
+void MergePreferencesOwnedFileOperationsSettings(Common::Settings::Settings& latest,
+                                                 const Common::Settings::FileOperationsSettings& baseline,
+                                                 const Common::Settings::FileOperationsSettings& working) noexcept
+{
+    auto merged                  = GetFileOperationsSettingsOrDefault(latest);
+    bool changed                 = false;
+    const auto applyChangedField = [&changed](auto& target, const auto& before, const auto& edited)
+    {
+        if (before != edited)
+        {
+            target  = edited;
+            changed = true;
+        }
+    };
+    applyChangedField(merged.autoDismissSuccess, baseline.autoDismissSuccess, working.autoDismissSuccess);
+    applyChangedField(merged.showInformationalNotes, baseline.showInformationalNotes, working.showInformationalNotes);
+    applyChangedField(merged.mirrorDecisionsInPane, baseline.mirrorDecisionsInPane, working.mirrorDecisionsInPane);
+    applyChangedField(merged.verifyAfterCopy, baseline.verifyAfterCopy, working.verifyAfterCopy);
+    applyChangedField(merged.defaultBandwidthLimitBytesPerSecond, baseline.defaultBandwidthLimitBytesPerSecond, working.defaultBandwidthLimitBytesPerSecond);
+    applyChangedField(merged.crossFsBridgeBufferSizeKB, baseline.crossFsBridgeBufferSizeKB, working.crossFsBridgeBufferSizeKB);
+    applyChangedField(merged.maxDiagnosticsLogFiles, baseline.maxDiagnosticsLogFiles, working.maxDiagnosticsLogFiles);
+    applyChangedField(merged.diagnosticsInfoEnabled, baseline.diagnosticsInfoEnabled, working.diagnosticsInfoEnabled);
+    applyChangedField(merged.diagnosticsDebugEnabled, baseline.diagnosticsDebugEnabled, working.diagnosticsDebugEnabled);
+    if (! changed)
+        return;
+    latest.fileOperations = std::move(merged);
+}
+
 Common::Settings::FileOperationsSettings* EnsureWorkingFileOperationsSettings(Common::Settings::Settings& settings) noexcept
 {
     if (settings.fileOperations.has_value())
@@ -1473,19 +1501,7 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
         return;
     }
 
-    const Common::Settings::FileOperationsSettings defaults{};
-    const auto& fileOperations = settings.fileOperations.value();
-    const bool hasNonDefault =
-        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.showInformationalNotes != defaults.showInformationalNotes ||
-        fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
-        fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-        fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-        fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-        fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-        fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-        fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
-
-    if (! hasNonDefault)
+    if (! Common::Settings::HasNonDefaultFileOperationsSettings(settings.fileOperations.value()))
     {
         settings.fileOperations.reset();
     }

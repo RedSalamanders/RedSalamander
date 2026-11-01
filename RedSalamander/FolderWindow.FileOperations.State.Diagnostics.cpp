@@ -5,6 +5,7 @@
 #include "FileSystemPathIdentity.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "HostServices.h"
+#include "LocalFileTransaction.h"
 #include "NavigationLocation.h"
 #include "SessionState.h"
 #include "SettingsHotReload.h"
@@ -644,8 +645,7 @@ bool FolderWindow::FileOperationState::OpenDiagnosticsLogForTask(uint64_t taskId
 
     if (logPath.empty())
     {
-        std::scoped_lock lock(_mutex);
-        logPath = GetLatestDiagnosticsLogPathUnlocked();
+        logPath = GetLatestDiagnosticsLogPath();
     }
 
     ec.clear();
@@ -689,10 +689,13 @@ void FolderWindow::FileOperationState::DebugFlushDiagnosticsForSelfTest() noexce
     FlushDiagnostics(true);
 }
 
-void FolderWindow::FileOperationState::DebugConfigureIssuesExportRouteForSelfTest(std::filesystem::path reportDirectory, bool refuseCreate) noexcept
+void FolderWindow::FileOperationState::DebugConfigureIssuesExportRouteForSelfTest(std::filesystem::path reportDirectory,
+                                                                                  const bool refuseCreate,
+                                                                                  std::wstring fixedFileName) noexcept
 {
     std::scoped_lock lock(_mutex);
     _debugIssuesExportReportDirectory = std::move(reportDirectory);
+    _debugIssuesExportFixedFileName   = std::move(fixedFileName);
     _debugIssuesExportRefuseCreate    = refuseCreate;
     _debugIssuesExportRoute           = {};
 }
@@ -742,10 +745,12 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
 
 #ifdef ENABLE_TESTS
     std::filesystem::path testReportDirectory;
+    std::wstring testFixedFileName;
     bool testRefuseCreate = false;
     {
         std::scoped_lock lock(_mutex);
         testReportDirectory = _debugIssuesExportReportDirectory;
+        testFixedFileName   = _debugIssuesExportFixedFileName;
         testRefuseCreate    = _debugIssuesExportRefuseCreate;
         if (! testReportDirectory.empty())
             ++_debugIssuesExportRoute.attempts;
@@ -783,14 +788,19 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
         return false;
     }
 
-    const std::filesystem::path reportPath = logsDir / fileName;
+    std::filesystem::path reportPath = logsDir / fileName;
 
-    std::error_code ec;
-    std::filesystem::create_directories(logsDir, ec);
-    if (ec)
+#ifdef ENABLE_TESTS
+    if (! testFixedFileName.empty())
     {
-        return false;
+        const std::filesystem::path testName(testFixedFileName);
+        if (testName.empty() || testName.has_parent_path() || testName.filename() != testName)
+        {
+            return false;
+        }
+        reportPath = logsDir / testName;
     }
+#endif
 
 #ifdef ENABLE_TESTS
     if (! testReportDirectory.empty() && testRefuseCreate)
@@ -800,16 +810,29 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
         return false;
     }
 #endif
-    wil::unique_handle file(CreateFileW(
-        reportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (! file)
+    Common::Files::LocalFileTransaction transaction;
+    if (FAILED(Common::Files::LocalFileTransaction::Create(reportPath, Common::Files::ExistingTargetPolicy::FailIfExists, true, transaction)))
     {
         return false;
     }
 
+    uint64_t expectedBytes = 0u;
+    const auto writeBytes  = [&](const void* data, const size_t byteCount) noexcept
+    {
+        if (byteCount > (std::numeric_limits<uint64_t>::max)() - expectedBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+        }
+        const HRESULT writeHr = transaction.Write(data, byteCount);
+        if (SUCCEEDED(writeHr))
+        {
+            expectedBytes += static_cast<uint64_t>(byteCount);
+        }
+        return writeHr;
+    };
+
     constexpr wchar_t bom = 0xFEFF;
-    DWORD written         = 0;
-    if (! WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr) || written != sizeof(bom))
+    if (FAILED(writeBytes(&bom, sizeof(bom))))
     {
         return false;
     }
@@ -831,12 +854,12 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
                     summary.totalBytes,
                     summary.sourcePath.empty() ? L"-" : summary.sourcePath,
                     summary.destinationPath.empty() ? L"-" : summary.destinationPath);
-    const size_t headerBytes = header.size() * sizeof(wchar_t);
-    if (headerBytes > static_cast<size_t>(std::numeric_limits<DWORD>::max()))
+    if (header.size() > (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
     {
         return false;
     }
-    if (! WriteFile(file.get(), header.data(), static_cast<DWORD>(headerBytes), &written, nullptr) || written != static_cast<DWORD>(headerBytes))
+    const size_t headerBytes = header.size() * sizeof(wchar_t);
+    if (FAILED(writeBytes(header.data(), headerBytes)))
     {
         return false;
     }
@@ -878,16 +901,20 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
         }
         line.append(L"\r\n");
 
-        const size_t bytesToWrite = line.size() * sizeof(wchar_t);
-        if (bytesToWrite > static_cast<size_t>(std::numeric_limits<DWORD>::max()))
-        {
-            continue;
-        }
-
-        if (! WriteFile(file.get(), line.data(), static_cast<DWORD>(bytesToWrite), &written, nullptr) || written != static_cast<DWORD>(bytesToWrite))
+        if (line.size() > (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
         {
             return false;
         }
+        const size_t bytesToWrite = line.size() * sizeof(wchar_t);
+        if (FAILED(writeBytes(line.data(), bytesToWrite)))
+        {
+            return false;
+        }
+    }
+
+    if (FAILED(transaction.Commit(expectedBytes)))
+    {
+        return false;
     }
 
     if (reportPathOut)
@@ -1259,7 +1286,7 @@ std::filesystem::path FolderWindow::FileOperationState::GetDiagnosticsLogPathFor
     return logsDir / fileName;
 }
 
-std::filesystem::path FolderWindow::FileOperationState::GetLatestDiagnosticsLogPathUnlocked() const noexcept
+std::filesystem::path FolderWindow::FileOperationState::GetLatestDiagnosticsLogPath() const noexcept
 {
     const std::filesystem::path logsDir = GetDiagnosticsLogDirectory();
     if (logsDir.empty())
@@ -1997,25 +2024,43 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
                               summary.publishedItemCount > 0u || summary.unknownPublicationItemCount > 0u || summary.removedSourceCount > 0u ||
                               summary.unknownSourceCount > 0u;
 
+    const uint64_t resultSummaryLanguageRevision = Localization::GetLanguagePreferenceRevision();
+    const auto setResultSummary                  = [&summary](const UINT messageId)
+    {
+        summary.resultSummaryResourceId   = messageId;
+        summary.resultSummaryHasArguments = false;
+        summary.resultSummaryArgument0    = 0u;
+        summary.resultSummaryArgument1    = 0u;
+        summary.resultSummary             = LoadStringResource(nullptr, messageId);
+    };
+    const auto setFormattedResultSummary = [&summary](const UINT messageId, const unsigned long argument0, const unsigned long argument1)
+    {
+        summary.resultSummaryResourceId   = messageId;
+        summary.resultSummaryHasArguments = true;
+        summary.resultSummaryArgument0    = argument0;
+        summary.resultSummaryArgument1    = argument1;
+        summary.resultSummary             = FormatStringResource(nullptr, messageId, argument0, argument1);
+    };
+
     if (! summary.startedMutation && IsCancellationStatus(summary.resultHr))
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_NOT_STARTED);
+        setResultSummary(IDS_FILEOPS_RESULT_NOT_STARTED);
     }
     else if (anyUnknownOutsideSkip)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_UNKNOWN);
+        setResultSummary(IDS_FILEOPS_RESULT_UNKNOWN);
     }
     else if (summary.verificationFailedItemCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_FAILED);
+        setResultSummary(IDS_FILEOPS_RESULT_VERIFICATION_FAILED);
     }
     else if (summary.verificationCanceledItemCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_CANCELED);
+        setResultSummary(IDS_FILEOPS_RESULT_VERIFICATION_CANCELED);
     }
     else if (summary.verificationUnavailableItemCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE);
+        setResultSummary(IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE);
     }
     else if ((summary.operation == FILESYSTEM_COPY || summary.operation == FILESYSTEM_MOVE) && anyCanceled && (anyCompleted || summary.publishedItemCount > 0u))
     {
@@ -2025,35 +2070,34 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
         const bool copy       = summary.operation == FILESYSTEM_COPY;
         const UINT stoppedId  = copy ? IDS_FMT_FILEOPS_RESULT_STOPPED_COPIED : IDS_FMT_FILEOPS_RESULT_STOPPED_MOVED;
         const UINT canceledId = copy ? IDS_FMT_FILEOPS_RESULT_CANCELED_COPIED : IDS_FMT_FILEOPS_RESULT_CANCELED_MOVED;
-        summary.resultSummary = FormatStringResource(nullptr, anyFailed ? stoppedId : canceledId, completedRoots, selectedRoots);
+        setFormattedResultSummary(anyFailed ? stoppedId : canceledId, completedRoots, selectedRoots);
     }
     else if (summary.indeterminateItemCount == 0u && summary.retainedOwnedStageCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED);
+        setResultSummary(IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED);
     }
     else if (summary.verifiedItemCount > 0u && summary.verificationProblemItemCount == 0u && summary.operation == FILESYSTEM_COPY)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFIED);
+        setResultSummary(IDS_FILEOPS_RESULT_VERIFIED);
     }
     else if (summary.operation == FILESYSTEM_MOVE && summary.publishedItemCount > 0u && summary.retainedSourceCount > 0u)
     {
-        summary.resultSummary =
-            LoadStringResource(nullptr,
-                               summary.retainedSourceNativeCount == summary.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
-                                                                                                : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
+        setResultSummary(summary.retainedSourceNativeCount == summary.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
+                                                                                          : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
     }
     else if (anySkipped && summary.publishedItemCount == 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_SKIPPED);
+        setResultSummary(IDS_FILEOPS_RESULT_SKIPPED);
     }
     else if (summary.operation == FILESYSTEM_COPY && (summary.publishedItemCount > 0u || anyCompleted))
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_COPIED);
+        setResultSummary(IDS_FILEOPS_RESULT_COPIED);
     }
     else if ((summary.operation == FILESYSTEM_MOVE || summary.operation == FILESYSTEM_RENAME) && summary.removedSourceCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_MOVED);
+        setResultSummary(IDS_FILEOPS_RESULT_MOVED);
     }
+    summary.resultSummaryLanguageRevision = resultSummaryLanguageRevision;
 
     {
         std::scoped_lock lock(task._progressPathMutex);
@@ -2328,9 +2372,16 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
             std::scoped_lock lock(_mutex);
             _completedTasks.push_front(summary);
             _issuesRevision.fetch_add(1u, std::memory_order_relaxed);
-            while (_completedTasks.size() > kMaxCompletedTaskSummaries)
+            size_t ordinarySummaries =
+                static_cast<size_t>(std::ranges::count_if(_completedTasks, [](const auto& item) noexcept { return ! item.interruptedMoveNotice; }));
+            while (ordinarySummaries > kMaxCompletedTaskSummaries)
             {
-                _completedTasks.pop_back();
+                const auto oldest =
+                    std::find_if(_completedTasks.rbegin(), _completedTasks.rend(), [](const auto& item) noexcept { return ! item.interruptedMoveNotice; });
+                if (oldest == _completedTasks.rend())
+                    break;
+                _completedTasks.erase(std::next(oldest).base());
+                --ordinarySummaries;
             }
         }
         // Revealed once the record is published: the frame it asks for renders the finished card from its record

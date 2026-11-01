@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 $buildScript = Join-Path $repoRoot 'build.ps1'
 
 Describe 'Build output process preflight' {
@@ -130,8 +131,11 @@ Describe 'Build output process preflight' {
             }
         )
 
-        { Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath } |
-            Should Not Throw
+        $guard = Invoke-RSTestBlock {
+            Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
+        }
+        $guard.Succeeded | Should Be $true
+        $null -eq $guard.Error | Should Be $true
         Assert-MockCalled Stop-Process -Times 0
     }
 
@@ -1319,8 +1323,56 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
     It 'rejects only residual tools proven to target the same repository and output profile' {
         $testRepo = Join-Path $TestDrive 'ResidualRepo'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+        $rootGit = Join-Path $testRepo '.git'
+        $nestedRoot = Join-Path $testRepo '.build\ci-closeout\checkout'
+        $nestedProject = Join-Path $nestedRoot 'RedSalamander\RedSalamander.vcxproj'
+        $nestedAdmin = Join-Path $rootGit 'worktrees\checkout1'
+        New-Item -ItemType Directory -Path $rootGit,$nestedAdmin,(Split-Path -Parent $nestedProject) -Force | Out-Null
+        [System.IO.File]::Copy((Join-Path $repoRoot 'Directory.Build.props'), (Join-Path $testRepo 'Directory.Build.props'))
+        [System.IO.File]::Copy((Join-Path $repoRoot 'Directory.Build.props'), (Join-Path $nestedRoot 'Directory.Build.props'))
+        [System.IO.File]::WriteAllText($nestedProject, '<Project />', [System.Text.UTF8Encoding]::new($false))
+        $nestedGitMarker = Join-Path $nestedRoot '.git'
+        [System.IO.File]::WriteAllText($nestedGitMarker, "gitdir: $nestedAdmin`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $nestedAdmin 'commondir'), "..\..`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $nestedAdmin 'gitdir'), "$nestedGitMarker`n", [System.Text.UTF8Encoding]::new($false))
+
+        $badLinkRoot = Join-Path $testRepo '.build\ci-closeout\checkout-bad-link'
+        $badLinkProject = Join-Path $badLinkRoot 'RedSalamander\RedSalamander.vcxproj'
+        $badLinkAdmin = Join-Path $rootGit 'worktrees\checkout-bad-link'
+        New-Item -ItemType Directory -Path (Join-Path $badLinkRoot 'RedSalamander'),$badLinkAdmin -Force | Out-Null
+        [System.IO.File]::Copy((Join-Path $repoRoot 'Directory.Build.props'), (Join-Path $badLinkRoot 'Directory.Build.props'))
+        [System.IO.File]::WriteAllText($badLinkProject, '<Project />', [System.Text.UTF8Encoding]::new($false))
+        $badLinkMarker = Join-Path $badLinkRoot '.git'
+        [System.IO.File]::WriteAllText($badLinkMarker, "gitdir: $badLinkAdmin`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $badLinkAdmin 'commondir'), "..\..`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $badLinkAdmin 'gitdir'), (Join-Path $badLinkRoot 'different-marker') + "`n", [System.Text.UTF8Encoding]::new($false))
+
+        $badPropsRoot = Join-Path $testRepo '.build\ci-closeout\checkout-bad-props'
+        $badPropsProject = Join-Path $badPropsRoot 'RedSalamander\RedSalamander.vcxproj'
+        $badPropsAdmin = Join-Path $rootGit 'worktrees\checkout-bad-props'
+        New-Item -ItemType Directory -Path (Join-Path $badPropsRoot 'RedSalamander'),$badPropsAdmin -Force | Out-Null
+        [System.IO.File]::Copy((Join-Path $repoRoot 'Directory.Build.props'), (Join-Path $badPropsRoot 'Directory.Build.props'))
+        [System.IO.File]::WriteAllText((Join-Path $badPropsRoot 'Directory.Build.props'), '<Project><PropertyGroup><OutDir>C:\shared\out\</OutDir></PropertyGroup></Project>', [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText($badPropsProject, '<Project />', [System.Text.UTF8Encoding]::new($false))
+        $badPropsMarker = Join-Path $badPropsRoot '.git'
+        [System.IO.File]::WriteAllText($badPropsMarker, "gitdir: $badPropsAdmin`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $badPropsAdmin 'commondir'), "..\..`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $badPropsAdmin 'gitdir'), "$badPropsMarker`n", [System.Text.UTF8Encoding]::new($false))
+
+        # A managed dependency is also nested under .build, but its ordinary Git
+        # checkout is not proof that it owns independent product vcpkg outputs.
+        $managedDependencyRoot = Join-Path $testRepo '.build\dependencies\DxUi\source\pinned'
+        $managedDependencyProject = Join-Path $managedDependencyRoot 'src\DxUi.vcxproj'
+        New-Item -ItemType Directory -Path (Join-Path $managedDependencyRoot '.git'),(Split-Path -Parent $managedDependencyProject) -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $managedDependencyRoot 'Directory.Build.props'), '<Project><PropertyGroup><VcpkgEnabled>false</VcpkgEnabled></PropertyGroup></Project>', [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText($managedDependencyProject, '<Project />', [System.Text.UTF8Encoding]::new($false))
+
         Mock Get-CimInstance -ModuleName ArtifactOperationLock {
             $testRepo = $global:RSTestResidualArtifactRepo
+            $nestedProject = $global:RSTestResidualArtifactNestedProject
+            $managedDependencyProject = $global:RSTestResidualArtifactManagedDependencyProject
+            $badLinkProject = $global:RSTestResidualArtifactBadLinkProject
+            $badPropsProject = $global:RSTestResidualArtifactBadPropsProject
             return @(
                 [pscustomobject]@{
                     ProcessId = 7711
@@ -1345,6 +1397,132 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
                     ParentProcessId = 9900
                     Name = 'MSBuild.exe'
                     CommandLine = 'MSBuild.exe "' + $testRepo + '\RedSalamander.sln" /p:Configuration=Release /p:Platform=x64'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10100
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $testRepo + '\RedSalamander.sln" /p:Configuration=Debug /p:Platform=x64'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10101
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:PreferredToolArchitecture=x64;RSBuildEnableTests=false -nologo -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10102
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture /t:Build'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10103
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="' + $testRepo + '" -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10104
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $managedDependencyProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10105
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:DirectoryBuildPropsPath="' + $testRepo + '\Directory.Build.props" -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10106
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" @redirect.rsp /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10107
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:RSOutSubdir=redirected -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10108
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:UnreviewedFutureProperty=1 -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10109
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 /p:RSProjectRelativeDir=redirected -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10112
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10113
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture /t:Clean'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10114
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture /t:Rebuild'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10115
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -restore'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10116
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -graphBuild'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10117
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -logger:ConsoleLogger'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10118
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -futureOption'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10119
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -getTargetResult:Build'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10120
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $nestedProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture -getResultOutputFile:unexpected.json'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10110
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $badLinkProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10111
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $badPropsProject + '" /p:Configuration=Debug /p:Platform=x64 -noAutoResponse -getProperty:PreferredToolArchitecture'
                 },
                 [pscustomobject]@{
                     ProcessId = 9922
@@ -1416,6 +1594,10 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
         }
 
         $global:RSTestResidualArtifactRepo = $testRepo
+        $global:RSTestResidualArtifactNestedProject = $nestedProject
+        $global:RSTestResidualArtifactManagedDependencyProject = $managedDependencyProject
+        $global:RSTestResidualArtifactBadLinkProject = $badLinkProject
+        $global:RSTestResidualArtifactBadPropsProject = $badPropsProject
         $message = $null
         try {
             Assert-RSNoResidualArtifactToolProcesses `
@@ -1431,6 +1613,27 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
         $message | Should Match 'PID=7711'
         $message | Should Not Match 'PID=7722'
         $message | Should Not Match 'PID=8811'
+        $message | Should Match 'PID=10100'
+        $message | Should Not Match 'PID=10101'
+        $message | Should Match 'PID=10102'
+        $message | Should Match 'PID=10103'
+        $message | Should Match 'PID=10104'
+        $message | Should Match 'PID=10105'
+        $message | Should Match 'PID=10106'
+        $message | Should Match 'PID=10107'
+        $message | Should Match 'PID=10108'
+        $message | Should Match 'PID=10109'
+        $message | Should Match 'PID=10110'
+        $message | Should Match 'PID=10111'
+        $message | Should Match 'PID=10112'
+        $message | Should Match 'PID=10113'
+        $message | Should Match 'PID=10114'
+        $message | Should Match 'PID=10115'
+        $message | Should Match 'PID=10116'
+        $message | Should Match 'PID=10117'
+        $message | Should Match 'PID=10118'
+        $message | Should Match 'PID=10119'
+        $message | Should Match 'PID=10120'
 
         $sharedDependencyMessage = $null
         try {
@@ -1442,6 +1645,27 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
             $sharedDependencyMessage = $_.Exception.Message
         }
         $sharedDependencyMessage | Should Match 'PID=9911'
+        $sharedDependencyMessage | Should Match 'PID=10100'
+        $sharedDependencyMessage | Should Not Match 'PID=10101'
+        $sharedDependencyMessage | Should Match 'PID=10102'
+        $sharedDependencyMessage | Should Match 'PID=10103'
+        $sharedDependencyMessage | Should Match 'PID=10104'
+        $sharedDependencyMessage | Should Match 'PID=10105'
+        $sharedDependencyMessage | Should Match 'PID=10106'
+        $sharedDependencyMessage | Should Match 'PID=10107'
+        $sharedDependencyMessage | Should Match 'PID=10108'
+        $sharedDependencyMessage | Should Match 'PID=10109'
+        $sharedDependencyMessage | Should Match 'PID=10110'
+        $sharedDependencyMessage | Should Match 'PID=10111'
+        $sharedDependencyMessage | Should Match 'PID=10112'
+        $sharedDependencyMessage | Should Match 'PID=10113'
+        $sharedDependencyMessage | Should Match 'PID=10114'
+        $sharedDependencyMessage | Should Match 'PID=10115'
+        $sharedDependencyMessage | Should Match 'PID=10116'
+        $sharedDependencyMessage | Should Match 'PID=10117'
+        $sharedDependencyMessage | Should Match 'PID=10118'
+        $sharedDependencyMessage | Should Match 'PID=10119'
+        $sharedDependencyMessage | Should Match 'PID=10120'
         $sharedDependencyMessage | Should Match 'PID=9933'
         $sharedDependencyMessage | Should Match 'PID=9934'
         $sharedDependencyMessage | Should Match 'PID=9955'
@@ -1473,5 +1697,9 @@ Import-Module '$escapedHelper' -Force -ErrorAction Stop
         $arm64SharedDependencyMessage | Should Not Match 'PID=9988'
         $arm64SharedDependencyMessage | Should Not Match 'PID=10011'
         Remove-Variable -Name RSTestResidualArtifactRepo -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name RSTestResidualArtifactNestedProject -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name RSTestResidualArtifactManagedDependencyProject -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name RSTestResidualArtifactBadLinkProject -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name RSTestResidualArtifactBadPropsProject -Scope Global -ErrorAction SilentlyContinue
     }
 }

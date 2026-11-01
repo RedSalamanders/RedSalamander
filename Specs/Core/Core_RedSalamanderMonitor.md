@@ -8,14 +8,18 @@ Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
 Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
 The former Restore-RedMonitor command is a read-only compatibility verifier.
 
-There are no viewer/test/satellite projects in this solution. Builds, tests and app packages never
-clone, compile, stage or require a viewer. ZIP/MSI/MSIX carry only the client MIT notice; stale old
-viewer executables/satellites must not enter packages. The standalone Release package owns installation.
+There are no viewer/test/satellite projects in this solution. Builds, tests and portable ZIPs never
+clone, compile, stage or require a viewer. The ZIP carries only the client MIT notice; stale old
+viewer executables/satellites must not enter the package. The independent RedMonitor Release ZIP owns
+the viewer's installation.
 
 Existing per-module providers remain registered through their original lifetime and ABI.
 Debug::detail::EmitEtwEvent calls the shared WriteNormalizedEvent with RedSalamander as application label,
 preserving severity and copied PID/TID/FILETIME. Existing fields/GUID/name remain compatible; Application
-is additive and the text prefix is normalized. Local/debug/crash/performance behavior remains owned here.
+is additive and the text prefix is normalized. Producer messages are truncated only when needed to fit the
+client's 16,000 UTF-16-code-unit application-plus-message limit; the retained prefix ends before a complete
+surrogate pair and carries the `[truncated]` marker. The application and message together never exceed the
+client limit. Local/debug/crash/performance behavior remains owned here.
 
 Debug bare startup may asynchronously launch an available production Release helper from
 LocalAppData/Programs/RedMonitor/RedMonitor.exe or ProgramFiles/RedMonitor/RedMonitor.exe.

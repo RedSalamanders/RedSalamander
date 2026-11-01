@@ -31,9 +31,40 @@ SelfTest::RunCase(options,
     std::filesystem::path caseRoot;
     state.Require(PrepareSearchCaseRoot(root, L"search_callback_contract", caseRoot), L"Failed to prepare search_callback_contract root.");
     state.Require(SelfTest::WriteTextFile(caseRoot / L"match.txt", "contract"), L"Failed to create match.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CreatedFileSystemInstance created{};
+    HRESULT hr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+    state.Require(SUCCEEDED(hr) && created.fileSystem,
+                  std::format(L"Failed to create an isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr) || ! created.fileSystem)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IInformations> information;
+    state.Require(CreateInformations(created.fileSystem, information), L"Isolated local file system instance missing IInformations.");
+    if (! information)
+    {
+        return false;
+    }
+
+    hr = information->SetConfiguration("{\"searchBackendPreference\":\"scan\",\"searchMaxDirectoryWalkers\":2}");
+    state.Require(SUCCEEDED(hr), std::format(L"Failed to configure the isolated local search worker count. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
 
     wil::com_ptr<IFileSystemSearch> search;
-    state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+    state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+    if (! search)
+    {
+        return false;
+    }
 
     std::wstring rootText    = caseRoot.wstring();
     std::wstring namePattern = L"*.txt";
@@ -47,41 +78,83 @@ SelfTest::RunCase(options,
     query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
     query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
 
-    RecordingSearchCallback successCallback;
-    HRESULT hr = search->Search(&query, &successCallback, nullptr);
-    state.Require(SUCCEEDED(hr), std::format(L"Search success case failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    state.Require(successCallback.ProgressCalls() >= 1u, L"Search success case expected at least one progress callback.");
-    state.Require(successCallback.CancelCalls() >= 1u, L"Search success case expected at least one cancel callback.");
-    state.Require(successCallback.NullPathProgressCalls() >= 1u, L"Search success case expected a final null-path progress callback.");
+    constexpr std::wstring_view joinGateName = L"REDSALAMANDER_SELFTEST_SEARCH_JOIN_BEFORE_DRAIN_ROOT";
+    const auto previousJoinGate              = RedSalamander::TestSupport::ReadEnvironmentValue(joinGateName);
+    state.Require(previousJoinGate.error == ERROR_SUCCESS, L"Failed to read the inherited parallel search join-gate value.");
+    if (previousJoinGate.error != ERROR_SUCCESS)
+    {
+        return false;
+    }
 
-    const auto progressSnapshots            = successCallback.ProgressSnapshots();
-    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
-    state.Require(completed && completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN,
-                  L"Callback protocol coverage must complete through its explicitly bounded scan backend.");
+    bool joinGateRestored = false;
+    {
+        const auto restoreJoinGate = wil::scope_exit([&]() noexcept
+        {
+            joinGateRestored =
+                SetEnvironmentVariableW(joinGateName.data(), previousJoinGate.value.has_value() ? previousJoinGate.value.value().c_str() : nullptr) != FALSE;
+        });
+        const BOOL joinGateSet     = SetEnvironmentVariableW(joinGateName.data(), rootText.c_str());
+        state.Require(joinGateSet != FALSE, L"Failed to enable the root-scoped parallel search join gate.");
+        if (joinGateSet != FALSE)
+        {
+            RecordingSearchCallback successCallback;
+            hr = search->Search(&query, &successCallback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Search success case failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(successCallback.ProgressCalls() >= 1u, L"Search success case expected at least one progress callback.");
+            state.Require(successCallback.CancelCalls() >= 1u, L"Search success case expected at least one cancel callback.");
+            state.Require(successCallback.NullPathProgressCalls() >= 1u, L"Search success case expected a final null-path progress callback.");
 
-    RecordingSearchCallback failProgressCallback(RecordingSearchCallback::Mode::FailProgress);
-    hr = search->Search(&query, &failProgressCallback, nullptr);
-    state.Require(hr == HRESULT_FROM_WIN32(ERROR_RETRY),
-                  std::format(L"Search fail-progress case expected ERROR_RETRY. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            const auto successMatches = successCallback.Matches();
+            state.Require(successMatches.size() == 1u && successMatches.front().displayName == L"match.txt",
+                          L"Search success case must report exactly the one fixture match.");
+            const auto progressSnapshots            = successCallback.ProgressSnapshots();
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed && completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN,
+                          L"Callback protocol coverage must complete through its explicitly bounded scan backend.");
 
-    RecordingSearchCallback failCancelCallback(RecordingSearchCallback::Mode::FailCancel);
-    hr = search->Search(&query, &failCancelCallback, nullptr);
-    state.Require(hr == E_ACCESSDENIED, std::format(L"Search fail-cancel case expected E_ACCESSDENIED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            RecordingSearchCallback failProgressCallback(RecordingSearchCallback::Mode::FailProgress);
+            hr = search->Search(&query, &failProgressCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_RETRY),
+                          std::format(L"Search fail-progress case expected ERROR_RETRY. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
-    RecordingSearchCallback cancelCallback(RecordingSearchCallback::Mode::Cancel);
-    hr = search->Search(&query, &cancelCallback, nullptr);
-    state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Search cancel case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            RecordingSearchCallback failCancelCallback(RecordingSearchCallback::Mode::FailCancel);
+            hr = search->Search(&query, &failCancelCallback, nullptr);
+            state.Require(hr == E_ACCESSDENIED, std::format(L"Search fail-cancel case expected E_ACCESSDENIED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
-    RecordingSearchCallback abortProgressCallback(RecordingSearchCallback::Mode::AbortProgress);
-    hr = search->Search(&query, &abortProgressCallback, nullptr);
-    state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Search abort-progress case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            RecordingSearchCallback cancelCallback(RecordingSearchCallback::Mode::Cancel);
+            hr = search->Search(&query, &cancelCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search cancel case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
-    RecordingSearchCallback abortMatchCallback(RecordingSearchCallback::Mode::AbortMatch);
-    hr = search->Search(&query, &abortMatchCallback, nullptr);
-    state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Search abort-match case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            RecordingSearchCallback abortProgressCallback(RecordingSearchCallback::Mode::AbortProgress);
+            hr = search->Search(&query, &abortProgressCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search abort-progress case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            RecordingSearchCallback abortMatchCallback(RecordingSearchCallback::Mode::AbortMatch);
+            hr = search->Search(&query, &abortMatchCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search abort-match case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(abortMatchCallback.MatchCalls() == 1u, L"Search abort-match case must invoke the callback for the fixture match.");
+            state.Require(abortMatchCallback.Matches().empty(), L"Search abort-match case must not record an aborted match.");
+
+            RecordingSearchCallback failMatchCallback(RecordingSearchCallback::Mode::FailMatch);
+            hr = search->Search(&query, &failMatchCallback, nullptr);
+            state.Require(hr == E_ACCESSDENIED, std::format(L"Search fail-match case expected E_ACCESSDENIED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(failMatchCallback.MatchCalls() == 1u && failMatchCallback.Matches().empty(),
+                          L"Search fail-match case must invoke the callback once and preserve its failure.");
+
+            RecordingSearchCallback cancelAfterMatchCallback(RecordingSearchCallback::Mode::CancelAfterMatch);
+            hr = search->Search(&query, &cancelAfterMatchCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search cancel-after-match case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            const auto cancelAfterMatchResults = cancelAfterMatchCallback.Matches();
+            state.Require(cancelAfterMatchCallback.MatchCalls() == 1u && cancelAfterMatchResults.size() == 1u &&
+                              cancelAfterMatchResults.front().displayName == L"match.txt",
+                          L"Search cancel-after-match case must report the fixture match before cancellation.");
+        }
+    }
+    state.Require(joinGateRestored, L"Failed to restore the inherited parallel search join-gate value.");
 
     return state.failure.empty();
 });
@@ -1574,11 +1647,13 @@ SelfTest::RunCase(options,
     std::filesystem::path caseRoot;
     state.Require(PrepareSearchCaseRoot(root, L"index_fileops_artifacts_visible", caseRoot),
                   L"Failed to prepare the File Operations artifact visibility root.");
-    const std::array<std::wstring, 5u> names{{
+    const std::array<std::wstring, 7u> names{{
         L"visible.rs_tmp_0123456789abcdef0123456789abcdef_1",
         L"visible.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}",
         L"visible.rs_ren_0123456789abcdef0123456789abcdef",
         L"visible.rs_copy_tmp_01234567_89abcdef_0123456789abcdef",
+        L"visible.rs_copy_tmp_0123456789abcdef0123456789abcdef",
+        L"visible.rs_bak_0123456789abcdef0123456789abcdef",
         L"visible.~rs-write-{01234567-89AB-CDEF-0123-456789ABCDEF}.tmp",
     }};
     for (const std::wstring& name : names)
@@ -12568,15 +12643,61 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    // Fixture-only: retain a synchronous client without sending a request so it
+    // occupies one service instance. The private production connector owns
+    // overlapped protocol I/O; shared capture pipes have different semantics.
+    const auto connectOccupiedPipe = [](const std::wstring& name, DWORD timeoutMs, DWORD& lastError, uint32_t& attempts) noexcept
+    {
+        wil::unique_handle connected;
+        const ULONGLONG started = ::GetTickCount64();
+        attempts                = 0u;
+        for (;;)
+        {
+            ++attempts;
+            connected.reset(::CreateFileW(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+            if (connected)
+            {
+                lastError = ERROR_SUCCESS;
+                return connected;
+            }
+            lastError               = ::GetLastError();
+            const ULONGLONG elapsed = ::GetTickCount64() - started;
+            if ((lastError != ERROR_FILE_NOT_FOUND && lastError != ERROR_PIPE_BUSY && lastError != ERROR_SEM_TIMEOUT) || elapsed >= timeoutMs)
+            {
+                return connected;
+            }
+            ::Sleep(static_cast<DWORD>((std::min<ULONGLONG>)(10u, timeoutMs - elapsed)));
+        }
+    };
+
+    // A never-created instance deterministically exercises the listener-gap
+    // retry path; WaitNamedPipe alone returns immediately in this state.
+    DWORD missingError               = ERROR_SUCCESS;
+    uint32_t missingAttempts         = 0u;
+    const ULONGLONG missingStarted   = ::GetTickCount64();
+    const wil::unique_handle missing = connectOccupiedPipe(MakeUniquePipeName(), 50u, missingError, missingAttempts);
+    const ULONGLONG missingElapsed   = ::GetTickCount64() - missingStarted;
+    state.Require(
+        ! missing && missingError == ERROR_FILE_NOT_FOUND && missingAttempts > 1u && missingElapsed < 1'000u,
+        std::format(
+            L"Missing-listener fixture must retry within its deadline. error={} attempts={} elapsedMs={}", missingError, missingAttempts, missingElapsed));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     // An accepted client can own the serialized service while it is still sending
     // its request. Hold that connection beyond the former 750 ms connect window;
     // the next query must wait, then return the exact result after it is released.
     // Exercise cancellation independently while the same occupied pipe remains busy.
     for (const bool cancelWhileBusy : {false, true})
     {
-        state.Require(::WaitNamedPipeW(pipeName.c_str(), 5'000u) != 0, L"Busy-pipe fixture did not find the isolated service listener.");
-        wil::unique_handle occupied(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-        state.Require(static_cast<bool>(occupied), L"Busy-pipe fixture could not occupy the isolated service connection.");
+        DWORD occupiedError         = ERROR_SUCCESS;
+        uint32_t occupiedAttempts   = 0u;
+        wil::unique_handle occupied = connectOccupiedPipe(pipeName, 5'000u, occupiedError, occupiedAttempts);
+        state.Require(
+            static_cast<bool>(occupied),
+            std::format(L"Busy-pipe fixture could not occupy the isolated service connection. error={} attempts={}", occupiedError, occupiedAttempts));
         if (! occupied)
             return false;
         wil::unique_event_nothrow clientStarted;

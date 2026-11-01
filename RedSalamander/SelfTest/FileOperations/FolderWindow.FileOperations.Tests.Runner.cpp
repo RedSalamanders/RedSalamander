@@ -78,6 +78,7 @@
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
+#include "FileOperationConfirmation.h"
 #include "FileOperationDurableStore.h"
 #include "FileOperationItemResultReducer.h"
 #include "FileOperationMoveBreadcrumb.h"
@@ -99,6 +100,7 @@
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
 #include "NavigationLocation.h"
+#include "ProcessCommandLine.h"
 #include "RedSalamander.h"
 #include "SplashScreen.h"
 #include "StringConversion.h"
@@ -212,6 +214,17 @@ public:
         return _providerOperationCallCount.load(std::memory_order_acquire);
     }
 
+    [[nodiscard]] ULONG ReferenceCountForSelfTest() const noexcept
+    {
+        return _refCount.load(std::memory_order_acquire);
+    }
+
+    void SetBlockReadDirectoryInfoForSelfTest(const HANDLE entered) noexcept
+    {
+        _readDirectoryInfoEnteredEvent = entered;
+        _blockReadDirectoryInfo        = true;
+    }
+
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override
     {
         if (! object)
@@ -271,6 +284,10 @@ public:
 
     HRESULT STDMETHODCALLTYPE ReadDirectoryInfo(const wchar_t*, IFilesInformation**) noexcept override
     {
+        if (_blockReadDirectoryInfo)
+        {
+            return WaitForeverAfterProviderOperationCall(_readDirectoryInfoEnteredEvent);
+        }
         return _boundedBlockedRead ? E_NOTIMPL : WaitForeverAfterProviderOperationCall();
     }
     HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t*, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
@@ -340,9 +357,13 @@ protected:
     }
 
 private:
-    HRESULT WaitForeverAfterProviderOperationCall() noexcept
+    HRESULT WaitForeverAfterProviderOperationCall(const HANDLE enteredEvent = nullptr) noexcept
     {
         _providerOperationCallCount.fetch_add(1u, std::memory_order_release);
+        if (enteredEvent != nullptr)
+        {
+            SetEvent(enteredEvent);
+        }
         if (_boundedBlockedRead)
         {
             std::byte buffer[16]{};
@@ -364,10 +385,12 @@ private:
     std::atomic<HRESULT> _blockedReadStatus{E_PENDING};
     wil::unique_handle _pipeRead;
     wil::unique_handle _pipeWrite;
+    HANDLE _readDirectoryInfoEnteredEvent = nullptr;
     std::string _capabilitiesJson;
-    bool _exposeTypedRoute   = true;
-    bool _typedCopyOperation = true;
-    bool _boundedBlockedRead = false;
+    bool _exposeTypedRoute       = true;
+    bool _typedCopyOperation     = true;
+    bool _boundedBlockedRead     = false;
+    bool _blockReadDirectoryInfo = false;
 };
 
 [[nodiscard]] Common::Settings::FileOperationsSettings& EnsureFileOperationsSettingsForSelfTest() noexcept
@@ -1162,6 +1185,7 @@ struct SelfTestState
     bool r1dAdmissionReturnedBeforeReadiness   = false;
     bool r1dMoveBreadcrumbPublishedBeforeReady = false;
     uint64_t r1dPresentationBaseline           = 0u;
+    HWND r1dPopup                              = nullptr;
     bool phase10MetadataSparseSeeded           = false;
     int64_t phase10MetadataExpectedWriteTime   = 0;
 
@@ -9075,15 +9099,18 @@ using TickResult = std::optional<bool>;
     return passed;
 }
 
-[[nodiscard]] bool RecordFileOpsPopupIdleTelemetry(SelfTestState& state) noexcept
+[[nodiscard]] bool RecordFileOpsPopupIdleTelemetry(SelfTestState& state, bool injectTelemetryFailure = false, bool* injectedFailureReached = nullptr) noexcept
 {
     using namespace std::chrono_literals;
-    using Snapshot    = FileOperationsPopupInternal::PopupTelemetryDebugSnapshot;
-    auto* folder      = TryGetFolderWindow(state.mainWindow);
-    auto* operations  = TryGetFileOps(folder);
-    const auto reject = [&state](std::wstring_view reason) noexcept
+    using Snapshot   = FileOperationsPopupInternal::PopupTelemetryDebugSnapshot;
+    auto* folder     = TryGetFolderWindow(state.mainWindow);
+    auto* operations = TryGetFileOps(folder);
+    if (injectedFailureReached != nullptr)
+        *injectedFailureReached = false;
+    const auto reject = [](std::wstring_view reason) noexcept
     {
-        state.retainTempRootOnFailure = true;
+        // Timing/telemetry failures still fail this case. Only byte-integrity or cleanup
+        // failures below retain scratch and prohibit subsequent family reuse.
         AppendLog(std::format(L"Popup telemetry fixture: {}", reason));
         return false;
     };
@@ -9108,7 +9135,9 @@ using TickResult = std::optional<bool>;
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
-    const HWND foreground  = GetForegroundWindow();
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+        return reject(L"process-scoped no-activation witness unavailable");
     uint64_t taskId        = 0u;
     uint64_t infoId        = 0u;
     const bool autoDismiss = operations->GetAutoDismissSuccess();
@@ -9307,24 +9336,8 @@ using TickResult = std::optional<bool>;
                                           GetWindowThreadProcessId(popup, nullptr)));
             if (! captureResources(resourcesAfter, name, L"after"))
                 return false; // The exact resource API already logged its failure.
-            const HWND actualForeground = GetForegroundWindow();
-            if (actualForeground != foreground)
-            {
-                DWORD expectedProcess = 0u, actualProcess = 0u;
-                const DWORD expectedThread = GetWindowThreadProcessId(foreground, &expectedProcess);
-                const DWORD actualThread   = GetWindowThreadProcessId(actualForeground, &actualProcess);
-                return reject(std::format(
-                    L"{} foreground changed expectedHwnd={} expectedPid={} expectedTid={} actualHwnd={} actualPid={} actualTid={} active={} focus={}",
-                    name,
-                    reinterpret_cast<uintptr_t>(foreground),
-                    expectedProcess,
-                    expectedThread,
-                    reinterpret_cast<uintptr_t>(actualForeground),
-                    actualProcess,
-                    actualThread,
-                    reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                    reinterpret_cast<uintptr_t>(GetFocus())));
-            }
+            if (! desktop.Sample())
+                return reject(std::format(L"{} lost owned-window no-activation evidence (failure={})", name, static_cast<unsigned int>(desktop.Failure())));
             const auto ticks     = after.timerTicks - before.timerTicks;
             const auto snapshots = after.taskSnapshots - before.taskSnapshots;
             const auto rates     = after.rateSnapshots - before.rateSnapshots;
@@ -9416,9 +9429,13 @@ using TickResult = std::optional<bool>;
     const auto quiet = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
         return ! operations->FindTask(taskId) && ! operations->HasActiveOperations();
     }, {.timeout = SelfTest::Scale(8s), .operationName = L"telemetry actual worker quiet point"});
-    if (! quiet.conditionMet || operations->GetPopupHwndForSelfTest() != popup || ! FilesEqualBytes(source, reference) ||
-        ! FilesEqualBytes(destination, reference) || ! measure(L"completed-idle", false))
-        return reject(L"completion lost retained popup, exact bytes, or idle measurement");
+    if (! quiet.conditionMet || ! FilesEqualBytes(source, reference) || ! FilesEqualBytes(destination, reference))
+    {
+        state.retainTempRootOnFailure = true;
+        return reject(L"completion lost its worker quiet point or exact source/destination bytes");
+    }
+    if (operations->GetPopupHwndForSelfTest() != popup || ! measure(L"completed-idle", false))
+        return reject(L"completion lost retained popup or idle measurement");
     Snapshot final{};
     if (! DebugGetFileOperationsPopupTelemetrySnapshot(popup, final) || final.lastTaskbarState != static_cast<uint32_t>(TBPF_NOPROGRESS))
         return reject(L"last completion did not publish the final taskbar model");
@@ -9444,7 +9461,7 @@ using TickResult = std::optional<bool>;
     SendMessageW(popup, taskbarCreated, 0u, 0);
     if (! DebugGetFileOperationsPopupTelemetrySnapshot(popup, replay) || replay.taskSnapshots != final.taskSnapshots ||
         replay.lastTaskbarState != static_cast<uint32_t>(TBPF_NOPROGRESS) || replay.taskbarAttempts != final.taskbarAttempts + 1u ||
-        (replay.idlePolicyEnabled && replay.timerIntervalMs != 0u) || GetForegroundWindow() != foreground)
+        (replay.idlePolicyEnabled && replay.timerIntervalMs != 0u) || ! desktop.Sample())
         return reject(L"Explorer did not replay the final taskbar model from its cache without idle telemetry");
     AppendLog(std::format(L"Popup taskbar replay: snapshots={} attempts={} successes={} intervalMs={}",
                           replay.taskSnapshots - final.taskSnapshots,
@@ -9455,13 +9472,28 @@ using TickResult = std::optional<bool>;
         return reject(L"owned popup policy restoration failed");
     restoreIdleSuspension.release();
     if (! cleanup())
+    {
+        state.retainTempRootOnFailure = true;
         return reject(L"worker cleanup or restored settings save did not reach its quiet point");
+    }
     restore.release();
-    const HWND finalForeground = GetForegroundWindow();
-    if (finalForeground != foreground)
-        return reject(std::format(L"final cleanup foreground changed expectedHwnd={} actualHwnd={}",
-                                  reinterpret_cast<uintptr_t>(foreground),
-                                  reinterpret_cast<uintptr_t>(finalForeground)));
+    if (! desktop.Finish())
+        return reject(std::format(L"owned-window no-activation witness failed (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    const auto& desktopStats = desktop.Stats();
+    Debug::Perf::Emit(
+        L"FileOps.PopupTelemetry.DesktopObservation",
+        std::format(L"cursorChanges={} inputChanges={} barrierUs={}", desktopStats.cursorChanges, desktopStats.inputChanges, desktopStats.barrierUs),
+        0u,
+        desktopStats.samples,
+        desktopStats.foregroundChanges,
+        S_OK);
+    if (injectTelemetryFailure)
+    {
+        if (injectedFailureReached != nullptr)
+            *injectedFailureReached = true;
+        AppendLog(L"Expected negative control: reject a telemetry-only result after exact bytes and fixture cleanup; family reuse remains allowed.");
+        return false;
+    }
     return true;
 }
 
@@ -9471,9 +9503,9 @@ using TickResult = std::optional<bool>;
 {
     using namespace std::chrono_literals;
     using namespace FileOperationsPopupInternal;
-    const auto reject = [&state](std::wstring_view reason) noexcept
+    const auto reject = [](std::wstring_view reason) noexcept
     {
-        state.retainTempRootOnFailure = true;
+        // This fixture owns only synthetic popup state; RAII closes it on every return.
         AppendLog(std::format(L"Completed-card auto-collapse: FAILED: {}", reason));
         return false;
     };
@@ -9483,9 +9515,9 @@ using TickResult = std::optional<bool>;
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
-    const HWND foreground   = GetForegroundWindow();
-    DWORD foregroundProcess = 0u;
-    static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundProcess));
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+        return reject(L"process-scoped no-activation witness unavailable");
     // Retaining height is an explicit same-binary counterfactual of the old completion path.
     // Fixed geometry prevents window auto-sizing or deferred accessible text from masking the race.
     struct Scenario
@@ -9595,17 +9627,7 @@ using TickResult = std::optional<bool>;
         if (! correct)
             return reject(facts);
     }
-    const HWND finalForeground = GetForegroundWindow();
-    if (finalForeground == foreground)
-        return true;
-    DWORD finalForegroundProcess = 0u;
-    static_cast<void>(GetWindowThreadProcessId(finalForeground, &finalForegroundProcess));
-    return reject(std::format(L"foreground changed: before=0x{:X} beforePid={} after=0x{:X} afterPid={} selfPid={}",
-                              reinterpret_cast<uintptr_t>(foreground),
-                              foregroundProcess,
-                              reinterpret_cast<uintptr_t>(finalForeground),
-                              finalForegroundProcess,
-                              GetCurrentProcessId()));
+    return desktop.Finish() || reject(L"owned-window no-activation witness failed");
 }
 
 [[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state) noexcept
@@ -9613,9 +9635,8 @@ using TickResult = std::optional<bool>;
     using namespace std::chrono_literals;
     using namespace FileOperationsPopupInternal;
     using State       = FolderWindow::FileOperationState;
-    const auto reject = [&state](std::wstring_view reason) noexcept
+    const auto reject = [](std::wstring_view reason) noexcept
     {
-        state.retainTempRootOnFailure = true;
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
         return false;
     };
@@ -9626,7 +9647,6 @@ using TickResult = std::optional<bool>;
     const auto fail = [&](std::wstring_view reason) noexcept
     {
         ++failures;
-        state.retainTempRootOnFailure = true;
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
     auto* folder     = TryGetFolderWindow(state.mainWindow);
@@ -10461,7 +10481,10 @@ using TickResult = std::optional<bool>;
         note(L"the foreground window changed during the measurement (environmental; no fixture activates a window)");
 
     if (! cleanup())
+    {
+        state.retainTempRootOnFailure = true;
         return reject(L"worker cleanup or the restored settings save did not reach its quiet point");
+    }
     restore.release();
     if (failures != 0u)
         return reject(std::format(L"{} cadence assertion(s) failed", failures));
@@ -10934,7 +10957,7 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
     };
     FileOperationMoveBreadcrumb::Breadcrumb breadcrumb;
     if (FAILED(FileOperationMoveBreadcrumb::Breadcrumb::Create(record, breadcrumb)) ||
-        FAILED(breadcrumb.Advance(FileOperationMoveBreadcrumb::DurablePhase::Executing)))
+        FAILED(breadcrumb.Advance(FileOperationMoveBreadcrumb::DurablePhase::Executing)) || FAILED(breadcrumb.SimulateExitedWriterForSelfTest()))
         return L"Clear-completed scope could not persist its interrupted-Move breadcrumb.";
     const std::filesystem::path breadcrumbPath = breadcrumb.GetPath();
 
@@ -15404,6 +15427,17 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
             AppendLog(L"Owned-volume operation-path controls passed without mounting a disk or taking focus.");
+            if (! RunFileOpsInterruptedMoveWriterChecks(state))
+            {
+                Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
+                return true;
+            }
+            bool injectedFailureReached = false;
+            if (RecordFileOpsPopupIdleTelemetry(state, true, &injectedFailureReached) || ! injectedFailureReached || state.retainTempRootOnFailure)
+            {
+                Fail(L"A clean telemetry-only negative control must fail its result while allowing the next owned fixture.");
+                return true;
+            }
             // Private predicates use their own engine; the real clipboard-ready journey
             // retains its strict idle-owner precondition under the no-activation guard.
             SelfTest::CaseState admissionContracts;
@@ -15412,8 +15446,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(admissionContracts.failure);
                 return true;
             }
-            if (! RunFileOpsDeleteParentPinChecks(state) || ! RunFileOpsCrossRootSkipContractChecks(state) ||
+            if (! RunFileOpsSameHostOverlapClassifierCostChecks(state) || ! RunFileOpsDeleteParentPinChecks(state) ||
+                ! RunFileOpsCrossRootSkipContractChecks(state) ||
                 ! RunFileOperationQueuedMissingSourceTaskSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOpsBridgePausedReaderStopSelfTestForSelfTest(*state.fileOps) || ! RunFileOpsLeftoverScanWorkerRetirementChecks(state) ||
                 ! RunFileOperationUnverifiableDestinationCollisionSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOpsCompletedCardAutoCollapseChecks(state))
             {

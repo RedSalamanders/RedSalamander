@@ -1,0 +1,437 @@
+{
+  "provenance": {
+    "utc": "2026-10-31T15:27:51.3141759Z",
+    "repoHead": "6b6f5646be297fbc232d137f1df6a00c5cb74461",
+    "identitySource": "Z:\\src\\RedSalamander\\Common\\FileSystemPathIdentity.cpp",
+    "identitySourceSha256": "9544B523F55374E37DA3EABB28A784E1679413EC3E8399998B607B80AD5211F9",
+    "oracleSource": "Z:\\RedSalamander.Perf\\runs\\pathmap31-63848\\scratch\\codex\\nls-parity-oracle\\NlsParityOracle.cs",
+    "powershell": "7.6.5",
+    "os": "Microsoft Windows NT 10.0.26300.0",
+    "temp": "Z:\\RedSalamander.Perf\\runs\\pathmap31-63848\\scratch\\codex\\nls-parity-oracle\\temp",
+    "api": "LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, explicit UTF-16 lengths); CompareStringOrdinal(ignoreCase=true, explicit UTF-16 lengths)",
+    "scope": "All 65,536 single UTF-16 code units, including isolated surrogates, plus representative supplementary and contextual strings; not a proof for arbitrary strings."
+  },
+  "result": {
+    "utf16SingleUnitCount": 65536,
+    "acceptedUnits": 65536,
+    "requiredLengthOtherThanOne": 0,
+    "mapQueryErrors": 0,
+    "mapFillErrors": 0,
+    "compareErrorsDuringSort": 0,
+    "nativeEquivalenceClasses": 64563,
+    "nontrivialNativeEquivalenceClasses": 973,
+    "acceptedKeyEquivalenceClassMismatches": [],
+    "acceptedKeyCollisionChecks": 973,
+    "acceptedKeyRawUnequalCollisions": [],
+    "contextPairs": [
+      {
+        "name": "ASCII-case",
+        "leftUtf16": "U+0061",
+        "rightUtf16": "U+0041",
+        "compareStringOrdinal": 2,
+        "nativeEqual": true,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0041",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0041",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": true,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Greek-final-sigma",
+        "leftUtf16": "U+03A3",
+        "rightUtf16": "U+03C2",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+03A3",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+03C2",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Greek-final-sigma-context",
+        "leftUtf16": "U+039F U+03A3",
+        "rightUtf16": "U+03BF U+03C2",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+039F U+03A3",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+039F U+03C2",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Greek-normal-sigma-context",
+        "leftUtf16": "U+039F U+03A3",
+        "rightUtf16": "U+03BF U+03C3",
+        "compareStringOrdinal": 2,
+        "nativeEqual": true,
+        "leftMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+039F U+03A3",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+039F U+03A3",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": true,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Turkish-dotless-i",
+        "leftUtf16": "U+0049",
+        "rightUtf16": "U+0131",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0049",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0131",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Turkish-dotted-I",
+        "leftUtf16": "U+0130",
+        "rightUtf16": "U+0069",
+        "compareStringOrdinal": 3,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0130",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0049",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "sharp-s-expansion",
+        "leftUtf16": "U+00DF",
+        "rightUtf16": "U+0053 U+0053",
+        "compareStringOrdinal": 3,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+00DF",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0053 U+0053",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "capital-sharp-s",
+        "leftUtf16": "U+1E9E",
+        "rightUtf16": "U+00DF",
+        "compareStringOrdinal": 3,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+1E9E",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+00DF",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "kelvin-sign",
+        "leftUtf16": "U+004B",
+        "rightUtf16": "U+212A",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+004B",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+212A",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "canonical-composition-control",
+        "leftUtf16": "U+0041 U+030A",
+        "rightUtf16": "U+00C5",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0041 U+030A",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+00C5",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "Deseret-supplementary",
+        "leftUtf16": "U+D801 U+DC28",
+        "rightUtf16": "U+D801 U+DC00",
+        "compareStringOrdinal": 3,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D801 U+DC00",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 2,
+          "required": 2,
+          "written": 2,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D801 U+DC00",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": true,
+        "parityChecked": true,
+        "parity": false
+      },
+      {
+        "name": "Deseret-context",
+        "leftUtf16": "U+0078 U+D801 U+DC28 U+007A",
+        "rightUtf16": "U+0058 U+D801 U+DC00 U+005A",
+        "compareStringOrdinal": 3,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 4,
+          "required": 4,
+          "written": 4,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0058 U+D801 U+DC00 U+005A",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 4,
+          "required": 4,
+          "written": 4,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+0058 U+D801 U+DC00 U+005A",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": true,
+        "parityChecked": true,
+        "parity": false
+      },
+      {
+        "name": "unpaired-high-surrogate",
+        "leftUtf16": "U+D801",
+        "rightUtf16": "U+D801",
+        "compareStringOrdinal": 2,
+        "nativeEqual": true,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D801",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D801",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": true,
+        "parityChecked": true,
+        "parity": true
+      },
+      {
+        "name": "unpaired-surrogate-distinct",
+        "leftUtf16": "U+D801",
+        "rightUtf16": "U+D802",
+        "compareStringOrdinal": 1,
+        "nativeEqual": false,
+        "leftMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D801",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "rightMap": {
+          "sourceUtf16Units": 1,
+          "required": 1,
+          "written": 1,
+          "acceptedByProductionRule": true,
+          "mappedUtf16Units": "U+D802",
+          "queryError": 0,
+          "fillError": 0
+        },
+        "bothKeysAccepted": true,
+        "keyEqualWhenAccepted": false,
+        "parityChecked": true,
+        "parity": true
+      }
+    ],
+    "contextPairMismatches": 2,
+    "pass": false
+  }
+}

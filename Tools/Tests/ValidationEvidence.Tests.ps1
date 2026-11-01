@@ -521,6 +521,31 @@ Describe 'Operation Startrail provisional evidence and promotion barriers' {
         $filtered.repository_verdict | Should Be 'NOT_EVALUATED'
         $filtered.change_verdict | Should Be 'PASSED'
 
+        $filteredLegacy = Set-RSTestRunSummaryFinalExitCode -Summary $legacy -TerminalState $filtered.repository_verdict
+        $filteredLegacy.exit_code | Should Be 2
+        $filteredLegacy.passed | Should Be 3
+        $filteredLegacy.failed | Should Be 0
+        $filteredLegacy.skipped | Should Be 1
+        $roundTripLegacy = $filteredLegacy | ConvertTo-Json -Depth 32 | ConvertFrom-Json
+        $roundTripLegacy.exit_code | Should Be 2
+
+        $emptyLegacy = [pscustomobject]@{ exit_code = 0; passed = 0; failed = 0; skipped = 0; total = 0; duration_ms = 0 }
+        $emptyFiltered = New-RSValidationRunSummaryV2 -Run $fixture.Run -Plan $plan -Decision $decision `
+            -LegacySummary $emptyLegacy -EvidenceRoot $fixture.Run.EvidenceRoot `
+            -SchemaRoot (Join-Path $repoRoot 'Specs\Testing') -CoverageScope filtered
+        $emptyFiltered.repository_verdict | Should Be 'NOT_EVALUATED'
+        $emptyLegacy = Set-RSTestRunSummaryFinalExitCode -Summary $emptyLegacy -TerminalState $emptyFiltered.repository_verdict
+        $emptyLegacy.exit_code | Should Be 2
+        $emptyLegacy.passed | Should Be 0
+        $emptyLegacy.failed | Should Be 0
+        $emptyLegacy.skipped | Should Be 0
+
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
+        $exitMapping = $runner.IndexOf('$overallExitCode = Get-RSValidationExitCode -TerminalState $terminalState', [StringComparison]::Ordinal)
+        $legacyWrite = $runner.IndexOf('Set-Content -LiteralPath $legacySummaryPath', [StringComparison]::Ordinal)
+        $exitMapping | Should BeGreaterThan -1
+        $legacyWrite | Should BeGreaterThan $exitMapping
+
         $fixture.Run.State.entries[0].promotion_digest = $null
         $nullPromotion = New-RSValidationRunSummaryV2 -Run $fixture.Run -Plan $plan -Decision $decision `
             -LegacySummary $legacy -EvidenceRoot $fixture.Run.EvidenceRoot `

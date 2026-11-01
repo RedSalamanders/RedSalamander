@@ -419,10 +419,20 @@ private:
     std::string _capabilitiesJson;
     mutable std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
-    // Per-provider-instance cache. A new plugin/context instance naturally invalidates the probe;
-    // distinct resolved volume roots retain independent entries.
+    struct StorageCharacteristicsCacheEntry final
+    {
+        std::wstring backingVolumeGuidDevicePath;
+        std::wstring driveRoot;
+        UINT driveType   = DRIVE_UNKNOWN;
+        bool highLatency = false;
+        FileSystemStorageCharacteristics characteristics{};
+    };
+
+    // One current physical probe per lexical volume root. A fresh backing GUID and route
+    // context are checked before reuse; a remount replaces the entry instead of accumulating
+    // snapshots for every volume ever assigned to this root.
     std::mutex _storageCharacteristicsMutex;
-    std::unordered_map<std::wstring, FileSystemStorageCharacteristics> _storageCharacteristicsCache;
+    std::unordered_map<std::wstring, StorageCharacteristicsCacheEntry> _storageCharacteristicsCache;
 
     FileSystemConcurrencyMode _concurrencyMode                 = kDefaultConcurrencyMode;
     unsigned int _copyMoveMaxConcurrency                       = kDefaultCopyMoveMaxConcurrency;

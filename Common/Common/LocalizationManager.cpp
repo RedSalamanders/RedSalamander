@@ -314,6 +314,53 @@ HRESULT ApplyLanguagePreference(const LanguagePreference& preference) noexcept
     return S_OK;
 }
 
+std::wstring GetEffectiveResourceCulture(HINSTANCE embeddedInstance) noexcept
+{
+    const HINSTANCE instance = NormalizeInstance(embeddedInstance);
+    if (! instance)
+    {
+        return L"en";
+    }
+
+    auto& state = State();
+    std::scoped_lock lock(state.mutex);
+    if (const ResourceOwner* owner = FindOwnerLocked(state, instance); owner && ! owner->loadedCulture.empty())
+    {
+        return owner->loadedCulture;
+    }
+
+    return L"en";
+}
+
+CardinalPluralCategory SelectCardinalPluralCategory(const std::wstring_view culture, const uint64_t value) noexcept
+{
+    const size_t languageLength = culture.find_first_of(L"-_");
+    const size_t length         = languageLength == std::wstring_view::npos ? culture.size() : languageLength;
+    const auto isLanguage       = [&](const wchar_t* language) noexcept
+    { return length == 2u && CompareStringOrdinal(culture.data(), static_cast<int>(length), language, 2, TRUE) == CSTR_EQUAL; };
+
+    if (isLanguage(L"cs") || isLanguage(L"sk"))
+    {
+        if (value == 1u)
+        {
+            return CardinalPluralCategory::One;
+        }
+        return value >= 2u && value <= 4u ? CardinalPluralCategory::Few : CardinalPluralCategory::Other;
+    }
+
+    if (isLanguage(L"fr"))
+    {
+        return value <= 1u ? CardinalPluralCategory::One : CardinalPluralCategory::Other;
+    }
+
+    if (isLanguage(L"ja"))
+    {
+        return CardinalPluralCategory::Other;
+    }
+
+    return value == 1u ? CardinalPluralCategory::One : CardinalPluralCategory::Other;
+}
+
 uint64_t GetLanguagePreferenceRevision() noexcept
 {
     auto& state = State();

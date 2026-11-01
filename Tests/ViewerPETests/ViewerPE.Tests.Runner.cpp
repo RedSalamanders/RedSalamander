@@ -1969,6 +1969,16 @@ void CheckEmbeddedViewerHidesStandaloneFileCombo(RedSalamanderCreateFn createFn,
           std::format(L"{} embedded viewer has no visible legacy ComboBox child", viewerName),
           success);
     Check(GetMenu(embeddedWindow) == nullptr, std::format(L"{} embedded viewer has no top-level native menu", viewerName), success);
+    if (viewerName == L"ViewerText")
+    {
+        WndMsg::ViewerMenuAttachmentDebugSnapshot attachment{};
+        const bool attachmentRead =
+            SendMessageW(embeddedWindow, WndMsg::kViewerDebugGetMenuAttachmentSnapshot, 0, reinterpret_cast<LPARAM>(&attachment)) != FALSE;
+        Check(attachmentRead && ! attachment.attempted && ! attachment.attached && attachment.inputMenu == nullptr &&
+                  CountVisibleChildWindowsByClass(embeddedWindow, kDxNativeMenuBarWindowClassName) == 0u,
+              L"ViewerText embedded open skips standalone menu attachment while theme setup runs without a menu host",
+              success);
+    }
 
     const HRESULT closeHr = embeddedViewer->Close();
     Check(SUCCEEDED(closeHr), std::format(L"{} embedded viewer close succeeds", viewerName), success);
@@ -4224,6 +4234,63 @@ private:
 
     BuiltinFileSystemStub acceptedFileSystem;
     acceptedFileSystem.MapVirtualPath(hostileVirtualPath, hostileBacking);
+
+    {
+        const std::filesystem::path rejectedProfilePath = tempDir / L"missing-webview-profile";
+        const std::wstring rejectedProfileText          = rejectedProfilePath.wstring();
+        std::optional<RedSalamander::TestSupport::ScopedEnvironmentVariable> rejectedProfile;
+        try
+        {
+            rejectedProfile.emplace(L"WEBVIEW2_USER_DATA_FOLDER", std::optional<std::wstring_view>{rejectedProfileText});
+        }
+        catch (const std::system_error& error)
+        {
+            Debug::Error(L"ViewerWeb rejected-profile test cannot set its scoped profile override: error={}", error.code().value());
+            Check(false, L"ViewerWeb rejected-profile test configures a scoped invalid profile override", success);
+            return false;
+        }
+        wil::com_ptr<IViewer> rejectedProfileViewer = createConfiguredViewer(kViewerWebPluginId);
+        if (! rejectedProfileViewer)
+        {
+            return false;
+        }
+
+        const std::vector<HWND> rejectedExistingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
+        const wchar_t* rejectedFiles[]                  = {hostileVirtualPath.c_str()};
+        ViewerOpenContext rejectedContext{.sizeBytes = sizeof(ViewerOpenContext)};
+        rejectedContext.fileSystem            = static_cast<IFileSystem*>(&acceptedFileSystem);
+        rejectedContext.fileSystemName        = L"Virtual File System";
+        rejectedContext.focusedPath           = hostileVirtualPath.c_str();
+        rejectedContext.otherFiles            = rejectedFiles;
+        rejectedContext.otherFileCount        = 1u;
+        rejectedContext.focusedOtherFileIndex = 0u;
+        const HRESULT rejectedOpenHr          = rejectedProfileViewer->Open(&rejectedContext);
+        Check(rejectedOpenHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED), L"ViewerWeb returns the fail-closed test-profile admission error from Open", success);
+
+        HWND rejectedWindow = FindNewVisibleWindowByClass(kViewerWebWindowClassName, rejectedExistingWindows);
+        ViewerWebSecurity::DebugSnapshot rejectedSnapshot{};
+        const bool rejectedSnapshotAvailable =
+            rejectedWindow &&
+            SendMessageW(rejectedWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&rejectedSnapshot)) == TRUE;
+        Check(rejectedSnapshotAvailable, L"ViewerWeb exposes the rejected profile admission state to the focused test", success);
+        Check(rejectedSnapshotAvailable && rejectedSnapshot.testProfileAdmissionFailureHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+              L"ViewerWeb records the exact test-profile admission failure",
+              success);
+        Check(rejectedSnapshotAvailable && ! std::wstring_view(rejectedSnapshot.statusMessage.data()).empty(),
+              L"ViewerWeb retains a visible initialization error after rejecting the profile",
+              success);
+        std::error_code rejectedProfileError;
+        const bool rejectedProfileCreated = std::filesystem::exists(rejectedProfilePath, rejectedProfileError);
+        Check(! rejectedProfileError && ! rejectedProfileCreated, L"ViewerWeb does not create or repair an invalid profile override", success);
+
+        static_cast<void>(rejectedProfileViewer->Close());
+        if (rejectedWindow)
+        {
+            Check(
+                PumpUntil([&]() noexcept { return IsWindow(rejectedWindow) == FALSE; }, 5000ms), L"ViewerWeb rejected-profile window closes cleanly", success);
+        }
+    }
+
     wil::com_ptr<IViewer> acceptedViewer = createConfiguredViewer(kViewerWebPluginId);
     if (! acceptedViewer)
     {
@@ -6933,6 +7000,13 @@ private:
     }
     Check(visibleLegacyComboCount == 0u, L"ViewerText does not expose a visible legacy ComboBox child", success);
     CheckDxNativeMenuBar(viewerWindow, L"ViewerText", success);
+    WndMsg::ViewerMenuAttachmentDebugSnapshot menuAttachment{};
+    const bool menuAttachmentRead =
+        SendMessageW(viewerWindow, WndMsg::kViewerDebugGetMenuAttachmentSnapshot, 0, reinterpret_cast<LPARAM>(&menuAttachment)) != FALSE;
+    Check(menuAttachmentRead && menuAttachment.attempted && menuAttachment.attached &&
+              menuAttachment.outcome == static_cast<unsigned>(RedSalamander::ViewerMenuHost::AttachOutcome::Hosted),
+          L"ViewerText standalone open attaches the DxUi menu host after pre-attach theme application",
+          success);
     CheckPlainMenuModelContract(viewerWindow, L"ViewerText", success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerTextFileComboId, L"ViewerText", success);
     CheckDxComboHostCompactChrome(viewerWindow, kViewerTextFileComboId, L"ViewerText", success);
@@ -10789,6 +10863,15 @@ private:
         provider.AddDirectory(std::format(L"{}/folder/{}", analysisRootPath, menuNames[index]), {});
     }
     provider.AddDirectory(analysisRootPath + L"/folder", std::move(folder));
+    ViewerSpaceProviderDirectory manyFolders;
+    const std::wstring manyFoldersPath = analysisRootPath + L"/folder/Folder1";
+    for (unsigned long index = 600u; index != 0u; --index)
+    {
+        const std::wstring name = std::format(L"entry{}", index);
+        manyFolders.entries.push_back({name, 0u, FILE_ATTRIBUTE_DIRECTORY, index});
+        provider.AddDirectory(manyFoldersPath + L"/" + name, {});
+    }
+    provider.AddDirectory(manyFoldersPath, std::move(manyFolders));
     provider.AddDirectory(analysisRootPath + L"/sibling", {});
     BuiltinFileSystemStub fileSystem;
     fileSystem.UseSyntheticFileSystemMetadata();
@@ -10909,6 +10992,31 @@ private:
           L"Natural breadcrumb sorting preserves distinct literal names and target tokens",
           success);
     Check(provider.ReadCount(analysisRootPath + L"/folder") == readsBeforeMenu, L"Retained breadcrumb sorting performs no provider I/O", success);
+    const auto manyFoldersPosition  = menuPosition(L"Folder1");
+    const uint64_t manyFoldersReads = provider.ReadCount(manyFoldersPath);
+    bool boundedNaturalPrefix       = manyFoldersPosition >= 0 && static_cast<size_t>(manyFoldersPosition) < naturalTokens.size();
+    WndMsg::ViewerSpaceNavigationFolderDebugQuery boundedQuery{};
+    if (boundedNaturalPrefix)
+    {
+        boundedQuery.parentToken = naturalTokens[static_cast<size_t>(manyFoldersPosition)];
+        std::vector<uint64_t> boundedTokens;
+        for (size_t index = 0u; index < 512u; ++index)
+        {
+            boundedQuery.index   = index;
+            const bool queried   = SendMessageW(window, WndMsg::kViewerSpaceDebugNavigationFolder, 0u, reinterpret_cast<LPARAM>(&boundedQuery)) != FALSE;
+            boundedNaturalPrefix = boundedNaturalPrefix && queried && boundedQuery.count == 512u && boundedQuery.token != 0u &&
+                                   std::wstring_view(boundedQuery.name) == std::format(L"entry{}", index + 1u) &&
+                                   std::ranges::find(boundedTokens, boundedQuery.token) == boundedTokens.end();
+            boundedTokens.push_back(boundedQuery.token);
+        }
+        boundedQuery.index   = 512u;
+        boundedNaturalPrefix = boundedNaturalPrefix &&
+                               SendMessageW(window, WndMsg::kViewerSpaceDebugNavigationFolder, 0u, reinterpret_cast<LPARAM>(&boundedQuery)) == FALSE &&
+                               boundedQuery.count == 512u && boundedQuery.token == 0u;
+    }
+    Check(boundedNaturalPrefix && provider.ReadCount(manyFoldersPath) == manyFoldersReads,
+          L"Breadcrumb cap returns the naturally first 512 of 600 reversed directories without provider I/O",
+          success);
     // Exercise the real retained analysis sorter, independently of breadcrumb menus.
     const auto naturalNameLess = [](const std::wstring& left, const std::wstring& right) noexcept
     {
@@ -11170,7 +11278,13 @@ private:
         const auto closeStarted   = std::chrono::steady_clock::now();
         const HRESULT closeResult = viewer->Close();
         const auto closeTime      = std::chrono::steady_clock::now() - closeStarted;
-        Check(SUCCEEDED(closeResult) && closeTime < 500ms && canUnload && ! canUnload(),
+        const bool unloadBlocked  = canUnload != nullptr && ! canUnload();
+        std::wcout << std::format(L"[INFO] ViewerSpace close during export: hr=0x{:08X} elapsedUs={} unloadExport={} unloadBlocked={}\n",
+                                  static_cast<uint32_t>(closeResult),
+                                  std::chrono::duration_cast<std::chrono::microseconds>(closeTime).count(),
+                                  canUnload != nullptr,
+                                  unloadBlocked);
+        Check(SUCCEEDED(closeResult) && closeTime < 500ms && unloadBlocked,
               L"Close returns while the export writer is held and module unload stays blocked",
               success);
         SetEvent(exportRelease.get());
@@ -11178,6 +11292,184 @@ private:
         Check(ReadBinaryFile(closePath).has_value(), L"Explicit frozen export finishes safely after its viewer closes", success);
     }
     Check(exportDesktop.Finish(), L"Export and close produce no owned foreground activation", success);
+    const auto checkPrivateCacheLifetime = [&]() noexcept
+    {
+        ViewerSpaceSyntheticProvider cacheProvider;
+        BuiltinFileSystemStub cacheFileSystem;
+        ViewerSpaceSyntheticProvider reboundProvider;
+        BuiltinFileSystemStub reboundFileSystem;
+        reboundFileSystem.SetDirectoryReadCallback(&ViewerSpaceSyntheticProvider::ReadCallback, &reboundProvider);
+        const std::wstring cacheRoot = (exportDirectory / L"SyntheticReports").native();
+        ViewerSpaceLifecycleReadGate cacheReadGate(cacheProvider, cacheRoot, cacheRoot + L"\\cache-gate-child");
+        if (! Check(cacheReadGate.IsValid(), L"Cache-lifetime provider gate owns its deterministic read-boundary events", success))
+            return false;
+        cacheFileSystem.SetDirectoryReadCallback(&ViewerSpaceLifecycleReadGate::ReadCallback, &cacheReadGate);
+        ViewerSpaceProviderDirectory firstListing;
+        firstListing.entries.push_back({L"report.bin", 4096u, 0u, 1u});
+        cacheProvider.AddDirectory(cacheRoot, std::move(firstListing));
+        const auto closeCacheViewer = wil::scope_exit([&]() noexcept
+        {
+            cacheReadGate.ReleaseAll();
+            static_cast<void>(viewer->Close());
+            Check(PumpUntil([&]() noexcept
+            { return cacheFileSystem.GetReferenceCount() == 1u && reboundFileSystem.GetReferenceCount() == 1u && cacheReadGate.ActiveCalls() == 0; },
+                            8000ms),
+                  L"Cache-lifetime fixture retires its provider before fixture destruction",
+                  success);
+        });
+        if (! Check(information && SUCCEEDED(information->SetConfiguration(
+                                       R"json({"cacheEnabled":true,"cacheTtlSeconds":0,"cacheMaxEntries":4,"scanThreads":1,"topFilesPerDirectory":64})json")),
+                    L"Cache-lifetime fixture enables only this viewer's private cache",
+                    success))
+            return false;
+        ViewerOpenContext cacheContext{.sizeBytes = sizeof(ViewerOpenContext)};
+        cacheContext.fileSystem          = &cacheFileSystem;
+        cacheContext.fileSystemName      = L"Synthetic Local Reports";
+        cacheContext.focusedPath         = cacheRoot.c_str();
+        ViewerOpenContext reboundContext = cacheContext;
+        reboundContext.fileSystem        = &reboundFileSystem;
+        reboundContext.fileSystemName    = L"Rebound Synthetic Local Reports";
+        HWND cacheWindow                 = nullptr;
+        const auto openCacheViewer       = [&](const ViewerOpenContext& openContext) noexcept
+        {
+            const auto previousWindows = CollectVisibleWindowsByClass(kViewerSpaceWindowClassName);
+            if (FAILED(viewer->Open(&openContext)))
+                return false;
+            if (! cacheWindow || ! IsWindow(cacheWindow))
+                cacheWindow = FindNewVisibleWindowByClass(kViewerSpaceWindowClassName, previousWindows);
+            return cacheWindow != nullptr;
+        };
+        enum class CacheWaitPhase : uint8_t
+        {
+            Build,
+            Restore,
+        };
+        const auto cachePhaseReady = [](const WndMsg::ViewerSpacePerfDebugSnapshot& value, uint64_t bytes, CacheWaitPhase phase) noexcept
+        {
+            if (value.scanState != WndMsg::ViewerSpacePerfScanState::Done || value.rootTotalBytes != bytes || value.animationTimerArmed ||
+                value.scanCacheResidentBytes == 0u)
+            {
+                return false;
+            }
+            if (phase == CacheWaitPhase::Restore)
+            {
+                return value.scanCacheRestoreBytes != 0u && value.scanCacheSnapshotBytes == 0u;
+            }
+            return value.scanCacheSnapshotBytes != 0u && value.scanCacheRestoreBytes == 0u && value.scanCacheRestoreUs == 0u;
+        };
+        const auto writeCacheWaitWitness = [&](std::wstring_view phase, const WndMsg::ViewerSpacePerfDebugSnapshot& value, HWND expectedWindow) noexcept
+        {
+            std::wcout << std::format(
+                L"[INFO] ViewerSpace cache wait failed: phase={} hwnd=0x{:X} expectedHwnd=0x{:X} sameHwnd={} hwndValid={} scanState={} displayGeneration={} "
+                L"rootBytes={} buildBytes={} restoreBytes={} residentBytes={} restoreUs={} restorePhase={} timerArmed={} cacheReads={} reboundReads={}\n",
+                phase,
+                reinterpret_cast<std::uintptr_t>(cacheWindow),
+                reinterpret_cast<std::uintptr_t>(expectedWindow),
+                expectedWindow != nullptr && cacheWindow == expectedWindow,
+                cacheWindow != nullptr && IsWindow(cacheWindow),
+                static_cast<uint32_t>(value.scanState),
+                value.displayGeneration,
+                value.rootTotalBytes,
+                value.scanCacheSnapshotBytes,
+                value.scanCacheRestoreBytes,
+                value.scanCacheResidentBytes,
+                value.scanCacheRestoreUs,
+                value.cacheRestorePhase,
+                value.animationTimerArmed,
+                cacheProvider.ReadCount(cacheRoot),
+                reboundProvider.ReadCount(cacheRoot));
+        };
+        const auto settledCache = [&](uint64_t bytes, CacheWaitPhase phase, WndMsg::ViewerSpacePerfDebugSnapshot& value, HWND expectedWindow) noexcept
+        {
+            const bool settled = PumpUntil(
+                [&]() noexcept
+            {
+                return cacheWindow != nullptr && IsWindow(cacheWindow) &&
+                       SendMessageW(cacheWindow, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&value)) != FALSE &&
+                       cachePhaseReady(value, bytes, phase);
+            },
+                15000ms);
+            if (! settled)
+            {
+                writeCacheWaitWitness(phase == CacheWaitPhase::Restore ? L"restore" : L"build", value, expectedWindow);
+            }
+            return settled;
+        };
+        WndMsg::ViewerSpacePerfDebugSnapshot cached{};
+        if (! Check(openCacheViewer(cacheContext) && settledCache(4096u, CacheWaitPhase::Build, cached, nullptr) && cacheProvider.ReadCount(cacheRoot) == 1u,
+                    L"One live viewer seeds an admitted private cache from the provider exactly once",
+                    success))
+            return false;
+        Check(! cachePhaseReady(cached, 4096u, CacheWaitPhase::Restore), L"The actual completed cold build cannot satisfy the cache-restore phase", success);
+        const HWND seededWindow       = cacheWindow;
+        const bool reopenedSameWindow = openCacheViewer(cacheContext) && cacheWindow == seededWindow && IsWindow(seededWindow);
+        if (! Check(reopenedSameWindow, L"Reopening the same context keeps the existing live ViewerSpace window", success))
+            return false;
+        const bool restoreSettled     = settledCache(4096u, CacheWaitPhase::Restore, cached, seededWindow);
+        const bool restoredSameWindow = restoreSettled && cacheProvider.ReadCount(cacheRoot) == 1u;
+        if (restoreSettled && ! restoredSameWindow)
+        {
+            writeCacheWaitWitness(L"same-window-restore-read-count", cached, seededWindow);
+        }
+        if (! Check(restoredSameWindow, L"The same open window restores its own exact cached scan without provider reread", success))
+            return false;
+
+        ViewerSpaceProviderDirectory reboundListing;
+        reboundListing.entries.push_back({L"replacement-report.bin", 8192u, 0u, 1u});
+        reboundProvider.AddDirectory(cacheRoot, std::move(reboundListing));
+        WndMsg::ViewerSpacePerfDebugSnapshot rebound{};
+        const bool reboundScanned = openCacheViewer(reboundContext) && settledCache(8192u, CacheWaitPhase::Build, rebound, nullptr) &&
+                                    reboundProvider.ReadCount(cacheRoot) == 1u && cacheProvider.ReadCount(cacheRoot) == 1u;
+        if (! reboundScanned)
+        {
+            writeCacheWaitWitness(L"provider-rebind-cold-build", rebound, nullptr);
+        }
+        if (! Check(reboundScanned, L"Changing provider identity on the same path discards the old window cache and scans the new provider", success))
+            return false;
+
+        if (! Check(SUCCEEDED(viewer->Close()) && ! IsWindow(cacheWindow), L"Close destroys the cache-owning window", success))
+            return false;
+        cacheWindow = nullptr;
+        ViewerSpaceProviderDirectory changedListing;
+        changedListing.entries.push_back({L"new-report.bin", 8192u, 0u, 1u});
+        cacheProvider.AddDirectory(cacheRoot, std::move(changedListing));
+        cacheReadGate.Configure(0u, 0u, 2u);
+        if (! Check(openCacheViewer(cacheContext) && cacheWindow != nullptr && IsWindow(cacheWindow),
+                    L"The retained viewer instance opens a live fresh window after Close",
+                    success))
+            return false;
+        const bool freshReadBlocked = WaitForSingleObject(cacheReadGate.Entered(0u), 8000u) == WAIT_OBJECT_0;
+        if (! Check(freshReadBlocked && cacheReadGate.ActiveCalls() == 1, L"Fresh post-Close scan reaches the gated provider read", success))
+        {
+            cacheReadGate.ReleaseAll();
+            return false;
+        }
+        WndMsg::ViewerSpacePerfDebugSnapshot cold{};
+        const bool noPrivateCacheAtFreshStart =
+            SendMessageW(cacheWindow, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&cold)) != FALSE &&
+            (cold.scanState == WndMsg::ViewerSpacePerfScanState::Queued || cold.scanState == WndMsg::ViewerSpacePerfScanState::Scanning) &&
+            cold.rootTotalBytes == 0u && cold.fileCandidateBytes == 0u && cold.scanCacheResidentBytes == 0u && cold.scanCacheRestoreBytes == 0u &&
+            cold.scanCacheRestoreUs == 0u && cacheProvider.ReadCount(cacheRoot) == 1u;
+        if (! Check(noPrivateCacheAtFreshStart, L"Close leaves no resident cache to restore before the new provider data is read", success))
+        {
+            writeCacheWaitWitness(L"post-close-before-provider-read", cold, nullptr);
+            cacheReadGate.ReleaseAll();
+            return false;
+        }
+        cacheReadGate.Release(0u);
+        if (! Check(WaitForSingleObject(cacheReadGate.Exited(0u), 8000u) == WAIT_OBJECT_0,
+                    L"Fresh post-Close provider read leaves its deterministic gate",
+                    success))
+            return false;
+        const bool reopenedCold = settledCache(8192u, CacheWaitPhase::Build, cold, nullptr) && cacheProvider.ReadCount(cacheRoot) == 2u &&
+                                  cold.scanCacheRestoreBytes == 0u && cold.scanCacheRestoreUs == 0u;
+        if (! reopenedCold)
+        {
+            writeCacheWaitWitness(L"after-close-cold-build", cold, nullptr);
+        }
+        return Check(reopenedCold, L"Reopening after Close reads changed provider data and builds a fresh cache instead of restoring discarded data", success);
+    };
+    Check(checkPrivateCacheLifetime(), L"ViewerSpace private cache belongs to one open window", success);
     return success;
 }
 
@@ -13760,6 +14052,101 @@ private:
               success);
     });
 
+    // A provider read failure below a retained-directory cap belongs to the visible Other bucket. It must not fail
+    // the root or turn an unrelated retained directory into an Error.
+    const std::wstring previousCappedUnreadableRetained = GetEnvironmentString(kMaxRetainedDirectoriesEnv);
+    static_cast<void>(SetEnvironmentVariableW(kMaxRetainedDirectoriesEnv, L"4"));
+    {
+        auto restoreCappedUnreadableRetained = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(SetEnvironmentVariableW(kMaxRetainedDirectoriesEnv,
+                                                      previousCappedUnreadableRetained.empty() ? nullptr : previousCappedUnreadableRetained.c_str()));
+        });
+
+        ViewerSpaceSyntheticProvider cappedUnreadableProvider;
+        ViewerSpaceProviderDirectory cappedUnreadableRoot;
+        for (uint32_t index = 0u; index < 6u; ++index)
+        {
+            const std::wstring name = std::format(L"d{}", index);
+            cappedUnreadableRoot.entries.push_back(ViewerSpaceProviderEntry{name, 0u, FILE_ATTRIBUTE_DIRECTORY, index + 1u});
+            ViewerSpaceProviderDirectory child;
+            child.entries.push_back(ViewerSpaceProviderEntry{L"payload.bin", static_cast<uint64_t>(index + 1u) * 10u, FILE_ATTRIBUTE_NORMAL, 1u});
+            if (index == 5u)
+            {
+                child.entries.push_back(ViewerSpaceProviderEntry{L"inner", 0u, FILE_ATTRIBUTE_DIRECTORY, 2u});
+            }
+            cappedUnreadableProvider.AddDirectory(std::format(L"V:\\capped-unreadable\\{}", name), std::move(child));
+        }
+        cappedUnreadableProvider.AddDirectory(L"V:\\capped-unreadable", std::move(cappedUnreadableRoot));
+        ViewerSpaceProviderDirectory unreadableInner;
+        unreadableInner.readResult = HRESULT_FROM_WIN32(ERROR_IO_DEVICE);
+        cappedUnreadableProvider.AddDirectory(L"V:\\capped-unreadable\\d5\\inner", std::move(unreadableInner));
+
+        runScenario(cappedUnreadableProvider,
+                    L"V:\\capped-unreadable",
+                    L"ViewerSpace unreadable capped subtree marker",
+                    WndMsg::ViewerSpacePerfScanState::Done,
+                    [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND window) noexcept
+        {
+            Check(snapshot.rootTotalBytes == 210u && snapshot.scanFailedFolders == 1u && snapshot.modelCappedDirectories >= 3u &&
+                      snapshot.aggregateBytes == 150u && snapshot.aggregateFiles == 3u &&
+                      cappedUnreadableProvider.ReadCount(L"V:\\capped-unreadable\\d5\\inner") == 1u,
+                  L"ViewerSpace retains exact totals and one unreadable count for the capped provider subtree",
+                  success);
+
+            bool errorOtherBucket         = false;
+            bool healthyRetainedDirectory = false;
+            bool analysisOtherError       = false;
+            const bool markerReady        = PumpUntil(
+                [&]() noexcept
+            {
+                WndMsg::ViewerSpacePerfDebugSnapshot current{};
+                if (SendMessageW(window, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&current)) == FALSE ||
+                    current.scanState != WndMsg::ViewerSpacePerfScanState::Done || current.pendingQueueCount != 0u || current.layoutDirty ||
+                    current.layoutBuildActive || current.presentedLayoutGeneration != current.layoutGeneration || current.analysisDirty ||
+                    current.analysisBuildActive)
+                {
+                    return false;
+                }
+
+                errorOtherBucket         = false;
+                healthyRetainedDirectory = false;
+                analysisOtherError       = false;
+                for (size_t index = 0u; index < current.drawItemCount; ++index)
+                {
+                    WndMsg::ViewerSpaceDrawItemDebugSnapshot item{};
+                    if (SendMessageW(window, WndMsg::kViewerSpaceDebugGetDrawItem, static_cast<WPARAM>(index), reinterpret_cast<LPARAM>(&item)) == FALSE)
+                    {
+                        continue;
+                    }
+                    if (item.isSynthetic && item.parentId == 1u && item.logicalBytes == 150u)
+                    {
+                        errorOtherBucket = item.isError;
+                    }
+                    if (item.isDirectory && ! item.isSynthetic && item.parentId == 1u && std::wstring_view(item.name) == L"d0")
+                    {
+                        healthyRetainedDirectory = ! item.isError;
+                    }
+                }
+                for (size_t index = 0u; index < current.analysisRowCount; ++index)
+                {
+                    WndMsg::ViewerSpaceAnalysisRowDebugQuery row{};
+                    row.index = index;
+                    if (SendMessageW(window, WndMsg::kViewerSpaceDebugGetAnalysisRow, 0u, reinterpret_cast<LPARAM>(&row)) != FALSE && row.other &&
+                        row.logicalBytes == 150u)
+                    {
+                        analysisOtherError = row.scanState == WndMsg::ViewerSpacePerfScanState::Error;
+                    }
+                }
+                return errorOtherBucket && healthyRetainedDirectory && analysisOtherError;
+            },
+                5000ms);
+            Check(markerReady && errorOtherBucket && healthyRetainedDirectory && analysisOtherError,
+                  L"ViewerSpace marks only the owning Other tile and analysis row as unreadable while the root and retained sibling remain Done",
+                  success);
+        });
+    }
+
     // X5/X6: navigation through the real message handlers. The fixture is a single-child chain, so the root view shows
     // nested directory bands; the tests search the vertical centre line for points whose click drills in.
     const auto readSnapshot = [](HWND window) noexcept
@@ -14243,9 +14630,9 @@ struct ViewerSpaceBlockingDirectoryControl final
           success);
 
     blockedViewer.reset();
-    Check(blockedFileSystem.GetReferenceCount() > 1u, L"ViewerSpace detached worker retains the provider and viewer lifetime", success);
+    Check(blockedFileSystem.GetReferenceCount() > 1u, L"ViewerSpace retiring worker retains the provider and viewer lifetime", success);
     shutdownFn();
-    Check(canUnloadFn() == FALSE, L"ViewerSpace runtime unload gate rejects refresh while an abandoned worker exists", success);
+    Check(canUnloadFn() == FALSE, L"ViewerSpace runtime unload gate rejects refresh while a retiring worker exists", success);
     Check(GetModuleHandleW(pluginPath.filename().c_str()) != nullptr, L"ViewerSpace module remains mapped while runtime unload is deferred", success);
 
     static_cast<void>(SetEvent(block.release.get()));
@@ -14255,7 +14642,9 @@ struct ViewerSpaceBlockingDirectoryControl final
     Check(PumpUntil([&]() noexcept { return blockedFileSystem.GetReferenceCount() == 1u; }, 8000ms),
           L"ViewerSpace worker and provider self-references retire exactly once after unblock",
           success);
-    Check(canUnloadFn() == FALSE, L"ViewerSpace intentionally quarantines same-path runtime reload for the process after forced abandonment", success);
+    Check(PumpUntil([&]() noexcept { return canUnloadFn() != FALSE; }, 8000ms),
+          L"ViewerSpace background join releases its unload gate after the provider returns",
+          success);
     Check(closeCounter.count.load(std::memory_order_acquire) == 1u, L"ViewerSpace does not report a second close after worker retirement", success);
     return success;
 #endif
@@ -17439,17 +17828,35 @@ struct ViewerSpaceBlockingDirectoryControl final
     asyncControl                  = {};
     asyncControl.loadDelayMs      = 250;
     static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetAsyncControl, 0, reinterpret_cast<LPARAM>(&asyncControl)));
-    Check(SUCCEEDED(viewer->Open(&context)) && SUCCEEDED(viewer->Open(&context)), L"ViewerVLC accepts rapid superseding delayed opens", success);
+    const std::wstring supersededPath   = (tempDir / L"superseded.wav").wstring();
+    const std::wstring latestPath       = (tempDir / L"latest.wav").wstring();
+    ViewerOpenContext supersededContext = context;
+    supersededContext.focusedPath       = supersededPath.c_str();
+    ViewerOpenContext latestContext     = context;
+    latestContext.focusedPath           = latestPath.c_str();
+    Check(SUCCEEDED(viewer->Open(&context)) && SUCCEEDED(viewer->Open(&supersededContext)) && SUCCEEDED(viewer->Open(&latestContext)),
+          L"ViewerVLC accepts rapid superseding delayed initial opens",
+          success);
+    snapshot                       = {};
+    const bool initialBurstBounded = SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE &&
+                                     snapshot.initialLoadInFlight && snapshot.initialLoadRestartRequested && snapshot.pendingLoadWorkCount == 1u &&
+                                     snapshot.loadQueueAccepted == acceptedBefore + 1u && snapshot.initialLoadCoalesced == 2u;
+    Check(initialBurstBounded, L"ViewerVLC keeps initial asynchronous loader work to one active worker and one latest request", success);
     const bool staleRequestRejected = PumpUntil(
         [&]() noexcept
     {
         snapshot = {};
         return SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE && ! snapshot.loadingActive &&
-               snapshot.loadQueueAccepted >= acceptedBefore + 2u && snapshot.staleLoadResults > staleBefore;
+               snapshot.pendingLoadWorkCount == 0u && snapshot.loadQueueAccepted == acceptedBefore + 2u && snapshot.staleLoadResults > staleBefore &&
+               snapshot.missingVisible;
     },
         8000ms);
-    Check(staleRequestRejected, L"ViewerVLC rejects a delayed stale load result by request and window identity", success);
+    Check(staleRequestRejected, L"ViewerVLC applies only the latest initial request after sequential loader completion", success);
     Check(! snapshot.vlcPlayerCreated, L"ViewerVLC never attaches or plays a stale delayed load result", success);
+    Check(std::wstring_view(snapshot.overlayBody).find(latestPath) != std::wstring_view::npos &&
+              std::wstring_view(snapshot.overlayBody).find(supersededPath) == std::wstring_view::npos,
+          L"ViewerVLC reports the latest requested path and never publishes the superseded middle path",
+          success);
 
     Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugForceLoadingVisible, 0, 0) != FALSE, L"ViewerVLC debug can force delayed loading overlay", success);
     snapshot = {};

@@ -319,7 +319,8 @@ function Invoke-RSValidationGitBinary {
     )
 
     $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = 'git.exe'
+    $gitCommand = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $start.FileName = $gitCommand.Source
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
@@ -497,6 +498,124 @@ function Get-RSValidationGitBlobSha256 {
     }
     $Cache.Add($key, $digest)
     return $digest
+}
+
+function Get-RSValidationGitBlobContentSha256 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-fA-F]{40,64}$')][string]$BlobId
+    )
+
+    $cache = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    return Get-RSValidationGitBlobSha256 `
+        -RepoRoot $RepoRoot `
+        -Object ([pscustomobject]@{ Type = 'blob'; Oid = $BlobId.ToLowerInvariant() }) `
+        -Cache $cache
+}
+
+function Get-RSValidationGitBlobContentSha256Map {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$BlobId
+    )
+
+    $cache = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $objects = [Collections.Generic.List[object]]::new()
+    foreach ($oid in $BlobId) {
+        if ($oid -notmatch '^[0-9a-fA-F]{40,64}$') { throw "Invalid Git blob identity: $oid" }
+        if ($seen.Add($oid)) {
+            $objects.Add([pscustomobject]@{ Type = 'blob'; Oid = $oid.ToLowerInvariant() })
+        }
+    }
+    $null = Add-RSValidationGitBlobSha256Batches `
+        -RepoRoot $RepoRoot `
+        -Object @($objects) `
+        -Cache $cache `
+        -MaximumBatchBytes (64MB)
+    $result = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($oid in $seen) { $result.Add($oid, $cache["blob:$($oid.ToLowerInvariant())"]) }
+    return ,$result
+}
+
+function Add-RSValidationGitBlobSha256Batches {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Object,
+        [Parameter(Mandatory = $true)][Collections.Generic.Dictionary[string, string]]$Cache,
+        [ValidateRange(1, [long]::MaxValue)][long]$MaximumBatchBytes = (64MB)
+    )
+
+    $blobObjects = [Collections.Generic.List[object]]::new()
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($candidate in $Object) {
+        if ($null -eq $candidate) { continue }
+        $key = "$($candidate.Type):$($candidate.Oid)"
+        if ($Cache.ContainsKey($key) -or -not $seen.Add($key)) { continue }
+        if ($candidate.Type -ne 'blob') {
+            $Cache.Add($key, (Get-RSCanonicalJsonDigest -InputObject ([ordered]@{ gitlink = $candidate.Oid })))
+            continue
+        }
+        if ([string]$candidate.Oid -notmatch '^[0-9a-fA-F]{40,64}$') {
+            throw "Invalid Git blob identity: $($candidate.Oid)"
+        }
+        $blobObjects.Add($candidate)
+    }
+    if ($blobObjects.Count -eq 0) { return 0 }
+    if ($blobObjects.Count -eq 1) {
+        Add-RSValidationGitBlobSha256Batch -RepoRoot $RepoRoot -Object @($blobObjects[0]) -Cache $Cache
+        return 1
+    }
+
+    $blobOids = @($blobObjects | ForEach-Object { ([string]$_.Oid).ToLowerInvariant() })
+    $sizeRows = @($blobOids | & git -C $RepoRoot cat-file --batch-check 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $sizeRows.Count -ne $blobOids.Count) {
+        throw 'Git blob batch-size query failed or returned an incomplete result.'
+    }
+    $sizeByOid = [Collections.Generic.Dictionary[string, long]]::new([StringComparer]::Ordinal)
+    for ($index = 0; $index -lt $blobOids.Count; $index++) {
+        $row = [string]$sizeRows[$index]
+        $match = [regex]::Match($row, '^(?<oid>[0-9a-fA-F]{40,64}) blob (?<size>[0-9]+)$')
+        if (-not $match.Success -or $match.Groups['oid'].Value -cne $blobOids[$index]) {
+            throw "Unexpected Git blob batch-size row '$row'."
+        }
+        $size = [int64]::Parse($match.Groups['size'].Value, [Globalization.CultureInfo]::InvariantCulture)
+        if ($size -gt [int]::MaxValue) {
+            throw "Git blob '$($blobOids[$index])' is too large to fingerprint safely."
+        }
+        $sizeByOid.Add($blobOids[$index], $size)
+    }
+
+    $batch = [Collections.Generic.List[object]]::new()
+    $batchBytes = [long]0
+    $batchCount = 0
+    foreach ($candidate in $blobObjects) {
+        $oid = ([string]$candidate.Oid).ToLowerInvariant()
+        $size = $sizeByOid[$oid]
+        if ($batch.Count -gt 0 -and ($batchBytes + $size) -gt $MaximumBatchBytes) {
+            Add-RSValidationGitBlobSha256Batch -RepoRoot $RepoRoot -Object $batch.ToArray() -Cache $Cache
+            $batch.Clear()
+            $batchBytes = 0
+            $batchCount++
+        }
+        $batch.Add($candidate)
+        $batchBytes += $size
+        if ($batchBytes -ge $MaximumBatchBytes) {
+            # An individually oversized pinned blob remains valid; isolate it so it
+            # cannot inflate the memory use of any neighboring batch.
+            Add-RSValidationGitBlobSha256Batch -RepoRoot $RepoRoot -Object $batch.ToArray() -Cache $Cache
+            $batch.Clear()
+            $batchBytes = 0
+            $batchCount++
+        }
+    }
+    if ($batch.Count -gt 0) {
+        Add-RSValidationGitBlobSha256Batch -RepoRoot $RepoRoot -Object $batch.ToArray() -Cache $Cache
+        $batchCount++
+    }
+    return $batchCount
 }
 
 function Add-RSValidationGitBlobSha256Batch {
@@ -1100,6 +1219,8 @@ Export-ModuleMember -Function @(
     'Assert-RSValidationProvenance',
     'Get-RSWorkspaceSnapshot',
     'Get-RSValidationBuildReceiptBindingDigest',
+    'Get-RSValidationGitBlobContentSha256',
+    'Get-RSValidationGitBlobContentSha256Map',
     'Get-RSValidationEntryFingerprint',
     'Assert-RSValidationRecordBounds',
     'Read-RSValidationJsonFile',

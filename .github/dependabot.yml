@@ -12,7 +12,6 @@ updates:
       - dependency-name: RedSalamanders/.github
     exclude-paths:
       - .github/workflows/terminal-engine-gate0.yml
-      - .github/workflows/terminal-engine-round4-closeout.yml
   - package-ecosystem: vcpkg
     directory: /
     schedule:
@@ -26,3 +25,18 @@ updates:
       - dependency-name: aws-sdk-cpp
       - dependency-name: aws-crt-cpp
       - dependency-name: '*'
+    groups:
+      core-stack:
+        patterns:
+          - 7zip
+          - wil
+          - yyjson
+          - blake3
+          - sqlite3
+          - libraw
+          - libjpeg-turbo
+          - pe-parse
+          - curl
+          - webview2
+          - ftxui
+          - aws-sdk-cpp

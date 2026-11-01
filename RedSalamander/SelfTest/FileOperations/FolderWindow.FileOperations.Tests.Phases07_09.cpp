@@ -4344,10 +4344,10 @@ case SelfTestState::Step::Phase7_CopyItemWalkAtLimitParks:
 }
 case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
 {
-    // A parallel DeleteItems deletes a selected folder only after the selected items below it. When two workers
-    // start on its one ready item, the second finds nothing to run and the job parks; the first deletes its item
-    // and makes the parent ready inside its own step, which wakes the job. If such a step did not wake it, the
-    // call would wait forever (Cancel included). Repeated, each call with a bounded wait.
+    // A parallel DeleteItems deletes selected folders only after the selected items below them. Include DIR-OLD
+    // between DIR and DIR\X in lexical path order to guard the ancestry stack against sibling interleaving. When
+    // two workers start on the one ready descendant, the job parks and the completed child wakes its parent.
+    // Repeated, each call with a bounded wait.
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
@@ -4376,18 +4376,19 @@ case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
     {
         FileOpsRecursiveProgressRecorder callback{};
         FileSystemOptions options{};
-        std::array<std::wstring, 3> paths;
-        std::array<const wchar_t*, 3> pathPtrs{};
+        std::array<std::wstring, 4> paths;
+        std::array<const wchar_t*, 4> pathPtrs{};
         IFileSystem* fileSystem = nullptr;
         HRESULT hr              = E_PENDING;
     };
     for (size_t round = 0u; round < kRounds; ++round)
     {
-        const std::filesystem::path folder = root / std::format(L"d{:02}", round);
-        const std::filesystem::path child  = folder / L"x";
-        const std::filesystem::path leaf   = child / L"y";
-        if (! RecreateEmptyDirectory(leaf) || ! WriteTestFile(leaf / L"f.bin", 4096u) || ! WriteTestFile(child / L"g.bin", 4096u) ||
-            ! WriteTestFile(folder / L"h.bin", 4096u))
+        const std::filesystem::path folder  = root / L"DIR";
+        const std::filesystem::path sibling = root / L"DIR-OLD";
+        const std::filesystem::path child   = folder / L"X";
+        const std::filesystem::path leaf    = child / L"Y";
+        if (! RecreateEmptyDirectory(root) || ! RecreateEmptyDirectory(leaf) || ! RecreateEmptyDirectory(sibling) || ! WriteTestFile(leaf / L"f.bin", 4096u) ||
+            ! WriteTestFile(child / L"g.bin", 4096u) || ! WriteTestFile(folder / L"h.bin", 4096u) || ! WriteTestFile(sibling / L"s.bin", 4096u))
         {
             Fail(L"Nested-roots delete check failed to seed a round.");
             return true;
@@ -4400,8 +4401,9 @@ case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
         }
         call->options.sizeBytes = sizeof(FileSystemOptions);
         call->fileSystem        = state.fsLocal.get();
-        // The folder and the items below it: the folder waits for x, and x waits for y.
-        call->paths = {folder.native(), child.native(), leaf.native()};
+        // DIR-OLD is a selected sibling between DIR and DIR\X in flat lexical order. DIR waits for X,
+        // X waits for Y, and DIR-OLD is independently ready.
+        call->paths = {folder.native(), sibling.native(), child.native(), leaf.native()};
         for (size_t index = 0u; index < call->paths.size(); ++index)
         {
             call->pathPtrs[index] = call->paths[index].c_str();
@@ -4435,16 +4437,18 @@ case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
                              round));
             return true;
         }
-        if (call->hr != S_OK || GetFileAttributesW(folder.c_str()) != INVALID_FILE_ATTRIBUTES)
+        if (call->hr != S_OK || GetFileAttributesW(folder.c_str()) != INVALID_FILE_ATTRIBUTES || GetFileAttributesW(sibling.c_str()) != INVALID_FILE_ATTRIBUTES)
         {
             Fail(std::format(L"Nested-roots delete check round {}: DeleteItems returned 0x{:08X} and the folder {}.",
                              round,
                              static_cast<unsigned long>(call->hr),
-                             GetFileAttributesW(folder.c_str()) == INVALID_FILE_ATTRIBUTES ? L"is gone" : L"is still there"));
+                             GetFileAttributesW(folder.c_str()) == INVALID_FILE_ATTRIBUTES && GetFileAttributesW(sibling.c_str()) == INVALID_FILE_ATTRIBUTES
+                                 ? L"is gone"
+                                 : L"is still there"));
             return true;
         }
     }
-    Debug::Perf::Emit(L"FileOps.SelfTest.DeleteItemsNestedRootsWake", std::format(L"rounds={} roots=3", kRounds), 0u, kRounds, 3u, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.DeleteItemsNestedRootsWake", std::format(L"rounds={} roots=4 interleavedSibling=1", kRounds), 0u, kRounds, 4u, S_OK);
 
     NextStep(state, SelfTestState::Step::Phase7_SharedPerItemScheduler);
     return false;

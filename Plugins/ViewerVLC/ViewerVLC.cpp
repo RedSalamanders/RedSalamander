@@ -1077,6 +1077,7 @@ struct ViewerVLC::VlcAsyncLoadResult
     std::wstring error;
     OverlayErrorKind errorKind = OverlayErrorKind::Playback;
     bool mediaSwitch           = false;
+    bool initialLoad           = false;
     bool mediaPrepared         = false;
     HRESULT hr                 = E_FAIL;
     uint64_t elapsedUs         = 0;
@@ -1103,6 +1104,7 @@ struct ViewerVLC::VlcAsyncLoadWork
     bool hasReusableInstance = false;
     std::unique_ptr<VlcState> state;
     std::shared_ptr<std::atomic_bool> canceled;
+    bool initialLoad = false;
 #ifdef ENABLE_TESTS
     uint32_t delayMs        = 0;
     bool failCompletionPost = false;
@@ -2104,13 +2106,16 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 snapshot->loadingSpinnerSecondDotArgb     = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
             }
 
-            snapshot->windowIdentity       = _windowIdentity;
-            snapshot->loadRequestId        = _asyncOpenGeneration;
-            snapshot->pendingLoadWorkCount = _pendingLoadWorkCount;
-            snapshot->loadQueueAccepted    = _loadQueueAccepted;
-            snapshot->loadQueueRejected    = _loadQueueRejected;
-            snapshot->staleLoadResults     = _staleLoadResults;
-            snapshot->cleanupCompletions   = _cleanupCompletions;
+            snapshot->windowIdentity              = _windowIdentity;
+            snapshot->loadRequestId               = _asyncOpenGeneration;
+            snapshot->pendingLoadWorkCount        = _pendingLoadWorkCount;
+            snapshot->initialLoadInFlight         = _initialLoadInFlight;
+            snapshot->initialLoadRestartRequested = _initialLoadRestartRequested;
+            snapshot->initialLoadCoalesced        = _initialLoadCoalesced;
+            snapshot->loadQueueAccepted           = _loadQueueAccepted;
+            snapshot->loadQueueRejected           = _loadQueueRejected;
+            snapshot->staleLoadResults            = _staleLoadResults;
+            snapshot->cleanupCompletions          = _cleanupCompletions;
             snapshot->deferredCleanupCount =
                 _deferredCleanupCount.load(std::memory_order_acquire) + (_syntheticCleanupPending.load(std::memory_order_acquire) ? 1u : 0u);
             snapshot->cleanupDeferrals          = _cleanupDeferrals.load(std::memory_order_acquire);
@@ -2736,16 +2741,19 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hudDWriteFactory.reset();
     _hudD2DFactory.reset();
 
-    _loadingTimerId         = 0;
-    _loadingUiActive        = false;
-    _loadingUiVisible       = false;
-    _loadingStartedTick     = 0;
-    _windowIdentity         = 0;
-    _closePending           = false;
-    _destroyingAfterCleanup = false;
-    _pendingLoadWorkCount   = 0;
-    _mediaSwitchInFlight    = false;
-    _mediaSwitchRequestId   = 0u;
+    _loadingTimerId              = 0;
+    _loadingUiActive             = false;
+    _loadingUiVisible            = false;
+    _loadingStartedTick          = 0;
+    _windowIdentity              = 0;
+    _closePending                = false;
+    _destroyingAfterCleanup      = false;
+    _pendingLoadWorkCount        = 0;
+    _initialLoadInFlight         = false;
+    _initialLoadRestartRequested = false;
+    _pendingInitialLoadPath.clear();
+    _mediaSwitchInFlight  = false;
+    _mediaSwitchRequestId = 0u;
     _mediaSwitchCanceled.reset();
     _pendingCloseCleanupCount = 0;
     {
@@ -5335,6 +5343,8 @@ void ViewerVLC::CancelPendingMediaOpen() noexcept
 {
     _mediaSwitchRestartRequested = false;
     _pendingMediaPath.clear();
+    _initialLoadRestartRequested = false;
+    _pendingInitialLoadPath.clear();
     if (_mediaSwitchCanceled)
         _mediaSwitchCanceled->store(true, std::memory_order_release);
 }
@@ -5354,10 +5364,21 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
         SetLoadingUiVisible(true);
         return;
     }
-    QueueAsyncVlcLoad(path, std::move(_vlc), requestId);
+    if (_initialLoadInFlight)
+    {
+        _pendingInitialLoadPath      = path;
+        _initialLoadRestartRequested = true;
+        ++_initialLoadCoalesced;
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"initial-coalesced", 0u, requestId, _windowIdentity, S_OK);
+        SetMissingUiVisible(false, {});
+        SetLoadingUiVisible(true);
+        return;
+    }
+    const bool initialLoad = _vlc == nullptr;
+    QueueAsyncVlcLoad(path, std::move(_vlc), requestId, initialLoad);
 }
 
-void ViewerVLC::QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique_ptr<VlcState> state, uint64_t requestId) noexcept
+void ViewerVLC::QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique_ptr<VlcState> state, uint64_t requestId, bool initialLoad) noexcept
 {
     if (! _hWnd || _closePending)
     {
@@ -5365,11 +5386,19 @@ void ViewerVLC::QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique
         return;
     }
 
+    if (initialLoad)
+        _initialLoadInFlight = true;
     ++_pendingLoadWorkCount;
     auto pendingOnFailure = wil::scope_exit([&]() noexcept
     {
         if (_pendingLoadWorkCount > 0u)
             --_pendingLoadWorkCount;
+        if (initialLoad)
+        {
+            _initialLoadInFlight         = false;
+            _initialLoadRestartRequested = false;
+            _pendingInitialLoadPath.clear();
+        }
         EnsureVlcCleanupProgress();
         CompleteCloseAfterCleanup();
     });
@@ -5389,10 +5418,11 @@ void ViewerVLC::QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique
     work->hwnd             = _hWnd.get();
     work->requestId        = requestId;
     work->windowIdentity   = _windowIdentity;
+    work->initialLoad      = initialLoad;
     work->path             = path;
     work->config           = _config;
     work->state            = std::move(state);
-    const bool mediaSwitch = work->state != nullptr;
+    const bool mediaSwitch = work->state != nullptr && ! initialLoad;
     if (work->state && work->state->instance && work->state->module)
     {
         work->reusableInstallDir      = work->state->installDir;
@@ -5447,6 +5477,7 @@ void ViewerVLC::QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique
         result->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
         result->requestId       = work->requestId;
         result->windowIdentity  = work->windowIdentity;
+        result->initialLoad     = work->initialLoad;
         result->path            = work->path;
         result->self            = work->self;
         result->owner           = work->owner;
@@ -5589,6 +5620,20 @@ void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> resul
     }
     if (result->retiredState)
         RetireVlcStateAsync(std::move(result->retiredState), false);
+    if (result->initialLoad)
+    {
+        _initialLoadInFlight = false;
+        if (_initialLoadRestartRequested && ! _closePending)
+        {
+            const auto path              = std::exchange(_pendingInitialLoadPath, std::filesystem::path{});
+            _initialLoadRestartRequested = false;
+            ++_staleLoadResults;
+            QueueAsyncVlcLoad(path, std::move(result->state), _asyncOpenGeneration, true);
+            return;
+        }
+        _initialLoadRestartRequested = false;
+        _pendingInitialLoadPath.clear();
+    }
     if (mediaSwitch && _mediaSwitchRestartRequested && ! _closePending)
     {
         ++_staleLoadResults;
@@ -5984,22 +6029,40 @@ void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
         newestCleanup = std::exchange(_asyncFallbackNewestCleanup, AsyncFallbackCompletion{});
     }
 
-    bool mediaCompletion = false;
+    bool mediaCompletion      = false;
+    bool initialRestartQueued = false;
     if (loadCount != 0u)
     {
         const uint64_t retiredLoads = std::min<uint64_t>(_pendingLoadWorkCount, loadCount);
         _pendingLoadWorkCount -= retiredLoads;
         _loadPostFallbacks += loadCount;
 
-        const bool sameWindow = newestLoad.windowIdentity != 0 && newestLoad.windowIdentity == _windowIdentity;
-        mediaCompletion       = sameWindow && _mediaSwitchInFlight && newestLoad.requestId == _mediaSwitchRequestId;
+        const bool sameWindow        = newestLoad.windowIdentity != 0 && newestLoad.windowIdentity == _windowIdentity;
+        const bool initialCompletion = sameWindow && _initialLoadInFlight;
+        if (initialCompletion)
+        {
+            _initialLoadInFlight = false;
+            if (_initialLoadRestartRequested && ! _closePending)
+            {
+                const auto path              = std::exchange(_pendingInitialLoadPath, std::filesystem::path{});
+                _initialLoadRestartRequested = false;
+                QueueAsyncVlcLoad(path, {}, _asyncOpenGeneration, true);
+                initialRestartQueued = true;
+            }
+            else
+            {
+                _initialLoadRestartRequested = false;
+                _pendingInitialLoadPath.clear();
+            }
+        }
+        mediaCompletion = sameWindow && _mediaSwitchInFlight && newestLoad.requestId == _mediaSwitchRequestId;
         if (mediaCompletion)
         {
             _mediaSwitchInFlight  = false;
             _mediaSwitchRequestId = 0u;
             _mediaSwitchCanceled.reset();
         }
-        const bool currentTerminal = sameWindow && ! _closePending && newestLoad.requestId == _asyncOpenGeneration;
+        const bool currentTerminal = sameWindow && ! _closePending && newestLoad.requestId == _asyncOpenGeneration && ! initialRestartQueued;
         _staleLoadResults += loadCount - (currentTerminal ? 1u : 0u);
         if (currentTerminal)
         {

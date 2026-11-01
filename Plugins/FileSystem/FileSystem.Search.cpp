@@ -890,6 +890,40 @@ HRESULT SearchDirectoryTreeParallelNameOnly(SearchRuntime& runtime) noexcept
     };
     auto workerWorkWaitGuard = wil::scope_exit([&] { waitForWorkerWorkItems(); });
 
+#if defined(ENABLE_TESTS)
+    // The one-file callback regression deliberately drains only this exact root
+    // after every worker has retired. Production builds contain no such gate.
+    const auto joinBeforeDrainRoot = EnvironmentVariables::Read(L"REDSALAMANDER_SELFTEST_SEARCH_JOIN_BEFORE_DRAIN_ROOT");
+    if (joinBeforeDrainRoot.has_value() && joinBeforeDrainRoot.value() == runtime.rootPath)
+    {
+        for (auto& workItem : workerWorkItems)
+        {
+            if (workItem)
+            {
+                ::WaitForThreadpoolWorkCallbacks(workItem.get(), FALSE);
+            }
+        }
+        uint64_t remainingWorkers = 0u;
+        uint64_t pendingResults   = 0u;
+        HRESULT gateStatus        = S_OK;
+        {
+            std::lock_guard lock(state.mutex);
+            remainingWorkers = state.remainingWorkers;
+            pendingResults   = state.completedResults.size();
+            gateStatus       = state.terminalHr;
+        }
+        Debug::Perf::Emit(L"FileSystem.Search.SelfTestJoinBeforeDrain", runtime.rootPath, 0u, remainingWorkers, pendingResults, gateStatus);
+        if (FAILED(gateStatus))
+        {
+            return gateStatus;
+        }
+        if (remainingWorkers != 0u || pendingResults != 1u)
+        {
+            return E_UNEXPECTED;
+        }
+    }
+#endif
+
     HRESULT finalHr = S_OK;
     while (true)
     {
@@ -1006,6 +1040,12 @@ HRESULT SearchDirectoryTreeParallelNameOnly(SearchRuntime& runtime) noexcept
     {
         std::lock_guard lock(state.mutex);
         maxActiveWorkers = state.maxActiveWorkers;
+        // A final-batch callback can fail after the coordinator cached that all
+        // workers were done. Preserve that first failure after the quiet point.
+        if (SUCCEEDED(finalHr) && FAILED(state.terminalHr))
+        {
+            finalHr = state.terminalHr;
+        }
     }
 
     treePerf.SetValue0(runtime.scannedDirectories);

@@ -10,7 +10,7 @@ $script:outputDir = $null
 $script:pluginDir = $null
 $script:monitorClientLicense = $null
 $script:searchServiceExe = $null
-$buildLogDir = Join-Path $repoRoot '.build\logs'
+$testSandboxModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1'
 $processStreamingModule = Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1'
 $artifactOperationLockModule = Join-Path $repoRoot 'Tools\Modules\Build\ArtifactOperationLock.psm1'
 $testInvocationModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestInvocation.psm1'
@@ -79,7 +79,10 @@ function Invoke-RSTargetedBuildForDeploymentTest {
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
         [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration
     )
-    [void](New-Item -ItemType Directory -Path $buildLogDir -Force)
+    $buildLogDir = New-RSTestSandboxScratchDirectory `
+        -RepoRoot $repoRoot `
+        -Harness 'pester-targeted-plugin-deployment' `
+        -Case 'build-capture'
 
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
     $stdoutLog = Join-Path $buildLogDir "pester-targeted-plugin-deployment-$timestamp.out.log"
@@ -139,6 +142,7 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
         }
         Import-Module $processStreamingModule -Force -ErrorAction Stop
         Import-Module $testInvocationModule -Global -ErrorAction Stop
+        Import-Module $testSandboxModule -Force -ErrorAction Stop
 
         $script:deploymentArtifactOperationScope = @{
             kind = 'build'

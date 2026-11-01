@@ -359,7 +359,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"mtp_overwrite_refuses_occupant_replaced_during_upload",
     L"mtp_copy_overwrite_refuses_occupant_replaced_during_temp_copy",
     L"mtp_atomic_writer_offers_conditional_replace_only",
-    L"mtp_create_temp_route_fallbacks",
+    L"mtp_direct_final_create_contract",
     L"mtp_overwrite_journal_generation_and_absent_cache_are_constant_cost",
     L"mtp_property_fetch_is_batched",
     L"mtp_public_writer_stages_until_commit",
@@ -3780,6 +3780,8 @@ public:
         FailCancel,
         AbortProgress,
         AbortMatch,
+        FailMatch,
+        CancelAfterMatch,
     };
 
     explicit RecordingSearchCallback(Mode mode = Mode::Success, uint32_t cancelAfterChecks = 0u) noexcept : _mode(mode), _cancelAfterChecks(cancelAfterChecks)
@@ -3803,9 +3805,16 @@ public:
             return E_INVALIDARG;
         }
 
+        _matchCalls.fetch_add(1u, std::memory_order_relaxed);
+
         if (_mode == Mode::AbortMatch)
         {
             return E_ABORT;
+        }
+
+        if (_mode == Mode::FailMatch)
+        {
+            return E_ACCESSDENIED;
         }
 
         RecordedSearchMatch copy{};
@@ -3888,7 +3897,10 @@ public:
         }
 
         const uint32_t cancelCalls = _cancelCalls.load(std::memory_order_acquire);
-        *pCancel                   = (_mode == Mode::Cancel || (_cancelAfterChecks != 0u && cancelCalls >= _cancelAfterChecks)) ? TRUE : FALSE;
+        *pCancel                   = (_mode == Mode::Cancel || (_mode == Mode::CancelAfterMatch && _matchCalls.load(std::memory_order_acquire) != 0u) ||
+                                      (_cancelAfterChecks != 0u && cancelCalls >= _cancelAfterChecks))
+                                         ? TRUE
+                                         : FALSE;
         return S_OK;
     }
 
@@ -3901,6 +3913,11 @@ public:
     [[nodiscard]] uint32_t ProgressCalls() const noexcept
     {
         return _progressCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint32_t MatchCalls() const noexcept
+    {
+        return _matchCalls.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] uint32_t CancelCalls() const noexcept
@@ -3925,6 +3942,7 @@ private:
     mutable std::mutex _mutex;
     std::vector<RecordedSearchMatch> _matches;
     std::vector<RecordedSearchProgress> _progress;
+    std::atomic<uint32_t> _matchCalls{0};
     std::atomic<uint32_t> _progressCalls{0};
     std::atomic<uint32_t> _cancelCalls{0};
     std::atomic<uint32_t> _nullPathProgressCalls{0};

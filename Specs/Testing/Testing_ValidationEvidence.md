@@ -331,6 +331,10 @@ consumers. Reporters, archive validation, MTP live closeout, and GitHub step sum
 accept v1 and v2 during the compatibility window. A complete Fresh/Resume Full can report
 repository `PASSED`; Affected/family/filtered/capability-reduced coverage reports
 repository `NOT_EVALUATED` while its selected change verdict may pass.
+The v1 `exit_code` is the final runner exit derived from the repository verdict (including
+exit 2 for filtered `NOT_EVALUATED` coverage); zero case counts never imply a passed run.
+The same scope rule applies when a focused legacy invocation produces only v1: a successful
+family or filtered run ends with exit 2. The absence of a v2 evidence record cannot widen coverage.
 
 Aggregate state labels are never sufficient evidence. One verified loader recomputes
 promotion, evidence, and terminal-result digests; requires digest/filename equality;

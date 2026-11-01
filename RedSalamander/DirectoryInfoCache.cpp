@@ -9,6 +9,7 @@
 #include "Helpers.h"
 #include "NavigationLocation.h"
 #include "PlugInterfaces/Informations.h"
+#include "SynchronousIoCancelWatch.h"
 
 namespace
 {
@@ -46,6 +47,12 @@ public:
 private:
     std::stop_token _stopToken;
 };
+
+bool ShouldCancelDirectoryEnumeration(void* context) noexcept
+{
+    const auto* const stopToken = static_cast<const std::stop_token*>(context);
+    return stopToken != nullptr && stopToken->stop_requested();
+}
 
 std::wstring NormalizePath(std::wstring_view path, bool isFilePlugin) noexcept;
 
@@ -304,14 +311,7 @@ uint32_t ClampMruWatched(uint32_t value) noexcept
         return std::nullopt;
     }
 
-    DirectoryInfoCache::ContextKey context{};
-    context.pluginId        = meta->id ? meta->id : (meta->shortId ? meta->shortId : L"");
-    context.pluginShortId   = meta->shortId ? meta->shortId : L"";
-    context.instanceContext = {};
-    context.pluginIdKey     = MakeCaseInsensitivePathKey(context.pluginId);
-    context.instanceContextKey.clear();
-    context.isFilePlugin = IsFilePlugin(context.pluginId, context.pluginShortId);
-    return context;
+    return DirectoryInfoCache::MakeContextKey(meta->id ? meta->id : L"", meta->shortId ? meta->shortId : L"", {});
 }
 } // namespace
 
@@ -642,6 +642,20 @@ std::optional<DirectoryInfoCache::ContextKey> DirectoryInfoCache::ResolveContext
     return MakeFallbackContext(fileSystem);
 }
 
+DirectoryInfoCache::ContextKey DirectoryInfoCache::MakeContextKey(std::wstring_view pluginId,
+                                                                  std::wstring_view pluginShortId,
+                                                                  std::wstring_view instanceContext) noexcept
+{
+    ContextKey context{};
+    context.pluginId           = pluginId.empty() ? std::wstring(pluginShortId) : std::wstring(pluginId);
+    context.pluginShortId      = std::wstring(pluginShortId);
+    context.instanceContext    = NormalizeInstanceContext(instanceContext);
+    context.pluginIdKey        = MakeCaseInsensitivePathKey(context.pluginId);
+    context.instanceContextKey = MakeCaseInsensitivePathKey(context.instanceContext);
+    context.isFilePlugin       = IsFilePlugin(context.pluginId, context.pluginShortId);
+    return context;
+}
+
 void DirectoryInfoCache::RegisterProvider(IFileSystem* fileSystem,
                                           std::wstring_view pluginId,
                                           std::wstring_view pluginShortId,
@@ -652,13 +666,11 @@ void DirectoryInfoCache::RegisterProvider(IFileSystem* fileSystem,
         return;
     }
 
-    ContextKey context{};
-    context.pluginId           = pluginId.empty() ? std::wstring(pluginShortId) : std::wstring(pluginId);
-    context.pluginShortId      = std::wstring(pluginShortId);
-    context.instanceContext    = NormalizeInstanceContext(instanceContext);
-    context.pluginIdKey        = MakeCaseInsensitivePathKey(context.pluginId);
-    context.instanceContextKey = MakeCaseInsensitivePathKey(context.instanceContext);
-    context.isFilePlugin       = IsFilePlugin(context.pluginId, context.pluginShortId);
+    const ContextKey context = MakeContextKey(pluginId, pluginShortId, instanceContext);
+    if (context.pluginId.empty() || context.pluginIdKey.empty())
+    {
+        return;
+    }
 
     Debug::Info(L"DirectoryInfoCache: RegisterProvider fs={} pluginId='{}' pluginShortId='{}' instanceContext='{}' isFilePlugin={}",
                 static_cast<const void*>(fileSystem),
@@ -812,7 +824,18 @@ void DirectoryInfoCache::InvalidateFolder(IFileSystem* fileSystem, const std::fi
 
 void DirectoryInfoCache::NotifyFolderContentsChanged(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept
 {
-    const auto keyOpt = MakeKey(fileSystem, folder);
+    const auto context = ResolveContextForFileSystem(fileSystem);
+    if (! context)
+    {
+        return;
+    }
+
+    NotifyFolderContentsChanged(context.value(), folder);
+}
+
+void DirectoryInfoCache::NotifyFolderContentsChanged(const ContextKey& context, const std::filesystem::path& folder) noexcept
+{
+    const auto keyOpt = MakeKey(context, folder);
     if (! keyOpt)
     {
         return;
@@ -824,7 +847,18 @@ void DirectoryInfoCache::NotifyFolderContentsChanged(IFileSystem* fileSystem, co
 
 void DirectoryInfoCache::NotifyPathCreated(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept
 {
-    const auto keyOpt = MakeKey(fileSystem, path);
+    const auto context = ResolveContextForFileSystem(fileSystem);
+    if (! context)
+    {
+        return;
+    }
+
+    NotifyPathCreated(context.value(), path);
+}
+
+void DirectoryInfoCache::NotifyPathCreated(const ContextKey& context, const std::filesystem::path& path) noexcept
+{
+    const auto keyOpt = MakeKey(context, path);
     if (! keyOpt)
     {
         return;
@@ -836,7 +870,18 @@ void DirectoryInfoCache::NotifyPathCreated(IFileSystem* fileSystem, const std::f
 
 void DirectoryInfoCache::NotifyPathDeleted(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept
 {
-    const auto keyOpt = MakeKey(fileSystem, path);
+    const auto context = ResolveContextForFileSystem(fileSystem);
+    if (! context)
+    {
+        return;
+    }
+
+    NotifyPathDeleted(context.value(), path);
+}
+
+void DirectoryInfoCache::NotifyPathDeleted(const ContextKey& context, const std::filesystem::path& path) noexcept
+{
+    const auto keyOpt = MakeKey(context, path);
     if (! keyOpt)
     {
         return;
@@ -850,7 +895,20 @@ void DirectoryInfoCache::NotifyPathMoved(IFileSystem* fileSystem,
                                          const std::filesystem::path& sourcePath,
                                          const std::filesystem::path& destinationPath) noexcept
 {
-    const auto sourceKeyOpt = MakeKey(fileSystem, sourcePath);
+    const auto context = ResolveContextForFileSystem(fileSystem);
+    if (! context)
+    {
+        return;
+    }
+
+    NotifyPathMoved(context.value(), sourcePath, destinationPath);
+}
+
+void DirectoryInfoCache::NotifyPathMoved(const ContextKey& context,
+                                         const std::filesystem::path& sourcePath,
+                                         const std::filesystem::path& destinationPath) noexcept
+{
+    const auto sourceKeyOpt = MakeKey(context, sourcePath);
     if (! sourceKeyOpt)
     {
         return;
@@ -898,23 +956,33 @@ std::optional<DirectoryInfoCache::Key> DirectoryInfoCache::MakeKey(IFileSystem* 
         return std::nullopt;
     }
 
-    std::wstring normalized = NormalizePath(folder.native(), contextOpt->isFilePlugin);
+    return MakeKey(contextOpt.value(), folder);
+}
+
+std::optional<DirectoryInfoCache::Key> DirectoryInfoCache::MakeKey(const ContextKey& context, const std::filesystem::path& folder) const noexcept
+{
+    if (context.pluginId.empty() || context.pluginIdKey.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring normalized = NormalizePath(folder.native(), context.isFilePlugin);
     if (normalized.empty())
     {
         return std::nullopt;
     }
 
-    Debug::Info(L"DirectoryInfoCache: MakeKey fs={} folder='{}' normalized='{}' pluginId='{}' pluginShortId='{}' instanceContext='{}' isFilePlugin={}",
-                static_cast<const void*>(fileSystem),
+    Debug::Info(L"DirectoryInfoCache: MakeKey context={} folder='{}' normalized='{}' pluginId='{}' pluginShortId='{}' instanceContext='{}' isFilePlugin={}",
+                static_cast<const void*>(&context),
                 folder.native(),
                 normalized,
-                contextOpt->pluginId,
-                contextOpt->pluginShortId,
-                contextOpt->instanceContext.empty() ? std::wstring_view(L"<none>") : std::wstring_view(contextOpt->instanceContext),
-                contextOpt->isFilePlugin ? L"true" : L"false");
+                context.pluginId,
+                context.pluginShortId,
+                context.instanceContext.empty() ? std::wstring_view(L"<none>") : std::wstring_view(context.instanceContext),
+                context.isFilePlugin ? L"true" : L"false");
 
     Key key{};
-    key.context = *contextOpt;
+    key.context = context;
     key.path    = std::move(normalized);
     key.pathKey = MakeCaseInsensitivePathKey(key.path);
     return key;
@@ -1641,6 +1709,17 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
     uint64_t loadVersion = 0u;
     for (;;)
     {
+        // A stop callback may run synchronously while registering when the token was
+        // already stopped. Register before taking _mutex, and keep the callback alive
+        // until after the unique_lock below releases it.
+        [[maybe_unused]] const std::stop_callback stopWake(stopToken,
+                                                           [this, entry]() noexcept
+        {
+            {
+                std::lock_guard barrier(_mutex);
+            }
+            entry->cv.notify_all();
+        });
         std::unique_lock lock(_mutex);
 
         TouchLocked(entry);
@@ -1668,8 +1747,16 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
 
         if (entry->loading)
         {
-            std::stop_callback stopWake(stopToken, [&] { entry->cv.notify_all(); });
-            entry->cv.wait(lock, [&] { return stopToken.stop_requested() || ! entry->loading; });
+            while (! stopToken.stop_requested() && entry->loading)
+            {
+#ifdef ENABLE_TESTS
+                if (_ensureLoadedPrewaitHookForSelfTest != nullptr)
+                {
+                    _ensureLoadedPrewaitHookForSelfTest(_ensureLoadedPrewaitContextForSelfTest);
+                }
+#endif
+                entry->cv.wait(lock);
+            }
             if (stopToken.stop_requested())
             {
                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -1711,6 +1798,8 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
     HRESULT hr = E_POINTER;
     if (fileSystem)
     {
+        [[maybe_unused]] const Common::SynchronousIoCancelWatch::Scope cancelSynchronousIo(
+            stopToken.stop_possible() ? &ShouldCancelDirectoryEnumeration : nullptr, stopToken.stop_possible() ? &stopToken : nullptr);
         wil::com_ptr<IFileSystemCancellableDirectoryEnumeration> cancellableEnumeration;
         if (stopToken.stop_possible() && fileSystem.try_query_to(cancellableEnumeration.put()) && cancellableEnumeration)
         {
@@ -1784,6 +1873,25 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
 
     return hr;
 }
+
+#ifdef ENABLE_TESTS
+void DirectoryInfoCache::SetEnsureLoadedPrewaitHookForSelfTest(EnsureLoadedPrewaitHookForSelfTest hook, void* context) noexcept
+{
+    std::lock_guard lock(_mutex);
+    _ensureLoadedPrewaitContextForSelfTest = context;
+    _ensureLoadedPrewaitHookForSelfTest    = hook;
+}
+
+void DirectoryInfoCache::WakeWaitersForSelfTest() noexcept
+{
+    std::lock_guard lock(_mutex);
+    for (const auto& [key, entry] : _entries)
+    {
+        static_cast<void>(key);
+        entry->cv.notify_all();
+    }
+}
+#endif
 
 DirectoryInfoCache::Borrowed DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode) noexcept
 {

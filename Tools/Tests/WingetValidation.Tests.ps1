@@ -191,10 +191,6 @@ Describe 'Winget manifest template' {
     BeforeAll {
         $installerTemplatePath = Join-Path $repoRoot 'Installer\winget\templates\RedSalamanders.RedSalamander.installer.yaml'
         $installerTemplate = Get-Content -Path $installerTemplatePath -Raw
-        $msixManifestPath = Join-Path $repoRoot 'Installer\msix\Package.appxmanifest'
-        $msixManifest = Get-Content -Path $msixManifestPath -Raw
-        $msixProjectPath = Join-Path $repoRoot 'Installer\msix\RedSalamanderInstaller.wapproj'
-        $msixProject = Get-Content -Path $msixProjectPath -Raw
         $directoryBuildPropsPath = Join-Path $repoRoot 'Directory.Build.props'
         $directoryBuildProps = Get-Content -Path $directoryBuildPropsPath -Raw
         $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
@@ -209,8 +205,6 @@ Describe 'Winget manifest template' {
         $installerTemplate | Should Match '(?m)^MinimumOSVersion:\s+10\.0\.22000\.2600\r?$'
         $installerTemplate | Should Not Match '10\.0\.26100\.0'
         $installerTemplate | Should Not Match '10\.0\.19041\.0'
-        $msixManifest | Should Match 'MinVersion="10\.0\.22000\.2600"'
-        $msixProject | Should Match '<TargetPlatformMinVersion>10\.0\.22000\.2600</TargetPlatformMinVersion>'
         $directoryBuildProps | Should Match '<WindowsTargetPlatformVersion>10\.0\.26100\.0</WindowsTargetPlatformVersion>'
         $directoryBuildProps | Should Match 'NTDDI_VERSION=NTDDI_WIN11_GE'
         $minimumOsHeader | Should Match 'kMinimumWindowsBuildNumber\s*=\s*22000'
@@ -235,29 +229,14 @@ Describe 'Winget manifest template' {
         $zipScript | Should Not Match 'RedLauncherConsole\.exe'
     }
 
-    It 'preserves package subdirectories for plugins, language satellites, and themes' {
+    It 'preserves plugin, language, and theme directories in the portable ZIP' {
         $zipScript | Should Match '\$LangSource = Join-Path \$BuildOutputDir "Lang"'
         $zipScript | Should Match 'RedSalamanderMonitor-\*'
-
-        $catchAllInclude = 'Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*"'
-        $catchAllIndex = $msixProject.IndexOf($catchAllInclude, [System.StringComparison]::Ordinal)
-        $catchAllIndex | Should Not Be -1
-        $catchAllEnd = $msixProject.IndexOf('>', $catchAllIndex)
-        $catchAllLine = $msixProject.Substring($catchAllIndex, $catchAllEnd - $catchAllIndex)
-
-        foreach ($folder in @('Plugins', 'Lang', 'Themes')) {
-            $include = 'Content Include="..\..\.build\$(Platform)\$(Configuration)\{0}\**\*"' -f $folder
-            $exclude = '..\..\.build\$(Platform)\$(Configuration)\{0}\**\*' -f $folder
-            $packagePath = '<PackagePath>{0}\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>' -f $folder
-            $link = '<Link>{0}\%(RecursiveDir)%(Filename)%(Extension)</Link>' -f $folder
-            $targetPath = '<TargetPath>{0}\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>' -f $folder
-
-            $msixProject.Contains($include) | Should Be $true
-            $catchAllLine.Contains($exclude) | Should Be $true
-            $msixProject.Contains($packagePath) | Should Be $true
-            $msixProject.Contains($link) | Should Be $true
-            $msixProject.Contains($targetPath) | Should Be $true
-        }
+        $zipScript | Should Match '\$PluginsSource = Join-Path \$BuildOutputDir "Plugins"'
+        $zipScript | Should Match 'Copy-Item \$PluginsSource -Destination \$PluginsDest -Recurse -Force'
+        $zipScript | Should Match 'Copy-Item -Destination \$LangDest -Force'
+        $zipScript | Should Match '\$ThemesSource = Join-Path \$BuildOutputDir "Themes"'
+        $zipScript | Should Match 'Copy-Item \$ThemesSource -Destination \(Join-Path \$TempDir "Themes"\) -Recurse -Force'
     }
 }
 

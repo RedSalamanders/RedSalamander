@@ -1,0 +1,15 @@
+{
+  "RunId": "ar31-13364ad0",
+  "ProcessId": 72940,
+  "ProcessStartedUtc": "2026-10-31T14:08:20.9517743Z",
+  "ProcessFinishedUtc": "2026-10-31T14:15:42.1181123Z",
+  "ExitCode": 0,
+  "PeakPesterHostWorkingSetBytes": 1316192256,
+  "WorkingSetSamples": 431,
+  "ChildScript": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\Invoke-FocusedPester.ps1",
+  "StdoutLog": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\pester.stdout.log",
+  "StderrLog": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\pester.stderr.log",
+  "Results": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\pester-results.json",
+  "PesterXmlDirectory": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\nunit",
+  "ProcessTempRoot": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\process-temp"
+}
