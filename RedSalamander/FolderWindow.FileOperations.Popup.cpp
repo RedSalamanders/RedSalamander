@@ -15224,6 +15224,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     }
     result.hostedAccessibilityNotificationCount = _hostedAccessibilityNotificationCount;
     result.hostedNativeTabCount                 = _debugNativeTabCount;
+    result.hostedModifierState                  = _controlsHost.DebugGetModifierState();
     result.failureSurfaceTabCount               = _debugFailureSurfaceTabCount;
     result.failureSurfaceReentrantEntryCount    = _debugFailureSurfaceReentrantEntryCount;
     result.hostedFocusChangeCount               = _debugFocusChangeCount;

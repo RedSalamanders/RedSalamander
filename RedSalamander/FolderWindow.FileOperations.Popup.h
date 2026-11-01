@@ -639,6 +639,7 @@ struct PopupLayoutDebugSnapshot
     bool hostedReducedMotion        = false;
     std::wstring hostedFocusedAutomationId;
     uint64_t hostedNativeTabCount   = 0u;
+    uint32_t hostedModifierState    = 0u;
     uint64_t hostedFocusChangeCount = 0u;
     std::wstring hostedPreviousFocusTargetId;
     std::wstring hostedLastFocusTargetId;

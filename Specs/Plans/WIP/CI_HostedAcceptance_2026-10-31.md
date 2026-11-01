@@ -135,7 +135,7 @@ Current public acceptance checkpoint:
 
 | Project | Original v1.0.7 native qualification | Artifact-only Prepare | Current disposition |
 |---|---|---|---|
-| RedSalamander | [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336) executing, frozen version 7.0.472 | Pending successful qualification | PR 197 and canonical fold PR 198 are merged; the admitted source, engine and repaired native digest match. Both native jobs are executing. |
+| RedSalamander | [41244955336](https://github.com/RedSalamanders/RedSalamander/actions/runs/41244955336), version 7.0.472: x64 regression failed; ARM64 pending | Pending successful qualification | Both builds passed. x64 retained two Commands failures; FileOps, Viewer and tooling passed. Fixture-protocol follow-through is under verification; no production or Prepare acceptance is claimed. |
 | RedXe | [41207884174](https://github.com/RedSalamanders/RedXe/actions/runs/41207884174), version 1.0.429 | [41211864521](https://github.com/RedSalamanders/RedXe/actions/runs/41211864521) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
 | RedMonitor | [41206180882](https://github.com/RedSalamanders/RedMonitor/actions/runs/41206180882), version 0.1.70 | [41208578017](https://github.com/RedSalamanders/RedMonitor/actions/runs/41208578017) passed | Both native regression/probe and production roles, ZIP hashes, actual ordering and downloaded publication plan independently verified. |
 | DxUi | [41206683035](https://github.com/RedSalamanders/DxUi/actions/runs/41206683035), version 0.1.778 | Not applicable | Both native regression/probe and SDK consumer roles, ZIP/library hashes and actual ordering independently verified. No hosted publisher exists. |
@@ -569,3 +569,45 @@ default CodeQL setup is not configured in all four public repositories; the shar
 security workflows remain active. New documentation-only mains RedXe c61861ca771ac0c224273b47df3ccf25b5dad86a
 and DxUi 5f31f2b3fcee2528c5a32c83285ee1d656019a26 retain the exact qualified native digest and engine;
 their existing qualification/Prepare evidence remains applicable. Private projects are unchanged by this work.
+
+### Native fixture-protocol follow-through - 2026-11-01
+
+Run 41244955336's x64 regression failed with 2704 required checks: 2639 passed, two failed and 63
+skipped. The normal File Operations suite passed 295 with 27 skips, including the repaired mirror
+and independent-volume controls; Viewer and all 1115 tooling checks passed. Commands reported
+960 passed, two failed and six skipped. The current raw job log (1405304 bytes), 77209391-byte
+canonical artifact, complete initial/retry records and a SHA-256 manifest of 16494 retained files
+are preserved separately from previous runs. ARM64 is still executing and no production, active
+probe or Prepare pass is inferred.
+
+The short-viewport failure again focused the forward footer target instead of the preceding
+published action. Source inspection found the pinned retained host reads its cached modifier mask,
+updated by key messages; the fixture changed only the separate Win32 thread keyboard table.
+The repair routes balanced owned Shift messages, checks the actual retained mask before Tab,
+requires one native Tab delivery and cleared routed Shift afterward, and preserves exact action
+identity, positive scroll, visible UIA bounds/chrome, task generation and native foreground/focus.
+The new debug-snapshot field is test-only; no global input is injected by this routed journey.
+
+The warm-quiescence case's initial trace was quiet=true, armed=true, queued=false, paintsAtReturn=0
+and renderDelta=0. Its focused retry passed; that repeat does not erase the initial failure or prove
+a product repair. The independent late control assumed a one-millisecond timer was ready after a
+fixed twenty-millisecond sleep. It now observes real timer readiness without dispatch, bounded by
+the same original deadline, and reports actual timer/wait errors. The existing five 81 ms trials,
+final drain/resample, real-paint assertions and timeout remain unchanged.
+
+An isolated native x64 fixture passed 35 checks with zero warnings/errors, including the existing
+19 action-order checks. It compiles the actual snapshot header, candidate/old routed protocol,
+pinned modifier/traversal methods and warm-quiescence helper/readiness control. Native message-only
+timers deliberately delayed to 120 ms reject the old twenty-millisecond assumption; removing only
+the helper's final drain is independently rejected. Deadline expiry, timer/wait failures and early
+routed-modifier cleanup remain failures. Pane counters and input/host boundaries are adapted: no
+visible product window, global input, UIA, real pane rendering, native ARM or full hosted qualification
+is claimed. Source/compiler/executable/reproducer bytes were archived and verified before owner
+exit; rejected fixture compiles (missing canonical include paths, callback type, baseline entrypoint
+and WIL address-of misuse) remain retained. Test-harness source contracts passed 213/213 without
+failures/skips. Full current-source hosted acceptance remains required.
+
+RedXe's later documentation-only PR 74 merged as 3a8b3b19be24682ecc386e1204eac2f3fc438d4f.
+Its recomputed native digest remains 634ca46f6b3f35ddace6732895f3a5bd1c1d62deac2ea1ee54dd59ca18a3be9f
+with engine e32cf9f9b29f4e817decb09e1be44be7fc1a94de; live ci-state still identifies original
+successful qualification 41207884174. Its existing qualification and Prepare remain applicable.

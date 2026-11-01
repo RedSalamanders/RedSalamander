@@ -1,0 +1,1 @@
+- Repair the short File Operations keyboard fixture by delivering and verifying balanced retained-host Shift messages, and replace the late-paint control's fixed sleep with observable timer readiness inside its original deadline. Preserve failed initial receipts and independent counterfactual controls; full native regression and publication gates remain required.
