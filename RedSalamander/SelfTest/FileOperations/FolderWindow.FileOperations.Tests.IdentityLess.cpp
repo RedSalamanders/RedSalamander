@@ -2697,47 +2697,123 @@ struct QueuedByNameDelete final
     auto* operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
     if (! operations || ! state.fsLocal || ! state.infoLocal || ! CancelOutstandingSelfTestOperations(operations))
         return false;
-    std::string original;
-    if (! BackupPluginConfiguration(state.infoLocal.get(), original))
-        return false;
-    const auto originalRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
-    if (originalRoute.state != FileSystemRouteContract::QueryState::Available)
-        return false;
-    const uint32_t originalBudget = originalRoute.snapshot.deleteMaxConcurrency;
-    bool restored                 = false;
-    const auto restore            = [&]() noexcept
+    // This local transaction is specific to the live selftest provider and its
+    // host settings mirror. The common setter owns mutation and dirty tracking.
+    std::function<bool(const std::function<bool()>&)> withTemporaryBudget;
+    withTemporaryBudget = [&](const std::function<bool()>& body) noexcept -> bool
     {
-        if (restored)
+        std::string original;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), original))
+            return false;
+        const auto originalRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (originalRoute.state != FileSystemRouteContract::QueryState::Available)
+            return false;
+        const uint32_t originalBudget = originalRoute.snapshot.deleteMaxConcurrency;
+        const bool originalDirty      = state.localConfigDirty;
+        const std::wstring pluginId(kPluginIdLocal);
+        const auto entry = g_settings.plugins.configurationByPluginId.find(pluginId);
+        std::optional<Common::Settings::JsonValue> originalHost;
+        if (entry != g_settings.plugins.configurationByPluginId.end())
+            originalHost = entry->second;
+        bool restored       = false;
+        bool canonicalReady = false;
+        std::string canonical;
+        const auto restore = [&]() noexcept
+        {
+            if (restored)
+                return true;
+            state.localConfigDirty = true;
+            if (! CancelOutstandingSelfTestOperations(operations))
+            {
+                AppendLog(L"Pinned tree, scale: Local configuration restoration failed to reach worker quiet.");
+                return false;
+            }
+            const bool set = SetPluginConfiguration(state.infoLocal.get(), canonicalReady ? canonical : original);
+            if (! set)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local configuration restoration setter failed: canonicalReady={}.", canonicalReady));
+                return false;
+            }
+            std::string actual;
+            const auto route  = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+            const bool read   = BackupPluginConfiguration(state.infoLocal.get(), actual);
+            const bool same   = canonicalReady && read && actual == canonical;
+            const bool budget = route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.deleteMaxConcurrency == originalBudget;
+            if (! canonicalReady || ! same || ! budget)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local restore verification failed: canonicalReady={} read={} same={} actualLength={} "
+                                      L"expectedLength={} budget={}",
+                                      canonicalReady,
+                                      read,
+                                      same,
+                                      actual.size(),
+                                      canonical.size(),
+                                      budget));
+                return false;
+            }
+            if (originalHost.has_value())
+                g_settings.plugins.configurationByPluginId[pluginId] = originalHost.value();
+            else
+                g_settings.plugins.configurationByPluginId.erase(pluginId);
+            state.localConfigDirty = originalDirty;
+            restored               = true;
             return true;
-        if (! CancelOutstandingSelfTestOperations(operations))
-        {
-            AppendLog(L"Pinned tree, scale: Local configuration was not restored because workers did not drain.");
+        };
+        const auto restoreOnExit = wil::scope_exit([&]() noexcept { static_cast<void>(restore()); });
+        // A fresh getter may return {}, whereas the setter adds canonical policy.
+        // Keep the guard active across this first mutation as well.
+        if (! SetPluginConfiguration(state.infoLocal.get(), original) || ! BackupPluginConfiguration(state.infoLocal.get(), canonical))
             return false;
-        }
-        if (FAILED(state.infoLocal->SetConfiguration(original.c_str())))
-        {
-            AppendLog(L"Pinned tree, scale: Local configuration restoration failed.");
+        canonicalReady             = true;
+        const auto normalizedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (normalizedRoute.state != FileSystemRouteContract::QueryState::Available || normalizedRoute.snapshot.deleteMaxConcurrency != originalBudget)
             return false;
-        }
-        std::string actual;
-        const auto route = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
-        restored         = BackupPluginConfiguration(state.infoLocal.get(), actual) && actual == original &&
-                           route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.deleteMaxConcurrency == originalBudget;
-        if (! restored)
-            AppendLog(L"Pinned tree, scale: Local configuration restoration verification failed.");
-        return restored;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        const auto requestedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        AppendLog(std::format(L"Pinned tree, scale: Local Delete budget original={} requested=8 effective={}",
+                              originalBudget,
+                              requestedRoute.state == FileSystemRouteContract::QueryState::Available ? requestedRoute.snapshot.deleteMaxConcurrency : 0u));
+        if (requestedRoute.state != FileSystemRouteContract::QueryState::Available || requestedRoute.snapshot.deleteMaxConcurrency != 8u)
+            return false;
+        if (! body())
+            return false;
+        return restore();
     };
-    const auto restoreOnExit = wil::scope_exit([&]() noexcept { static_cast<void>(restore()); });
-    if (FAILED(state.infoLocal->SetConfiguration(R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json")))
-        return false;
-    const auto requestedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
-    AppendLog(std::format(L"Pinned tree, scale: Local Delete budget original={} requested=8 effective={}",
-                          originalBudget,
-                          requestedRoute.state == FileSystemRouteContract::QueryState::Available ? requestedRoute.snapshot.deleteMaxConcurrency : 0u));
-    if (requestedRoute.state != FileSystemRouteContract::QueryState::Available || requestedRoute.snapshot.deleteMaxConcurrency != 8u)
-        return false;
-    const bool passed = RunDeleteIdentityLessPinnedTreeScaleChecksImpl(state);
-    return restore() && passed;
+    // The outer transaction protects the caller while the inner transactions
+    // exercise both map lineages without requiring the optional NAS fixture.
+    return withTemporaryBudget([&]() noexcept
+    {
+        const std::wstring pluginId(kPluginIdLocal);
+        // The setter canonicalizes {}; this checks its normalized default semantics.
+        if (! SetPluginConfiguration(state.infoLocal.get(), "{}"))
+            return false;
+        g_settings.plugins.configurationByPluginId.erase(pluginId);
+        state.localConfigDirty     = false;
+        const bool defaultRestored = withTemporaryBudget([]() noexcept { return true; });
+        if (! defaultRestored || state.localConfigDirty || g_settings.plugins.configurationByPluginId.contains(pluginId))
+            return false;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":2})json"))
+            return false;
+        state.localConfigDirty = true;
+        const auto savedHost   = g_settings.plugins.configurationByPluginId.at(pluginId);
+        std::string savedProvider;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), savedProvider))
+            return false;
+        // A failed body takes the same scope-guard path as an early fixture exit.
+        if (withTemporaryBudget([]() noexcept { return false; }) || ! state.localConfigDirty ||
+            ! g_settings.plugins.configurationByPluginId.contains(pluginId) || g_settings.plugins.configurationByPluginId.at(pluginId).value != savedHost.value)
+            return false;
+        std::string afterProvider;
+        const auto afterRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (! BackupPluginConfiguration(state.infoLocal.get(), afterProvider) || afterProvider != savedProvider ||
+            afterRoute.state != FileSystemRouteContract::QueryState::Available || afterRoute.snapshot.deleteMaxConcurrency != 2u)
+            return false;
+        AppendLog(L"Pinned tree, scale: normalized default, nondefault and early-exit configuration restoration witnesses passed.");
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        return RunDeleteIdentityLessPinnedTreeScaleChecksImpl(state);
+    });
 }
 
 // I35 S4 (red-team HIGH c and b, round 2): a folder deleted by name carries its last-write time in its

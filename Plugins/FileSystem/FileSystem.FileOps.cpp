@@ -4757,18 +4757,87 @@ HRESULT SetHandleReadonlyAttribute(DeleteHandleSnapshot& snapshot, bool readonly
     return S_OK;
 }
 
-HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
+// Per-walk aggregates deliberately omit paths and are emitted only after the walk's workers have joined.
+// Independent relaxed counters are diagnostic only and never control scheduling or mutation.
+struct ByNameWalkMetrics final
 {
+    struct Stage final
+    {
+        Stage() noexcept               = default;
+        Stage(const Stage&)            = delete;
+        Stage(Stage&&)                 = delete;
+        Stage& operator=(const Stage&) = delete;
+        Stage& operator=(Stage&&)      = delete;
+
+        std::atomic<uint64_t> count{0u}, totalUs{0u}, maxUs{0u};
+        void Record(std::chrono::steady_clock::time_point start) noexcept
+        {
+            const auto elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+            count.fetch_add(1u, std::memory_order_relaxed);
+            totalUs.fetch_add(elapsed, std::memory_order_relaxed);
+            uint64_t prior = maxUs.load(std::memory_order_relaxed);
+            while (prior < elapsed && ! maxUs.compare_exchange_weak(prior, elapsed, std::memory_order_relaxed))
+            {
+            }
+        }
+        void Emit(std::wstring_view metric, HRESULT childWalkHr) const noexcept
+        {
+            Debug::Perf::EmitDurationUs(metric,
+                                        L"child-walk-total",
+                                        totalUs.load(std::memory_order_relaxed),
+                                        count.load(std::memory_order_relaxed),
+                                        maxUs.load(std::memory_order_relaxed),
+                                        childWalkHr);
+        }
+    };
+    ByNameWalkMetrics() noexcept                           = default;
+    ByNameWalkMetrics(const ByNameWalkMetrics&)            = delete;
+    ByNameWalkMetrics(ByNameWalkMetrics&&)                 = delete;
+    ByNameWalkMetrics& operator=(const ByNameWalkMetrics&) = delete;
+    ByNameWalkMetrics& operator=(ByNameWalkMetrics&&)      = delete;
+
+    const bool enabled = Debug::Perf::IsCaptureEnabled();
+    std::atomic<uint64_t> active{0u}, peak{0u}, parallelPasses{0u}, inlineBudget{0u}, inlineSingle{0u}, inlineNested{0u}, inlineNoWorkers{0u};
+    Stage open, facts, disposition, dispositionEx, dispositionLegacy, close, readonlyClear, readonlyRollback, completionCallback;
+    std::atomic<uint64_t> exSuccess{0u}, exInvalidParameter{0u}, exNotSupported{0u}, exOtherFailure{0u}, legacySuccess{0u}, legacyFailure{0u};
+    HRESULT childWalkHr = S_OK; // Set only by the joining thread; excludes final root disposition.
+    void Enter() noexcept
+    {
+        const uint64_t now = active.fetch_add(1u, std::memory_order_relaxed) + 1u;
+        uint64_t prior     = peak.load(std::memory_order_relaxed);
+        while (prior < now && ! peak.compare_exchange_weak(prior, now, std::memory_order_relaxed))
+        {
+        }
+    }
+};
+
+HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot, ByNameWalkMetrics* metrics = nullptr) noexcept
+{
+    const bool measure = metrics != nullptr && metrics->enabled;
 #ifdef FILE_DISPOSITION_FLAG_DELETE
     FILE_DISPOSITION_INFO_EX dispositionEx{};
-    dispositionEx.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS;
-    if (::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfoEx, &dispositionEx, sizeof(dispositionEx)))
+    dispositionEx.Flags    = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS;
+    const auto exStarted   = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL exSucceeded = ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfoEx, &dispositionEx, sizeof(dispositionEx));
+    const DWORD exError    = exSucceeded ? ERROR_SUCCESS : ::GetLastError();
+    if (measure)
     {
+        metrics->dispositionEx.Record(exStarted);
+        auto& outcome = exSucceeded                          ? metrics->exSuccess
+                        : exError == ERROR_INVALID_PARAMETER ? metrics->exInvalidParameter
+                        : exError == ERROR_NOT_SUPPORTED     ? metrics->exNotSupported
+                                                             : metrics->exOtherFailure;
+        outcome.fetch_add(1u, std::memory_order_relaxed);
+    }
+    if (exSucceeded)
+    {
+        const auto closeStarted = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         snapshot.handle.reset();
+        if (measure)
+            metrics->close.Record(closeStarted);
         return S_OK;
     }
 
-    const DWORD exError = ::GetLastError();
     if (exError != ERROR_INVALID_PARAMETER && exError != ERROR_NOT_SUPPORTED)
     {
         return HRESULT_FROM_WIN32(exError);
@@ -4776,13 +4845,22 @@ HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
 #endif
 
     FILE_DISPOSITION_INFO disposition{};
-    disposition.DeleteFile = TRUE;
-    if (! ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfo, &disposition, sizeof(disposition)))
+    disposition.DeleteFile     = TRUE;
+    const auto legacyStarted   = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL legacySucceeded = ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+    const DWORD legacyError    = legacySucceeded ? ERROR_SUCCESS : ::GetLastError();
+    if (measure)
     {
-        return HRESULT_FROM_WIN32(::GetLastError());
+        metrics->dispositionLegacy.Record(legacyStarted);
+        (legacySucceeded ? metrics->legacySuccess : metrics->legacyFailure).fetch_add(1u, std::memory_order_relaxed);
     }
+    if (! legacySucceeded)
+        return HRESULT_FROM_WIN32(legacyError);
 
+    const auto closeStarted = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     snapshot.handle.reset();
+    if (measure)
+        metrics->close.Record(closeStarted);
     return S_OK;
 }
 
@@ -4832,14 +4910,19 @@ HRESULT PauseAfterPermanentDeleteChildForSelfTest(std::wstring_view actualPath) 
 HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
                                  DeleteHandleSnapshot& snapshot,
                                  bool countCompletion,
-                                 [[maybe_unused]] std::wstring_view actualPath) noexcept
+                                 [[maybe_unused]] std::wstring_view actualPath,
+                                 ByNameWalkMetrics* metrics = nullptr) noexcept
 {
+    const bool measure        = metrics != nullptr && metrics->enabled;
     bool restoreReadonly      = false;
     auto restoreReadonlyScope = wil::scope_exit([&]() noexcept
     {
         if (restoreReadonly)
         {
+            const auto started = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             static_cast<void>(SetHandleReadonlyAttribute(snapshot, true));
+            if (measure)
+                metrics->readonlyRollback.Record(started);
         }
     });
 
@@ -4869,7 +4952,10 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         }
 
+        const auto started    = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         const HRESULT clearHr = SetHandleReadonlyAttribute(snapshot, false);
+        if (measure)
+            metrics->readonlyClear.Record(started);
         if (FAILED(clearHr))
         {
             return clearHr;
@@ -4877,7 +4963,7 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
         restoreReadonly = true;
     }
 
-    const HRESULT deleteHr = MarkHandleForDeletion(snapshot);
+    const HRESULT deleteHr = MarkHandleForDeletion(snapshot, metrics);
     if (FAILED(deleteHr))
     {
         return deleteHr;
@@ -4891,7 +4977,10 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
         {
             AddCompletedBytes(context, snapshot.fileBytes);
         }
+        const auto started = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         ReportCompletedObject(context, actualPath.data(), snapshot.attributes, snapshot.fileBytes);
+        if (measure)
+            metrics->completionCallback.Record(started);
     }
 
 #if defined(ENABLE_TESTS)
@@ -10529,59 +10618,6 @@ struct ByNameFolderNode final
     DeleteHandleSnapshot hold;    // held, sharing only reads, from its check to its own deletion
 };
 
-// Per-walk aggregates deliberately omit paths and are emitted only after the walk's workers have joined.
-// Independent relaxed counters are diagnostic only and never control scheduling or mutation.
-struct ByNameWalkMetrics final
-{
-    struct Stage final
-    {
-        Stage() noexcept               = default;
-        Stage(const Stage&)            = delete;
-        Stage(Stage&&)                 = delete;
-        Stage& operator=(const Stage&) = delete;
-        Stage& operator=(Stage&&)      = delete;
-
-        std::atomic<uint64_t> count{0u}, totalUs{0u}, maxUs{0u};
-        void Record(std::chrono::steady_clock::time_point start) noexcept
-        {
-            const auto elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
-            count.fetch_add(1u, std::memory_order_relaxed);
-            totalUs.fetch_add(elapsed, std::memory_order_relaxed);
-            uint64_t prior = maxUs.load(std::memory_order_relaxed);
-            while (prior < elapsed && ! maxUs.compare_exchange_weak(prior, elapsed, std::memory_order_relaxed))
-            {
-            }
-        }
-        void Emit(std::wstring_view metric, HRESULT childWalkHr) const noexcept
-        {
-            Debug::Perf::EmitDurationUs(metric,
-                                        L"child-walk-total",
-                                        totalUs.load(std::memory_order_relaxed),
-                                        count.load(std::memory_order_relaxed),
-                                        maxUs.load(std::memory_order_relaxed),
-                                        childWalkHr);
-        }
-    };
-    ByNameWalkMetrics() noexcept                           = default;
-    ByNameWalkMetrics(const ByNameWalkMetrics&)            = delete;
-    ByNameWalkMetrics(ByNameWalkMetrics&&)                 = delete;
-    ByNameWalkMetrics& operator=(const ByNameWalkMetrics&) = delete;
-    ByNameWalkMetrics& operator=(ByNameWalkMetrics&&)      = delete;
-
-    const bool enabled = Debug::Perf::IsCaptureEnabled();
-    std::atomic<uint64_t> active{0u}, peak{0u}, parallelPasses{0u}, inlineBudget{0u}, inlineSingle{0u}, inlineNested{0u}, inlineNoWorkers{0u};
-    Stage open, facts, disposition;
-    HRESULT childWalkHr = S_OK; // Set only by the joining thread; excludes final root disposition.
-    void Enter() noexcept
-    {
-        const uint64_t now = active.fetch_add(1u, std::memory_order_relaxed) + 1u;
-        uint64_t prior     = peak.load(std::memory_order_relaxed);
-        while (prior < now && ! peak.compare_exchange_weak(prior, now, std::memory_order_relaxed))
-        {
-        }
-    }
-};
-
 // The deletions of one pinned tree: its folders, the concurrency, the first stop and the entries deleted.
 struct ByNameTreeWalk final
 {
@@ -10605,6 +10641,19 @@ struct ByNameTreeWalk final
         metrics.open.Emit(L"FileOps.Local.ByNameWalk.OpenUs", metrics.childWalkHr);
         metrics.facts.Emit(L"FileOps.Local.ByNameWalk.FactsUs", metrics.childWalkHr);
         metrics.disposition.Emit(L"FileOps.Local.ByNameWalk.DispositionUs", metrics.childWalkHr);
+        metrics.dispositionEx.Emit(L"FileOps.Local.ByNameWalk.DispositionExUs", metrics.childWalkHr);
+        metrics.dispositionLegacy.Emit(L"FileOps.Local.ByNameWalk.DispositionLegacyUs", metrics.childWalkHr);
+        metrics.close.Emit(L"FileOps.Local.ByNameWalk.CloseUs", metrics.childWalkHr);
+        metrics.readonlyClear.Emit(L"FileOps.Local.ByNameWalk.ReadonlyClearUs", metrics.childWalkHr);
+        metrics.readonlyRollback.Emit(L"FileOps.Local.ByNameWalk.ReadonlyRollbackUs", metrics.childWalkHr);
+        metrics.completionCallback.Emit(L"FileOps.Local.ByNameWalk.CompletionCallbackUs", metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExSuccess", metrics.exSuccess.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(
+            L"FileOps.Local.ByNameWalk.ExInvalidParameter", metrics.exInvalidParameter.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExNotSupported", metrics.exNotSupported.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExOtherFailure", metrics.exOtherFailure.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.LegacySuccess", metrics.legacySuccess.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.LegacyFailure", metrics.legacyFailure.load(std::memory_order_relaxed), metrics.childWalkHr);
     }
     ByNameTreeWalk(const ByNameTreeWalk&)            = delete;
     ByNameTreeWalk& operator=(const ByNameTreeWalk&) = delete;
@@ -10785,7 +10834,7 @@ void DeleteByNameListedEntry(ByNameTreeWalk& walk, OperationContext& worker, con
         return;
     }
     const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    hr                            = DeleteOpenedPathNoFollow(worker, child, true, extended);
+    hr                            = DeleteOpenedPathNoFollow(worker, child, true, extended, &walk.metrics);
     if (walk.metrics.enabled)
         walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))
@@ -10827,7 +10876,7 @@ void DeleteByNameHeldFolder(ByNameTreeWalk& walk, OperationContext& worker, cons
         return;
     }
     const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    const HRESULT hr              = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path));
+    const HRESULT hr              = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path), &walk.metrics);
     if (walk.metrics.enabled)
         walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))

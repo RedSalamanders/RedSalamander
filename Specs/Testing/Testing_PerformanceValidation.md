@@ -985,7 +985,13 @@ selection. `OpenUs`, `FactsUs`, and `DispositionUs` are typed microsecond sums, 
 `value0` and maximum in `value1`; zero is still a duration. Open and facts include held folders as well as
 files. Disposition includes child folders and files, excludes the final root, and includes callbacks. These
 are application wrapper elapsed times, not kernel or server latency. The file-handler peak does not measure
-simultaneous I/O. These independent diagnostics do not justify weakening identity checks.
+simultaneous I/O. Within that disposition wrapper, `DispositionExUs`, `DispositionLegacyUs`, `CloseUs`,
+`ReadonlyClearUs`, `ReadonlyRollbackUs`, and `CompletionCallbackUs` measure individual wrapper calls using
+the same sum/count/max fields. The completion measurement includes the callback wrapper and its lock, even
+when no callback is installed. The six `ExSuccess`, `ExInvalidParameter`, `ExNotSupported`, `ExOtherFailure`,
+`LegacySuccess`, and `LegacyFailure` count metrics record the selected disposition outcomes; zero counts are
+valid, including builds without the extended disposition call. These independent diagnostics do not justify
+weakening identity checks.
 
 Single-pass File Operations discovery emits one bounded terminal metric set per task:
 `FileOps.Discovery.OpenUs`, `CallbackCount`, `CallbackUs`, `LockWaitUs`, `MaxQueueDepth`,

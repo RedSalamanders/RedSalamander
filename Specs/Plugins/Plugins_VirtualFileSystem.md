@@ -1345,8 +1345,13 @@ for identity-less locations (I35 R7.3, D-7.3).
 
 The pinned-tree scale selftest temporarily sets the actual Local provider to manual Delete concurrency 8,
 verifies the typed route, and restores and verifies the original provider configuration after its workers
-are quiet. Its 2,466-entry whole, chunked and configured NAS scenarios retain their existing identity checks
-and deadline. A failed worker drain or configuration restoration fails the case.
+are quiet. It uses the canonical selftest setter so the host configuration mirror and dirty tracking follow
+the mutation. Restoration compares the provider's normalized configuration and original effective budget,
+then restores the exact prior host-map entry or absence and dirty flag. An unavailable canonical baseline
+permits only a best-effort recovery attempt, never a verified restoration. Local witnesses cover normalized
+defaults, nondefault settings and early-exit restoration. Its 2,466-entry whole, chunked and configured NAS
+scenarios retain their existing identity checks and deadline. A failed worker drain or configuration
+restoration fails the case.
 
 Optional `IFileSystemObjectBinding`
 (`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
