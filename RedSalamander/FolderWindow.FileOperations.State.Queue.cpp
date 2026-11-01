@@ -2127,6 +2127,32 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
         const bool activeExclusive = std::ranges::any_of(_activeMutationInterlocks, [](const auto& entry) noexcept {
             return entry.admission && entry.admission->hasDataTransfers && ! entry.admission->parallelNewFiles;
         });
+        // An exclusive job waiting for active transfers must get a chance to drain the
+        // admission set. Otherwise later independent jobs can continually refill it.
+        // Only reserve for a decided, runnable waiter: a queued, paused, cancelled or
+        // predecessor-blocked task must not prevent the work it depends on from entering.
+        const bool olderExclusiveWaiting = available && admission->hasDataTransfers &&
+                                           std::ranges::any_of(_preparedMutationInterlocks,
+                                                               [&](const ActiveMutationInterlock& other) noexcept
+        {
+            if (! other.task || ! other.admission || other.taskId == task._taskId || ! other.admission->hasDataTransfers || other.admission->parallelNewFiles ||
+                ! other.admission->relations.advisoryDecided || ! other.task->_waitingForExclusiveTransfer.load(std::memory_order_acquire) ||
+                other.task->_waitForOthers.load(std::memory_order_acquire) || other.task->_cancelled.load(std::memory_order_acquire) ||
+                other.task->_stopToken.stop_requested() || other.task->IsPaused() || other.task->IsQueuePaused())
+                return false;
+            const auto selected = other.task->LoadSelectedAdmission();
+            if (selected->interlock != other.admission ||
+                std::pair{other.task->GetQueueOrderKey(), other.admission->key} >= std::pair{task.GetQueueOrderKey(), admission->key} ||
+                HasPublishedOverlapPredecessor(*other.admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+                return false;
+            uint64_t otherComparisons = 0u;
+            return MutationInterlocksPermit(other.taskId, *other.admission, _activeMutationInterlocks, otherComparisons);
+        });
+        if (olderExclusiveWaiting)
+        {
+            task._waitingForExclusiveTransfer.store(true, std::memory_order_release);
+            return false;
+        }
         if (available && admission->hasDataTransfers && (activeExclusive || (! admission->parallelNewFiles && activeTransfers != 0u)))
         {
             task._waitingForExclusiveTransfer.store(true, std::memory_order_release);
@@ -2284,6 +2310,16 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::sha
 }
 
 #ifdef ENABLE_TESTS
+bool FolderWindow::FileOperationState::DebugAreBothAdmissionsActiveForSelfTest(uint64_t firstTaskId, uint64_t secondTaskId) noexcept
+{
+    // Activation and removal both hold this lock, so the two membership reads
+    // describe one instant rather than opposite sides of a serialized handoff.
+    std::scoped_lock lock(_queueMutex);
+    const auto isActive = [&](uint64_t taskId) noexcept
+    { return std::ranges::any_of(_activeMutationInterlocks, [taskId](const ActiveMutationInterlock& active) noexcept { return active.taskId == taskId; }); };
+    return isActive(firstTaskId) && isActive(secondTaskId);
+}
+
 bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForSelfTest(std::wstring& failure) noexcept
 {
     using namespace std::chrono_literals;
@@ -2396,11 +2432,50 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
     Common::Settings::Settings settings{};
     settings.fileOperations.emplace();
     FolderWindow owner;
-    const auto restore = wil::scope_exit([&]() noexcept
+    const auto restore                            = wil::scope_exit([&]() noexcept
     {
         settings.fileOperations->maxParallelTransfers = originalLimit;
         owner.SetSettings(&settings);
+        owner.ApplyFileOperationSettings();
     });
+    settings.fileOperations->maxParallelTransfers = 7u;
+    owner.SetSettings(&settings);
+    owner.ApplyFileOperationSettings();
+    {
+        Common::Settings::Settings privateSettings{};
+        privateSettings.fileOperations.emplace();
+        FolderWindow privateOwner;
+        privateOwner.SetSettings(&privateSettings);
+        privateOwner.SetSettings(nullptr);
+        if (FileOperations::GetSharedParallelTransferLimit() != 7u)
+        {
+            failure = L"Attaching or detaching a private FolderWindow must not change the process-wide transfer limit.";
+            return false;
+        }
+    }
+    {
+        FileOperationState state(owner);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.push_back({.taskId = 1u});
+        }
+        const bool firstOnly = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.push_back({.taskId = 2u});
+        }
+        const bool both = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.erase(state._activeMutationInterlocks.begin());
+        }
+        const bool secondOnly = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        if (firstOnly || ! both || secondOnly)
+        {
+            failure = L"The admission snapshot must distinguish overlap from either side of a handoff.";
+            return false;
+        }
+    }
     {
         FileOperationState state(owner);
         auto publisher                                  = std::make_shared<MutationInterlockAdmission>();
@@ -2435,6 +2510,7 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
     {
         settings.fileOperations->maxParallelTransfers = 4u;
         owner.SetSettings(&settings);
+        owner.ApplyFileOperationSettings();
         FileOperationState state(owner);
         for (uint64_t index = 1u; index <= 4u; ++index)
         {
@@ -2510,6 +2586,7 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
         {
             settings.fileOperations->maxParallelTransfers = limit;
             owner.SetSettings(&settings);
+            owner.ApplyFileOperationSettings();
             FileOperationState state(owner);
             for (uint32_t index = 0u; index < limit; ++index)
             {
@@ -2592,6 +2669,201 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
                 return false;
             }
         }
+    for (const bool cancelExclusive : {false, true})
+    {
+        settings.fileOperations->maxParallelTransfers = 4u;
+        owner.ApplyFileOperationSettings();
+        FileOperationState state(owner);
+        auto activeScopes                          = makeScopes(1u);
+        activeScopes[1].conservativeIdentityDomain = false;
+        auto active                                = std::make_shared<MutationInterlockAdmission>();
+        active->key                                = 1u;
+        active->scopes                             = std::make_shared<const MutationInterlockScopes>(std::move(activeScopes));
+        active->relations.advisoryDecided          = true;
+        active->isTransfer = active->hasDataTransfers = active->parallelNewFiles = true;
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = std::move(active)});
+        state._activeOperations = 1u;
+        const auto makeTask     = [&](uint64_t id, bool exclusive) noexcept -> Task*
+        {
+            auto candidate   = std::make_unique<Task>(state);
+            Task* const task = candidate.get();
+            task->_taskId    = id;
+            task->_admissionKey.store(id, std::memory_order_release);
+            task->_queueOrderKey.store(id, std::memory_order_release);
+            task->_operation                     = FILESYSTEM_COPY;
+            auto scopes                          = makeScopes(id);
+            scopes[1].conservativeIdentityDomain = false;
+            if (exclusive)
+                for (auto& scope : scopes)
+                    scope.independentNewFileTransfer = false;
+            task->InstallPreparedMutationInterlockScopes(std::move(scopes), false);
+            MutationInterlockRelations decided{};
+            decided.advisoryDecided = true;
+            state.PublishMutationInterlockDecision(*task, decided);
+            state._tasks.push_back(std::move(candidate));
+            state.PublishPreparedMutationInterlock(*task);
+            return task;
+        };
+        Task* const exclusive = makeTask(2u, true);
+        Task* const later     = makeTask(3u, false);
+        std::binary_semaphore exclusiveEntered{0}, laterDone{0};
+        std::counting_semaphore<2> exclusiveRelease{0};
+        std::atomic<bool> laterEntered{false};
+        std::jthread first([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*exclusive, token);
+            if (result.outcome == OperationEntryOutcome::Entered)
+            {
+                exclusiveEntered.release();
+                exclusiveRelease.acquire();
+                state.LeaveOperation(*exclusive, result.accepted);
+            }
+        });
+        std::jthread second;
+        const auto cleanup  = wil::scope_exit([&]() noexcept
+        {
+            {
+                // Synchronize stop with the predicate-to-wait transition, including
+                // failure paths that can be waiting on an identity predecessor.
+                std::scoped_lock lock(state._queueMutex);
+                first.request_stop();
+                second.request_stop();
+            }
+            exclusiveRelease.release();
+            state._queueCv.notify_all();
+            first.join();
+            if (second.joinable())
+                second.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+            state._tasks.clear();
+        });
+        const auto deadline = std::chrono::steady_clock::now() + 3s;
+        while (! exclusive->_waitingForExclusiveTransfer.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        if (! exclusive->_waitingForExclusiveTransfer.load(std::memory_order_acquire))
+        {
+            failure = L"Exclusive admission must wait for the active transfer before the fairness check.";
+            return false;
+        }
+        second                  = std::jthread([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*later, token);
+            laterEntered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*later, result.accepted);
+            laterDone.release();
+        });
+        const auto waitDeadline = std::chrono::steady_clock::now() + 3s;
+        while (! later->IsWaitingInQueue() && ! laterEntered.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < waitDeadline)
+            std::this_thread::sleep_for(1ms);
+        if (! later->IsWaitingInQueue() || laterEntered.load(std::memory_order_acquire))
+        {
+            failure = L"A later independent transfer must not refill capacity ahead of an eligible exclusive waiter.";
+            return false;
+        }
+        if (cancelExclusive)
+            exclusive->RequestCancel();
+        else
+        {
+            {
+                std::scoped_lock lock(state._queueMutex);
+                state._activeMutationInterlocks.clear();
+                state._activeOperations = 0u;
+            }
+            state._queueCv.notify_all();
+            if (! exclusiveEntered.try_acquire_for(3s) || laterEntered.load(std::memory_order_acquire))
+            {
+                failure = L"The reserved exclusive admission must enter before the later transfer when capacity drains.";
+                return false;
+            }
+            exclusiveRelease.release();
+        }
+        if (! laterDone.try_acquire_for(3s) || ! laterEntered.load(std::memory_order_acquire))
+        {
+            failure = L"The later transfer must enter after the exclusive admission completes or is cancelled.";
+            return false;
+        }
+    }
+    for (const bool predecessorBlocked : {false, true})
+    {
+        settings.fileOperations->maxParallelTransfers = 4u;
+        owner.ApplyFileOperationSettings();
+        FileOperationState state(owner);
+        auto activeScopes                          = makeScopes(1u);
+        activeScopes[1].conservativeIdentityDomain = false;
+        auto active                                = std::make_shared<MutationInterlockAdmission>();
+        active->key                                = 1u;
+        active->scopes                             = std::make_shared<const MutationInterlockScopes>(std::move(activeScopes));
+        active->relations.advisoryDecided          = true;
+        active->isTransfer = active->hasDataTransfers = active->parallelNewFiles = true;
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = std::move(active)});
+        state._activeOperations = 1u;
+        const auto prepare      = [&](uint64_t id, bool exclusive) noexcept -> Task*
+        {
+            auto candidate   = std::make_unique<Task>(state);
+            Task* const task = candidate.get();
+            task->_taskId    = id;
+            task->_admissionKey.store(id, std::memory_order_release);
+            task->_queueOrderKey.store(id, std::memory_order_release);
+            task->_operation                     = FILESYSTEM_COPY;
+            auto scopes                          = makeScopes(id);
+            scopes[1].conservativeIdentityDomain = false;
+            if (exclusive)
+                for (auto& scope : scopes)
+                    scope.independentNewFileTransfer = false;
+            task->InstallPreparedMutationInterlockScopes(std::move(scopes), false);
+            MutationInterlockRelations decided{};
+            decided.advisoryDecided = true;
+            if (exclusive && predecessorBlocked)
+            {
+                decided.predecessorKeys[0] = 3u;
+                decided.predecessorCount   = 1u;
+            }
+            state.PublishMutationInterlockDecision(*task, decided);
+            state._tasks.push_back(std::move(candidate));
+            state.PublishPreparedMutationInterlock(*task);
+            return task;
+        };
+        // Prepare the predecessor first so its published key is visible when the
+        // exclusive decision is frozen. The waiting flag models a prior capacity
+        // wait; pause or a newly published predecessor must make it ineligible.
+        Task* const later     = prepare(3u, false);
+        Task* const exclusive = prepare(2u, true);
+        exclusive->_waitingForExclusiveTransfer.store(true, std::memory_order_release);
+        if (! predecessorBlocked)
+            exclusive->SetPaused(true);
+        std::binary_semaphore done{0};
+        std::atomic<bool> entered{false};
+        std::jthread waiter([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*later, token);
+            entered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*later, result.accepted);
+            done.release();
+        });
+        const auto cleanup = wil::scope_exit([&]() noexcept
+        {
+            {
+                std::scoped_lock lock(state._queueMutex);
+                waiter.request_stop();
+            }
+            state._queueCv.notify_all();
+            waiter.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+            state._tasks.clear();
+        });
+        if (! done.try_acquire_for(3s) || ! entered.load(std::memory_order_acquire))
+        {
+            failure = predecessorBlocked ? L"A published predecessor must enter despite the exclusive waiter's stale capacity flag."
+                                         : L"A paused exclusive waiter must not reserve transfer admission.";
+            return false;
+        }
+    }
     Debug::Perf::EmitValue(L"FileOps.SelfTest.SharedTransfers.AdmissionContracts", 1u, S_OK);
     return true;
 }

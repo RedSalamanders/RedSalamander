@@ -9476,6 +9476,8 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
 #endif
 
     g_folderWindow.SetSettings(&g_settings);
+    // Only the running application's owner publishes the process-wide transfer limit.
+    g_folderWindow.ApplyFileOperationSettings();
 #ifdef ENABLE_TESTS
     if (IsRunningAnySelfTest())
     {

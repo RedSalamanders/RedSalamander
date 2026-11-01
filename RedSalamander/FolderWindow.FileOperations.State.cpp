@@ -25838,6 +25838,7 @@ bool FolderWindow::FileOperationState::DebugRunSharedTransfersForSelfTest(IFileS
     settings.fileOperations->maxParallelTransfers = limit;
     FolderWindow owner;
     owner.SetSettings(&settings);
+    owner.ApplyFileOperationSettings();
     FileOperationState state(owner);
     state.SetQueueNewTasks(false);
     g_fileOpsAutoConcurrencyOverridePreferred.store(4u, std::memory_order_release);

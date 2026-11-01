@@ -2,6 +2,14 @@
 
 ## Hosted qualification prerequisites
 
+Shared-transfer admission controls preserve a nondefault process-wide limit across private
+`FolderWindow` settings attachment and detachment. Intentional scheduler fixtures apply their
+limit explicitly and restore the original. Conflicting-task overlap observations read both active
+admissions under the scheduler's queue lock, rather than combining separate worker-state reads
+across a serialized handoff. Exclusive-fairness controls exercise the real admission boundary with
+spare shared capacity, an older exclusive waiter and a later independent transfer, retaining drain,
+cancellation and ineligible-waiter controls. These focused checks do not establish Full qualification.
+
 The unified CI adapter runs the normal CI suite after a test-enabled Release build on both native
 architectures; Full and ASan remain explicit manual qualifications. See
 [Build_UnifiedCI.md](../Build/Build_UnifiedCI.md) for event routing and the global production barrier.

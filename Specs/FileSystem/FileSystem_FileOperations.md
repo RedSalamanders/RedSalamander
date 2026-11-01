@@ -2017,7 +2017,11 @@ it adds no provider I/O to preparation or the queue predicate.
 
 Jobs that transfer data but do not qualify reserve exclusive transfer admission until completion. This retains
 serialization for overwrites, directory work and opaque provider calls and avoids holding file
-capacity while waiting on another transfer job's conflict decision. Known path/object interlocks
+capacity while waiting on another transfer job's conflict decision. Once an eligible older exclusive
+admission waits for active transfers to drain, later transfers cannot refill the admission set ahead
+of it. Reservation follows queue order and admission identity, and excludes canceled, stopped,
+paused, explicitly queued, stale or predecessor/identity-blocked waiters. Cancellation or completion
+releases the reservation; identity dependencies remain ahead of capacity. Known path/object interlocks
 remain in force for every operation family. Eligible host transfers resolve destination conflicts
 and bind the source before acquiring a shared file permit; a raced existing target requires an
 exclusive permit. Shared permits precede connection permits and span staging, bytes, publication,

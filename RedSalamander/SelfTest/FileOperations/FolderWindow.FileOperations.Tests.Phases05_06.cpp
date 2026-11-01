@@ -12128,8 +12128,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
 
     Task* const first  = state.fileOps->FindTask(state.taskA.value());
     Task* const second = state.fileOps->FindTask(state.taskB.value());
-    if (first != nullptr && second != nullptr && first->HasEnteredOperation() && second->HasEnteredOperation() &&
-        ! state.completedTasks.contains(state.taskA.value()) && ! state.completedTasks.contains(state.taskB.value()))
+    if (state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value()))
     {
         Fail(L"Conflicting transfer jobs must never enter execution simultaneously.");
         return true;

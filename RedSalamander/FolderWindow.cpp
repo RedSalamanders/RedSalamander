@@ -801,7 +801,6 @@ void FolderWindow::SetSettings(Common::Settings::Settings* settings) noexcept
     }
 #endif
     _settings = settings;
-    ApplyFileOperationSettings();
 #ifdef ENABLE_TESTS
     if (IsFolderWindowSelfTestTracingEnabled())
     {

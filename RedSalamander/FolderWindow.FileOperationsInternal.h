@@ -2702,6 +2702,7 @@ struct FolderWindow::FileOperationState
     void DebugForceNextOrphanedCompletionDrainSubmissionFailure() noexcept;
     void DebugForceAllOrphanedCompletionDrainSubmissionFailures(bool enabled) noexcept;
     void DebugClearConcurrentOverlapRelationsForSelfTest(Task& task) noexcept;
+    [[nodiscard]] bool DebugAreBothAdmissionsActiveForSelfTest(uint64_t firstTaskId, uint64_t secondTaskId) noexcept;
     void DebugForceLiveOutputIndexOverflowForSelfTest() noexcept;
     [[nodiscard]] bool DebugLiveOutputIndexOverflowedForSelfTest() noexcept;
     void DebugRecordCompletionApplyTidForSelfTest(DWORD threadId) noexcept;
