@@ -78,7 +78,8 @@ constexpr std::wstring_view kStageIdentityUnsupportedPathEnvVar  = L"REDSALAMAND
 constexpr std::wstring_view kStageIdentityUnsupportedFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_FIRED";
 // I35: emulates a redirector without FileIdInfo (the NAS probe of 2026-10-11) for every path at or
 // below the configured root. Unlike the one-shot injections it stays set until the test clears it.
-constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar          = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+constexpr std::wstring_view kBindDirectoryIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH";
 // I35 R7.1: the no-follow open of exactly this path fails with ERROR_NOT_SUPPORTED (a redirector that
 // refuses the open itself); it stays set until the test clears it.
 constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
@@ -146,36 +147,38 @@ constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDE
     return path != nullptr && path[0] != L'\0' && ShouldFailOwnedPublicationForSelfTest(path, pathEnvironmentVariable, firedEnvironmentVariable, counterName);
 }
 
-// True while the persistent identity-unsupported injection names `path` or one of its ancestors.
+// The directory-only control models NAS parent directories whose IDs are unavailable while
+// regular-file publication can still return exact object authority.
 [[nodiscard]] bool IsBindIdentityUnsupportedForSelfTest(const wchar_t* path) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
         return false;
     }
-    const DWORD required = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), nullptr, 0u);
-    if (required == 0u)
+    for (const auto name : {kBindIdentityUnsupportedRootEnvVar, kBindDirectoryIdentityUnsupportedRootEnvVar})
     {
-        return false;
+        const DWORD required = GetEnvironmentVariableW(name.data(), nullptr, 0u);
+        if (required == 0u)
+            continue;
+        std::wstring configured(static_cast<size_t>(required), L'\0');
+        const DWORD written = GetEnvironmentVariableW(name.data(), configured.data(), required);
+        if (written == 0u || written >= required)
+            continue;
+        configured.resize(written);
+        while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
+            configured.pop_back();
+        const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
+        const std::wstring actual = FileSystemInternal::ToExtendedPath(path);
+        if (root.empty() || actual.size() < root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root) ||
+            (actual.size() != root.size() && actual[root.size()] != L'\\'))
+            continue;
+        if (name == kBindIdentityUnsupportedRootEnvVar)
+            return true;
+        const DWORD attributes = GetFileAttributesW(actual.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+            return true;
     }
-    std::wstring configured(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), configured.data(), required);
-    if (written == 0u || written >= required)
-    {
-        return false;
-    }
-    configured.resize(written);
-    while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
-    {
-        configured.pop_back();
-    }
-    const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
-    const std::wstring actual = FileSystemInternal::ToExtendedPath(path);
-    if (root.empty() || actual.size() < root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root))
-    {
-        return false;
-    }
-    return actual.size() == root.size() || actual[root.size()] == L'\\';
+    return false;
 }
 
 // True while the persistent open-failure injection names exactly `path`.

@@ -4008,7 +4008,9 @@ Specs\TestRuns\local_scratch
         $selfTest | Should Match 'R4A02_LiveOutputGuardChoices'
         $selfTest | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest'
         $selfTest | Should Match 'Task::ConflictAction::RunConcurrently'
-        $selfTest | Should Match 'completedB->second\.interlockWaitCount\s*!=\s*0u'
+        $selfTest | Should Match 'state\.r4a02SerializedAdmissionObserved'
+        $header | Should Match '!\s*serializedTransfers'
+        $queue | Should Match 'candidate\.isTransfer\s*&&\s*published\.admission->isTransfer'
         $queue | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest[\s\S]{0,900}FileOps\.LiveOutput\.IndexOverflow'
     }
 
@@ -4410,7 +4412,7 @@ Specs\TestRuns\local_scratch
         $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
-        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\)\s*&&'
+        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\s*\|\|\s*\(selectedAdmission->interlock\s*&&\s*selectedAdmission->interlock->parallelNewFiles\)\)\s*&&'
         $bridge | Should Match 'bridgeDestinationFileSystem\s*=\s*selectedAdmission->destination->fileSystem\s*\?\s*selectedAdmission->destination->fileSystem\.get\(\)\s*:\s*_fileSystem\.get\(\)'
         $bridge | Should Not Match 'strategy\.nativeBridgeRejected'
         $bridge | Should Not Match 'bridge\.move\.cleanup\.cancelled'

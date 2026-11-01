@@ -8972,6 +8972,7 @@ void SelectThemeTarget(HWND hWnd, std::wstring_view themeId, RedSalamander::Ui::
 
 void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
 {
+    g_folderWindow.ApplyFileOperationSettings();
     if (! hWnd)
     {
         return;

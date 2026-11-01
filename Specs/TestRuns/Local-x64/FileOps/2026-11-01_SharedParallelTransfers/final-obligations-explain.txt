@@ -1,0 +1,22 @@
+Shadow validation plan: 0324e82e90e375f7ecd339e42a4c8a76dfeb6303fd93c0e249cd832ee8e833b8
+Changed paths: 52; advisory build: full
+  AFFECTED   tooling.pester-build-toolchain               1038097 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   selftest.compare-directories                  156242 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   selftest.commands                            1318616 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   selftest.file-operations                     1253728 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.product-ui                           3991 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-pe.noninteractive                       32969 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-pe.interactive                         202981 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-sqlite.noninteractive                   12274 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-sqlite.interactive                       7261 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.filesystem-curl                      3874 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.localization                         6567 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.red-configure                        4671 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.plugin-contract                     76679 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.settings-schema                      4160 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.crash-handling                       3842 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   perf.performance-tests2                        17086 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.pester                                226596 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.vcpkg-merge-synthetic                   3880 ms  SOURCE_INPUT_CHANGED
+Estimated fresh duration: 4373514 ms (advisory only).
+Decision: Z:\RedSalamander.Perf\evidence\shared-parallel-transfers-20261101\closeout-obligations-plan.json

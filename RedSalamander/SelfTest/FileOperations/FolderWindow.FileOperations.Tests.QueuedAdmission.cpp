@@ -293,8 +293,12 @@
         return false;
     // Exercise the actual scheduler and live-output consent predicates with immutable private
     // registrations. Public task identity stays fixed while the proposed admission changes.
-    auto candidate             = std::make_unique<State::Task>(*privateOperations);
-    auto peer                  = std::make_unique<State::Task>(*privateOperations);
+    auto candidate = std::make_unique<State::Task>(*privateOperations);
+    auto peer      = std::make_unique<State::Task>(*privateOperations);
+    // General consent-key ownership remains applicable to Rename. Two Copy/Move
+    // admissions now serialize regardless of consent; the shared-transfer controls
+    // cover that policy independently of these registration-replacement checks.
+    candidate->_operation      = FILESYSTEM_RENAME;
     const auto artifactReceipt = [](std::wstring_view name)
     {
         FileOperationArtifacts::TouchGuardReceipt receipt;
@@ -440,8 +444,8 @@
     const auto* movedStorage = movableScopes.data();
     candidate->InstallPreparedMutationInterlockScopes(std::move(movableScopes), false);
     const auto originalCandidateOwner = candidate->LoadMutationInterlockAdmission();
-    state.Require(originalCandidateOwner && originalCandidateOwner->scopes->data() == movedStorage,
-                  L"Freezing preparation must move the authority vector without copying its storage.");
+    state.Require(originalCandidateOwner && ! originalCandidateOwner->isTransfer && originalCandidateOwner->scopes->data() == movedStorage,
+                  L"Freezing the Rename consent fixture must move the authority vector without copying its storage.");
     State::MutationInterlockAdmission candidateAdmission = *originalCandidateOwner;
     peer->_taskId                                        = 41u;
     peer->_admissionKey.store(41u, std::memory_order_release);

@@ -295,6 +295,17 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
+    const Common::Settings::Settings baselineSettings = g_settings;
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept
+    {
+        g_settings = baselineSettings;
+        g_folderWindow.ApplyFileOperationSettings();
+    });
+    ScopedSettingsArtifactBackup settingsBackup;
+    state.Require(settingsBackup.Capture(L"RedSalamander"), L"Failed to back up settings for parallel-transfer Preferences validation.");
+    if (! state.failure.empty())
+        return false;
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -307,6 +318,13 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
                       L"Existing Preferences window did not close before File Operations live interaction test.");
     }
+
+    if (! g_settings.fileOperations.has_value())
+        g_settings.fileOperations.emplace();
+    g_settings.fileOperations->maxParallelTransfers = 4u;
+    g_folderWindow.ApplyFileOperationSettings();
+    const std::wstring expectedTheme = g_settings.theme.currentThemeId;
+    const bool expectedVerification  = g_settings.fileOperations->verifyAfterCopy;
 
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
@@ -539,6 +557,56 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
+    const std::wstring parallelName = DxUi::StripNativeMenuMnemonicMarkers(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE));
+    const auto selectParallelLimit  = [&](uint32_t limit) noexcept
+    {
+        if (! focusVisibleDescendantByName(getActivePage(), UIA_ComboBoxControlTypeId, parallelName))
+            return false;
+        // Route actual control keys through the owned DX page, never a debug value setter.
+        const HWND page = getActivePage();
+        SendMessageW(page, WM_KEYDOWN, VK_HOME, 0);
+        SendMessageW(page, WM_KEYUP, VK_HOME, 0);
+        for (uint32_t index = 1u; index < limit; ++index)
+        {
+            SendMessageW(page, WM_KEYDOWN, VK_DOWN, 0);
+            SendMessageW(page, WM_KEYUP, VK_DOWN, 0);
+        }
+        PumpPendingMessages();
+        return waitForComboValue(parallelName, std::to_wstring(limit));
+    };
+    state.Require(waitForComboValue(parallelName, L"4"), L"Parallel transfers must expose its named UIA combo and default value four.");
+    state.Require(selectParallelLimit(6u), L"Real keyboard interaction must change the parallel-transfer combo to six.");
+    state.Require(DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty && snapshot.shellApplyButtonEnabled,
+                  L"Changing the parallel limit must mark Preferences dirty and enable Apply.");
+    state.Require(g_settings.fileOperations->maxParallelTransfers == 4u && FileOperations::GetSharedParallelTransferLimit() == 4u,
+                  L"Editing the parallel limit must affect only the draft before Apply.");
+    state.Require(selectParallelLimit(4u) && DebugGetPreferencesDialogSnapshot(snapshot) && ! snapshot.dirty && ! snapshot.shellApplyButtonEnabled,
+                  L"Restoring four must restore the clean baseline and disable Apply.");
+    state.Require(selectParallelLimit(6u), L"Parallel transfers must accept a second actual keyboard change.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_BTN_APPLY), L"Parallel transfers Preferences Apply"),
+                  L"The visible Apply button must commit the parallel-transfer limit.");
+    Common::Settings::Settings persisted{};
+    const auto persistedReady = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        persisted = {};
+        return Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", persisted) == S_OK && persisted.fileOperations.has_value() &&
+               persisted.fileOperations->maxParallelTransfers == 6u;
+    },
+        {.timeout = SelfTest::Scale(3000ms), .operationName = L"parallel-transfer Preferences persistence"});
+    state.Require(persistedReady.conditionMet && g_settings.fileOperations->maxParallelTransfers == 6u &&
+                      FileOperations::GetSharedParallelTransferLimit() == 6u,
+                  L"Apply must update the running scheduler and serialize the parallel-transfer limit.");
+    state.Require(persisted.theme.currentThemeId == expectedTheme && persisted.fileOperations.has_value() &&
+                      persisted.fileOperations->verifyAfterCopy == expectedVerification,
+                  L"Parallel-transfer Apply must preserve unrelated theme and File Operations settings.");
+    state.Require(DebugGetPreferencesDialogSnapshot(snapshot) && ! snapshot.dirty && ! snapshot.shellApplyButtonEnabled,
+                  L"Successful Apply must advance the parallel-transfer baseline and disable Apply.");
+    state.Require(selectParallelLimit(2u), L"The applied parallel limit must remain editable before Cancel.");
+    if (! state.failure.empty())
+        return false;
+
     const std::wstring initialComboValue = initialComboState->value;
     const UINT comboChangeKey            = (initialComboValue == unlimitedText) ? VK_DOWN : VK_HOME;
     const std::wstring targetComboValue  = (initialComboValue == unlimitedText) ? oneMiBText : unlimitedText;
@@ -622,6 +690,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Preferences shell Cancel action did not discard the File Operations combo mutation before the page was reopened.");
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences shell Cancel action did not discard the File Operations edit mutation before the page was reopened.");
+    state.Require(waitForComboValue(parallelName, L"6") && g_settings.fileOperations->maxParallelTransfers == 6u &&
+                      FileOperations::GetSharedParallelTransferLimit() == 6u,
+                  L"Cancel must discard the unapplied parallel limit while retaining the last successfully applied value.");
 
     snapshot = {};
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after File Operations live interaction validation.");
@@ -1558,10 +1629,12 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"auto-dismiss success toggle");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::ShowInformationalNotesToggle, L"show informational notes toggle");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle, L"mirror decisions in pane toggle");
+    sendTab(false, PreferencesFileOperationsDebugFocusTarget::ParallelTransfersCombo, L"shared parallel-transfer limit");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"bridge buffer field");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle, L"wrapped verification toggle");
 
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"reverse bridge buffer field");
+    sendTab(true, PreferencesFileOperationsDebugFocusTarget::ParallelTransfersCombo, L"reverse shared parallel-transfer limit");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle, L"reverse mirror decisions in pane toggle");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::ShowInformationalNotesToggle, L"reverse show informational notes toggle");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"reverse auto-dismiss success toggle");

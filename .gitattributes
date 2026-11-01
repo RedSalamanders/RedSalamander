@@ -3,6 +3,10 @@
 ###############################################################################
 * text=auto
 
+# Identity-interlock waiting regression captures and measured source bytes.
+/Specs/TestRuns/Local-x64/FileOps/2026-10-31_IdentityInterlockWaiting/** -text -whitespace
+/Specs/TestRuns/Local-x64/FileOps/2026-11-01_SharedParallelTransfers/** -text -whitespace
+
 # Immutable client inputs and imported patch context retain their original bytes.
 ThirdParty/RedMonitor/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 

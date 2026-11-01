@@ -1,0 +1,36 @@
+{
+  "kind": "auxiliary-source-only-pester-recheck",
+  "run_id": "20261101T011829Z-82348-b6bb618e42f24767ada4c8cd3aba3f1a",
+  "repo_root": "Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031",
+  "engine_commit": "c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c",
+  "pester_version": "3.4.0",
+  "excludes": [
+    "RequiresBuildToolchain"
+  ],
+  "results": [
+    {
+      "Script": "BuildReproducibility.Tests.ps1",
+      "Total": 23,
+      "Passed": 23,
+      "Failed": 0,
+      "Skipped": 0,
+      "Failures": []
+    },
+    {
+      "Script": "ReleaseWorkflowPolicy.Tests.ps1",
+      "Total": 45,
+      "Passed": 44,
+      "Failed": 1,
+      "Skipped": 0,
+      "Failures": [
+        {
+          "Name": "qualifies the admitted Ghostty product and portable package on native ARM64",
+          "Describe": "Release workflow source contracts",
+          "StackTrace": "at line: 986 in Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031\\Tools\\Tests\\ReleaseWorkflowPolicy.Tests.ps1\n986:         $ghosttyProductWorkflow | Should Match \"Get-Content -LiteralPath \\.\\\\vcpkg\\.json -Raw\"\r",
+          "MessageExcerpt": "Expected: {name: Ghostty Runtime Product Qualification\r\n\r\n\"on\":\r\n  workflow_call:\r\n    inputs:\r\n      build_number:\r\n        description: Positive build number used for both build receipts and package identity\r\n        required: true\r\n        type: string\r\n  workflow_dispatch:\r\n    inputs:\r\n      build_number:\r\n        description: Positive build number used for both build receipts and package identity\r\n        required: true\r\n        default: \"1\"\r\n        type: string\r\n\r\npermissions:\r\n  contents: read\r\n\r\nconcurrency:\r\n  group: ghostty-product-native-${{ github.ref }}-${{ inputs.build_number }}\r\n  cancel-in-progress: false\r\n\r\njobs:\r\n  qualify-arm64-product:\r\n    name: Native ARM64 admitted-product qualification\r\n    runs-on: windows-11-vs2026-arm\r\n    timeout-minutes: 240\r\n\r\n    steps:\r\n  "
+        }
+      ]
+    }
+  ],
+  "qualification": "Source-only recheck; does not replace or promote the original PR suite result."
+}

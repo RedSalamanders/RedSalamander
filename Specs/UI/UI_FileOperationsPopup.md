@@ -1267,12 +1267,23 @@ indeterminate while any included total is open, even when other active tasks hav
 
 Waiting Copy/Move cards show their operation/selection, the static Waiting chip, source and fixed
 destination paths, and applicable Start now / queue order / limit / cancel actions. While queued,
-waiting on another operation or queue-paused, they expose no Counting text, Written: 0 B,
+waiting on another operation or queue-paused, they expose no Skip counting action, Counting text, Written: 0 B,
 transfer amounts, percentages, ETA, concurrency, discovery indicator, source-row mini-bar,
 whole-task progress bar/marquee or throughput graph, in either pixels or hosted accessibility.
 Retained scan/stream facts do not override this state. Layout reserves only rows actually painted,
 with the ordinary content/action gap. Running/discovery and manual-pause presentation resumes
 normally when eligible. No waiting animation or repeated unchanged live announcement is allowed.
+
+When an identity-unavailable conflict blocks admission, a measured, wrapped sentence explains
+that file IDs are unavailable for this operation and it must run separately. Capacity waits say
+`Waiting for a transfer slot. The shared limit is {0}.` using the live configured target. Exclusive
+admission waits say `Waiting for an operation that must run separately.` Their complete localized
+text is exposed through the task-owned `WaitingReason` accessibility region. These cards omit
+Start now and Skip counting: releasing a user queue preference cannot bypass capacity or a safety
+interlock. A direct Start now request preserves the actual wait until admission or cancellation;
+it never exposes Running, Counting or zero-byte progress while the worker still waits.
+Overlap questions for two Copy/Move jobs offer Queue and Don't start; they withhold Run at the
+same time. Other operation-family consent rules continue to use their existing safety policy.
 
 The no-activation `FileOps_ReviewRemediationContracts` fixture exercises these waiting surfaces
 through the production painter and hosted accessibility regions, including running-to-waiting

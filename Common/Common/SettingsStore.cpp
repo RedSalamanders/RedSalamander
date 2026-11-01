@@ -3813,6 +3813,11 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     GetBool(fileOperations, "diagnosticsInfoEnabled", settings.diagnosticsInfoEnabled);
     GetBool(fileOperations, "diagnosticsDebugEnabled", settings.diagnosticsDebugEnabled);
 
+    uint32_t maxParallelTransfers = settings.maxParallelTransfers;
+    if (GetUInt32(fileOperations, "maxParallelTransfers", maxParallelTransfers))
+    {
+        settings.maxParallelTransfers = std::clamp(maxParallelTransfers, 1u, 16u);
+    }
     uint32_t crossFsBridgeBufferSizeKB = settings.crossFsBridgeBufferSizeKB;
     if (GetUInt32(fileOperations, "crossFsBridgeBufferSizeKB", crossFsBridgeBufferSizeKB))
     {
@@ -5520,7 +5525,8 @@ bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOpera
     return fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.showInformationalNotes != defaults.showInformationalNotes ||
            fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.popupFooterOnly != defaults.popupFooterOnly ||
            fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.popupThroughputExpanded != defaults.popupThroughputExpanded ||
-           fileOperations.verifyAfterCopy != defaults.verifyAfterCopy || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+           fileOperations.verifyAfterCopy != defaults.verifyAfterCopy || fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
+           fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
            fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
            fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
@@ -8072,6 +8078,10 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                 yyjson_mut_obj_add_bool(doc, fileOperations, "verifyAfterCopy", settings.fileOperations->verifyAfterCopy);
             }
 
+            if (settings.fileOperations->maxParallelTransfers != defaults.maxParallelTransfers)
+            {
+                yyjson_mut_obj_add_uint(doc, fileOperations, "maxParallelTransfers", std::clamp(settings.fileOperations->maxParallelTransfers, 1u, 16u));
+            }
             if (settings.fileOperations->crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB)
             {
                 yyjson_mut_obj_add_uint(

@@ -369,9 +369,10 @@ private:
     bool _autoDismiss                             = false;
 };
 
-// One Copy of the corpus folder into `destinationParent` (Verify off), timed from admission to the
-// retired task, on the Local provider's own route or, with `bridgeRoute`, through the host bridge (the
-// same provider instance named as the destination). The destination copy is removed afterwards.
+// Copy the corpus (Verify off), timed from admission to the retired task. A provider-owned
+// control selects its directory root: new regular-file selections now deliberately use the
+// shared-permit host bridge, even without an explicit destination provider. The explicit
+// bridge control selects the regular files. Both validate the same corpus payload afterwards.
 [[nodiscard]] std::optional<ThroughputSample> RunThroughputCopy(SelfTestState& state,
                                                                 FolderWindow::FileOperationState* operations,
                                                                 ThroughputCaseScope& scope,
@@ -390,20 +391,23 @@ private:
     }
     const auto removeCopy = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(destinationParent)); });
 
-    const auto startedAt = std::chrono::steady_clock::now();
-    const auto admitted  = StartFileOperationAndGetId(operations,
-                                                      FILESYSTEM_COPY,
-                                                      FolderWindow::Pane::Left,
-                                                      FolderWindow::Pane::Right,
-                                                      state.fsLocal,
-                                                      ThroughputCorpusFiles(corpusFolder, corpus),
-                                                      destinationParent,
-                                                      FILESYSTEM_FLAG_RECURSIVE,
-                                                      false,
-                                                      0u,
-                                                      FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                      false,
-                                                      bridgeRoute ? state.fsLocal : nullptr);
+    const std::vector<std::filesystem::path> sources =
+        bridgeRoute ? ThroughputCorpusFiles(corpusFolder, corpus) : std::vector<std::filesystem::path>{corpusFolder};
+    const std::filesystem::path copiedCorpus = bridgeRoute ? destinationParent : destinationParent / corpusFolder.filename();
+    const auto startedAt                     = std::chrono::steady_clock::now();
+    const auto admitted                      = StartFileOperationAndGetId(operations,
+                                                                          FILESYSTEM_COPY,
+                                                                          FolderWindow::Pane::Left,
+                                                                          FolderWindow::Pane::Right,
+                                                                          state.fsLocal,
+                                                                          sources,
+                                                                          destinationParent,
+                                                                          FILESYSTEM_FLAG_RECURSIVE,
+                                                                          false,
+                                                                          0u,
+                                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                          false,
+                                                                          bridgeRoute ? state.fsLocal : nullptr);
     if (! admitted.has_value())
     {
         failure = std::format(L"{}: the Copy was not admitted", target);
@@ -421,7 +425,7 @@ private:
         return std::nullopt;
     }
     const CompletedTaskInfo& info = state.completedTasks.at(taskId);
-    if (info.hr != S_OK || ! ThroughputCopyComplete(destinationParent, corpus))
+    if (info.hr != S_OK || ! ThroughputCopyComplete(copiedCorpus, corpus))
     {
         failure = std::format(L"{}: the Copy did not publish the whole corpus (hr=0x{:08X})", target, static_cast<unsigned long>(info.hr));
         return std::nullopt;
@@ -1375,7 +1379,7 @@ private:
 // R10.5: the native route's concurrency budget toward the loopback alias of the case root. The two
 // sides report different storage preferences; with the destination consulted (R10.3 candidate c) the
 // budget is min(source, destination) and records the destination's storage kind, as the bridge does;
-// without it the source alone sets the budget, as it always did.
+// without it the source sets the storage budget. Both also obey the shared transfer cap.
 [[nodiscard]] ThroughputCaseResult RunFileOpsSmbNativeRouteConcurrencyBudgetChecks(SelfTestState& state) noexcept
 {
     auto* folder     = TryGetFolderWindow(state.mainWindow);
@@ -1414,9 +1418,12 @@ private:
         unsigned int budget      = 0u;
         uint32_t destinationKind = FILESYSTEM_STORAGE_UNKNOWN;
     };
+    const unsigned int sharedLimit = FileOperations::GetSharedParallelTransferLimit();
     const std::array<BudgetExpectation, 2> expectations{{
-        {{L"base", FILESYSTEM_TRANSFER_TUNING_NONE}, kSourcePreferred, FILESYSTEM_STORAGE_UNKNOWN},
-        {{L"c", FILESYSTEM_TRANSFER_TUNING_DESTINATION_CONCURRENCY}, std::min(kSourcePreferred, kDestinationPreferred), FILESYSTEM_STORAGE_NETWORK_SHARE},
+        {{L"base", FILESYSTEM_TRANSFER_TUNING_NONE}, std::min(kSourcePreferred, sharedLimit), FILESYSTEM_STORAGE_UNKNOWN},
+        {{L"c", FILESYSTEM_TRANSFER_TUNING_DESTINATION_CONCURRENCY},
+         std::min({kSourcePreferred, kDestinationPreferred, sharedLimit}),
+         FILESYSTEM_STORAGE_NETWORK_SHARE},
     }};
     ThroughputCaseScope scope(state, operations);
     EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
@@ -1545,12 +1552,12 @@ private:
         return {.reason = std::format(L"the Move did not move the corpus (hr=0x{:08X})", static_cast<unsigned long>(info.hr))};
     if (! managed)
         return {.reason = L"the Move did not run as a Managed Move (host bridge): the fixture no longer exercises a same-provider bridge route"};
-    if (info.configuredMaxConcurrency != std::min(kSourcePreferred, kDestinationPreferred) ||
-        info.autoConcurrencyDestinationStorageKind != FILESYSTEM_STORAGE_NETWORK_SHARE)
+    const unsigned int expectedBudget = std::min({kSourcePreferred, kDestinationPreferred, FileOperations::GetSharedParallelTransferLimit()});
+    if (info.configuredMaxConcurrency != expectedBudget || info.autoConcurrencyDestinationStorageKind != FILESYSTEM_STORAGE_NETWORK_SHARE)
         return {.reason = std::format(L"the Managed Move ran with budget {} and destination storage kind {} (expected {} and {})",
                                       info.configuredMaxConcurrency,
                                       info.autoConcurrencyDestinationStorageKind,
-                                      std::min(kSourcePreferred, kDestinationPreferred),
+                                      expectedBudget,
                                       static_cast<uint32_t>(FILESYSTEM_STORAGE_NETWORK_SHARE))};
     if (info.progressStallSide != StallSide::Destination)
         return {.reason = std::format(L"a stall of the Managed Move would be named after side {} (expected the destination, {})",

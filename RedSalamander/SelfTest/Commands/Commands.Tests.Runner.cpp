@@ -2,6 +2,8 @@
 
 #ifdef ENABLE_TESTS
 
+#include <DxUi/NativeMenuInterop.h>
+
 #include "Common.Tests.PerfJsonl.h"
 #include "Framework.h"
 #include "NaturalSort.h"

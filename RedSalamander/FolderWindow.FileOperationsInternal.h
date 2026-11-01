@@ -24,6 +24,7 @@ namespace FileOperations
 {
 inline constexpr ULONGLONG kTaskCardRevealDelayMs         = 500u;
 inline constexpr ULONGLONG kInlineRenameCardRevealDelayMs = kTaskCardRevealDelayMs;
+[[nodiscard]] uint32_t GetSharedParallelTransferLimit() noexcept;
 
 enum class ConflictActionPlacement : uint8_t
 {
@@ -270,9 +271,14 @@ struct MutationInterlockScope
     std::vector<MutationInterlockAnchor> anchors;
     MutationInterlockAccess access = MutationInterlockAccess::WriteSource;
     bool exactDeleteAuthority      = false;
-    // Exact identity is explicitly unsupported. Such a scope conflicts conservatively with every
-    // mutation scope in the same provider identity domain; it is never treated as path-only proof.
+    // Exact identity is explicitly unsupported. Keep domain-wide serialization unless both
+    // scopes qualify for distinct new-file admission below. Namespace keys never grant object authority.
     bool conservativeIdentityDomain = false;
+    // Automatic concurrency is limited to new regular-file leaves, prepared from a bound
+    // regular source and a Missing destination. Existing names and trees never qualify.
+    bool independentNewFileTransfer = false;
+    std::optional<std::wstring> independentParentKey;
+    std::optional<std::wstring> independentPathKey;
     // C10: the identity a provider without object binding resolved for this root while the task
     // prepared; the card's re-check and the delete compare the live identity with it.
     std::optional<FileSystemDeleteIdentity> pinnedDeleteIdentity;
@@ -1281,6 +1287,9 @@ struct FolderWindow::FileOperationState
         std::shared_ptr<const MutationInterlockScopes> scopes;
         MutationInterlockRelations relations;
         bool publishesUnderWriteSourceScopes = false;
+        bool parallelNewFiles                = false;
+        bool isTransfer                      = false;
+        bool hasDataTransfers                = false;
     };
 
     struct AdmissionDestinationInputs final
@@ -2139,6 +2148,10 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _hasPublishedLiveOutput{false};
         std::atomic<bool> _liveOutputIndexOverflowed{false};
         std::atomic<bool> _waitingInQueue{false};
+        // Presentation only; immutable scope interlocks remain the admission authority.
+        std::atomic<bool> _waitingForIdentityInterlock{false};
+        std::atomic<bool> _waitingForParallelTransferSlot{false};
+        std::atomic<bool> _waitingForExclusiveTransfer{false};
         // Stable engine-owned ordering for tasks that have not entered the operation.
         // Popup reorder commands swap these keys and then reorder the wait deque.
         std::atomic<uint64_t> _queueOrderKey{0};
@@ -2772,11 +2785,12 @@ struct FolderWindow::FileOperationState
         uint64_t latestQueueOrderKey = 0u;
         // I35 R7.3: an overlapping pair involves a delete by name. That delete deletes exactly the tree
         // it pinned, so the two tasks never run at the same time.
-        bool byNameDelete = false;
+        bool byNameDelete        = false;
+        bool serializedTransfers = false;
 
         [[nodiscard]] bool CanRunConcurrently() const noexcept
         {
-            return ! byNameDelete && ! relationOverflow && relationCount > 0u;
+            return ! byNameDelete && ! serializedTransfers && ! relationOverflow && relationCount > 0u;
         }
     };
     struct ActiveMutationInterlock final
@@ -2791,7 +2805,8 @@ struct FolderWindow::FileOperationState
     [[nodiscard]] static bool MutationInterlocksPermit(uint64_t taskId,
                                                        const MutationInterlockAdmission& candidate,
                                                        std::span<const ActiveMutationInterlock> active,
-                                                       uint64_t& comparisons) noexcept;
+                                                       uint64_t& comparisons,
+                                                       bool* identityUnavailable = nullptr) noexcept;
     [[nodiscard]] static bool HasConcurrentPublisherConsent(const MutationInterlockAdmission& candidate, const ActiveMutationInterlock& publisher) noexcept;
     void PublishPreparedMutationInterlock(Task& task) noexcept;
     void PublishMutationInterlockDecision(Task& task, MutationInterlockRelations relations) noexcept;
@@ -2834,6 +2849,20 @@ struct FolderWindow::FileOperationState
     static constexpr UINT kCompletionRecoveryHeartbeatMs     = 100u;
     static constexpr UINT kCompletionRecoveryIdleHeartbeatMs = 1000u;
     [[nodiscard]] HRESULT ArmCompletionRecoveryTimer() noexcept;
+
+#ifdef ENABLE_TESTS
+    [[nodiscard]] static bool DebugValidateInterlockWaitingPresentationForSelfTest(std::wstring& failure) noexcept;
+    [[nodiscard]] static bool DebugValidateSharedTransferAdmissionsForSelfTest(std::wstring& failure) noexcept;
+    [[nodiscard]] static bool DebugValidateSharedTransferBudgetForSelfTest(std::wstring& failure) noexcept;
+    [[nodiscard]] static bool DebugRunSharedTransfersForSelfTest(IFileSystem* fileSystem,
+                                                                 std::span<const std::filesystem::path> sources,
+                                                                 const std::filesystem::path& destination,
+                                                                 FileSystemOperation operation,
+                                                                 uint32_t limit,
+                                                                 size_t filesPerJob,
+                                                                 bool cancelLast,
+                                                                 std::wstring& failure) noexcept;
+#endif
 
 private:
     struct PendingConflictInspection

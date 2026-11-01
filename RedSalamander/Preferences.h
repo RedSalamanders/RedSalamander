@@ -185,6 +185,7 @@ enum class PreferencesFileOperationsDebugFocusTarget : uint8_t
     AutoDismissSuccessToggle,
     ShowInformationalNotesToggle,
     MirrorDecisionsInPaneToggle,
+    ParallelTransfersCombo,
     BridgeBufferEdit,
 };
 

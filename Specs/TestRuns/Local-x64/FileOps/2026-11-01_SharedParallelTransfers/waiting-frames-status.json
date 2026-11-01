@@ -1,0 +1,6 @@
+{
+  "metric": "FileOps.Popup.WaitingCard.FrameUs",
+  "fail_on_quality": true,
+  "exit_code": 0,
+  "native_run": "20261101T005245Z-81876-5d96eb249d5142babc1ca5f85060a9c6"
+}

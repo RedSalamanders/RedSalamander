@@ -1478,6 +1478,7 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
     const bool hasNonDefault =
         fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.showInformationalNotes != defaults.showInformationalNotes ||
         fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+        fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
         fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
         fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
         fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||

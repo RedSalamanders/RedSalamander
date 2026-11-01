@@ -11991,10 +11991,9 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
 case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // R4-A02-2: start one throttled Local Copy, then explicitly Run a second Copy whose publish
-    // scope is the same destination subtree. The second task bypasses only the disclosed active
-    // relation, both tasks are admitted at once, and disjoint members from both immutable result
-    // sets reach the destination without disabling ordinary per-item policy.
+    // Keep the historical case ID for exact-filter callers. Transfer conflicts now offer
+    // Queue and Cancel; the former Run choice must not bypass serialization. Both complete
+    // result sets must survive, and an independent third job still receives its own question.
     const std::filesystem::path rootA                             = state.tempRoot / L"r4a02-run-a";
     const std::filesystem::path rootB                             = state.tempRoot / L"r4a02-run-b";
     const std::filesystem::path rootC                             = state.tempRoot / L"r4a02-run-c";
@@ -12039,7 +12038,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
             Fail(L"R4A02 Run concurrent could not stage the undisclosed third task.");
             return true;
         }
-        state.r4a02ConcurrentAdmissionObserved = false;
+        state.r4a02SerializedAdmissionObserved = false;
         state.taskC.reset();
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
@@ -12107,14 +12106,14 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->overlapTaskId != state.taskA.value() ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->defaultAction != Task::ConflictAction::Proceed ||
             prompt->escapeAction != Task::ConflictAction::Cancel)
         {
-            Fail(L"R4A02 Run concurrent warning must offer Queue (default), Run, and Don't start for the named active task.");
+            Fail(L"Conflicting transfer admission must offer Queue (default) and Don't start, with no Run bypass.");
             return true;
         }
-        second->DebugSubmitCurrentConflictDecision(Task::ConflictAction::RunConcurrently, false);
+        second->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
         state.stepState = 3u;
         return false;
     }
@@ -12124,22 +12123,24 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     if (first != nullptr && second != nullptr && first->HasEnteredOperation() && second->HasEnteredOperation() &&
         ! state.completedTasks.contains(state.taskA.value()) && ! state.completedTasks.contains(state.taskB.value()))
     {
-        state.r4a02ConcurrentAdmissionObserved = true;
+        Fail(L"Conflicting transfer jobs must never enter execution simultaneously.");
+        return true;
     }
-    if (state.stepState == 3u && state.r4a02ConcurrentAdmissionObserved)
+    if (state.stepState == 3u && first != nullptr && first->HasEnteredOperation() && second != nullptr && second->IsWaitingInQueue())
     {
-        state.taskC = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceC},
-                                                 destination,
-                                                 FILESYSTEM_FLAG_RECURSIVE,
-                                                 false,
-                                                 0u,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false);
+        state.r4a02SerializedAdmissionObserved = true;
+        state.taskC                            = StartFileOperationAndGetId(state.fileOps,
+                                                                            FILESYSTEM_COPY,
+                                                                            FolderWindow::Pane::Left,
+                                                                            FolderWindow::Pane::Right,
+                                                                            state.fsLocal,
+                                                                            {sourceC},
+                                                                            destination,
+                                                                            FILESYSTEM_FLAG_RECURSIVE,
+                                                                            false,
+                                                                            0u,
+                                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                            false);
         if (! state.taskC.has_value())
         {
             Fail(L"R4A02 Run concurrent could not start the undisclosed third task.");
@@ -12163,7 +12164,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
         }
         const bool namesDisclosedTask = prompt->overlapTaskId == state.taskA.value() || prompt->overlapTaskId == state.taskB.value();
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! namesDisclosedTask ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently))
+            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently))
         {
             Fail(L"R4A02 Run concurrent third task did not receive an independent warning naming an active task.");
             return true;
@@ -12183,12 +12184,12 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     const bool outputsPresent =
         std::filesystem::exists(destination / L"shared" / L"a000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"a399.bin", outputEc) &&
         std::filesystem::exists(destination / L"shared" / L"b000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"b399.bin", outputEc);
-    if (! state.r4a02ConcurrentAdmissionObserved || FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
-        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || completedB->second.interlockWaitCount != 0u || ! outputsPresent)
+    if (! state.r4a02SerializedAdmissionObserved || FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
+        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! outputsPresent)
     {
-        Fail(std::format(L"R4A02 Run concurrent must admit both disclosed tasks and retain both result sets "
+        Fail(std::format(L"Conflicting transfers must run in order and retain both result sets "
                          L"(observed={}, A=0x{:08X}, B=0x{:08X}, C=0x{:08X}, B waits={}, outputs={}).",
-                         state.r4a02ConcurrentAdmissionObserved,
+                         state.r4a02SerializedAdmissionObserved,
                          static_cast<unsigned long>(completedA->second.hr),
                          static_cast<unsigned long>(completedB->second.hr),
                          static_cast<unsigned long>(completedC->second.hr),

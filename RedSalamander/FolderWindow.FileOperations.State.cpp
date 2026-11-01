@@ -52,6 +52,7 @@
 
 #ifdef ENABLE_TESTS
 #include "Common.Tests.SandboxPath.h"
+#include <semaphore>
 namespace
 {
 } // namespace
@@ -3762,6 +3763,8 @@ public:
     {
         CopyMove,
         Delete,
+        SharedTransfer,
+        ExclusiveTransfer,
     };
 
     class Permit final
@@ -3836,6 +3839,106 @@ public:
         return Acquire(connectionId, Kind::Delete, max, std::forward<CancelPredicate>(shouldCancel));
     }
 
+    // Process-wide file budget shares the existing RAII/cancellation owner with connection
+    // permits. Provider-owned calls reserve the budget exclusively because their internal
+    // files cannot individually acquire host permits; their options carry the same cap.
+    void ConfigureSharedTransfers(uint32_t limit) noexcept
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            _sharedTransferLimit.store(std::clamp(limit, 1u, 16u), std::memory_order_release);
+        }
+        _cv.notify_all();
+    }
+
+    [[nodiscard]] uint32_t SharedTransferLimit() const noexcept
+    {
+        return _sharedTransferLimit.load(std::memory_order_acquire);
+    }
+
+#ifdef ENABLE_TESTS
+    struct TransferSnapshot final
+    {
+        uint32_t shared           = 0u;
+        uint32_t waitingShared    = 0u;
+        uint32_t waitingExclusive = 0u;
+        uint32_t peak             = 0u;
+        unsigned int paused       = 0u;
+        bool exclusive            = false;
+    };
+    [[nodiscard]] TransferSnapshot DebugTransfers() noexcept
+    {
+        std::scoped_lock lock(_mutex);
+        return {_sharedTransfers,
+                _debugWaitingSharedTransfers,
+                _waitingExclusiveTransfers,
+                _debugPeakTransfers,
+                _debugTransferPause.activeWaiters.load(std::memory_order_acquire),
+                _exclusiveTransfer};
+    }
+    void DebugPauseTransfers(bool enabled) noexcept
+    {
+        std::scoped_lock lock(_mutex);
+        if (enabled)
+            _debugPeakTransfers = _sharedTransfers;
+        _debugTransferPause.Set(enabled);
+    }
+#endif
+
+    template <typename CancelPredicate> [[nodiscard]] Permit AcquireTransfer(bool exclusive, CancelPredicate&& shouldCancel) noexcept
+    {
+        const uint64_t startedUs = PerfNowUs();
+        uint32_t reserved        = 0u;
+        uint32_t limit           = 0u;
+        {
+            std::unique_lock lock(_mutex);
+            if (exclusive)
+                ++_waitingExclusiveTransfers;
+#ifdef ENABLE_TESTS
+            else
+                ++_debugWaitingSharedTransfers;
+#endif
+            const auto retireWaiter = wil::scope_exit([&]() noexcept
+            {
+                if (exclusive)
+                    --_waitingExclusiveTransfers;
+#ifdef ENABLE_TESTS
+                else
+                    --_debugWaitingSharedTransfers;
+#endif
+                _cv.notify_all();
+            });
+            for (;;)
+            {
+                if (shouldCancel())
+                    return {};
+                limit = SharedTransferLimit();
+                if (! _exclusiveTransfer && (exclusive ? _sharedTransfers == 0u : _waitingExclusiveTransfers == 0u && _sharedTransfers < limit))
+                {
+                    if (exclusive)
+                        _exclusiveTransfer = true;
+                    else
+                        ++_sharedTransfers;
+#ifdef ENABLE_TESTS
+                    _debugPeakTransfers = std::max(_debugPeakTransfers, _sharedTransfers);
+#endif
+                    reserved = exclusive ? limit : _sharedTransfers;
+                    break;
+                }
+                _cv.wait_for(lock, std::chrono::milliseconds(100));
+            }
+        }
+        if (Debug::Perf::IsCaptureEnabled())
+            Debug::Perf::Emit(L"FileOps.SharedTransfers.AcquireUs", exclusive ? L"exclusive" : L"shared", PerfElapsedUs(startedUs), reserved, limit, S_OK);
+        Permit permit(this, {}, exclusive ? Kind::ExclusiveTransfer : Kind::SharedTransfer);
+#ifdef ENABLE_TESTS
+        _debugTransferPause.Pause(15'000u);
+        if (shouldCancel())
+            return {};
+#endif
+        return permit;
+    }
+
 private:
     struct Entry final
     {
@@ -3848,6 +3951,16 @@ private:
     void Release(const std::wstring& connectionId, Kind kind) noexcept
     {
         std::lock_guard lock(_mutex);
+
+        if (kind == Kind::SharedTransfer || kind == Kind::ExclusiveTransfer)
+        {
+            if (kind == Kind::ExclusiveTransfer)
+                _exclusiveTransfer = false;
+            else if (_sharedTransfers != 0u)
+                --_sharedTransfers;
+            _cv.notify_all();
+            return;
+        }
 
         const auto it = _entries.find(connectionId);
         if (it == _entries.end())
@@ -3920,6 +4033,15 @@ private:
     std::mutex _mutex;
     std::condition_variable _cv;
     std::unordered_map<std::wstring, Entry> _entries;
+    std::atomic<uint32_t> _sharedTransferLimit{4u};
+#ifdef ENABLE_TESTS
+    uint32_t _debugWaitingSharedTransfers = 0u;
+    uint32_t _debugPeakTransfers          = 0u;
+    SelfTestPausePoint _debugTransferPause;
+#endif
+    uint32_t _sharedTransfers           = 0u;
+    uint32_t _waitingExclusiveTransfers = 0u;
+    bool _exclusiveTransfer             = false;
 };
 
 ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
@@ -10243,7 +10365,32 @@ public:
 
     HRESULT AppendTransfer(const FileOperations::TransferPlan& typedPlan, IFileSystem* sourceFileSystem, IFileSystem* destinationFileSystem) noexcept
     {
-        HRESULT hr = S_OK;
+        HRESULT hr       = S_OK;
+        bool independent = ! typedPlan.selectedItems.empty() && typedPlan.selectedItems.size() <= kMaxIndexedEntries - _independentEntries &&
+                           typedPlan.strategy != FileOperations::OperationStrategy::Native &&
+                           FileOperations::IsLocalFileSystemEndpoint(typedPlan.sourceEndpoint) &&
+                           FileOperations::IsLocalFileSystemEndpoint(typedPlan.destinationEndpoint);
+        std::vector<std::optional<std::wstring>> parentKeys;
+        std::vector<std::optional<std::wstring>> destinationKeys;
+        std::vector<std::optional<std::wstring>> sourceKeys;
+        size_t keyBytes       = 0u;
+        const auto prepareKey = [&](const FileSystemPathIdentity& identity, std::wstring_view path) noexcept -> std::optional<std::wstring>
+        {
+            auto key = TryMakePathKey(identity, path);
+            if (! key.has_value())
+                return std::nullopt;
+            const size_t bytes = (key.value().capacity() + 1u) * sizeof(wchar_t);
+            if (bytes > kMaxIndexedKeyBytes - _independentKeyBytes - keyBytes)
+                return std::nullopt;
+            keyBytes += bytes;
+            return key;
+        };
+        if (independent)
+        {
+            parentKeys.reserve(typedPlan.selectedItems.size());
+            destinationKeys.reserve(typedPlan.selectedItems.size());
+            sourceKeys.reserve(typedPlan.selectedItems.size());
+        }
         for (size_t sourceIndex = 0u; sourceIndex < typedPlan.selectedItems.size(); ++sourceIndex)
         {
             std::wstring destinationLeaf;
@@ -10251,15 +10398,29 @@ public:
             {
                 return E_INVALIDARG;
             }
+            RootBindingFacts destinationBinding{};
             hr = Add(destinationFileSystem,
                      typedPlan.destinationEndpoint,
                      destinationLeaf,
                      FileOperations::MutationInterlockAccess::PublishDestination,
                      false,
-                     false);
+                     false,
+                     &destinationBinding);
             if (FAILED(hr))
             {
                 return hr;
+            }
+            independent = independent && destinationBinding.attempted && destinationBinding.state == FileOperations::ObjectBindingState::Missing;
+            if (independent)
+            {
+                std::wstring parent;
+                std::optional<std::wstring> parentKey;
+                if (TryGetFileSystemParentPath(typedPlan.destinationEndpoint.pathIdentity.value(), destinationLeaf, parent))
+                    parentKey = prepareKey(typedPlan.destinationEndpoint.pathIdentity.value(), parent);
+                independent = parentKey.has_value();
+                parentKeys.push_back(std::move(parentKey));
+                destinationKeys.push_back(prepareKey(typedPlan.destinationEndpoint.pathIdentity.value(), destinationLeaf));
+                independent = independent && destinationKeys.back().has_value();
             }
         }
         const FileOperations::MutationInterlockAccess sourceAccess =
@@ -10273,12 +10434,53 @@ public:
             {
                 return hr;
             }
+            const auto sourceScope = FindScope(BucketFor(typedPlan.sourceEndpoint), typedPlan.sourceEndpoint, item.providerPath, false);
+            independent            = independent && sourceScope != scopes.end() && ! sourceScope->conservativeIdentityDomain && sourceScope->root &&
+                                     sourceScope->root->retained.authority.kind == FILESYSTEM_BOUND_REGULAR_FILE;
+            if (independent)
+            {
+                sourceKeys.push_back(prepareKey(typedPlan.sourceEndpoint.pathIdentity.value(), item.providerPath));
+                independent = sourceKeys.back().has_value();
+            }
         }
+        if (independent)
+        {
+            _independentKeyBytes += keyBytes;
+            _independentEntries += typedPlan.selectedItems.size();
+            for (size_t index = 0u; index < typedPlan.selectedItems.size(); ++index)
+            {
+                const auto source =
+                    FindScope(BucketFor(typedPlan.sourceEndpoint), typedPlan.sourceEndpoint, typedPlan.selectedItems[index].providerPath, false);
+                std::wstring destinationPath;
+                if (! FileOperations::TryResolveTransferDestinationProviderPath(typedPlan, index, destinationPath))
+                    return E_INVALIDARG;
+                const auto destination = FindScope(BucketFor(typedPlan.destinationEndpoint), typedPlan.destinationEndpoint, destinationPath, false);
+                if (source == scopes.end() || destination == scopes.end())
+                    return E_UNEXPECTED;
+                source->independentNewFileTransfer      = true;
+                destination->independentNewFileTransfer = true;
+                destination->independentParentKey       = std::move(parentKeys[index]);
+                destination->independentPathKey         = std::move(destinationKeys[index]);
+                source->independentPathKey              = std::move(sourceKeys[index]);
+            }
+        }
+        else
+            _nonIndependentTransfer = true;
         return S_OK;
     }
 
     HRESULT Finish(FileSystemOperation operation, HRESULT hr) noexcept
     {
+        if (_nonIndependentTransfer)
+        {
+            for (auto& scope : scopes)
+            {
+                scope.independentNewFileTransfer = false;
+                scope.independentParentKey.reset();
+                scope.independentPathKey.reset();
+            }
+            _independentKeyBytes = _independentEntries = 0u;
+        }
         if (SUCCEEDED(hr))
         {
             std::ranges::sort(scopes,
@@ -10301,6 +10503,7 @@ public:
                           hr);
         Debug::Perf::Emit(L"FileOps.Interlock.PrepareLookupChecks", OperationToString(operation), 0u, _scopePredicateChecks, _authorityPredicateChecks, hr);
         Debug::Perf::Emit(L"FileOps.Interlock.PrepareIndexStorage", OperationToString(operation), 0u, _indexedKeyBytes, _indexedEntries, hr);
+        Debug::Perf::Emit(L"FileOps.Interlock.NewFileKeyBytes", OperationToString(operation), 0u, _independentKeyBytes, _independentEntries, hr);
         Debug::Perf::Emit(L"FileOps.Interlock.ScopeCount",
                           L"read-source",
                           0u,
@@ -10333,6 +10536,9 @@ private:
     static constexpr size_t kMaxIndexedKeyBytes = 16u * 1024u * 1024u;
     size_t _indexedEntries                      = 0u;
     size_t _indexedKeyBytes                     = 0u;
+    size_t _independentKeyBytes                 = 0u;
+    size_t _independentEntries                  = 0u;
+    bool _nonIndependentTransfer                = false;
     PathBucket _uncachedBucket{.unkeyableScope = true, .unkeyableAuthority = true};
     bool _unindexedContracts           = false;
     uint64_t _scopePredicateChecks     = 0u;
@@ -10985,8 +11191,20 @@ void FolderWindow::FileOperationState::Task::InstallPreparedMutationInterlockSco
     admission->key                             = _admissionKey.load(std::memory_order_acquire);
     admission->scopes                          = std::make_shared<const MutationInterlockScopes>(std::move(scopes));
     admission->publishesUnderWriteSourceScopes = publishesUnderWriteSourceScopes;
-    auto selected                              = std::make_shared<SelectedAdmissionView>(*LoadSelectedAdmission());
-    selected->interlock                        = std::move(admission);
+    admission->parallelNewFiles = ! admission->scopes->empty() && ! publishesUnderWriteSourceScopes &&
+                                  std::ranges::all_of(*admission->scopes, [](const auto& scope) noexcept { return scope.independentNewFileTransfer; });
+    admission->isTransfer       = _operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE;
+    auto selected               = std::make_shared<SelectedAdmissionView>(*LoadSelectedAdmission());
+    // Native-only Move is a rename/rename-merge: it cannot fall back to copying bytes.
+    // It still participates in every path/object conflict, but consumes no data capacity.
+    admission->hasDataTransfers = _operation == FILESYSTEM_COPY || (_operation == FILESYSTEM_MOVE && (! selected->plans || selected->plans->empty() ||
+                                                                                                      std::ranges::any_of(*selected->plans,
+                                                                                                                          [](const auto& plan) noexcept
+    {
+        const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
+        return ! transfer || transfer->strategy != FileOperations::OperationStrategy::Native;
+    })));
+    selected->interlock         = std::move(admission);
     _selectedAdmission.store(std::move(selected), std::memory_order_release);
     const uint64_t ownerFreezeUs = PerfElapsedUs(ownerStartedUs);
     // Logical object bytes exclude allocator/control-block overhead and transferred
@@ -12768,6 +12986,10 @@ void FolderWindow::FileOperationState::Task::InitializeFileSystemOptions(FileSys
     if (_executionMode == ExecutionMode::PerItem && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE))
     {
         options.copyMoveMaxConcurrency = std::max(1u, _perItemMaxConcurrencyBudget);
+        // Managed Moves use host file permits. Provider-native Moves only rename;
+        // a transfer setting must not reduce their metadata concurrency.
+        if (_operation == FILESYSTEM_COPY)
+            options.copyMoveMaxConcurrency = std::min(options.copyMoveMaxConcurrency, FileOperations::GetSharedParallelTransferLimit());
     }
 }
 
@@ -12798,6 +13020,12 @@ void FolderWindow::FileOperationState::Task::SetWaitForOthers(bool wait) noexcep
 
 void FolderWindow::FileOperationState::Task::SetWaitingInQueue(bool waiting) noexcept
 {
+    if (! waiting)
+    {
+        _waitingForIdentityInterlock.store(false, std::memory_order_release);
+        _waitingForParallelTransferSlot.store(false, std::memory_order_release);
+        _waitingForExclusiveTransfer.store(false, std::memory_order_release);
+    }
     const bool wasWaiting = _waitingInQueue.load(std::memory_order_acquire);
     if (wasWaiting == waiting)
     {
@@ -18932,10 +19160,8 @@ struct CrossFileSystemBridge
         }
 #endif
 
-        // I35 R10.1: a file waiting for a connection permit is opening: announced before the wait, so the
-        // wait is never named after the previous file's publication. Only a limited connection waits.
-        const bool announcedBeforePermits = sourceConnectionLimit.has_value() || destinationConnectionLimit.has_value();
-        if (announcedBeforePermits)
+        // Announce this file before shared or connection capacity waits, so its wait is
+        // never named after the previous file's publication.
         {
             const HRESULT hrAnnounce = ReportProgress(
                 sourcePath, destinationPath, 0u, 0u, overallCompletedBytes.load(std::memory_order_acquire), progressStreamId, ProgressPhase::Opening);
@@ -18945,28 +19171,7 @@ struct CrossFileSystemBridge
             }
         }
 
-        ConnectionConcurrencyLimiter::Permit permit1;
-        ConnectionConcurrencyLimiter::Permit permit2;
-        const HRESULT hrPermits = AcquireCopyMovePermits(permit1, permit2);
-        if (FAILED(hrPermits))
-        {
-            return hrPermits;
-        }
-        // Count admitted file transactions, including commit/publication/source cleanup. Waiting
-        // Opening rows have no permit yet and cannot inflate the actual file concurrency metric.
-        const uint64_t activeFiles = task._bridgeActiveFileTransfers.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-        AtomicMax(task._bridgeMaxActiveFileTransfers, activeFiles);
-        const auto fileActivity = wil::scope_exit([&]() noexcept { task._bridgeActiveFileTransfers.fetch_sub(1u, std::memory_order_acq_rel); });
-
         PublicationTransaction txn(sourcePath, std::move(destinationPath));
-        const auto cleanupStage = wil::scope_exit([&] noexcept
-        {
-            if (! txn.promoted && txn.ownedStageCleanupAllowed && txn.ownedStage)
-            {
-                AbortOwnedStage(*txn.ownedStage, txn.stagePath, sourcePath, txn.destinationPath);
-            }
-        });
-
         HRESULT hr = AdmitDestination(txn);
         if (hr != S_OK)
         {
@@ -18977,27 +19182,31 @@ struct CrossFileSystemBridge
         {
             return hr;
         }
+        // Resolve conflicts before taking capacity. A raced or existing name reserves the
+        // shared budget exclusively; new names retain atomic no-replace publication.
+        const bool exclusive =
+            txn.overwriteGranted || txn.replaceReadOnlyGranted || txn.replaceLinkGranted || txn.expectedDestination || txn.replaceExpectation.has_value();
+        auto sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
+            exclusive, [&]() noexcept { return task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested(); });
+        if (! sharedPermit)
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        ConnectionConcurrencyLimiter::Permit permit1;
+        ConnectionConcurrencyLimiter::Permit permit2;
+        const HRESULT hrPermits = AcquireCopyMovePermits(permit1, permit2);
+        if (FAILED(hrPermits))
+            return hrPermits;
+        const auto cleanupStage    = wil::scope_exit([&] noexcept
+        {
+            if (! txn.promoted && txn.ownedStageCleanupAllowed && txn.ownedStage)
+                AbortOwnedStage(*txn.ownedStage, txn.stagePath, sourcePath, txn.destinationPath);
+        });
+        const uint64_t activeFiles = task._bridgeActiveFileTransfers.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        AtomicMax(task._bridgeMaxActiveFileTransfers, activeFiles);
+        const auto fileActivity = wil::scope_exit([&]() noexcept { task._bridgeActiveFileTransfers.fetch_sub(1u, std::memory_order_acq_rel); });
         ReportFileWork(FileSystemFileWorkPhase::Begin, sourcePath, txn.destinationPath, progressStreamId, txn.hasKnownFileTotalBytes, txn.fileTotalBytes, 0u);
         if (publishSelectedLeafDiscovery)
         {
             hr = PublishSelectedLeafDiscovery(txn.fileTotalBytes, txn.hasKnownFileTotalBytes);
-            if (FAILED(hr))
-            {
-                return hr;
-            }
-        }
-        // I35 R10.1: the file is announced before its writer, stage and pre-content metadata exist,
-        // so that time is this file's Opening phase (unless it was announced before its permit wait).
-        // Nothing is staged yet, so a cancel stops here.
-        if (! announcedBeforePermits)
-        {
-            hr = ReportProgress(sourcePath,
-                                txn.destinationPath,
-                                txn.hasKnownFileTotalBytes ? txn.fileTotalBytes : 0u,
-                                0u,
-                                overallCompletedBytes.load(std::memory_order_acquire),
-                                progressStreamId,
-                                ProgressPhase::Opening);
             if (FAILED(hr))
             {
                 return hr;
@@ -22832,7 +23041,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
         wil::com_ptr<IFileSystemDirectoryOperations> fileSystemDirOps;
         static_cast<void>(_fileSystem->QueryInterface(IID_PPV_ARGS(fileSystemDirOps.addressof())));
 
-        const bool useCrossFileSystemBridge = (selectedAdmission->destination->fileSystem != nullptr || hasManagedMovePlans || hasVerificationPlans) &&
+        const bool useCrossFileSystemBridge = (selectedAdmission->destination->fileSystem != nullptr || hasManagedMovePlans || hasVerificationPlans ||
+                                               (selectedAdmission->interlock && selectedAdmission->interlock->parallelNewFiles)) &&
                                               (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE);
         IFileSystem* const bridgeDestinationFileSystem =
             selectedAdmission->destination->fileSystem ? selectedAdmission->destination->fileSystem.get() : _fileSystem.get();
@@ -22880,6 +23090,49 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                 case FileOperations::TransferSafetyState::ProviderContractViolation: return L"identity.providerContractViolation";
             }
             return L"identity.unknown";
+        };
+        // A bound regular file cannot contain its destination. For a positively Missing
+        // leaf, unavailable parent IDs need not prevent no-replace creation. These attribute
+        // reads only reject links/non-directories; they never grant replacement or deletion.
+        const auto newFileParentsAreDirectories = [&](const FileOperations::QualifiedEndpoint& endpoint, std::wstring_view destinationPath) noexcept
+        {
+            Debug::Perf::Scope perf(L"FileOps.NewFileParentCheckUs");
+            perf.SetHr(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+            uint64_t checked = 0u;
+            const auto count = wil::scope_exit([&]() noexcept { perf.SetValue0(checked); });
+            if (! destinationFileSystemIo || ! endpoint.pathIdentity.has_value())
+                return false;
+            const auto& identity = endpoint.pathIdentity.value();
+            std::wstring current;
+            if (! TryGetFileSystemParentPath(identity, destinationPath, current))
+                return false;
+            for (size_t depth = 0u; ! current.empty() && depth < 1024u; ++depth)
+            {
+                if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
+                {
+                    perf.SetHr(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                    return false;
+                }
+                ++checked;
+                unsigned long attributes = 0u;
+                const HRESULT hr         = destinationFileSystemIo->GetAttributes(current.c_str(), &attributes);
+                if (SUCCEEDED(hr))
+                {
+                    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+                        return false;
+                }
+                else if (hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                    return false;
+                std::wstring parent;
+                if (! TryGetFileSystemParentPath(identity, current, parent) || EquivalentPath(identity, current, parent))
+                {
+                    perf.SetHr(S_OK);
+                    return true;
+                }
+                current = std::move(parent);
+            }
+            perf.SetHr(current.empty() ? S_OK : HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE));
+            return current.empty();
         };
         const auto prepareExactTransferGuard = [&](size_t index,
                                                    std::wstring_view sourcePath,
@@ -22935,6 +23188,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                 // removes it only after the provider's proof of the published object matched.
                 if (plan.strategy == FileOperations::OperationStrategy::Managed && plan.destinationEndpoint.verificationWriterDigestProof)
                 {
+                    return S_FALSE;
+                }
+                if (plan.strategy == FileOperations::OperationStrategy::Managed && selectedAdmission->interlock &&
+                    selectedAdmission->interlock->parallelNewFiles && guard.destinationWasMissing && ! guard.destinationIdentityUnsupported &&
+                    guard.source.boundObject && guard.source.kind == FILESYSTEM_BOUND_REGULAR_FILE && guard.sourceParent.has_value() &&
+                    (plan.destinationEndpoint.verificationHostReadback || plan.destinationEndpoint.verificationProviderBlake3Proof) &&
+                    FileOperations::IsLocalFileSystemEndpoint(plan.sourceEndpoint) && FileOperations::IsLocalFileSystemEndpoint(plan.destinationEndpoint) &&
+                    newFileParentsAreDirectories(plan.destinationEndpoint, destinationPath))
+                {
+                    // The bridge rebinds the exact source and must still prove publication before
+                    // DeleteIfUnchanged. Unproved publication retains the source; no ancestor
+                    // attribute or scheduling key becomes destructive authority.
                     return S_FALSE;
                 }
             }
@@ -23222,6 +23487,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             }
         }
 
+        if (isTransferOperation && (! selectedAdmission->interlock || selectedAdmission->interlock->hasDataTransfers))
+            _perItemMaxConcurrencyBudget = std::min(_perItemMaxConcurrencyBudget, FileOperations::GetSharedParallelTransferLimit());
         _perItemMaxConcurrency = std::min<unsigned int>(_perItemMaxConcurrencyBudget, static_cast<unsigned int>(_perItemTotalItems));
         _effectiveConcurrencyBudget.store(_perItemMaxConcurrencyBudget, std::memory_order_release);
         _perItemCompletedItems      = 0;
@@ -23862,6 +24129,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     }
 
                     FileSystemOptions options{};
+                    auto sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
+                        true, [&]() noexcept { return _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
+                    if (! sharedPermit)
+                        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                     InitializeFileSystemOptions(options, static_cast<void*>(&cookie));
                     result.providerMutationAttempted = true;
                     executionPhase                   = FileOperationItemResultReducer::ExecutionPhase::MutationPossible;
@@ -25537,8 +25808,384 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPathArrayArena(const std::v
 }
 
 #ifdef ENABLE_TESTS
+bool FolderWindow::FileOperationState::DebugRunSharedTransfersForSelfTest(IFileSystem* fileSystem,
+                                                                          std::span<const std::filesystem::path> sources,
+                                                                          const std::filesystem::path& destination,
+                                                                          FileSystemOperation operation,
+                                                                          uint32_t limit,
+                                                                          size_t filesPerJob,
+                                                                          bool cancelLast,
+                                                                          std::wstring& failure) noexcept
+{
+    using namespace std::chrono_literals;
+    if (! fileSystem || sources.empty() || filesPerJob == 0u || sources.size() % filesPerJob != 0u)
+        return false;
+    auto& limiter                        = GetConnectionConcurrencyLimiter();
+    const uint32_t previousLimit         = limiter.SharedTransferLimit();
+    const bool previousAuto              = g_fileOpsAutoConcurrencyOverrideEnabled.load(std::memory_order_acquire);
+    const unsigned int previousPreferred = g_fileOpsAutoConcurrencyOverridePreferred.load(std::memory_order_acquire);
+    const uint32_t previousStorage       = g_fileOpsAutoConcurrencyOverrideStorageKind.load(std::memory_order_acquire);
+    const auto restore                   = wil::scope_exit([&]() noexcept
+    {
+        limiter.DebugPauseTransfers(false);
+        limiter.ConfigureSharedTransfers(previousLimit);
+        g_fileOpsAutoConcurrencyOverridePreferred.store(previousPreferred, std::memory_order_release);
+        g_fileOpsAutoConcurrencyOverrideStorageKind.store(previousStorage, std::memory_order_release);
+        g_fileOpsAutoConcurrencyOverrideEnabled.store(previousAuto, std::memory_order_release);
+    });
+    Common::Settings::Settings settings{};
+    settings.fileOperations.emplace();
+    settings.fileOperations->maxParallelTransfers = limit;
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    FileOperationState state(owner);
+    state.SetQueueNewTasks(false);
+    g_fileOpsAutoConcurrencyOverridePreferred.store(4u, std::memory_order_release);
+    g_fileOpsAutoConcurrencyOverrideStorageKind.store(FILESYSTEM_STORAGE_SSD, std::memory_order_release);
+    g_fileOpsAutoConcurrencyOverrideEnabled.store(true, std::memory_order_release);
+    const size_t jobCount = sources.size() / filesPerJob;
+    for (size_t job = 0u; job < jobCount; ++job)
+    {
+        OperationConstruction construction{};
+        construction.operation  = operation;
+        construction.fileSystem = fileSystem;
+        construction.sourcePaths.assign(sources.begin() + static_cast<std::ptrdiff_t>(job * filesPerJob),
+                                        sources.begin() + static_cast<std::ptrdiff_t>((job + 1u) * filesPerJob));
+        construction.destinationFolder = destination;
+        construction.sourcePluginId = construction.destinationPluginId = L"builtin/file-system";
+        construction.sourcePluginShortId = construction.destinationPluginShortId = L"file";
+        construction.options.executionMode                                       = FileOperations::ExecutionMode::Parallel;
+        OperationAdmission admission{};
+        const HRESULT buildHr = BuildOperationAdmission(construction, admission);
+        if (FAILED(buildHr))
+        {
+            failure = std::format(L"Real shared-transfer fixture admission failed: 0x{:08X}.", static_cast<unsigned long>(buildHr));
+            return false;
+        }
+        // The sandbox is one local volume. Select the managed route to exercise the
+        // same pump/publication/source-cleanup path as a local-to-NAS Move, preserving
+        // the real providers' captured proof and cancellation capabilities.
+        for (auto& plan : admission.plans)
+            if (auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan); transfer && transfer->strategy == FileOperations::OperationStrategy::Native)
+                transfer->strategy = FileOperations::OperationStrategy::Managed;
+        auto task     = std::make_unique<Task>(state);
+        task->_taskId = 0x5A00000000000000ull + job;
+        task->_admissionKey.store(job + 1u, std::memory_order_release);
+        task->_operation             = operation;
+        task->_executionMode         = ExecutionMode::PerItem;
+        task->_fileSystem            = fileSystem;
+        task->_sourcePaths           = std::move(construction.sourcePaths);
+        task->_sourcePluginId        = L"builtin/file-system";
+        task->_sourcePluginShortId   = L"file";
+        task->_perItemMaxConcurrency = 4u;
+        for (const auto& source : task->_sourcePaths)
+            task->_sourcePathAttributesHint.push_back(GetFileAttributesW(source.c_str()));
+        task->InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(admission.plans)),
+                                        {.folder = destination, .pluginId = L"builtin/file-system", .pluginShortId = L"file"});
+        task->InitializeSourceItemResultBuilders();
+        const HRESULT prepareHr = task->PrepareMutationInterlockScopes();
+        if (FAILED(prepareHr) || ! task->LoadMutationInterlockAdmission() || ! task->LoadMutationInterlockAdmission()->parallelNewFiles)
+        {
+            failure = std::format(L"Bound regular sources and Missing NAS-style destinations must qualify for shared admission: 0x{:08X}.",
+                                  static_cast<unsigned long>(prepareHr));
+            return false;
+        }
+        MutationInterlockRelations decided{};
+        decided.advisoryDecided = true;
+        state.PublishMutationInterlockDecision(*task, decided);
+        state._tasks.push_back(std::move(task));
+        state.PublishPreparedMutationInterlock(*state._tasks.back());
+    }
+    limiter.DebugPauseTransfers(true);
+    std::vector<std::jthread> workers;
+    std::atomic<size_t> completed{0u};
+    const auto cleanup       = wil::scope_exit([&]() noexcept
+    {
+        limiter.DebugPauseTransfers(false);
+        for (auto& task : state._tasks)
+            task->RequestCancel();
+        for (auto& worker : workers)
+            worker.request_stop();
+        state._queueCv.notify_all();
+        workers.clear();
+        state._preparedMutationInterlocks.clear();
+        state._tasks.clear();
+    });
+    const uint64_t startedUs = PerfNowUs();
+    for (auto& storage : state._tasks)
+    {
+        Task* const task = storage.get();
+        workers.emplace_back([&, task](std::stop_token stopToken) noexcept
+        {
+            auto com           = wil::CoInitializeEx(COINIT_MULTITHREADED);
+            task->_stopToken   = stopToken;
+            const auto entered = state.EnterOperation(*task, stopToken);
+            HRESULT hr         = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (entered.outcome == OperationEntryOutcome::Entered)
+            {
+                task->_enteredOperation.store(true, std::memory_order_release);
+                task->PublishLifecyclePhase(Task::TaskLifecyclePhase::Running);
+                task->EnterSourceItemsMutationGate();
+                task->BeginDiscovery();
+                hr = task->ExecuteOperation(entered.accepted);
+                task->CloseDiscovery();
+                state.LeaveOperation(*task, entered.accepted);
+                task->_enteredOperation.store(false, std::memory_order_release);
+            }
+            task->_resultHr.store(task->FinalizeTypedItemResults(hr), std::memory_order_release);
+            completed.fetch_add(1u, std::memory_order_release);
+        });
+    }
+    const auto waitFor = [](const auto& predicate) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + 10s;
+        while (! predicate() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        return predicate();
+    };
+    const uint32_t expected = static_cast<uint32_t>(std::min<size_t>(limit, sources.size()));
+    if (! waitFor([&]() noexcept
+    {
+        const auto snapshot = limiter.DebugTransfers();
+        if (snapshot.shared != expected || snapshot.paused != expected)
+            return false;
+        if (jobCount > limit)
+            return static_cast<size_t>(std::ranges::count_if(state._tasks, [](const auto& task) noexcept {
+                return task->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+            })) == jobCount - limit;
+        return sources.size() <= limit || snapshot.waitingShared != 0u;
+    }))
+    {
+        const auto snapshot = limiter.DebugTransfers();
+        failure             = std::format(L"Actual file pumps must share one limit across jobs (shared={}, paused={}, waiting={}, expected={}).",
+                                          snapshot.shared,
+                                          snapshot.paused,
+                                          snapshot.waitingShared,
+                                          expected);
+        return false;
+    }
+    Task* cancelled = nullptr;
+    if (cancelLast)
+    {
+        const auto last =
+            std::ranges::find_if(state._tasks, [](const auto& task) noexcept { return task->_waitingForParallelTransferSlot.load(std::memory_order_acquire); });
+        if (last == state._tasks.end())
+        {
+            failure = L"The cancellation scenario requires a real queued job.";
+            return false;
+        }
+        cancelled = last->get();
+        if (! state.RunQueuedTaskNow(cancelled->_taskId) || ! cancelled->IsWaitingInQueue())
+        {
+            failure = L"Start now cannot bypass four real occupied transfer slots.";
+            return false;
+        }
+        cancelled->RequestCancel();
+    }
+    limiter.DebugPauseTransfers(false);
+    if (! waitFor([&]() noexcept { return completed.load(std::memory_order_acquire) == jobCount; }))
+    {
+        failure = std::format(L"Shared file pumps and queued jobs must finish after releasing the test barrier (completed={} expected={} held={}).",
+                              completed.load(std::memory_order_acquire),
+                              jobCount,
+                              limiter.DebugTransfers().shared);
+        return false;
+    }
+    workers.clear();
+    const auto snapshot = limiter.DebugTransfers();
+    Debug::Perf::Emit(L"FileOps.SelfTest.SharedTransfers.RealIoUs",
+                      operation == FILESYSTEM_MOVE ? L"managed-move" : L"copy",
+                      PerfElapsedUs(startedUs),
+                      snapshot.peak,
+                      limit,
+                      S_OK);
+    for (const auto& task : state._tasks)
+    {
+        const HRESULT expectedStatus = task.get() == cancelled ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+        if (task->GetResult() != expectedStatus)
+        {
+            failure = std::format(L"Shared real-I/O task returned 0x{:08X}, expected 0x{:08X}.",
+                                  static_cast<unsigned long>(task->GetResult()),
+                                  static_cast<unsigned long>(expectedStatus));
+            return false;
+        }
+        // The caller checks contents. A canceled job must never create its destination.
+        if (task.get() == cancelled)
+            for (const auto& source : task->_sourcePaths)
+                if (GetFileAttributesW((destination / source.filename()).c_str()) != INVALID_FILE_ATTRIBUTES ||
+                    GetFileAttributesW(source.c_str()) == INVALID_FILE_ATTRIBUTES)
+                {
+                    failure = L"A canceled capacity waiter must leave its source intact and its destination absent.";
+                    return false;
+                }
+    }
+    if (snapshot.shared != 0u || snapshot.waitingShared != 0u || snapshot.exclusive || snapshot.waitingExclusive != 0u || snapshot.peak > limit)
+    {
+        failure = L"Real copies and moves must respect the shared peak and leave no permits or waiters at teardown.";
+        return false;
+    }
+    return true;
+}
+
+bool FolderWindow::FileOperationState::DebugValidateSharedTransferBudgetForSelfTest(std::wstring& failure) noexcept
+{
+    using namespace std::chrono_literals;
+    // No HWNDs or callbacks to the calling thread: inspect the limiter's locked state
+    // rather than pumping GUI messages in this worker-lifetime fixture.
+    const auto waitFor = [](const auto& predicate) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + 3s;
+        while (! predicate() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        return predicate();
+    };
+    for (const uint32_t limit : {1u, 2u, 4u, 16u})
+    {
+        ConnectionConcurrencyLimiter limiter;
+        limiter.ConfigureSharedTransfers(limit);
+        std::vector<ConnectionConcurrencyLimiter::Permit> held;
+        for (uint32_t index = 0u; index < limit; ++index)
+            held.push_back(limiter.AcquireTransfer(false, []() noexcept { return false; }));
+        std::atomic<bool> cancel{false};
+        std::atomic<bool> granted{false};
+        std::binary_semaphore release{0};
+        std::jthread worker([&]() noexcept
+        {
+            auto permit = limiter.AcquireTransfer(false, [&]() noexcept { return cancel.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                granted.store(true, std::memory_order_release);
+                release.acquire();
+            }
+        });
+        const auto cleanup = wil::scope_exit([&]() noexcept
+        {
+            cancel.store(true, std::memory_order_release);
+            if (worker.joinable())
+            {
+                release.release();
+                worker.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return limiter.DebugTransfers().waitingShared == 1u; }) || granted.load(std::memory_order_acquire))
+        {
+            failure = L"The shared budget must block file N+1 at limits 1, 2, 4 and 16.";
+            return false;
+        }
+        if (limit == 2u)
+        {
+            // A live increase wakes an already waiting file without restarting its job.
+            limiter.ConfigureSharedTransfers(3u);
+        }
+        else
+        {
+            // A decrease drains existing holders, including the last holder at limit one.
+            limiter.ConfigureSharedTransfers(1u);
+            held.erase(held.begin() + 1, held.end());
+            if (limiter.DebugTransfers().shared != 1u || granted.load(std::memory_order_acquire))
+            {
+                failure = L"Lowering the limit must drain existing transfers before admitting another file.";
+                return false;
+            }
+            held.clear();
+        }
+        if (! waitFor([&]() noexcept { return granted.load(std::memory_order_acquire); }))
+        {
+            failure = L"Releasing capacity or raising the limit must wake a shared waiter.";
+            return false;
+        }
+        release.release();
+        worker.join();
+        held.clear();
+        if (limiter.DebugTransfers().shared != 0u || limiter.DebugTransfers().waitingShared != 0u)
+        {
+            failure = L"Completing shared transfers must return every permit.";
+            return false;
+        }
+    }
+    ConnectionConcurrencyLimiter limiter;
+    auto first = limiter.AcquireTransfer(false, []() noexcept { return false; });
+    std::atomic<bool> cancel{false};
+    std::atomic<bool> exclusiveGranted{false};
+    std::atomic<bool> sharedGranted{false};
+    std::binary_semaphore releaseExclusive{0};
+    std::jthread exclusive([&]() noexcept
+    {
+        auto permit = limiter.AcquireTransfer(true, [&]() noexcept { return cancel.load(std::memory_order_acquire); });
+        if (permit)
+        {
+            exclusiveGranted.store(true, std::memory_order_release);
+            releaseExclusive.acquire();
+        }
+    });
+    std::jthread shared;
+    const auto cleanup = wil::scope_exit([&]() noexcept
+    {
+        cancel.store(true, std::memory_order_release);
+        if (exclusive.joinable())
+        {
+            releaseExclusive.release();
+            exclusive.join();
+        }
+        if (shared.joinable())
+            shared.join();
+    });
+    if (! waitFor([&]() noexcept { return limiter.DebugTransfers().waitingExclusive == 1u; }))
+    {
+        failure = L"An exclusive transfer must wait for existing shared files.";
+        return false;
+    }
+    shared = std::jthread([&]() noexcept
+    {
+        auto permit = limiter.AcquireTransfer(false, [&]() noexcept { return cancel.load(std::memory_order_acquire); });
+        sharedGranted.store(static_cast<bool>(permit), std::memory_order_release);
+    });
+    if (! waitFor([&]() noexcept { return limiter.DebugTransfers().waitingShared == 1u; }))
+    {
+        failure = L"New shared files must queue behind a pending exclusive transfer.";
+        return false;
+    }
+    first = {};
+    if (! waitFor([&]() noexcept { return exclusiveGranted.load(std::memory_order_acquire); }) || sharedGranted.load(std::memory_order_acquire) ||
+        limiter.DebugTransfers().shared != 0u)
+    {
+        failure = L"An exclusive transfer must run alone without writer starvation.";
+        return false;
+    }
+    // Cancel the shared waiter while the exclusive holder is still alive.
+    cancel.store(true, std::memory_order_release);
+    shared.join();
+    if (sharedGranted.load(std::memory_order_acquire) || limiter.DebugTransfers().waitingShared != 0u)
+    {
+        failure = L"Cancellation must remove a shared waiter without acquiring or leaking capacity.";
+        return false;
+    }
+    releaseExclusive.release();
+    exclusive.join();
+    if (limiter.DebugTransfers().exclusive || limiter.DebugTransfers().waitingExclusive != 0u)
+    {
+        failure = L"An exclusive transfer must release its reservation at teardown.";
+        return false;
+    }
+    Debug::Perf::EmitValue(L"FileOps.SelfTest.SharedTransfers.BudgetContracts", 1u, S_OK);
+    return true;
+}
+
 std::optional<FileSystemItemMutationResult> TakeFileOpsItemReceiptForSelfTest(uint64_t taskId, size_t itemIndex) noexcept
 {
     return FolderWindowFileOperationsStateInternal::TakeRecordedFileOpsItemReceiptForSelfTest(taskId, itemIndex);
 }
 #endif
+
+uint32_t FileOperations::GetSharedParallelTransferLimit() noexcept
+{
+    return GetConnectionConcurrencyLimiter().SharedTransferLimit();
+}
+
+void FolderWindow::ApplyFileOperationSettings() noexcept
+{
+    const uint32_t limit = _settings && _settings->fileOperations.has_value() ? _settings->fileOperations->maxParallelTransfers : 4u;
+    GetConnectionConcurrencyLimiter().ConfigureSharedTransfers(limit);
+    if (_fileOperations)
+        _fileOperations->NotifyQueueChanged();
+}

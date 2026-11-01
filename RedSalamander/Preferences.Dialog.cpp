@@ -2107,6 +2107,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
             baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
             baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
+            baselineFileOperations.maxParallelTransfers != workingFileOperations.maxParallelTransfers ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
             baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||
@@ -2475,6 +2476,7 @@ struct PreferencesSaveResult final
             baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
             baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
+            baselineFileOperations.maxParallelTransfers != workingFileOperations.maxParallelTransfers ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
             baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||

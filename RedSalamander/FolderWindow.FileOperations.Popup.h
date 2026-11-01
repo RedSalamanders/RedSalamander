@@ -313,13 +313,17 @@ struct TaskSnapshot
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG operationStartTick       = 0;
 
-    bool waitingForOthers  = false;
-    bool waitingInQueue    = false;
-    bool overlapQueued     = false; // R4-A02-1: queued behind named overlapping tasks; no Start now
-    bool queuePaused       = false;
-    uint64_t queueOrderKey = 0;
-    bool canMoveQueueUp    = false;
-    bool canMoveQueueDown  = false;
+    bool waitingForOthers                = false;
+    bool waitingInQueue                  = false;
+    bool waitingForIdentityInterlock     = false;
+    bool waitingForParallelTransferSlot  = false;
+    bool waitingForExclusiveTransfer     = false;
+    uint32_t sharedParallelTransferLimit = 4u;
+    bool overlapQueued                   = false; // R4-A02-1: queued behind named overlapping tasks; no Start now
+    bool queuePaused                     = false;
+    uint64_t queueOrderKey               = 0;
+    bool canMoveQueueUp                  = false;
+    bool canMoveQueueDown                = false;
 
     // Single-pass discovery knowledge state.
     bool discoveryAheadActive               = false;
@@ -1417,6 +1421,7 @@ private:
         GraphLabelLayout counts;
         GraphLabelLayout throughput;
         GraphLabelLayout concurrency;
+        GraphLabelLayout waitingReason;
         GraphLabelLayout lastNote;
         std::wstring headerText;
         std::wstring paintedHeader;

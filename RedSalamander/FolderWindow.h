@@ -785,6 +785,7 @@ public:
     void SetZoomState(std::optional<Pane> zoomedPane, std::optional<float> restoreSplitRatio);
 
     void SetSettings(Common::Settings::Settings* settings) noexcept;
+    void ApplyFileOperationSettings() noexcept;
     void SetShortcutManager(const ShortcutManager* shortcuts) noexcept;
     void SetFunctionBarModifiers(uint32_t modifiers) noexcept;
     void SetFunctionBarPressedKey(std::optional<uint32_t> vk) noexcept;

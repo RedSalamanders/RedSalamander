@@ -137,7 +137,12 @@ void TestRealSchema(const std::wstring& schemaPath, bool& success)
         Check(menuBar->defaultValue == L"true", L"anchor menuBarVisible: defaultValue == true", success);
     }
 
-    const SettingField* funcBar = FindByPath(fields, L"mainMenuSettings.functionBarVisible");
+    const SettingField* funcBar  = FindByPath(fields, L"mainMenuSettings.functionBarVisible");
+    const SettingField* parallel = FindByPath(fields, L"fileOperationsSettings.maxParallelTransfers");
+    Check(parallel && parallel->paneName == L"File Operations" && parallel->controlType == L"custom" && parallel->schemaType == L"integer" &&
+              parallel->defaultValue == L"4",
+          L"shared transfers: schema exposes the File Operations control with default four",
+          success);
     Check(funcBar != nullptr, L"real schema: anchor mainMenuSettings.functionBarVisible present", success);
     if (funcBar != nullptr)
     {
@@ -1074,6 +1079,54 @@ void TestSettingsStoreRecoveryBackupCas(bool& success)
 }
 #endif
 
+void TestFileOperationParallelLimitSettings(bool& success)
+{
+    using namespace Common::Settings;
+    const std::wstring appId = std::format(L"RedSalamanderSharedTransfers-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const auto path    = GetSettingsPath(appId);
+    Check(FileOperationsSettings{}.maxParallelTransfers == 4u, L"shared transfers: typed default is four", success);
+    Settings settings{};
+    settings.theme.currentThemeId = L"builtin/dark";
+    Check(SaveSettings(appId, settings) == S_OK, L"shared transfers: isolated baseline saves", success);
+    for (const uint32_t limit : {1u, 2u, 4u, 16u})
+    {
+        Settings working{};
+        Check(TryLoadSettingsNoRecovery(appId, working) == S_OK, L"shared transfers: fresh baseline loads", success);
+        if (! working.fileOperations.has_value())
+            working.fileOperations.emplace();
+        working.fileOperations->maxParallelTransfers = limit;
+        Check(SaveSettings(appId, working) == S_OK, L"shared transfers: configured limit saves", success);
+        Settings loaded{};
+        const HRESULT status  = TryLoadSettingsNoRecovery(appId, loaded);
+        const uint32_t actual = loaded.fileOperations.has_value() ? loaded.fileOperations->maxParallelTransfers : 4u;
+        Check(status == S_OK && actual == limit && loaded.theme.currentThemeId == L"builtin/dark",
+              L"shared transfers: round trip preserves the limit and unrelated settings",
+              success);
+        const bool written = ReadTestBytes(path).find("\"maxParallelTransfers\"") != std::string::npos;
+        Check(written == (limit != 4u), L"shared transfers: default four is omitted and nondefaults are retained", success);
+        if (limit == 4u)
+            Check(! loaded.fileOperations.has_value(), L"shared transfers: a default-only section is pruned", success);
+    }
+    struct Boundary
+    {
+        std::string_view token;
+        uint32_t expected;
+    };
+    for (const Boundary boundary :
+         {Boundary{"0", 1u}, Boundary{"100", 16u}, Boundary{"-1", 4u}, Boundary{"7.5", 4u}, Boundary{"4294967296", 4u}, Boundary{"\"four\"", 4u}})
+    {
+        const std::string fixture = std::format(R"json({{"schemaVersion":16,"fileOperations":{{"maxParallelTransfers":{0}}}}})json", boundary.token);
+        Check(WriteTestBytes(path, fixture), L"shared transfers: boundary fixture is written", success);
+        Settings loaded{};
+        Check(TryLoadSettingsNoRecovery(appId, loaded) == S_OK && loaded.fileOperations.has_value() &&
+                  loaded.fileOperations->maxParallelTransfers == boundary.expected,
+              L"shared transfers: integers clamp to 1..16 and invalid types keep default four",
+              success);
+    }
+}
+
 void TestConnectionProfileIdentityGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderConnectionIdentity-{}-{}", GetCurrentProcessId(), GetTickCount64());
@@ -1410,6 +1463,7 @@ int wmain(int argc, wchar_t** argv)
     TestSettingsStoreRecoveryBackupCas(success);
 #endif
     TestConnectionProfileIdentityGuards(success);
+    TestFileOperationParallelLimitSettings(success);
 
     std::array<wchar_t, 32768> executablePath{};
     const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));

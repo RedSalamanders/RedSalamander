@@ -1474,15 +1474,32 @@ any consent wait, while `DurableCommitUs` covers durable replacement and queue s
 Entry's event-driven replacement loop records wait segments with a `reprepare` label. A segment
 that waited in Queue mode is attributed to Queue even if the mode later changes; compare total
 queue plus interlock time when assessing that mixed-mode fixture.
-The deterministic `R4A02_RunConcurrentSameDestinationStaysSafe` case proves that one disclosed
-identity-bound relation admits both tasks without an interlock wait while a third undisclosed task
-still asks independently. `R4A02_LiveOutputGuardChoices` pauses a Local publisher immediately after
+The deterministic `R4A02_RunConcurrentSameDestinationStaysSafe` retains its historical exact-filter
+name but now proves the transfer-serialization policy: overlapping transfers withhold Run, the
+second waits, both result sets survive, and a third task still asks independently. Stale concurrent
+consent cannot bypass the backend transfer interlock. `R4A02_LiveOutputGuardChoices` pauses a Local publisher immediately after
 one exact item is published and pauses a permanent Delete immediately before the live-output guard;
 it covers Skip, exact-publisher Queue, explicit invalidation, terminal release, and a forced 256-entry
 overflow fallback that withholds the destructive choice. The protected case must complete without
 recursive enumeration or provider I/O added solely for correlation. The index high-water must not
 exceed 256, overflow must retain protection, and Queue wait duration is observation rather than a
 throughput claim because it intentionally includes the named publisher's remaining lifetime.
+
+The shared-transfer feature protects new regular files to a destination whose parent
+IDs are Unsupported. `FileOps_IdentityInterlockWaiting` records `FileOps.SharedTransfers.AcquireUs`
+and actual-I/O `FileOps.SelfTest.SharedTransfers.RealIoUs` with peak held files and configured target.
+Compare setting-one and setting-four scheduling in the same candidate build, retain the barriers
+and fixture sizes in provenance, and never call this a matched-source A/B or a NAS throughput
+benchmark. `FileOps.SelfTest.SharedTransfers.IndexUs` compares 64 and 4,096 selected-file sets;
+its probe count must remain at most 100 per selected file and match pairwise conflict controls.
+Budget tests must cover cancellation, exclusive fairness, live limit changes and zero holders/
+waiters at teardown. Archive captures for capacity/exclusive Waiting and summarize frame timing.
+
+Native-route Copy controls select the corpus directory root. Selecting its individual missing
+regular-file destinations now intentionally uses the host bridge for shared permits, even without
+an explicit destination provider. Native and bridge controls must verify the same corpus payload
+at their respective output paths. `FileOps.Bridge.FileAdmissionCount` counts directory-walk child
+admissions; zero alone does not prove a regular-file selection used the provider-native route.
 
 `FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes` records preparation duration in
 `duration_us`, unique retained authority nodes in `value0`, and the fixed 256-item selection in

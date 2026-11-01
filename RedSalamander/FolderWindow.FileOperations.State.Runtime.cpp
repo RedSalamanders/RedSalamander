@@ -2805,7 +2805,8 @@ bool FolderWindow::FileOperationState::RunQueuedTaskNow(uint64_t taskId) noexcep
     }
 
     task->SetWaitForOthers(false);
-    task->SetWaitingInQueue(false);
+    // Start now releases only the user's queue preference. EnterOperation owns the actual
+    // waiting state and clears it only after the safety interlock admits the task (or cancel).
     UpdateQueuePausedTasks();
     NotifyQueueChanged();
     return true;

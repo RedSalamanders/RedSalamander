@@ -675,6 +675,7 @@ struct SelfTestState
         FileOps_SafetyRemediationContracts,
         FileOps_ConflictMessageText,
         FileOps_ReviewRemediationContracts,
+        FileOps_IdentityInterlockWaiting,
         FileOps_RepeatDecisionContracts,
         FileOps_SkipCountingPresentation,
         FileOps_PermanentDeleteCompletionProgress,
@@ -1117,7 +1118,7 @@ struct SelfTestState
     wil::com_ptr_nothrow<IInvokeProvider> discoverySkipAction;
     std::optional<std::uint64_t> taskB;
     std::optional<std::uint64_t> taskC;
-    bool r4a02ConcurrentAdmissionObserved = false;
+    bool r4a02SerializedAdmissionObserved = false;
     uint32_t r4a02LiveOutputScenario      = 0u;
     bool r4a02LiveOutputQueueObserved     = false;
     bool inlineF2QueueModeOriginal        = true;
@@ -1302,6 +1303,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SafetyRemediationContracts: return L"FileOps_SafetyRemediationContracts";
         case SelfTestState::Step::FileOps_ConflictMessageText: return L"FileOps_ConflictMessageText";
         case SelfTestState::Step::FileOps_ReviewRemediationContracts: return L"FileOps_ReviewRemediationContracts";
+        case SelfTestState::Step::FileOps_IdentityInterlockWaiting: return L"FileOps_IdentityInterlockWaiting";
         case SelfTestState::Step::FileOps_RepeatDecisionContracts: return L"FileOps_RepeatDecisionContracts";
         case SelfTestState::Step::FileOps_SkipCountingPresentation: return L"FileOps_SkipCountingPresentation";
         case SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress: return L"FileOps_PermanentDeleteCompletionProgress";
@@ -1639,6 +1641,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
+    SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
     SelfTestState::Step::FileOps_SkipCountingPresentation,
     SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress,
@@ -1860,7 +1863,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation,        // R4-A02-1 - Don't start ends the overlapping task before any mutation
     SelfTestState::Step::R4A02_ReadReadDoesNotWarn,                   // R4-A02-1 - two Copies reading one source warn nothing
     SelfTestState::Step::R4A02_SameDestinationWarns,                  // R4-A02-1 - simultaneous Copies publishing the same leaf warn before mutation
-    SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // R4-A02-2 - Run admits only the disclosed overlap and both result sets stay truthful
+    SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // Historical exact ID: conflicting transfers now queue, preserving both result sets.
     SelfTestState::Step::R4A02_LiveOutputGuardChoices,                // R4-A02-2 - uncovered live output parks; Skip/Queue/destructive and overflow stay safe
     SelfTestState::Step::R4A02_DisjointWritesDoNotWarn,               // R4-A02-1 - disjoint source and destination roots warn nothing
     SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise, // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide
@@ -2325,10 +2328,11 @@ struct FileOpsFamilyDefinition
 constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyQueuedAdmissionContracts{{
     SelfTestState::Step::FileOps_QueuedAdmissionContracts,
 }};
-constexpr std::array<SelfTestState::Step, 6> kFileOpsFamilySafetyRemediationContracts{{
+constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilySafetyRemediationContracts{{
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
+    SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
     SelfTestState::Step::FileOps_SkipCountingPresentation,
     SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress,
@@ -15439,6 +15443,26 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! CaptureFileOpsCardHierarchy(state))
             {
                 Fail(L"Card hierarchy failed; see CardHierarchy subject, geometry and disclosure witnesses in the trace.");
+                return true;
+            }
+            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+            NextStep(state, SelfTestState::Step::FileOps_IdentityInterlockWaiting);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_IdentityInterlockWaiting:
+        {
+            static bool inProgress = false;
+            if (inProgress || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            inProgress       = true;
+            const auto reset = wil::scope_exit([]() noexcept { inProgress = false; });
+            std::wstring failure;
+            if (! FolderWindow::FileOperationState::DebugValidateInterlockWaitingPresentationForSelfTest(failure) ||
+                ! FolderWindow::FileOperationState::DebugValidateSharedTransferBudgetForSelfTest(failure) ||
+                ! FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForSelfTest(failure) ||
+                ! RunFileOperationSharedTransferSelfTests(state, failure) || ! CaptureFileOpsWaitingCards(state, true))
+            {
+                Fail(failure.empty() ? L"Identity-interlock waiting card failed; see WaitingCard witnesses in the trace." : failure);
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

@@ -2041,6 +2041,37 @@ establish broad runtime, architecture, sanitizer, performance or Full qualificat
 
 ## File Operations queued admission and Safety contracts
 
+The exact no-activation `FileOps_IdentityInterlockWaiting` case holds two distinct invented destination filenames in one
+identity-unavailable domain at the real `EnterOperation` boundary. Thirty-two Start now requests
+must retain Waiting and its identity-limit reason, without starting discovery or mutation. Separate
+release/cancel controls require prompt retirement and clear the reason. The fixture records
+`FileOps.SelfTest.IdentityInterlock.StartNowUs`. Its English/French waiting-card matrix covers the
+wrapped explanatory text, accessibility, absent Start now and Skip counting, suppressed counters,
+and removal of the reason and restoration of counting controls when the same card becomes running;
+existing frame measurements remain in force.
+The same exact case validates the shared file budget at 1, 2, 4 and 16, live increase/decrease,
+pending-exclusive fairness, cancellation and permit teardown. Indexed new-file scope controls
+also admit an unrelated native-only rename while all four data slots are occupied. They
+retain equal-name, alias, existing-target and folder conflicts, and compare indexed/pairwise
+results with a 4,096-file scaling witness. Real owned local copies and managed moves simulate
+unsupported destination-parent IDs, exercise multiple jobs and multiple files per job, require
+a peak no greater than the shared target, and check exact content and source cleanup. A fifth
+one-file job must wait without counting and cannot bypass the limit through Start now. The
+waiting-card gallery also covers capacity and exclusive reasons in English/French. All paths
+are invented sandbox fixtures; no desktop input is required. These controlled setting-one/four
+witnesses measure scheduling, not network/NAS throughput.
+The local test provider's `REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH`
+control isolates unavailable directory IDs from regular-file authority. Managed Move positive
+controls require full publication and exact source removal in that mode. The all-path-binding
+unsupported control also succeeds when the provider still supplies operation-owned publication
+authority. Binding support and publication proof are separate capabilities. `R3_3_PublicationFaultMatrix`
+owns the refusal controls that retain sources when actual publication/verification proof fails.
+The historical `R4A02_RunConcurrentSameDestinationStaysSafe` filter now verifies that conflicting
+transfers queue and preserve both complete result sets, with no concurrent-transfer bypass action.
+The direct admission witness also rejects stale concurrent consent for this pair.
+It requires neither desktop input nor a desktop lease when selected exactly in the FileOps-only
+runner without proof injections. Broad selections and proof injections retain the normal lease.
+
 `FileOps_QueuedAdmissionContracts` runs without foreground input. It exercises canonical private
 admission with captured provider context, options and clipboard provenance; rejection of an explicit
 mapping outside the destination must leave the prior envelope, task set and provider objects intact.
