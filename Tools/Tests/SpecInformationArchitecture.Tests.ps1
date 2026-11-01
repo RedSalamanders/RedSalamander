@@ -1183,30 +1183,25 @@ Describe 'Markdown fence indentation boundaries' {
     }
 }
 
-Describe 'Markdown HTML comment visibility' {
-    It 'masks HTML comments without hiding literal code or changing offsets' {
+Describe 'Bounded Markdown comment-delimiter provenance mask' {
+    It 'masks every raw comment-shaped span and preserves offsets and line endings' {
         $text = 'visible `<!-- literal -->` <!-- secret' + "`r`n" + 'still hidden --> `abc123` visible'
-        $masked = Get-RSMarkdownHtmlCommentMask -Text $text
+        $masked = Get-RSMarkdownCommentDelimiterMask -Text $text
         $masked.Length | Should Be $text.Length
-        $masked | Should Match '<!-- literal -->'
-        $masked | Should Not Match 'secret|still hidden'
+        $masked | Should Not Match 'literal|secret|still hidden'
         $masked | Should Match '`abc123` visible'
         $masked.IndexOf("`r`n") | Should Be $text.IndexOf("`r`n")
-        $unterminated = Get-RSMarkdownHtmlCommentMask -Text 'before <!-- hidden to end'
-        $unterminated | Should Match '^before '
-        $unterminated | Should Not Match 'hidden'
-        $separate = Get-RSMarkdownHtmlCommentMask -Text 'a<!--x-->b<!--y-->c'
-        $separate | Should Match '^a\s+b\s+c$'
-        $afterCommentBacktick = Get-RSMarkdownHtmlCommentMask -Text '<!-- ` --> visible <!-- hidden --> `literal`'
-        $afterCommentBacktick | Should Not Match 'hidden'
-        $afterCommentBacktick | Should Match '`literal`'
-        $fenceInComment = '<!--' + "`n" + '```' + "`n" + '-->' + "`n" + '<!-- hidden --> visible'
-        (Get-RSMarkdownHtmlCommentMask -Text $fenceInComment) | Should Not Match 'hidden'
-        $fencedLiteral = '```' + "`n" + '<!-- literal -->' + "`n" + '```'
-        (Get-RSMarkdownHtmlCommentMask -Text $fencedLiteral) | Should Match '<!-- literal -->'
-        (Get-RSMarkdownHtmlCommentMask -Text '') | Should Be ''
+        (Get-RSMarkdownCommentDelimiterMask -Text 'before <!-- hidden to end') | Should Not Match 'hidden'
+        (Get-RSMarkdownCommentDelimiterMask -Text 'a<!--x-->b<!--y-->c') | Should Match '^a\s+b\s+c$'
+        $escaped = @('\`<!--hidden-->`', '\\`<!--hidden-->`', '\``<!--hidden-->`', '\```<!--hidden-->``')
+        foreach ($item in $escaped) { (Get-RSMarkdownCommentDelimiterMask -Text $item) | Should Not Match 'hidden' }
+        $crossLine = '`open' + "`r`n" + 'closes` and `<!-- hidden -->`'
+        $crossMask = Get-RSMarkdownCommentDelimiterMask -Text $crossLine
+        $crossMask | Should Not Match 'hidden'
+        $crossMask.Length | Should Be $crossLine.Length
+        (Get-RSMarkdownCommentDelimiterMask -Text '') | Should Be ''
         $boundMessage = ''
-        try { $null = Get-RSMarkdownHtmlCommentMask -Text ('x' * 2049) }
+        try { $null = Get-RSMarkdownCommentDelimiterMask -Text ('x' * 2049) }
         catch { $boundMessage = $_.Exception.Message }
         $boundMessage | Should Match 'exceeds 2048 UTF-16 units'
     }

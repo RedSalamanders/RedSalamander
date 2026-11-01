@@ -1,1 +1,1 @@
-- Require review provenance warnings to be rendered opening alerts, rejecting fenced examples, later quotations, and provenance hidden in HTML comments while preserving dated legacy and newer-review provenance checks.
+- Require review provenance warnings to be rendered opening alerts, rejecting fenced examples, later quotations, and provenance in comment-shaped spans and unsupported raw HTML while preserving dated legacy and newer-review provenance checks.
