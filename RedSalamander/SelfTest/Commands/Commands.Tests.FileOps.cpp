@@ -16830,24 +16830,97 @@ struct FileOperationsPopupTestFixture final
         wil::com_ptr_nothrow<IRawElementProviderFragment> cancelFragment;
         if (! FindExactFileOperationsActionForSelfTest(
                 fixture.popup, Hit::TaskConflictAction, taskId, task.conflict.escapeAction, IDS_FILEOP_BTN_CANCEL, cancelProvider) ||
-            ! cancelProvider || FAILED(cancelProvider.query_to(cancelFragment.put())) || ! cancelFragment || FAILED(cancelFragment->SetFocus()))
-            return failSetup(L"exact Cancel lookup or focus");
-        RedrawWindow(fixture.popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-        FileOperationsPopupInternal::PopupLayoutDebugSnapshot visible{};
-        visible.taskId = taskId;
-        D2D1_RECT_F cancelBounds{};
+            ! cancelProvider || FAILED(cancelProvider.query_to(cancelFragment.put())) || ! cancelFragment)
+            return failSetup(L"exact Cancel lookup");
         const auto cancelId = std::format(
             L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(Hit::TaskConflictAction), taskId, task.conflict.escapeAction, task.conflict.generation);
         const float scale = static_cast<float>(GetDpiForWindow(fixture.popup)) / 96.0f;
-        if (! DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, visible) ||
-            ! popupState->DebugHostedDecisionActionBoundsForSelfTest(taskId, cancelBounds, cancelId) || cancelBounds.bottom <= cancelBounds.top ||
-            cancelBounds.top * scale < visible.listViewportRect.top || cancelBounds.bottom * scale > visible.listViewportRect.bottom)
-            return failSetup(std::format(L"visible Cancel after setup paint: boundsDip=({},{}) scale={} viewport=({},{})",
-                                         cancelBounds.top,
-                                         cancelBounds.bottom,
-                                         scale,
-                                         visible.listViewportRect.top,
-                                         visible.listViewportRect.bottom));
+        struct CancelObservation final
+        {
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+            FileOperationsPopupInternal::TaskSnapshot task{};
+            D2D1_RECT_F bounds{};
+            SCROLLINFO scroll{.cbSize = sizeof(SCROLLINFO), .fMask = SIF_ALL};
+            uint64_t renders = 0u;
+            bool layoutOk    = false;
+            bool taskOk      = false;
+            bool boundsOk    = false;
+            bool scrollOk    = false;
+        };
+        const auto observeCancel = [&]() noexcept
+        {
+            CancelObservation observation{};
+            observation.layout.taskId = taskId;
+            observation.layoutOk      = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, observation.layout);
+            observation.taskOk        = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, observation.task);
+            observation.boundsOk      = popupState->DebugHostedDecisionActionBoundsForSelfTest(taskId, observation.bounds, cancelId);
+            observation.scrollOk      = GetScrollInfo(fixture.popup, SB_VERT, &observation.scroll) != FALSE;
+            observation.renders       = popupState->DebugHostedRenderCount();
+            return observation;
+        };
+        std::wstring cancelProviderId;
+        const bool cancelProviderIdOk                = TryReadRawProviderStringProperty(*cancelProvider, UIA_AutomationIdPropertyId, cancelProviderId);
+        const CancelObservation beforeCancelFocus    = observeCancel();
+        const HRESULT cancelFocusHr                  = cancelFragment->SetFocus();
+        const CancelObservation immediateCancelFocus = observeCancel();
+        if (! cancelProviderIdOk || cancelProviderId != cancelId || FAILED(cancelFocusHr))
+            return failSetup(std::format(L"Cancel provider identity or focus: id='{}' expected='{}' hr=0x{:08X}",
+                                         cancelProviderId,
+                                         cancelId,
+                                         static_cast<unsigned long>(cancelFocusHr)));
+        RedrawWindow(fixture.popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        CancelObservation settledCancel{};
+        const auto ready = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            settledCancel = observeCancel();
+            return settledCancel.renders > beforeCancelFocus.renders && settledCancel.layoutOk && settledCancel.taskOk && settledCancel.boundsOk &&
+                   settledCancel.task.conflict.active && settledCancel.task.conflict.buttonsPublishable &&
+                   settledCancel.task.conflict.generation == task.conflict.generation && settledCancel.layout.hostedFocusedAutomationId == cancelId &&
+                   settledCancel.bounds.bottom > settledCancel.bounds.top && settledCancel.bounds.top * scale >= settledCancel.layout.listViewportRect.top &&
+                   settledCancel.bounds.bottom * scale <= settledCancel.layout.listViewportRect.bottom;
+        },
+            wait);
+        const auto traceCancel = [&](std::wstring_view phase, const CancelObservation& observation) noexcept
+        {
+            Trace(std::format(L"TwoPending Cancel setup {} {}: render={} layout={} task={} bounds={} focus='{}' scroll={} range=[{},{}] page={} "
+                              L"scrollRead={} boundsDip=({},{}) viewport=({},{}) scale={} generation={}",
+                              leg,
+                              phase,
+                              observation.renders,
+                              observation.layoutOk,
+                              observation.taskOk,
+                              observation.boundsOk,
+                              observation.layout.hostedFocusedAutomationId,
+                              observation.layout.scrollPosition,
+                              observation.scroll.nMin,
+                              observation.scroll.nMax,
+                              observation.scroll.nPage,
+                              observation.scrollOk,
+                              observation.bounds.top,
+                              observation.bounds.bottom,
+                              observation.layout.listViewportRect.top,
+                              observation.layout.listViewportRect.bottom,
+                              scale,
+                              observation.task.conflict.generation));
+        };
+        traceCancel(L"before", beforeCancelFocus);
+        traceCancel(L"immediate", immediateCancelFocus);
+        traceCancel(L"settled", settledCancel);
+        if (! ready.conditionMet)
+            return failSetup(std::format(L"visible Cancel after a new hosted frame: id='{}' hr=0x{:08X} {}",
+                                         cancelId,
+                                         static_cast<unsigned long>(cancelFocusHr),
+                                         ready.timeoutDiagnostic));
+        // Reacquire the current exact provider after the setup frame; lookup does not paint.
+        wil::com_ptr_nothrow<IRawElementProviderSimple> settledCancelProvider;
+        std::wstring settledCancelId;
+        if (! FindMatchingWindowHostRawProvider(
+                fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL), settledCancelProvider.put(), cancelId) ||
+            ! settledCancelProvider || ! TryReadRawProviderStringProperty(*settledCancelProvider, UIA_AutomationIdPropertyId, settledCancelId) ||
+            settledCancelId != cancelId)
+            return failSetup(L"reacquire exact Cancel provider after setup frame");
+        Trace(std::format(L"TwoPending Cancel provider {}: before='{}' settled='{}' expected='{}'.", leg, cancelProviderId, settledCancelId, cancelId));
 
         // The canonical exact provider lookup does not scroll or redraw.
         const auto optionsId = std::format(L"FileOperations.Action.{}.0.0", static_cast<uint32_t>(Hit::FooterOptions));

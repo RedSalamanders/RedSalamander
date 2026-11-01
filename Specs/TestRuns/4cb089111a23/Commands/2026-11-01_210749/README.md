@@ -1,0 +1,5 @@
+# Focused Commands Debug run: TwoPending setup failure
+
+Run `20261101T210749Z-30956-df01357452034ed687006662c3e662d8` used source `0750451541e6ca23b9e0e8511613f97a8273039b` and x64 Debug test-enabled build receipt `cceb33263bea64a4863e5cb4fab3635a495453d1e98a3e65dd2dedf0494f127c`, build-input snapshot `46545d6f5d85d067a138c56a399a75de4d9fa58bd91cb00c800c65c5adf09b93`. The build reported zero warnings and errors. The selected native run recorded 13 passed, 1 failed and 2 declared clipboard-capability skips; wrapper exit 1. `results.json` is derived and preserves every case status, reason and skip classification. This is a focused failure, not full-suite acceptance.
+
+The direct A–B–A no-frame focus/default/cancel checks passed. The subsequent positive-visible B Cancel setup observed its bottom 6 pixels beyond the viewport and failed. The raw trace does not establish whether that geometry was stale or a focus-reveal defect. `trace-derived.txt` paraphrases the relevant trace; raw results, trace and metrics remain in the external archived run. `provenance.json` binds those original artifacts by SHA-256; `member-checksums.json` binds this packet's other exact bytes.

@@ -1,0 +1,4 @@
+Derived trace summary; this is not the original byte-preserving trace.
+Direct A-to-B focus: exact B focus and default, empty cancel when B action was offscreen; HRESULT 0; render count stayed 168; exact=true.
+Direct B-to-A focus: exact A focus, default and cancel; HRESULT 0; render count stayed 168; exact=true.
+Subsequent positive-visible B setup failed: Cancel bounds top 318.66666, bottom 352 DIPs; scale 1.5; viewport 0..522 pixels. The bottom is 528 pixels, 6 pixels below the viewport. The trace does not determine whether the setup observed stale rendering or focus reveal failed.

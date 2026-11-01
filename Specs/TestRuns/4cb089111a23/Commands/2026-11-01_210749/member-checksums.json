@@ -1,0 +1,26 @@
+{
+  "schema": "red-salamander.curated-member-checksums.v1",
+  "excludes": "member-checksums.json",
+  "members": {
+    ".gitattributes": {
+      "bytes": 20,
+      "sha256": "e97602ab9cac70102245345c5ab0fc9830df8b17f1072b188265a662a3a547ae"
+    },
+    "provenance.json": {
+      "bytes": 1411,
+      "sha256": "1892fa9fa40fe1e569d1320144eb7065c27a886bdab0167d8bc722dda6d9ca92"
+    },
+    "README.md": {
+      "bytes": 1184,
+      "sha256": "cb611142c81cbb91a8717a0b98a5ae380aa453ae3ba9e59cae98439a8b52ffa0"
+    },
+    "results.json": {
+      "bytes": 3637,
+      "sha256": "aa9c912678d54fc9ba0bb321d815c292363cdcba02a1b84dc21429baf319f2ce"
+    },
+    "trace-derived.txt": {
+      "bytes": 590,
+      "sha256": "ed97323bdbf63ce88ca184b450dd649190035928dc3ce8d0410aabfeacc7d519"
+    }
+  }
+}

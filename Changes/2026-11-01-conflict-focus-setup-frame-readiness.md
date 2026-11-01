@@ -1,0 +1,1 @@
+- Wait for an observed hosted frame and exact visible Cancel control when preparing the two-pending-conflict UI witness. Record focus, scroll and geometry through setup while retaining the existing bounded wait, full-visibility predicate and subsequent synchronous no-frame binding checks. A persistent focus-reveal failure remains a failed test.

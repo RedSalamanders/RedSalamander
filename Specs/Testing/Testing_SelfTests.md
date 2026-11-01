@@ -24,6 +24,12 @@ may focus its button. Escape coverage distinguishes fully virtualized cards from
 clipped actions. The latter proves card/viewport intersection and actual retained action bounds
 outside the DPI-converted viewport independently of the binding under test. The scalar test-only
 decision-action bounds getter observes the hosted buttons without rendering, activating or dispatching.
+The two-pending-conflict witness establishes its visible Cancel setup with a new hosted render,
+the exact live task and prompt generation, and fully visible measured bounds within the existing bounded
+wait. A paint request alone is not proof that a retained frame was prepared. Setup records focus, scroll
+and geometry before and after focus, then reacquires the exact provider; the subsequent Options baseline
+and synchronous decision-binding assertions still permit no intervening hosted render. Setup must fail
+if clipping persists after rendered frames rather than weakening visibility or repairing it by explicit scrolling.
 
 The unified CI adapter runs the normal CI suite after a test-enabled Release build on both native
 architectures; Full and ASan remain explicit manual qualifications. See
