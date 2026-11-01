@@ -1076,6 +1076,32 @@ public:
             count += hit.kind == kind && hit.taskId == taskId ? 1u : 0u;
         return count;
     }
+    // Union of retained decision-button bounds in DIPs, before viewport clipping.
+    [[nodiscard]] bool DebugHostedDecisionActionBoundsForSelfTest(uint64_t taskId, D2D1_RECT_F& bounds) const noexcept
+    {
+        bool found = false;
+        for (size_t index = 0u; index < _hostedButtons.size() && index < _hostedButtonHits.size(); ++index)
+        {
+            const DxUi::Button* button = _hostedButtons[index];
+            const auto& hit            = _hostedButtonHits[index];
+            if (! button || hit.taskId != taskId || hit.kind != PopupHitTest::Kind::TaskConflictAction)
+                continue;
+            const auto current = button->GetBounds();
+            if (! found)
+            {
+                bounds = current;
+                found  = true;
+            }
+            else
+            {
+                bounds.left   = std::min(bounds.left, current.left);
+                bounds.top    = std::min(bounds.top, current.top);
+                bounds.right  = std::max(bounds.right, current.right);
+                bounds.bottom = std::max(bounds.bottom, current.bottom);
+            }
+        }
+        return found;
+    }
     [[nodiscard]] uint64_t DebugHostedRenderCount() const noexcept
     {
         return _controlsHost.DebugGetRenderCount();

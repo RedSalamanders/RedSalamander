@@ -149,6 +149,16 @@
     if (! verifyAccessibleText())
         return reject(L"the visible detail editor lost its subject-aware UIA Name or edit/TextPattern bounds");
 
+    // UIA Invoke focuses the Copy button, so check the pending text-focus handoff first.
+    if (! popupState->DebugPathDetailNeedsFocusForSelfTest() || ! popupState->DebugFocusPathDetailControlForSelfTest(popup.get(), copyId) ||
+        popupState->DebugPathDetailNeedsFocusForSelfTest())
+        return reject(L"a hosted Copy focus change did not clear pending initial text focus");
+    PopupLayoutDebugSnapshot retainedCopyFocus{};
+    retainedCopyFocus.taskId = taskId;
+    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), retainedCopyFocus) || retainedCopyFocus.hostedFocusedAutomationId != copyId)
+        return reject(L"path detail synchronization stole focus back from the Copy control");
+
     const auto invokePathDetailCopy = [&](std::wstring_view targetId) noexcept
     {
         wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> root;
@@ -213,15 +223,6 @@
         copyAnnouncementLayout.hostedAccessibilityNotificationCount <= announcementsAfterSuccess)
         return reject(L"failed path copy did not raise an accessibility notification");
     popupState->DebugSetPathDetailCopyResultForSelfTest(std::nullopt);
-
-    if (! popupState->DebugPathDetailNeedsFocusForSelfTest() || ! popupState->DebugFocusPathDetailControlForSelfTest(popup.get(), copyId) ||
-        popupState->DebugPathDetailNeedsFocusForSelfTest())
-        return reject(L"a hosted Copy focus change did not clear pending initial text focus");
-    PopupLayoutDebugSnapshot retainedCopyFocus{};
-    retainedCopyFocus.taskId = taskId;
-    RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), retainedCopyFocus) || retainedCopyFocus.hostedFocusedAutomationId != copyId)
-        return reject(L"path detail synchronization stole focus back from the Copy control");
 
     const std::array<std::wstring, 3u> logicalTargets{{textId, copyId, closeId}};
     for (size_t index = 0u; index < logicalTargets.size(); ++index)
@@ -474,12 +475,17 @@
     if (! DebugGetFileOperationsPopupTaskSnapshot(popup.get(), taskBId, projectedB) || ! projectedB.conflict.active ||
         ! projectedB.conflict.buttonsPublishable || projectedB.conflict.generation != taskB.conflict.generation)
         return reject(L"task B did not publish an actionable decision");
-    const std::wstring escapeIdB = std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                               static_cast<uint32_t>(PopupHitTest::Kind::TaskConflictAction),
-                                               taskBId,
-                                               projectedB.conflict.escapeAction,
-                                               projectedB.conflict.generation);
-    const auto pressEscape       = [&]() noexcept
+    const std::wstring escapeIdB  = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                static_cast<uint32_t>(PopupHitTest::Kind::TaskConflictAction),
+                                                taskBId,
+                                                projectedB.conflict.escapeAction,
+                                                projectedB.conflict.generation);
+    const std::wstring defaultIdB = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                static_cast<uint32_t>(PopupHitTest::Kind::TaskConflictAction),
+                                                taskBId,
+                                                projectedB.conflict.defaultAction,
+                                                projectedB.conflict.generation);
+    const auto pressEscape        = [&]() noexcept
     {
         SendMessageW(popup.get(), WM_KEYDOWN, VK_ESCAPE, 1);
         SendMessageW(popup.get(), WM_KEYUP, VK_ESCAPE, 0);
@@ -528,13 +534,70 @@
     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     PopupLayoutDebugSnapshot offscreenBinding{};
     offscreenBinding.taskId = taskBId;
-    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), offscreenBinding) || offscreenBinding.hostedCancelAutomationId.size() != 0u ||
-        offscreenBinding.hostedDefaultAutomationId.empty())
-        return reject(L"offscreen Escape was not hidden while the independent Enter default remained published");
+    if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), offscreenBinding) || ! offscreenBinding.hostedCancelAutomationId.empty())
+        return reject(L"a fully offscreen decision exposed an Escape binding");
     const uint64_t beforeOffscreenEscape = popupState->DebugHostedActionCountForSelfTest();
     pressEscape();
     if (IsWindowVisible(popup.get()) || popupState->DebugHostedActionCountForSelfTest() != beforeOffscreenEscape)
         return reject(L"Escape on an offscreen decision invoked it instead of hiding the popup");
+
+    // A fully offscreen card is virtualized and has no hosted default button. Find
+    // the intermediate position where the card is hosted but its actions are below
+    // the viewport, so Enter's independent binding can be checked as well.
+    ShowWindow(popup.get(), SW_SHOWNOACTIVATE);
+    bool foundOffscreenActions = false;
+    D2D1_RECT_F decisionBounds{};
+    bool haveDecisionBounds = false;
+    for (size_t step = 0u; step < 256u; ++step)
+    {
+        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        offscreenBinding.taskId = taskBId;
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), offscreenBinding))
+            return reject(L"the partially visible decision layout snapshot is unavailable");
+        const auto& card         = offscreenBinding.taskPaintedCardRect;
+        const auto& view         = offscreenBinding.listViewportRect;
+        const bool cardVisible   = card.right > card.left && card.bottom > view.top && card.top < view.bottom;
+        haveDecisionBounds       = popupState->DebugHostedDecisionActionBoundsForSelfTest(taskBId, decisionBounds);
+        const float pixelsPerDip = static_cast<float>(GetDpiForWindow(popup.get())) / 96.0f;
+        const bool actionsBelowViewport =
+            haveDecisionBounds && pixelsPerDip > 0.0f && decisionBounds.top >= view.bottom / pixelsPerDip && decisionBounds.bottom > decisionBounds.top;
+        if (cardVisible && popupState->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskConflictAction, taskBId) > 0u && actionsBelowViewport &&
+            offscreenBinding.hostedCancelAutomationId.empty() && offscreenBinding.hostedDefaultAutomationId == defaultIdB)
+        {
+            foundOffscreenActions = true;
+            break;
+        }
+        const int previousScroll = offscreenBinding.scrollPosition;
+        static_cast<void>(SendMessageW(popup.get(), WM_VSCROLL, SB_LINEDOWN, 0));
+        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), offscreenBinding) || offscreenBinding.scrollPosition == previousScroll)
+            break;
+    }
+    if (! foundOffscreenActions)
+        return reject(std::format(L"could not expose the card with offscreen actions and an independent Enter default: scroll={}, card=({},{},{},{}), "
+                                  L"viewport=({},{},{},{}), hosted actions={}, decision bounds DIPs=({},{},{},{}), bounds valid={}, default='{}', cancel='{}'",
+                                  offscreenBinding.scrollPosition,
+                                  offscreenBinding.taskPaintedCardRect.left,
+                                  offscreenBinding.taskPaintedCardRect.top,
+                                  offscreenBinding.taskPaintedCardRect.right,
+                                  offscreenBinding.taskPaintedCardRect.bottom,
+                                  offscreenBinding.listViewportRect.left,
+                                  offscreenBinding.listViewportRect.top,
+                                  offscreenBinding.listViewportRect.right,
+                                  offscreenBinding.listViewportRect.bottom,
+                                  popupState->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskConflictAction, taskBId),
+                                  decisionBounds.left,
+                                  decisionBounds.top,
+                                  decisionBounds.right,
+                                  decisionBounds.bottom,
+                                  haveDecisionBounds,
+                                  offscreenBinding.hostedDefaultAutomationId,
+                                  offscreenBinding.hostedCancelAutomationId));
+    const uint64_t beforeClippedEscape = popupState->DebugHostedActionCountForSelfTest();
+    pressEscape();
+    if (IsWindowVisible(popup.get()) || popupState->DebugHostedActionCountForSelfTest() != beforeClippedEscape || GetForegroundWindow() != foregroundBefore ||
+        GetFocus() != focusBefore)
+        return reject(L"Escape with clipped decision actions invoked one or changed native focus");
 
     // Restore the two-card scenario for the focused-card routing controls below.
     popupState->DebugSetVisualScenario({taskA, taskB}, false, true);

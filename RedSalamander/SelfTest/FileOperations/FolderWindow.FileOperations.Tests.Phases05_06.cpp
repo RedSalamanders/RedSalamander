@@ -12066,14 +12066,14 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         const auto validPrompt = [&](const Task::ConflictPromptState& prompt, uint64_t otherTaskId) noexcept
         {
             return prompt.bucket == Task::ConflictBucket::SameHostOverlap && PromptHasAction(prompt, Task::ConflictAction::Proceed) &&
-                   PromptHasAction(prompt, Task::ConflictAction::RunConcurrently) && PromptHasAction(prompt, Task::ConflictAction::Cancel) &&
+                   ! PromptHasAction(prompt, Task::ConflictAction::RunConcurrently) && PromptHasAction(prompt, Task::ConflictAction::Cancel) &&
                    prompt.defaultAction == Task::ConflictAction::Proceed && prompt.escapeAction == Task::ConflictAction::Cancel &&
                    prompt.overlapTaskId == otherTaskId;
         };
         if ((promptA.has_value() && ! validPrompt(promptA.value(), state.taskB.value())) ||
             (promptB.has_value() && ! validPrompt(promptB.value(), state.taskA.value())))
         {
-            Fail(L"R4A02 same destination warning did not name the concurrently prepared Copy and both scheduling actions.");
+            Fail(L"R4A02 same destination warning must name the peer Copy and offer Queue and Don't start without Run concurrently.");
             return true;
         }
         if (promptA.has_value())
@@ -12389,7 +12389,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
                                                  state.fsLocal,
                                                  {scenario == 3u ? sourceItem : sourceParent},
                                                  destination,
-                                                 FILESYSTEM_FLAG_NONE,
+                                                 scenario == 3u ? FILESYSTEM_FLAG_NONE : FILESYSTEM_FLAG_RECURSIVE,
                                                  false,
                                                  0u,
                                                  FolderWindow::FileOperationState::ExecutionMode::PerItem,
@@ -12407,6 +12407,14 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     if (state.stepState == 1u)
     {
         Task* const publisher = state.fileOps->FindTask(state.taskA.value());
+        if (const auto prompt = TryGetConflictPromptCopy(publisher); prompt.has_value())
+        {
+            releasePauses();
+            Fail(std::format(L"R4A02 live-output {} publisher opened an unexpected pre-publication prompt (bucket={}).",
+                             scenarioName,
+                             static_cast<unsigned int>(prompt.value().bucket)));
+            return true;
+        }
         std::error_code ec;
         if (! HasFileOpsLiveOutputPublishedPauseEnteredForSelfTest() || ! std::filesystem::exists(publishedItem, ec))
         {

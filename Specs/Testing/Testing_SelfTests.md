@@ -12,10 +12,18 @@ cancellation and ineligible-waiter controls. These focused checks do not establi
 
 `R4A02_LiveOutputGuardChoices` uses a provider-native directory publisher whose child handles have
 closed before its top-level completion pause, so Skip, Queue, destructive consent and publication-index
-overflow still reach the actual warning and mutation gates. A separate qualified single-file bridge
+overflow still reach the actual warning and mutation gates. Its directory copy explicitly enables
+recursion and an unexpected pre-publication prompt fails immediately. Conflicting Copy jobs retain
+the peer identity, Queue and Cancel assertions while rejecting Run concurrently. A separate qualified single-file bridge
 control retains its publication authority, requires Local Delete preparation to fail with
 `ERROR_SHARING_VIOLATION` before either gate, proves both files remain byte-equal, and releases the
 publisher to successful completion. The sharing failure does not replace warning coverage.
+
+No-activation path-detail fixtures check pending initial text focus before UIA Invoke, because Invoke
+may focus its button. Escape coverage distinguishes fully virtualized cards from retained cards with
+clipped actions. The latter proves card/viewport intersection and actual retained action bounds
+outside the DPI-converted viewport independently of the binding under test. The scalar test-only
+decision-action bounds getter observes the hosted buttons without rendering, activating or dispatching.
 
 The unified CI adapter runs the normal CI suite after a test-enabled Release build on both native
 architectures; Full and ASan remain explicit manual qualifications. See
