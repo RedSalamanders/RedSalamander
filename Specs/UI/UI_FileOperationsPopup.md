@@ -284,6 +284,11 @@ must reveal each preceding primary action and then More; forward Tab from More m
 primary action. Each step first restores the top scroll position and verifies the previous focus
 identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
 above the footer. Traversal never submits an action or changes foreground ownership.
+Routed modifier tests deliver owned Shift key messages to the retained host as well as setting
+the thread keyboard table used by native shortcut checks. The host caches modifiers from its
+message stream; changing the table alone does not establish reverse traversal. The debug layout
+snapshot exposes that modifier mask. Each step verifies the mask before Tab, one native Tab
+delivery, and cleared routed Shift afterward, including scoped cleanup on failure.
 First-frame collapse tests MUST inspect the actual raw provider tree, including offscreen children,
 after witnessing each case-owned task before collapse. Missing roots, traversal failures and logical
 visibility flags alone cannot establish that providers retired.

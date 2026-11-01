@@ -15680,8 +15680,34 @@ struct FileOperationsPopupTestFixture final
         state.Require(SetKeyboardState(keys.data()) != FALSE, L"Unable to set routed traversal modifiers.");
         if (! state.failure.empty())
             return;
+        // The retained host tracks modifier key messages separately from the
+        // Win32 thread keyboard table. Route the owned Shift down/up as well;
+        // SetKeyboardState alone makes this journey traverse forward.
+        bool routedShift              = false;
+        const auto releaseHostedShift = [&]() noexcept
+        {
+            if (routedShift)
+            {
+                routedShift = false;
+                SendMessageW(fixture.popup, WM_KEYUP, VK_SHIFT, (LPARAM{1} << 30) | (LPARAM{1} << 31));
+            }
+        };
+        const auto releaseHostedShiftOnExit = wil::scope_exit([&]() noexcept { releaseHostedShift(); });
+        if (reverse)
+        {
+            routedShift = true;
+            SendMessageW(fixture.popup, WM_KEYDOWN, VK_SHIFT, 0);
+        }
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot routedModifiers{};
+        routedModifiers.taskId = fixture.taskId.value();
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, routedModifiers) &&
+                          ((routedModifiers.hostedModifierState & MK_SHIFT) != 0u) == reverse,
+                      L"The retained host must observe the routed traversal modifier before Tab.");
+        if (! state.failure.empty())
+            return;
         SendMessageW(fixture.popup, WM_KEYDOWN, VK_TAB, 0);
         SendMessageW(fixture.popup, WM_KEYUP, VK_TAB, 0);
+        releaseHostedShift();
         PumpPendingMessages();
         redraw();
         FileOperationsPopupInternal::PopupLayoutDebugSnapshot shortLayout{};
@@ -15697,14 +15723,16 @@ struct FileOperationsPopupTestFixture final
         const bool revealed =
             layoutAvailable && taskAvailable && currentTask.conflict.active && currentTask.conflict.generation == shortTask.conflict.generation &&
             GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > 0 &&
-            shortLayout.hostedFocusedAutomationId == expectedId &&
+            shortLayout.hostedFocusedAutomationId == expectedId && shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u &&
+            (shortLayout.hostedModifierState & MK_SHIFT) == 0u &&
             FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId) && provider &&
             SUCCEEDED(provider.query_to(fragment.put())) && SUCCEEDED(fragment->get_BoundingRectangle(&bounds)) && bounds.height > 0 &&
             bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
             bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
         state.Require(revealed,
                       std::format(L"{} must reveal the published action above the footer: expected={} scroll={} focused={} boundsTop={} height={} "
-                                  L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
+                                  L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={} "
+                                  L"modifiersBefore={} modifiersAfter={} nativeTabsBefore={} nativeTabsAfter={}.",
                                   reverse ? L"Shift+Tab" : L"Tab",
                                   expectedId,
                                   shortLayout.scrollPosition,
@@ -15718,7 +15746,11 @@ struct FileOperationsPopupTestFixture final
                                   IsWindow(fixture.popup) != FALSE,
                                   IsWindowVisible(fixture.popup) != FALSE,
                                   currentTask.finished,
-                                  currentTask.conflict.active));
+                                  currentTask.conflict.active,
+                                  routedModifiers.hostedModifierState,
+                                  shortLayout.hostedModifierState,
+                                  beforeTab.hostedNativeTabCount,
+                                  shortLayout.hostedNativeTabCount));
     };
     std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
     for (size_t remaining = primaryCount; remaining > 0u && state.failure.empty(); --remaining)

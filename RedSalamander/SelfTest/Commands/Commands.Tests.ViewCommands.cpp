@@ -15440,6 +15440,9 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
         HWND timerWindow = nullptr;
         bool armed       = false;
         bool queued      = false;
+        DWORD timerError = ERROR_SUCCESS;
+        DWORD waitError  = ERROR_SUCCESS;
+        std::chrono::steady_clock::time_point deadline{};
 
         static void Queue(void* context) noexcept
         {
@@ -15448,10 +15451,30 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
                 return;
             control.armed = true;
             if (SetTimer(control.timerWindow, 1u, 1u, PaintProbe::OnTimer) == 0u)
+            {
+                control.timerError = GetLastError();
                 return;
-            std::this_thread::sleep_for(20ms);
-            MSG pending{};
-            control.queued = PeekMessageW(&pending, control.timerWindow, WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
+            }
+            // Observe the real timer's readiness without dispatching it. A
+            // fixed sleep cannot promise readiness under timer coalescing.
+            // This control shares (and never extends) the original deadline;
+            // only the helper under test may drain the queued paint.
+            while (std::chrono::steady_clock::now() < control.deadline)
+            {
+                MSG pending{};
+                if (PeekMessageW(&pending, control.timerWindow, WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE)
+                {
+                    control.queued = true;
+                    return;
+                }
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(control.deadline - std::chrono::steady_clock::now());
+                const DWORD waitMs   = static_cast<DWORD>((std::max)(1ms, (std::min)(20ms, remaining)).count());
+                if (MsgWaitForMultipleObjectsEx(0u, nullptr, waitMs, QS_TIMER, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                {
+                    control.waitError = GetLastError();
+                    return;
+                }
+            }
         }
     };
     std::atomic<uint32_t> latePaints{0u};
@@ -15467,22 +15490,32 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
     state.Require(attached != 0 || GetLastError() == ERROR_SUCCESS, L"Could not attach the late queued-paint probe.");
     if (! state.failure.empty())
         return false;
-    QuietCommitPaint lateControl{.timerWindow = lateTimerWindow.get()};
+    const auto lateTimeout = SelfTest::Scale(5000ms);
+    QuietCommitPaint lateControl{.timerWindow = lateTimerWindow.get(), .deadline = std::chrono::steady_clock::now() + lateTimeout};
     const auto beforeLate             = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
-    const bool lateQuiet              = WaitForFolderViewWarmPerfQuiescence(pane, 100ms, SelfTest::Scale(5000ms), QuietCommitPaint::Queue, &lateControl);
+    const bool lateQuiet              = WaitForFolderViewWarmPerfQuiescence(pane, 100ms, lateTimeout, QuietCommitPaint::Queue, &lateControl);
     const auto atLateReturn           = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
     const uint32_t latePaintsAtReturn = latePaints.load(std::memory_order_acquire);
     MSG pendingLate{};
     const bool latePendingAtReturn = lateTimerWindow && PeekMessageW(&pendingLate, lateTimerWindow.get(), WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
-    SelfTest::AppendSelfTestTrace(std::format(L"Warm quiescence late probe: quiet={} armed={} queued={} pending={} paintsAtReturn={} renderDelta={}.",
+    SelfTest::AppendSelfTestTrace(std::format(L"Warm quiescence late probe: quiet={} armed={} queued={} pending={} paintsAtReturn={} renderDelta={} "
+                                              L"timerError={} waitError={}.",
                                               lateQuiet,
                                               lateControl.armed,
                                               lateControl.queued,
                                               latePendingAtReturn,
                                               latePaintsAtReturn,
-                                              atLateReturn.renderCalls - beforeLate.renderCalls));
+                                              atLateReturn.renderCalls - beforeLate.renderCalls,
+                                              lateControl.timerError,
+                                              lateControl.waitError));
     state.Require(lateQuiet && lateControl.armed && lateControl.queued,
-                  L"The independent late-paint control must actually queue work inside the original quiet deadline.");
+                  std::format(L"The independent late-paint control must actually queue work inside the original quiet deadline: quiet={} armed={} "
+                              L"queued={} timerError={} waitError={}.",
+                              lateQuiet,
+                              lateControl.armed,
+                              lateControl.queued,
+                              lateControl.timerError,
+                              lateControl.waitError));
     state.Require(! latePendingAtReturn && latePaintsAtReturn == 1u && atLateReturn.renderCalls > beforeLate.renderCalls,
                   L"Warm quiescence must drain and observe the real paint queued after its first empty-queue observation.");
     // Drain any failed negative control while its borrowed probe is still alive.

@@ -1,0 +1,1 @@
+- Track the public unified-CI native and artifact-only Prepare acceptance with original source-bound receipts, retain the exact scope and timing of obsolete-run cancellation approvals, and keep private-project readiness and broader runtime qualification with their existing owners. DxUi retains internal SDK artifacts without a publication workflow.
