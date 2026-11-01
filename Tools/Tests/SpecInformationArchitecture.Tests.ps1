@@ -1182,3 +1182,32 @@ Describe 'Markdown fence indentation boundaries' {
         $headings[0].Title | Should Be 'Visible heading'
     }
 }
+
+Describe 'Markdown HTML comment visibility' {
+    It 'masks HTML comments without hiding literal code or changing offsets' {
+        $text = 'visible `<!-- literal -->` <!-- secret' + "`r`n" + 'still hidden --> `abc123` visible'
+        $masked = Get-RSMarkdownHtmlCommentMask -Text $text
+        $masked.Length | Should Be $text.Length
+        $masked | Should Match '<!-- literal -->'
+        $masked | Should Not Match 'secret|still hidden'
+        $masked | Should Match '`abc123` visible'
+        $masked.IndexOf("`r`n") | Should Be $text.IndexOf("`r`n")
+        $unterminated = Get-RSMarkdownHtmlCommentMask -Text 'before <!-- hidden to end'
+        $unterminated | Should Match '^before '
+        $unterminated | Should Not Match 'hidden'
+        $separate = Get-RSMarkdownHtmlCommentMask -Text 'a<!--x-->b<!--y-->c'
+        $separate | Should Match '^a\s+b\s+c$'
+        $afterCommentBacktick = Get-RSMarkdownHtmlCommentMask -Text '<!-- ` --> visible <!-- hidden --> `literal`'
+        $afterCommentBacktick | Should Not Match 'hidden'
+        $afterCommentBacktick | Should Match '`literal`'
+        $fenceInComment = '<!--' + "`n" + '```' + "`n" + '-->' + "`n" + '<!-- hidden --> visible'
+        (Get-RSMarkdownHtmlCommentMask -Text $fenceInComment) | Should Not Match 'hidden'
+        $fencedLiteral = '```' + "`n" + '<!-- literal -->' + "`n" + '```'
+        (Get-RSMarkdownHtmlCommentMask -Text $fencedLiteral) | Should Match '<!-- literal -->'
+        (Get-RSMarkdownHtmlCommentMask -Text '') | Should Be ''
+        $boundMessage = ''
+        try { $null = Get-RSMarkdownHtmlCommentMask -Text ('x' * 2049) }
+        catch { $boundMessage = $_.Exception.Message }
+        $boundMessage | Should Match 'exceeds 2048 UTF-16 units'
+    }
+}
