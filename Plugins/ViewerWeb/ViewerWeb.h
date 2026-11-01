@@ -259,8 +259,9 @@ private:
     std::atomic<uint64_t> _asyncLoadPostFailureCount{0u};
     std::atomic<uint64_t> _asyncSavePostFailureCount{0u};
     std::wstring _statusMessage;
-    bool _loadPostFailureTerminal = false;
-    bool _saveInProgress          = false;
+    HRESULT _profileAdmissionFailureHr = S_OK;
+    bool _loadPostFailureTerminal      = false;
+    bool _saveInProgress               = false;
 
     std::optional<std::wstring> _pendingPath;
     std::optional<std::wstring> _pendingWebContent;

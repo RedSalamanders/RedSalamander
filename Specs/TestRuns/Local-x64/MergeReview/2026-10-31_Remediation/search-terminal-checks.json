@@ -1,0 +1,20 @@
+[
+  {
+    "check": "Tool inventory",
+    "status": "passed",
+    "log": "Z:\\RedSalamander.Perf\\runs\\20261101T014625Z-66356-93799f3a7b1d42fda5acb500ee747c29\\scratch\\parallel-terminal-checks\\tool-inventory.log"
+  },
+  {
+    "check": "Changelog",
+    "status": "passed",
+    "log": "Z:\\RedSalamander.Perf\\runs\\20261101T014625Z-66356-93799f3a7b1d42fda5acb500ee747c29\\scratch\\parallel-terminal-checks\\changelog.log"
+  },
+  {
+    "check": "Release affected explain",
+    "status": "plan_generated",
+    "exit_code": 2,
+    "repository_qualified": false,
+    "pending_interactive": 4,
+    "log": "Z:\\RedSalamander.Perf\\runs\\20261101T014625Z-66356-93799f3a7b1d42fda5acb500ee747c29\\scratch\\parallel-terminal-checks\\prepush-explain.log"
+  }
+]

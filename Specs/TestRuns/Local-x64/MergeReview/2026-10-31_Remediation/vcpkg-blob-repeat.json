@@ -1,0 +1,317 @@
+{
+  "run_id": "20261031T180105Z-42672-3b9014697c5a444aa6f9bfd10545b7e7",
+  "results": [
+    {
+      "path": "Tools\\Tests\\VcpkgInstallSafety.Tests.ps1",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 6265,
+      "cases": [
+        {
+          "Name": "contains vcpkg execution and acquires selected platform dependency locks in stable order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "accepts vcpkg triplet leaf names",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects triplet values that are paths",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "resolves child paths under the intended root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects child paths that escape the intended root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "accepts manifest version floors present in the selected registry",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects a manifest floor absent from the selected registry before install",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "accepts an exact manifest override present in the selected registry",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects an exact manifest override absent from the selected registry",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the audited AWS SDK serializer dependency on one exact override",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "merges a single source file while StrictMode is active",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "reads the default toolset from the installation, not the newest one installed beside it",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "fails with the file and the repair when the default toolset version is missing or malformed",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "finds the installation the way the build does",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "writes the stock triplet unchanged in its own line endings, then the two pins",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rewrites the overlay only when its bytes change",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "finds the stock triplet in triplets, then triplets\\community, and keeps the governed leaf-name rule",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "pins every triplet the installer builds, before any lock, staging directory or download",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "matches the pinned DxUi modules it mirrors",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "compares vcpkg version text the way the pin checks need",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "pins builtin-baseline to the vcpkg tool commit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps every direct floor at or below its exact override and the audited AWS SDK and CRT pair together",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Dependabot away from the vcpkg baseline and the audited AWS pair",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Dependabot from proposing any vcpkg port or baseline update",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "finds every floor and override in the immutable builtin-baseline version database (data only)",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the ARM64 compatibility overlay on the builtin-baseline source and notices (data only)",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "executes the real CI argument selection with pinned triplets, ARM64 ports and failure propagation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "invalidates the hosted dependency cache when the overlays or their helper change",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "refreshes the installer's overlay triplet before MSBuild can install, inside the platform dependency lock",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "initializes the once-per-build overlay flag so callers under StrictMode can build",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "passes the overlay to the MSBuild manifest install only when the overlay triplet exists",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "limits expansion only for the affected compiler target and translation unit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        }
+      ]
+    },
+    {
+      "path": "Tools\\Tests\\ToolInventory.Tests.ps1",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 8196,
+      "cases": [
+        {
+          "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects an unclassified nested file outside reviewed directory rules",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "fails when a derived module consumer is missing from usedBy",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects stale explicit paths",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires explicit prerequisites metadata on entries and directory rules",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires retention policy for compatibility records",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires every non-null replacement to be an exact existing Tools path",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects historical entries without a reviewed manual entry point",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects unreviewed and missing historical manual entry-point paths",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses a reviewed nested rule when exactly one rule matches",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "renders a useful Markdown file inventory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "documents the command contract and supports Validate as an alias",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        }
+      ]
+    }
+  ]
+}

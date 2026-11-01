@@ -1,0 +1,159 @@
+{
+  "schema": "review-remediation.native-qualification.v1",
+  "source_snapshot_id": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "scope": "Fresh affected and PrePush noninteractive acceptance; repository qualification remains NOT_EVALUATED for four deferred foreground entries",
+  "affected": {
+    "run_id": "20261101T015718Z-59720-915e2c48f6844afaaa00dd704cbae4d2",
+    "path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T015718Z-59720-915e2c48f6844afaaa00dd704cbae4d2\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "sha256": "af544f246baa9b1f04de1c62e06b4253b71ed26a46cc559ad9cb7bb0e924d931",
+    "counts": {
+      "executed": 14,
+      "incomplete": 0,
+      "invalidated": 0,
+      "promoted": 14,
+      "provisional": 0,
+      "reused": 0
+    },
+    "case_counts": {
+      "failed": 0,
+      "passed": 1421,
+      "skipped": 31,
+      "total": 1452
+    },
+    "receipt_id": "83db9bc6c5ef4556da0b72d9bb5a7514f1ca6b498e551102aab3c7d4ef5fa0da"
+  },
+  "prepush": {
+    "run_id": "20261101T030139Z-63704-6bc18431b6844a6ebcd98279ed4f127c",
+    "path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T030139Z-63704-6bc18431b6844a6ebcd98279ed4f127c\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "sha256": "50953677be95e61318c7e1c9f47906169a1506ee44ff25defd4a8eff20e9200e",
+    "counts": {
+      "executed": 14,
+      "incomplete": 0,
+      "invalidated": 0,
+      "promoted": 14,
+      "provisional": 0,
+      "reused": 0
+    },
+    "case_counts": {
+      "failed": 0,
+      "passed": 1421,
+      "skipped": 31,
+      "total": 1452
+    },
+    "receipt_id": "86e553ec52e5cfec47163b88ebb46f072be6784deab40eb01309fc2fca601ce9"
+  },
+  "prepush_mode": "Fresh; Test-Changes.ps1 intentionally chooses Fresh for PrePush. No local results were reused. Earlier reuse expectation was corrected.",
+  "fresh_compare": {
+    "passed": 252,
+    "failed": 0,
+    "skipped": 31,
+    "duration_ms": 126108,
+    "repair_cases": [
+      {
+        "name": "local_search_callback_contract",
+        "status": "passed",
+        "duration_ms": 5
+      },
+      {
+        "name": "search_service_multi_client_and_rebuild_control",
+        "status": "passed",
+        "duration_ms": 2836
+      }
+    ],
+    "raw_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T030139Z-63704-6bc18431b6844a6ebcd98279ed4f127c\\artifacts\\archive\\4cb089111a23\\CompareDirectories\\2026-11-01_045140\\compare_results.json",
+    "sha256": "96de1b2aff270afa78fdf95c336ec3df4ec7ecebaf20b513e15f9313c21510b6"
+  },
+  "fresh_join_before_drain": {
+    "expected_dispatches": 4,
+    "actual_dispatches": 4,
+    "rows": [
+      {
+        "timestamp": "2026-11-01T03:50:46.815Z",
+        "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+        "durationUs": 0,
+        "value0": 0,
+        "value1": 1,
+        "hr": 0
+      },
+      {
+        "timestamp": "2026-11-01T03:50:46.816Z",
+        "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+        "durationUs": 0,
+        "value0": 0,
+        "value1": 1,
+        "hr": 0
+      },
+      {
+        "timestamp": "2026-11-01T03:50:46.817Z",
+        "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+        "durationUs": 0,
+        "value0": 0,
+        "value1": 1,
+        "hr": 0
+      },
+      {
+        "timestamp": "2026-11-01T03:50:46.817Z",
+        "metric": "FileSystem.Search.SelfTestJoinBeforeDrain",
+        "durationUs": 0,
+        "value0": 0,
+        "value1": 1,
+        "hr": 0
+      }
+    ],
+    "scope": "Deterministic ordering witness; no throughput improvement claim",
+    "raw_perf_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T030139Z-63704-6bc18431b6844a6ebcd98279ed4f127c\\artifacts\\archive\\4cb089111a23\\CompareDirectories\\2026-11-01_045140\\perf\\perf_metrics.jsonl",
+    "raw_perf_sha256": "271c0ca6db161bd9d7075e248120df13e2ebc8a288fea96e36ff9cdd2cf033a7"
+  },
+  "native_logs": [
+    ".build/logs/msbuild-20261101_024608_648-pid81992-db931b6f.log",
+    ".build/logs/msbuild-20261101_031633_085-pid59720-c58c18b7.log",
+    ".build/logs/msbuild-20261101_042028_471-pid63704-2bef2da8.log"
+  ],
+  "compiler_results": {
+    "affected_passed": 30,
+    "affected_failed": 0,
+    "affected_seconds": 821.38,
+    "prepush_passed": 30,
+    "prepush_failed": 0,
+    "prepush_seconds": 783.14
+  },
+  "tooling_results": {
+    "affected_passed": 1128,
+    "affected_failed": 0,
+    "affected_seconds": 905.66,
+    "prepush_passed": 1128,
+    "prepush_failed": 0,
+    "prepush_seconds": 878.57
+  },
+  "performance_tests2": {
+    "affected_passed": 15,
+    "prepush_passed": 15
+  },
+  "arm64_production": {
+    "run_id": "20261101T021617Z-53856-bda9232a44d44589a1052526530771a5",
+    "receipt_id": "9935d0dd4b84c70fd776643850d5051ab8f2f55506230eebb3b1cc6ed57becb5",
+    "raw_receipt_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T021617Z-53856-bda9232a44d44589a1052526530771a5\\scratch\\release-zip\\build-receipt.json",
+    "raw_receipt_sha256": "4f9b8c446dadfe2b36cc62e1e090961da272a80c9cb26097ac7fdb4b5ae0ba58",
+    "outputs": 174,
+    "artifact_hash_mismatches": 0,
+    "zip_entries": 175,
+    "excluded_entries": [],
+    "package": {
+      "path": ".build/AppPackages/RedSalamander-7.0.1-ARM64-Portable.zip",
+      "bytes": 25983657,
+      "sha256": "c78da66be1cf185e50c95f2530f6b0e7ce917dd00eaad9c5d282ab59fcd9cb28"
+    },
+    "native_execution": "Not performed; requires ARM64 hardware"
+  },
+  "failed_runs_retained": [
+    "20261031T224507Z-21004-09ddb0846d214cfb8a1cbaa6bdd8440f",
+    "20261101T000911Z-85964-64c59339d2b64746b6b9109402edcac1",
+    "20261101T004014Z-20408-b6518ed1f0964256922cd3306462ff76"
+  ],
+  "foreground_pending": [
+    "Commands",
+    "FileOperations",
+    "ViewerPETests.Interactive",
+    "ViewerSqliteTests.Interactive"
+  ]
+}

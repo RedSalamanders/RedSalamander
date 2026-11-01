@@ -3087,7 +3087,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             FileOperations::MutationInterlockScope sameLeafScope        = publishScope;
             FileOperations::MutationInterlockScope distinctSiblingScope = publishScope;
             distinctSiblingScope.providerPath                           = (copyOnlyDestinationRoot / L"different-sibling.bin").native();
-            bool rebuiltDistinctAnchors                                 = true;
+            distinctSiblingScope.providerPathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), distinctSiblingScope.providerPath);
+            bool rebuiltDistinctAnchors          = true;
             for (FileOperations::MutationInterlockAnchor& anchor : distinctSiblingScope.anchors)
             {
                 rebuiltDistinctAnchors = rebuiltDistinctAnchors && anchor.authority &&
@@ -3101,6 +3102,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
             FileOperations::MutationInterlockScope ancestorScope = publishScope;
             ancestorScope.providerPath                           = copyOnlyDestinationRoot.native();
+            ancestorScope.providerPathKey                        = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), ancestorScope.providerPath);
             ancestorScope.anchors.resize(1u);
             ancestorScope.anchors.front().relativePath.clear();
             ancestorScope.anchors.front().relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), L"");
@@ -3121,6 +3123,115 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                               ! FileOperations::DebugMutationScopesOverlapForSelfTest(sameLeafScope, sharedReadScope),
                           L"Anchored interlocks must serialize the same or ancestor target, admit distinct siblings, fail unsupported identity domains "
                           L"conservatively, and share reads."))
+            {
+                return true;
+            }
+
+            const auto makeIndexedScope = [&](std::wstring_view relativePath, FileOperations::MutationInterlockAccess access)
+            {
+                FileOperations::MutationInterlockScope scope = publishScope;
+                scope.access                                 = access;
+                scope.providerPath                           = (copyOnlyDestinationRoot / std::wstring(relativePath)).native();
+                scope.providerPathKey                        = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), scope.providerPath);
+                scope.anchors.resize(1u);
+                scope.anchors.front().relativePath    = relativePath;
+                scope.anchors.front().relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), relativePath);
+                return scope;
+            };
+            const auto indexedPairwiseOracle =
+                [](const std::vector<FileOperations::MutationInterlockScope>& left, const std::vector<FileOperations::MutationInterlockScope>& right) noexcept
+            {
+                return std::ranges::any_of(left,
+                                           [&](const FileOperations::MutationInterlockScope& leftScope) noexcept
+                {
+                    return std::ranges::any_of(right, [&](const FileOperations::MutationInterlockScope& rightScope) noexcept {
+                        return FileOperations::DebugMutationScopesOverlapForSelfTest(leftScope, rightScope);
+                    });
+                });
+            };
+
+            // Regression: raw lexical order puts DIR-OLD between DIR and DIR\X. The read/read
+            // duplicate at DIR must not hide the later write/read conflict beneath that ancestor.
+            const std::vector<FileOperations::MutationInterlockScope> ancestorReads{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+            };
+            const std::vector<FileOperations::MutationInterlockScope> interleavedScopes{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR-OLD", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR/X", FileOperations::MutationInterlockAccess::WriteSource),
+            };
+            uint64_t interleavedComparisons = 0u;
+            const bool interleavedOverlap = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, interleavedScopes, interleavedComparisons);
+            const bool interleavedOracle  = indexedPairwiseOracle(ancestorReads, interleavedScopes);
+            if (! require(interleavedOverlap && interleavedOverlap == interleavedOracle && interleavedComparisons > 0u,
+                          L"Indexed interlocks must match the pairwise oracle when a read/read ancestor is interleaved with a sibling before a nested writer."))
+            {
+                return true;
+            }
+
+            auto unkeyableInterleavedScopes = interleavedScopes;
+            unkeyableInterleavedScopes[1].anchors.front().relativePathKey.reset();
+            uint64_t fallbackComparisons = 0u;
+            const bool fallbackOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, unkeyableInterleavedScopes, fallbackComparisons);
+            if (! require(fallbackOverlap && fallbackOverlap == indexedPairwiseOracle(ancestorReads, unkeyableInterleavedScopes) && fallbackComparisons > 0u,
+                          L"Unkeyable interlock scopes must retain pairwise-oracle behavior for the interleaved ancestor/writer case."))
+            {
+                return true;
+            }
+
+            const std::vector<FileOperations::MutationInterlockScope> caseInsensitiveReads{
+                makeIndexedScope(L"Dir", FileOperations::MutationInterlockAccess::ReadSource),
+            };
+            const std::vector<FileOperations::MutationInterlockScope> caseInsensitiveWrites{
+                makeIndexedScope(L"DIR", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"DIR-OLD", FileOperations::MutationInterlockAccess::ReadSource),
+                makeIndexedScope(L"dir\\X", FileOperations::MutationInterlockAccess::WriteSource),
+            };
+            uint64_t caseInsensitiveComparisons = 0u;
+            const bool caseInsensitiveOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(caseInsensitiveReads, caseInsensitiveWrites, caseInsensitiveComparisons);
+            if (! require(caseInsensitiveOverlap && caseInsensitiveOverlap == indexedPairwiseOracle(caseInsensitiveReads, caseInsensitiveWrites),
+                          L"Indexed interlocks must keep case-insensitive path profiles aligned with the pairwise oracle."))
+            {
+                return true;
+            }
+
+            auto caseSensitiveReads                                               = caseInsensitiveReads;
+            auto caseSensitiveWrites                                              = caseInsensitiveWrites;
+            caseSensitiveReads.front().endpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveReads)
+            {
+                scope.anchors.front().relativePath    = L"Dir";
+                scope.anchors.front().relativePathKey = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            }
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveWrites)
+            {
+                scope.endpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+                scope.anchors.front().relativePathKey            = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            }
+            caseSensitiveWrites[0].anchors.front().relativePath = L"Dir";
+            caseSensitiveWrites[1].anchors.front().relativePath = L"Dir-OLD";
+            caseSensitiveWrites[2].anchors.front().relativePath = L"dir\\X";
+            for (FileOperations::MutationInterlockScope& scope : caseSensitiveWrites)
+                scope.anchors.front().relativePathKey = TryMakePathKey(scope.endpoint.pathIdentity.value(), scope.anchors.front().relativePath);
+            uint64_t caseSensitiveComparisons = 0u;
+            const bool caseSensitiveOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(caseSensitiveReads, caseSensitiveWrites, caseSensitiveComparisons);
+            if (! require(! caseSensitiveOverlap && caseSensitiveOverlap == indexedPairwiseOracle(caseSensitiveReads, caseSensitiveWrites) &&
+                              caseSensitiveComparisons > 0u,
+                          L"Indexed interlocks must not invent an ancestor conflict for case-sensitive sibling components."))
+            {
+                return true;
+            }
+
+            auto differentProfileScopes = interleavedScopes;
+            for (FileOperations::MutationInterlockScope& scope : differentProfileScopes)
+                scope.endpoint.profileId = L"other-profile";
+            uint64_t profileComparisons = 0u;
+            const bool profileOverlap   = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(ancestorReads, differentProfileScopes, profileComparisons);
+            if (! require(! profileOverlap && profileOverlap == indexedPairwiseOracle(ancestorReads, differentProfileScopes),
+                          L"Indexed interlocks must preserve provider-profile identity-domain separation."))
             {
                 return true;
             }
@@ -3216,8 +3327,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
                 retainedPublishScopes.emplace_back(scope);
                 FileOperations::MutationInterlockScope siblingScope = scope;
-                siblingScope.providerPath = (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
-                bool rebuiltAnchors       = true;
+                siblingScope.providerPath    = (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
+                siblingScope.providerPathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), siblingScope.providerPath);
+                bool rebuiltAnchors          = true;
                 for (FileOperations::MutationInterlockAnchor& anchor : siblingScope.anchors)
                 {
                     rebuiltAnchors         = rebuiltAnchors && anchor.authority &&
@@ -3252,6 +3364,13 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             Debug::Perf::Emit(L"FileOps.Interlock.CheckUs", L"selftest-local-256x256-disjoint-publish-leaves", comparisonUs, scopeComparisons, 1u, S_OK);
             Debug::Perf::Emit(L"FileOps.Interlock.ScopeComparisons", L"selftest-local-256x256-disjoint-publish-leaves", 0u, scopeComparisons, 1u, S_OK);
             Debug::Perf::Emit(L"FileOps.Interlock.ActiveCandidates", L"selftest-local-256x256-disjoint-publish-leaves", 0u, 1u, scopeComparisons, S_OK);
+
+            if (! RunFileOpsSameHostOverlapClassifierAssertions(retainedPublishScopes, disjointPublishScopes))
+            {
+                Fail(L"The actual overlap classifier failed its 256x256 disjoint and last-pair assertions.");
+                return true;
+            }
+
             Debug::Perf::Emit(L"FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes",
                               L"local-256-top-level-items",
                               retentionPrepareUs,
@@ -12211,19 +12330,23 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
 case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // R4-A02-2: pause a Local Copy immediately after it publishes one exact destination item, then
-    // start a permanent Delete of that item. The Delete chooses Run at admission and the test drops
+    // R4-A02-2: copy a directory through the Local provider and pause its top-level completion
+    // callback after the child has been published and its file handles closed. A selected regular
+    // file takes the bridge route, whose retained publication authority correctly prevents the
+    // Delete bind before this advisory can be exercised. Start a permanent Delete of the child.
+    // The Delete chooses Run at admission and the test drops
     // only that relation at the pre-mutation pause, modelling a newly uncovered destructive
     // consequence without relying on transfer timing. The item gate must protect the live publisher
     // for Skip, Queue, and explicit destructive consent. The Queue row forces the fixed publication
     // index into overflow and proves the conservative active-scope fallback.
-    const uint32_t scenario                   = state.r4a02LiveOutputScenario;
-    const wchar_t* const scenarioName         = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : L"Delete anyway";
-    const std::filesystem::path sourceParent  = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
-    const std::filesystem::path sourceItem    = sourceParent / L"a-published.bin";
-    const std::filesystem::path destination   = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
-    const std::filesystem::path publishedItem = destination / L"a-published.bin";
-    const auto releasePauses                  = []() noexcept
+    const uint32_t scenario                  = state.r4a02LiveOutputScenario;
+    const wchar_t* const scenarioName        = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : scenario == 2u ? L"Delete anyway" : L"Bridge sharing";
+    const std::filesystem::path sourceParent = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
+    const std::filesystem::path sourceItem   = sourceParent / L"a-published.bin";
+    const std::filesystem::path destination  = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
+    const std::filesystem::path publishedItem =
+        scenario == 3u ? destination / sourceItem.filename() : destination / sourceParent.filename() / sourceItem.filename();
+    const auto releasePauses = []() noexcept
     {
         ReleaseFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest();
         SetFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest(false);
@@ -12240,10 +12363,10 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
 
     if (state.stepState == 0u)
     {
-        if (scenario >= 3u || ! state.fsLocal || ! state.fileOps)
+        if (scenario >= 4u || ! state.fsLocal || ! state.fileOps)
         {
             releasePauses();
-            Fail(L"R4A02 live-output guard requires three scenarios and the Local file system.");
+            Fail(L"R4A02 live-output guard requires four scenarios and the Local file system.");
             return true;
         }
         std::error_code ec;
@@ -12264,7 +12387,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
                                                  FolderWindow::Pane::Left,
                                                  FolderWindow::Pane::Right,
                                                  state.fsLocal,
-                                                 {sourceItem},
+                                                 {scenario == 3u ? sourceItem : sourceParent},
                                                  destination,
                                                  FILESYSTEM_FLAG_NONE,
                                                  false,
@@ -12330,12 +12453,43 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     {
         Task* const invalidator = state.fileOps->FindTask(state.taskB.value());
         const auto prompt       = TryGetConflictPromptCopy(invalidator);
-        if (! prompt.has_value())
+        if (scenario == 3u)
         {
-            if (state.completedTasks.contains(state.taskB.value()))
+            if (prompt.has_value() || HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest())
             {
                 releasePauses();
-                Fail(std::format(L"R4A02 live-output {} Delete completed without its admission warning.", scenarioName));
+                Fail(L"R4A02 bridge sharing control reached an admission warning before the Delete binding failed.");
+                return true;
+            }
+            const auto completed = state.completedTasks.find(state.taskB.value());
+            if (completed == state.completedTasks.end())
+                return false;
+            const HRESULT deleteHr   = completed->second.hr;
+            const bool publisherLive = HasFileOpsLiveOutputPublishedPauseEnteredForSelfTest() && state.fileOps->FindTask(state.taskA.value()) != nullptr &&
+                                       ! state.completedTasks.contains(state.taskA.value());
+            const bool intact        = FileSizeEquals(sourceItem, 4u * 1024u) && FilesEqualBytes(sourceItem, publishedItem);
+            if (deleteHr != HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || ! publisherLive || ! intact ||
+                HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest())
+            {
+                releasePauses();
+                Fail(std::format(L"R4A02 bridge sharing control failed (Delete hr=0x{:08X}, publisher live={}, files intact={}).",
+                                 static_cast<unsigned long>(deleteHr),
+                                 publisherLive,
+                                 intact));
+                return true;
+            }
+            releasePauses();
+            state.stepState = 6u;
+            return false;
+        }
+        if (! prompt.has_value())
+        {
+            if (const auto completed = state.completedTasks.find(state.taskB.value()); completed != state.completedTasks.end())
+            {
+                releasePauses();
+                Fail(std::format(L"R4A02 live-output {} Delete completed without its admission warning (hr=0x{:08X}).",
+                                 scenarioName,
+                                 static_cast<unsigned long>(completed->second.hr)));
                 return true;
             }
             return false;
@@ -12428,6 +12582,23 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
         return false;
     }
 
+    if (state.stepState == 6u)
+    {
+        const auto publisherDone = state.completedTasks.find(state.taskA.value());
+        if (publisherDone == state.completedTasks.end())
+            return false;
+        if (FAILED(publisherDone->second.hr) || ! FileSizeEquals(sourceItem, 4u * 1024u) || ! FilesEqualBytes(sourceItem, publishedItem))
+        {
+            Fail(std::format(L"R4A02 bridge sharing publisher did not finish cleanly with both files intact (hr=0x{:08X}).",
+                             static_cast<unsigned long>(publisherDone->second.hr)));
+            return true;
+        }
+        state.taskA.reset();
+        state.taskB.reset();
+        NextStep(state, SelfTestState::Step::R4A02_DisjointWritesDoNotWarn);
+        return false;
+    }
+
     const auto publisherDone   = state.completedTasks.find(state.taskA.value());
     const auto invalidatorDone = state.completedTasks.find(state.taskB.value());
     std::error_code existsEc;
@@ -12470,7 +12641,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     ++state.r4a02LiveOutputScenario;
     state.taskA.reset();
     state.taskB.reset();
-    if (state.r4a02LiveOutputScenario < 3u)
+    if (state.r4a02LiveOutputScenario < 4u)
     {
         state.stepState = 0u;
         return false;

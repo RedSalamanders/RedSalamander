@@ -53,12 +53,22 @@ winget validate --manifest .build\AppPackages\winget-manifest
 winget install --manifest .build\AppPackages\winget-manifest
 ```
 
-## Submission checklist
+## Hosted publication
 
-- Confirm the generated `PackageVersion` matches the GitHub release tag.
-- Confirm both archive URLs are public and immutable.
-- Confirm x64 and ARM64 SHA256 values came from the final release archives.
-- Confirm `DocumentUrl` points at `docs/README.md`.
-- Validate locally with the current Winget client.
-- Submit the generated manifest directory to `microsoft/winget-pkgs` following
-  the repository contribution process.
+The app-local entrypoint is `.github/workflows/publish.yml`. It runs through
+`workflow_dispatch` on `main`, requires the ID of an original successful
+`Qualify main Release` run, and offers `Prepare` (the default), `Release`, and
+`Winget` operations. It delegates to the reusable publication engine pinned in
+`.ci/project.json`; keep the workflow caller and project pin aligned.
+
+`Prepare` previews the selected qualification, `Release` publishes its retained
+ZIPs, and `Winget` verifies both native installs before submitting the manifest.
+Publication promotes the selected run's qualified artifacts without rebuilding
+or restamping them. Both x64 and ARM64 ZIPs are required. See the normative
+[Winget publication contract](../Specs/Installer/WingetIntegration.md) and
+[hosted CI policy](../Specs/Build/Build_UnifiedCI.md).
+
+Before requesting publication, validate a locally generated manifest with the
+current Winget client and confirm its version, public immutable archive URLs,
+and SHA-256 values match the selected qualification's release artifacts. Local
+validation does not replace the hosted qualification or publication gates.

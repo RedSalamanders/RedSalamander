@@ -37,7 +37,9 @@ under Unreleased in descending ordinal filename order (newest date first, topic 
 changelog's UTF-8 BOM and line endings, flushes a staged changelog to disk and atomically publishes it, then removes
 only folded files. A removal that fails after publication names the fragment; rerunning finishes the cleanup. A
 checkout-local exclusive lease prevents overlapping folds; repositories ignore its lease and staged files. Retry after
-interrupted cleanup does not duplicate an identical entry already in Unreleased. An identical entry in a released
+interrupted cleanup does not duplicate an identical entry already in Unreleased. Before publication, two pending
+fragments with identical normalized text and no matching Unreleased entry are refused before either fragment or the
+changelog is changed; keep both inputs and make their entries distinct before retrying. An identical entry in a released
 section does not suppress a new entry. `-WhatIf` previews without writing; `-Check` is read-only and rejects even one
 remaining fragment, which makes it the check of a finished fold. Validation and folding never stage, commit, push,
 fetch, build native code or take desktop focus. Reparse checks cover the repository root and everything below it,

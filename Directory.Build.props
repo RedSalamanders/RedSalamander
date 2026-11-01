@@ -179,13 +179,6 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
 
-  <!-- Desktop Bridge packaging project (wapproj) -->
-  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.wapproj'">
-    <BaseIntermediateOutputPath>$(RSBuildRoot)Intermediate\</BaseIntermediateOutputPath>
-    <IntermediateOutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntermediateOutputPath>
-    <BaseOutputPath>$(RSBuildRoot)Intermediate\</BaseOutputPath>
-    <OutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</OutputPath>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='Release'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>

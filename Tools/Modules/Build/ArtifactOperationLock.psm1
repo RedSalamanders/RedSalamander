@@ -395,7 +395,6 @@ function Get-RSArtifactOperationScopeInfo {
             $fileStem = "packaging-$hash"
             $artifactRoots = @(
                 [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot '.build\AppPackages')),
-                [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot 'Installer\msix')),
                 [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot 'Installer\winget'))
             )
         }
@@ -1546,17 +1545,14 @@ function Test-RSArtifactCommandLineMatchesSharedDependencyPath {
     return $false
 }
 
-function Get-RSMSBuildPropertyValue {
+function Get-RSMSBuildPropertyAssignments {
     param(
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name
+        [string[]]$Arguments
     )
 
     $propertyPrefixes = @('/p:', '-p:', '--property:', '/property:')
-    $foundValue = $null
+    $assignments = [System.Collections.Generic.List[object]]::new()
     foreach ($rawToken in $Arguments) {
         $token = ([string]$rawToken).Trim().Trim('"')
         $propertyList = $null
@@ -1572,21 +1568,40 @@ function Get-RSMSBuildPropertyValue {
         }
 
         foreach ($assignment in @($propertyList -split '[;,]')) {
+            $assignment = $assignment.Trim()
+            if ([string]::IsNullOrEmpty($assignment)) { continue }
             $equalsIndex = $assignment.IndexOf('=')
             if ($equalsIndex -le 0) {
+                $assignments.Add([pscustomobject]@{ Name = ''; Value = ''; IsValid = $false })
                 continue
             }
 
             $assignmentName = $assignment.Substring(0, $equalsIndex).Trim()
             $assignmentValue = $assignment.Substring($equalsIndex + 1).Trim().Trim('"', "'")
-            if ([string]::Equals($assignmentName, $Name, [System.StringComparison]::OrdinalIgnoreCase)) {
-                # MSBuild applies the final occurrence when a property is supplied
-                # more than once, so coordination resolves the same effective value.
-                $foundValue = $assignmentValue
-            }
+            $assignments.Add([pscustomobject]@{ Name = $assignmentName; Value = $assignmentValue; IsValid = -not [string]::IsNullOrEmpty($assignmentName) })
         }
     }
 
+    return $assignments.ToArray()
+}
+
+function Get-RSMSBuildPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $foundValue = $null
+    foreach ($assignment in @(Get-RSMSBuildPropertyAssignments -Arguments $Arguments)) {
+        if ($assignment.IsValid -and [string]::Equals($assignment.Name, $Name, [System.StringComparison]::OrdinalIgnoreCase)) {
+            # MSBuild applies the final occurrence when a property is supplied
+            # more than once, so coordination resolves the same effective value.
+            $foundValue = $assignment.Value
+        }
+    }
     return $foundValue
 }
 
@@ -1608,6 +1623,225 @@ function Test-RSMSBuildPropertyValue {
     return [string]::Equals($actualValue, $Value, [System.StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-RSArtifactPathChainHasNoReparsePoints {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Boundary
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $fullBoundary = [System.IO.Path]::GetFullPath($Boundary)
+    $relativePath = [System.IO.Path]::GetRelativePath($fullBoundary, $fullPath)
+    if ([System.IO.Path]::IsPathRooted($relativePath) -or $relativePath -eq '..' -or
+        $relativePath.StartsWith('..\', [System.StringComparison]::Ordinal) -or
+        $relativePath.StartsWith('../', [System.StringComparison]::Ordinal)) {
+        return $false
+    }
+
+    $current = $fullPath
+    while ($true) {
+        try {
+            $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        }
+        catch {
+            return $false
+        }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            return $false
+        }
+
+        if ([string]::Equals(
+                ([System.IO.Path]::GetFullPath($current)).TrimEnd('\'),
+                $fullBoundary.TrimEnd('\'),
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+
+        $parent = [System.IO.Directory]::GetParent($current)
+        if ($null -eq $parent) {
+            return $false
+        }
+        $current = $parent.FullName
+    }
+}
+
+function Get-RSArtifactGitWorktreeMetadata {
+    param([Parameter(Mandatory = $true)][string]$WorktreeRoot)
+
+    $root = [System.IO.Path]::GetFullPath($WorktreeRoot).TrimEnd('\')
+    $marker = Join-Path $root '.git'
+    if (-not (Test-Path -LiteralPath $marker) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $marker -Boundary $root)) { return $null }
+    $markerItem = Get-Item -LiteralPath $marker -Force
+    if (($markerItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
+    if ($markerItem.PSIsContainer) {
+        return [pscustomobject]@{ Root = $root; Marker = $marker; GitDir = $markerItem.FullName; CommonDir = $markerItem.FullName; IsLinked = $false }
+    }
+
+    $markerText = [System.IO.File]::ReadAllText($marker).Trim()
+    if ($markerText -notmatch '^gitdir:\s*(?<path>.+)$') { return $null }
+    $gitDir = $Matches.path.Trim()
+    if (-not [System.IO.Path]::IsPathFullyQualified($gitDir)) { $gitDir = Join-Path $root $gitDir }
+    $gitDir = [System.IO.Path]::GetFullPath($gitDir).TrimEnd('\')
+    if (-not (Test-Path -LiteralPath $gitDir -PathType Container)) { return $null }
+
+    $commonDirFile = Join-Path $gitDir 'commondir'
+    $backPointerFile = Join-Path $gitDir 'gitdir'
+    if (-not (Test-Path -LiteralPath $commonDirFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $backPointerFile -PathType Leaf) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $gitDir -Boundary $gitDir) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $commonDirFile -Boundary $gitDir) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $backPointerFile -Boundary $gitDir)) { return $null }
+
+    $commonDir = [System.IO.File]::ReadAllText($commonDirFile).Trim()
+    if (-not [System.IO.Path]::IsPathFullyQualified($commonDir)) { $commonDir = Join-Path $gitDir $commonDir }
+    $commonDir = [System.IO.Path]::GetFullPath($commonDir).TrimEnd('\')
+    if (-not (Test-Path -LiteralPath $commonDir -PathType Container) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $commonDir -Boundary $commonDir)) { return $null }
+
+    $backPointer = [System.IO.File]::ReadAllText($backPointerFile).Trim()
+    if (-not [System.IO.Path]::IsPathFullyQualified($backPointer) -or
+        -not [string]::Equals([System.IO.Path]::GetFullPath($backPointer), [System.IO.Path]::GetFullPath($marker), [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $null
+    }
+
+    $worktreesRoot = [System.IO.Path]::GetFullPath((Join-Path $commonDir 'worktrees')).TrimEnd('\')
+    $adminRelative = [System.IO.Path]::GetRelativePath($worktreesRoot, $gitDir)
+    if ([System.IO.Path]::IsPathRooted($adminRelative) -or $adminRelative -eq '.' -or $adminRelative -eq '..' -or
+        $adminRelative.StartsWith('..\', [System.StringComparison]::Ordinal) -or
+        $adminRelative.StartsWith('../', [System.StringComparison]::Ordinal)) { return $null }
+    if (-not (Test-RSArtifactPathChainHasNoReparsePoints -Path $gitDir -Boundary $commonDir)) { return $null }
+
+    return [pscustomobject]@{ Root = $root; Marker = $marker; GitDir = $gitDir; CommonDir = $commonDir; IsLinked = $true }
+}
+
+function Test-RSArtifactCommandLineTargetsIndependentRedSalamanderWorktree {
+    param(
+        [Parameter(Mandatory = $true)][string]$CommandLine,
+        [Parameter(Mandatory = $true)][object]$ScopeInfo
+    )
+
+    $arguments = @(Split-RSArtifactCommandLineTokens -CommandLine $CommandLine)
+    if ($arguments.Count -lt 4 -or @($arguments | Where-Object { $_.StartsWith('@', [System.StringComparison]::Ordinal) }).Count -ne 0) {
+        return $false
+    }
+
+    # This exemption is only for a side-effect-free property query. A build's
+    # project/targets or inherited environment can redirect evaluated outputs,
+    # so an unevaluated, text-only props check cannot prove a build is independent.
+    if (-not [string]::Equals([System.IO.Path]::GetFileName($arguments[0]), 'MSBuild.exe', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    $allowedProperties = @('Configuration', 'Platform', 'PreferredToolArchitecture', 'RSBuildEnableTests')
+    $projectPath = $null
+    $hasGetProperty = $false
+    $hasNoAutoResponse = $false
+    $hasNoLogo = $false
+    for ($index = 1; $index -lt $arguments.Count; $index++) {
+        $argument = ([string]$arguments[$index]).Trim()
+        $isPropertySwitch = @('/p:', '-p:', '--property:', '/property:') | Where-Object {
+            $argument.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+        if ($null -ne $isPropertySwitch) {
+            $assignments = @(Get-RSMSBuildPropertyAssignments -Arguments @($argument))
+            if ($assignments.Count -eq 0 -or @($assignments | Where-Object { -not $_.IsValid -or $allowedProperties -notcontains $_.Name }).Count -ne 0) {
+                return $false
+            }
+            continue
+        }
+        if ($argument -match '(?i)^-getProperty:[A-Za-z_][A-Za-z0-9_.]*(?:,[A-Za-z_][A-Za-z0-9_.]*)*$') {
+            if ($hasGetProperty) { return $false }
+            $hasGetProperty = $true
+            continue
+        }
+        if ([string]::Equals($argument, '-noAutoResponse', [System.StringComparison]::OrdinalIgnoreCase)) {
+            if ($hasNoAutoResponse) { return $false }
+            $hasNoAutoResponse = $true
+            continue
+        }
+        if ([string]::Equals($argument, '-nologo', [System.StringComparison]::OrdinalIgnoreCase)) {
+            if ($hasNoLogo) { return $false }
+            $hasNoLogo = $true
+            continue
+        }
+        if ([System.IO.Path]::IsPathFullyQualified($argument) -and
+            [string]::Equals([System.IO.Path]::GetExtension($argument), '.vcxproj', [System.StringComparison]::OrdinalIgnoreCase) -and
+            (Test-Path -LiteralPath $argument -PathType Leaf)) {
+            if ($null -ne $projectPath) { return $false }
+            $projectPath = [System.IO.Path]::GetFullPath($argument)
+            continue
+        }
+        # Unknown flags, target switches, logger switches, restore/graph modes,
+        # implicit response files, and extra project inputs fail closed.
+        return $false
+    }
+    if ($null -eq $projectPath -or -not $hasGetProperty -or -not $hasNoAutoResponse) {
+        return $false
+    }
+    $projectDirectory = Split-Path -Parent $projectPath
+    $candidateRoot = $null
+    $candidate = $projectDirectory
+    while ($null -eq $candidateRoot) {
+        $marker = Join-Path $candidate '.git'
+        if (Test-Path -LiteralPath $marker) { $candidateRoot = [System.IO.Path]::GetFullPath($candidate); break }
+        if ([string]::Equals($candidate, $ScopeInfo.RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) { break }
+        $parent = Split-Path -Parent $candidate
+        if ([string]::IsNullOrEmpty($parent) -or [string]::Equals($parent, $candidate, [System.StringComparison]::OrdinalIgnoreCase)) { break }
+        $candidate = $parent
+    }
+    if ($null -eq $candidateRoot -or [string]::Equals($candidateRoot, $ScopeInfo.RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    if (-not (Test-RSArtifactPathChainHasNoReparsePoints -Path $ScopeInfo.RepoRoot -Boundary $ScopeInfo.RepoRoot) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $candidateRoot -Boundary $ScopeInfo.RepoRoot) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $projectPath -Boundary $candidateRoot)) {
+        return $false
+    }
+
+    $relativeRoot = [System.IO.Path]::GetRelativePath($ScopeInfo.RepoRoot, $candidateRoot)
+    if ([System.IO.Path]::IsPathRooted($relativeRoot) -or $relativeRoot -eq '..' -or
+        $relativeRoot.StartsWith('..\', [System.StringComparison]::Ordinal) -or
+        $relativeRoot.StartsWith('../', [System.StringComparison]::Ordinal)) { return $false }
+
+    $rootWorktree = Get-RSArtifactGitWorktreeMetadata -WorktreeRoot $ScopeInfo.RepoRoot
+    $candidateWorktree = Get-RSArtifactGitWorktreeMetadata -WorktreeRoot $candidateRoot
+    if ($null -eq $rootWorktree -or $null -eq $candidateWorktree -or -not $candidateWorktree.IsLinked -or
+        -not [string]::Equals($rootWorktree.CommonDir, $candidateWorktree.CommonDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    $canonicalProps = Join-Path $ScopeInfo.RepoRoot 'Directory.Build.props'
+    $candidateProps = Join-Path $candidateRoot 'Directory.Build.props'
+    if (-not (Test-Path -LiteralPath $canonicalProps -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $candidateProps -PathType Leaf) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $canonicalProps -Boundary $ScopeInfo.RepoRoot) -or
+        -not (Test-RSArtifactPathChainHasNoReparsePoints -Path $candidateProps -Boundary $candidateRoot) -or
+        (Get-FileHash -LiteralPath $canonicalProps -Algorithm SHA256).Hash -cne
+        (Get-FileHash -LiteralPath $candidateProps -Algorithm SHA256).Hash) { return $false }
+
+    # The matching root-policy text is retained as query provenance, not as proof
+    # of evaluated build output roots.
+    try {
+        [xml]$props = [System.IO.File]::ReadAllText($canonicalProps)
+    }
+    catch [System.Xml.XmlException] { return $false }
+    $rootProperties = @{
+        '/Project/PropertyGroup/SolutionDir' = '$(MSBuildThisFileDirectory)'
+        '/Project/PropertyGroup/RSBuildRoot' = '$(SolutionDir).build\'
+        '/Project/PropertyGroup/VcpkgManifestRoot' = '$(SolutionDir)'
+        '/Project/PropertyGroup/VcpkgInstalledDir' = '$(RSBuildRoot)vcpkg_installed\$(RSVcpkgPlatformScope)\'
+        '/Project/PropertyGroup/OutDir' = '$(RSBuildRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)'
+        '/Project/PropertyGroup/IntDir' = '$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\'
+    }
+    foreach ($xpath in $rootProperties.Keys) {
+        $node = $props.SelectSingleNode($xpath)
+        if ($null -eq $node -or $node.InnerText.Trim() -cne $rootProperties[$xpath]) { return $false }
+    }
+
+    return $true
+}
+
 function Test-RSArtifactCommandLineMatchesScope {
     param(
         [AllowNull()]
@@ -1615,7 +1849,9 @@ function Test-RSArtifactCommandLineMatchesScope {
         [string]$CommandLine,
 
         [Parameter(Mandatory = $true)]
-        [object]$ScopeInfo
+        [object]$ScopeInfo,
+
+        [AllowNull()][AllowEmptyString()][string]$ProcessName = ''
     )
 
     if ([string]::IsNullOrWhiteSpace($CommandLine) -or
@@ -1646,20 +1882,29 @@ function Test-RSArtifactCommandLineMatchesScope {
             return $true
         }
 
+        if ([string]::Equals($ProcessName, 'MSBuild.exe', [System.StringComparison]::OrdinalIgnoreCase) -and
+            (Test-RSArtifactCommandLineTargetsIndependentRedSalamanderWorktree -CommandLine $CommandLine -ScopeInfo $ScopeInfo)) {
+            return $false
+        }
         return Test-RSMSBuildPropertyValue `
             -CommandLine $CommandLine `
             -Name 'Platform' `
             -Value $ScopeInfo.Platform
     }
 
-    return (Test-RSMSBuildPropertyValue `
-            -CommandLine $CommandLine `
-            -Name 'Configuration' `
-            -Value $ScopeInfo.Configuration) -and
+    $sameProfile = (Test-RSMSBuildPropertyValue `
+        -CommandLine $CommandLine `
+        -Name 'Configuration' `
+        -Value $ScopeInfo.Configuration) -and
         (Test-RSMSBuildPropertyValue `
             -CommandLine $CommandLine `
             -Name 'Platform' `
             -Value $ScopeInfo.Platform)
+    if ($sameProfile -and [string]::Equals($ProcessName, 'MSBuild.exe', [System.StringComparison]::OrdinalIgnoreCase) -and
+        (Test-RSArtifactCommandLineTargetsIndependentRedSalamanderWorktree -CommandLine $CommandLine -ScopeInfo $ScopeInfo)) {
+        return $false
+    }
+    return $sameProfile
 }
 
 function Get-RSResidualArtifactToolProcesses {
@@ -1689,7 +1934,8 @@ function Get-RSResidualArtifactToolProcesses {
 
             return Test-RSArtifactCommandLineMatchesScope `
                 -CommandLine $commandLine `
-                -ScopeInfo $scopeInfo
+                -ScopeInfo $scopeInfo `
+                -ProcessName ([string]$_.Name)
         })
 }
 

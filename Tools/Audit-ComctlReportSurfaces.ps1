@@ -46,7 +46,7 @@ $actualFiles = @(Find-RSRepositorySourceMatches `
     Select-Object -ExpandProperty Path -Unique |
     Sort-Object -Unique)
 
-$expectedFiles = $auditedFiles.File | Sort-Object -Unique
+$expectedFiles = @($auditedFiles | ForEach-Object { $_.File } | Sort-Object -Unique)
 $missingFiles = @($expectedFiles | Where-Object { $_ -notin $actualFiles })
 $unexpectedFiles = @($actualFiles | Where-Object { $_ -notin $expectedFiles })
 

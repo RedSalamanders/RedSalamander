@@ -1174,15 +1174,18 @@ public:
             bool checked         = false;
             bool mayHoldOriginal = false;
         };
-        bool open              = false;
-        bool includeSubfolders = false;
-        bool scanning          = false;
-        bool deleteEnabled     = false;
-        bool deleteSupported   = false;
-        bool folderLimit       = false;
-        bool rowLimit          = false;
-        bool depthLimit        = false;
-        size_t hiddenInUse     = 0u;
+        bool open                    = false;
+        bool includeSubfolders       = false;
+        bool scanning                = false;
+        bool deleteEnabled           = false;
+        bool deleteSupported         = false;
+        bool folderLimit             = false;
+        bool rowLimit                = false;
+        bool depthLimit              = false;
+        size_t hiddenInUse           = 0u;
+        size_t incompleteFolderCount = 0u;
+        size_t invalidChildNameCount = 0u;
+        HRESULT scanFirstError       = S_OK;
         std::wstring status;
         std::vector<Row> rows;
     };
@@ -1190,10 +1193,13 @@ public:
     struct LeftoverScanDebugResult
     {
         std::vector<std::filesystem::path> rows;
-        bool folderLimit = false;
-        bool rowLimit    = false;
-        bool depthLimit  = false;
-        bool canceled    = false;
+        bool folderLimit             = false;
+        bool rowLimit                = false;
+        bool depthLimit              = false;
+        bool canceled                = false;
+        size_t incompleteFolderCount = 0u;
+        size_t invalidChildNameCount = 0u;
+        HRESULT firstError           = S_OK;
     };
 
     struct OpenedFilesDebugSnapshot
@@ -1330,14 +1336,24 @@ public:
     [[nodiscard]] bool DebugGetLeftoverCleanupSnapshot(LeftoverCleanupDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugSetLeftoverCleanupIncludeSubfolders(bool include) noexcept;
     // Runs the listing's subfolder walk on the calling thread with these bounds; `cancelBeforeStart`
-    // requests its stop before the first folder.
+    // requests its stop before the first folder. A nonempty `failReadDirectoryForTest` injects one
+    // deterministic provider read failure for partial-result coverage.
     [[nodiscard]] static HRESULT DebugScanLeftoversForSelfTest(IFileSystem* fileSystem,
                                                                const std::filesystem::path& folder,
                                                                size_t maxFolders,
                                                                size_t maxRows,
                                                                size_t maxDepth,
                                                                bool cancelBeforeStart,
-                                                               LeftoverScanDebugResult& out) noexcept;
+                                                               LeftoverScanDebugResult& out,
+                                                               const std::filesystem::path& failReadDirectoryForTest = {}) noexcept;
+    // Starts a real background scan against a held provider read, requests final retirement, and
+    // returns without waiting for that read. The caller releases the provider gate and observes reapedEvent.
+    [[nodiscard]] static HRESULT DebugRetireLeftoverScanWorkerForSelfTest(IFileSystem* fileSystem,
+                                                                          const std::filesystem::path& folder,
+                                                                          HWND completionTarget,
+                                                                          HANDLE providerEnteredEvent,
+                                                                          HANDLE reapedEvent,
+                                                                          DWORD& retirementElapsedMs) noexcept;
     // Posts the listing's Delete Selected (true) or Cancel (false), as its buttons do.
     [[nodiscard]] bool DebugAnswerLeftoverCleanup(bool confirm) noexcept;
     // Test runs delete the confirmed leftovers permanently (behind the card) instead of filling the Recycle Bin.
@@ -1792,8 +1808,6 @@ private:
     void ApplyLeftoverCleanupDialogTheme() noexcept;
     void RequestCloseLeftoverCleanupDialog() noexcept;
     void CloseLeftoverCleanupDialog() noexcept;
-    // Frees closed listings whose subfolder walk has ended; `wait` waits for every walk (window teardown).
-    void SweepRetiredLeftoverCleanupDialogs(bool wait) noexcept;
 
     struct SharedDirectoryRow final
     {
@@ -2114,9 +2128,6 @@ private:
     std::unique_ptr<OpenedFilesDialogState, OpenedFilesDialogStateDeleter> _openedFilesDialog;
     std::unique_ptr<SharedDirectoriesDialogState> _sharedDirectoriesDialog;
     std::unique_ptr<LeftoverCleanupDialogState, LeftoverCleanupDialogStateDeleter> _leftoverCleanupDialog;
-    // Closed listings whose subfolder walk was still blocked in a canceled directory read when they
-    // closed: kept until the walk returns, so closing never waits on a dead share.
-    std::vector<std::unique_ptr<LeftoverCleanupDialogState, LeftoverCleanupDialogStateDeleter>> _retiredLeftoverCleanupDialogs;
 #ifdef ENABLE_TESTS
     bool _debugLeftoverCleanupPermanentForSelfTest         = false;
     bool _debugLeftoverCleanupDeleteUnsupportedForSelfTest = false;

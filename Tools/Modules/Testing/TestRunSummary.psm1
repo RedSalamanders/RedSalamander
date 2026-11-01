@@ -24,6 +24,25 @@ function Get-RSValidationExitCode {
     throw "Unhandled validation terminal state '$TerminalState'."
 }
 
+function Set-RSTestRunSummaryFinalExitCode {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Summary,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('PASSED', 'FAILED', 'NOT_EVALUATED', 'INVALID_CLI_OR_PLAN', 'BLOCKED_ATTESTATION', 'CORRUPT_EVIDENCE')]
+        [string]$TerminalState
+    )
+
+    if ($null -eq $Summary.PSObject.Properties['exit_code']) {
+        throw 'The legacy run summary has no exit_code property.'
+    }
+
+    $Summary.exit_code = Get-RSValidationExitCode -TerminalState $TerminalState
+    return $Summary
+}
+
 function Convert-RSTestCaseForRunSummary {
     param(
         [Parameter(Mandatory = $true)]
@@ -677,6 +696,7 @@ function Convert-RSTestRunSummaryToGitHubStepSummary {
 
 Export-ModuleMember -Function @(
     'Get-RSValidationExitCode',
+    'Set-RSTestRunSummaryFinalExitCode',
     'Convert-RSTestCaseForRunSummary',
     'Convert-RSTestRetryAttemptForRunSummary',
     'Convert-RSTestQuarantineRepairAttemptForRunSummary',

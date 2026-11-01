@@ -1,0 +1,560 @@
+{
+  "RunId": "ar31-13364ad0",
+  "TestRoot": "Z:\\RedSalamander.Perf",
+  "ProcessTempRoot": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\process-temp",
+  "StartedUtc": "2026-10-31T14:08:22.2804495Z",
+  "FinishedUtc": "2026-10-31T14:15:41.2217726Z",
+  "ElapsedSeconds": 438.933,
+  "PassedCount": 52,
+  "FailedCount": 0,
+  "SkippedCount": 0,
+  "TotalCount": 52,
+  "Files": [
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\TestRunArchive.Tests.ps1",
+      "StartedUtc": "2026-10-31T14:08:22.2804495Z",
+      "FinishedUtc": "2026-10-31T14:15:23.8368030Z",
+      "ElapsedSeconds": 421.552,
+      "PassedCount": 25,
+      "FailedCount": 0,
+      "SkippedCount": 0,
+      "TotalCount": 25,
+      "TestResults": [
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "accepts a bounded artifact under its embedded machine profile",
+          "Result": "Passed",
+          "Time": 40.6125442,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects a commit hash used as the machine profile",
+          "Result": "Passed",
+          "Time": 0.0807119,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects an oversized individual artifact",
+          "Result": "Passed",
+          "Time": 0.0591057,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects an oversized aggregate run including unchanged sibling files",
+          "Result": "Passed",
+          "Time": 0.0478624,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "sizes a real worktree run from tracked files and excludes ignored raw artifacts",
+          "Result": "Passed",
+          "Time": 0.1787069,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "accepts an empty path set",
+          "Result": "Passed",
+          "Time": 0.039532,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "validates every Terminal VT JSONL row and requires its schema-owned artifacts",
+          "Result": "Passed",
+          "Time": 0.297841,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects Terminal VT results that do not satisfy the area schema",
+          "Result": "Passed",
+          "Time": 0.1571038,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "recomputes a Terminal VT pair and rejects a candidate beyond baseline x1.10",
+          "Result": "Passed",
+          "Time": 0.1349992,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "accepts only the exact reviewed Zig transition and otherwise requires equal versions",
+          "Result": "Passed",
+          "Time": 0.3505538,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "retains environment, behavior, and p95 rejection during a reviewed Zig transition",
+          "Result": "Passed",
+          "Time": 0.0812643,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "finds an unchanged historical violation only in whole-inventory mode",
+          "Result": "Passed",
+          "Time": 1.0268401,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "retains the imported pre-contract boundary while rejecting new committed archives",
+          "Result": "Passed",
+          "Time": 0.7169031,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects committed and uncommitted edits to imported legacy evidence",
+          "Result": "Passed",
+          "Time": 1.1217025,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "validates staged and committed moves of grandfathered blobs at their new paths",
+          "Result": "Passed",
+          "Time": 1.2984642,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "omits only exact immutable continuation relocations from changed and inventory caps",
+          "Result": "Passed",
+          "Time": 1.5398464,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects changed bytes, duplicate old copies, mode drift, and unreviewed relocation siblings",
+          "Result": "Passed",
+          "Time": 3.3609384,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "batches worktree and index identity reads while retaining byte, stage, and mode rejection",
+          "Result": "Passed",
+          "Time": 0.5633549,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "keeps the exact stock-Windows relocation map within path limits and current archive caps",
+          "Result": "Passed",
+          "Time": 54.9514564,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "fails closed when an imported baseline object is present but is not an ancestor",
+          "Result": "Passed",
+          "Time": 0.6957235,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "checks committed branch evidence against origin main in a history-free import",
+          "Result": "Passed",
+          "Time": 0.5637822,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "rejects a newly produced oversized run before staging and never prints a green closeout",
+          "Result": "Passed",
+          "Time": 0.5076554,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "retains a digest-bound compact summary and the behavioral results supporting the archived claim",
+          "Result": "Passed",
+          "Time": 0.1089254,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "keeps the current changed archive set within the contract",
+          "Result": "Passed",
+          "Time": 25.8778313,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "TestRuns archive contract",
+          "Context": "",
+          "Name": "keeps the complete checked-in archive inventory within the contract",
+          "Result": "Passed",
+          "Time": 286.7759022,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        }
+      ],
+      "NUnitXml": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\nunit\\TestRunArchive.Tests.ps1.xml"
+    },
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ValidationFingerprint.Tests.ps1",
+      "StartedUtc": "2026-10-31T14:15:23.8386447Z",
+      "FinishedUtc": "2026-10-31T14:15:41.2200123Z",
+      "ElapsedSeconds": 17.381,
+      "PassedCount": 27,
+      "FailedCount": 0,
+      "SkippedCount": 0,
+      "TotalCount": 27,
+      "TestResults": [
+        {
+          "Describe": "Operation Startrail schema foundation",
+          "Context": "",
+          "Name": "uses one reviewed schema draft and closes every root object",
+          "Result": "Passed",
+          "Time": 0.0719203,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail schema foundation",
+          "Context": "",
+          "Name": "rejects missing canonicalization, unknown states, invalid paths, and cache policies",
+          "Result": "Passed",
+          "Time": 0.0191596,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "normalizes strings, sorts object keys ordinally, and preserves array order",
+          "Result": "Passed",
+          "Time": 0.0409859,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "produces one stable lowercase SHA-256 identity",
+          "Result": "Passed",
+          "Time": 0.0081962,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "emits byte-identical canonical fixtures in a clean supported pwsh process",
+          "Result": "Passed",
+          "Time": 0.7974073,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "rejects floating point and date coercion",
+          "Result": "Passed",
+          "Time": 0.0078988,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "rejects invalid identifiers, paths, aliases, duplicate plan ids, and provenance cycles",
+          "Result": "Passed",
+          "Time": 0.0139625,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "freezes the complete reason-code enum",
+          "Result": "Passed",
+          "Time": 0.0023582,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail canonical JSON",
+          "Context": "",
+          "Name": "rejects Startrail evidence on Windows PowerShell 5.1 before evidence IO",
+          "Result": "Passed",
+          "Time": 1.0828139,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail dependency closure",
+          "Context": "",
+          "Name": "derives recursive script, module, and schema inputs without unrelated extras",
+          "Result": "Passed",
+          "Time": 0.1407265,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail dependency closure",
+          "Context": "",
+          "Name": "binds the current runner summary module and aggregate schema transitively",
+          "Result": "Passed",
+          "Time": 2.4078419,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "hashes canonical Git blob bytes independently of checkout line endings",
+          "Result": "Passed",
+          "Time": 0.4901832,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "chunks canonical blob hashing by measured object bytes and rejects missing blob identities",
+          "Result": "Passed",
+          "Time": 0.6513728,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "keeps the CI managed tool checkout outside product source identity",
+          "Result": "Passed",
+          "Time": 1.7010874,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "preserves distinct base index and worktree identities for every Git mutation class",
+          "Result": "Passed",
+          "Time": 3.64786,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "changes identity for committed and pre/post worktree mutations",
+          "Result": "Passed",
+          "Time": 1.9606211,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "rejects reparse inputs and unsafe impact-base arguments without fetching",
+          "Result": "Passed",
+          "Time": 0.6447159,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "uses the local merge base and includes committed divergence without fetching",
+          "Result": "Passed",
+          "Time": 1.2118011,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail workspace snapshots",
+          "Context": "",
+          "Name": "preserves the included side of staged and unstaged boundary-crossing renames",
+          "Result": "Passed",
+          "Time": 0.8820308,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail entry fingerprints",
+          "Context": "",
+          "Name": "binds the complete entry, plan, workspace, receipt, epoch, runner, environment, and quarantine inputs",
+          "Result": "Passed",
+          "Time": 0.5088623,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "publishes schema-valid UTF-8 LF records for absent and present destinations",
+          "Result": "Passed",
+          "Time": 0.0994706,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "creates immutable records once without replacing existing bytes",
+          "Result": "Passed",
+          "Time": 0.0319417,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "rejects duplicate JSON keys before deserialization",
+          "Result": "Passed",
+          "Time": 0.0055366,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "accepts only exact canonical bytes, key order, escapes, and NFC strings",
+          "Result": "Passed",
+          "Time": 0.0232971,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "enforces node and string bounds during streaming validation",
+          "Result": "Passed",
+          "Time": 0.3474552,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "rejects record paths outside the allowed root",
+          "Result": "Passed",
+          "Time": 0.00456,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Operation Startrail atomic records and fixtures",
+          "Context": "",
+          "Name": "creates the reusable dirty staged untracked delete rename and space fixture",
+          "Result": "Passed",
+          "Time": 0.2756433,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        }
+      ],
+      "NUnitXml": "Z:\\RedSalamander.Perf\\runs\\ar31-13364ad0\\scratch\\codex\\archive-guard-pester\\nunit\\ValidationFingerprint.Tests.ps1.xml"
+    }
+  ]
+}

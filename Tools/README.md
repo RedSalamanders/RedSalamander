@@ -1,5 +1,12 @@
 # Repository tooling
 
+The root build captures native artifact and DxUi provenance after native compilation, then
+verifies captured bytes and uniform test-surface metadata before receipt publication. ZIP
+staging must preserve that native closure; see [build evidence authority](../Specs/Build/Build_Toolchain.md#build-evidence-authority-operation-startrail-implemented).
+
+`New-RSTestSandboxLink` resolves a relative link path against PowerShell's location once and uses
+the resulting absolute path for both sandbox checks and creation, even when the process directory differs.
+
 Hosted CI/Full and nightly shuffle UI runs wrap native validation in
 `Invoke-RSWithHostedTestDesktop` from `Modules/Testing/HostedTestDesktop.psm1`.
 It selects a supported sufficient display mode, reports work-area/session/foreground facts,
@@ -51,8 +58,11 @@ managed source rejects build/test reuse. The optional newer-version notice never
 is yellow and prints the normal update command plus its `-UpdateOnly` alternative. A candidate without a successful
 completed DxUi validation is red and must remain pinned.
 New managed clones enable Git long paths for metadata creation and persist them locally before checkout; user/global Git settings are unchanged.
-The required vcpkg safety integration checks need that normal DxUi restore and the exact
-`vcpkg-tool.json` checkout at `.build/vcpkg-tool`, including its `versions` database.
+The vcpkg safety data checks need the normal DxUi restore and locally available Git objects for the exact
+`vcpkg.json` `builtin-baseline`, using Git with `--no-lazy-fetch` support. Only executing data cases materialize the
+required version database and ARM64 AWS port files into an owned TestSandbox fixture. They verify each materialized blob
+and do not qualify the current executable checkout or bootstrap. Missing commit/tree/blob objects remain prerequisite
+skips subject to the runner's terminal skip policy; raw blob materialization or content mismatches fail.
 The mirror check uses the shared short source locator and verifies the full Git HEAD before importing modules.
 Missing prerequisites remain incomplete Full coverage; they are not new environment-skip exceptions.
 The compiler/linker policy audit queries ordinary profiles with an explicit child debug-format
@@ -74,6 +84,11 @@ See `Specs/Build/Build_Toolchain.md` for the manual upgrade and per-module prove
 `Tools/` contains the repository's supported developer commands, build and test
 helpers, release policy, and preserved terminal-engine evaluation evidence. Start
 here instead of guessing from a filename.
+
+Portable ZIP tests verify the expected release matrix, PE architecture, checksum
+integrity, and absence of the ENABLE_TESTS marker or reserved test exports. The
+shared PE test-surface policy also checks native artifacts before release receipt
+publication.
 
 The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`,
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal` and `FileOps_SelectionShapeSmb` storage/route regressions run without activation or a desktop
@@ -302,7 +317,7 @@ contract and is authoritative when the table is intentionally brief.
 |---|---|---|
 | `AnalyzeTestRuns.ps1` | Public test-run trend command | Manual historical timing/result analysis. |
 | `Audit-ComctlReportSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for list-view/tooltip surfaces. |
-| `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject remaining Win32/GDI UI dependencies. |
+| `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject Win32/GDI UI findings; each allowed residual has an exact path/category/line pattern and owner/exit condition. Default output is structured findings with an information-stream summary; `-AsMarkdown` emits Markdown. |
 | `Audit-VisibleNativeSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for visible native controls. |
 | `Build-GhosttyTerminalRuntime.ps1` | Public active runtime builder | Thin stable entrypoint for canonical Product builds and explicit isolated candidate builds; delegates validation, restore, build, and attestation to `GhosttyRuntimeLifecycle.psm1`, with native-command/lease progress separate from captured streams and one disposable compiler cache shared across authenticated dependency fetches. |
 | `Build-TerminalEngine.ps1` | Dormant generic lifecycle compatibility command | Stable facade for `External/TerminalEngine/TerminalEngine.proj` and reviewed future-upgrade evidence; not the product builder. |
@@ -362,7 +377,7 @@ and focused tests.
 | Module | Responsibility |
 |---|---|
 | `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning. |
-| `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, staged publication and retry-safe cleanup. |
+| `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, duplicate-pending-entry refusal, staged publication and retry-safe cleanup. |
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
@@ -378,7 +393,7 @@ and focused tests.
 | `Modules/Build/VcpkgToolIdentity.psm1` | Pinned vcpkg executable attestation. |
 | `Modules/Build/Versioning.psm1` | Atomic locked version resolution/persistence and validated diagnostics plus pure explicit package-version construction. |
 | `Modules/Packaging/PortablePackageSmoke.psm1` | Clean-extraction package smoke plus receipt-bound Ghostty identity, notice, and native load/free validation. |
-| `Modules/Packaging/ReleaseArtifactPolicy.psm1` | Release artifact names, architectures, completeness, checksums, and the fail-closed distributable test-surface check used by every packager. |
+| `Modules/Packaging/ReleaseArtifactPolicy.psm1` | Portable ZIP names, architectures, completeness, checksums, and fail-closed distributable test-surface checks. |
 | `Modules/Packaging/RuntimeDependencies.psm1` | Central runtime-dependency manifest resolution and validation. |
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
@@ -386,7 +401,7 @@ and focused tests.
 | `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only supported display selection, work-area/session/foreground diagnostics, and restoration around native qualification. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
-| `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters plus result classification. |
+| `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |
 | `Modules/Testing/TestQuarantine.psm1` | Quarantine policy parsing, status, and metadata-preserving repair planning. |
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |
 | `Modules/Testing/TestRunArchive.psm1` | Archived evidence structure/content validation, area-schema dispatch, complete JSONL validation, and paired Terminal VT admission comparison. |
@@ -459,6 +474,11 @@ Search, Preferences, plugins, connections and Command Palette examples from
 private synthetic settings. It uses the runner's no-activation guard and owned
 foreground observer without global input or a desktop lease. Broader filters,
 case variants and proof injections retain the ordinary Commands classification.
+The exact Commands case `cmd_directory_cache_invalidation_during_enumeration_is_retained`
+also admits `-NonInteractive`: it validates cache cancellation with an owned
+sandbox and synthetic blocked I/O, without physical input or foreground assertions.
+The admission requires that exact case filter and no flaky/order proof injection;
+all broader or modified selections retain the ordinary Commands classification.
 `ViewerPETests TestViewerDocumentationGallery --no-activate` captures generated
 viewer fixtures; `TestViewerSpaceLifecycleCaptures --no-activate` covers Space.
 These focused captures do not qualify keyboard interaction or a Full run.
@@ -494,6 +514,8 @@ then applies the required compiler/SDK policy independently of the parent name.
 
 
 Tools/Install-ClangFormat.ps1 installs the Build/clang-format.json-pinned native formatter using PowerShell 7, without Python. It validates package and executable bytes, supports an offline -WheelPath and nonmutating -WhatIf, and preserves the existing executable on failure. The cache stays beneath .build/format.
+
+The repository-root `format-all.ps1` entrypoint formats tracked first-party `.cpp` and `.h` files with that same pinned formatter. It excludes `ThirdParty/`, `Specs/`, `advisor-plans/` and `.codex/`, and supports `-WhatIf` before acquiring the formatter or changing files. It does not rewrite archived evidence or untracked files.
 
 Formatter output paths reuse the guarded path and atomic publication helpers in
 `Modules/Build/ArtifactOperationLock.psm1`. Existing reparse components are rejected through

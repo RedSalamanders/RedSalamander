@@ -263,28 +263,8 @@ HRESULT VerifyCommittedOverwrite(IMtpBackend& backend,
     return MakeWriterTempPath(normalizedPath, L".rs-mtp-overwrite-", tempPath);
 }
 
-// A device that refuses the hidden create temp or its rename, as opposed to a transport failure: the
-// direct upload, the only route such a device has, may still work.
-[[nodiscard]] bool IsCreateTempRouteRefusal(HRESULT hr) noexcept
-{
-    return hr == E_NOTIMPL || hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ||
-           hr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hr == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER) || hr == HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
-}
-
-// The hidden create temp is removed when possible; a failure leaves a hidden leftover the pane badges
-// as a possible artifact, so it is logged rather than ignored.
-void DeleteCreateTempBestEffort(IMtpBackend& backend, const std::wstring& tempPath) noexcept
-{
-    const HRESULT hr = backend.DeleteItem(tempPath, false);
-    if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
-    {
-        Debug::Warning(
-            L"MTP: the create temp '{}' could not be removed (hr=0x{:08X}); it stays as a hidden leftover.", tempPath, static_cast<unsigned long>(hr));
-        Debug::Perf::EmitValue(L"mtp.create.temp_cleanup_failed", 1u, hr);
-    }
-}
-
-// The direct upload of a new file (the route of a device that refuses the hidden temp or its rename).
+// New files upload directly to the final name. The provider uses an exclusive create; a failed
+// upload can leave partial bytes, so the host treats non-conflict failures as unknown publication.
 [[nodiscard]] HRESULT CommitWriterCreateDirect(IMtpBackend& backend, std::wstring_view normalizedPath, HANDLE stagingFile, uint64_t sizeBytes) noexcept
 {
     LARGE_INTEGER origin{};
@@ -295,76 +275,6 @@ void DeleteCreateTempBestEffort(IMtpBackend& backend, const std::wstring& tempPa
     const HRESULT hr = backend.WriteFileFromHandle(normalizedPath, stagingFile, sizeBytes, false);
     Debug::Perf::EmitValue(L"mtp.create.direct_upload", 1u, hr);
     return hr;
-}
-
-// I35 XP-01: a plain create publishes atomically too. The staged payload is uploaded under a hidden
-// temp sibling and renamed to the final name, which must still be free; a failed upload or rename
-// therefore never leaves a partial object under the final name, and the temp is removed when
-// possible. A refused rename is decided from the device, live: WPD sets the object's two names in one
-// call and reports the first failure, so the rename may have applied anyway. A device that refuses the
-// temp or the rename (`routeRefused`) returns ERROR_RETRY with nothing published under the final name;
-// the caller then uploads directly, in a command of its own, and remembers the refusal for the session.
-[[nodiscard]] HRESULT CommitWriterCreateWithTempRename(
-    IMtpBackend& backend, std::wstring_view normalizedPath, HANDLE stagingFile, uint64_t sizeBytes, bool& routeRefused) noexcept
-{
-    routeRefused = false;
-    std::wstring tempPath;
-    HRESULT hr = MakeWriterTempPath(normalizedPath, L".rs-mtp-create-", tempPath);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-    hr = backend.WriteFileFromHandle(tempPath, stagingFile, sizeBytes, false);
-    if (FAILED(hr))
-    {
-        DeleteCreateTempBestEffort(backend, tempPath);
-        Debug::Perf::EmitValue(L"mtp.create.temp_upload_failed", 1u, hr);
-        if (IsCreateTempRouteRefusal(hr))
-        {
-            routeRefused = true;
-            return HRESULT_FROM_WIN32(ERROR_RETRY);
-        }
-        return hr;
-    }
-    const HRESULT renameHr = backend.RenameItem(tempPath, normalizedPath, false);
-    if (SUCCEEDED(renameHr))
-    {
-        Debug::Perf::EmitValue(L"mtp.create.temp_rename_committed", 1u, S_OK);
-        return S_OK;
-    }
-
-    backend.RefreshPathOccupancy(normalizedPath);
-    backend.RefreshPathOccupancy(tempPath);
-    uint64_t finalSize           = 0u;
-    const HRESULT finalHr        = backend.GetFileSize(normalizedPath, finalSize);
-    unsigned long tempAttributes = 0u;
-    const HRESULT tempHr         = backend.GetAttributes(tempPath, tempAttributes);
-    const bool finalAbsent       = finalHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || finalHr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-    const bool tempAbsent        = tempHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || tempHr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-    if (SUCCEEDED(finalHr) && tempAbsent && finalSize == sizeBytes)
-    {
-        // The rename applied despite its status: the final name holds the uploaded object.
-        Debug::Perf::EmitValue(L"mtp.create.rename_applied_despite_status", 1u, renameHr);
-        return S_OK;
-    }
-    if (SUCCEEDED(tempHr))
-    {
-        DeleteCreateTempBestEffort(backend, tempPath);
-    }
-    Debug::Perf::EmitValue(L"mtp.create.rename_temp_failed", 1u, renameHr);
-    if (SUCCEEDED(finalHr) && SUCCEEDED(tempHr))
-    {
-        // Another writer took the final name; this upload published nothing there.
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-    }
-    if (finalAbsent && SUCCEEDED(tempHr) && IsCreateTempRouteRefusal(renameHr))
-    {
-        routeRefused = true;
-        return HRESULT_FROM_WIN32(ERROR_RETRY);
-    }
-    // Anything else (the device state could not be read, or the temp vanished) leaves publication
-    // undecided: the rename's own failure is returned.
-    return renameHr;
 }
 
 [[nodiscard]] HRESULT ReadPersistentIdFromItemProperties(IMtpBackend& backend, std::wstring_view path, std::wstring& persistentId) noexcept
@@ -2732,6 +2642,10 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::QueryInterface(REFIID riid, void** ppvO
     {
         *ppvObject = static_cast<IFileSystemAtomicWriter*>(this);
     }
+    else if (riid == __uuidof(IFileSystemDirectFinalCreateWriter))
+    {
+        *ppvObject = static_cast<IFileSystemDirectFinalCreateWriter*>(this);
+    }
     else if (riid == __uuidof(IFileSystemInitialize))
     {
         *ppvObject = static_cast<IFileSystemInitialize*>(this);
@@ -3302,10 +3216,8 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CreateFileWriter(const wchar_t* path, F
     return S_OK;
 }
 
-// R3-1 / C9: the overwrite commit stages to a temp sibling, verifies it, deletes the decided occupant
-// by identity, and renames the temp into the name. I35 XP-01: a plain create is atomic-final too (temp
-// upload, then a rename onto the free name): MTP exposes no object binding, so the host has no owned
-// stage of its own on a device and this writer is the only publication route for a new file.
+// R3-1 / C9: only the guarded overwrite temp-sibling swap is atomic-final. New files use the
+// separately advertised direct-final create route below.
 HRESULT STDMETHODCALLTYPE FileSystemMtp::SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept
 {
     if (! supported)
@@ -3318,7 +3230,36 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::SupportsAtomicWriterCommit(const wchar_
         return E_POINTER;
     }
     const bool overwrite = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
-    if (FAILED(CheckMutationAllowed()) || (overwrite && CreatedObjectPuidUnsupported()))
+    if (! overwrite)
+    {
+        return S_OK;
+    }
+    if (FAILED(CheckMutationAllowed()) || CreatedObjectPuidUnsupported())
+    {
+        return S_OK;
+    }
+    std::wstring normalized;
+    if (FAILED(NormalizeInputPath(path, normalized)) || normalized == L"/")
+    {
+        return S_OK;
+    }
+    *supported = TRUE;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemMtp::SupportsDirectFinalCreate(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept
+{
+    if (! supported)
+    {
+        return E_POINTER;
+    }
+    *supported = FALSE;
+    if (! path)
+    {
+        return E_POINTER;
+    }
+    constexpr uint32_t kDestructiveGrantFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY;
+    if ((static_cast<uint32_t>(flags) & kDestructiveGrantFlags) != 0u || FAILED(CheckMutationAllowed()))
     {
         return S_OK;
     }
@@ -3441,11 +3382,9 @@ HRESULT FileSystemMtp::CommitFileWriter(std::wstring_view normalizedPath,
         .failWrites     = settings.failOverwriteJournalWrites,
         .deviceIdentity = OverwriteJournalDeviceIdentity(settings.connectionDevicePuid, settings.connectionHost, commandPath),
     };
-    auto tempPuidMissing              = std::make_shared<std::atomic_bool>(false);
-    auto tempPuidPresent              = std::make_shared<std::atomic_bool>(false);
-    auto createRouteRefused           = std::make_shared<std::atomic_bool>(false);
-    const bool createTempRouteRefused = CreateTempRouteRefused();
-    hr                                = RunBackendCommand(
+    auto tempPuidMissing = std::make_shared<std::atomic_bool>(false);
+    auto tempPuidPresent = std::make_shared<std::atomic_bool>(false);
+    hr                   = RunBackendCommand(
         [commandPath,
          stagingFile,
          sizeBytes,
@@ -3455,26 +3394,14 @@ HRESULT FileSystemMtp::CommitFileWriter(std::wstring_view normalizedPath,
          verifyLevel,
          decidedDestinationPersistentId = std::move(decidedDestinationPersistentId),
          createdObjectPuidUnsupported,
-         createTempRouteRefused,
          journalContext,
          tempPuidMissing,
-         tempPuidPresent,
-         createRouteRefused](IMtpBackend& backend) noexcept
+         tempPuidPresent](IMtpBackend& backend) noexcept
     {
         static_cast<void>(payloadOwner);
         if (! allowOverwrite)
         {
-            if (createTempRouteRefused)
-            {
-                return CommitWriterCreateDirect(backend, commandPath, stagingFile, sizeBytes);
-            }
-            bool routeRefused      = false;
-            const HRESULT createHr = CommitWriterCreateWithTempRename(backend, commandPath, stagingFile, sizeBytes, routeRefused);
-            if (routeRefused)
-            {
-                createRouteRefused->store(true, std::memory_order_release);
-            }
-            return createHr;
+            return CommitWriterCreateDirect(backend, commandPath, stagingFile, sizeBytes);
         }
 
         // R0c-OR2: occupancy is decided live, never from a path cache that may predate another
@@ -3520,23 +3447,6 @@ HRESULT FileSystemMtp::CommitFileWriter(std::wstring_view normalizedPath,
     },
         journalContext.deviceIdentity,
         MtpBackendCommandKind::Mutating);
-    if (createRouteRefused->load(std::memory_order_acquire))
-    {
-        // I35 XP-01: this device refuses the hidden create temp or its rename. Later creates upload
-        // directly, and this one does now, in a command (and a watchdog budget) of its own.
-        RecordCreateTempRouteRefused();
-        if (hr == HRESULT_FROM_WIN32(ERROR_RETRY))
-        {
-            hr = RunBackendCommand(
-                [commandPath, stagingFile, sizeBytes, payloadOwner](IMtpBackend& backend) noexcept
-            {
-                static_cast<void>(payloadOwner);
-                return CommitWriterCreateDirect(backend, commandPath, stagingFile, sizeBytes);
-            },
-                journalContext.deviceIdentity,
-                MtpBackendCommandKind::Mutating);
-        }
-    }
     if (tempPuidPresent->load(std::memory_order_acquire))
     {
         RecordCreatedObjectPuidProbe(true);
@@ -4527,18 +4437,6 @@ void FileSystemMtp::RecordCreatedObjectPuidProbe(bool supported) noexcept
 {
     std::lock_guard lock(_stateMutex);
     _createdObjectPuidPolicy = supported ? CreatedObjectPuidPolicy::Supported : CreatedObjectPuidPolicy::Unsupported;
-}
-
-bool FileSystemMtp::CreateTempRouteRefused() const noexcept
-{
-    std::lock_guard lock(_stateMutex);
-    return _createTempRouteRefused;
-}
-
-void FileSystemMtp::RecordCreateTempRouteRefused() noexcept
-{
-    std::lock_guard lock(_stateMutex);
-    _createTempRouteRefused = true;
 }
 
 HRESULT FileSystemMtp::CompleteSingleItem(FileSystemOperation operationType,

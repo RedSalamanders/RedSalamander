@@ -515,7 +515,7 @@ Search changes must be validated through:
 - Commands self-test `search_local_plugin_invalid_regex_reports_single_completion`, which verifies built-in local syntax-invalid and safety-rejected regex searches return `E_INVALIDARG`, emit no matches, and report the single completed progress payload described above,
 - Commands self-test `search_local_plugin_parallel_cancel_fanin`, which verifies built-in local parallel name-only scan finds flat, broad, and deep-tree matches, serializes fan-in callbacks, and honors `FileSystemSearchShouldCancel` after a ready match batch starts draining,
 - Commands self-test `filesystem_local_watch_unwatch_drains_inflight_callback`, which verifies built-in local watch teardown drains a blocked in-flight callback before `UnwatchDirectory(...)` returns,
-- packaged Release validation for MSI and MSIX when service packaging changes.
+- portable Release ZIP validation for the search-service payload when service packaging changes.
 
 Writer-ownership acquisition emits `search.service.writer_ownership.acquire_us` with `detail=store-file`, `value0=0`
 for an acquired lease or `value0=1` for live-owner contention, and the failing HRESULT when ownership cannot be
@@ -552,6 +552,7 @@ Machine-dependent coverage remains part of the suite and must skip with a reason
 - Built-in local name-only scan searches may parallelize recursive traversal through `searchMaxDirectoryWalkers`, bounded to `1..8`.
 - Unchecked Find indexed-backend preference forces built-in local searches to the scan backend instead of allowing service/local-index selection through `auto`.
 - Parallel search fan-in and indexed/broker result streams must poll cancellation during match emission or between service batches, serialize callbacks, and reach a worker quiet point before returning cancellation/failure.
+- After the parallel directory-walk quiet point, return the first recorded terminal failure, including a final-batch match/cancel callback failure raised after all workers had already retired. A cached completion observation must never turn `E_ABORT`/`ERROR_CANCELLED` or another callback failure into success; ordinary successful/max-results completion retains its existing result.
 - Built-in local parallel search workers must be coordinator-owned `PTP_WORK`/RAII work items or an equivalent cleanup-group ownership model. Raw `TrySubmitThreadpoolCallback` callbacks must not receive pointers to stack-owned scan state, condition variables, chunk vectors, or module pins unless the coordinator has a proven wait that outlives every possible callback access.
 - Search snippets must not split UTF-16 surrogate pairs at the snippet start or end boundary.
 - Followed-symlink traversal must de-duplicate physical directory identities without leaving stale logical visit keys for rejected duplicate identities, and must skip followed local directories whose physical identity cannot be probed.

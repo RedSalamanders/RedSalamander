@@ -20,10 +20,11 @@ namespace
 }
 } // namespace
 
-void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
+void FolderWindow::FileOperationState::EnsurePopupVisible(PopupRevealReason reason) noexcept
 {
-    const uint64_t startedUs = PerfNowUs();
-    HWND ownerWindow         = _owner.GetHwnd();
+    const bool forceExistingPopupVisible = reason != PopupRevealReason::RoutineTask && reason != PopupRevealReason::InformationalTask;
+    const uint64_t startedUs             = PerfNowUs();
+    HWND ownerWindow                     = _owner.GetHwnd();
     if (ownerWindow)
     {
         HWND rootWindow = GetAncestor(ownerWindow, GA_ROOT);
@@ -51,9 +52,17 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
     while (existingPopup && IsWindow(existingPopup))
     {
         Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleExistingCount");
+        if (! forceExistingPopupVisible && IsIconic(existingPopup) != FALSE)
+        {
+            // A routine reveal updates the retained card state but respects an explicit minimize.
+            return;
+        }
         const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
         const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
-        ShowWindow(existingPopup, SW_SHOWNOACTIVATE);
+        if (forceExistingPopupVisible || IsWindowVisible(existingPopup) == FALSE)
+        {
+            ShowWindow(existingPopup, SW_SHOWNOACTIVATE);
+        }
         const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
 
         if (! IsWindow(existingPopup))
@@ -108,7 +117,7 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
             }
         }
 
-        const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
+        const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE) | (forceExistingPopupVisible ? 0u : SWP_NOZORDER);
 
         if (! IsWindow(existingPopup))
         {
@@ -117,9 +126,10 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
             continue;
         }
 
-        // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
+        // Attention and explicit requests may raise an existing popup without activating it.
+        // Routine updates preserve z-order; a restored/newly shown window stays non-activating.
         const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
-        SetWindowPos(existingPopup, HWND_TOP, targetX, targetY, 0, 0, flags);
+        SetWindowPos(existingPopup, forceExistingPopupVisible ? HWND_TOP : nullptr, targetX, targetY, 0, 0, flags);
         const uint64_t positionUs = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
 
         if (! IsWindow(existingPopup))
@@ -255,22 +265,20 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
 void FolderWindow::FileOperationState::ShowPopup() noexcept
 {
     // This entry is the explicit View command. Automatic task presentation still
-    // uses EnsurePopupVisible without activation. Do not override intervening input.
+    // uses EnsurePopupVisible without activation. Preserve an intervening change
+    // of foreground window or focus, but do not treat the command's own key-up as
+    // intervening input: cold creation can update GetLastInputInfo after dispatch.
     const std::weak_ptr<void> lifetime = _uiLifetime;
     const HWND ownerWindow             = GetAncestor(_owner.GetHwnd(), GA_ROOT);
     const HWND foreground              = GetForegroundWindow();
     const HWND focus                   = GetFocus();
-    LASTINPUTINFO input{sizeof(LASTINPUTINFO)};
-    const bool inputKnown = GetLastInputInfo(&input) != FALSE;
     _actionablePromptPresentationPending.store(false, std::memory_order_release);
     RevealPendingTasksImmediately();
-    EnsurePopupVisible();
+    EnsurePopupVisible(PopupRevealReason::ExplicitShow);
     if (lifetime.expired())
         return;
     const HWND popup = _popup.get();
-    LASTINPUTINFO currentInput{sizeof(LASTINPUTINFO)};
-    if (! popup || (foreground != ownerWindow && foreground != popup) || GetForegroundWindow() != foreground || GetFocus() != focus || ! inputKnown ||
-        ! GetLastInputInfo(&currentInput) || currentInput.dwTime != input.dwTime)
+    if (! popup || (foreground != ownerWindow && foreground != popup) || GetForegroundWindow() != foreground || GetFocus() != focus)
         return;
     if (Common::RequestForegroundWindow(popup) && ! lifetime.expired() && _popup.get() == popup && GetForegroundWindow() == popup)
         SetFocus(popup);

@@ -658,7 +658,7 @@ Translations are resource-only satellite DLLs under `RedSalamander/Lang/<culture
 
 #### Build
 
-`build.ps1` (repo root) is the wrapper over MSBuild on `RedSalamander.sln`. It locates MSBuild via `vswhere`/path search (prefers VS 2026 / toolset v145), stamps versions through `Tools\Modules\Build\Versioning.psm1`, and supports `-Configuration {Debug|Release|ASan Debug}`, `-Platform {x64|ARM64}`, `-ProjectName`, `-Clean`/`-Rebuild`, and packaging (`-Msix`, `-Msi`, `-Zip`, `-GenerateWingetManifest`). Private build implementation is grouped under `Tools/Modules/`; stable scripts at the Tools root are entrypoints or compatibility shims. Language satellite projects are validated to land in the `Lang\` output folder. Use [`Tools/README.md`](../Tools/README.md) and `Tools/tool-inventory.json` to find each command's purpose, consumers, side effects, and owner; tooling changes follow `Specs/Testing/Testing_ToolingGovernance.md`.
+`build.ps1` (repo root) is the wrapper over MSBuild on `RedSalamander.sln`. It locates MSBuild via `vswhere`/path search (prefers VS 2026 / toolset v145), stamps versions through `Tools\Modules\Build\Versioning.psm1`, and supports `-Configuration {Debug|Release|ASan Debug}`, `-Platform {x64|ARM64}`, `-ProjectName`, `-Clean`/`-Rebuild`, portable ZIP packaging (`-Zip`), and Winget manifest generation (`-GenerateWingetManifest`). Private build implementation is grouped under `Tools/Modules/`; stable scripts at the Tools root are entrypoints or compatibility shims. Language satellite projects are validated to land in the `Lang\` output folder. Use [`Tools/README.md`](../Tools/README.md) and `Tools/tool-inventory.json` to find each command's purpose, consumers, side effects, and owner; tooling changes follow `Specs/Testing/Testing_ToolingGovernance.md`.
 
 #### Tests
 
@@ -688,8 +688,8 @@ Satellite resources must never duplicate language-neutral IDs (it breaks the par
 
 - [DxUi Technical Guide](DxUi.md) explains the shared DirectX UI layer, host
   lifecycle, theme/background model, controls, examples, and tests.
-- [Winget Integration](WingetIntegration.md) explains package manifest
-  generation and validation.
+- [Winget Integration](../Specs/Installer/WingetIntegration.md) explains the
+  manifest contract and the manually dispatched publication adapter.
 - [Documentation Coverage Map](DocumentationMap.md) tracks what the public docs
   cover and which areas are still thin.
 - [Monitor.md](Monitor.md) introduces the independent RedMonitor viewer for ETW/log

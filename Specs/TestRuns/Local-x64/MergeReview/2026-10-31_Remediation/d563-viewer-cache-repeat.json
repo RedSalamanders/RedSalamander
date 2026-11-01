@@ -1,0 +1,34 @@
+{
+  "scope": "focused noninteractive ViewerSpace cases; no Full qualification",
+  "run_id": "20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1",
+  "configuration": "Debug",
+  "platform": "x64",
+  "build_receipt_id": "7ca19c3199c83d1dcbfe1e6a1e4136488935dffacd17ea6ca454eb93e846a568",
+  "source_snapshot_id": "d563cfc4543de7f9a0cc8d1dca97f9221b32feba9f62ffefe9201cae15789be8",
+  "source_and_artifacts_stable": true,
+  "exit_code": 0,
+  "cases": [
+    {
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "exit_code": 0,
+      "timed_out": false,
+      "harness_error": "",
+      "duration_ms": 18988,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.out.log",
+      "stdout_sha256": "390aa6737bcf33db19b6983d4e6fd8127f94d4b99447be0d8b54c9d66bcf49a1",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.err.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "exit_code": 0,
+      "timed_out": false,
+      "harness_error": "",
+      "duration_ms": 18699,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.out.log",
+      "stdout_sha256": "8d27091fc2b795060dac49412b0c51b5e064a3bc5a415671b10deef162992ffb",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T181112Z-78212-0b7d81b5201d4001a340d57328532dd1\\scratch\\process-temp\\TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.err.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

@@ -591,7 +591,7 @@ strict. A relocated real binary and wrong-layout/wrong-binary/missing controls c
 the repair. No C++ source changed; updated native CI remains required.
 
 The next public CI run completed both native Debug builds but failed Suite PR
-standalone checks; the [complete failure packet](../../TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure/README.md)
+standalone checks; the [complete failure packet](../../TestRuns/4cb089111a23/Validation/v01/README.md)
 retains both architectures' logs and uploaded artifacts. Two search cases were
 absent from discovery, the schema cmdlet omitted nested rejection diagnostics,
 and an ARM64 binary-identity fixture assumed an x64 file layout. Native failures

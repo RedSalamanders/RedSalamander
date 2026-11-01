@@ -121,6 +121,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Common\FileSystemPathIdentity.cpp" />
     <ClCompile Include="..\..\Common\LocalSearchIndexCore.cpp" />
     <ClCompile Include="..\..\Common\SearchServiceBroker.cpp" />
     <ClCompile Include="..\..\Common\SqliteIndexStore.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="FileSystem.Path.cpp" />
     <ClCompile Include="FileSystem.Search.cpp" />
     <ClCompile Include="FileSystem.Watch.cpp" />
+    <ClInclude Include="..\..\Common\FileSystemPathIdentity.h" />
     <ClInclude Include="..\..\Common\LocalSearchIndexCore.h" />
     <ClInclude Include="..\..\Common\Blake3Digest.h" />
     <ClInclude Include="..\..\Common\FileOperationTraversalPolicy.h" />

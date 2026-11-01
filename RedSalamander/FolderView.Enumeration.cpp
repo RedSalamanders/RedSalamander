@@ -188,8 +188,11 @@ void FolderView::StopEnumerationThread() noexcept
     }
 
     _enumerationThread.request_stop();
+    std::stop_source generationToStop{std::nostopstate};
     {
         std::lock_guard guard(_enumerationMutex);
+        generationToStop              = std::exchange(_enumerationGenerationStopSource, std::stop_source{});
+        _pendingEnumerationStopSource = std::stop_source{std::nostopstate};
         _pendingEnumerationPath.reset();
         _pendingEnumerationFileSystem.reset();
         _pendingEnumerationPluginId.clear();
@@ -199,6 +202,7 @@ void FolderView::StopEnumerationThread() noexcept
         _iconLoadingActive.store(false, std::memory_order_release);
         _thumbnailLoadingActive.store(false, std::memory_order_release);
     }
+    generationToStop.request_stop();
     _enumerationCv.notify_all();
     _enumerationThread        = std::jthread{};
     _enumerationThreadStarted = false;
@@ -239,12 +243,23 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
     }
     [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
-    [[maybe_unused]] const std::stop_callback notifyOnStop(stopToken, [this]() noexcept { _enumerationCv.notify_all(); });
+    [[maybe_unused]] const std::stop_callback notifyOnStop(stopToken,
+                                                           [this]() noexcept
+    {
+        // Synchronize the notification with the predicate mutex so stop cannot land
+        // between the worker's predicate check and its atomic unlock-and-wait.
+        {
+            std::lock_guard barrier(_enumerationMutex);
+        }
+        _enumerationCv.notify_all();
+    });
     while (! stopToken.stop_requested())
     {
         std::filesystem::path folder;
         uint64_t generation     = 0;
         bool hasEnumerationWork = false;
+        std::stop_source generationStopSource{std::nostopstate};
+        std::stop_token generationStopToken;
         wil::com_ptr<IFileSystem> fileSystem;
         std::wstring pluginId;
         std::wstring instanceContext;
@@ -266,11 +281,13 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
             hasEnumerationWork = _pendingEnumerationPath.has_value();
             if (hasEnumerationWork)
             {
-                folder          = std::move(_pendingEnumerationPath.value());
-                generation      = _pendingEnumerationGeneration;
-                fileSystem      = std::move(_pendingEnumerationFileSystem);
-                pluginId        = std::move(_pendingEnumerationPluginId);
-                instanceContext = std::move(_pendingEnumerationInstanceContext);
+                folder               = std::move(_pendingEnumerationPath.value());
+                generation           = _pendingEnumerationGeneration;
+                generationStopSource = std::move(_pendingEnumerationStopSource);
+                generationStopToken  = generationStopSource.get_token();
+                fileSystem           = std::move(_pendingEnumerationFileSystem);
+                pluginId             = std::move(_pendingEnumerationPluginId);
+                instanceContext      = std::move(_pendingEnumerationInstanceContext);
                 _pendingEnumerationPath.reset();
             }
         }
@@ -278,8 +295,12 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         // Process folder enumeration if requested
         if (hasEnumerationWork && ! folder.empty())
         {
-            auto payload = ExecuteEnumeration(folder, generation, stopToken, std::move(fileSystem), std::move(pluginId), std::move(instanceContext));
-            if (payload && ! stopToken.stop_requested() && generation == _enumerationGeneration.load(std::memory_order_acquire))
+            // Thread teardown cancels the currently executing generation as well.
+            [[maybe_unused]] const std::stop_callback stopGenerationWithWorker(
+                stopToken, [generationStopSource]() mutable noexcept { generationStopSource.request_stop(); });
+            auto payload = ExecuteEnumeration(folder, generation, generationStopToken, std::move(fileSystem), std::move(pluginId), std::move(instanceContext));
+            if (payload && ! stopToken.stop_requested() && ! generationStopToken.stop_requested() &&
+                generation == _enumerationGeneration.load(std::memory_order_acquire))
             {
                 if (_hWnd)
                 {
@@ -348,7 +369,16 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
     HRESULT hr               = filesInformation->GetCount(&entryCount);
     if (FAILED(hr))
     {
-        entryCount = 0;
+        payload->status = hr;
+        return payload;
+    }
+
+    unsigned long bufferSize = 0u;
+    hr                       = filesInformation->GetBufferSize(&bufferSize);
+    if (FAILED(hr))
+    {
+        payload->status = hr;
+        return payload;
     }
 
     std::vector<FolderItem> directories;
@@ -358,14 +388,9 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
     try
     {
         constexpr size_t kEnumerationReserveCeiling = 1u << 20;
-        unsigned long bufferSizeHint                = 0;
-        if (FAILED(filesInformation->GetBufferSize(&bufferSizeHint)))
-        {
-            bufferSizeHint = 0;
-        }
-        const size_t countHint    = static_cast<size_t>(entryCount);
-        const size_t maxByBuffer  = bufferSizeHint > 0u ? static_cast<size_t>(bufferSizeHint) / sizeof(FileInfo) : countHint;
-        const size_t clampedCount = std::min(countHint, std::min(maxByBuffer, kEnumerationReserveCeiling));
+        const size_t countHint                      = static_cast<size_t>(entryCount);
+        const size_t maxByBuffer                    = static_cast<size_t>(bufferSize) / sizeof(FileInfo);
+        const size_t clampedCount                   = std::min(countHint, std::min(maxByBuffer, kEnumerationReserveCeiling));
 
         // GetCount is an untrusted allocation hint; reserve only a bounded amount derived from the real buffer.
         const size_t estimatedDirs  = clampedCount / 4u;
@@ -381,32 +406,23 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
             return payload;
         }
 
-        if (entry != nullptr)
+        unsigned long allocatedSize = 0u;
+        hr                          = filesInformation->GetAllocatedSize(&allocatedSize);
+        if (FAILED(hr))
         {
-            unsigned long bufferSize = 0;
-            hr                       = filesInformation->GetBufferSize(&bufferSize);
-            if (FAILED(hr))
-            {
-                payload->status = hr;
-                return payload;
-            }
+            payload->status = hr;
+            return payload;
+        }
+        if (allocatedSize < bufferSize || (entryCount == 0u && (entry != nullptr || bufferSize != 0u)) ||
+            (entryCount != 0u && (entry == nullptr || bufferSize < offsetof(FileInfo, FileName))))
+        {
+            payload->status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            return payload;
+        }
 
-            unsigned long allocatedSize = 0;
-            hr                          = filesInformation->GetAllocatedSize(&allocatedSize);
-            if (FAILED(hr))
-            {
-                payload->status = hr;
-                return payload;
-            }
-
-            if (allocatedSize < bufferSize || allocatedSize < sizeof(FileInfo))
-            {
-                payload->status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                return payload;
-            }
-
-            std::byte* base = reinterpret_cast<std::byte*>(entry);
-            std::byte* end  = base + bufferSize;
+        if (entryCount != 0u)
+        {
+            Common::Plugins::PackedFileInfoCursor cursor(entry, bufferSize, entryCount);
 
             {
                 Debug::Perf::Scope perf(L"FolderView.ExecuteEnumeration.BuildItems");
@@ -425,22 +441,30 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                 const auto hiddenNames  = _hiddenNames.load(std::memory_order_acquire);
                 const bool hiddenActive = hiddenNames && ! hiddenNames->names.empty();
 
-                while (! stopToken.stop_requested())
+                for (unsigned long entryIndex = 0u; entryIndex < entryCount && ! stopToken.stop_requested(); ++entryIndex)
                 {
                     if (_enumerationGeneration.load(std::memory_order_acquire) != generation)
                     {
                         return nullptr;
                     }
 
-                    const DWORD fileAttributes = entry->FileAttributes;
+                    const FileInfo* current = nullptr;
+                    hr                      = cursor.Next(&current);
+                    if (FAILED(hr) || current == nullptr)
+                    {
+                        payload->status = FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                        break;
+                    }
+
+                    const DWORD fileAttributes = current->FileAttributes;
                     bool include               = (showHiddenFiles || (fileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0) &&
                                                  (showSystemFiles || (fileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0);
 
                     std::wstring_view displayName;
                     if (include)
                     {
-                        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
-                        displayName            = std::wstring_view(entry->FileName, nameChars);
+                        const size_t nameChars = static_cast<size_t>(current->FileNameSize) / sizeof(wchar_t);
+                        displayName            = std::wstring_view(current->FileName, nameChars);
 
                         if (filterActive && ! MaskSyntax::MatchesWildcardMask(displayName, nameFilter->mask))
                         {
@@ -465,10 +489,10 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                         item.isDirectory    = (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                         item.fileAttributes = fileAttributes;
-                        item.lastWriteTime  = entry->LastWriteTime;
-                        if (! item.isDirectory && entry->EndOfFile > 0)
+                        item.lastWriteTime  = current->LastWriteTime;
+                        if (! item.isDirectory && current->EndOfFile > 0)
                         {
-                            item.sizeBytes = static_cast<uint64_t>(entry->EndOfFile);
+                            item.sizeBytes = static_cast<uint64_t>(current->EndOfFile);
                         }
 
                         // Compute extension offset for files (zero-copy)
@@ -494,26 +518,6 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                             files.emplace_back(std::move(item));
                         }
                     }
-
-                    if (entry->NextEntryOffset == 0)
-                    {
-                        break;
-                    }
-
-                    if (entry->NextEntryOffset < sizeof(FileInfo))
-                    {
-                        payload->status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                        break;
-                    }
-
-                    std::byte* next = reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset;
-                    if (next < base || next + sizeof(FileInfo) > end)
-                    {
-                        payload->status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                        break;
-                    }
-
-                    entry = reinterpret_cast<FileInfo*>(next);
                 }
 
                 perf.SetValue1(directories.size() + files.size());
@@ -928,10 +932,13 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 void FolderView::CancelPendingEnumeration()
 {
     _pendingExternalCommandAfterEnumeration.reset();
-    _enumerationGeneration.fetch_add(1, std::memory_order_release);
+    std::stop_source generationToStop{std::nostopstate};
     {
         std::lock_guard guard(_enumerationMutex);
+        _enumerationGeneration.fetch_add(1, std::memory_order_release);
+        generationToStop = std::exchange(_enumerationGenerationStopSource, std::stop_source{});
         _pendingEnumerationPath.reset();
+        _pendingEnumerationStopSource = std::stop_source{std::nostopstate};
         _pendingEnumerationFileSystem.reset();
         _pendingEnumerationPluginId.clear();
         _pendingEnumerationInstanceContext.clear();
@@ -940,6 +947,7 @@ void FolderView::CancelPendingEnumeration()
         _iconLoadingActive.store(false, std::memory_order_release);
         _thumbnailLoadingActive.store(false, std::memory_order_release);
     }
+    generationToStop.request_stop();
     _enumerationCv.notify_one();
 
     _pendingBusyOverlay.reset();
@@ -1045,7 +1053,14 @@ void FolderView::EnumerateFolder()
     ClearErrorOverlay(ErrorOverlayKind::Enumeration);
 
     EnsureEnumerationThread();
-    const uint64_t generation = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+    uint64_t generation = 0u;
+    std::stop_source generationToStop{std::nostopstate};
+    {
+        std::lock_guard guard(_enumerationMutex);
+        generation       = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+        generationToStop = std::exchange(_enumerationGenerationStopSource, std::stop_source{});
+    }
+    generationToStop.request_stop();
     if (_pendingExternalCommandAfterEnumeration && _currentFolder)
     {
         const std::wstring currentKey = NormalizeFocusMemoryFolderKey(_currentFolder.value());
@@ -1076,6 +1091,7 @@ void FolderView::EnumerateFolder()
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath            = *_currentFolder;
         _pendingEnumerationGeneration      = generation;
+        _pendingEnumerationStopSource      = _enumerationGenerationStopSource;
         _pendingEnumerationFileSystem      = _fileSystem;
         _pendingEnumerationPluginId        = _fileSystemPluginId;
         _pendingEnumerationInstanceContext = _fileSystemInstanceContext;
@@ -1224,7 +1240,14 @@ void FolderView::RequestRefreshFromCache()
     }
 
     EnsureEnumerationThread();
-    const uint64_t generation      = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+    uint64_t generation = 0u;
+    std::stop_source generationToStop{std::nostopstate};
+    {
+        std::lock_guard guard(_enumerationMutex);
+        generation       = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+        generationToStop = std::exchange(_enumerationGenerationStopSource, std::stop_source{});
+    }
+    generationToStop.request_stop();
     const uint64_t debounceDelayMs = _pendingRefreshDebounceDelayMs;
     _pendingRefreshDebounceDelayMs = 0u;
     RecordPendingRefreshToPaintStart(generation, debounceDelayMs);
@@ -1261,6 +1284,7 @@ void FolderView::RequestRefreshFromCache()
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath            = *_currentFolder;
         _pendingEnumerationGeneration      = generation;
+        _pendingEnumerationStopSource      = _enumerationGenerationStopSource;
         _pendingEnumerationFileSystem      = _fileSystem;
         _pendingEnumerationPluginId        = _fileSystemPluginId;
         _pendingEnumerationInstanceContext = _fileSystemInstanceContext;

@@ -1,6 +1,7 @@
 #include "ProductUi.Scope.Tests.DirectoryRecords.h"
 
 #include "DirectoryRecordCursor.h"
+#include "PathUtils.h"
 
 #include <array>
 #include <cstring>
@@ -74,5 +75,23 @@ template <typename T> [[nodiscard]] bool CheckLayout() noexcept
 
 bool TestCheckedDirectoryRecords() noexcept
 {
-    return CheckLayout<FILE_FULL_DIR_INFO>() && CheckLayout<FILE_ID_BOTH_DIR_INFO>() && CheckLayout<FILE_NOTIFY_INFORMATION>();
+    if (! CheckLayout<FILE_FULL_DIR_INFO>() || ! CheckLayout<FILE_ID_BOTH_DIR_INFO>() || ! CheckLayout<FILE_NOTIFY_INFORMATION>())
+        return false;
+
+    const std::wstring embeddedNull{L'a', L'\0', L'b'};
+    for (const std::wstring_view invalid : std::array<std::wstring_view, 10u>{
+             {std::wstring_view{}, L".", L"..", L"a/b", L"a\\b", L"\\root", L"/root", L"C:relative", L"C:\\absolute", L"\\\\server\\share"}})
+    {
+        if (Common::Paths::IsSingleChildPathComponent(invalid))
+            return false;
+    }
+    if (Common::Paths::IsSingleChildPathComponent(std::wstring_view(embeddedNull)))
+        return false;
+
+    for (const std::wstring_view valid : {L"ordinary", L"\u00E9\U0001F600", L"trailing.", L"trailing ", L"CON", L"provider:opaque"})
+    {
+        if (! Common::Paths::IsSingleChildPathComponent(valid))
+            return false;
+    }
+    return true;
 }

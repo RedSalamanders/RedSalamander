@@ -1,0 +1,14 @@
+{
+  "status": "INTERRUPTED_BY_OWNER",
+  "reason": "Confirmed independent supplementary UTF-16 key/ordinal parity mismatch; final qualification stopped before rerunning on corrected source",
+  "source_receipt": "5b8d38033444b89a99cc6281004075019369179937d6cf6a7b33a39675cacda1",
+  "pester_build_toolchain": {
+    "failed": 0,
+    "seconds": 710.64,
+    "warning": "LNK4075 in relocated native fixture prevents zero-warning acceptance",
+    "passed": 30
+  },
+  "control": "Ctrl-C sent through owned exec session6010; parent4204 exited; no MSBuild/cl/link descendants remained",
+  "not_a_complete_prepush_pass": true,
+  "recorded_utc": "2026-10-31T15:31:51.1159643Z"
+}

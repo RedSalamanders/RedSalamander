@@ -1,0 +1,47 @@
+{
+    "run_started_utc": "2026-10-31T13:37:58.766Z",
+    "duration_ms": 70701,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_ReviewRemediationContracts",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261031T133217Z-78760-0683c01f176749aaabf72c88b89ef0af\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 70062,
+            "passed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_ReviewRemediationContracts",
+            "failureMessage": "Documentation screenshots failed; see DocumentationPrivacy witnesses in the trace.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1250,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ReviewRemediationContracts",
+                    "status": "failed",
+                    "duration_ms": 68765,
+                    "repeat_index": 1,
+                    "reason": "Documentation screenshots failed; see DocumentationPrivacy witnesses in the trace."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+}

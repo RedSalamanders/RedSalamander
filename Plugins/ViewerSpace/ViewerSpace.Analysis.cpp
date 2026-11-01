@@ -230,9 +230,9 @@ void ViewerSpace::InvalidateAnalysis() noexcept
     EnsureAnimationTimer();
 }
 
-uint64_t ViewerSpace::AnalysisOwnedBytes() const noexcept
+uint64_t ViewerSpace::AnalysisOwnedBytes(bool includeFilter) const noexcept
 {
-    uint64_t bytes    = WorkspaceOwnedBytes() + _analysisRows.capacity() * sizeof(uint32_t) + _analysisFilter.capacity() * sizeof(wchar_t);
+    uint64_t bytes    = _analysisRows.capacity() * sizeof(uint32_t) + (includeFilter ? _analysisFilter.capacity() * sizeof(wchar_t) : 0u);
     const auto charge = [](const std::shared_ptr<AnalysisBuildState>& state) noexcept -> uint64_t
     {
         if (! state)
@@ -265,6 +265,7 @@ std::optional<ViewerSpace::ResolvedItem> ViewerSpace::ResolveAnalysisItem(uint32
         item.parentId           = parentId;
         item.isSynthetic        = true;
         item.contentNotMeasured = parent->contentNotMeasured;
+        item.scanState          = parent->aggregateContainsUnreadable ? ScanState::Error : ScanState::Done;
         item.totalBytes         = parent->aggregateBytes;
         item.aggregateFolders   = parent->aggregateFolders;
         item.aggregateFiles     = parent->aggregateFiles;
@@ -718,8 +719,8 @@ void ViewerSpace::UpdateInspector() noexcept
                          ? std::wstring{}
                          : LoadStringResource(g_hInstance,
                                               static_cast<UINT>(value.contentNotMeasured              ? IDS_VIEWERSPACE_ANALYSIS_CONTENTS_NOT_MEASURED
-                                                                : value.isSynthetic                   ? IDS_VIEWERSPACE_ANALYSIS_DETAIL_LIMITATION
                                                                 : value.scanState == ScanState::Error ? IDS_VIEWERSPACE_ANALYSIS_STATE_UNREADABLE
+                                                                : value.isSynthetic                   ? IDS_VIEWERSPACE_ANALYSIS_DETAIL_LIMITATION
                                                                 : value.scanState == ScanState::Done  ? IDS_VIEWERSPACE_STATUS_DONE
                                                                                                       : IDS_VIEWERSPACE_ANALYSIS_STATE_PARTIAL));
     }

@@ -709,23 +709,28 @@ LRESULT AnalysisHost::HandleWindowMessage(HWND hwnd, UINT message, WPARAM wParam
             }
         }
     }
-    if ((message == WM_KEYDOWN || message == WM_SYSKEYDOWN) && _callbacks.commandKey)
+    if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
     {
         const UINT virtualKey = static_cast<UINT>(wParam);
-        if (virtualKey == VK_ESCAPE && (_host.GetCapturedControl() == _panelSplitter || _host.GetCapturedControl() == _inspectorSplitter))
+        const auto* captured  = _host.GetCapturedControl();
+        if (virtualKey == VK_ESCAPE && captured != nullptr && (captured == _panelSplitter || captured == _inspectorSplitter))
         {
             CancelResize();
             return 0;
         }
         const bool alt          = message == WM_SYSKEYDOWN || (GetKeyState(VK_MENU) & 0x8000) != 0;
         const bool control      = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-        const bool ownerCommand = virtualKey == VK_F5 || virtualKey == VK_ESCAPE ||
-                                  (alt && (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_INSERT)) ||
+        const bool ownerCommand = virtualKey == VK_F5 || (alt && (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_INSERT)) ||
                                   (control && (virtualKey == '1' || virtualKey == '2'));
         if (virtualKey == VK_ESCAPE && _filterField != nullptr && ! _filterField->GetText().empty())
         {
             _filterField->SetText(L"");
             InvokeFilterChanged(L"");
+            return 0;
+        }
+        if (virtualKey == VK_ESCAPE && _callbacks.panelClose)
+        {
+            InvokePanelClose();
             return 0;
         }
         if (ownerCommand && InvokeCommandKey(virtualKey, (alt ? MOD_ALT : 0u) | (control ? MOD_CONTROL : 0u)))

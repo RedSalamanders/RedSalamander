@@ -70,11 +70,12 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
     std::vector<std::filesystem::path> sources,
     const std::filesystem::path& destinationFolder,
     bool requireConfirmation,
-    FileSystemFlags flags = FILESYSTEM_FLAG_RECURSIVE)
+    FileSystemFlags flags             = FILESYSTEM_FLAG_RECURSIVE,
+    FileSystemOperation operationType = FILESYSTEM_COPY)
 {
     const bool localSource = source.get() == state.fsLocal.get();
     const auto admitted    = StartFileOperationAndGetId(operations,
-                                                        FILESYSTEM_COPY,
+                                                        operationType,
                                                         localSource ? FolderWindow::Pane::Left : FolderWindow::Pane::Right,
                                                         localSource ? FolderWindow::Pane::Right : FolderWindow::Pane::Left,
                                                         source,
@@ -105,6 +106,62 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
                               prompt->sourcePath));
     if (! done.conditionMet || ! state.completedTasks.contains(taskId))
         return std::nullopt;
+    return FindCrossProviderSummary(operations, taskId);
+}
+
+[[nodiscard]] std::optional<FolderWindow::FileOperationState::CompletedTaskSummary> RunCrossProviderTransferAnsweringConflict(
+    SelfTestState& state,
+    FolderWindow::FileOperationState* operations,
+    std::vector<uint64_t>& tasks,
+    const wil::com_ptr<IFileSystem>& source,
+    const wil::com_ptr<IFileSystem>& destination,
+    std::vector<std::filesystem::path> sources,
+    const std::filesystem::path& destinationFolder,
+    FolderWindow::FileOperationState::Task::ConflictAction action,
+    FileSystemOperation operationType = FILESYSTEM_COPY)
+{
+    const bool localSource = source.get() == state.fsLocal.get();
+    const auto admitted    = StartFileOperationAndGetId(operations,
+                                                        operationType,
+                                                        localSource ? FolderWindow::Pane::Left : FolderWindow::Pane::Right,
+                                                        localSource ? FolderWindow::Pane::Right : FolderWindow::Pane::Left,
+                                                        source,
+                                                        std::move(sources),
+                                                        destinationFolder,
+                                                        FILESYSTEM_FLAG_RECURSIVE,
+                                                        false,
+                                                        0u,
+                                                        FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                        false,
+                                                        destination);
+    if (! admitted.has_value())
+    {
+        return std::nullopt;
+    }
+    const uint64_t taskId = admitted.value();
+    tasks.push_back(taskId);
+    bool answered   = false;
+    const auto done = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        FolderWindow::FileOperationState::Task* task = operations->FindTask(taskId);
+        if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+        {
+            if (answered || ! task || ! task->SubmitConflictDecision(prompt->generation, action, false))
+            {
+                AppendLog(L"Cross-provider direct-create conflict prompt could not be answered exactly once.");
+                return true;
+            }
+            answered = true;
+            return false;
+        }
+        return state.completedTasks.contains(taskId) && task == nullptr;
+    },
+        {.timeout = SelfTest::Scale(kCrossProviderWait), .operationName = L"cross-provider direct-create conflict resolution"});
+    if (! done.conditionMet || ! state.completedTasks.contains(taskId) || ! answered)
+    {
+        return std::nullopt;
+    }
     return FindCrossProviderSummary(operations, taskId);
 }
 
@@ -251,6 +308,211 @@ private:
                                   leftover,
                                   destinationNames.size(),
                                   DescribeCrossProviderDiagnostics(summary.value())));
+
+    const auto createConfiguredMtp = [&](const std::string& fakeOptions,
+                                         wil::com_ptr<IFileSystem>& configuredFs,
+                                         wil::com_ptr<IFileSystemIO>& configuredIo,
+                                         wil::com_ptr<IFileSystemDirectoryOperations>& configuredDirectories) noexcept -> HRESULT
+    {
+        HRESULT createHr = createMtp(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), fakeOptions.c_str(), configuredFs.put_void());
+        if (FAILED(createHr) || ! configuredFs)
+        {
+            return FAILED(createHr) ? createHr : E_UNEXPECTED;
+        }
+        wil::com_ptr<IInformations> configuredInfo;
+        wil::com_ptr<IFileSystemInitialize> configuredInitialize;
+        createHr = configuredFs->QueryInterface(IID_PPV_ARGS(configuredInfo.put()));
+        if (SUCCEEDED(createHr))
+        {
+            createHr = configuredInfo->SetConfiguration(R"json({"readOnly":false,"commandTimeoutMs":5000})json");
+        }
+        if (SUCCEEDED(createHr))
+        {
+            createHr = configuredFs->QueryInterface(IID_PPV_ARGS(configuredInitialize.put()));
+        }
+        if (SUCCEEDED(createHr))
+        {
+            createHr = configuredInitialize->Initialize(L"/", nullptr);
+        }
+        if (SUCCEEDED(createHr))
+        {
+            createHr = configuredFs->QueryInterface(IID_PPV_ARGS(configuredIo.put()));
+        }
+        if (SUCCEEDED(createHr))
+        {
+            createHr = configuredFs->QueryInterface(IID_PPV_ARGS(configuredDirectories.put()));
+        }
+        return createHr;
+    };
+    const auto readWriteCallCount = [](IFileSystemIO* fileIo, std::wstring_view path) noexcept -> std::optional<uint64_t>
+    {
+        if (! fileIo)
+        {
+            return std::nullopt;
+        }
+        const std::wstring pathText(path);
+        const char* properties = nullptr;
+        if (FAILED(fileIo->GetItemProperties(pathText.c_str(), &properties)) || properties == nullptr)
+        {
+            return std::nullopt;
+        }
+        const std::string_view json(properties);
+        const size_t key = json.find("\"writeFileCalls\":");
+        if (key == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+        size_t valueStart = key + std::string_view("\"writeFileCalls\":").size();
+        size_t valueEnd   = valueStart;
+        while (valueEnd < json.size() && json[valueEnd] >= '0' && json[valueEnd] <= '9')
+        {
+            ++valueEnd;
+        }
+        if (valueStart == valueEnd)
+        {
+            return std::nullopt;
+        }
+        uint64_t result = 0u;
+        for (size_t index = valueStart; index < valueEnd; ++index)
+        {
+            result = result * 10u + static_cast<uint64_t>(json[index] - '0');
+        }
+        return result;
+    };
+
+    // A copy-only MTP route uses a private writer payload, then one exclusive direct create.
+    const std::filesystem::path retainedMoveSource = root / L"managed-move-source.bin";
+    if (! WriteFilledTestFile(retainedMoveSource, 4'099u, 0x2Au))
+    {
+        return reject(L"managed Move source unavailable");
+    }
+    const std::filesystem::path retainedDestinationFolder = root / L"retained-destination";
+    if (! RecreateEmptyDirectory(retainedDestinationFolder))
+    {
+        return reject(L"managed Move fixture folder unavailable");
+    }
+    wil::com_ptr<IFileSystem> moveMtp;
+    wil::com_ptr<IFileSystemIO> moveMtpIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> moveMtpDirectories;
+    hr = createConfiguredMtp("{}", moveMtp, moveMtpIo, moveMtpDirectories);
+    if (FAILED(hr) || ! moveMtp || ! moveMtpIo || ! moveMtpDirectories || FAILED(moveMtpDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+    {
+        return reject(L"managed Move fake MTP setup failed");
+    }
+    const auto moveSummary = RunCrossProviderTransferFrom(state,
+                                                          operations,
+                                                          scope.tasks,
+                                                          state.fsLocal,
+                                                          moveMtp,
+                                                          {retainedMoveSource},
+                                                          std::filesystem::path(kMtpDestination),
+                                                          false,
+                                                          FILESYSTEM_FLAG_RECURSIVE,
+                                                          FILESYSTEM_MOVE);
+    std::string retainedMoveBytes;
+    std::string expectedMoveBytes;
+    if (! moveSummary.has_value() || moveSummary->errorCount != 0u || moveSummary->publishedItemCount != 1u || moveSummary->retainedSourceCount != 1u ||
+        ! std::filesystem::exists(retainedMoveSource) ||
+        ! ReadFileTextFsIo(moveMtpIo, std::filesystem::path(kMtpDestination) / retainedMoveSource.filename(), retainedMoveBytes) ||
+        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), retainedMoveSource, expectedMoveBytes) || retainedMoveBytes != expectedMoveBytes)
+    {
+        return reject(L"managed Move through direct-final create must publish the copy and retain its source without exact publication proof");
+    }
+
+    // If another writer takes the new name after discovery, the direct exclusive create reports a
+    // known no-commit conflict. Skip preserves that occupant; Overwrite re-enters the guarded PUID swap.
+    const std::filesystem::path skipRaceSource      = root / L"race-skip-source.bin";
+    const std::filesystem::path overwriteRaceSource = root / L"race-overwrite-source.bin";
+    if (! WriteFilledTestFile(skipRaceSource, 2'048u, 0x31u) || ! WriteFilledTestFile(overwriteRaceSource, 2'049u, 0x32u))
+    {
+        return reject(L"appeared-occupant sources unavailable");
+    }
+    constexpr std::wstring_view kSkipRaceLeaf = L"appeared-skip.bin";
+    wil::com_ptr<IFileSystem> skipRaceMtp;
+    wil::com_ptr<IFileSystemIO> skipRaceIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> skipRaceDirectories;
+    const std::string skipRaceOptions = R"json({"directCreateRaceOncePathContains":"appeared-skip.bin"})json";
+    hr                                = createConfiguredMtp(skipRaceOptions, skipRaceMtp, skipRaceIo, skipRaceDirectories);
+    if (FAILED(hr) || ! skipRaceDirectories || FAILED(skipRaceDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+    {
+        return reject(L"appeared-occupant Skip fake MTP setup failed");
+    }
+    const auto skipRaceSummary = RunCrossProviderTransferAnsweringConflict(state,
+                                                                           operations,
+                                                                           scope.tasks,
+                                                                           state.fsLocal,
+                                                                           skipRaceMtp,
+                                                                           {skipRaceSource},
+                                                                           std::filesystem::path(kMtpDestination),
+                                                                           FolderWindow::FileOperationState::Task::ConflictAction::Skip);
+    std::string skipOccupant;
+    const auto skipDestination = std::filesystem::path(kMtpDestination) / kSkipRaceLeaf;
+    if (! skipRaceSummary.has_value() || skipRaceSummary->skippedItemCount != 1u || skipRaceSummary->errorCount != 0u ||
+        ! ReadFileTextFsIo(skipRaceIo, skipDestination, skipOccupant) || skipOccupant != "concurrent occupant preserved")
+    {
+        return reject(L"direct-create collision Skip must preserve the appeared occupant and follow the ordinary conflict prompt");
+    }
+
+    wil::com_ptr<IFileSystem> overwriteRaceMtp;
+    wil::com_ptr<IFileSystemIO> overwriteRaceIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> overwriteRaceDirectories;
+    const std::string overwriteRaceOptions = R"json({"directCreateRaceOncePathContains":"appeared-overwrite.bin"})json";
+    hr                                     = createConfiguredMtp(overwriteRaceOptions, overwriteRaceMtp, overwriteRaceIo, overwriteRaceDirectories);
+    if (FAILED(hr) || ! overwriteRaceDirectories || FAILED(overwriteRaceDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+    {
+        return reject(L"appeared-occupant Overwrite fake MTP setup failed");
+    }
+    const auto overwriteRaceSummary = RunCrossProviderTransferAnsweringConflict(state,
+                                                                                operations,
+                                                                                scope.tasks,
+                                                                                state.fsLocal,
+                                                                                overwriteRaceMtp,
+                                                                                {overwriteRaceSource},
+                                                                                std::filesystem::path(kMtpDestination),
+                                                                                FolderWindow::FileOperationState::Task::ConflictAction::Overwrite);
+    std::string overwriteRaceBytes;
+    std::string overwriteExpected;
+    if (! overwriteRaceSummary.has_value() || overwriteRaceSummary->resultHr != S_OK || overwriteRaceSummary->errorCount != 0u ||
+        ! ReadFileTextFsIo(overwriteRaceIo, std::filesystem::path(kMtpDestination) / L"appeared-overwrite.bin", overwriteRaceBytes) ||
+        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), overwriteRaceSource, overwriteExpected) || overwriteRaceBytes != overwriteExpected)
+    {
+        return reject(L"explicit Overwrite after a direct-create collision must use the existing guarded replacement route");
+    }
+
+    // A partial upload is not a known conflict. E_FAIL must leave the item Unknown and non-retryable.
+    const std::filesystem::path partialMoveSource = root / L"partial-move-source.bin";
+    if (! WriteFilledTestFile(partialMoveSource, 4'096u, 0x4Bu))
+    {
+        return reject(L"partial direct-create source unavailable");
+    }
+    wil::com_ptr<IFileSystem> partialMtp;
+    wil::com_ptr<IFileSystemIO> partialIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> partialDirectories;
+    const std::string partialOptions = R"json({"directCreateFailOncePathContains":"partial-move-source.bin","directCreateFailAfterBytes":17})json";
+    hr                               = createConfiguredMtp(partialOptions, partialMtp, partialIo, partialDirectories);
+    if (FAILED(hr) || ! partialDirectories || FAILED(partialDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+    {
+        return reject(L"partial direct-create fake MTP setup failed");
+    }
+    const auto partialSummary                      = RunCrossProviderTransferFrom(state,
+                                                                                  operations,
+                                                                                  scope.tasks,
+                                                                                  state.fsLocal,
+                                                                                  partialMtp,
+                                                                                  {partialMoveSource},
+                                                                                  std::filesystem::path(kMtpDestination),
+                                                                                  false,
+                                                                                  FILESYSTEM_FLAG_RECURSIVE,
+                                                                                  FILESYSTEM_MOVE);
+    const std::filesystem::path partialDestination = std::filesystem::path(kMtpDestination) / partialMoveSource.filename();
+    std::string partialBytes;
+    const auto partialWriteCalls = readWriteCallCount(partialIo.get(), partialDestination.native());
+    if (! partialSummary.has_value() || partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u ||
+        partialSummary->retainedSourceCount != 1u || ! std::filesystem::exists(partialMoveSource) || ! partialWriteCalls.has_value() ||
+        partialWriteCalls.value() != 1u || ! ReadFileTextFsIo(partialIo, partialDestination, partialBytes) || partialBytes.size() != 17u)
+    {
+        return reject(L"partial direct Commit must retain the source, preserve partial destination bytes, and report Unknown without retry");
+    }
     Debug::Perf::Emit(L"FileOps.SelfTest.CrossProviderMtpNewFile", L"local-to-mtp=new-file+new-folder;no-temp-left", 0u, 2u, 0u, S_OK);
     return true;
 }

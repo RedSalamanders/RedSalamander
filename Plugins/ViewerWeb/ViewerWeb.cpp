@@ -1888,8 +1888,9 @@ void ViewerWeb::OnCreate(HWND hwnd)
 void ViewerWeb::OnDestroy() noexcept
 {
     _saveRequestId.fetch_add(1u, std::memory_order_acq_rel);
-    _loadPostFailureTerminal = false;
-    _saveInProgress          = false;
+    _profileAdmissionFailureHr = S_OK;
+    _loadPostFailureTerminal   = false;
+    _saveInProgress            = false;
     _hFindDialog.reset();
     DiscardWebView2();
 
@@ -2848,22 +2849,26 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             return FALSE;
         }
 
-        *snapshot                         = {};
-        snapshot->route                   = _documentRoute;
-        snapshot->privateOrigin           = _internalDocumentUrl.has_value() ? TRUE : FALSE;
-        snapshot->stagedFileTracked       = _tempExtractedPath.has_value() ? TRUE : FALSE;
-        snapshot->navigationCompleted     = _navigationCompleted ? TRUE : FALSE;
-        snapshot->navigationSucceeded     = _navigationSucceeded ? TRUE : FALSE;
-        snapshot->generatedOutputRejected = _generatedOutputRejected ? TRUE : FALSE;
-        snapshot->loadedSourceBytes       = _loadedSourceBytes;
-        snapshot->pendingCleanupCount     = g_stagedCleanupTracker.PendingCount();
-        snapshot->generatedOutputBytes    = _generatedOutputBytes;
-        snapshot->generatedOutputLimit    = _generatedOutputLimit;
-        snapshot->asyncLoadPostFailures   = _asyncLoadPostFailureCount.load(std::memory_order_acquire);
-        snapshot->asyncSavePostFailures   = _asyncSavePostFailureCount.load(std::memory_order_acquire);
-        snapshot->loadPostFailureTerminal = _loadPostFailureTerminal ? TRUE : FALSE;
-        snapshot->saveInProgress          = _saveInProgress ? TRUE : FALSE;
-        const size_t copyLength           = std::min(_allowedDocumentUrl.size(), snapshot->allowedDocumentUrl.size() - 1u);
+        *snapshot                               = {};
+        snapshot->route                         = _documentRoute;
+        snapshot->privateOrigin                 = _internalDocumentUrl.has_value() ? TRUE : FALSE;
+        snapshot->stagedFileTracked             = _tempExtractedPath.has_value() ? TRUE : FALSE;
+        snapshot->navigationCompleted           = _navigationCompleted ? TRUE : FALSE;
+        snapshot->navigationSucceeded           = _navigationSucceeded ? TRUE : FALSE;
+        snapshot->generatedOutputRejected       = _generatedOutputRejected ? TRUE : FALSE;
+        snapshot->loadedSourceBytes             = _loadedSourceBytes;
+        snapshot->pendingCleanupCount           = g_stagedCleanupTracker.PendingCount();
+        snapshot->generatedOutputBytes          = _generatedOutputBytes;
+        snapshot->generatedOutputLimit          = _generatedOutputLimit;
+        snapshot->asyncLoadPostFailures         = _asyncLoadPostFailureCount.load(std::memory_order_acquire);
+        snapshot->asyncSavePostFailures         = _asyncSavePostFailureCount.load(std::memory_order_acquire);
+        snapshot->loadPostFailureTerminal       = _loadPostFailureTerminal ? TRUE : FALSE;
+        snapshot->saveInProgress                = _saveInProgress ? TRUE : FALSE;
+        snapshot->testProfileAdmissionFailureHr = _profileAdmissionFailureHr;
+        const size_t statusLength               = std::min(_statusMessage.size(), snapshot->statusMessage.size() - 1u);
+        std::copy_n(_statusMessage.begin(), statusLength, snapshot->statusMessage.begin());
+        snapshot->statusMessage[statusLength] = L'\0';
+        const size_t copyLength               = std::min(_allowedDocumentUrl.size(), snapshot->allowedDocumentUrl.size() - 1u);
         std::copy_n(_allowedDocumentUrl.begin(), copyLength, snapshot->allowedDocumentUrl.begin());
         snapshot->allowedDocumentUrl[copyLength] = L'\0';
         snapshot->scriptsEnabled                 = _documentScriptsEnabled ? TRUE : FALSE;
@@ -4206,7 +4211,13 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
     const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
     if (FAILED(folderHr))
     {
-        _webViewInitInProgress = false;
+        _webViewInitInProgress     = false;
+        _profileAdmissionFailureHr = folderHr;
+        _statusMessage             = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+        Debug::Error(std::format(L"ViewerWeb: test profile admission failed closed (hr=0x{:08X}).", static_cast<unsigned long>(folderHr)));
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, _statusMessage);
+        if (hwnd)
+            InvalidateRect(hwnd, nullptr, FALSE);
         ResetSharedEnvironmentImpl();
         Release();
         return folderHr;
@@ -4434,6 +4445,11 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
     {
         Debug::Error(L"ViewerWeb: OpenPath called with an empty path.");
         return E_INVALIDARG;
+    }
+
+    if (FAILED(_profileAdmissionFailureHr))
+    {
+        return _profileAdmissionFailureHr;
     }
 
     if (! _fileSystem)

@@ -1,3 +1,5 @@
+#if defined(ENABLE_TESTS)
+
 #include "FileSystemMtp.h"
 
 #include <algorithm>
@@ -294,12 +296,10 @@ public:
         {
             _renameItemFailDestinationPath = NormalizeMtpPath(renameItemFailDestinationPath);
         }
-        _writeFileFailOncePathContains = ReadStringOptionWide(optionsJsonUtf8, "writeFileFailOncePathContains");
-        // I35 XP-01 fixtures: a device that refuses the hidden create temp's upload, or its rename (applied
-        // or not before the failure is reported), with the given HRESULT.
-        _createTempWriteFailHr                   = static_cast<HRESULT>(ReadUInt32Option(optionsJsonUtf8, "createTempWriteFailHr", 0u, 0xFFFFFFFFu));
-        _createRenameFailHr                      = static_cast<HRESULT>(ReadUInt32Option(optionsJsonUtf8, "createRenameFailHr", 0u, 0xFFFFFFFFu));
-        _createRenameAppliesBeforeFailure        = ReadBoolOption(optionsJsonUtf8, "createRenameAppliesBeforeFailure", false);
+        _writeFileFailOncePathContains           = ReadStringOptionWide(optionsJsonUtf8, "writeFileFailOncePathContains");
+        _directCreateFailOncePathContains        = ReadStringOptionWide(optionsJsonUtf8, "directCreateFailOncePathContains");
+        _directCreateFailAfterBytes              = ReadUInt32Option(optionsJsonUtf8, "directCreateFailAfterBytes", 0u, 0xFFFFFFFFu);
+        _directCreateRaceOncePathContains        = ReadStringOptionWide(optionsJsonUtf8, "directCreateRaceOncePathContains");
         _copyItemFailOnceDestinationPathContains = ReadStringOptionWide(optionsJsonUtf8, "copyItemFailOnceDestinationPathContains");
         const uint32_t r0cSiblingCount           = ReadUInt32Option(optionsJsonUtf8, "r0cSiblingCount", 0u, 4'096u);
         std::wstring disconnectEnumerateOncePath = ReadStringOptionWide(optionsJsonUtf8, "disconnectEnumerateOncePath");
@@ -609,11 +609,6 @@ public:
             _writeFileFailOnceConsumed = true;
             return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
         }
-        if (FAILED(_createTempWriteFailHr) && LeafName(normalized).find(L".rs-mtp-create-") != std::wstring::npos)
-        {
-            return _createTempWriteFailHr;
-        }
-
         const std::wstring parent = ParentPath(normalized);
         FakeNode* parentNode      = FindNodeLocked(parent);
         if (! parentNode || ! IsDirectory(*parentNode))
@@ -660,6 +655,32 @@ public:
 
     HRESULT WriteFileFromHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes, bool allowOverwrite) noexcept override
     {
+        if (! allowOverwrite)
+        {
+            const std::wstring normalized = NormalizeMtpPath(path);
+            if (! _directCreateFailOncePathContains.empty() && normalized.find(_directCreateFailOncePathContains) != std::wstring::npos &&
+                ! _directCreateFailOnceConsumed.exchange(true, std::memory_order_acq_rel))
+            {
+                std::vector<std::byte> bytes;
+                const HRESULT readHr = ReadFakeSourceHandle(sourceFile, sizeBytes, bytes);
+                if (FAILED(readHr))
+                {
+                    return readHr;
+                }
+                bytes.resize((std::min)(bytes.size(), static_cast<size_t>(_directCreateFailAfterBytes)));
+                const HRESULT partialHr = WriteFile(normalized, bytes, false);
+                return FAILED(partialHr) ? partialHr : E_FAIL;
+            }
+            if (! _directCreateRaceOncePathContains.empty() && normalized.find(_directCreateRaceOncePathContains) != std::wstring::npos &&
+                ! _directCreateRaceOnceConsumed.exchange(true, std::memory_order_acq_rel))
+            {
+                constexpr std::string_view kCompetingContent = "concurrent occupant preserved";
+                std::vector<std::byte> competingBytes(kCompetingContent.size());
+                std::memcpy(competingBytes.data(), kCompetingContent.data(), competingBytes.size());
+                const HRESULT occupantHr = WriteFile(normalized, competingBytes, false);
+                return FAILED(occupantHr) ? occupantHr : HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
+        }
         std::vector<std::byte> bytes;
         const HRESULT readHr = ReadFakeSourceHandle(sourceFile, sizeBytes, bytes);
         return FAILED(readHr) ? readHr : WriteFile(path, bytes, allowOverwrite);
@@ -1128,8 +1149,7 @@ private:
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
-        // These two fixtures fail the overwrite swap's rename (temp onto the final name). Since I35
-        // XP-01 a plain create renames its own temp too; that rename has its own knobs below.
+        // These two fixtures fail the overwrite swap's rename (temp onto the final name).
         const bool overwriteTempSource = LeafName(source).find(L".rs-mtp-overwrite-") != std::wstring::npos;
         if (overwriteTempSource && ! _renameItemFailOnceDestinationPath.empty() && ! _renameItemFailOnceConsumed && dest == _renameItemFailOnceDestinationPath)
         {
@@ -1140,12 +1160,6 @@ private:
         {
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         }
-        const bool createTempSource = LeafName(source).find(L".rs-mtp-create-") != std::wstring::npos;
-        if (createTempSource && FAILED(_createRenameFailHr) && ! _createRenameAppliesBeforeFailure)
-        {
-            return _createRenameFailHr;
-        }
-
         const std::wstring parent  = ParentPath(dest);
         const FakeNode* parentNode = FindNodeLocked(parent);
         if (! parentNode || ! IsDirectory(*parentNode))
@@ -1175,11 +1189,6 @@ private:
             node.displayName   = LeafName(targetPath);
             _nodes[targetPath] = std::move(node);
         }
-        if (createTempSource && FAILED(_createRenameFailHr) && _createRenameAppliesBeforeFailure)
-        {
-            // A device that applied the rename (both names set) but reported a failure anyway.
-            return _createRenameFailHr;
-        }
         return S_OK;
     }
 
@@ -1194,10 +1203,12 @@ private:
     bool _omitPersistentIdForOverwriteTemps = false;
     std::wstring _omitPersistentIdForPropertiesPath;
     std::wstring _writeFileFailOncePathContains;
-    bool _writeFileFailOnceConsumed        = false;
-    HRESULT _createTempWriteFailHr         = S_OK;
-    HRESULT _createRenameFailHr            = S_OK;
-    bool _createRenameAppliesBeforeFailure = false;
+    bool _writeFileFailOnceConsumed = false;
+    std::wstring _directCreateFailOncePathContains;
+    uint32_t _directCreateFailAfterBytes = 0u;
+    std::atomic_bool _directCreateFailOnceConsumed{false};
+    std::wstring _directCreateRaceOncePathContains;
+    std::atomic_bool _directCreateRaceOnceConsumed{false};
     std::wstring _copyItemFailOnceDestinationPathContains;
     bool _copyItemFailOnceConsumed = false;
     std::wstring _deleteItemFailOncePath;
@@ -1293,3 +1304,9 @@ FakeMtpActiveCallScope::~FakeMtpActiveCallScope() noexcept
     return std::make_unique<FakeMtpBackend>(optionsJsonUtf8);
 }
 } // namespace FileSystemMtpInternal
+
+#else
+
+static_assert(true, "The MTP fake backend is compiled only in test-enabled builds.");
+
+#endif

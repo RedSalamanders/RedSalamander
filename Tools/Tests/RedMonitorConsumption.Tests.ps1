@@ -17,6 +17,10 @@ Describe 'Independent RedMonitor consumption' {
   $helpers=Get-Content -LiteralPath (Join-Path $repoRoot 'Common/Helpers.h') -Raw
   $helpers|Should Match 'RedMonitor::WriteNormalizedEvent'
   $helpers|Should Match 'g_RedSalamanderProvider'
+  $helpers|Should Match 'kEtwTruncationMarker\{L"… \[truncated\]"\}'
+  $helpers|Should Match 'BuildBoundedRedMonitorMessage\(std::wstring_view message\)'
+  $helpers|Should Match 'previous\s*>=\s*0xD800u\s*&&\s*previous\s*<=\s*0xDBFFu\s*&&\s*next\s*>=\s*0xDC00u\s*&&\s*next\s*<=\s*0xDFFFu'
+  $helpers|Should Match 'message\.size\(\)\s*>\s*maxMessageSize[\s\S]{0,180}message\s*=\s*boundedMessage'
   $startup=Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander/RedSalamander.cpp') -Raw
   $startup|Should Match 'RedMonitor::LaunchInstalledViewer'
   $startup|Should Match 'RedMonitor::IsOrdinaryStartup'

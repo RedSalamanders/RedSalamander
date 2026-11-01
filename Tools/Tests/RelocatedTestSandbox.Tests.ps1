@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/MSBuildInvocation.psm1') -ErrorAction Stop
 
 Describe 'Native test sandbox after package relocation' -Tag RequiresBuildToolchain {
     It 'uses an authorized explicit root without a checkout and still rejects invalid roots' {
@@ -68,7 +69,11 @@ int wmain()
     <EnableASAN Condition="'$(Configuration)'=='ASan Debug'">true</EnableASAN>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <PropertyGroup><OutDir>$(MSBuildProjectDirectory)\bin\</OutDir><IntDir>$(MSBuildProjectDirectory)\obj\</IntDir><LinkIncremental>false</LinkIncremental></PropertyGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildProjectDirectory)\bin\</OutDir><IntDir>$(MSBuildProjectDirectory)\obj\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>__INCLUDES__</AdditionalIncludeDirectories><LanguageStandard>stdcpplatest</LanguageStandard>
@@ -90,8 +95,13 @@ int wmain()
         $arguments = @('-NoProfile', '-File', (Join-Path $repoRoot 'Tools/Invoke-SanitizedMsbuild.ps1'),
             $project, '/t:Build', "/p:Configuration=$env:RS_VALIDATION_CONFIGURATION", "/p:Platform=$env:RS_VALIDATION_PLATFORM",
             '/nologo', '/v:minimal', '/nr:false')
+        $buildLog = Join-Path $fixture 'build.log'
         $buildExit = Invoke-RSStreamingProcess -FilePath 'pwsh.exe' -Arguments $arguments -WorkingDirectory $fixture `
-            -LogPath (Join-Path $fixture 'build.log') -TimeoutMilliseconds 120000 -DelegateArtifactOperation
+            -LogPath $buildLog -TimeoutMilliseconds 120000 -DelegateArtifactOperation
+        $buildDiagnostics = Get-RSMSBuildDiagnosticSummary -LogPath $buildLog
+        if ($buildDiagnostics.WarningCount -ne 0 -or $buildDiagnostics.ErrorCount -ne 0) {
+            throw "Relocated fixture build diagnostics must be zero; warnings=$($buildDiagnostics.WarningCount) errors=$($buildDiagnostics.ErrorCount) log=$buildLog"
+        }
         $buildExit | Should Be 0
         $runExit = Invoke-RSStreamingProcess -FilePath (Join-Path $fixture 'bin/Relocated.exe') -WorkingDirectory $fixture `
             -LogPath (Join-Path $fixture 'run.log') -TimeoutMilliseconds 30000

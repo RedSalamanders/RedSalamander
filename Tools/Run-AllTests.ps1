@@ -633,17 +633,14 @@ function Invoke-RSTestPlanEntry {
                 $exitCode = if ($failedCount -gt 0) { 1 } else { 0 }
                 # Named case results let the durable-evidence contract accept exactly the declared
                 # environment-bound skips and reject any other skip.
-                $pesterCases = @()
+                $pesterTestResults = @()
                 if ($null -ne $pesterResult -and $null -ne $pesterResult.PSObject.Properties['TestResult']) {
-                    foreach ($testResult in @($pesterResult.TestResult)) {
-                        $status = switch ([string]$testResult.Result) {
-                            'Passed' { 'passed' }
-                            'Failed' { 'failed' }
-                            'Skipped' { 'skipped' }
-                            default { 'inconclusive' }
-                        }
-                        $pesterCases += [pscustomobject]@{ name = [string]$testResult.Name; status = $status }
-                    }
+                    $pesterTestResults = @($pesterResult.TestResult)
+                }
+                $pesterDetails = Convert-RSPesterTestResults -TestResults $pesterTestResults
+                $pesterCases = @($pesterDetails.Cases)
+                if ($failedCount -gt 0 -and -not [string]::IsNullOrWhiteSpace($pesterDetails.FailureReason)) {
+                    $failureReason = [string]$pesterDetails.FailureReason
                 }
             }
             'PowerShellScript' {
@@ -2351,18 +2348,13 @@ $runSummary = New-RSTestRunSummary `
     -TestSandboxAudit $testSandboxAudit `
     -Results $allResults
 $summaryForConsumers = $runSummary
+$legacySummaryPath = $null
 if ($null -ne $validationEvidenceRun) {
     $legacySummaryPath = Join-Path $artifactRoot 'run-all-tests-results-v1.json'
-    $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $legacySummaryPath -Encoding UTF8
     $summaryForConsumers = New-RSValidationRunSummaryV2 -Run $validationEvidenceRun `
         -Plan $validationPlan -Decision $shadowDecision -LegacySummary $runSummary `
         -EvidenceRoot $validationEvidenceRoot `
         -SchemaRoot (Join-Path $repoRoot 'Specs\Testing') -CoverageScope $validationCoverageScope
-    Write-RSAtomicCanonicalJsonFile -LiteralPath $runSummaryPath -InputObject $summaryForConsumers `
-        -SchemaPath (Join-Path $repoRoot 'Specs\Testing\RunAllTestsSummary.schema.json') `
-        -AllowedRoot $artifactRoot
-} else {
-    $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $runSummaryPath -Encoding UTF8
 }
 $terminalState = if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tests.v2') {
     switch ([string]$summaryForConsumers.repository_verdict) {
@@ -2372,7 +2364,8 @@ $terminalState = if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tes
         'BLOCKED' { 'CORRUPT_EVIDENCE' }
         default { 'CORRUPT_EVIDENCE' }
     }
-} elseif ($overallExitCode -eq 0 -and $testPlan.Count -eq 0) {
+} elseif ($overallExitCode -eq 0 -and ($testPlan.Count -eq 0 -or $validationCoverageScope -ne 'complete')) {
+    # Legacy-only focused runs have the same incomplete repository verdict as v2.
     # An empty selection (for example every entry pending the interactive desktop) executed nothing.
     'NOT_EVALUATED'
 } elseif ($overallExitCode -eq 0) {
@@ -2381,6 +2374,17 @@ $terminalState = if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tes
     'FAILED'
 }
 $overallExitCode = Get-RSValidationExitCode -TerminalState $terminalState
+$runSummary = Set-RSTestRunSummaryFinalExitCode -Summary $runSummary -TerminalState $terminalState
+if ($null -ne $legacySummaryPath) {
+    $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $legacySummaryPath -Encoding UTF8
+}
+if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tests.v2') {
+    Write-RSAtomicCanonicalJsonFile -LiteralPath $runSummaryPath -InputObject $summaryForConsumers `
+        -SchemaPath (Join-Path $repoRoot 'Specs\Testing\RunAllTestsSummary.schema.json') `
+        -AllowedRoot $artifactRoot
+} else {
+    $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $runSummaryPath -Encoding UTF8
+}
 $caseHistoryRows = @(Convert-RSTestRunSummaryToCaseHistoryRows -Summary $runSummary)
 $caseHistoryPath = Join-Path $artifactRoot 'run-all-tests-case-history.jsonl'
 Convert-RSTestCaseHistoryRowsToJsonl -Rows $caseHistoryRows | Set-Content -LiteralPath $caseHistoryPath -Encoding UTF8

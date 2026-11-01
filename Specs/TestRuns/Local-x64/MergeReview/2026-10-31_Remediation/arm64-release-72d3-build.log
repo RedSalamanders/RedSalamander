@@ -1,0 +1,1399 @@
+
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  RedSalamander-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedSalamander-ja-JP.dll
+  RedSalamander-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedSalamander-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\Terminal-fr-FR.dll
+  Terminal-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\Terminal-cs-CZ.dll
+  Terminal-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\Terminal-ja-JP.dll
+  Terminal-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerText-fr-FR.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Installing vcpkg dependencies to Z:\src\RedSalamander\.build\vcpkg_installed\arm64\
+  "C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\vcpkg\vcpkg.exe" install  --x-wait-for-lock --triplet "arm64-windows" --vcpkg-root "C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\vcpkg\\" "--x-manifest-root=Z:\src\RedSalamander\\" "--x-install-root=Z:\src\RedSalamander\.build\vcpkg_installed\arm64\\" "--overlay-triplets=Z:\src\RedSalamander\.build\vcpkg-triplets\arm64" "--overlay-ports=Z:\src\RedSalamander\Build\vcpkg-ports"
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystem-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemCurl-fr-FR.dll
+  Detecting compiler hash for triplet x64-windows...
+  FileSystemDummy-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerWeb-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMtp-sk-SK.dll
+  RedConfigure-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedConfigure-ja-JP.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.52.37025/bin/Hostx64/x64/cl.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Detecting compiler hash for triplet arm64-windows...
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  LocalizationTests-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\LocalizationTests-fr-FR.dll
+  FileSystem-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem-sk-SK.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystem7z-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSpace-sk-SK.dll
+  Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.52.37025/bin/Hostx64/arm64/cl.exe
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedSalamander-sk-SK.dll
+  The following packages are already installed:
+      blake3:arm64-windows@1.8.7
+    * brotli:arm64-windows@1.2.0
+      ftxui:arm64-windows@7.0.3
+    * jasper:arm64-windows@4.2.9
+      libjpeg-turbo[core,jpeg8]:arm64-windows@3.2.0#1
+    * libspng:arm64-windows@0.7.4#1
+    * nghttp2:arm64-windows@1.70.0
+      pe-parse:arm64-windows@2.1.1#1
+    * vcpkg-cmake:x64-windows@2025-08-07
+    * vcpkg-cmake-config:x64-windows@2026-07-21
+    * vcpkg-cmake-get-vars:x64-windows@2025-05-29
+      wil:arm64-windows@1.0.260126.7
+      yyjson[core,writer,reader,non-standard,fast-fp-conv]:arm64-windows@0.13.0
+    * zlib:arm64-windows@1.3.2#2
+  The following packages will be rebuilt:
+      7zip:arm64-windows@26.5 -- git+https://github.com/microsoft/vcpkg@7f5e5f3ff93f5f838f667deb416a6de0a2cc92c6
+    * aws-c-auth:arm64-windows@1.0.1 -- git+https://github.com/microsoft/vcpkg@72d4fddcd374e0f3225b773c90625446e654520a
+    * aws-c-cal:arm64-windows@1.0.0 -- git+https://github.com/microsoft/vcpkg@055df4f4af8ab15325dab8f6079230a676dafb08
+    * aws-c-common:arm64-windows@1.0.3 -- Z:\src\RedSalamander\Build\vcpkg-ports\aws-c-common
+    * aws-c-compression:arm64-windows@1.0.0 -- git+https://github.com/microsoft/vcpkg@7e7fc37feeca83c12d18ef7216c264189aa36ff5
+    * aws-c-event-stream:arm64-windows@1.0.0 -- git+https://github.com/microsoft/vcpkg@582ffd23bbcd6d7a032b09a741b5eaa75f81da6f
+    * aws-c-http:arm64-windows@1.1.1 -- git+https://github.com/microsoft/vcpkg@08f6a459209893f9b3df02719b1c99ee2e644a60
+    * aws-c-io:arm64-windows@1.1.0 -- git+https://github.com/microsoft/vcpkg@23b9483a68fbd5dd42506080b1cd01e00e1fc939
+    * aws-c-mqtt:arm64-windows@1.1.2 -- git+https://github.com/microsoft/vcpkg@e81125a730fd105baf8923059cf690aca46322fb
+    * aws-c-s3:arm64-windows@1.3.1 -- git+https://github.com/microsoft/vcpkg@84534f4068260c4e02153f40b5538ae2fc9073ce
+    * aws-c-sdkutils:arm64-windows@1.0.0 -- git+https://github.com/microsoft/vcpkg@ea57afc0ab7fb8ba50b2e70255176eba5be0b42e
+    * aws-checksums:arm64-windows@1.0.1 -- git+https://github.com/microsoft/vcpkg@dadb110ae1c885f92144d171b46ebc4d15a475b8
+    * aws-crt-cpp:arm64-windows@0.43.4 -- git+https://github.com/microsoft/vcpkg@45d8a734f55078f7578d592a228e6119177f8512
+      aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880 -- git+https://github.com/microsoft/vcpkg@16847bf67e10d1ed8c0db3849296eab981429ff3
+      curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0 -- git+https://github.com/microsoft/vcpkg@4bccd20fa6fba05e2ce71e654aa10629470fd9af
+    * lcms:arm64-windows@2.19.1#1 -- git+https://github.com/microsoft/vcpkg@18ab2c77128f44e6439741effc3f62ccaa9f36f7
+      libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2 -- git+https://github.com/microsoft/vcpkg@fba030a7be23a0356eb36ed721db8d55b0b64d93
+    * libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3 -- git+https://github.com/microsoft/vcpkg@54808a3c678f5f9122ca14d132d79dbca18c2763
+    * openssl:arm64-windows@3.6.5#2 -- git+https://github.com/microsoft/vcpkg@531e65d1e8dcc42d0ac01783393753bbe365be9d
+      sqlite3[core,json1]:arm64-windows@3.54.1 -- git+https://github.com/microsoft/vcpkg@603ae9e17b08b01ee35b063c4c5862896986942e
+    * vcpkg-tool-meson:x64-windows@1.12.1 -- git+https://github.com/microsoft/vcpkg@f9f5a01332d61d50927d4a801d185a8424e53edf
+      webview2:arm64-windows@1.0.4258.31 -- git+https://github.com/microsoft/vcpkg@c60e5863a4c2694d108477f7850ad4c163ef901c
+  Additional packages (*) will be modified to complete this operation.
+  LocalizationTests-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Lang\RedConfigure-sk-SK.dll
+  Restored 3 package(s) from C:\Users\eric\AppData\Local\vcpkg\archives in 217 ms. Use --debug to see more details.
+  Removing 1/44 webview2:arm64-windows
+  Elapsed time to handle webview2:arm64-windows: 19.1 ms
+  Removing 2/44 sqlite3:arm64-windows
+  Elapsed time to handle sqlite3:arm64-windows: 7.22 ms
+  Removing 3/44 libraw:arm64-windows
+  Elapsed time to handle libraw:arm64-windows: 11.8 ms
+  Removing 4/44 lcms:arm64-windows
+  Elapsed time to handle lcms:arm64-windows: 5.77 ms
+  Removing 5/44 vcpkg-tool-meson:x64-windows
+  Elapsed time to handle vcpkg-tool-meson:x64-windows: 5.25 ms
+  Removing 6/44 curl:arm64-windows
+  Elapsed time to handle curl:arm64-windows: 21 ms
+  Removing 7/44 libssh2:arm64-windows
+  Elapsed time to handle libssh2:arm64-windows: 9.04 ms
+  Removing 8/44 openssl:arm64-windows
+  Elapsed time to handle openssl:arm64-windows: 36.3 ms
+  Removing 9/44 aws-sdk-cpp:arm64-windows
+  Elapsed time to handle aws-sdk-cpp:arm64-windows: 413 ms
+  Removing 10/44 aws-crt-cpp:arm64-windows
+  Elapsed time to handle aws-crt-cpp:arm64-windows: 22.2 ms
+  Removing 11/44 aws-c-event-stream:arm64-windows
+  Elapsed time to handle aws-c-event-stream:arm64-windows: 6.55 ms
+  Removing 12/44 aws-c-mqtt:arm64-windows
+  Elapsed time to handle aws-c-mqtt:arm64-windows: 8.87 ms
+  Removing 13/44 aws-c-s3:arm64-windows
+  Elapsed time to handle aws-c-s3:arm64-windows: 6.51 ms
+  Removing 14/44 aws-c-auth:arm64-windows
+  Elapsed time to handle aws-c-auth:arm64-windows: 6.25 ms
+  Removing 15/44 aws-c-http:arm64-windows
+  Elapsed time to handle aws-c-http:arm64-windows: 7.31 ms
+  Removing 16/44 aws-c-compression:arm64-windows
+  Elapsed time to handle aws-c-compression:arm64-windows: 6.72 ms
+  Removing 17/44 aws-c-io:arm64-windows
+  Elapsed time to handle aws-c-io:arm64-windows: 11 ms
+  Removing 18/44 aws-c-cal:arm64-windows
+  Elapsed time to handle aws-c-cal:arm64-windows: 7.16 ms
+  Removing 19/44 aws-c-sdkutils:arm64-windows
+  Elapsed time to handle aws-c-sdkutils:arm64-windows: 7.07 ms
+  Removing 20/44 aws-checksums:arm64-windows
+  Elapsed time to handle aws-checksums:arm64-windows: 7.79 ms
+  Removing 21/44 aws-c-common:arm64-windows
+  Elapsed time to handle aws-c-common:arm64-windows: 26 ms
+  Removing 22/44 7zip:arm64-windows
+  Elapsed time to handle 7zip:arm64-windows: 19.4 ms
+  Installing 23/44 7zip:arm64-windows@26.5...
+  7zip:arm64-windows@26.5 package ABI: 8286aa7dfadde7550320d50f536e1fd7b0fd48690eea5ea869d666b2cdb529ee
+  Elapsed time to handle 7zip:arm64-windows: 22.9 ms
+  Installing 24/44 aws-c-common:arm64-windows@1.0.3...
+  aws-c-common:arm64-windows@1.0.3 package ABI: 0b04123270b36d51403638755a77bfa3a08a23467777b8b82e2b9cfdf7f47c80
+  Building aws-c-common:arm64-windows@1.0.3...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  Z:\src\RedSalamander\Build\vcpkg-ports\aws-c-common: info: installing overlay port from here
+  Downloading https://github.com/awslabs/aws-c-common/archive/v1.0.3.tar.gz -> awslabs-aws-c-common-v1.0.3.tar.gz
+  Successfully downloaded awslabs-aws-c-common-v1.0.3.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-common-v1.0.3.tar.gz
+  -- Applying patch disable-internal-crt-option.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-common/src/v1.0.3-7a6f344cab.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-common:arm64-windows@1.0.3 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-common:arm64-windows: 13 s
+  Installing 25/44 aws-checksums:arm64-windows@1.0.1...
+  aws-checksums:arm64-windows@1.0.1 package ABI: 551aaf05f2950596574cdd264fa2691c3a795017bf604f85b04b1ee0e588f9e7
+  Building aws-checksums:arm64-windows@1.0.1...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\dadb110ae1c885f92144d171b46ebc4d15a475b8: info: installing from git registry git+https://github.com/microsoft/vcpkg@dadb110ae1c885f92144d171b46ebc4d15a475b8
+  Downloading https://github.com/awslabs/aws-checksums/archive/v1.0.1.tar.gz -> awslabs-aws-checksums-v1.0.1.tar.gz
+  Successfully downloaded awslabs-aws-checksums-v1.0.1.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-checksums-v1.0.1.tar.gz
+  -- Applying patch fix-cmake-config.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-checksums/src/v1.0.1-bdb9bb663f.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-checksums:arm64-windows@1.0.1 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-checksums:arm64-windows: 10 s
+  Completed submission of aws-c-common:arm64-windows@1.0.3 to 1 binary cache(s) in 207 ms
+  Installing 26/44 aws-c-sdkutils:arm64-windows@1.0.0...
+  aws-c-sdkutils:arm64-windows@1.0.0 package ABI: fa56018fb80c348fccd0fc4cfacff5faa08cb26cdc3a30ecb2d77b4994ed27a4
+  Building aws-c-sdkutils:arm64-windows@1.0.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\ea57afc0ab7fb8ba50b2e70255176eba5be0b42e: info: installing from git registry git+https://github.com/microsoft/vcpkg@ea57afc0ab7fb8ba50b2e70255176eba5be0b42e
+  -- Using cached awslabs-aws-c-sdkutils-v1.0.0.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-sdkutils/src/v1.0.0-4294c0ea17.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-sdkutils-v1.0.0.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-sdkutils/src/v1.0.0-4294c0ea17.clean
+  -- Configuring arm64-windows
+  CMake Warning at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake:346 (message):
+    The following variables are not used in CMakeLists.txt:
+  
+        BUILD_TESTING
+  
+    Please recheck them and remove the unnecessary options from the
+    `vcpkg_cmake_configure` call.
+  
+    If these options should still be passed for whatever reason, please use the
+    `MAYBE_UNUSED_VARIABLES` argument.
+  Call Stack (most recent call first):
+    C:/Users/eric/AppData/Local/vcpkg/registries/git-trees/ea57afc0ab7fb8ba50b2e70255176eba5be0b42e/portfile.cmake:9 (vcpkg_cmake_configure)
+    scripts/ports.cmake:209 (include)
+  
+  
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-sdkutils:arm64-windows@1.0.0 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-sdkutils:arm64-windows: 4.4 s
+  Completed submission of aws-checksums:arm64-windows@1.0.1 to 1 binary cache(s) in 120 ms
+  Installing 27/44 aws-c-cal:arm64-windows@1.0.0...
+  aws-c-cal:arm64-windows@1.0.0 package ABI: 9821b4c239accf7d3ddc4975b09335d4fe5d545ab49ddca3762ceaa01fa9735b
+  Building aws-c-cal:arm64-windows@1.0.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\055df4f4af8ab15325dab8f6079230a676dafb08: info: installing from git registry git+https://github.com/microsoft/vcpkg@055df4f4af8ab15325dab8f6079230a676dafb08
+  -- Using cached awslabs-aws-c-cal-v1.0.0.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-cal/src/v1.0.0-618a68f81e.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-cal-v1.0.0.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-cal/src/v1.0.0-618a68f81e.clean
+  -- Configuring arm64-windows
+  CMake Warning at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake:346 (message):
+    The following variables are not used in CMakeLists.txt:
+  
+        BUILD_TESTING
+  
+    Please recheck them and remove the unnecessary options from the
+    `vcpkg_cmake_configure` call.
+  
+    If these options should still be passed for whatever reason, please use the
+    `MAYBE_UNUSED_VARIABLES` argument.
+  Call Stack (most recent call first):
+    C:/Users/eric/AppData/Local/vcpkg/registries/git-trees/055df4f4af8ab15325dab8f6079230a676dafb08/portfile.cmake:13 (vcpkg_cmake_configure)
+    scripts/ports.cmake:209 (include)
+  
+  
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-cal:arm64-windows@1.0.0 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-cal:arm64-windows: 5.4 s
+  Completed submission of aws-c-sdkutils:arm64-windows@1.0.0 to 1 binary cache(s) in 168 ms
+  Installing 28/44 aws-c-io:arm64-windows@1.1.0...
+  aws-c-io:arm64-windows@1.1.0 package ABI: 78c90db264be8eafdf6aa289ce984711d83f34bbc8171a69b8d45171f7023155
+  Building aws-c-io:arm64-windows@1.1.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\23b9483a68fbd5dd42506080b1cd01e00e1fc939: info: installing from git registry git+https://github.com/microsoft/vcpkg@23b9483a68fbd5dd42506080b1cd01e00e1fc939
+  Downloading https://github.com/awslabs/aws-c-io/archive/v1.1.0.tar.gz -> awslabs-aws-c-io-v1.1.0.tar.gz
+  Successfully downloaded awslabs-aws-c-io-v1.1.0.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-io-v1.1.0.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-io/src/v1.1.0-ba7a133944.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-io:arm64-windows@1.1.0 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-io:arm64-windows: 6.4 s
+  Completed submission of aws-c-cal:arm64-windows@1.0.0 to 1 binary cache(s) in 154 ms
+  Installing 29/44 aws-c-compression:arm64-windows@1.0.0...
+  aws-c-compression:arm64-windows@1.0.0 package ABI: 5bf3bdabc05a7241c4ba7de02be5832670cea4ba784957cc3193d6e57d4661b3
+  Building aws-c-compression:arm64-windows@1.0.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\7e7fc37feeca83c12d18ef7216c264189aa36ff5: info: installing from git registry git+https://github.com/microsoft/vcpkg@7e7fc37feeca83c12d18ef7216c264189aa36ff5
+  -- Using cached awslabs-aws-c-compression-v1.0.0.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-compression/src/v1.0.0-a07921bd96.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-compression-v1.0.0.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-compression/src/v1.0.0-a07921bd96.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-compression:arm64-windows@1.0.0 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-compression:arm64-windows: 4.3 s
+  Completed submission of aws-c-io:arm64-windows@1.1.0 to 1 binary cache(s) in 204 ms
+  Installing 30/44 aws-c-http:arm64-windows@1.1.1...
+  aws-c-http:arm64-windows@1.1.1 package ABI: 3e7e5e9fc00578bfe0131912fede94486bfc2ec7c4f428f1384b29a323d9eb84
+  Building aws-c-http:arm64-windows@1.1.1...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\08f6a459209893f9b3df02719b1c99ee2e644a60: info: installing from git registry git+https://github.com/microsoft/vcpkg@08f6a459209893f9b3df02719b1c99ee2e644a60
+  Downloading https://github.com/awslabs/aws-c-http/archive/v1.1.1.tar.gz -> awslabs-aws-c-http-v1.1.1.tar.gz
+  Successfully downloaded awslabs-aws-c-http-v1.1.1.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-http-v1.1.1.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-http/src/v1.1.1-87a9a83c45.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-http:arm64-windows@1.1.1 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-http:arm64-windows: 6 s
+  Completed submission of aws-c-compression:arm64-windows@1.0.0 to 1 binary cache(s) in 123 ms
+  Installing 31/44 aws-c-auth:arm64-windows@1.0.1...
+  aws-c-auth:arm64-windows@1.0.1 package ABI: 883e752db76a3b3979419367c93e26f8bf265d05658d8d332d521bd0b0d19fee
+  Building aws-c-auth:arm64-windows@1.0.1...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\72d4fddcd374e0f3225b773c90625446e654520a: info: installing from git registry git+https://github.com/microsoft/vcpkg@72d4fddcd374e0f3225b773c90625446e654520a
+  Downloading https://github.com/awslabs/aws-c-auth/archive/v1.0.1.tar.gz -> awslabs-aws-c-auth-v1.0.1.tar.gz
+  Successfully downloaded awslabs-aws-c-auth-v1.0.1.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-auth-v1.0.1.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-auth/src/v1.0.1-a09967b84b.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/aws-c-auth_arm64-windows/share/aws-c-auth/copyright
+  -- Performing post-build validation
+  Starting submission of aws-c-auth:arm64-windows@1.0.1 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-auth:arm64-windows: 8.6 s
+  Completed submission of aws-c-http:arm64-windows@1.1.1 to 1 binary cache(s) in 260 ms
+  Installing 32/44 aws-c-s3:arm64-windows@1.3.1...
+  aws-c-s3:arm64-windows@1.3.1 package ABI: 934877524ddabd6a2926e913c01f08e6396951da210b2ad683be921e63f9354e
+  Building aws-c-s3:arm64-windows@1.3.1...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\84534f4068260c4e02153f40b5538ae2fc9073ce: info: installing from git registry git+https://github.com/microsoft/vcpkg@84534f4068260c4e02153f40b5538ae2fc9073ce
+  Downloading https://github.com/awslabs/aws-c-s3/archive/v1.3.1.tar.gz -> awslabs-aws-c-s3-v1.3.1.tar.gz
+  Successfully downloaded awslabs-aws-c-s3-v1.3.1.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-s3-v1.3.1.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-s3/src/v1.3.1-99cdff7238.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-s3:arm64-windows@1.3.1 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-s3:arm64-windows: 5.9 s
+  Completed submission of aws-c-auth:arm64-windows@1.0.1 to 1 binary cache(s) in 219 ms
+  Installing 33/44 aws-c-mqtt:arm64-windows@1.1.2...
+  aws-c-mqtt:arm64-windows@1.1.2 package ABI: 939b107762d34d374647b5d4405e3df81182c333946df5607f00adf30d08396f
+  Building aws-c-mqtt:arm64-windows@1.1.2...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\e81125a730fd105baf8923059cf690aca46322fb: info: installing from git registry git+https://github.com/microsoft/vcpkg@e81125a730fd105baf8923059cf690aca46322fb
+  Downloading https://github.com/awslabs/aws-c-mqtt/archive/v1.1.2.tar.gz -> awslabs-aws-c-mqtt-v1.1.2.tar.gz
+  Successfully downloaded awslabs-aws-c-mqtt-v1.1.2.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-mqtt-v1.1.2.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-mqtt/src/v1.1.2-6abb14eb71.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-mqtt:arm64-windows@1.1.2 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-mqtt:arm64-windows: 5.8 s
+  Completed submission of aws-c-s3:arm64-windows@1.3.1 to 1 binary cache(s) in 221 ms
+  Installing 34/44 aws-c-event-stream:arm64-windows@1.0.0...
+  aws-c-event-stream:arm64-windows@1.0.0 package ABI: 0614b493023c6fa4f5264683798d53833d0f48804a391d6b29a7f6437cb8406a
+  Building aws-c-event-stream:arm64-windows@1.0.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\582ffd23bbcd6d7a032b09a741b5eaa75f81da6f: info: installing from git registry git+https://github.com/microsoft/vcpkg@582ffd23bbcd6d7a032b09a741b5eaa75f81da6f
+  -- Using cached awslabs-aws-c-event-stream-v1.0.0.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-event-stream/src/v1.0.0-12b3161c1e.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-c-event-stream-v1.0.0.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-c-event-stream/src/v1.0.0-12b3161c1e.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-c-event-stream:arm64-windows@1.0.0 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-c-event-stream:arm64-windows: 4.2 s
+  Completed submission of aws-c-mqtt:arm64-windows@1.1.2 to 1 binary cache(s) in 213 ms
+  Installing 35/44 aws-crt-cpp:arm64-windows@0.43.4...
+  aws-crt-cpp:arm64-windows@0.43.4 package ABI: 2f15ff137815bff0283d532138c30bc36d78f8be67a304a6be00c41a976937fa
+  Building aws-crt-cpp:arm64-windows@0.43.4...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\45d8a734f55078f7578d592a228e6119177f8512: info: installing from git registry git+https://github.com/microsoft/vcpkg@45d8a734f55078f7578d592a228e6119177f8512
+  -- Using cached awslabs-aws-crt-cpp-v0.43.4.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-crt-cpp/src/v0.43.4-13f4b9b6d2.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/awslabs-aws-crt-cpp-v0.43.4.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-crt-cpp/src/v0.43.4-13f4b9b6d2.clean
+  -- Configuring arm64-windows-dbg
+  -- Configuring arm64-windows-rel
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-crt-cpp:arm64-windows@0.43.4 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-crt-cpp:arm64-windows: 16 s
+  Completed submission of aws-c-event-stream:arm64-windows@1.0.0 to 1 binary cache(s) in 133 ms
+  Installing 36/44 aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880...
+  aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880 package ABI: 9522daa7bfbc1e0b5dc50687580f93af1df3b98b721186f69f73f49ad538ef53
+  Building aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\16847bf67e10d1ed8c0db3849296eab981429ff3: info: installing from git registry git+https://github.com/microsoft/vcpkg@16847bf67e10d1ed8c0db3849296eab981429ff3
+  CMake Warning at scripts/cmake/vcpkg_buildpath_length_warning.cmake:4 (message):
+    aws-sdk-cpp's buildsystem uses very long paths and may fail on your system.
+  
+    We recommend moving vcpkg to a short path such as 'C:\src\vcpkg' or using
+    the subst command.
+  Call Stack (most recent call first):
+    C:/Users/eric/AppData/Local/vcpkg/registries/git-trees/16847bf67e10d1ed8c0db3849296eab981429ff3/portfile.cmake:1 (vcpkg_buildpath_length_warning)
+    scripts/ports.cmake:209 (include)
+  
+  
+  -- Using cached aws-aws-sdk-cpp-1.11.880.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-sdk-cpp/src/1.11.880-77291d0f48.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/aws-aws-sdk-cpp-1.11.880.tar.gz
+  -- Applying patch fix-aws-root.patch
+  -- Applying patch lock-curl-http-and-tls-settings.patch
+  -- Applying patch fix_find_curl.patch
+  -- Applying patch find-dependency.patch
+  -- Applying patch configure-binary-dir.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/aws-sdk-cpp/src/1.11.880-77291d0f48.clean
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Performing post-build validation
+  Starting submission of aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880 to 1 binary cache(s) in the background
+  Elapsed time to handle aws-sdk-cpp:arm64-windows: 3.3 min
+  Completed submission of aws-crt-cpp:arm64-windows@0.43.4 to 1 binary cache(s) in 898 ms
+  Installing 37/44 openssl:arm64-windows@3.6.5#2...
+  openssl:arm64-windows@3.6.5#2 package ABI: 67c573347b00a1aa5223291b707ac485301e3f95891aac6f7e3f9dcc1d98133a
+  Building openssl:arm64-windows@3.6.5#2...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\531e65d1e8dcc42d0ac01783393753bbe365be9d: info: installing from git registry git+https://github.com/microsoft/vcpkg@531e65d1e8dcc42d0ac01783393753bbe365be9d
+  -- Using cached openssl-openssl-openssl-3.6.5.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/openssl-openssl-openssl-3.6.5.tar.gz
+  -- Applying patch cmake-config.patch
+  -- Applying patch command-line-length.patch
+  -- Applying patch script-prefix.patch
+  -- Applying patch windows/install-layout.patch
+  -- Applying patch windows/install-pdbs.patch
+  -- Applying patch windows/install-programs.diff
+  -- Applying patch unix/android-cc.patch
+  -- Applying patch unix/move-openssldir.patch
+  -- Applying patch unix/no-empty-dirs.patch
+  -- Applying patch unix/no-static-libs-for-shared.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/openssl/src/nssl-3.6.5-c2a478abe6.clean
+  -- Getting CMake variables for arm64-windows
+  -- Loading CMake variables from Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/openssl/cmake-get-vars_C_CXX-arm64-windows.cmake.log
+  -- Getting CMake variables for arm64-windows
+  -- Prerunning arm64-windows-dbg
+  -- Building arm64-windows-dbg
+  -- Prerunning arm64-windows-rel
+  -- Building arm64-windows-rel
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/lib/pkgconfig/libcrypto.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/lib/pkgconfig/libssl.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/lib/pkgconfig/openssl.pc
+  -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+  -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+  -- Using msys root at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/debug/lib/pkgconfig/libcrypto.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/debug/lib/pkgconfig/libssl.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/debug/lib/pkgconfig/openssl.pc
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/share/openssl/usage
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/openssl_arm64-windows/share/openssl/copyright
+  -- Performing post-build validation
+  Starting submission of openssl:arm64-windows@3.6.5#2 to 1 binary cache(s) in the background
+  Elapsed time to handle openssl:arm64-windows: 1.7 min
+  Completed submission of aws-sdk-cpp[core,dynamodb,kinesis,s3,s3-crt,s3tables]:arm64-windows@1.11.880 to 1 binary cache(s) in 2.1 s
+  Installing 38/44 libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3...
+  libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3 package ABI: 9bc25dace12cf86498d681233616e8b2e4cc171fcb9c4f6138de239015e5f1bc
+  Building libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\54808a3c678f5f9122ca14d132d79dbca18c2763: info: installing from git registry git+https://github.com/microsoft/vcpkg@54808a3c678f5f9122ca14d132d79dbca18c2763
+  -- Using cached libssh2-libssh2-libssh2-1.11.1.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libssh2/src/sh2-1.11.1-63514a5168.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/libssh2-libssh2-libssh2-1.11.1.tar.gz
+  -- Applying patch cmake-config.diff
+  -- Applying patch pkgconfig.diff
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libssh2/src/sh2-1.11.1-63514a5168.clean
+  -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+  -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+  -- Using msys root at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libssh2_arm64-windows/lib/pkgconfig/libssh2.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libssh2_arm64-windows/debug/lib/pkgconfig/libssh2.pc
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libssh2_arm64-windows/share/libssh2/usage
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libssh2_arm64-windows/share/libssh2/copyright
+  -- Performing post-build validation
+  Starting submission of libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3 to 1 binary cache(s) in the background
+  Elapsed time to handle libssh2:arm64-windows: 4.8 s
+  Completed submission of openssl:arm64-windows@3.6.5#2 to 1 binary cache(s) in 1.2 s
+  Installing 39/44 curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0...
+  curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0 package ABI: 93f5c49488b84ebb5402d530cbc329e966a3e50bc3c344f83848e5fe871ba485
+  Building curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\4bccd20fa6fba05e2ce71e654aa10629470fd9af: info: installing from git registry git+https://github.com/microsoft/vcpkg@4bccd20fa6fba05e2ce71e654aa10629470fd9af
+  -- Using cached curl-curl-curl-8_23_0.tar.gz
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/curl-curl-curl-8_23_0.tar.gz
+  -- Applying patch dependencies.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/curl/src/url-8_23_0-7ec8cad9a3.clean
+  -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+  -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+  -- Using msys root at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+  -- Configuring arm64-windows
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/curl_arm64-windows/lib/pkgconfig/libcurl.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/curl_arm64-windows/debug/lib/pkgconfig/libcurl.pc
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/curl_arm64-windows/share/curl/vcpkg-cmake-wrapper.cmake
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/curl_arm64-windows/share/curl/usage
+  -- Performing post-build validation
+  Starting submission of curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0 to 1 binary cache(s) in the background
+  Elapsed time to handle curl:arm64-windows: 14 s
+  Completed submission of libssh2[core,openssl,zlib]:arm64-windows@1.11.1#3 to 1 binary cache(s) in 176 ms
+  Installing 40/44 vcpkg-tool-meson:x64-windows@1.12.1...
+  vcpkg-tool-meson:x64-windows@1.12.1 package ABI: 7b7b87a7edcd14dc463e4bd852fb0fc83ac78e35c689be0bc3e747f1209e8e68
+  Building vcpkg-tool-meson:x64-windows@1.12.1...
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\f9f5a01332d61d50927d4a801d185a8424e53edf: info: installing from git registry git+https://github.com/microsoft/vcpkg@f9f5a01332d61d50927d4a801d185a8424e53edf
+  -- Using cached meson-1.12.1-COPYING
+  -- Found Python version '3.14.2 at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/python/python-3.14.2-x64-1/python.exe'
+  -- Using meson: C:/Users/eric/AppData/Local/vcpkg/downloads/tools/meson-1.12.1-224c27/meson.py
+  -- Performing post-build validation
+  Starting submission of vcpkg-tool-meson:x64-windows@1.12.1 to 1 binary cache(s) in the background
+  Elapsed time to handle vcpkg-tool-meson:x64-windows: 134 ms
+  Installing 41/44 lcms:arm64-windows@2.19.1#1...
+  lcms:arm64-windows@2.19.1#1 package ABI: 5475084d1751bd70a72b68104ac9646327d73c7393f851311173bf8bfecc12cf
+  Building lcms:arm64-windows@2.19.1#1...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\18ab2c77128f44e6439741effc3f62ccaa9f36f7: info: installing from git registry git+https://github.com/microsoft/vcpkg@18ab2c77128f44e6439741effc3f62ccaa9f36f7
+  -- Found Python version '3.14.2 at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/python/python-3.14.2-x64-1/python.exe'
+  -- Using meson: C:/Users/eric/AppData/Local/vcpkg/downloads/tools/meson-1.12.1-224c27/meson.py
+  -- Using cached mm2-Little-CMS-lcms2.19.1.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/lcms/src/lcms2.19.1-03b05538d0.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/mm2-Little-CMS-lcms2.19.1.tar.gz
+  -- Applying patch fix-shared-library.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/lcms/src/lcms2.19.1-03b05538d0.clean
+  -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+  -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+  -- Using msys root at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+  -- Configuring arm64-windows-dbg
+  -- Getting CMake variables for arm64-windows
+  -- Loading CMake variables from Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/lcms/cmake-get-vars_C_CXX-arm64-windows.cmake.log
+  -- Configuring arm64-windows-dbg done
+  -- Configuring arm64-windows-rel
+  -- Configuring arm64-windows-rel done
+  -- Package arm64-windows-dbg
+  -- Package arm64-windows-rel
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/lib/pkgconfig/lcms2.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/debug/lib/pkgconfig/lcms2.pc
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/share/lcms/lcms-config.cmake
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/share/lcms2/lcms2-config.cmake
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/share/lcms/usage
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/lcms_arm64-windows/share/lcms/copyright
+  -- Performing post-build validation
+  Starting submission of lcms:arm64-windows@2.19.1#1 to 1 binary cache(s) in the background
+  Elapsed time to handle lcms:arm64-windows: 13 s
+  Completed submission of curl[brotli,core,http2,openssl,ssh,ssl,sspi]:arm64-windows@8.23.0 to 1 binary cache(s) in 359 ms
+  Completed submission of vcpkg-tool-meson:x64-windows@1.12.1 to 1 binary cache(s) in 45.5 ms
+  Installing 42/44 libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2...
+  libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2 package ABI: 4d657773269e91abb8e48038ff33c9e8f606c02536d74abfd9fc8aef14a04a04
+  Building libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2...
+  Z:\src\RedSalamander\.build\vcpkg-triplets\arm64\arm64-windows.cmake: info: loaded overlay triplet from here
+  C:\Users\eric\AppData\Local\vcpkg\registries\git-trees\fba030a7be23a0356eb36ed721db8d55b0b64d93: info: installing from git registry git+https://github.com/microsoft/vcpkg@fba030a7be23a0356eb36ed721db8d55b0b64d93
+  -- Using cached LibRaw-LibRaw-0.22.2.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libraw/src/0.22.2-fabf993e5f.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/LibRaw-LibRaw-0.22.2.tar.gz
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libraw/src/0.22.2-fabf993e5f.clean
+  -- Using cached LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz
+  -- Cleaning sources at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libraw/src/640ca616d3-f6ae978fdb.clean. Use --editable to skip cleaning for the packages you specify.
+  -- Extracting source C:/Users/eric/AppData/Local/vcpkg/downloads/LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz
+  -- Applying patch dependencies.patch
+  -- Applying patch fix-install.patch
+  -- Using source at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/blds/libraw/src/640ca616d3-f6ae978fdb.clean
+  -- Configuring arm64-windows
+  CMake Warning at Z:/src/RedSalamander/.build/vcpkg_installed/arm64/x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake:346 (message):
+    The following variables are not used in CMakeLists.txt:
+  
+        CMAKE_REQUIRE_FIND_PACKAGE_Jasper
+  
+    Please recheck them and remove the unnecessary options from the
+    `vcpkg_cmake_configure` call.
+  
+    If these options should still be passed for whatever reason, please use the
+    `MAYBE_UNUSED_VARIABLES` argument.
+  Call Stack (most recent call first):
+    C:/Users/eric/AppData/Local/vcpkg/registries/git-trees/fba030a7be23a0356eb36ed721db8d55b0b64d93/portfile.cmake:33 (vcpkg_cmake_configure)
+    scripts/ports.cmake:209 (include)
+  
+  
+  -- Building arm64-windows-dbg
+  -- Building arm64-windows-rel
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libraw_arm64-windows/lib/pkgconfig/libraw.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libraw_arm64-windows/lib/pkgconfig/libraw_r.pc
+  -- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+  -- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+  -- Using msys root at C:/Users/eric/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libraw_arm64-windows/debug/lib/pkgconfig/libraw.pc
+  -- Fixing pkgconfig file: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libraw_arm64-windows/debug/lib/pkgconfig/libraw_r.pc
+  -- Installing: Z:/src/RedSalamander/.build/vcpkg_installed/arm64/vcpkg/pkgs/libraw_arm64-windows/share/libraw/usage
+  -- Performing post-build validation
+  Starting submission of libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2 to 1 binary cache(s) in the background
+  Elapsed time to handle libraw:arm64-windows: 23 s
+  Completed submission of lcms:arm64-windows@2.19.1#1 to 1 binary cache(s) in 152 ms
+  Installing 43/44 sqlite3[core,json1]:arm64-windows@3.54.1...
+  sqlite3[core,json1]:arm64-windows@3.54.1 package ABI: acb6af8173ba81c7acc2acab588f1b57d4a2c7ff69ac0728ab89c6dcc349f318
+  Elapsed time to handle sqlite3:arm64-windows: 9.46 ms
+  Installing 44/44 webview2:arm64-windows@1.0.4258.31...
+  webview2:arm64-windows@1.0.4258.31 package ABI: 0749017c00ecd2a503a0c31d4e26d8962836e44c4e759709f10fee2df71604a5
+  Elapsed time to handle webview2:arm64-windows: 9.36 ms
+  Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+  Packages installed in this vcpkg installation declare the following licenses:
+  (LGPL-2.1-only OR CDDL-1.0)
+  Apache-2.0
+  BSD-2-Clause
+  BSD-3-Clause
+  ISC
+  LGPL-2.1-or-later
+  MIT
+  Zlib
+  blessing
+  curl
+  7zip provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(7zip CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE 7zip::7zip)
+  
+  The package aws-sdk-cpp:arm64-windows provides CMake targets:
+  
+      When using AWSSDK, AWSSDK_ROOT_DIR must be defined by the user.
+      find_package(AWSSDK CONFIG COMPONENTS core dynamodb kinesis s3 REQUIRED)
+      target_include_directories(main PRIVATE ${AWSSDK_INCLUDE_DIRS})
+      target_link_libraries(main PRIVATE ${AWSSDK_LIBRARIES})
+      
+      OR
+      
+      find_package(aws-cpp-sdk-core REQUIRED)
+      target_link_libraries(main PRIVATE aws-cpp-sdk-core)
+  
+  blake3 provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(blake3 CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE BLAKE3::blake3)
+  
+  blake3 provides pkg-config modules:
+  
+    # BLAKE3 C implementation
+    libblake3
+  
+  curl is compatible with built-in CMake targets:
+  
+      find_package(CURL REQUIRED)
+      target_link_libraries(main PRIVATE CURL::libcurl)
+  
+  ftxui provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(ftxui CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE ftxui::dom ftxui::ftxui ftxui::screen ftxui::component)
+  
+  ftxui provides pkg-config modules:
+  
+    # C++ Functional Terminal User Interface.
+    ftxui
+  
+  libjpeg-turbo is compatible with built-in implementation-agnostic CMake targets:
+  
+    find_package(JPEG REQUIRED)
+    target_link_libraries(main PRIVATE JPEG::JPEG)
+  
+  libjpeg-turbo provides CMake targets for the TurboJPEG C API:
+  
+    find_package(libjpeg-turbo CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE $<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>)
+  
+  libjpeg-turbo provides pkg-config modules:
+  
+    # A SIMD-accelerated JPEG codec that provides the libjpeg API
+    libjpeg
+  
+    # A SIMD-accelerated JPEG codec that provides the TurboJPEG API
+    libturbojpeg
+  
+  libraw provides CMake targets:
+  
+      find_package(libraw CONFIG REQUIRED)
+      # non-thread-safe
+      target_link_libraries(main PRIVATE libraw::raw)
+      # thread-safe
+      target_link_libraries(main PRIVATE libraw::raw_r)
+  
+  libraw provides pkg-config modules:
+  
+    # Raw image decoder library (non-thread-safe)
+    libraw
+  
+    # Raw image decoder library (thread-safe)
+    libraw_r
+  
+  pe-parse provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(pe-parse CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE pe-parse::pe-parse)
+  
+  sqlite3 provides pkgconfig bindings.
+  sqlite3 provides CMake targets:
+  
+      find_package(unofficial-sqlite3 CONFIG REQUIRED)
+      target_link_libraries(main PRIVATE unofficial::sqlite3::sqlite3)
+  
+  wil provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(wil CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE WIL::WIL)
+  
+  webview2 provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(unofficial-webview2 CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE unofficial::webview2::webview2)
+  
+  yyjson provides CMake targets:
+  
+    # this is heuristically generated, and may not be correct
+    find_package(yyjson CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE yyjson::yyjson)
+  
+  yyjson provides pkg-config modules:
+  
+    # Fastest JSON library in C
+    yyjson
+  
+  Waiting for 1 remaining binary cache submissions...
+  Completed submission of libraw[core,dng-lossy,openmp]:arm64-windows@0.22.2 to 1 binary cache(s) in 481 ms (1/1)
+  All requested installations completed successfully in: 7.4 min
+  ViewerPE.Tests.Runner.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  FlipSequentialDiscard.cpp
+  dllmain.cpp
+  ls3.cpp
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  Factory.cpp
+  ls2.cpp
+  Generating code
+  Finished generating code
+  ls2.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ls2.exe
+  dllmain.cpp
+  Factory.cpp
+  Generating code
+  FileSystemCurl.Tests.Runner.cpp
+  FileSystem7z.cpp
+  Finished generating code
+  FlipSequentialDiscard.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\FlipSequentialDiscard.exe
+  ls1.cpp
+  Generating code
+  Finished generating code
+  FileSystemDummy.cpp
+  Generating code
+  Generating code
+  Finished generating code
+  ls1.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ls1.exe
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Common.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Common.exp
+  Generating code
+  Finished generating code
+  FileSystemCurlTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\FileSystemCurlTests.exe
+  Main.cpp
+  ls3.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ls3.exe
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem7z.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem7z.exp
+  Generating code
+  FilesInformationGoogleDrive.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+  Generating code
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemDummy.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemDummy.exp
+  Generating code
+  Finished generating code
+  RedLauncher.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\RedLauncher.exe
+  compilation header save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\Release\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\Release\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\Release\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\Release\DxUi\DxUiCompositePS.cso
+  DxUi.RichDocument.cpp
+  FileSystemGoogleDrive.cpp
+  Finished generating code
+  DxUi.RichMarkdownProjection.cpp
+  FileSystem7z.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem7z.dll
+  TestSupport.Tests.WindowScreenshot.cpp
+  Finished generating code
+  DxUi.RichSemantic.cpp
+  Common.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Common.dll
+  DxUi.RichTextCommands.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Finished generating code
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystemPathIdentity.cpp
+  ViewerSqlite.Engine.cpp
+  PluginContract.Tests.Runner.cpp
+  DxUi.RichSemanticDocument.cpp
+  LocalSearchIndexCore.cpp
+  FileSystemGoogleDrive.Tests.FakeDrive.cpp
+  DxUi.RichSemanticGeometry.cpp
+  ViewerSqlite.Tests.Runner.cpp
+  FileSystemPathIdentity.cpp
+  SearchServiceBroker.cpp
+  FileSystemRouteContract.cpp
+  FileSystemDummy.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemDummy.dll
+  dllmain.cpp
+  DxUi.MarkdownSyntax.cpp
+  Factory.cpp
+  Generating code
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemGoogleDrive.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemGoogleDrive.exp
+  Generating code
+  Generating code
+  DxUi.NativeFlowchart.cpp
+  DxUi.NativeMath.cpp
+  SqliteIndexStore.cpp
+  FileSystemCurl.CopyMove.cpp
+  Finished generating code
+  DxUi.NativeFlowchartLayout.cpp
+  FileSystemGoogleDrive.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemGoogleDrive.dll
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\libcurl.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\libcurl.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\libssl-3-arm64.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\libssl-3-arm64.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\libcrypto-3-arm64.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\libcrypto-3-arm64.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\libssh2.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\libssh2.dll done
+  Generating code
+  DxUi.PreparedFlowchart.cpp
+  Finished generating code
+  ViewerSqliteTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ViewerSqliteTests.exe
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\sqlite3.dll -> Z:\src\RedSalamander\.build\ARM64\Release\sqlite3.dll done
+  SettingsSchema.Tests.Runner.cpp
+  DxUi.RichTextLayout.cpp
+  Finished generating code
+  SearchTextHelpers.cpp
+  PluginContractTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\PluginContractTests.exe
+  CrashHandling.Tests.Runner.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.RichDocumentLayout.cpp
+  CrashQuarantine.cpp
+  SettingsSchemaParser.cpp
+  DxUi.RichTextEditor.cpp
+  dllmain.cpp
+  Factory.cpp
+  FileSystemCurl.Imap.cpp
+  CrashHandler.cpp
+  Generating code
+  FileSystem.cpp
+  DxUi.RichImage.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  Finished generating code
+  SettingsSchemaTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\SettingsSchemaTests.exe
+  CrashHandling.Tests.CrashQuarantine.Stubs.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Finished generating code
+  ControlCatalog.cpp
+  ViewerPETests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ViewerPETests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.Shared.cpp
+  Generating code
+  Factory.cpp
+  NativeMenuInterop.cpp
+  Finished generating code
+  CrashHandlingTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\CrashHandlingTests.exe
+  FilesInformationMtp.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  FileSystem.FileOps.cpp
+  FileSystemCurl.Tests.Ftp.cpp
+  Embedded.cpp
+  FilesInformationMicrosoftDrive.cpp
+  FileSystemMtp.Core.cpp
+  FilesInformationS3.cpp
+  FileSystemMicrosoftDrive.cpp
+  FileSystem.Menu.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+  FileSystemMtp.Device.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemCurl.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+  FileSystem.Path.cpp
+  FileSystemS3.Configuration.cpp
+  FileSystemMicrosoftDrive.Tests.FakeGraph.cpp
+  FileSystemMtp.Tests.FakeBackend.cpp
+  Compiling...
+  DxUi.ComboBox.cpp
+  Finished generating code
+  FileSystem.Search.cpp
+  FileSystemCurl.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemCurl.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SearchTextHelpers.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  FileSystemS3.Core.cpp
+  FileSystemMtp.Shared.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMicrosoftDrive.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  DxUi.Controls.cpp
+  FileSystem.Watch.cpp
+  Finished generating code
+  Generating code
+  FileSystemMicrosoftDrive.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMicrosoftDrive.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMtp.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Localization.Tests.Runner.cpp
+  FileSystemS3.Directory.cpp
+  Finished generating code
+  DxUi.Layout.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\RedSalamanderSearchService.exe
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem.exp
+  Generating code
+  Generating code
+  DxUi.Forms.cpp
+  Finished generating code
+  Finished generating code
+  LocalizationTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\LocalizationTests.exe
+  FileSystem.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystem.dll
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\sqlite3.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\sqlite3.dll done
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls4.cpp
+  Finished generating code
+  FileSystemS3.DirectoryOps.cpp
+  FileSystemMtp.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemMtp.dll
+  DxUi.EditorControls.cpp
+  Generating code
+  Finished generating code
+  ls4.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ls4.exe
+  DxUi.cpp
+  FileSystemS3.DriveInfo.cpp
+  DxUi.Grid.cpp
+  FileSystemS3.IO.cpp
+  DxUi.Menu.cpp
+  FileSystemS3.Menu.cpp
+  DxUi.NativeTextInput.cpp
+  DxUi.PointerInput.cpp
+  FileSystemS3.S3.cpp
+  DxUi.Scrollbar.cpp
+  DxUi.SingleLineTextEditing.cpp
+  FileSystemS3.S3Table.cpp
+  DxUi.TextInput.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystemS3.Shared.cpp
+  TextInputServices.cpp
+  FileSystemS3.Tests.FakeS3.cpp
+  TextClipboard.cpp
+  DxUi.Theme.cpp
+  DxUi.Tree.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemS3.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  Finished generating code
+  DxUi.Typeahead.cpp
+  FileSystemS3.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\FileSystemS3.dll
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-cpp-sdk-core.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-cpp-sdk-core.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-crt-cpp.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-crt-cpp.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-http.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-http.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-io.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-io.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-common.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-common.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-cal.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-cal.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-compression.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-compression.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-mqtt.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-mqtt.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-auth.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-auth.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-sdkutils.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-sdkutils.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-checksums.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-checksums.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-event-stream.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-event-stream.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-c-s3.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-c-s3.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-cpp-sdk-s3-crt.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-cpp-sdk-s3-crt.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\aws-cpp-sdk-s3tables.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\aws-cpp-sdk-s3tables.dll done
+  DxUi.WindowHost.cpp
+  Compiling...
+  DxUi.TextElements.cpp
+  DxUi.vcxproj -> Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\ARM64\Release\DxUi.lib
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Performance.Tests.pch.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  dllmain.cpp
+  AppTheme.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  ViewerVLC.cpp
+  UiMetrics.cpp
+  ViewerWeb.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerSqlite.Engine.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  ProductUi.Tests.Runner.cpp
+  ViewerSpace.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerVLC.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  ViewerSqlite.cpp
+  TraceProvider.cpp
+  ViewerImgRaw.Decode.cpp
+  Finished generating code
+  ViewerVLC.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerVLC.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerWeb.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerWeb.exp
+  Generating code
+  Common.Tests.LatencyHooks.cpp
+  ProductUi.Scope.Tests.DirectoryRecords.cpp
+  FileSystemPluginManager.cpp
+  ViewerSpace.Layout.cpp
+  Generating code
+  ViewerImgRaw.Export.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSqlite.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  Finished generating code
+  PluginModuleLifecycle.cpp
+  ViewerWeb.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerWeb.dll
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\WebView2Loader.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\WebView2Loader.dll done
+  ViewerSpace.Analysis.cpp
+  Generating code
+  ViewerImgRaw.cpp
+  ViewerPluginManager.cpp
+  ViewerSpace.Workspace.cpp
+  Finished generating code
+  Performance.Tests.FolderView.Enumeration.Access.cpp
+  RedConfigure.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\RedConfigure.exe
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerImgRaw.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Factory.cpp
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  ViewerSpace.Model.cpp
+  IconCache.cpp
+  Finished generating code
+  ViewerPE.cpp
+  ViewerImgRaw.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerImgRaw.dll
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\raw_r.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\raw_r.dll done
+  Z:\src\RedSalamander\.build\vcpkg_installed\arm64\arm64-windows\bin\lcms2-2.dll -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\lcms2-2.dll done
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp
+  ViewerSpace.AnalysisHost.cpp
+  Finished generating code
+  Performance.Tests.FolderIconEnumerationPerfTest.cpp
+  dllmain.cpp
+  Finished generating code
+  ProductUiTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\ProductUiTests.exe
+  Performance.Tests.FolderViewColumnLayout.cpp
+  Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp
+  ViewerText.Encoding.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerSqlite.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSqlite.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerPE.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerPE.exp
+  Generating code
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  PlaceholderValidation.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  RcParser.cpp
+  ViewerSpace.NavigationHost.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  RcWriter.cpp
+  Performance.Tests.Runner.cpp
+  RedConfigureApp.cpp
+  ViewerText.MenuTheme.cpp
+  [GhosttyRuntime] waiting for repository lease: Z:\src\RedSalamander
+  [GhosttyRuntime] acquired repository lease: Z:\src\RedSalamander
+  Performance.Tests.PluginManager.Stubs.cpp
+  [GhosttyRuntime] starting: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=63824: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=63824 code=0; draining output: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=78836: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=78836 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=66224: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=66224 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=48084: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=48084 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] restoring locked dependency: aro
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=52096: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=52096 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: pixels
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=70520: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=70520 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: translate-c
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=55612: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=55612 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: uucode
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=63136: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=63136 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: wuffs
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=64308: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=64308 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=88200: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=88200 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=76172: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=76172 code=1; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=79440: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  Finished generating code
+  [GhosttyRuntime] exited pid=79440 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\PerformanceTests2.lib and object Z:\src\RedSalamander\.build\ARM64\Release\PerformanceTests2.exp
+  Generating code
+  RedConfigurePagePresenters.cpp
+  [GhosttyRuntime] waiting for canonical build-drive lease
+  [GhosttyRuntime] acquired canonical build-drive lease
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=32120: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=32120 code=0; draining output: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  ViewerSpace.Hosts.cpp
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=82800: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=82800 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=31896: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  ViewerPE.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerPE.dll
+  RedConfigureRoot.cpp
+  ViewerText.cpp
+  Finished generating code
+  PerformanceTests2.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\PerformanceTests2.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSpace.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  RedConfigureSession.cpp
+  ViewerText.Text.cpp
+  RedConfigureWorkflow.cpp
+  ViewerText.Hex.cpp
+  Finished generating code
+  ViewerSpace.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerSpace.dll
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=30: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  RedConfigure.Tests.Runner.cpp
+  Generating code
+  Finished generating code
+  RedConfigureTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\RedConfigureTests.exe
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=60: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=90: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=120: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=150: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] running pid=31896 elapsedSeconds=180: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=31896 code=0; draining output: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=187: R:\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=R:\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=75020: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=75020 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=60996: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=60996 code=0; draining output: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\subst.exe cwd=Z:\src\RedSalamander
+  Ghostty terminal runtime ready: mode=Product platform=ARM64 pairedRaw=fb1ba734aa742b59b72451c725f6c43edd3d02a0b414969e66dd330884a08a21 normalizedDiagnostic=31e3f2674c2b4a312330adb1a50ffdb7c7f9c3643ffed53741be2b37385916b0
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerText.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerText.exp
+  Generating code
+  Terminal.cpp
+  Finished generating code
+  ViewerText.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\ViewerText.dll
+  TerminalAccessibility.cpp
+  TerminalInternal.cpp
+  TerminalKittyImagePipeline.cpp
+  TerminalCommandSurfaceModel.cpp
+  TerminalRuntimeLoader.cpp
+  TerminalSecurity.cpp
+  TerminalSession.cpp
+  TerminalVt.cpp
+  Terminal.Tests.VtUpgrade.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\Release\Plugins\Terminal.lib and object Z:\src\RedSalamander\.build\ARM64\Release\Plugins\Terminal.exp
+  Generating code
+  Finished generating code
+  Terminal.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\Plugins\Terminal.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.Tests.Runner.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.Popup.PathDetail.cpp
+  FolderWindow.FileOperations.State.Conflict.cpp
+  FolderWindow.FileOperations.DecisionMirror.cpp
+  FolderWindow.FileOperations.PromptText.cpp
+  FileOperationsConflictBroker.cpp
+  FolderWindow.FileOperations.IssuesProjection.cpp
+  FolderWindow.FileOperations.Tests.Runner.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.Tests.OwnedShutdown.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.LeftoverCleanup.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.Tests.Runner.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  Common.Tests.Runner.cpp
+  Common.Tests.LatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  Generating code
+  Finished generating code
+  RedSalamander.vcxproj -> Z:\src\RedSalamander\.build\ARM64\Release\RedSalamander.exe

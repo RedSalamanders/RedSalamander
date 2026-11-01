@@ -204,7 +204,7 @@ The **Commands** menu contains multi-step tools and integration commands.
 ### Plugins, View, and Help menus
 
 - **Plugins** opens Plugin Manager and lists plugin-provided dynamic commands.
-- **View** switches theme, fullscreen, menu/function bars, File Operations Failed Items, pane focus, and Preferences.
+- **View** switches theme, fullscreen, menu/function bars, File Operation Issues, pane focus, and Preferences.
 - **Help** opens the shortcut display, external documentation, and About dialog.
 
 A few **View** and **Help** entries are easy to overlook:

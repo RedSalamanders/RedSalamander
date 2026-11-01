@@ -545,7 +545,7 @@ void ReleaseFileOpsBridgePublishedDestinationRetryPauseForSelfTest() noexcept
 
 void FolderWindow::FileOperationState::DebugEnsurePopupVisibleForSelfTest() noexcept
 {
-    EnsurePopupVisible();
+    EnsurePopupVisible(PopupRevealReason::ExplicitShow);
 }
 
 void SetFileOpsConflictMetadataPauseForSelfTest(bool enabled, ULONGLONG bailoutMs) noexcept
@@ -769,6 +769,59 @@ namespace
     return ! left.objectId.empty() && left.pathProfileId == right.pathProfileId && left.objectId == right.objectId;
 }
 
+[[nodiscard]] bool SamePathKeyContract(const FileSystemPathIdentity& left, const FileSystemPathIdentity& right) noexcept
+{
+    return left.pathTextStableIdentity && right.pathTextStableIdentity && left.componentComparison == right.componentComparison &&
+           left.preferredSeparator == right.preferredSeparator && left.acceptedSeparators == right.acceptedSeparators;
+}
+
+[[nodiscard]] std::optional<FileSystemPathKeyRelation> CompareScopeProviderPathKeys(const FileOperations::MutationInterlockScope& left,
+                                                                                    const FileOperations::MutationInterlockScope& right) noexcept
+{
+    if (! left.endpoint.pathIdentity.has_value() || ! right.endpoint.pathIdentity.has_value() || ! left.providerPathKey.has_value() ||
+        ! right.providerPathKey.has_value() || ! SamePathKeyContract(left.endpoint.pathIdentity.value(), right.endpoint.pathIdentity.value()))
+    {
+        return std::nullopt;
+    }
+    return CompareFileSystemPathKeys(left.endpoint.pathIdentity.value(), left.providerPathKey.value(), right.providerPathKey.value());
+}
+
+[[nodiscard]] std::optional<FileSystemPathKeyRelation> CompareAnchorPathKeys(const FileOperations::MutationInterlockScope& left,
+                                                                             const FileOperations::MutationInterlockAnchor& leftAnchor,
+                                                                             const FileOperations::MutationInterlockScope& right,
+                                                                             const FileOperations::MutationInterlockAnchor& rightAnchor) noexcept
+{
+    if (! left.endpoint.pathIdentity.has_value() || ! right.endpoint.pathIdentity.has_value() || ! leftAnchor.relativePathKey.has_value() ||
+        ! rightAnchor.relativePathKey.has_value() || ! SamePathKeyContract(left.endpoint.pathIdentity.value(), right.endpoint.pathIdentity.value()))
+    {
+        return std::nullopt;
+    }
+    return CompareFileSystemPathKeys(left.endpoint.pathIdentity.value(), leftAnchor.relativePathKey.value(), rightAnchor.relativePathKey.value());
+}
+
+[[nodiscard]] bool ScopeProviderPathsOverlap(const FileOperations::MutationInterlockScope& left, const FileOperations::MutationInterlockScope& right) noexcept
+{
+    if (const auto relation = CompareScopeProviderPathKeys(left, right); relation == FileSystemPathKeyRelation::Disjoint)
+    {
+        return false;
+    }
+    // A key hit is an accelerator, not a replacement for the admitted raw relation.
+    const FileSystemPathIdentity& identity = left.endpoint.pathIdentity.value();
+    return EquivalentPath(identity, left.providerPath, right.providerPath) || IsStrictDescendantPath(identity, left.providerPath, right.providerPath) ||
+           IsStrictDescendantPath(identity, right.providerPath, left.providerPath);
+}
+
+[[nodiscard]] bool ScopeProviderPathIsStrictDescendant(const FileOperations::MutationInterlockScope& candidate,
+                                                       const FileOperations::MutationInterlockScope& prefix) noexcept
+{
+    if (const auto relation = CompareScopeProviderPathKeys(prefix, candidate);
+        relation.has_value() && relation.value() != FileSystemPathKeyRelation::LeftAncestor)
+    {
+        return false;
+    }
+    return IsStrictDescendantPath(candidate.endpoint.pathIdentity.value(), prefix.providerPath, candidate.providerPath);
+}
+
 [[nodiscard]] bool ScopeRootAppearsIn(const FileOperations::MutationInterlockScope& needle, const FileOperations::MutationInterlockScope& haystack) noexcept
 {
     if (! needle.root)
@@ -800,15 +853,23 @@ namespace
         }
         for (const FileOperations::MutationInterlockAnchor& rightAnchor : right.anchors)
         {
-            if (! rightAnchor.authority ||
-                ! SameInterlockIdentity(leftAnchor.authority->retained.authority.identity, rightAnchor.authority->retained.authority.identity))
+            if (! rightAnchor.authority || leftAnchor.authority->retained.authority.identity.objectId.empty() ||
+                (leftAnchor.authority != rightAnchor.authority &&
+                 ! SameInterlockIdentity(leftAnchor.authority->retained.authority.identity, rightAnchor.authority->retained.authority.identity)))
             {
                 continue;
             }
 
             const FileSystemPathIdentity& identity = left.endpoint.pathIdentity.value();
-            if (leftAnchor.relativePath.empty() || rightAnchor.relativePath.empty() ||
-                EquivalentPath(identity, leftAnchor.relativePath, rightAnchor.relativePath) ||
+            if (leftAnchor.relativePath.empty() || rightAnchor.relativePath.empty())
+            {
+                return true;
+            }
+            if (const auto relation = CompareAnchorPathKeys(left, leftAnchor, right, rightAnchor); relation == FileSystemPathKeyRelation::Disjoint)
+            {
+                continue;
+            }
+            if (EquivalentPath(identity, leftAnchor.relativePath, rightAnchor.relativePath) ||
                 IsStrictDescendantPath(identity, leftAnchor.relativePath, rightAnchor.relativePath) ||
                 IsStrictDescendantPath(identity, rightAnchor.relativePath, leftAnchor.relativePath))
             {
@@ -871,9 +932,7 @@ namespace
 
     if (FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint))
     {
-        const FileSystemPathIdentity& identity = left.endpoint.pathIdentity.value();
-        if (EquivalentPath(identity, left.providerPath, right.providerPath) || IsStrictDescendantPath(identity, left.providerPath, right.providerPath) ||
-            IsStrictDescendantPath(identity, right.providerPath, left.providerPath))
+        if (ScopeProviderPathsOverlap(left, right))
         {
             return true;
         }
@@ -1082,7 +1141,10 @@ struct IndexedInterlockAuthorityGroup
         {
             continue;
         }
-        std::ranges::sort(group.targets, {}, &IndexedInterlockTarget::key);
+        const FileSystemPathIdentity& pathIdentity = group.endpoint->pathIdentity.value();
+        std::ranges::sort(group.targets, [&](const IndexedInterlockTarget& lhs, const IndexedInterlockTarget& rhs) noexcept {
+            return CompareFileSystemPathsByComponents(pathIdentity, lhs.key, rhs.key) < 0;
+        });
         std::vector<AggregatedTarget> aggregated;
         aggregated.reserve(group.targets.size());
         for (const IndexedInterlockTarget& target : group.targets)
@@ -1282,9 +1344,7 @@ namespace
     {
         return false;
     }
-    const FileSystemPathIdentity& identity = left.endpoint.pathIdentity.value();
-    return EquivalentPath(identity, left.providerPath, right.providerPath) || IsStrictDescendantPath(identity, left.providerPath, right.providerPath) ||
-           IsStrictDescendantPath(identity, right.providerPath, left.providerPath);
+    return ScopeProviderPathsOverlap(left, right);
 }
 
 // R4-A02-1: the concrete race of one conflicting scope pair, seen from this task (`own`).
@@ -1327,7 +1387,8 @@ namespace
 // only strictly inside it: two by-name scopes of one folder remove the same members.
 [[nodiscard]] FileOperations::SameHostOverlapProblem ClassifySameHostOverlap(const std::vector<FileOperations::MutationInterlockScope>& mine,
                                                                              const std::vector<FileOperations::MutationInterlockScope>& theirs,
-                                                                             bool& byNameDelete) noexcept
+                                                                             bool& byNameDelete,
+                                                                             uint64_t* pairComparisons = nullptr) noexcept
 {
     using FileOperations::MutationInterlockAccess;
     using FileOperations::SameHostOverlapProblem;
@@ -1340,6 +1401,8 @@ namespace
     {
         for (const FileOperations::MutationInterlockScope& other : theirs)
         {
+            if (pairComparisons != nullptr)
+                ++(*pairComparisons);
             if (own.byNameCorroborated || other.byNameCorroborated)
             {
                 // I35 R7.3: a delete by name, prepared, queued or running, is advised by path like an exact
@@ -1350,8 +1413,7 @@ namespace
                     continue;
                 }
                 byNameDelete = true;
-                if (other.byNameCorroborated &&
-                    (! own.byNameCorroborated || IsStrictDescendantPath(own.endpoint.pathIdentity.value(), other.providerPath, own.providerPath)))
+                if (other.byNameCorroborated && (! own.byNameCorroborated || ScopeProviderPathIsStrictDescendant(own, other)))
                 {
                     return own.access == MutationInterlockAccess::ReadSource ? SameHostOverlapProblem::DeletedByNameRead
                                                                              : SameHostOverlapProblem::DeletedByNameWritten;
@@ -1605,6 +1667,11 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         return advice;
     }
 
+    const bool captureOverlapCosts = Debug::Perf::IsCaptureEnabled();
+    uint64_t classifierElapsedUs   = 0u;
+    uint64_t classifierPairCount   = 0u;
+    uint64_t classifierCallCount   = 0u;
+
     // Frozen scopes can be compared while holding the queue lock: this performs no provider call,
     // path traversal, or allocation. Prepared/prepared edges point only to older admission keys, which
     // gives Queue a stable acyclic predecessor order. Every active task remains eligible because a
@@ -1640,8 +1707,17 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         {
             return;
         }
-        bool byNameDelete                                    = false;
-        const FileOperations::SameHostOverlapProblem problem = ClassifySameHostOverlap(*admission->scopes, *other.admission->scopes, byNameDelete);
+        bool byNameDelete                  = false;
+        uint64_t pairComparisons           = 0u;
+        const uint64_t classifierStartedUs = captureOverlapCosts ? PerfNowUs() : 0u;
+        const FileOperations::SameHostOverlapProblem problem =
+            ClassifySameHostOverlap(*admission->scopes, *other.admission->scopes, byNameDelete, captureOverlapCosts ? &pairComparisons : nullptr);
+        if (captureOverlapCosts)
+        {
+            classifierElapsedUs += PerfElapsedUs(classifierStartedUs);
+            classifierPairCount += pairComparisons;
+            ++classifierCallCount;
+        }
         if (problem == FileOperations::SameHostOverlapProblem::None)
         {
             return;
@@ -1680,7 +1756,8 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         }
     };
 
-    std::scoped_lock lock(_queueMutex);
+    std::unique_lock lock(_queueMutex);
+    const uint64_t queueLockStartedUs = captureOverlapCosts ? PerfNowUs() : 0u;
     for (const ActiveMutationInterlock& prepared : _preparedMutationInterlocks)
     {
         consider(prepared, true);
@@ -1688,6 +1765,14 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
     for (const ActiveMutationInterlock& active : _activeMutationInterlocks)
     {
         consider(active, false);
+    }
+    lock.unlock();
+    if (captureOverlapCosts)
+    {
+        const uint64_t queueLockHoldUs = PerfElapsedUs(queueLockStartedUs);
+        Debug::Perf::Emit(L"FileOps.Overlap.ClassifierUs", L"find-same-host-overlap", classifierElapsedUs, classifierPairCount, classifierCallCount, S_OK);
+        Debug::Perf::Emit(L"FileOps.Overlap.ClassifierScopePairs", L"find-same-host-overlap", 0u, classifierPairCount, classifierCallCount, S_OK);
+        Debug::Perf::Emit(L"FileOps.Overlap.FindAdviceLockHoldUs", L"", queueLockHoldUs, classifierCallCount, advice.taskCount, S_OK);
     }
     return advice;
 }
@@ -1947,6 +2032,9 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
             }
             FileOperations::MutationInterlockScope probe = currentScope;
             probe.providerPath                           = providerPath;
+            // This transient probe changes the frozen scope's path while holding the queue lock.
+            // Clear its stale key and preserve the exact component fallback without allocating one.
+            probe.providerPathKey.reset();
             for (const FileOperations::MutationInterlockScope& publishedScope : *publisher.admission->scopes)
             {
                 const bool publishesHere =
@@ -2014,7 +2102,22 @@ bool FolderWindow::FileOperationState::WaitForLiveOutputPublisher(Task& task, ui
     {
         return std::ranges::any_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept { return active.taskId == publisherTaskId; });
     };
-    _queueCv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || ! publisherIsLive(); });
+    const auto shouldWake = [&]() noexcept
+    {
+        const bool ready = stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || ! publisherIsLive();
+#ifdef ENABLE_TESTS
+        if (! ready && task._dbgQueueWaitBeforeSleepGate.load(std::memory_order_acquire))
+        {
+            task._dbgQueueWaitBeforeSleepReached.store(true, std::memory_order_release);
+            task._dbgQueueWaitBeforeSleepGate.wait(true, std::memory_order_acquire);
+        }
+#endif
+        return ready;
+    };
+    while (! shouldWake())
+    {
+        _queueCv.wait(lock);
+    }
     const bool completed = ! publisherIsLive();
     lock.unlock();
     Debug::Perf::EmitValue(L"FileOps.LiveOutput.WaitUs", PerfElapsedUs(startedUs), completed ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED));
@@ -2071,6 +2174,15 @@ bool FileOperations::DebugMutationScopeSetsOverlapForSelfTest(const std::vector<
 {
     comparisons = 0u;
     return TaskScopesOverlap(left, right, comparisons);
+}
+
+FileOperations::SameHostOverlapProblem FileOperations::DebugClassifySameHostOverlapForSelfTest(const std::vector<MutationInterlockScope>& left,
+                                                                                               const std::vector<MutationInterlockScope>& right,
+                                                                                               bool& byNameDelete,
+                                                                                               uint64_t& pairComparisons) noexcept
+{
+    pairComparisons = 0u;
+    return ClassifySameHostOverlap(left, right, byNameDelete, &pairComparisons);
 }
 #endif
 

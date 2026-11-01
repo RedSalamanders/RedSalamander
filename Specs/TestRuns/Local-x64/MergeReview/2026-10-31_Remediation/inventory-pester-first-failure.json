@@ -1,0 +1,1023 @@
+{
+  "RunId": "ia31-a0f5af36",
+  "TestRoot": "Z:\\RedSalamander.Perf",
+  "ProcessTempRoot": "Z:\\RedSalamander.Perf\\runs\\ia31-a0f5af36\\scratch\\process-temp",
+  "StartedUtc": "2026-10-31T14:16:34.0847887Z",
+  "FinishedUtc": "2026-10-31T14:17:55.9449851Z",
+  "ElapsedSeconds": 81.844,
+  "PassedCount": 94,
+  "FailedCount": 3,
+  "SkippedCount": 0,
+  "TotalCount": 97,
+  "Files": [
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\SpecInformationArchitecture.Tests.ps1",
+      "StartedUtc": "2026-10-31T14:16:34.0847887Z",
+      "FinishedUtc": "2026-10-31T14:17:46.2610762Z",
+      "ElapsedSeconds": 72.169,
+      "PassedCount": 73,
+      "FailedCount": 0,
+      "SkippedCount": 0,
+      "TotalCount": 73,
+      "TestResults": [
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "accepts a valid normative document with an evidence-backed consistency row",
+          "Result": "Passed",
+          "Time": 1.0938076,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "accepts a valid active WIP plan indexed exactly once",
+          "Result": "Passed",
+          "Time": 0.4759301,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "accepts a compact retired tombstone with the required retrieval fields",
+          "Result": "Passed",
+          "Time": 0.4024113,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a duplicate WIP index entry",
+          "Result": "Passed",
+          "Time": 0.4394047,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects an unindexed direct WIP file",
+          "Result": "Passed",
+          "Time": 0.4675696,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a stale WIP index path",
+          "Result": "Passed",
+          "Time": 0.4518174,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "accepts distinct WIP ranks that no archived plan claims",
+          "Result": "Passed",
+          "Time": 0.5155715,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects two WIP index rows that share a rank",
+          "Result": "Passed",
+          "Time": 0.423837,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a WIP rank that an archived plan title already claims",
+          "Result": "Passed",
+          "Time": 0.5399106,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "does not treat an unrelated archived title as a claimed plan ID",
+          "Result": "Passed",
+          "Time": 0.4940578,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "does not read an ordinary title word ending in a digit as a plan ID",
+          "Result": "Passed",
+          "Time": 0.486853,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects an unchecked checkbox in normative prose",
+          "Result": "Passed",
+          "Time": 0.3953492,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects future or implementation-plan headings in normative prose",
+          "Result": "Passed",
+          "Time": 0.4291873,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "resolves a local relative link and heading anchor",
+          "Result": "Passed",
+          "Time": 0.4285383,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "uses GitHub duplicate-heading suffixes",
+          "Result": "Passed",
+          "Time": 0.006851,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "preserves GitHub identifier and punctuation spacing in heading fragments",
+          "Result": "Passed",
+          "Time": 0.0054247,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "accepts real links to identifier and ampersand heading fragments",
+          "Result": "Passed",
+          "Time": 0.3923551,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects missing local targets and heading anchors",
+          "Result": "Passed",
+          "Time": 0.3929447,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "ignores fake links inside fenced Cpp PowerShell and Markdown examples",
+          "Result": "Passed",
+          "Time": 0.0062588,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "ignores a fake link inside inline code",
+          "Result": "Passed",
+          "Time": 0.0028669,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "keeps a missing link visible after line-leading triple-backtick inline code",
+          "Result": "Passed",
+          "Time": 0.4011057,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "keeps a real backtick fence open when a matching run has trailing nonwhitespace",
+          "Result": "Passed",
+          "Time": 0.0066297,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "allows backticks in tilde fence info and requires a whitespace-only closing tail",
+          "Result": "Passed",
+          "Time": 0.004717,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a repository-root escape attempt",
+          "Result": "Passed",
+          "Time": 0.4089744,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "reports a stale link from immutable Done as informational",
+          "Result": "Passed",
+          "Time": 0.3853275,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "validates the exact pinned I27 stock-Windows history relocation map",
+          "Result": "Passed",
+          "Time": 39.8674332,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a modified protected Done file",
+          "Result": "Passed",
+          "Time": 0.3754695,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the reviewed completed menu plan path without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3807291,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the reviewed completed menu remediation path without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3896003,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the reviewed retired File Operations popup plan without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3941334,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the reviewed retired File Operations architecture-debt plan without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3814873,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the retired File Operations reliability core plan without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3648629,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the retired File Operations execution record without weakening Done protection",
+          "Result": "Passed",
+          "Time": 0.3797394,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed Beeline residual record",
+          "Result": "Passed",
+          "Time": 0.5481141,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I35 copy/move UX and reliability record",
+          "Result": "Passed",
+          "Time": 0.5181815,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I37 folder-copy progress record",
+          "Result": "Passed",
+          "Time": 0.5127832,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed card information hierarchy record",
+          "Result": "Passed",
+          "Time": 0.5423339,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I20 terminal font and plugin numeric record",
+          "Result": "Passed",
+          "Time": 0.5246928,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I28 release dependency recovery record",
+          "Result": "Passed",
+          "Time": 0.5197356,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I38 dialog keyboard focus record",
+          "Result": "Passed",
+          "Time": 0.5325693,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I42 Copy Move selection convergence record",
+          "Result": "Passed",
+          "Time": 0.5622336,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits the six reviewed October 19 records and rejects every sibling and extra companion",
+          "Result": "Passed",
+          "Time": 0.7290212,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed PowerShell tooling closeout record",
+          "Result": "Passed",
+          "Time": 0.5371174,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed dependency integration closeout record",
+          "Result": "Passed",
+          "Time": 0.581358,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed agent-skill remediation closeout record",
+          "Result": "Passed",
+          "Time": 0.5489127,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed waiting-card record",
+          "Result": "Passed",
+          "Time": 0.5275508,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed test-run evidence archival record",
+          "Result": "Passed",
+          "Time": 0.5403608,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I44 sort paint measurement record",
+          "Result": "Passed",
+          "Time": 0.5716257,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I45 writer CPU record",
+          "Result": "Passed",
+          "Time": 0.5486162,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I43 sorting row movement record",
+          "Result": "Passed",
+          "Time": 0.6231433,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I41 natural sorting performance record",
+          "Result": "Passed",
+          "Time": 0.5479384,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I40 natural name sorting record",
+          "Result": "Passed",
+          "Time": 0.5483836,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed I39 breadcrumb natural sorting record",
+          "Result": "Passed",
+          "Time": 0.5182174,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed discovery-scope record",
+          "Result": "Passed",
+          "Time": 0.5383567,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed direct-API discovery record",
+          "Result": "Passed",
+          "Time": 0.5681111,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed provider discovery parity record",
+          "Result": "Passed",
+          "Time": 0.5187753,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed completed S3 marker and residuals record",
+          "Result": "Passed",
+          "Time": 0.5626411,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the exact reviewed I26 File Operations UI plan path",
+          "Result": "Passed",
+          "Time": 0.5852287,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the exact reviewed I27 File Operations safety remediation path",
+          "Result": "Passed",
+          "Time": 0.5441329,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits reviewed I27 gallery companions and rejects an unreviewed image in the same collection",
+          "Result": "Passed",
+          "Time": 0.5575924,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the exact reviewed I30 delivered review and implementation record",
+          "Result": "Passed",
+          "Time": 0.5607012,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the exact reviewed I30 findings ledger inside its archived directory",
+          "Result": "Passed",
+          "Time": 0.5330583,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed Terminal and File Operations follow-up record",
+          "Result": "Passed",
+          "Time": 0.539677,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "admits only the reviewed DxUi adoption closeout and supporting records",
+          "Result": "Passed",
+          "Time": 1.6754075,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a tombstone above the line cap",
+          "Result": "Passed",
+          "Time": 0.4000491,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "classifies protected schema theme TestRuns and Mockups outside normative prose rules",
+          "Result": "Passed",
+          "Time": 0.0030733,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "requires every normative file to have a consistency record and evidence anchors",
+          "Result": "Passed",
+          "Time": 0.5468832,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects UNVERIFIED and unresolved contradiction statuses in strict inventory",
+          "Result": "Passed",
+          "Time": 0.4254069,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Specification information architecture",
+          "Context": "",
+          "Name": "rejects a WIP plan that claims authority over current contracts",
+          "Result": "Passed",
+          "Time": 0.3835531,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Markdown fence indentation boundaries",
+          "Context": "",
+          "Name": "keeps unindented prose visible after an opener prefixed by four spaces",
+          "Result": "Passed",
+          "Time": 0.1087368,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Markdown fence indentation boundaries",
+          "Context": "",
+          "Name": "keeps unindented prose visible after an opener prefixed by a tab",
+          "Result": "Passed",
+          "Time": 0.0029829,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Markdown fence indentation boundaries",
+          "Context": "",
+          "Name": "keeps a valid fence open across a closer prefixed by four spaces",
+          "Result": "Passed",
+          "Time": 0.003856,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Markdown fence indentation boundaries",
+          "Context": "",
+          "Name": "keeps a valid fence open across a closer prefixed by a tab",
+          "Result": "Passed",
+          "Time": 0.0026093,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        }
+      ],
+      "NUnitXml": "Z:\\RedSalamander.Perf\\runs\\ia31-a0f5af36\\scratch\\codex\\archive-inventory-pester\\nunit\\SpecInformationArchitecture.Tests.ps1.xml"
+    },
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1",
+      "StartedUtc": "2026-10-31T14:17:46.2640437Z",
+      "FinishedUtc": "2026-10-31T14:17:52.6634089Z",
+      "ElapsedSeconds": 6.399,
+      "PassedCount": 14,
+      "FailedCount": 3,
+      "SkippedCount": 0,
+      "TotalCount": 17,
+      "TestResults": [
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+          "Result": "Failed",
+          "Time": 2.0588761,
+          "FailureMessage": "The checked-in tool inventory must be valid. Expected '0' but got '1'.",
+          "StackTrace": "at line: 16 in Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+          "Result": "Passed",
+          "Time": 0.0402896,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects an unclassified nested file outside reviewed directory rules",
+          "Result": "Passed",
+          "Time": 0.0037816,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "fails when a derived module consumer is missing from usedBy",
+          "Result": "Passed",
+          "Time": 0.0950428,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects stale explicit paths",
+          "Result": "Passed",
+          "Time": 0.0038851,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+          "Result": "Passed",
+          "Time": 0.0953803,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+          "Result": "Passed",
+          "Time": 0.0085508,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "requires explicit prerequisites metadata on entries and directory rules",
+          "Result": "Passed",
+          "Time": 0.0058558,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "requires retention policy for compatibility records",
+          "Result": "Passed",
+          "Time": 0.0207444,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "requires every non-null replacement to be an exact existing Tools path",
+          "Result": "Passed",
+          "Time": 0.0122939,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects historical entries without a reviewed manual entry point",
+          "Result": "Passed",
+          "Time": 0.0041482,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects unreviewed and missing historical manual entry-point paths",
+          "Result": "Passed",
+          "Time": 0.0056085,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+          "Result": "Passed",
+          "Time": 0.0043896,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+          "Result": "Passed",
+          "Time": 0.0044634,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "uses a reviewed nested rule when exactly one rule matches",
+          "Result": "Passed",
+          "Time": 0.0043211,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "renders a useful Markdown file inventory",
+          "Result": "Failed",
+          "Time": 1.8140384,
+          "FailureMessage": "Markdown output must include summary, file table, and the public inventory command.",
+          "StackTrace": "at line: 369 in Z:\\src\\RedSalamander\\Tools\\Tests\\ToolInventory.Tests.ps1",
+          "Reason": ""
+        },
+        {
+          "Describe": "Tools inventory contract",
+          "Context": "",
+          "Name": "documents the command contract and supports Validate as an alias",
+          "Result": "Failed",
+          "Time": 1.9217166,
+          "FailureMessage": "Tools inventory validation failed with 1 finding(s): MISSING_DERIVED_CONSUMER: Tools/Modules/Testing/ValidationFingerprint.psm1",
+          "StackTrace": "at line: 70 in Z:\\src\\RedSalamander\\Tools\\Get-ToolInventory.ps1",
+          "Reason": ""
+        }
+      ],
+      "NUnitXml": "Z:\\RedSalamander.Perf\\runs\\ia31-a0f5af36\\scratch\\codex\\archive-inventory-pester\\nunit\\ToolInventory.Tests.ps1.xml"
+    },
+    {
+      "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\TestInventory.Tests.ps1",
+      "StartedUtc": "2026-10-31T14:17:52.6648281Z",
+      "FinishedUtc": "2026-10-31T14:17:55.9411512Z",
+      "ElapsedSeconds": 3.276,
+      "PassedCount": 7,
+      "FailedCount": 0,
+      "SkippedCount": 0,
+      "TotalCount": 7,
+      "TestResults": [
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "derives in-product self-test surfaces without frozen registration totals",
+          "Result": "Passed",
+          "Time": 0.6791913,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "derives every native test project and its kind from the canonical run plan",
+          "Result": "Passed",
+          "Time": 0.4135539,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "keeps critical CI and Full surfaces visible with their run-plan kinds",
+          "Result": "Passed",
+          "Time": 0.4791707,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "exports JSON as a lossless manifest of source and run-plan inventory",
+          "Result": "Passed",
+          "Time": 0.407246,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "classifies every source-contract case for replacement decisions",
+          "Result": "Passed",
+          "Time": 0.3759643,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "guards FileOperations Step enum values against phase-order drift",
+          "Result": "Passed",
+          "Time": 0.5675388,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        },
+        {
+          "Describe": "Test inventory helper",
+          "Context": "",
+          "Name": "documents commands for live inventory instead of checked-in current totals",
+          "Result": "Passed",
+          "Time": 0.0161682,
+          "FailureMessage": "",
+          "StackTrace": "",
+          "Reason": ""
+        }
+      ],
+      "NUnitXml": "Z:\\RedSalamander.Perf\\runs\\ia31-a0f5af36\\scratch\\codex\\archive-inventory-pester\\nunit\\TestInventory.Tests.ps1.xml"
+    }
+  ]
+}

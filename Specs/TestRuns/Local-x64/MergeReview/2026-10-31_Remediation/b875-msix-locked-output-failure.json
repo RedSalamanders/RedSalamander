@@ -1,0 +1,100 @@
+{
+  "package": "MSIX",
+  "result": "fail",
+  "receipt_id": "005951e621da3db7b8549912046751f99e82640d88f55815736a159bcbb2cf09",
+  "receipt_sha256": "3ec5bde1ae5657c3c87f2d2d0f946c1563c64a4ccff18e364e7601c79c731b80",
+  "input_tree_before": [
+    {
+      "path": "Assets/Square150x150Logo.png",
+      "size_bytes": 28812,
+      "sha256": "1abcf2e88e7a7059c97b712b040de324f967446d2f20b15a02a0edcbc3231da8"
+    },
+    {
+      "path": "Assets/Square310x310Logo.png",
+      "size_bytes": 102956,
+      "sha256": "2570dceb2e938404694e706b0d2e21960a3c1c9ea82d9a8281ccdadfdfde6bcc"
+    },
+    {
+      "path": "Assets/Square44x44Logo.png",
+      "size_bytes": 4023,
+      "sha256": "f44aaa35d28eb1d3b7efe3ee4e8918bc4be2de121872af8a0a74e79502087460"
+    },
+    {
+      "path": "Assets/StoreLogo.png",
+      "size_bytes": 4916,
+      "sha256": "4c2937c9154e499f019a90613b86fd8a9536122886c1cceffd6d5fe45448a9f0"
+    },
+    {
+      "path": "Assets/Wide310x150Logo.png",
+      "size_bytes": 30285,
+      "sha256": "9ef7f8d1809d3673b7233c434310d9641bead11e73821a732d9b67caf28808a1"
+    },
+    {
+      "path": "build-msix.ps1",
+      "size_bytes": 11239,
+      "sha256": "479c118acb8bada083af7f83f49c2419017cd9076e337e37ec5bd5bc0367f227"
+    },
+    {
+      "path": "GenerateAssets.ps1",
+      "size_bytes": 5987,
+      "sha256": "e27ed1d89ad5a3ed197f4a6b81e2595eb57f3c614dcce94ff504f4b361d8b793"
+    },
+    {
+      "path": "Package.appxmanifest",
+      "size_bytes": 2001,
+      "sha256": "598406f2505ddd382fd8f54cb4d1fa1e31760bcad944f1a7de0eee6658af9830"
+    },
+    {
+      "path": "RedSalamanderInstaller_TemporaryKey.pfx",
+      "size_bytes": 2536,
+      "sha256": "91bff6d4266db3c032ddf83a10f2a7f17b151503df0ae398944ef59c1121fa55"
+    },
+    {
+      "path": "RedSalamanderInstaller.wapproj",
+      "size_bytes": 7266,
+      "sha256": "fcbcd711cec889852113ba19c80c463279fc9a2b483d6931640f900dad31fcfb"
+    },
+    {
+      "path": "RedSalamanderInstaller.wapproj.user",
+      "size_bytes": 168,
+      "sha256": "c06a75b13f855a94d46616796e024c52b499f8f92cf00ccb571ddbc6ff574676"
+    },
+    {
+      "path": "UpdateManifestVersion.ps1",
+      "size_bytes": 5832,
+      "sha256": "0fee3a69787859c1a87e2c5d72f155d4841359be299393b3c4518cbcfd37b0b0"
+    }
+  ],
+  "input_tree_after": [],
+  "input_differences": [],
+  "pngs_before": [
+    {
+      "name": "Square150x150Logo.png",
+      "size_bytes": 28812,
+      "sha256": "1abcf2e88e7a7059c97b712b040de324f967446d2f20b15a02a0edcbc3231da8"
+    },
+    {
+      "name": "Square310x310Logo.png",
+      "size_bytes": 102956,
+      "sha256": "2570dceb2e938404694e706b0d2e21960a3c1c9ea82d9a8281ccdadfdfde6bcc"
+    },
+    {
+      "name": "Square44x44Logo.png",
+      "size_bytes": 4023,
+      "sha256": "f44aaa35d28eb1d3b7efe3ee4e8918bc4be2de121872af8a0a74e79502087460"
+    },
+    {
+      "name": "StoreLogo.png",
+      "size_bytes": 4916,
+      "sha256": "4c2937c9154e499f019a90613b86fd8a9536122886c1cceffd6d5fe45448a9f0"
+    },
+    {
+      "name": "Wide310x150Logo.png",
+      "size_bytes": 30285,
+      "sha256": "9ef7f8d1809d3673b7233c434310d9641bead11e73821a732d9b67caf28808a1"
+    }
+  ],
+  "pngs_after": [],
+  "packages_after": [],
+  "failure": "System.Management.Automation.RuntimeException: MSIX build failed with exit code 1"
+}

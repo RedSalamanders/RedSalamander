@@ -1610,10 +1610,11 @@ void AlertOverlayWindow::OnKeyDown(WPARAM key, LPARAM flags) noexcept
         return;
     }
 
-    // A decision overlay never acts on an auto-repeated key: a key held for the pane underneath, or an
-    // Escape or Enter held after it answered the previous decision, cannot answer this one. Other
-    // non-blocking alerts (a plugin's non-modal alert) keep acting on it.
-    if (_keysRequireFocus && (flags & kKeyPreviouslyDownFlag) != 0)
+    // A decision overlay never acts on an auto-repeated key. Blocking prompts also reject repeated
+    // Enter/Escape: holding the key that opened Cancel all must not answer its nested prompt.
+    // Navigation repeats and non-blocking plugin alerts retain their existing behavior.
+    const bool repeatedDecision = _keysRequireFocus || (_blocksInput && (key == VK_RETURN || key == VK_ESCAPE));
+    if (repeatedDecision && (flags & kKeyPreviouslyDownFlag) != 0)
     {
         return;
     }
@@ -4208,6 +4209,21 @@ bool DebugRunAlertOverlayModelessSelfTest(HWND placement, AlertOverlayModelessSe
         const uint64_t requestsBefore   = DebugGetAlertOverlayForegroundRequestCount();
         const bool captured =
             target && SUCCEEDED(blocking->ShowForAnchor(otherPane.get(), theme, makeModel(false), true)) && blocking->_restoreFocus == target.get();
+        blocking->SetCallbacks(callbacks);
+        blocking->SetKeyBindings(kDefaultId, kEscapeId);
+        pressed = {};
+        if (captured)
+        {
+            SendMessageW(blocking->_hwnd.get(), WM_KEYDOWN, VK_RETURN, kKeyPreviouslyDownFlag);
+            SendMessageW(blocking->_hwnd.get(), WM_KEYDOWN, VK_ESCAPE, kKeyPreviouslyDownFlag);
+            const bool ignoredRepeats = pressed.buttonCount == 0u && blocking->IsVisible();
+            SendMessageW(blocking->_hwnd.get(), WM_KEYUP, VK_RETURN, 0);
+            SendMessageW(blocking->_hwnd.get(), WM_KEYDOWN, VK_RETURN, 0);
+            SendMessageW(blocking->_hwnd.get(), WM_KEYUP, VK_ESCAPE, 0);
+            SendMessageW(blocking->_hwnd.get(), WM_KEYDOWN, VK_ESCAPE, 0);
+            out.blockingDecisionRejectsRepeat =
+                ignoredRepeats && pressed.buttonCount == 2u && pressed.buttons[0] == kDefaultId && pressed.buttons[1] == kEscapeId;
+        }
         ShowWindow(target.get(), SW_HIDE);
         blocking->Hide();
         out.blockingHideFallsBackToAnchor =

@@ -354,10 +354,13 @@ When an explicit/material Copy/Move confirmation is required, it captures:
 Copy/Move and admitted permanent-Delete confirmation locations use the captured endpoint path
 identity contracts. The source and destination apply their own provider rules; no slash rewriting,
 case folding, Windows `parent_path` interpretation, or drive-prefix guess may change displayed
-provider spelling. Common-parent grouping requires one qualified provider/instance/profile/root
-domain with the same path contract and uses the canonical parent and path-equivalence helpers.
-Case-distinct parents in a case-sensitive namespace, unknown contracts, and mixed domains use the
-existing bounded localized Multiple locations summary. A displayed single source, sample file,
+provider spelling. Common-parent grouping requires one provider/instance/profile namespace and a
+shared stable path-text contract, then uses the canonical parent and path-equivalence helpers.
+The display-only grouping ignores `rootId`: roots qualify strategy topology, while matching path
+rules in one provider instance/profile can still render one common parent. This does not weaken
+root-qualified strategy admission or mutation checks. Case-distinct parents in a case-sensitive
+namespace, unknown contracts, and mixed domains use the existing bounded localized Multiple
+locations summary. A displayed single source, sample file,
 parent or destination preserves its raw spelling; a directory marker uses only the captured
 contract's accepted/preferred separator. An unknown contract adds no separator. Formatting makes
 no additional provider call and leaves operation endpoints and consent defaults unchanged.
@@ -558,9 +561,12 @@ this per-object result.
 
 For host-managed publication, an admitted file must have either a provider-confirmed atomic-final
 writer for the exact final path/grants or an exclusive writer plus retained bound-stage authority.
-The latter route binds any expected destination no-follow, publishes conditionally through
+An identity-less destination may additionally admit an exclusive direct-final create for a new path
+when it exposes `IFileSystemDirectFinalCreateWriter`; this route is non-atomic, rejects overwrite and
+replace grants, and its writer keeps `Write()` private until `Commit()`. The bound-stage route
+binds any expected destination no-follow, publishes conditionally through
 `PublishAs`, verifies/sets basic metadata through the returned exact published authority, and aborts
-only the exact stage token. There is no unowned temp-path promotion or pathname cleanup fallback.
+only the exact stage token. There is no unowned temp-path promotion or pathname-only cleanup fallback.
 The Local provider implements this bound route; FileSystemDummy implements the atomic-final route.
 A granted replacement on an atomic-final route without object binding publishes through that writer
 with the occupant the user saw as its expectation (R3-1, Conflict model): the writer revalidates
@@ -569,6 +575,26 @@ before publication, and a changed or vanished occupant is a definitive non-commi
 publication.
 Any required `S_OK` null output, unknown mutation outcome, or identity mismatch fails closed and
 retains every object whose ownership cannot be proven.
+
+The Local `IFileWriter` preserves its public direct-create and sibling-stage path-promotion behavior.
+Abort first requests disposition on the still-open exact writer handle. When a failed staged promotion
+has already closed that handle, cleanup reopens the leaf without following a reparse point, compares
+its persistent `FILE_ID_INFO` with the identity captured from the writer handle, and requests
+disposition on that pinned handle only when they match. A missing/unsupported identity, reopen error,
+or identity mismatch leaves the path untouched; it never falls back to `DeleteFileW(path)`. Direct
+`CREATE_NEW` admission remains write-only and does not require DELETE access up front. Its failed
+abort uses the same persistent-identity reopen only when exact by-handle disposition was unavailable.
+This local policy differs from `Common::Files::LocalFileTransaction`, which retains its own delete-
+capable stage handle through its handle-rename publication route. PluginContractTests covers direct
+and staged abort, both committed writer modes, and a failed promotion followed by installing a
+different sentinel at the old stage path.
+
+Direct-final create is only for an absent name and never replaces an occupant. The provider may return
+`ERROR_ALREADY_EXISTS`, `ERROR_FILE_EXISTS`, or `ERROR_REVISION_MISMATCH` only when it knows no final
+path mutation occurred; these remain ordinary conflicts for the user to resolve. Any other failed
+`Commit()` may have left partial destination content and is reported as publication Unknown, with no
+automatic retry or path-based cleanup. A managed Move without exact publication proof keeps its
+source even when the destination reports successful Commit; it is a copied result with source retained.
 
 For ordinary built-in Local Copy of a regular file to an absent destination name, the provider uses
 the visible direct-final publication shape: it creates the final leaf exclusively, retains the exact
@@ -1089,6 +1115,17 @@ There is no PID, thread-ID, clock, counter, or other predictable-name fallback. 
 Move use the same immutable verification option: byte-count and committed-size validation remain
 mandatory, while the optional BLAKE3 content pass runs only when requested by the plan. Verification
 never changes Copy-only source retention into source-delete authority.
+
+The Local provider bounds both copy-stage and backup leaves to 255 UTF-16 code units by truncating
+only the readable filename prefix without splitting a valid surrogate pair, retaining the purpose
+marker and 128-bit random hex token. The public writer's private overwrite stage uses the same
+bounded-name primitive; a long final leaf does not make its temporary component exceed the cap.
+It propagates entropy failure before creating a stage or renaming an original; exclusive-create
+and conditional-rename checks still own collision handling. Leftover discovery recognizes both
+these names and the legacy counter/GUID forms; backups remain potentially original data.
+Publication clears the writer's Temporary hint but preserves Hidden from finalized source metadata.
+Literal link Preserve uses the effective SubstituteName and relative flag, never advisory PrintName;
+extended drive/UNC and NT prefixes must retain their original target meaning.
 
 Success with a null reader, writer, capability document, directory result, bound object, or
 published object is a provider-contract failure. Unknown publication or mutation outcome forbids
@@ -1914,14 +1951,16 @@ in the published layout is coerced to Cancel.
 | Security-significant metadata loss | Move anyway / Copy and keep source | Same task/risk/destination root when explicitly selected |
 | Recycle escalation | Delete permanently / Skip; More: Delete all remaining permanently (multi-item task) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
 
-Each accepted choice creates a bounded receipt containing risk, task ID, optional item index,
-destination root, optional source/destination identity, and decision. The task retains at most 64
-receipts; exhaustion fails closed. Receipts are task-local, never session-sticky, never Preferences,
-and never transferable to another risk/root/task. Recycle escalation never offers the Apply-to-all
-checkbox; its only broader scope is the explicit **Delete all remaining permanently** action. An
-explicit eligible Apply-to-all acceptance, or that action, creates one receipt for that exact
-task/risk/destination-root grant; later matching items consume the cached scope and do not pretend
-to have separate per-object receipts. Recycle uses this scoped cache only for that action's grant.
+An accepted per-item choice is returned directly to the waiting executor together with its accepted
+prompt observation; validation remains bound to that task, prompt generation, item and destination
+root. The task does not retain a second per-item consent-receipt table, so unrelated prior prompts
+cannot exhaust a fixed receipt count and reject a later valid answer. These choices are never
+session-sticky, never Preferences, and never transferable to another risk/root/task. Recycle
+escalation never offers the Apply-to-all checkbox; its only broader scope is the explicit
+**Delete all remaining permanently** action. An explicit eligible Apply-to-all acceptance, or that
+action, creates one task-scoped cached grant for the exact risk and destination root; later matching
+items use that cached scope and do not pretend to have separate per-object consent receipts. Recycle
+uses this scoped cache only for that action's grant.
 
 ## Overlapping-operation interlock
 
@@ -1979,6 +2018,31 @@ tree while another task is reading it. Endpoint/path-profile containment and ret
 root-to-ancestor identity remain the overlap authority. Role-aware admission must not increase
 retained authority beyond the existing bound of unique governed provider paths and path depth.
 
+The same-host advisory runs while the queue lock protects published immutable scope snapshots.
+Scope provider paths and retained-anchor relative suffixes may carry canonical path keys prepared
+before publication, with at most 16 MiB of provider-key UTF-16 payload per task. The advisory may
+compare keys without allocation or provider I/O only under the same stable path contract. Key
+relation must match `EquivalentPath` and `IsStrictDescendantPath` exactly, including empty paths
+and repeated, leading or trailing separators. Positive key relations are confirmed with the exact
+raw equality/ancestry predicates before reporting overlap. Missing, budget-refused, unstable or incompatible
+keys retain the exact component fallback. A retargeted unpublished copy clears or rebuilds its
+key. Scope-pair order and first-conflict/delete-by-name priority remain unchanged. Preparation
+reports candidate key count and UTF-16 payload bytes outside the queue lock; this payload metric
+excludes string-object, capacity and allocator overhead.
+
+The no-activation `FileOps_ReviewRemediationContracts` case keeps the single disjoint and last-pair
+measurements in Debug. Test-enabled Release adds one warmup and five counterbalanced paired samples
+for each shape, comparing keyed scopes with same-binary keyless-fallback copies whose provider and
+anchor keys are cleared before timing. Both paths keep the exact retained-authority pointer shortcut.
+Every sample emits elapsed time, order, actual pair count and outcome; each pair asserts equal
+problem, by-name flag and comparisons. Reported timing is only the within-build key-reuse comparison
+for these exact Local 256-by-256 scopes. It is neither a historical full-baseline comparison nor
+Release qualification by itself.
+
+The same case retargets real retained Local ancestor scopes to absent supplementary-character
+publication leaves, rebuilding all provider and anchor suffix keys. Ordinal-distinct Deseret
+siblings must remain disjoint with and without keys, while identical leaves must conflict.
+
 An absent final leaf is represented by its nearest exact existing ancestor plus the normalized
 relative suffix from that anchor. Equal or ancestor/descendant suffixes under the same exact anchor
 overlap; distinct sibling suffixes do not. This comparison is alias-safe across alternate path
@@ -2031,11 +2095,17 @@ Native-only rename moves use their existing path/object interlocks without claim
 an unrelated rename remains admissible while all data slots are occupied.
 
 Admission precomputes normalized suffix keys outside the queue lock and indexes exact retained-anchor
-identity domains during the overlap check. Within one exact anchor group, a sorted ancestor-stack scan
-detects equal and ancestor/descendant suffixes while preserving role compatibility: read/read remains
-admissible and every overlapping writer/publisher pair serializes. Conservative, legacy, or otherwise
-unkeyable scopes fall back to the exact Cartesian overlap predicate; the index never turns incomplete
-identity into path authority.
+identity domains during the overlap check. Within one exact anchor group, suffixes are ordered by
+provider path components, with each ancestor before its descendants; raw flat-string order is invalid
+because punctuation siblings can otherwise split a descendant subtree. The ancestor-stack scan detects
+equal and ancestor/descendant suffixes while preserving role compatibility: read/read remains admissible
+and every overlapping writer/publisher pair serializes. Conservative, legacy, or otherwise unkeyable
+scopes fall back to the exact Cartesian overlap predicate; the index never turns incomplete identity
+into path authority.
+
+The Local provider orders selected recursive Delete roots by the same component hierarchy before
+building its child-before-parent dependency stack. An interleaved sibling such as `DIR-OLD` must not
+detach `DIR` from a later selected `DIR\X`; both selected nested roots must finish in dependency order.
 
 Successful Copy, Move, Rename, and directory-shell publication records the actual provider path in
 a host-local live-publication index while the publishing task remains active. Each entry pairs that
@@ -2101,6 +2171,12 @@ transfer's implicit destination); Preparing queries the contract on the task thr
 that admits transfer leaves), fills both from the answer, or fails the task on its card with the
 provider's reason and a `preparation.destinationName` diagnostic before any interlock or mutation;
 execution keeps its own re-query against that admitted join.
+
+Inline Rename does not enter the source mutation phase until the worker is about to call
+`RenameIfUnchanged`. A pre-bind, provider-name refusal, live-output Skip, or other early failure is
+therefore reported as a typed `Failed`/`NotPublished`/`Retained` item; it must not become
+`Unknown` merely because no mutation receipt was produced. Batch Rename retains its task-wide
+mutation gate because its executor may touch multiple roots.
 
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
@@ -2209,6 +2285,10 @@ user need not resume it or change Queue/Parallel mode. Waking a condition variab
 without exiting on cancellation is not a quiet-point guarantee. Stop/cancel wakeups
 must synchronize with each wait predicate's mutex after publishing the stop state,
 so a worker between a false predicate and sleep cannot lose the notification.
+This synchronization applies to task queue/interlock waits, per-item scheduler work
+availability and shutdown, and bridge-pipeline completion/stop predicates. A notifier
+must release the predicate mutex before notifying; a shared notification helper must
+not reacquire a mutex that a caller may already hold.
 
 File Operations admits mutation only after the exact path-and-operation capability response
 classifies its complete route as `bounded` or `providerWatchdog`. `bounded` carries a zero provider
@@ -2513,6 +2593,10 @@ Aggregate mapping:
 Source rows are removed or ghosted only for `SourceDisposition::Removed`. Retained remains and
 refreshes. Unknown refreshes without optimistic removal. Destination refreshes for Published or
 Unknown. The same mapping applies to FolderView, Find, Compare, search index, and watcher consumers.
+Completion cache notifications use the source provider retained by the task and the destination
+provider retained by its selected admission. A pane's live provider is used only to decide which
+currently visible folder view can refresh; navigating a pane while work runs cannot redirect a
+completion notification to the pane's replacement provider.
 
 The engine stores one typed result for every selected top-level source before completion is posted.
 Provider mutation truth and host-owned Managed publication/cleanup truth feed that record; a missing
@@ -2817,14 +2901,25 @@ running scope on that folder, an ancestor or a descendant: a running Copy's stag
 destination) are left out and counted, before the listing shows and again when Delete Selected is
 pressed, so the note can say that no operation running in this window works in their folders; it also
 says the items may be left over with incomplete data or still in use by another window or program.
+Newly discovered leftover stages are pre-checked only when their modification time is known and older
+than 24 hours; recent, future-dated, and unknown-time stages start unchecked. This is a conservative
+default rather than evidence that an older stage is safe to delete. An explicit checkbox choice remains
+in force when the row is rediscovered. If a subfolder cannot be read or its packed directory chain is
+malformed, the listing retains its prior rows and adds rows from validated portions of the scan, reports
+how many folders were incomplete, and does not present that scan as complete. Provider child names that
+could escape their parent during a host path join are skipped and counted as invalid names.
 **Delete Selected** submits one ordinary `DeletePlan` (`DeleteOrigin::LeftoverCleanup`) through
 `StartOperation` on the provider and plugin identity the listing was opened on (not the pane's current
 one): to the Recycle Bin where the provider supports it, as the pane Delete does, else a permanent
 Delete behind its card, so the touch guard, the confirmation and the by-name rules apply unchanged. On
 a provider that cannot delete (an MTP device) the listing shows its rows unchecked, disables Delete
 Selected and says why. Closing the listing stops its walk, re-issuing the I/O cancel for a bounded
-200 ms; a walk still blocked keeps the closed listing alive until it returns (the folder window waits
-for it only when it is destroyed). The listing deletes nothing itself, never opens by itself or at
+200 ms; a synchronous provider read may still be blocked after cancellation. The UI closes its HWND and
+DxUi resources on the UI thread, then transfers the joinable worker to an off-UI threadpool reaper. A
+separate shared work context owns the provider COM reference and module pin until the read returns; the
+worker never captures the dialog or FolderWindow. Completion uses a weak context identity plus generation
+and a drained message-payload token, so a closed or HWND-reused listing cannot adopt an old result. Final
+FolderWindow teardown does not join a provider read. The listing deletes nothing itself, never opens by itself or at
 startup, has no entry in the pane background menu (only the Commands menu and the artifact submenu, an
 accepted S4 departure), and leaves the interrupted-Move breadcrumb untouched.
 
@@ -2954,7 +3049,7 @@ At startup, the host enumerates the exact breadcrumb root through a no-follow di
 the scan at 4,096 total direct children, and considers only regular non-reparse `*.move.json` children.
 A store that exceeds that cap withholds every notice and logs one warning naming the directory.
 Each read is capped at 128 KiB before allocation and verifies a stable complete file size. Valid
-non-terminal records become interrupted-Move warning cards. Valid terminal records may be removed as
+non-terminal records with a provably exited writer become interrupted-Move warning cards. New schema-2 records bind the PID and process creation FILETIME, so PID reuse does not identify the old writer. Live schema-2 writers are skipped, including terminal records still being finalized; unverified schema-2 writers remain unprojected and unacknowledged and are counted as writer-unverified. A legacy schema-1 record has no writer identity: it is projected, or a terminal record is removed, only when a process snapshot proves there is no other `RedSalamander.exe` process. Any peer or uncertain process enumeration withholds the record and increments a separate legacy-withheld count; it does not count as schema-2 writer uncertainty or trigger the partial-load warning. Do not compare process-creation FILETIME with the legacy record's wall-clock timestamp to infer process ordering. Valid terminal records of exited writers may be removed as
 stale completed bookkeeping. Malformed, truncated, invalid-UTF-8, wrong-version, directory, reparse,
 or oversized records are rejected and left untouched; one rejected sibling does not discard another
 valid record. Loading, projecting, navigating, or dismissing a record never opens, deletes, copies,
@@ -3408,3 +3503,47 @@ mutation outcome into replay permission. The blocker observation is cleared befo
 ### Standard action placement
 
 Archive Pack/Unpack and selection-mask prompts place Help before OK and Cancel, keeping Cancel rightmost. Hosted creation order matches physical placement for keyboard and accessibility traversal.
+
+### Interrupted-Move writer and notice ownership (2026-10-31)
+
+Schema-2 creation stamps the current writer's PID and process creation time. Schema-2 loading uses a
+query-only process handle and a zero-time observation; access/identity-query failure is unverified,
+not proof of exit. Schema-2 acknowledgement rechecks that the writer has exited and refuses
+active/unverifiable records. A schema-1 record is eligible only when a process snapshot has no other
+`RedSalamander.exe` peer; the current process is excluded because it writes schema 2, and a snapshot
+failure or any peer fails closed. The same rule gates schema-1 projection, terminal removal, and
+explicit acknowledgement. Do not order process creation and legacy record creation by FILETIME.
+The owning writer's Terminal finalization removes its own record through the exact durable store
+helper. A failed Executing advance remains conservative and records a visible diagnostic warning.
+Rejected and schema-2 unverifiable records are reported even when a partial load returns S_FALSE;
+legacy-withheld records have a separate informational count.
+
+Legacy eligibility takes at most one process observation per load, lazily after the entire
+direct-child path list has been acquired. That proof applies only to successfully parsed schema-1
+records from that list, including terminal cleanup through the exact durable-store remover. A
+newly started process cannot be the writer of one of those already enumerated random-named records.
+Standalone explicit acknowledgement takes a fresh observation. Load statistics expose the
+eligibility observation count, and `fileops.move_breadcrumb.legacy_peer_probe.us` measures its cost;
+the 16-record projection/withholding/terminal controls require one observation per load.
+
+Operation IDs, informational-card IDs, interrupted-Move notice IDs and late queue-order keys
+share one counter under `_mutex`. A notice receives its ID in the same critical section that
+publishes its completed-summary row; enumeration and localized formatting remain outside it.
+The source ownership guard and public-path concurrent allocation smoke cover that contract;
+the smoke is not claimed as a deterministic reproduction of a lost increment.
+
+Only one FileOperationState in a process projects a given record at a time. Its weak notice claim
+carries no provider or UI ownership and transfers when the final summary/snapshot retires. A bounded
+batch of 24 notices is pinned independently of the 24 ordinary completed summaries; ordinary history
+eviction cannot remove a notice. Explicit dismissal acknowledges its exact record and permits the next
+stored notice to fill the visible batch. Clear completed continues to preserve every notice.
+
+A notice's selection count is the saturating sum of admitted Native/Managed/CopyOnly selected items,
+not the number of provider roots. A single item retains its admitted display name, never a full path
+masquerading as its subject. Provider-root count and bounded representative samples remain separate
+provenance. Root count cannot exceed admitted item count. A breadcrumb is still a read-only outcome
+notice and grants no source/destination mutation or recovery action.
+
+Task cancellation owns a stop source from construction. The token identity is immutable before the
+task is published to UI/provider workers. User cancellation requests that source; the worker-lifetime
+token propagates shutdown to it. No worker assigns a plain shared stop_token after publication.

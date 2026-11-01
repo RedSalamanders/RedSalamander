@@ -7,6 +7,7 @@
 #include "Common.Tests.PerfJsonl.h"
 #include "Framework.h"
 #include "NaturalSort.h"
+#include "Version.h"
 
 #include <UIAutomation.h>
 #include <psapi.h>
@@ -623,10 +624,16 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
         runFamily(L"view-commands", [&] { RunViewCommandsCommandsSelfTestCases(mainWindow, runOptions, suite); });
     };
 
-    // This one static case has no foreground input or main-window isolation
+    // These exact cases have no foreground-input or main-window isolation
     // contract. Broad Commands runs retain the existing warning and isolation.
-    if (! options.listCasesOnly && options.caseFilter == L"cmd_product_documentation_gallery" &&
-        RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+    const bool noActivationDirectoryCacheCase = options.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" &&
+                                                options.flakyProofCaseName.empty() && options.orderProofCaseName.empty();
+    if (! options.listCasesOnly && noActivationDirectoryCacheCase && RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+    {
+        runRegisteredCases(options);
+    }
+    else if (! options.listCasesOnly && options.caseFilter == L"cmd_product_documentation_gallery" &&
+             RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
     {
         runRegisteredCases(options);
     }

@@ -223,7 +223,7 @@ Plugins/                   # All plugin DLLs
       ViewerVLC, ViewerPE, ViewerWeb
 Tests/                     # Standalone test projects (ProductUiTests, PerformanceTests2, ...)
 Tools/                     # Inventoried commands/modules; start with Tools/README.md
-Installer/                 # MSIX + MSI packaging
+Installer/                 # Portable ZIP packaging and Winget manifests
 PoC/                       # Proof-of-concept projects
 ```
 

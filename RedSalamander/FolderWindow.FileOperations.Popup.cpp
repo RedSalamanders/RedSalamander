@@ -2,6 +2,7 @@
 #include "WindowActivation.h"
 
 #include "DxUiThemePalette.h"
+#include "FileOperationConfirmation.h"
 #include "FileOperationsFooterLayout.h"
 #include "FileSystemPathIdentity.h"
 #include "FluentIcons.h"
@@ -524,10 +525,12 @@ constexpr ULONGLONG kTaskbarListRetryDelayMs                   = 1000ull;
                                     FormatBytesCompact(task.completedWorkBytes));
     if (task.operation == FILESYSTEM_DELETE)
         return LoadStringResource(nullptr, IDS_FILEOPS_DELETING_WITHOUT_COUNTS);
+    if (task.operation == FILESYSTEM_DELETE)
+        return FormatStringResource(nullptr, IDS_FMT_FILEOPS_DELETION_PROGRESS, FormatBytesCompact(task.completedBytes), task.completedItems);
     return FormatStringResource(nullptr,
-                                task.operation == FILESYSTEM_DELETE ? IDS_FMT_FILEOPS_DELETION_PROGRESS : IDS_FMT_FILEOPS_DISCOVERY_PROGRESS,
+                                IDS_FMT_FILEOPS_TRANSFER_PROGRESS,
                                 FormatBytesCompact(task.completedBytes),
-                                static_cast<unsigned long>(task.completedItems));
+                                FormatFileOperationCountNoun(FileOperationCountNoun::Item, task.completedItems));
 }
 
 [[nodiscard]] bool TaskUsesSkippedCountingWorkSummary(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
@@ -1794,6 +1797,18 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
     return {};
 }
 
+[[nodiscard]] std::wstring AccessibleStatusTextForTask(const FileOperationsPopupInternal::TaskSnapshot& task, TaskStatusKind status, ULONGLONG nowTick)
+{
+    std::wstring text = StatusTextForTask(task, status, nowTick);
+    if (text.empty() && status == TaskStatusKind::Running)
+    {
+        // The visual card already uses the compact Running chip. Keep the live progress
+        // control and the native failure surface named when the visual status line is blank.
+        text = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_RUNNING);
+    }
+    return text;
+}
+
 [[nodiscard]] std::wstring StatusChipTextForTask(const FileOperationsPopupInternal::TaskSnapshot& task, TaskStatusKind status, ULONGLONG nowTick)
 {
     switch (status)
@@ -2502,6 +2517,13 @@ public:
     FileOperationsSpeedLimitPromptWindow(FileOperationsSpeedLimitPromptWindow&&)                 = delete;
     FileOperationsSpeedLimitPromptWindow& operator=(FileOperationsSpeedLimitPromptWindow&&)      = delete;
 
+    ~FileOperationsSpeedLimitPromptWindow()
+    {
+        // A modal prompt can leave its loop through the host shutdown fence. Destroy the HWND
+        // while the DxUi host is still alive so WM_NCDESTROY can detach it before member teardown.
+        ClosePromptWindow();
+    }
+
     [[nodiscard]] std::optional<uint64_t> ShowModal() noexcept
     {
         const HRESULT classHr = EnsureWindowClass();
@@ -2594,6 +2616,7 @@ public:
         if (HostIsPromptShutdown())
         {
             _result.reset();
+            ClosePromptWindow();
         }
 
         return _result;
@@ -7754,18 +7777,20 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::HandleHostedKeyDown(
         {
             return false;
         }
-        const int direction = (virtualKey == VK_LEFT || virtualKey == VK_UP) ? -1 : 1;
-        for (size_t offset = 1u; offset < _hostedButtonHits.size(); ++offset)
+        const int direction      = (virtualKey == VK_LEFT || virtualKey == VK_UP) ? -1 : 1;
+        const size_t buttonCount = std::min(_hostedButtonHits.size(), _hostedButtons.size());
+        for (size_t offset = 1u; offset < buttonCount; ++offset)
         {
             const ptrdiff_t candidateIndex = static_cast<ptrdiff_t>(index) + direction * static_cast<ptrdiff_t>(offset);
-            if (candidateIndex < 0 || candidateIndex >= static_cast<ptrdiff_t>(_hostedButtonHits.size()))
+            if (candidateIndex < 0 || candidateIndex >= static_cast<ptrdiff_t>(buttonCount))
             {
                 break;
             }
-            const size_t candidate = static_cast<size_t>(candidateIndex);
-            if (_hostedButtonHits[candidate].taskId == hit.taskId)
+            const size_t candidate     = static_cast<size_t>(candidateIndex);
+            DxUi::Button* const target = _hostedButtons[candidate];
+            if (_hostedButtonHits[candidate].taskId == hit.taskId && target != nullptr && target->IsVisible() && target->IsEnabled() && target->IsFocusable())
             {
-                _controlsHost.SetFocusControl(_hostedButtons[candidate]);
+                _controlsHost.SetFocusControl(target);
                 return true;
             }
         }
@@ -8518,6 +8543,25 @@ const FileOperationsPopupInternal::FileOperationsPopupState::PublishedConflictKe
     if (! _controlsHost.GetFocusControl())
         focusedTaskId = fallbackTaskId;
 
+    const auto hasVisibleDecisionControl = [&](uint64_t taskId) noexcept
+    {
+        const D2D1_RECT_F viewport{_controlsHost.PixelsToDip(_listViewportRect.left),
+                                   _controlsHost.PixelsToDip(_listViewportRect.top),
+                                   _controlsHost.PixelsToDip(_listViewportRect.right),
+                                   _controlsHost.PixelsToDip(_listViewportRect.bottom)};
+        for (size_t index = 0u; index < _hostedButtons.size() && index < _hostedButtonHits.size(); ++index)
+        {
+            const DxUi::Button* const button = _hostedButtons[index];
+            const PopupHitTest& hit          = _hostedButtonHits[index];
+            if (! button || hit.taskId != taskId || hit.kind != PopupHitTest::Kind::TaskConflictAction || ! button->IsVisible())
+                continue;
+            const D2D1_RECT_F bounds = button->GetBounds();
+            if (bounds.left < viewport.right && bounds.right > viewport.left && bounds.top < viewport.bottom && bounds.bottom > viewport.top)
+                return true;
+        }
+        return false;
+    };
+
     const PublishedConflictKeyboardBinding* decisionTask = nullptr;
     bool focusedTaskPresent                              = false;
     if (focusedTaskId != 0u)
@@ -8570,11 +8614,14 @@ const FileOperationsPopupInternal::FileOperationsPopupState::PublishedConflictKe
     _conflictEscapeGeneration   = 0u;
     if (decisionTask)
     {
-        defaultButton             = findPublishedActionButton(decisionTask->taskId, decisionTask->defaultAction);
-        escapeButton              = findPublishedActionButton(decisionTask->taskId, decisionTask->escapeAction);
-        _conflictEscapeTaskId     = decisionTask->taskId;
-        _conflictEscapeAction     = decisionTask->escapeAction;
-        _conflictEscapeGeneration = decisionTask->generation;
+        defaultButton = findPublishedActionButton(decisionTask->taskId, decisionTask->defaultAction);
+        if (hasVisibleDecisionControl(decisionTask->taskId))
+        {
+            escapeButton              = findPublishedActionButton(decisionTask->taskId, decisionTask->escapeAction);
+            _conflictEscapeTaskId     = decisionTask->taskId;
+            _conflictEscapeAction     = decisionTask->escapeAction;
+            _conflictEscapeGeneration = decisionTask->generation;
+        }
     }
 
     _controlsHost.SetDefaultButton(defaultButton);
@@ -8836,7 +8883,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             return LoadStringResource(nullptr, IDS_FILEOPS_AGGREGATE_PROGRESS);
         }
         const auto taskIt = std::ranges::find(snapshot, taskId, &TaskSnapshot::taskId);
-        return taskIt != snapshot.end() ? StatusTextForTask(*taskIt, taskIt->statusKind, GetTickCount64())
+        return taskIt != snapshot.end() ? AccessibleStatusTextForTask(*taskIt, taskIt->statusKind, GetTickCount64())
                                         : LoadStringResource(nullptr, IDS_FILEOPS_STATUS_RUNNING);
     };
     const ULONGLONG animationTick = GetTickCount64();
@@ -11033,13 +11080,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     // Keep the exact value on the same rectangle as its abbreviated display.
                     // These bounded row slots are refreshed with the current snapshot, not cached by path.
                     _hostedTooltipDescriptors.push_back({bounds,
-                                                         std::format(L"{} {}", label, path),
+                                                         FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE, label, path),
                                                          std::format(L"FileOperations.Task.{}.Path.{}", task.taskId, suffix),
                                                          std::wstring(path),
                                                          0u,
                                                          task.taskId,
                                                          std::move(helpText),
                                                          ! task.finished});
+                    _hostedTooltipDescriptors.back().copyPathSubject = label;
 #ifdef ENABLE_TESTS
                     _hostedTooltipDescriptors.back().paintedLabelBounds = labelBounds;
                     _hostedTooltipDescriptors.back().paintedLabel       = label;
@@ -12001,7 +12049,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         {
                             const std::wstring rateText = FormatRateLabelText(graphHistory);
                             const std::wstring etaText  = graphEtaText.empty() ? LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE) : graphEtaText;
-                            const std::wstring summary  = std::format(L"{0} · {1}", rateText, etaText);
+                            const std::wstring summary  = FormatStringResource(nullptr, IDS_FMT_FILEOPS_RATE_AND_ETA, rateText, etaText);
                             static_cast<void>(
                                 DrawWrappedText(_dwriteFactory.get(), _target.get(), _smallFormat.get(), _subTextBrush.get(), summary, bodyRect, lineH));
                             _hostedTooltipDescriptors.push_back({.bounds       = bodyRect,
@@ -13949,7 +13997,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshFailureSurfac
         text.append(L"\r\n")
             .append(LoadStringResource(nullptr, operationId))
             .append(L": ")
-            .append(StatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
+            .append(AccessibleStatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
         ++listed;
     }
     if (text != _failureTextValue)
@@ -14061,6 +14109,15 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::TryAttachHost(HWND h
         _debugPreviousFocusTargetId = std::move(_debugLastFocusTargetId);
         _debugLastFocusTargetId     = control ? control->GetAccessibleAutomationId() : std::wstring{};
 #endif
+        if (! _pathDetailId.empty() && control)
+        {
+            const std::wstring_view focusId = control->GetAccessibleAutomationId();
+            if (focusId == L"FileOperations.PathDetail.Text" || focusId == L"FileOperations.PathDetail.Copy" || focusId == L"FileOperations.PathDetail.Close")
+            {
+                _pathDetailLogicalFocusId.assign(focusId);
+                _pathDetailNeedsFocus = false;
+            }
+        }
         // Focus is observable before the next frame. Enter/Escape must change
         // authority in the same transaction, including UIA and inspection return.
         // Reconciliation binds once after its control arrays are consistent.
@@ -16719,6 +16776,34 @@ HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps,
         // Reclaim ownership via unique_ptr destructor
         std::unique_ptr<FileOperationsPopupInternal::FileOperationsPopupState> reclaimed(state);
         return nullptr;
+    }
+
+    // The saved rectangle may be on a monitor with a different scale from its
+    // owner. Once the HWND is associated with that monitor, normalize the saved
+    // placement at the popup's actual DPI before it is first shown.
+    if (fileOps)
+    {
+        const UINT popupDpi = GetDpiForWindow(popup);
+        RECT targetRect{};
+        bool targetMaximized = false;
+        bool haveTargetRect  = false;
+        if (! fileOps->GetPopupFooterOnly() && fileOps->TryGetPopupExpandedPlacement(targetRect, popupDpi))
+        {
+            state->SetExpandedPlacementForRestore(targetRect, true);
+            haveTargetRect = true;
+        }
+        else if (fileOps->TryGetPopupPlacement(targetRect, targetMaximized, popupDpi))
+        {
+            if (! fileOps->GetPopupFooterOnly())
+                state->SetExpandedPlacementForRestore(targetRect, true);
+            haveTargetRect = true;
+        }
+        if (haveTargetRect)
+        {
+            const int targetWidth  = std::max(0L, targetRect.right - targetRect.left);
+            const int targetHeight = std::max(0L, targetRect.bottom - targetRect.top);
+            SetWindowPos(popup, nullptr, targetRect.left, targetRect.top, targetWidth, targetHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
     }
 
     return popup;

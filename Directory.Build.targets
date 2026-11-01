@@ -321,7 +321,7 @@
     <Link><OptimizeReferences>true</OptimizeReferences><LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration></Link>
     <Lib><LinkTimeCodeGeneration>true</LinkTimeCodeGeneration></Lib>
   </ItemDefinitionGroup>
-  <Target Name="ValidateMsvcToolsVersion" BeforeTargets="PrepareForBuild" Condition="'$(RSIsFirstPartyProject)'=='true'">
+  <Target Name="ValidateMsvcToolsVersion" BeforeTargets="PrepareForBuild" Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <Error Condition="!$([System.String]::Copy('$(VCToolsVersion)').StartsWith('$(RequiredMsvcToolsVersion).'))" Text="RedSalamander requires MSVC build tools $(RequiredMsvcToolsVersion).x; selected $(VCToolsVersion). Install and select the required default C++ toolset." />
   </Target>
   <Target Name="RSVerifyRedMonitorClient" BeforeTargets="PrepareForBuild" Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '@(ClCompile)'!=''">

@@ -62,6 +62,13 @@ namespace FolderWindowFileOperationsStateInternal
 {
 using Task = FolderWindow::FileOperationState::Task;
 
+// Pair a predicate-state publication with the mutex used by its condition-variable wait.
+// Call only after publishing the state and without already holding this mutex.
+template <typename Mutex> void SynchronizeWaiterMutexBeforeNotify(Mutex& mutex) noexcept
+{
+    std::scoped_lock lock(mutex);
+}
+
 using FileSystemRouteContract::IsValidItemMutationResultPrefix;
 
 [[nodiscard]] FileOperations::OwnedStageDisposition GetOwnedStageDisposition(const FileSystemItemMutationResult& result) noexcept
@@ -6260,44 +6267,6 @@ struct DeferredConsentResult
     std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
 };
 
-[[nodiscard]] bool StoreDeferredConsentReceipt(Task& task, const DeferredConsentRequest& request, ConflictAction action, bool applyToAll) noexcept
-{
-    FileOperations::DeferredConsentReceipt receipt{};
-    receipt.risk                = request.risk;
-    receipt.taskId              = task._taskId;
-    receipt.itemIndex           = applyToAll ? std::nullopt : request.itemIndex;
-    receipt.destinationRootId   = request.destinationRootId;
-    receipt.sourceIdentity      = request.sourceIdentity;
-    receipt.destinationIdentity = request.destinationIdentity;
-    if (request.overlapTaskIdCount > 0u)
-    {
-        auto related         = std::make_shared<FileOperations::SameHostOverlapRelationSet>();
-        related->taskIds     = request.overlapTaskIds;
-        related->taskIdCount = request.overlapTaskIdCount;
-        receipt.relatedTasks = std::move(related);
-    }
-    receipt.decision = action;
-
-    std::scoped_lock lock(task._conflictArbiter.mutex);
-    for (std::optional<FileOperations::DeferredConsentReceipt>& existing : task._conflictArbiter.consentReceipts)
-    {
-        if (existing.has_value() && existing->risk == receipt.risk && existing->taskId == receipt.taskId && existing->itemIndex == receipt.itemIndex &&
-            existing->destinationRootId == receipt.destinationRootId)
-        {
-            existing = std::move(receipt);
-            return true;
-        }
-    }
-    const auto empty = std::ranges::find_if(task._conflictArbiter.consentReceipts,
-                                            [](const std::optional<FileOperations::DeferredConsentReceipt>& entry) noexcept { return ! entry.has_value(); });
-    if (empty == task._conflictArbiter.consentReceipts.end())
-    {
-        return false;
-    }
-    *empty = std::move(receipt);
-    return true;
-}
-
 [[nodiscard]] DeferredConsentResult RequestDeferredConsent(Task& task, const DeferredConsentRequest& request) noexcept
 {
     // A Recycle escalation's applyToAllEligible is never the checkbox: it only enables the explicit
@@ -6349,16 +6318,6 @@ struct DeferredConsentResult
     if (promptBegin.fromCache)
     {
         return {S_OK, action, true, acceptedObservation};
-    }
-    if (! StoreDeferredConsentReceipt(task, request, action, applyToAll))
-    {
-        task.LogDiagnostic(FolderWindow::FileOperationState::DiagnosticSeverity::Error,
-                           HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY),
-                           L"consent.receipt.limit",
-                           L"The bounded deferred-consent receipt table is full; the affected mutation was not authorized.",
-                           request.sourcePath,
-                           request.destinationPath);
-        return {HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY), ConflictAction::Cancel, false};
     }
     return {S_OK, action, applyToAll, acceptedObservation};
 }
@@ -6596,6 +6555,7 @@ public:
 
     void NotifyWorkAvailable() noexcept
     {
+        SynchronizeWaiterMutexBeforeNotify(_mutex);
         _cv.notify_all();
     }
 
@@ -6632,6 +6592,7 @@ public:
             _workerCount.store(0u, std::memory_order_release);
         }
 
+        SynchronizeWaiterMutexBeforeNotify(_mutex);
         _cv.notify_all();
 
         // FileOperationState stops producers before shutting down this scheduler.
@@ -7378,9 +7339,84 @@ bool RunFileOpsWorkerStartGateCancellationSelfTestForSelfTestInternal(FolderWind
     return cancelPassed && stopPassed;
 }
 
+bool RunQueueWaitCancelLostWakeSelfTest(FolderWindow::FileOperationState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    using Task = FolderWindow::FileOperationState::Task;
+
+    constexpr uint64_t publisherTaskId = std::numeric_limits<uint64_t>::max();
+    Task task(state);
+    {
+        std::scoped_lock lock(state._queueMutex);
+        if (std::ranges::any_of(state._activeMutationInterlocks, [](const auto& active) noexcept { return active.taskId == publisherTaskId; }))
+            return false;
+        state._activeMutationInterlocks.push_back(FolderWindow::FileOperationState::ActiveMutationInterlock{.taskId = publisherTaskId});
+    }
+
+    task._dbgQueueWaitBeforeSleepReached.store(false, std::memory_order_release);
+    task._dbgQueueWaitBeforeSleepGate.store(true, std::memory_order_release);
+    std::atomic<bool> waiterReturned{false};
+    std::atomic<bool> waiterCompletedPublisher{true};
+    std::atomic<bool> cancelReturned{false};
+    std::jthread waiter([&]() noexcept
+    {
+        waiterCompletedPublisher.store(state.WaitForLiveOutputPublisher(task, publisherTaskId, task._stopToken), std::memory_order_release);
+        waiterReturned.store(true, std::memory_order_release);
+    });
+    const auto waitUntil = [](const auto& predicate, const std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (! predicate() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        return predicate();
+    };
+    const bool reachedWaitGap = waitUntil([&]() noexcept { return task._dbgQueueWaitBeforeSleepReached.load(std::memory_order_acquire); }, 2s);
+    std::jthread canceller([&]() noexcept
+    {
+        task.RequestCancel();
+        cancelReturned.store(true, std::memory_order_release);
+    });
+    // RequestCancel must remain behind the actual queue predicate mutex until the waiter calls
+    // condition_variable::wait and atomically releases it.
+    static_cast<void>(waitUntil([&]() noexcept { return cancelReturned.load(std::memory_order_acquire); }, 100ms));
+    const bool cancelReturnedBeforeWait = cancelReturned.load(std::memory_order_acquire);
+
+    task._dbgQueueWaitBeforeSleepGate.store(false, std::memory_order_release);
+    task._dbgQueueWaitBeforeSleepGate.notify_all();
+    bool waiterWoke = waitUntil([&]() noexcept { return waiterReturned.load(std::memory_order_acquire); }, 2s);
+    if (! waiterWoke)
+    {
+        // Failure-only rescue keeps a RED diagnostic bounded and cannot mask the recorded ordering.
+        task.RequestCancel();
+        state._queueCv.notify_all();
+        waiterWoke = waitUntil([&]() noexcept { return waiterReturned.load(std::memory_order_acquire); }, 2s);
+    }
+    canceller.join();
+    waiter.join();
+    {
+        std::scoped_lock lock(state._queueMutex);
+        std::erase_if(state._activeMutationInterlocks, [](const auto& active) noexcept { return active.taskId == publisherTaskId; });
+    }
+    state.NotifyQueueChanged();
+    const bool passed = reachedWaitGap && ! cancelReturnedBeforeWait && waiterWoke && ! waiterCompletedPublisher.load(std::memory_order_acquire) &&
+                        task._stopToken.stop_requested();
+    if (! passed)
+    {
+        Debug::Error(L"FileOps queue cancellation lost-wake selftest failed: reached={}, earlyCancelReturn={}, woke={}, completedPublisher={}.",
+                     reachedWaitGap ? 1u : 0u,
+                     cancelReturnedBeforeWait ? 1u : 0u,
+                     waiterWoke ? 1u : 0u,
+                     waiterCompletedPublisher.load(std::memory_order_acquire) ? 1u : 0u);
+    }
+    return passed;
+}
+
 bool RunFileOpsBridgePausedReaderStopSelfTestForSelfTestInternal(FolderWindow::FileOperationState& state) noexcept
 {
     using Task = FolderWindow::FileOperationState::Task;
+
+    if (! RunQueueWaitCancelLostWakeSelfTest(state))
+        return false;
 
     Task task(state);
     task.SetPaused(true);
@@ -7583,6 +7619,7 @@ HRESULT FolderWindow::FileOperationState::Task::DebugRequestDeferredConsentForSe
                                                                                        uint64_t itemCount,
                                                                                        bool bytesKnown,
                                                                                        uint64_t bytes,
+                                                                                       size_t itemIndex,
                                                                                        ConflictAction* selectedAction) noexcept
 {
     if (selectedAction == nullptr)
@@ -7596,7 +7633,7 @@ HRESULT FolderWindow::FileOperationState::Task::DebugRequestDeferredConsentForSe
     request.status                     = HRESULT_FROM_WIN32(ERROR_REQUEST_ABORTED);
     request.sourcePath                 = L"selftest-source";
     request.destinationPath            = L"selftest-destination";
-    request.itemIndex                  = 0u;
+    request.itemIndex                  = itemIndex;
     request.destinationRootId          = L"selftest-root";
     request.applyToAllEligible         = applyToAllEligible;
     request.itemCountKnown             = itemCountKnown;
@@ -10178,8 +10215,18 @@ public:
         const auto findAuthorityNode = [&](std::wstring_view path) { return FindAuthorityNode(bucket, endpoint, path); };
 
         FileOperations::MutationInterlockScope scope{};
-        scope.endpoint             = endpoint;
-        scope.providerPath         = std::wstring(providerPath);
+        scope.endpoint                           = endpoint;
+        scope.providerPath                       = std::wstring(providerPath);
+        const uint64_t remainingProviderKeyBytes = kMaxProviderPathKeyPayloadBytes - _providerPathKeyPayloadBytes;
+        if (endpoint.pathIdentity.has_value() && providerPath.size() <= remainingProviderKeyBytes / sizeof(wchar_t))
+        {
+            scope.providerPathKey = TryMakePathKey(endpoint.pathIdentity.value(), providerPath);
+            if (scope.providerPathKey.has_value())
+            {
+                ++_providerPathKeyCount;
+                _providerPathKeyPayloadBytes += static_cast<uint64_t>(scope.providerPathKey.value().size()) * sizeof(wchar_t);
+            }
+        }
         scope.access               = access;
         scope.exactDeleteAuthority = retainDeleteAuthority;
 
@@ -10504,6 +10551,9 @@ public:
         Debug::Perf::Emit(L"FileOps.Interlock.PrepareLookupChecks", OperationToString(operation), 0u, _scopePredicateChecks, _authorityPredicateChecks, hr);
         Debug::Perf::Emit(L"FileOps.Interlock.PrepareIndexStorage", OperationToString(operation), 0u, _indexedKeyBytes, _indexedEntries, hr);
         Debug::Perf::Emit(L"FileOps.Interlock.NewFileKeyBytes", OperationToString(operation), 0u, _independentKeyBytes, _independentEntries, hr);
+        // Candidate-only payload estimate is collected during preparation; it adds no queue-lock work.
+        Debug::Perf::Emit(
+            L"FileOps.Interlock.ProviderPathKeyCandidateStorage", OperationToString(operation), 0u, _providerPathKeyPayloadBytes, _providerPathKeyCount, hr);
         Debug::Perf::Emit(L"FileOps.Interlock.ScopeCount",
                           L"read-source",
                           0u,
@@ -10534,11 +10584,16 @@ private:
     static constexpr size_t kMaxPathBuckets     = 256u;
     static constexpr size_t kMaxIndexedEntries  = 32'768u;
     static constexpr size_t kMaxIndexedKeyBytes = 16u * 1024u * 1024u;
-    size_t _indexedEntries                      = 0u;
-    size_t _indexedKeyBytes                     = 0u;
-    size_t _independentKeyBytes                 = 0u;
-    size_t _independentEntries                  = 0u;
-    bool _nonIndependentTransfer                = false;
+    // An optional accelerator must not add unbounded retained path storage to a task.
+    // Refusal leaves that scope on its original exact component-comparison path.
+    static constexpr uint64_t kMaxProviderPathKeyPayloadBytes = 16u * 1024u * 1024u;
+    size_t _indexedEntries                                    = 0u;
+    size_t _indexedKeyBytes                                   = 0u;
+    uint64_t _providerPathKeyCount                            = 0u;
+    uint64_t _providerPathKeyPayloadBytes                     = 0u;
+    size_t _independentKeyBytes                               = 0u;
+    size_t _independentEntries                                = 0u;
+    bool _nonIndependentTransfer                              = false;
     PathBucket _uncachedBucket{.unkeyableScope = true, .unkeyableAuthority = true};
     bool _unindexedContracts           = false;
     uint64_t _scopePredicateChecks     = 0u;
@@ -12039,7 +12094,6 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
 
 void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToken) noexcept
 {
-    _stopToken = stopToken;
     // R0f: every synchronous Win32 call this worker makes on a provider's behalf has a quiet point.
     // Once Cancel/Stop is requested, the watch cancels a call still pending after its grace, so a
     // wedged network round trip returns instead of holding the task, its popup, or shutdown.
@@ -12047,6 +12101,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     [[maybe_unused]] const std::stop_callback stopWake(stopToken,
                                                        [this]() noexcept
     {
+        _stopSource.request_stop();
         PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
         HRESULT pendingReadiness = E_PENDING;
         if (_selectedRootReadinessStatus.compare_exchange_strong(pendingReadiness, HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_acq_rel))
@@ -12066,6 +12121,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         if (_state)
         {
             ++_perf.queueNotifyAllCount;
+            SynchronizeWaiterMutexBeforeNotify(_state->_queueMutex);
             _state->NotifyQueueChanged();
         }
     });
@@ -12228,7 +12284,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         {
             // The existing admitted record remains conservative: after a crash it still says the
             // Move may have started. Breadcrumb persistence never becomes mutation authority.
-            LogDiagnostic(DiagnosticSeverity::Debug,
+            LogDiagnostic(DiagnosticSeverity::Warning,
                           breadcrumbHr,
                           L"move.breadcrumb.advanceFailed",
                           L"The Move breadcrumb could not advance to Executing; the admitted record remains conservative.");
@@ -12776,7 +12832,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
                           hr);
         Debug::Perf::Emit(L"FileOps.Queue.WaitUs", L"", perfStats.queueWaitUs, progressSnapshot.completedBytes, progressSnapshot.progressCallbackCount, hr);
         Debug::Perf::Emit(L"FileOps.Queue.EnterCount", L"", 0u, perfStats.queueEnterCount, 0u, hr);
-        Debug::Perf::Emit(L"FileOps.Queue.NotifyAllCount", L"", 0u, perfStats.queueNotifyAllCount, 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Queue.NotifyAllCount", L"", 0u, perfStats.queueNotifyAllCount.load(std::memory_order_relaxed), 0u, hr);
         Debug::Perf::Emit(L"FileOps.Queue.CancelWhileWaiting", L"", 0u, perfStats.queueCancelWhileWaiting, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Queue.DepthOnEnter", L"", 0u, perfStats.queueDepthOnEnter, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Queue.ActiveOperations", L"", 0u, perfStats.queueActiveOperations, 0u, hr);
@@ -12876,6 +12932,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
         _cancelRequestedTick.compare_exchange_strong(expected, GetTickCount64(), std::memory_order_release);
     }
     _cancelled.store(true, std::memory_order_release);
+    _stopSource.request_stop();
     // Publish durable authority before the lifecycle phase becomes observable.
     PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
     HRESULT pendingReadiness = E_PENDING;
@@ -12907,6 +12964,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
     if (_state)
     {
         ++_perf.queueNotifyAllCount;
+        SynchronizeWaiterMutexBeforeNotify(_state->_queueMutex);
         _state->NotifyQueueChanged();
     }
     // x-perf#5: a stopping task is active telemetry even if it was paused, queued or prompting.
@@ -13223,10 +13281,21 @@ void FolderWindow::FileOperationState::Task::MarkSourceItemMutationPossible(size
 void FolderWindow::FileOperationState::Task::EnterSourceItemsMutationGate() noexcept
 {
     // Per-item Copy/Move/Delete reach a provider only through QualifiedItemPolicy::Process, which
-    // marks each selected root as it is dispatched. A bulk provider call and the rename executors
-    // can touch every root at once, so they keep the task-wide gate.
+    // marks each selected root as it is dispatched. Batch Rename can touch every root at once, so
+    // it keeps the task-wide gate. Inline Rename remains Preparing through its validation and
+    // binding work, then marks its single root immediately before the provider mutation call.
     if (_executionMode == ExecutionMode::PerItem && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE || _operation == FILESYSTEM_DELETE))
         return;
+    if (_operation == FILESYSTEM_RENAME)
+    {
+        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
+        if (plans && plans->size() == 1u)
+        {
+            const auto* rename = std::get_if<FileOperations::RenamePlan>(&plans->front());
+            if (rename != nullptr && rename->origin == FileOperations::RenameOrigin::InlineRename)
+                return;
+        }
+    }
     MarkSourceItemsMutationPossible();
 }
 
@@ -13940,6 +14009,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
                     ? grantedExpectedDestination.get()
                     : (destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource ? destination.authority.boundObject.get()
                                                                                                                : nullptr);
+            MarkSourceItemMutationPossible(0u);
             renameHr = source.authority.boundObject->RenameIfUnchanged(
                 destinationPath.c_str(), expectedDestination, itemFlags, &options, &mutation, renamedObject.put());
             if (SUCCEEDED(renameHr))
@@ -17797,6 +17867,7 @@ struct CrossFileSystemBridge
         bool identityLessReplace    = false;
         bool useAtomicFinalWriter   = false;
         bool useIdentityOwnedStage  = false;
+        bool useDirectFinalWriter   = false;
         FileSystemFlags writerFlags = FILESYSTEM_FLAG_NONE;
 
         // Stage and writer handles.
@@ -18101,8 +18172,7 @@ struct CrossFileSystemBridge
         return S_OK;
     }
 
-    // Phase 3: the writer route. Atomic-final publication through the provider writer, an
-    // identity-owned stage, or neither (authority unavailable).
+    // Phase 3: choose atomic-final, direct-final create, identity-owned stage, or fail closed.
     [[nodiscard]] HRESULT RouteWriter(PublicationTransaction& txn) noexcept
     {
         const std::wstring& sourcePath                   = txn.sourcePath;
@@ -18117,6 +18187,17 @@ struct CrossFileSystemBridge
 
         txn.identityLess     = ! destinationBinding;
         txn.writerProofRoute = txn.identityLess && verificationWriterDigestProof && writerRoute.useAtomicFinalWriter;
+        wil::com_ptr<IFileSystemDirectFinalCreateWriter> directFinalCreateCapability;
+        static_cast<void>(destinationFs.QueryInterface(IID_PPV_ARGS(directFinalCreateCapability.addressof())));
+        BOOL directFinalCreateSupported = FALSE;
+        const HRESULT directFinalCreateHr =
+            directFinalCreateCapability
+                ? directFinalCreateCapability->SupportsDirectFinalCreate(destinationPath.c_str(), writerRoute.effectiveFinalFlags, &directFinalCreateSupported)
+                : E_NOINTERFACE;
+        if (FAILED(directFinalCreateHr))
+        {
+            directFinalCreateSupported = FALSE;
+        }
         if (managedCleanupRecord.armed && txn.identityLess && ! txn.writerProofRoute)
         {
             MarkManagedSourceRetained(sourcePath,
@@ -18135,7 +18216,9 @@ struct CrossFileSystemBridge
         txn.useAtomicFinalWriter  = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.armed || txn.writerProofRoute) &&
                                     (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute || txn.identityLess);
         txn.useIdentityOwnedStage = ! txn.identityLess && (managedCleanupRecord.armed || ! txn.useAtomicFinalWriter);
-        if (! txn.useAtomicFinalWriter && ! txn.useIdentityOwnedStage)
+        txn.useDirectFinalWriter  = ! txn.useAtomicFinalWriter && txn.identityLess && directFinalCreateSupported == TRUE && ! overwriteGranted &&
+                                    ! txn.replaceReadOnlyGranted && ! txn.replaceLinkGranted;
+        if (! txn.useAtomicFinalWriter && ! txn.useIdentityOwnedStage && ! txn.useDirectFinalWriter)
         {
             const HRESULT unsupportedHr = destinationBindingQueryHr == E_NOINTERFACE
                                               ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
@@ -18143,7 +18226,7 @@ struct CrossFileSystemBridge
             task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
                                unsupportedHr,
                                L"bridge.stage.authorityUnavailable",
-                               L"Destination cannot provide atomic-final or identity-owned staged publication.",
+                               L"Destination cannot provide atomic-final, direct-final create, or identity-owned staged publication.",
                                sourcePath,
                                destinationPath);
             return unsupportedHr;
@@ -18155,8 +18238,8 @@ struct CrossFileSystemBridge
         return S_OK;
     }
 
-    // Phase 4: the stage. An atomic-final writer (with the replace expectation and the proof
-    // hashers it can answer) or an identity-owned stage, plus the stage's metadata interface.
+    // Phase 4: create the private writer payload, then use atomic-final, direct-final create, or
+    // identity-owned stage publication.
     [[nodiscard]] HRESULT PrepareStage(PublicationTransaction& txn, uint64_t progressStreamId, bool& replaceRefused) noexcept
     {
         const std::wstring& sourcePath                                                  = txn.sourcePath;
@@ -18167,7 +18250,7 @@ struct CrossFileSystemBridge
         std::vector<std::unique_ptr<Common::Crypto::ContentHasher>>& writerProofHashers = txn.writerProofHashers;
         HRESULT hr                                                                      = S_OK;
 
-        if (txn.useAtomicFinalWriter)
+        if (txn.useAtomicFinalWriter || txn.useDirectFinalWriter)
         {
             hr = destinationIo.CreateFileWriter(destinationPath.c_str(), txn.writerFlags, writer.put());
             if (FAILED(hr))
@@ -18619,7 +18702,10 @@ struct CrossFileSystemBridge
                         readIndex = (readIndex + 1u) % slots.size();
                     }
 
-                    readerFinished.store(true, std::memory_order_release);
+                    {
+                        std::scoped_lock lock(pipelineMutex);
+                        readerFinished.store(true, std::memory_order_release);
+                    }
                     pipelineCv.notify_all();
                 });
             }
@@ -18715,7 +18801,10 @@ struct CrossFileSystemBridge
                     writeIndex = (writeIndex + 1u) % slots.size();
                 }
 
-                pipelineStop.store(true, std::memory_order_release);
+                {
+                    std::scoped_lock lock(pipelineMutex);
+                    pipelineStop.store(true, std::memory_order_release);
+                }
                 task.WakePauseWaiters();
                 pipelineCv.notify_all();
                 readerThread.join();
@@ -18780,8 +18869,8 @@ struct CrossFileSystemBridge
         FileSystemMetadataSnapshot& sourceMetadataSnapshot            = txn.sourceMetadataSnapshot;
         const bool useIdentityOwnedStage                              = txn.useIdentityOwnedStage;
         const bool identityLessReplace                                = txn.identityLessReplace;
-        const std::wstring& writerPath                                = txn.useAtomicFinalWriter ? destinationPath : txn.stagePath;
-        HRESULT hr                                                    = S_OK;
+        const std::wstring& writerPath = (txn.useAtomicFinalWriter || txn.useDirectFinalWriter) ? destinationPath : txn.stagePath;
+        HRESULT hr                     = S_OK;
 
         hr = writer->Commit();
         if (FAILED(hr))
@@ -18811,7 +18900,7 @@ struct CrossFileSystemBridge
             task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
                                hr,
                                L"bridge.commit",
-                               L"Destination writer Commit failed while finalizing a staged bridge copy.",
+                               L"Destination writer Commit failed while finalizing a bridge copy.",
                                sourcePath,
                                destinationPath);
             return hr;
@@ -25918,8 +26007,8 @@ bool FolderWindow::FileOperationState::DebugRunSharedTransfersForSelfTest(IFileS
         Task* const task = storage.get();
         workers.emplace_back([&, task](std::stop_token stopToken) noexcept
         {
-            auto com           = wil::CoInitializeEx(COINIT_MULTITHREADED);
-            task->_stopToken   = stopToken;
+            auto com = wil::CoInitializeEx(COINIT_MULTITHREADED);
+            [[maybe_unused]] const std::stop_callback stopForward(stopToken, [task]() noexcept { task->_stopSource.request_stop(); });
             const auto entered = state.EnterOperation(*task, stopToken);
             HRESULT hr         = HRESULT_FROM_WIN32(ERROR_CANCELLED);
             if (entered.outcome == OperationEntryOutcome::Entered)

@@ -1,0 +1,137 @@
+{
+  "schema": "review-remediation.final-evidence-checks.v1",
+  "run_id": "20261101T040929Z-62072-fd5d5f1a80c14b68b80b7d332eeb5a5f",
+  "source_snapshot_id": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "git_head": "6b6f5646be297fbc232d137f1df6a00c5cb74461",
+  "source_file_count": 833,
+  "source_matches_native_and_package_receipts": true,
+  "shipping_artifacts": [
+    {
+      "platform": "x64",
+      "receipt_id": "ef19a2cd1b79a412386de525dba7bf9312455f78d377de2ba31ad66247d026d5",
+      "raw_receipt_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T035755Z-78260-df93e57911584b59b801e4962a01f620\\scratch\\release-zip\\build-receipt.json",
+      "raw_receipt_sha256": "427295e646925d8d97df83066f687e78b6a295b17c3d232f7d237e7ebc1f5884",
+      "outputs_verified": 174,
+      "hash_mismatches": 0,
+      "tests_enabled": false
+    },
+    {
+      "platform": "ARM64",
+      "receipt_id": "9935d0dd4b84c70fd776643850d5051ab8f2f55506230eebb3b1cc6ed57becb5",
+      "raw_receipt_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T021617Z-53856-bda9232a44d44589a1052526530771a5\\scratch\\release-zip\\build-receipt.json",
+      "raw_receipt_sha256": "4f9b8c446dadfe2b36cc62e1e090961da272a80c9cb26097ac7fdb4b5ae0ba58",
+      "outputs_verified": 174,
+      "hash_mismatches": 0,
+      "tests_enabled": false
+    }
+  ],
+  "stock": {
+    "run_id": "sf-daf065ef",
+    "canonical_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\sf-daf065ef\\scratch",
+    "raw_result_sha256": "e4334823a53e584487e55a21caddb7ebf7707269b0dc6d1164d16b68e900dc28",
+    "recipe_sha256": "119f9380a1ee95458726942f61898d1222695f3bda3e8dc25dc5f6079549e88b",
+    "link_probe_sha256": "a6994282f4ee100d545ae50390a024152bea4aa8443f759f08f435c6fc46dcb4",
+    "result": "pass",
+    "files": 28032,
+    "max_relative_path_chars": 200,
+    "max_absolute_path_chars": 251,
+    "roundtrip_mismatches": 0,
+    "source_index_status_head_objects_unchanged": true
+  },
+  "post_proof_metadata": {
+    "scope": "Only compact evidence/README additions after materialization; the proof does not claim a rewritten HEAD or materialization of these later metadata files",
+    "candidate_existing_paths": 28032,
+    "max_relative_path_chars": 200.0,
+    "packet_files_before_this_record": 173,
+    "packet_bytes_before_this_record": 5189102,
+    "packet_cap_bytes": 5242880
+  },
+  "source_whitespace": "passed",
+  "changelog": "passed",
+  "tool_inventory": "passed",
+  "current_promotions": [
+    {
+      "file": "search-terminal-affected-invocation.json",
+      "size_bytes": 801,
+      "sha256": "1856c5a5236833f549f8476dcfcb9259ed81e4d8ee47b80b6570dba46c5d59de"
+    },
+    {
+      "file": "search-terminal-affected-v2.json",
+      "size_bytes": 11298,
+      "sha256": "af544f246baa9b1f04de1c62e06b4253b71ed26a46cc559ad9cb7bb0e924d931"
+    },
+    {
+      "file": "search-terminal-arm64-zip.json",
+      "size_bytes": 1000,
+      "sha256": "e64cccc5558387618b7b3eccf38c8e2ef2cd4c963f4778c3e7889922741520d9"
+    },
+    {
+      "file": "search-terminal-build.json",
+      "size_bytes": 563,
+      "sha256": "8466b6a36e6920ce2cb5dd2a60c0fc23f30edaca3b5d244c398c1614374bed3c"
+    },
+    {
+      "file": "search-terminal-checks.json",
+      "size_bytes": 771,
+      "sha256": "c10cc7cbb40a062117787cf1dcaae7dae7349f3add412282deb003f8757cbd30"
+    },
+    {
+      "file": "search-terminal-focused.json",
+      "size_bytes": 1097,
+      "sha256": "ddf0f40c4a74dbd3c79e9449ca98f34007a899a28dbccccdc7907c845be5657c"
+    },
+    {
+      "file": "search-terminal-native-qualification.json",
+      "size_bytes": 5991,
+      "sha256": "8bbd590c3385fadfc4c25ed06558e5f90a965b56fc52ecf382fbe0d8fba1443c"
+    },
+    {
+      "file": "search-terminal-ordering.json",
+      "size_bytes": 2375,
+      "sha256": "091d73164b37595ab5d342a4863fcb9ff821893903b544e7c6ce5d079d4c17cc"
+    },
+    {
+      "file": "search-terminal-prepush-invocation.json",
+      "size_bytes": 796,
+      "sha256": "05c530e08734b665759b2168027a78fa30c0e3b24057b432ca3861e360d597fc"
+    },
+    {
+      "file": "search-terminal-prepush-v2.json",
+      "size_bytes": 11295,
+      "sha256": "50953677be95e61318c7e1c9f47906169a1506ee44ff25defd4a8eff20e9200e"
+    },
+    {
+      "file": "search-terminal-prior-failure.json",
+      "size_bytes": 1114,
+      "sha256": "74085d6e3d97d2083d71a49d33ec7984d8d72f367935fb8ae0056fcb505e7f7d"
+    },
+    {
+      "file": "search-terminal-stock-result.json",
+      "size_bytes": 5477,
+      "sha256": "e4334823a53e584487e55a21caddb7ebf7707269b0dc6d1164d16b68e900dc28"
+    },
+    {
+      "file": "search-terminal-x64-production-receipt.json",
+      "size_bytes": 77537,
+      "sha256": "427295e646925d8d97df83066f687e78b6a295b17c3d232f7d237e7ebc1f5884"
+    },
+    {
+      "file": "search-terminal-x64-zip.json",
+      "size_bytes": 959,
+      "sha256": "e5176471ffbcad33c79a99cc863eb19e11a9b8b5a821a597ebf58b8358f96a60"
+    }
+  ],
+  "owner_deferred_foreground": [
+    "Commands",
+    "FileOperations",
+    "ViewerPETests.Interactive",
+    "ViewerSqliteTests.Interactive"
+  ],
+  "remaining_qualification": [
+    "Native ARM64 runtime and unclassified ARM64-only WIC decode discrepancy",
+    "Physical device/SMB/elevated prerequisites for capability skips",
+    "Mixed-DPI, real assistive technology and foreground interaction",
+    "Real machine shutdown acceptance"
+  ],
+  "publication": "None; local unsigned artifacts only"
+}

@@ -918,6 +918,13 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
     });
     Require(errorHr == HRESULT_FROM_WIN32(ERROR_DISK_FULL), "total transfer preserves the underlying I/O error");
 
+    const std::wstring longReadablePrefix = std::wstring(207u, L'x') + L"\U0001F600" + std::wstring(48u, L'y');
+    std::wstring boundedSiblingName;
+    Require(SUCCEEDED(Common::Paths::BuildUniqueSiblingName<wchar_t>(longReadablePrefix, L".~rs-write-", L".tmp", 255u, boundedSiblingName)) &&
+                boundedSiblingName.size() <= 255u && boundedSiblingName.starts_with(std::wstring(207u, L'x') + L".~rs-write-") &&
+                boundedSiblingName.ends_with(L".tmp") && Common::Strings::TryUtf8FromUtf16Strict(boundedSiblingName).has_value(),
+            "a bounded private stage name preserves its identity suffix and valid UTF-16 when the readable prefix cuts an emoji");
+
     const std::wstring sibling = []
     {
         std::error_code artifactError;
@@ -1680,6 +1687,27 @@ int wmain(int argc, wchar_t** argv)
         std::fputs("A Release build has no runtime checks to report.\n", stdout);
         return 0;
 #endif
+    }
+
+    {
+        constexpr size_t maximum = RedMonitor::kMaxMessageCodeUnits - Debug::detail::kRedMonitorApplicationLabel.size() - 3u;
+        const std::wstring exact(maximum, L'x');
+        Require(Debug::detail::BuildBoundedRedMonitorMessage(L"short diagnostic") == L"short diagnostic" &&
+                    Debug::detail::BuildBoundedRedMonitorMessage(exact) == exact,
+                "ordinary and exact-limit diagnostics must remain unchanged");
+        const std::wstring oversized(maximum + 1u, L'x');
+        const auto bounded = Debug::detail::BuildBoundedRedMonitorMessage(oversized);
+        Require(bounded.size() == maximum && bounded.ends_with(Debug::detail::kEtwTruncationMarker),
+                "oversized diagnostics must fit the normalized client limit with an explicit marker");
+        std::wstring surrogateBoundary = oversized;
+        const size_t split             = maximum - Debug::detail::kEtwTruncationMarker.size();
+        surrogateBoundary[split - 1u]  = static_cast<wchar_t>(0xD83Du);
+        surrogateBoundary[split]       = static_cast<wchar_t>(0xDE80u);
+        const auto surrogateBounded    = Debug::detail::BuildBoundedRedMonitorMessage(surrogateBoundary);
+        Require(surrogateBounded.size() == maximum - 1u && surrogateBounded.ends_with(Debug::detail::kEtwTruncationMarker) &&
+                    surrogateBounded.substr(0u, split - 1u) == oversized.substr(0u, split - 1u),
+                "diagnostic truncation must not leave half of a UTF-16 surrogate pair");
+        std::cout << "PASSED: RedMonitor diagnostic length and surrogate boundaries\n";
     }
 
     TestFileOperationsCompletedGroupLayoutKeepsWholeRegions();

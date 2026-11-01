@@ -17,6 +17,17 @@ The default uses local merge-base changes plus staged, unstaged and untracked wo
 Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `test-scopes.json` owns standalone scope/PR metadata. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
 
 For independent resource investigations, force fresh execution and retain paired fixture/build provenance. Timing, native ARM64, real devices, IME/assistive technology and foreground input remain separate qualification requirements. These commands do not manufacture those claims.
+
+Portable distribution regressions cover ZIP staging, clean extraction, runtime
+dependency closure, package smoke, and receipt-bound native outputs. Product
+distribution uses portable ZIP archives and Winget manifests.
+
+BuildEvidence.Tests.ps1 executes the root build's native producer, provenance and
+capture statements in production order against changing fixture files. It checks
+final hashes, sizes and test-surface metadata, and verifies that later native-byte
+changes fail before receipt publication. Execute the whole file to retain its
+fingerprint command-surface setup; an isolated Describe requires the same imports.
+
 ```powershell
 ./Test-Changes.ps1 -Suite Commands -CommandsFamily file-operations -SkipBuild
 ./Test-Changes.ps1 -Mode Full -Interactive -ResumeFrom <run-id>
@@ -51,8 +62,8 @@ Related specifications:
 
 ```powershell
 .\Tools\Run-AllTests.ps1                      # Build Debug + run ALL self-tests
-.\Tools\Run-AllTests.ps1 -Suite PR             # Build Debug + run the GitHub Actions pull-request/push gate locally (about ten minutes of tests)
-.\Tools\Run-AllTests.ps1 -Suite CI             # Build Debug + run the nightly suite locally (adds the in-product self-test suites)
+.\Tools\Run-AllTests.ps1 -Suite PR             # Build Debug + run the short native regression selection locally
+.\Tools\Run-AllTests.ps1 -Suite CI             # Build Debug + run the extended native selection locally
 .\Tools\Run-AllTests.ps1 -Suite Full           # Build Debug + run self-tests, native tests, PerformanceTests2, and local script tests
 .\Tools\Run-AllTests.ps1 -Suite Commands       # Single suite
 .\Tools\Run-AllTests.ps1 -Suite Commands -CommandsFamily file-operations # One governed family process; not Full evidence
@@ -98,6 +109,16 @@ and command dispatch inside the live application window.
 | Navigation | `SelfTest\Commands\Commands.Tests.Navigation.cpp` | Navigation location, GoTo |
 | Dialogs | `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` | About, fatal error, splash, change case, rename, filter, mask |
 | ShellCommands | `SelfTest\Commands\Commands.Tests.ShellCommands.cpp` | Shell-integrated pane commands, bounded FolderView drop parsing/targeting/effect semantics, pointer target integrity, and verified move-clipboard invalidation |
+
+The directory-cache cancellation boundary is an exact no-activation Commands case:
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite Commands -CaseFilter cmd_directory_cache_invalidation_during_enumeration_is_retained -NonInteractive
+```
+
+It uses the marked test sandbox and synthetic blocked-I/O fixture. Prefix, combined,
+case-variant and proof-injected selections keep the normal interactive Commands
+admission. This focused case does not qualify the other Commands cases.
 
 ## 2. Compare Directories Self-Test Suite
 
@@ -233,6 +254,11 @@ resize/collapse and detached-provider path behind the no-activation guard.
 Its workspace assertions cover exact discovered/original/shown exclusion accounting, restore,
 separate cleanup marks/review/recorded host handoff, configuration defaults/roundtrip,
 and Unicode/unknown-fact JSON plus CSV formula-prefix protection. The recording host never deletes data. The same case drives the production export preparation/writer through a test-only synchronous gateway that admits only marked-sandbox paths. It checks exact JSON rows/totals, CSV metadata/UTF-8 identification, failed atomic publication preserving an existing file, and bounded Close while an owned duplicated-event gate holds the module-pinned writer. The gateway, fault and gate are absent from test-disabled builds.
+The private-cache fixture distinguishes completed snapshot construction from restoration.
+It proves same-window reuse without another provider read, rejects reuse after a provider identity
+change, and holds the first post-Close read while checking that no old bytes or cache remain.
+A fresh scan then observes the changed provider data. Restore bytes and read counts prove the
+cache hit; elapsed time is diagnostic and may legitimately round to zero.
 The focused interactive case exercises the Layout button/menu, Ctrl+1/Ctrl+2 and Escape
 under the existing warning/desktop lease, after the user agrees to the time.
 It verifies visible file/folder Modified timestamps, unavailable missing/invalid provider dates,
@@ -319,12 +345,15 @@ This is the same dynamically discovered current profile used by CI and Full.
 It deliberately excludes the SHA-256-sealed Gate0/Round4 Terminal cohort; see
 `Tools/TerminalEngine/README.md` for explicit archival reproduction commands.
 
-**Run in artifact-only CI jobs:** `.\Tools\Run-AllTests.ps1 -Suite PR -ValidationMode Fresh -SkipBuild`
-(pull requests and pushes) or `-Suite CI` (nightly).
+Suite PR and Suite CI are local runner selections; they are not aliases for the hosted gates.
+The hosted PR workflow runs compiler-free checks and formatting feedback. Main native qualification
+uses the shared organization workflow, which builds and tests Release on native x64 and ARM64 before
+production packaging. Use the workflow's retained receipts for hosted evidence; a local focused run
+does not replace that qualification.
 
 Suite PR and Suite CI both include the deterministic PluginContractTests, SettingsSchemaTests, and
-CrashHandlingTests executables. Pull requests build and test x64 Debug and ARM64 Debug on native
-runners (`windows-2025-vs2026`, `windows-11-vs2026-arm`); the ARM64 artifacts run on the ARM64 host.
+CrashHandlingTests executables. Suite PR omits the three long in-product self-test suites and
+focus-taking entries; Suite CI adds the governed extended native selection.
 
 | File | Coverage |
 |------|----------|
@@ -350,7 +379,7 @@ runners (`windows-2025-vs2026`, `windows-11-vs2026-arm`); the ARM64 artifacts ru
 | `TestInventory.Tests.ps1` | Source/run-plan test inventory, project/run-plan set equality, execution-kind coverage, live source-contract classification/replacement queue, FileOperations phase-order integrity, and no checked-in current-total ownership |
 | `TestRunArchive.Tests.ps1` | TestRun archive size, machine-profile, curated-evidence, and empty-path policy guards |
 | `ThemeDistributionContracts.Tests.ps1` | Theme schema, package-assets, licensing, and distribution contract guards |
-| `VcpkgInstallSafety.Tests.ps1` | vcpkg path/triplet safety, offline dependency-pin contract, MSBuild install overlay pin |
+| `VcpkgInstallSafety.Tests.ps1` | vcpkg path/triplet safety, immutable baseline data constraints, MSBuild install overlay pin; data checks do not qualify live bootstrap |
 | `VerifyNoProductionGetCursorPos.Tests.ps1` | Production sources avoid `GetCursorPos` outside annotated diagnostics |
 | `Versioning.Tests.ps1` | Local build-number reuse/allocation |
 | `ViewerChromeSourceContracts.Tests.ps1` | Viewer chrome keyboard routing, launcher subsystem, and Escape contract guards |
@@ -358,7 +387,7 @@ runners (`windows-2025-vs2026`, `windows-11-vs2026-arm`); the ARM64 artifacts ru
 
 Fast vcpkg merge coverage:
 
-- `.\Tests\vcpkg-merge-synthetic-test.ps1` — synthetic lock/merge coverage.
+- `.\Tests\vcpkg-merge-synthetic-test.ps1` — synthetic lock/merge coverage in a unique marked TestSandbox run; it never creates or cleans fixtures in `.build`.
 
 Manual-only intrusive validation:
 
@@ -429,8 +458,7 @@ operation, budget, elapsed time, and dispatched-message count.
 
 The shared support and sandbox-path headers accept compiler-provided Windows
 feature macros without redefining them. `RelocatedTestSandbox.Tests.ps1` builds
-and executes this header-only path outside the checkout with warnings as errors;
-its ASan Debug fixture also requires actual sanitizer instrumentation.
+and executes this header-only path outside the checkout. Its build log must report zero warnings and errors; ordinary Debug enables incremental linking for Edit and Continue, while Release and ASan Debug remain nonincremental. The ASan Debug fixture also requires actual sanitizer instrumentation.
 
 `SettingsSchemaTests` also owns Settings Store connection-identity recovery proof: strict reload rejects case-colliding
 IDs, startup recovery assigns distinct canonical replacements without copying ambiguous saved-secret references, the

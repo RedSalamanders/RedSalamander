@@ -1,0 +1,206 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: Z:\RedSalamander.Perf\runs\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\scratch\viewer-pe\webview2-74976-34506156
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime harness path resolves
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness owns captured output pipes (error=0)
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness owns noninteractive standard input
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime inherited-handle attribute size resolves
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime inherited-handle attribute list initializes
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime restricts inherited handles to its three standard streams
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process launches
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process resumes
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process exits before timeout
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness process reports an exit code
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime fresh harness run passes (exit=0x00000000)
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime owned job has no active processes before desktop restoration
+[PASS] TestViewerSpaceAnalysisHostVirtualGridAndLifetime retains complete bounded stdout and stderr
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: Z:\RedSalamander.Perf\runs\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\scratch\viewer-pe\webview2-78832-34506203
+[PASS] Analysis fixture executable path resolves
+[PASS] Analysis fixture loads ViewerSpace
+[PASS] Embedded UTF-8 queued caption decodes its Unicode ellipsis correctly
+[PASS] Analysis fixture factory resolves
+[PASS] Analysis fixture creates viewer
+[PASS] Space accepts workspace preferences through the global plugin configuration
+[PASS] Space preferences round-trip the chosen area and date basis
+[PASS] Analysis fixture configuration accepted
+[PASS] Missing workspace preferences reset to normal Size and folder colors
+[PASS] Analysis fixture opens
+[PASS] Analysis fixture publishes exact complete rows and geometry
+[PASS] Breadcrumb folder menu includes sorted sibling directories and excludes 2000 files
+[PASS] Breadcrumb folder-menu target navigates into the first folder
+ViewerSpace.SiblingSort fixture=mixed-12 sample=0 elapsed_ns=252300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=1 elapsed_ns=199900 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=2 elapsed_ns=195800 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=3 elapsed_ns=194400 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=4 elapsed_ns=340000 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=5 elapsed_ns=322900 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=6 elapsed_ns=326900 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=7 elapsed_ns=320000 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=8 elapsed_ns=340000 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=9 elapsed_ns=382900 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=10 elapsed_ns=416700 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=11 elapsed_ns=341800 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=12 elapsed_ns=342600 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=13 elapsed_ns=335100 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=14 elapsed_ns=377300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=15 elapsed_ns=341200 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=16 elapsed_ns=343300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=17 elapsed_ns=346000 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=18 elapsed_ns=336900 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=19 elapsed_ns=356500 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=20 elapsed_ns=346600 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=21 elapsed_ns=339000 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=22 elapsed_ns=339700 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=23 elapsed_ns=335300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=24 elapsed_ns=336800 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=25 elapsed_ns=340600 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=26 elapsed_ns=340300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=27 elapsed_ns=346700 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=28 elapsed_ns=338600 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=29 elapsed_ns=336600 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=30 elapsed_ns=521300 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+ViewerSpace.SiblingSort fixture=mixed-12 sample=31 elapsed_ns=347500 returned=12
+[PASS] Retained breadcrumb query includes all twelve directories and excludes files
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] Every retained breadcrumb folder has a generation-qualified target
+[PASS] ViewerSpace breadcrumb names use case-insensitive natural number order
+[PASS] ViewerSpace breadcrumb leading-zero names keep their numeric position
+[PASS] ViewerSpace breadcrumb comparison handles every digit run
+[PASS] ViewerSpace breadcrumb natural order preserves dot and Unicode names
+[PASS] Natural breadcrumb sorting preserves distinct literal names and target tokens
+[PASS] Retained breadcrumb sorting performs no provider I/O
+[PASS] Breadcrumb cap returns the naturally first 512 of 600 reversed directories without provider I/O
+[PASS] Analysis numeric-name sort publishes all retained rows
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis Name uses Windows natural order in both directions, including numeric, case, dot and Unicode names
+[PASS] Analysis numeric-name sort publishes all retained rows
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis natural sort retains every directory and file
+[PASS] Analysis Name uses Windows natural order in both directions, including numeric, case, dot and Unicode names
+[PASS] Analysis restores descending numeric size sort
+[PASS] Analysis equal-size directory ties use ascending Windows natural names
+[PASS] Analysis natural sorting performs no provider I/O
+[PASS] Ancestor breadcrumb can navigate directly from one child to its sibling
+[PASS] Sibling navigation changes the displayed root without a new scan
+[PASS] Breadcrumb rejects a folder menu from a stale display generation
+[PASS] Parent navigation restores the complete root analysis before UIA checks
+[INFO] ViewerSpace analysis test outer client: 984x661 px (984x661 DIP at 96 DPI), rows=2002, bounds=984x330 px.
+[INFO] ViewerSpace analysis host: available=true hwnd=true visible=true size=984x330 px root=true D2D=true render=22 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[INFO] ViewerSpace navigation host: available=true hwnd=true visible=true size=984x36 px root=true D2D=true render=3 resize=0 resizeFailure=0 presentFailure=0 flushFailure=0 palette=0xFFFFFFFF/0xFF141414 dark=false highContrast=false mode=0
+[PASS] ViewerSpace modified timestamps: folder, file, missing and invalid provider dates.
+[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=0 foregroundChanges=0 inputChanges=0 ownedTransitions=0 barrierUs=135 failure=0
+[PASS] Cleanup uses exactly one reviewed host handoff and no viewer-side delete
+[PASS] Focus in pane uses the same provider-aware service with a real containing folder and leaf
+[PASS] Analysis UIA contract
+[PASS] Export integration starts its no-activation witness
+[PASS] Export uses an acquired marked sandbox
+[PASS] Export records the settled projection size
+[PASS] Export negative fixture resolves the selected sandbox boundary
+[PASS] Export negative fixture is outside the selected marked sandbox
+[PASS] Test export rejects a path outside the marked sandbox
+[PASS] Production export snapshot and atomic JSON writer complete without activation
+[PASS] Exported JSON has the exact settled retained row count and original discovered total
+[PASS] Production JSON export preserves exact valid file and folder FILETIME ticks
+[PASS] Production JSON export retains explicit null for missing and invalid modified times
+[PASS] Production UTF-8 CSV export completes
+[PASS] CSV includes UTF-8 identification, metadata and every frozen item row
+[PASS] Export exercises a failed atomic publication
+[PASS] A failed export preserves the existing destination exactly
+[PASS] Analysis detach boundary captures its current source callback count
+[INFO] Analysis callbacks: before desktop drain=4385, immediately before detach=4385
+[PASS] Analysis fixture actually detaches its host before retained provider access
+[PASS] Analysis detached provider contract
+[INFO] ViewerSpace export gate: events=true/true queued=true ready=true elapsedUs=1932096 beforeObserved=true afterObserved=true generation=1/1 rows=2002/2002 dirty=false/false analysisBuild=false/false animationTimer=false/false rebinding=false/false busy=false/true factsReady=true/true
+[PASS] Export worker reaches its owned deterministic lifetime gate
+[INFO] ViewerSpace close during export: hr=0x00000000 elapsedUs=111978 unloadExport=true unloadBlocked=true
+[PASS] Close returns while the export writer is held and module unload stays blocked
+[PASS] Export writer releases its module lifetime after completion
+[PASS] Explicit frozen export finishes safely after its viewer closes
+[PASS] Export and close produce no owned foreground activation
+[PASS] Cache-lifetime provider gate owns its deterministic read-boundary events
+[PASS] Cache-lifetime fixture enables only this viewer's private cache
+[PASS] One live viewer seeds an admitted private cache from the provider exactly once
+[PASS] The actual completed cold build cannot satisfy the cache-restore phase
+[PASS] Reopening the same context keeps the existing live ViewerSpace window
+[PASS] The same open window restores its own exact cached scan without provider reread
+[PASS] Changing provider identity on the same path discards the old window cache and scans the new provider
+[PASS] Close destroys the cache-owning window
+[PASS] The retained viewer instance opens a live fresh window after Close
+[PASS] Fresh post-Close scan reaches the gated provider read
+[PASS] Close leaves no resident cache to restore before the new provider data is read
+[PASS] Fresh post-Close provider read leaves its deterministic gate
+[PASS] Reopening after Close reads changed provider data and builds a fresh cache instead of restoring discarded data
+[PASS] Cache-lifetime fixture retires its provider before fixture destruction
+[PASS] ViewerSpace private cache belongs to one open window
+ViewerPETests passed.
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests passed.

@@ -1,0 +1,206 @@
+{
+  "schema": "review-remediation.release-paired-classifier-analysis.v1",
+  "source_snapshot_id": "ce9a63824be65a183c7a6fb55f03eaecc93c5a0ae50df554ba14cfa7196087de",
+  "build_receipt_id": "bc572e7b3400ae440e078f57a08dce996ca8a9e6befcfd82be10b0cf4b3b5399",
+  "analysis_run_id": "20261031T202904Z-73660-6336523681384e8a8906103106ff6ac4",
+  "native_run_id": "20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385",
+  "raw_metrics_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "raw_metrics_sha256": "220897206ab3398fee263201b1d1b49f35d74bd042ce9e1e9591b348fe667a20",
+  "raw_metrics_bytes": 13230335,
+  "selected_metric_rows": 109,
+  "sample_metric_rows": 20,
+  "classifier": [
+    {
+      "scenario": "disjoint",
+      "count_per_route": 5,
+      "candidate_median_us": 105722,
+      "keyless_fallback_median_us": 1483431,
+      "median_ratio_fallback_over_candidate": 14.0314,
+      "all_pairs": [
+        {
+          "sample": 0,
+          "order": "candidate-first",
+          "candidate_us": 111431,
+          "keyless_fallback_us": 1332409,
+          "comparisons": 65536,
+          "encoded_outcome": 0
+        },
+        {
+          "sample": 1,
+          "order": "keyless-first",
+          "candidate_us": 91024,
+          "keyless_fallback_us": 1391409,
+          "comparisons": 65536,
+          "encoded_outcome": 0
+        },
+        {
+          "sample": 2,
+          "order": "candidate-first",
+          "candidate_us": 89826,
+          "keyless_fallback_us": 1483431,
+          "comparisons": 65536,
+          "encoded_outcome": 0
+        },
+        {
+          "sample": 3,
+          "order": "keyless-first",
+          "candidate_us": 105722,
+          "keyless_fallback_us": 1522544,
+          "comparisons": 65536,
+          "encoded_outcome": 0
+        },
+        {
+          "sample": 4,
+          "order": "candidate-first",
+          "candidate_us": 106215,
+          "keyless_fallback_us": 1663295,
+          "comparisons": 65536,
+          "encoded_outcome": 0
+        }
+      ]
+    },
+    {
+      "scenario": "last-pair",
+      "count_per_route": 5,
+      "candidate_median_us": 114743,
+      "keyless_fallback_median_us": 1658271,
+      "median_ratio_fallback_over_candidate": 14.452,
+      "all_pairs": [
+        {
+          "sample": 0,
+          "order": "candidate-first",
+          "candidate_us": 117950,
+          "keyless_fallback_us": 1653796,
+          "comparisons": 65536,
+          "encoded_outcome": 4
+        },
+        {
+          "sample": 1,
+          "order": "keyless-first",
+          "candidate_us": 106466,
+          "keyless_fallback_us": 1700729,
+          "comparisons": 65536,
+          "encoded_outcome": 4
+        },
+        {
+          "sample": 2,
+          "order": "candidate-first",
+          "candidate_us": 118857,
+          "keyless_fallback_us": 1649956,
+          "comparisons": 65536,
+          "encoded_outcome": 4
+        },
+        {
+          "sample": 3,
+          "order": "keyless-first",
+          "candidate_us": 109619,
+          "keyless_fallback_us": 1681354,
+          "comparisons": 65536,
+          "encoded_outcome": 4
+        },
+        {
+          "sample": 4,
+          "order": "candidate-first",
+          "candidate_us": 114743,
+          "keyless_fallback_us": 1658271,
+          "comparisons": 65536,
+          "encoded_outcome": 4
+        }
+      ]
+    }
+  ],
+  "memory": {
+    "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage",
+    "row_count": 22,
+    "max_payload_bytes": 185856,
+    "scope_count_at_max": 512,
+    "budget_bytes": 16777216,
+    "measurement": "Candidate retained string payload only; excludes other scope/anchor strings, allocations and process RSS."
+  },
+  "preparation": [
+    {
+      "durationUs": 36743,
+      "value0": 512,
+      "value1": 512,
+      "hr": 0
+    }
+  ],
+  "screenshot_comparison": [
+    {
+      "file": "file-operations-completed.png",
+      "published_sha256": "699440903233b7d4c6d88f28214434f260ebd9fe282a0de85a7f1d45750c88df",
+      "current_sha256": "234a162e52b15ea2b8efa5aa6fd0234c2b82332ef4c804d0aefc9b0cc9a7aea1",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-completed.png"
+    },
+    {
+      "file": "file-operations-conflict.png",
+      "published_sha256": "dc75b26f34e7b22a71abc880b69412974c5430ffe6fb7947450bfea8626d18b3",
+      "current_sha256": "2d3321d2a037d3fb1ed6ed50cbdeb15211a1505135fce9e63c7e680b5b944dcf",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-conflict.png"
+    },
+    {
+      "file": "file-operations-counting.png",
+      "published_sha256": "240891a50817f44bf11551fb8c18d80b491af1d051133204b9e11d07caab394e",
+      "current_sha256": "972480bbd94ee48d63ce8eddbdee8bdc10ecd5fd4a346b4130928dd4e9b79661",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-counting.png"
+    },
+    {
+      "file": "file-operations-file-progress.png",
+      "published_sha256": "9d2ab6f7428cc8cfcca017b2efcb422a357b6d4d84e71632e67a8a4eac7c98f9",
+      "current_sha256": "25477d01f375a776545d1bb23cba6b332f42b5120016b914dba6655a025abcc5",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-file-progress.png"
+    },
+    {
+      "file": "file-operations-issues.png",
+      "published_sha256": "75457a4a4d4b640d4d37d8859a51e851f64f9663dd2e9ef3cf98a74e11cd3fa6",
+      "current_sha256": "3eebec5088255e0cb391f37e9261da13e7b4c853d8858cd3ca49145c20a4cb11",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-issues.png"
+    },
+    {
+      "file": "file-operations-move-totals.png",
+      "published_sha256": "fca3b34e7de7d0a000230e75d93a3854816d539699f28ba55361c8f79a66f833",
+      "current_sha256": "2860a89b9036c7387f01470e586b677da652ae1e7b5aaa713447f3d691a25dc5",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-move-totals.png"
+    },
+    {
+      "file": "file-operations-paused.png",
+      "published_sha256": "11c920df5689ff542a6db0e22bac3774b3bdc344980aa69d862e5fe35e06b14f",
+      "current_sha256": "bf975c35fcf504e8c790ff95d450dfbc27b4637ba9758a8eb20488aa1e2d064a",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-paused.png"
+    },
+    {
+      "file": "file-operations-popup.png",
+      "published_sha256": "ebb671ec361f5164ca3c8f24c7dcedc8270b4c9b631b329b09bd89961ab7299d",
+      "current_sha256": "2323c25e28487c0373f7cd8d2b9d9c84943b8b7c4a6ef48292ee34a175c245b9",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-popup.png"
+    },
+    {
+      "file": "file-operations-queued.png",
+      "published_sha256": "fbf69575533037086ccd62df7770b3a2b3149ebd681c33723803d4dfba2c4c08",
+      "current_sha256": "6065561c39a6d31e832d0fe8a6f497635e2ccc379bc8f63edc9e38ba9fc278b0",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-queued.png"
+    },
+    {
+      "file": "file-operations-wrapped-note.png",
+      "published_sha256": "dd0683f88bf48aabbdbc0caf0713d3c77e85e75827eaa6648c0c6d5406172997",
+      "current_sha256": "14b628440e74af3146ebec18112b77a030e4fdb98e97f91e51823116830c4cf8",
+      "byte_identical": false,
+      "current_source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T202222Z-66224-ab491a4d3e054c57b481ca4887db7385\\artifacts\\selftest\\last_run\\fileops\\documentation\\file-operations-wrapped-note.png"
+    }
+  ],
+  "limits": [
+    "Five paired samples per scenario with alternating order after unmeasured warmup; preparation outside timing.",
+    "Keyless fallback is a same-binary counterfactual, not a historical unmodified binary.",
+    "Compiler snapshots found zero MSBuild/cl/link processes during the selected invocation; observation was not continuous.",
+    "No p95, full allocator, physical-device, focus-taking or complete repository qualification claim."
+  ]
+}

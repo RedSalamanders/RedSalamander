@@ -645,6 +645,9 @@ struct ViewerVlcDebugSnapshot
     uint64_t windowIdentity              = 0;
     uint64_t loadRequestId               = 0;
     uint64_t pendingLoadWorkCount        = 0;
+    bool initialLoadInFlight             = false;
+    bool initialLoadRestartRequested     = false;
+    uint64_t initialLoadCoalesced        = 0;
     uint64_t loadQueueAccepted           = 0;
     uint64_t loadQueueRejected           = 0;
     uint64_t staleLoadResults            = 0;
@@ -795,6 +798,7 @@ struct ViewerSpacePerfDebugSnapshot
     uint64_t scanCacheSnapshotBytes          = 0u;
     uint64_t scanCacheRestoreBytes           = 0u;
     uint64_t scanCacheResidentBytes          = 0u;
+    uint64_t scanCacheModuleBytes            = 0u;
     uint64_t scanCacheRestoreUs              = 0u;
     uint32_t cacheRestorePhase               = 0u;
     uint64_t viewerOwnedBytes                = 0u;
@@ -937,6 +941,7 @@ struct ViewerSpaceDrawItemDebugSnapshot
     uint32_t parentId       = 0u;
     uint64_t logicalBytes   = 0u;
     bool contentNotMeasured = false;
+    bool isError            = false;
     wchar_t name[260]{};
     uint32_t depth                  = 0u;
     bool isDirectory                = false;
@@ -1026,6 +1031,7 @@ struct ViewerSpaceWorkspaceDebugSnapshot
     uint64_t originalViewBytes = 0u;
     uint64_t shownViewBytes    = 0u;
     uint64_t ownedBytes        = 0u;
+    uint64_t ownedExportBytes  = 0u;
     size_t exclusions          = 0u;
     size_t unresolved          = 0u;
     size_t cleanupMarks        = 0u;
@@ -1049,11 +1055,6 @@ struct ViewerSpaceExportDebugRequest
 };
 inline constexpr UINT kViewerSpaceDebugExport = WM_APP + 0x652;
 #endif
-
-// RedSalamanderMonitor / ColorTextView
-inline constexpr UINT kColorTextViewLayoutReady = WM_APP + 0x620;
-inline constexpr UINT kColorTextViewWidthReady  = WM_APP + 0x621;
-inline constexpr UINT kColorTextViewEtwBatch    = WM_APP + 0x622;
 
 // PoC / samples
 inline constexpr UINT kWin32HelloCredHelloResult = WM_APP + 0x680;

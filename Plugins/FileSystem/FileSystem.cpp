@@ -1004,8 +1004,11 @@ struct SymbolicLinkReparseDataBufferForProperties final
 }
 
 #ifdef _DEBUG
+struct LocalVolumeRouteCache;
+
 struct StorageProbeDebugHooks
 {
+    LocalVolumeRouteCache* routeCache                                                                                                          = nullptr;
     void* context                                                                                                                              = nullptr;
     BOOL (*getVolumePathName)(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept                    = nullptr;
     BOOL (*getVolumeNameForVolumeMountPoint)(void* context, const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept = nullptr;
@@ -1020,19 +1023,22 @@ struct StorageProbeDebugHooks
                             DWORD outBufferBytes,
                             LPDWORD bytesReturned,
                             LPOVERLAPPED overlapped) noexcept                                                                                  = nullptr;
-    wil::unique_hfile (*openFollowingPath)(
-        void* context, const wchar_t* path, DWORD desiredAccess, DWORD shareMode, DWORD creationDisposition, DWORD flags) noexcept = nullptr;
-    DWORD (*getFinalPathName)(void* context, HANDLE file, wchar_t* path, DWORD bufferLength, DWORD flags) noexcept                 = nullptr;
-    UINT (*getDriveType)(void* context, const wchar_t* rootPath) noexcept                                                          = nullptr;
+    UINT (*getDriveType)(void* context, const wchar_t* rootPath) noexcept                                                                      = nullptr;
 };
 
-std::atomic<StorageProbeDebugHooks*> g_storageProbeDebugHooks{nullptr};
+// A synthetic probe is private to the calling selftest thread. Other live provider threads
+// must never observe its stack context or publish its fake identities into the real route cache.
+thread_local StorageProbeDebugHooks* g_storageProbeDebugHooks = nullptr;
 
 class StorageProbeDebugScope final
 {
 public:
-    explicit StorageProbeDebugScope(StorageProbeDebugHooks& hooks) noexcept : _previous(g_storageProbeDebugHooks.exchange(&hooks, std::memory_order_acq_rel))
+    StorageProbeDebugScope(StorageProbeDebugHooks& hooks, LocalVolumeRouteCache& routeCache) noexcept
+        : _hooks(hooks),
+          _previous(std::exchange(g_storageProbeDebugHooks, &hooks)),
+          _previousRouteCache(hooks.routeCache)
     {
+        _hooks.routeCache = &routeCache;
     }
 
     StorageProbeDebugScope(const StorageProbeDebugScope&)            = delete;
@@ -1042,11 +1048,14 @@ public:
 
     ~StorageProbeDebugScope() noexcept
     {
-        g_storageProbeDebugHooks.store(_previous, std::memory_order_release);
+        _hooks.routeCache        = _previousRouteCache;
+        g_storageProbeDebugHooks = _previous;
     }
 
 private:
-    StorageProbeDebugHooks* _previous = nullptr;
+    StorageProbeDebugHooks& _hooks;
+    StorageProbeDebugHooks* _previous          = nullptr;
+    LocalVolumeRouteCache* _previousRouteCache = nullptr;
 };
 #endif
 
@@ -1062,7 +1071,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 [[nodiscard]] BOOL GetVolumePathNameForStorageProbe(const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->getVolumePathName != nullptr)
     {
         return hooks->getVolumePathName(hooks->context, fileName, volumePathName, bufferLength);
@@ -1078,7 +1087,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 [[nodiscard]] BOOL GetVolumeNameForVolumeMountPointForStorageProbe(const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->getVolumeNameForVolumeMountPoint != nullptr)
     {
         return hooks->getVolumeNameForVolumeMountPoint(hooks->context, volumeMountPoint, volumeName, bufferLength);
@@ -1094,7 +1103,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 [[nodiscard]] DWORD QueryDosDeviceForStorageProbe(const wchar_t* deviceName, wchar_t* targetPath, DWORD bufferLength) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->queryDosDevice != nullptr)
     {
         return hooks->queryDosDevice(hooks->context, deviceName, targetPath, bufferLength);
@@ -1108,7 +1117,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 [[nodiscard]] UINT GetDriveTypeForStorageProbe(const wchar_t* rootPath) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->getDriveType != nullptr)
     {
         return hooks->getDriveType(hooks->context, rootPath);
@@ -1121,7 +1130,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 [[nodiscard]] wil::unique_hfile OpenStorageProbeVolume(const wchar_t* volumePath) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->openVolume != nullptr)
     {
         return hooks->openVolume(hooks->context, volumePath);
@@ -1129,37 +1138,6 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 #endif
 
     return wil::unique_hfile(CreateFileW(volumePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
-}
-
-// Admission observes the followed endpoint's volume, unlike mutation BindObject,
-// which must retain the no-follow object. Borrow the ABI's terminated path only
-// synchronously, request no data access, and never retain this handle in a cache.
-[[nodiscard]] wil::unique_hfile OpenFollowingPathForRouteObservation(const wchar_t* path) noexcept
-{
-    constexpr DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-    constexpr DWORD flags     = FILE_FLAG_BACKUP_SEMANTICS;
-#ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
-    if (hooks != nullptr)
-    {
-        // Existing synthetic storage hooks must not escape into real path I/O.
-        return hooks->openFollowingPath != nullptr ? hooks->openFollowingPath(hooks->context, path, 0u, shareMode, OPEN_EXISTING, flags) : wil::unique_hfile{};
-    }
-#endif
-    return wil::unique_hfile(CreateFileW(path, 0u, shareMode, nullptr, OPEN_EXISTING, flags, nullptr));
-}
-
-[[nodiscard]] DWORD GetFinalPathNameForRouteObservation(HANDLE file, wchar_t* path, DWORD bufferLength) noexcept
-{
-    constexpr DWORD flags = FILE_NAME_OPENED | VOLUME_NAME_GUID;
-#ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
-    if (hooks != nullptr)
-    {
-        return hooks->getFinalPathName != nullptr ? hooks->getFinalPathName(hooks->context, file, path, bufferLength, flags) : 0u;
-    }
-#endif
-    return GetFinalPathNameByHandleW(file, path, bufferLength, flags);
 }
 
 [[nodiscard]] BOOL DeviceIoControlForStorageProbe(HANDLE device,
@@ -1172,7 +1150,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
                                                   LPOVERLAPPED overlapped) noexcept
 {
 #ifdef _DEBUG
-    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks;
     if (hooks != nullptr && hooks->deviceIoControl != nullptr)
     {
         return hooks->deviceIoControl(hooks->context, device, ioControlCode, inBuffer, inBufferBytes, outBuffer, outBufferBytes, bytesReturned, overlapped);
@@ -1255,6 +1233,11 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     return volumePath;
 }
 
+[[nodiscard]] bool IsStableVolumeGuidDevicePath(std::wstring_view volumePath) noexcept
+{
+    return OrdinalString::StartsWithNoCase(volumePath, L"\\\\?\\Volume{") && volumePath.ends_with(L'}');
+}
+
 [[nodiscard]] std::wstring ResolveVolumeGuidDevicePath(std::wstring_view volumeRoot) noexcept
 {
     if (volumeRoot.empty())
@@ -1296,9 +1279,8 @@ struct LocalCapabilityRouteInfo final
 }
 
 // Route facts are queried once per child name by Create Directory, Batch Rename, and Change
-// Case, often on the UI thread. A volume's identity and drive type are stable for the life of
-// a mount, so remember the last resolved volume briefly. Reuse still requires a
-// fresh observation of each requested path; a lexical prefix is never volume authority.
+// Case, often on the UI thread. Resolve the lexical mount root and its current direct GUID for
+// every query. A short-lived exact-root/GUID hit may reuse only the encoded route result.
 struct LocalVolumeRouteCache final
 {
     LocalVolumeRouteCache()                                        = default;
@@ -1316,73 +1298,13 @@ struct LocalVolumeRouteCache final
 LocalVolumeRouteCache g_localVolumeRouteCache;
 constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
 
-[[nodiscard]] std::optional<LocalCapabilityRouteInfo> TryObserveCachedLocalRoute(const wchar_t* path, bool& rejectResolvedRootCache) noexcept
+[[nodiscard]] LocalVolumeRouteCache& CurrentLocalVolumeRouteCache() noexcept
 {
-    const std::wstring_view pathView(path);
-    if (! Common::Paths::IsSupportedLocalFileOperationPath(pathView))
-    {
-        return std::nullopt;
-    }
-
-    std::wstring cachedRoot;
-    std::wstring cachedGuid;
-    LocalCapabilityRouteInfo cachedRoute;
-    ULONGLONG cachedTick = 0u;
-    {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        if (g_localVolumeRouteCache.route.remote || g_localVolumeRouteCache.volumeGuidDevicePath.empty() ||
-            GetTickCount64() - g_localVolumeRouteCache.resolvedTick > kLocalVolumeRouteCacheTtlMs || ! g_localVolumeRouteCache.volumeRoot.ends_with(L'\\') ||
-            ! OrdinalString::StartsWithNoCase(pathView, g_localVolumeRouteCache.volumeRoot))
-        {
-            return std::nullopt;
-        }
-        cachedRoot  = g_localVolumeRouteCache.volumeRoot;
-        cachedGuid  = g_localVolumeRouteCache.volumeGuidDevicePath;
-        cachedRoute = g_localVolumeRouteCache.route;
-        cachedTick  = g_localVolumeRouteCache.resolvedTick;
-    }
-    if (! OrdinalString::StartsWithNoCase(cachedGuid, L"\\\\?\\Volume{") || ! cachedGuid.ends_with(L'}'))
-    {
-        return std::nullopt;
-    }
-
-    // The prefix above only limits the optimization. Opening this exact path
-    // follows current junction/symlink routing anew on every query. Missing or
-    // inaccessible paths and non-Mount-Manager/SMB endpoints keep the old resolver.
-    const wil::unique_hfile file = OpenFollowingPathForRouteObservation(path);
-    if (! file)
-    {
-        return std::nullopt;
-    }
-    std::array<wchar_t, MAX_PATH> finalPath{};
-    const DWORD length = GetFinalPathNameForRouteObservation(file.get(), finalPath.data(), static_cast<DWORD>(finalPath.size()));
-    if (length == 0u || length >= finalPath.size() || finalPath[length] != L'\0')
-    {
-        return std::nullopt;
-    }
-    const std::wstring_view finalName(finalPath.data(), length);
-    if (finalName.size() <= cachedGuid.size() || finalName[cachedGuid.size()] != L'\\' ||
-        ! OrdinalString::EqualsNoCase(finalName.substr(0u, cachedGuid.size()), cachedGuid))
-    {
-        // A known new endpoint must not fall through to a stale same-spelling
-        // mount cache hit (for example, a junction retarget or remounted drive).
-        rejectResolvedRootCache = true;
-        return std::nullopt;
-    }
-    const std::wstring currentMountGuid = ResolveVolumeGuidDevicePath(cachedRoot);
-    if (! OrdinalString::EqualsNoCase(currentMountGuid, cachedGuid))
-    {
-        rejectResolvedRootCache = true;
-        return std::nullopt;
-    }
-    if (GetTickCount64() - cachedTick > kLocalVolumeRouteCacheTtlMs)
-    {
-        return std::nullopt;
-    }
-#if defined(ENABLE_TESTS)
-    CountAdmissionProbe(AdmissionProbeSlot::CacheHits);
+#ifdef _DEBUG
+    if (g_storageProbeDebugHooks != nullptr && g_storageProbeDebugHooks->routeCache != nullptr)
+        return *g_storageProbeDebugHooks->routeCache;
 #endif
-    return cachedRoute;
+    return g_localVolumeRouteCache;
 }
 
 [[nodiscard]] LocalCapabilityRouteInfo BuildLocalCapabilityRouteInfo(const wchar_t* pathText) noexcept
@@ -1400,13 +1322,8 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
         return route;
     }
 
-    bool rejectResolvedRootCache = false;
-    if (const std::optional<LocalCapabilityRouteInfo> observed = TryObserveCachedLocalRoute(pathText, rejectResolvedRootCache); observed.has_value())
-    {
-        return observed.value();
-    }
-
-    const std::wstring volumeRoot = ResolveLocalVolumeRootPath(path);
+    LocalVolumeRouteCache& routeCache = CurrentLocalVolumeRouteCache();
+    const std::wstring volumeRoot     = ResolveLocalVolumeRootPath(path);
     if (volumeRoot.empty())
     {
         // The provider-root query used by legacy capability inventory has no concrete volume.
@@ -1415,36 +1332,44 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
         return route;
     }
 
-    const ULONGLONG nowTick = GetTickCount64();
+    route.remote                    = GetDriveTypeForStorageProbe(volumeRoot.c_str()) == DRIVE_REMOTE;
+    const std::wstring rootIdentity = ResolveVolumeGuidDevicePath(volumeRoot);
+    const ULONGLONG nowTick         = GetTickCount64();
+    if (rootIdentity.empty())
     {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        if (! rejectResolvedRootCache && g_localVolumeRouteCache.volumeRoot == volumeRoot &&
-            nowTick - g_localVolumeRouteCache.resolvedTick <= kLocalVolumeRouteCacheTtlMs)
+        // Keep the lexical root fallback for this call, but do not let a prior
+        // GUID-backed snapshot survive an unavailable identity observation.
+        route.rootId = EncodeLocalRootId(volumeRoot);
+        std::scoped_lock lock(routeCache.mutex);
+        routeCache.volumeRoot.clear();
+        routeCache.volumeGuidDevicePath.clear();
+        routeCache.resolvedTick = 0u;
+        return route;
+    }
+
+    route.rootId = EncodeLocalRootId(rootIdentity);
+    {
+        std::scoped_lock lock(routeCache.mutex);
+        if (OrdinalString::EqualsNoCase(routeCache.volumeRoot, volumeRoot) && OrdinalString::EqualsNoCase(routeCache.volumeGuidDevicePath, rootIdentity) &&
+            nowTick - routeCache.resolvedTick <= kLocalVolumeRouteCacheTtlMs)
         {
 #if defined(ENABLE_TESTS)
             CountAdmissionProbe(AdmissionProbeSlot::CacheHits);
 #endif
-            return g_localVolumeRouteCache.route;
+            LocalCapabilityRouteInfo cachedRoute = routeCache.route;
+            cachedRoute.remote                   = route.remote;
+            return cachedRoute;
         }
     }
 
 #if defined(ENABLE_TESTS)
     CountAdmissionProbe(AdmissionProbeSlot::CacheMisses);
 #endif
-    route.remote                      = GetDriveTypeW(volumeRoot.c_str()) == DRIVE_REMOTE;
-    std::wstring rootIdentity         = ResolveVolumeGuidDevicePath(volumeRoot);
-    std::wstring volumeGuidDevicePath = rootIdentity;
-    if (rootIdentity.empty())
-    {
-        rootIdentity = volumeRoot;
-    }
-    route.rootId = EncodeLocalRootId(std::move(rootIdentity));
-
-    std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-    g_localVolumeRouteCache.volumeRoot           = volumeRoot;
-    g_localVolumeRouteCache.volumeGuidDevicePath = std::move(volumeGuidDevicePath);
-    g_localVolumeRouteCache.route                = route;
-    g_localVolumeRouteCache.resolvedTick         = nowTick;
+    std::scoped_lock lock(routeCache.mutex);
+    routeCache.volumeRoot           = volumeRoot;
+    routeCache.volumeGuidDevicePath = rootIdentity;
+    routeCache.route                = route;
+    routeCache.resolvedTick         = nowTick;
     return route;
 }
 
@@ -1526,19 +1451,13 @@ void FillTransferHintsLocal(FileSystemTransferHints& hints, bool highLatency) no
 // Probes the physical medium behind a resolved volume root (seek penalty + bus type). Requires no admin
 // rights: a zero-access volume handle is enough for IOCTL_STORAGE_QUERY_PROPERTY. Outputs stay
 // "unknown" when the volume cannot be opened (virtual/plugin namespaces, unresolved aliases).
-void ProbeLocalStorageMedium(const std::wstring& volumeRoot,
-                             const std::wstring& fallbackDriveRoot,
-                             bool& seekPenalty,
-                             bool& seekPenaltyKnown,
-                             STORAGE_BUS_TYPE& busType,
-                             bool& busTypeKnown) noexcept
+void ProbeLocalStorageMedium(const std::wstring& volumePath, bool& seekPenalty, bool& seekPenaltyKnown, STORAGE_BUS_TYPE& busType, bool& busTypeKnown) noexcept
 {
     seekPenalty      = false;
     seekPenaltyKnown = false;
     busType          = BusTypeUnknown;
     busTypeKnown     = false;
 
-    const std::wstring volumePath = ResolveStorageProbeDevicePath(volumeRoot, fallbackDriveRoot);
     if (volumePath.empty())
     {
         return;
@@ -1581,8 +1500,7 @@ void ProbeLocalStorageMedium(const std::wstring& volumeRoot,
 }
 
 void FillStorageCharacteristicsLocal(FileSystemStorageCharacteristics& characteristics,
-                                     const std::wstring& volumeRoot,
-                                     const std::wstring& fallbackDriveRoot,
+                                     const std::wstring& volumePath,
                                      UINT driveType,
                                      bool highLatency) noexcept
 {
@@ -1601,7 +1519,7 @@ void FillStorageCharacteristicsLocal(FileSystemStorageCharacteristics& character
     bool seekPenaltyKnown    = false;
     STORAGE_BUS_TYPE busType = BusTypeUnknown;
     bool busTypeKnown        = false;
-    ProbeLocalStorageMedium(volumeRoot, fallbackDriveRoot, seekPenalty, seekPenaltyKnown, busType, busTypeKnown);
+    ProbeLocalStorageMedium(volumePath, seekPenalty, seekPenaltyKnown, busType, busTypeKnown);
 
     if (seekPenaltyKnown && seekPenalty)
     {
@@ -1649,9 +1567,8 @@ void FillStorageCharacteristicsLocal(FileSystemStorageCharacteristics& character
 
     if (Debug::Perf::IsCaptureEnabled())
     {
-        const std::wstring& emittedRoot = ! volumeRoot.empty() ? volumeRoot : fallbackDriveRoot;
         Debug::Perf::Emit(L"FileOps.Storage.ProbedKind",
-                          emittedRoot,
+                          volumePath,
                           characteristics.storageKind,
                           characteristics.preferredCopyMoveConcurrency,
                           (seekPenaltyKnown ? 1u : 0u) | (busTypeKnown ? 2u : 0u),
@@ -1666,31 +1583,20 @@ struct DebugMountedVolumeStorageProbeState
 {
     std::wstring volumeRoot = L"R:\\MountedVolume\\";
     std::wstring volumeName = L"\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\";
+    std::vector<std::pair<std::wstring, std::wstring>> pathRootMappings;
     std::wstring openedVolumePath;
     std::wstring lastVolumePathInput;
     std::wstring lastVolumeNameInput;
+    unsigned int openVolumeCalls      = 0;
     unsigned int volumePathCalls      = 0;
     unsigned int volumeNameCalls      = 0;
+    unsigned int queryDosDeviceCalls  = 0;
     DWORD firstVolumePathBufferLength = 0u;
     DWORD lastVolumePathBufferLength  = 0u;
     DWORD lastVolumeNameBufferLength  = 0u;
     DWORD volumePathError             = ERROR_SUCCESS;
     DWORD volumeNameError             = ERROR_SUCCESS;
     bool oneShortSuccess              = false;
-    std::wstring finalPath            = L"\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\Folder\\file.bin";
-    std::wstring mountGuidAfterFinal;
-    std::wstring lastFollowingPath;
-    unsigned int followingOpenCalls = 0u;
-    unsigned int finalPathCalls     = 0u;
-    DWORD followingDesiredAccess    = MAXDWORD;
-    DWORD followingShareMode        = 0u;
-    DWORD followingDisposition      = 0u;
-    DWORD followingFlags            = 0u;
-    DWORD finalFlags                = 0u;
-    DWORD finalBufferLength         = 0u;
-    DWORD forcedFinalLength         = 0u;
-    bool failFollowingOpen          = false;
-    bool failFinalQuery             = false;
 };
 
 bool DebugCopyStringToBuffer(std::wstring_view text, wchar_t* buffer, DWORD bufferLength) noexcept
@@ -1732,6 +1638,13 @@ BOOL DebugMountedVolumeGetVolumePathName(void* context, const wchar_t* fileName,
         SetLastError(state->volumePathError);
         return FALSE;
     }
+    for (const auto& [input, root] : state->pathRootMappings)
+    {
+        if (state->lastVolumePathInput == input)
+        {
+            return DebugCopyStringToBuffer(root, volumePathName, bufferLength) ? TRUE : FALSE;
+        }
+    }
     if (state->oneShortSuccess && state->volumeRoot.size() == bufferLength && state->volumeRoot.ends_with(L'\\'))
         return DebugCopyStringToBuffer(std::wstring_view(state->volumeRoot).substr(0u, state->volumeRoot.size() - 1u), volumePathName, bufferLength) ? TRUE
                                                                                                                                                      : FALSE;
@@ -1758,8 +1671,13 @@ BOOL DebugMountedVolumeGetVolumeNameForVolumeMountPoint(void* context, const wch
     return DebugCopyStringToBuffer(state->volumeName, volumeName, bufferLength) ? TRUE : FALSE;
 }
 
-DWORD DebugMountedVolumeQueryDosDevice(void*, const wchar_t*, wchar_t*, DWORD) noexcept
+DWORD DebugMountedVolumeQueryDosDevice(void* context, const wchar_t*, wchar_t*, DWORD) noexcept
 {
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    if (state != nullptr)
+    {
+        ++state->queryDosDeviceCalls;
+    }
     SetLastError(ERROR_FILE_NOT_FOUND);
     return 0u;
 }
@@ -1769,233 +1687,144 @@ wil::unique_hfile DebugMountedVolumeOpenVolume(void* context, const wchar_t* vol
     auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
     if (state != nullptr)
     {
+        ++state->openVolumeCalls;
         state->openedVolumePath = volumePath != nullptr ? volumePath : L"";
     }
     return {};
 }
 
-wil::unique_hfile DebugOpenFollowingRoutePath(
-    void* context, const wchar_t* path, DWORD desiredAccess, DWORD shareMode, DWORD creationDisposition, DWORD flags) noexcept
+UINT DebugRouteDriveType(void*, const wchar_t*) noexcept
 {
-    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
-    ++state->followingOpenCalls;
-    state->lastFollowingPath      = path;
-    state->followingDesiredAccess = desiredAccess;
-    state->followingShareMode     = shareMode;
-    state->followingDisposition   = creationDisposition;
-    state->followingFlags         = flags;
-    if (state->failFollowingOpen)
-    {
-        SetLastError(ERROR_FILE_NOT_FOUND);
-        return {};
-    }
-    // A real owned kernel handle exercises every early-exit cleanup path. The
-    // final-name hook supplies synthetic metadata; no fake R: path is opened.
-    return wil::unique_hfile(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-}
-
-DWORD DebugGetFinalRoutePath(void* context, HANDLE file, wchar_t* path, DWORD bufferLength, DWORD flags) noexcept
-{
-    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
-    ++state->finalPathCalls;
-    state->finalFlags        = flags;
-    state->finalBufferLength = bufferLength;
-    DWORD handleFlags        = 0u;
-    if (! GetHandleInformation(file, &handleFlags) || state->failFinalQuery)
-    {
-        SetLastError(ERROR_ACCESS_DENIED);
-        return 0u;
-    }
-    if (state->forcedFinalLength != 0u)
-    {
-        return state->forcedFinalLength;
-    }
-    if (! DebugCopyStringToBuffer(state->finalPath, path, bufferLength))
-    {
-        return static_cast<DWORD>(state->finalPath.size() + 1u);
-    }
-    if (! state->mountGuidAfterFinal.empty())
-    {
-        state->volumeName = state->mountGuidAfterFinal;
-    }
-    return static_cast<DWORD>(state->finalPath.size());
+    return DRIVE_FIXED;
 }
 
 void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     DebugMountedVolumeStorageProbeState state;
+    state.volumeRoot             = L"C:\\";
+    const std::wstring pathA     = L"C:\\ordinary\\file.bin";
+    const std::wstring pathB     = L"C:\\MountB\\finalLinkToA";
+    const std::wstring pathBWarm = L"C:\\MountB\\second.bin";
+    const std::wstring pathC     = L"C:\\MountB\\MountC\\child.bin";
+    state.pathRootMappings       = {
+        {pathA, L"C:\\"},
+        {pathB, L"C:\\MountB\\"},
+        {pathBWarm, L"C:\\MountB\\"},
+        {pathC, L"C:\\MountB\\MountC\\"},
+    };
     StorageProbeDebugHooks hooks{
         .context                          = &state,
         .getVolumePathName                = DebugMountedVolumeGetVolumePathName,
         .getVolumeNameForVolumeMountPoint = DebugMountedVolumeGetVolumeNameForVolumeMountPoint,
-        .openFollowingPath                = DebugOpenFollowingRoutePath,
-        .getFinalPathName                 = DebugGetFinalRoutePath,
+        .queryDosDevice                   = DebugMountedVolumeQueryDosDevice,
+        .getDriveType                     = DebugRouteDriveType,
     };
-    StorageProbeDebugScope scope(hooks);
-    std::wstring savedRoot;
-    std::wstring savedGuid;
-    LocalCapabilityRouteInfo savedRoute;
-    ULONGLONG savedTick = 0u;
+    LocalVolumeRouteCache testRouteCache;
+    StorageProbeDebugScope scope(hooks, testRouteCache);
+
+    const std::wstring guidA = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+    const std::string idA    = EncodeLocalRootId(guidA);
+    const auto routeA        = BuildLocalCapabilityRouteInfo(pathA.c_str());
+    DebugCheck(routeA.rootId == idA && ! routeA.remote, L"cold local route should use the lexical mount root's direct volume GUID", passed, failed);
+
+    bool otherThreadIsolated = false;
+    std::jthread otherProbe([&]() noexcept
     {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        savedRoot  = g_localVolumeRouteCache.volumeRoot;
-        savedGuid  = g_localVolumeRouteCache.volumeGuidDevicePath;
-        savedRoute = g_localVolumeRouteCache.route;
-        savedTick  = g_localVolumeRouteCache.resolvedTick;
-    }
-    const auto restore = wil::scope_exit([&]
-    {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        g_localVolumeRouteCache.volumeRoot           = std::move(savedRoot);
-        g_localVolumeRouteCache.volumeGuidDevicePath = std::move(savedGuid);
-        g_localVolumeRouteCache.route                = std::move(savedRoute);
-        g_localVolumeRouteCache.resolvedTick         = savedTick;
+        if (g_storageProbeDebugHooks != nullptr)
+            return;
+        DebugMountedVolumeStorageProbeState otherState;
+        otherState.volumeRoot = L"T:\\";
+        otherState.volumeName = L"\\\\?\\Volume{CCCCCCCC-DDDD-EEEE-FFFF-000000000000}\\";
+        StorageProbeDebugHooks otherHooks{
+            .context                          = &otherState,
+            .getVolumePathName                = DebugMountedVolumeGetVolumePathName,
+            .getVolumeNameForVolumeMountPoint = DebugMountedVolumeGetVolumeNameForVolumeMountPoint,
+            .queryDosDevice                   = DebugMountedVolumeQueryDosDevice,
+            .getDriveType                     = DebugRouteDriveType,
+        };
+        LocalVolumeRouteCache otherCache;
+        StorageProbeDebugScope otherScope(otherHooks, otherCache);
+        const auto otherRoute = BuildLocalCapabilityRouteInfo(L"T:\\owned-probe\\file.bin");
+        otherThreadIsolated   = otherRoute.rootId == EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(otherState.volumeName)) &&
+                                otherCache.volumeGuidDevicePath == BuildOpenableVolumeGuidDevicePath(otherState.volumeName);
     });
-    const auto seed    = [&]
+    otherProbe.join();
+    DebugCheck(otherThreadIsolated && g_storageProbeDebugHooks == &hooks && testRouteCache.route.rootId == idA && state.volumePathCalls == 1u,
+               L"simultaneous selftest threads keep probe hooks and synthetic route caches private",
+               passed,
+               failed);
+
+    state.volumeRoot         = L"C:\\MountB\\";
+    state.volumeName         = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
+    const std::wstring guidB = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+    const auto routeB        = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    DebugCheck(routeB.rootId == EncodeLocalRootId(guidB) && routeB.rootId != routeA.rootId && state.lastVolumePathInput == pathB &&
+                   state.lastVolumeNameInput == L"C:\\MountB\\",
+               L"a path lexically inside MountB must not inherit a prior root reached by following its final link",
+               passed,
+               failed);
+
+    const unsigned int pathCallsBeforeWarm = state.volumePathCalls;
+    const unsigned int guidCallsBeforeWarm = state.volumeNameCalls;
+    const auto routeBWarm                  = BuildLocalCapabilityRouteInfo(pathBWarm.c_str());
+    DebugCheck(routeBWarm.rootId == routeB.rootId && state.volumePathCalls == pathCallsBeforeWarm + 1u && state.volumeNameCalls == guidCallsBeforeWarm + 1u,
+               L"a warm route hit must still resolve the requested lexical root and current direct GUID",
+               passed,
+               failed);
+
+    state.volumeRoot  = L"C:\\MountB\\MountC\\";
+    state.volumeName  = L"\\\\?\\Volume{BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF}\\";
+    const auto routeC = BuildLocalCapabilityRouteInfo(pathC.c_str());
+    DebugCheck(routeC.rootId == EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName)) && routeC.rootId != routeB.rootId &&
+                   state.lastVolumeNameInput == L"C:\\MountB\\MountC\\",
+               L"a nested mount must retain its own lexical root and direct volume identity",
+               passed,
+               failed);
+
+    state.volumeRoot     = L"C:\\MountB\\";
+    state.volumeName     = L"\\\\?\\Volume{CCCCCCCC-DDDD-EEEE-FFFF-000000000000}\\";
+    const auto remounted = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    DebugCheck(remounted.rootId == EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName)) && remounted.rootId != routeB.rootId,
+               L"the same lexical mount root must receive a new route identity after its direct GUID changes",
+               passed,
+               failed);
+
+    state.volumeNameError      = ERROR_NOT_SUPPORTED;
+    const auto unavailableGuid = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    bool routeCacheInvalidated = false;
     {
-        state                   = DebugMountedVolumeStorageProbeState{};
-        const std::wstring guid = BuildOpenableVolumeGuidDevicePath(state.volumeName);
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        g_localVolumeRouteCache.volumeRoot           = state.volumeRoot;
-        g_localVolumeRouteCache.volumeGuidDevicePath = guid;
-        g_localVolumeRouteCache.route                = LocalCapabilityRouteInfo{EncodeLocalRootId(guid), false};
-        g_localVolumeRouteCache.resolvedTick         = GetTickCount64();
-    };
-    const auto currentRoute       = [&] { return BuildLocalCapabilityRouteInfo(L"R:\\MountedVolume\\Folder\\file.bin"); };
-    const std::string firstId     = EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName));
-    const std::wstring secondGuid = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
-    const std::string secondId    = EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(secondGuid));
-
-    seed();
-    const LocalCapabilityRouteInfo hit = currentRoute();
-    DebugCheck(hit.rootId == firstId && ! hit.remote && state.volumePathCalls == 0u && state.volumeNameCalls == 1u && state.followingOpenCalls == 1u &&
-                   state.finalPathCalls == 1u && state.lastFollowingPath == L"R:\\MountedVolume\\Folder\\file.bin",
-               L"an existing route must observe the exact followed path and revalidate its cached mount GUID",
-               passed,
-               failed);
-    DebugCheck(state.followingDesiredAccess == 0u && state.followingShareMode == (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) &&
-                   state.followingDisposition == OPEN_EXISTING && state.followingFlags == FILE_FLAG_BACKUP_SEMANTICS &&
-                   state.finalFlags == (FILE_NAME_OPENED | VOLUME_NAME_GUID) && state.finalBufferLength == MAX_PATH,
-               L"route observation must request no data access, follow links, and use bounded opened-name GUID output",
-               passed,
-               failed);
-
-    seed();
-    state.failFollowingOpen = true;
-    const auto missing      = currentRoute();
-    DebugCheck(missing.rootId == firstId && state.volumePathCalls == 1u && state.finalPathCalls == 0u,
-               L"an absent or inaccessible endpoint must retain the original volume-path resolver",
-               passed,
-               failed);
-
-    seed();
-    state.failFinalQuery   = true;
-    const auto unsupported = currentRoute();
-    DebugCheck(unsupported.rootId == firstId && state.volumePathCalls == 1u && state.volumeNameCalls == 0u,
-               L"an unsupported final-name query must retain the original resolved-root cache policy",
-               passed,
-               failed);
-
-    seed();
-    state.forcedFinalLength = MAX_PATH + 42u;
-    const auto oversized    = currentRoute();
-    DebugCheck(oversized.rootId == firstId && state.volumePathCalls == 1u && state.finalBufferLength == MAX_PATH,
-               L"an oversized final name must fall back without allocating or trusting truncated identity",
-               passed,
-               failed);
-
-    seed();
-    state.finalPath       = secondGuid + L"Folder\\file.bin";
-    state.volumeName      = secondGuid;
-    const auto retargeted = currentRoute();
-    DebugCheck(retargeted.rootId == secondId && state.volumePathCalls == 1u && state.volumeNameCalls == 1u,
-               L"a changed followed endpoint must not authorize a stale same-spelling mount cache hit",
-               passed,
-               failed);
-
-    seed();
-    state.finalPath               = secondGuid + L"Folder\\file.bin";
-    state.volumePathError         = ERROR_ACCESS_DENIED;
-    const auto unresolvedRetarget = currentRoute();
-    DebugCheck(unresolvedRetarget.rootId == "local-provider-root" && state.volumePathCalls == 2u && state.volumeNameCalls == 0u,
-               L"a changed endpoint whose fallback resolution fails must never reuse the previously cached GUID",
-               passed,
-               failed);
-
-    seed();
-    state.mountGuidAfterFinal = secondGuid;
-    const auto remounted      = currentRoute();
-    DebugCheck(remounted.rootId == secondId && state.volumePathCalls == 1u && state.volumeNameCalls == 2u,
-               L"a cached mount changed during observation must be re-resolved instead of returning the old GUID",
-               passed,
-               failed);
-
-    seed();
-    {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        g_localVolumeRouteCache.resolvedTick = GetTickCount64() - kLocalVolumeRouteCacheTtlMs - 1u;
+        std::scoped_lock lock(testRouteCache.mutex);
+        routeCacheInvalidated = testRouteCache.volumeRoot.empty();
     }
-    const auto expired = currentRoute();
-    DebugCheck(expired.rootId == firstId && state.followingOpenCalls == 0u && state.volumePathCalls == 1u && state.volumeNameCalls == 1u,
-               L"expired route facts must be queried through the original resolver without a following-handle shortcut",
+    DebugCheck(unavailableGuid.rootId == EncodeLocalRootId(state.volumeRoot) && routeCacheInvalidated,
+               L"an unavailable current GUID must use the lexical fallback and invalidate the old GUID snapshot",
+               passed,
+               failed);
+    state.volumeNameError = ERROR_SUCCESS;
+
+    state.volumePathError = ERROR_ACCESS_DENIED;
+    const auto unresolved = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    DebugCheck(unresolved.rootId == "local-provider-root", L"a failed lexical root resolver must not reuse a prior route cache entry", passed, failed);
+    state.volumePathError = ERROR_SUCCESS;
+
+    const unsigned int volumePathCallsBeforeUnc = state.volumePathCalls;
+    const auto unc                              = BuildLocalCapabilityRouteInfo(L"\\\\server\\share\\Folder\\file.bin");
+    DebugCheck(unc.remote && ! unc.rootId.empty() && state.volumePathCalls == volumePathCallsBeforeUnc,
+               L"UNC classification must bypass local mount-root resolution",
                passed,
                failed);
 
-    seed();
-    const auto unc = BuildLocalCapabilityRouteInfo(L"\\\\server\\share\\Folder\\file.bin");
-    DebugCheck(unc.remote && ! unc.rootId.empty() && state.followingOpenCalls == 0u && state.volumePathCalls == 0u,
-               L"UNC classification must bypass local following-handle observation",
+    // Route classification follows the lexical mount manager contract and must
+    // never chase a drive alias into a backing root (storage probing does so separately).
+    state.volumeRoot       = L"R:\\";
+    state.volumeNameError  = ERROR_NOT_SUPPORTED;
+    state.pathRootMappings = {{L"R:\\SubstAlias\\file.bin", L"R:\\"}};
+    const auto substRoute  = BuildLocalCapabilityRouteInfo(L"R:\\SubstAlias\\file.bin");
+    DebugCheck(substRoute.rootId == EncodeLocalRootId(L"R:\\") && state.queryDosDeviceCalls == 0u,
+               L"route identity must preserve SUBST lexical-root fallback without querying its backing target",
                passed,
                failed);
-
-    seed();
-    {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        g_localVolumeRouteCache.volumeGuidDevicePath.clear();
-    }
-    const auto noGuid = currentRoute();
-    DebugCheck(noGuid.rootId == firstId && state.followingOpenCalls == 0u && state.volumePathCalls == 1u,
-               L"a cache without a retained GUID must preserve the original resolved-root cache policy",
-               passed,
-               failed);
-
-    seed();
-    state.volumeNameError = ERROR_NOT_SUPPORTED;
-    {
-        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        g_localVolumeRouteCache.volumeGuidDevicePath.clear();
-        g_localVolumeRouteCache.resolvedTick = GetTickCount64() - kLocalVolumeRouteCacheTtlMs - 1u;
-    }
-    const auto unavailableGuid = currentRoute();
-    DebugCheck(unavailableGuid.rootId == EncodeLocalRootId(state.volumeRoot) && state.followingOpenCalls == 0u && state.volumePathCalls == 1u &&
-                   state.volumeNameCalls == 1u,
-               L"an unavailable Mount Manager GUID must preserve the original system-resolved root token",
-               passed,
-               failed);
-
-    // Exercise all owned-handle early exits repeatedly, including mismatched
-    // metadata. Small unrelated handle noise cannot conceal a 64-handle leak.
-    for (unsigned int mode = 0u; mode < 4u; ++mode)
-    {
-        seed();
-        state.failFinalQuery       = mode == 1u;
-        state.forcedFinalLength    = mode == 2u ? MAX_PATH + 42u : 0u;
-        state.finalPath            = mode == 3u ? secondGuid + L"Folder\\file.bin" : state.finalPath;
-        DWORD handlesBefore        = 0u;
-        DWORD handlesAfter         = 0u;
-        const bool beforeAvailable = GetProcessHandleCount(GetCurrentProcess(), &handlesBefore) != FALSE;
-        for (unsigned int iteration = 0u; iteration < 64u; ++iteration)
-        {
-            static_cast<void>(currentRoute());
-        }
-        const bool afterAvailable = GetProcessHandleCount(GetCurrentProcess(), &handlesAfter) != FALSE;
-        DebugCheck(beforeAvailable && afterAvailable && state.followingOpenCalls == 64u && handlesAfter <= handlesBefore + 2u,
-                   L"successful, failed, oversized and mismatched observations must close every owned path handle",
-                   passed,
-                   failed);
-    }
 }
-
 void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     DebugMountedVolumeStorageProbeState state;
@@ -2006,12 +1835,14 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
         .queryDosDevice                   = DebugMountedVolumeQueryDosDevice,
         .openVolume                       = DebugMountedVolumeOpenVolume,
     };
-    StorageProbeDebugScope scope(hooks);
+    LocalVolumeRouteCache testRouteCache;
+    StorageProbeDebugScope scope(hooks, testRouteCache);
 
     FileSystemStorageCharacteristics characteristics{};
     characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
-    auto* fileSystem          = new (std::nothrow) FileSystem();
-    if (! DebugCheck(fileSystem != nullptr, L"mounted-volume storage probe selftest should allocate a FileSystem instance", passed, failed))
+    wil::com_ptr<FileSystem> fileSystem;
+    fileSystem.attach(new (std::nothrow) FileSystem());
+    if (! DebugCheck(static_cast<bool>(fileSystem), L"mounted-volume storage probe selftest should allocate a FileSystem instance", passed, failed))
     {
         return;
     }
@@ -2019,12 +1850,11 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
     const HRESULT hr                        = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
     const unsigned int firstVolumeNameCalls = state.volumeNameCalls;
     const HRESULT cachedHr                  = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Other\\second.bin", &characteristics);
-    fileSystem->Release();
 
     DebugCheck(hr == S_OK, L"mounted-volume storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
     DebugCheck(cachedHr == S_OK, L"cached mounted-volume storage query should remain non-failing", passed, failed);
-    DebugCheck(state.volumeNameCalls == firstVolumeNameCalls,
-               L"repeated storage queries for one resolved volume should reuse the per-instance physical probe",
+    DebugCheck(state.volumeNameCalls == firstVolumeNameCalls + 1u && state.openVolumeCalls == 1u,
+               L"a cache hit must revalidate the current GUID while reusing the per-instance physical probe",
                passed,
                failed);
     DebugCheck(state.volumePathCalls > 0u, L"mounted-volume storage probe should resolve the real volume root", passed, failed);
@@ -2038,6 +1868,24 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
     }
     DebugCheck(state.openedVolumePath == expectedOpenPath, L"mounted-volume storage probe should open the resolved volume GUID device", passed, failed);
     DebugCheck(state.openedVolumePath != L"\\\\.\\R:", L"mounted-volume storage probe must not open the lexical drive letter", passed, failed);
+
+    state.volumeName                     = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
+    const HRESULT remountedHr            = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\AfterRemount\\file.bin", &characteristics);
+    const std::wstring remountedExpected = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+    DebugCheck(remountedHr == S_OK && state.openVolumeCalls == 2u && state.openedVolumePath == remountedExpected,
+               L"a remounted lexical root must reprobe the newly observed backing volume GUID",
+               passed,
+               failed);
+
+    state.volumeNameError                  = ERROR_NOT_SUPPORTED;
+    const HRESULT fallbackHr1              = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Fallback\\one.bin", &characteristics);
+    const unsigned int opensAfterFallback1 = state.openVolumeCalls;
+    const HRESULT fallbackHr2              = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Fallback\\two.bin", &characteristics);
+    DebugCheck(fallbackHr1 == S_OK && fallbackHr2 == S_OK && opensAfterFallback1 == 3u && state.openVolumeCalls == 4u && state.openedVolumePath == L"\\\\.\\R:",
+               L"without a stable volume GUID, drive-letter fallback probes must not be retained as physical cache entries",
+               passed,
+               failed);
+    fileSystem.reset();
 
     // Reuse the existing storage hooks; these controls isolate output-buffer
     // behavior from cache/per-instance storage policy and real-volume fixtures.
@@ -2112,6 +1960,7 @@ struct DebugSubstStorageProbeState
     unsigned int volumePathCalls     = 0;
     unsigned int volumeNameCalls     = 0;
     unsigned int queryDosDeviceCalls = 0;
+    unsigned int openVolumeCalls     = 0;
 };
 
 BOOL DebugSubstGetVolumePathName(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept
@@ -2125,7 +1974,7 @@ BOOL DebugSubstGetVolumePathName(void* context, const wchar_t* fileName, wchar_t
 
     ++state->volumePathCalls;
     const std::wstring_view requestedPath = fileName != nullptr ? std::wstring_view(fileName) : std::wstring_view{};
-    if (requestedPath == L"R:\\SubstAlias\\file.bin")
+    if (OrdinalString::StartsWithNoCase(requestedPath, L"R:\\SubstAlias\\"))
     {
         return DebugCopyStringToBuffer(state->substRoot, volumePathName, bufferLength) ? TRUE : FALSE;
     }
@@ -2193,6 +2042,7 @@ wil::unique_hfile DebugSubstOpenVolume(void* context, const wchar_t* volumePath)
     auto* state = static_cast<DebugSubstStorageProbeState*>(context);
     if (state != nullptr)
     {
+        ++state->openVolumeCalls;
         state->openedVolumePath = volumePath != nullptr ? volumePath : L"";
     }
     return {};
@@ -2208,18 +2058,19 @@ void RunDebugSubstStorageProbeSelfTest(unsigned int& passed, unsigned int& faile
         .queryDosDevice                   = DebugSubstQueryDosDevice,
         .openVolume                       = DebugSubstOpenVolume,
     };
-    StorageProbeDebugScope scope(hooks);
+    LocalVolumeRouteCache testRouteCache;
+    StorageProbeDebugScope scope(hooks, testRouteCache);
 
     FileSystemStorageCharacteristics characteristics{};
     characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
-    auto* fileSystem          = new (std::nothrow) FileSystem();
-    if (! DebugCheck(fileSystem != nullptr, L"SUBST storage probe selftest should allocate a FileSystem instance", passed, failed))
+    wil::com_ptr<FileSystem> fileSystem;
+    fileSystem.attach(new (std::nothrow) FileSystem());
+    if (! DebugCheck(static_cast<bool>(fileSystem), L"SUBST storage probe selftest should allocate a FileSystem instance", passed, failed))
     {
         return;
     }
 
     const HRESULT hr = fileSystem->GetStorageCharacteristics(L"R:\\SubstAlias\\file.bin", &characteristics);
-    fileSystem->Release();
 
     DebugCheck(hr == S_OK, L"SUBST storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
     DebugCheck(state.queryDosDeviceCalls > 0u, L"SUBST storage probe should query the drive alias target", passed, failed);
@@ -2233,6 +2084,18 @@ void RunDebugSubstStorageProbeSelfTest(unsigned int& passed, unsigned int& faile
     }
     DebugCheck(state.openedVolumePath == expectedOpenPath, L"SUBST storage probe should open the backing volume GUID device", passed, failed);
     DebugCheck(state.openedVolumePath != L"\\\\.\\R:", L"SUBST storage probe must not open the lexical alias drive", passed, failed);
+
+    const HRESULT cachedHr = fileSystem->GetStorageCharacteristics(L"R:\\SubstAlias\\second.bin", &characteristics);
+    DebugCheck(cachedHr == S_OK && state.openVolumeCalls == 1u,
+               L"SUBST physical cache hits must revalidate backing identity but reuse the medium probe",
+               passed,
+               failed);
+    state.volumeName          = L"\\\\?\\Volume{77777777-8888-9999-AAAA-BBBBBBBBBBBB}\\";
+    const HRESULT remountedHr = fileSystem->GetStorageCharacteristics(L"R:\\SubstAlias\\remounted.bin", &characteristics);
+    DebugCheck(remountedHr == S_OK && state.openVolumeCalls == 2u && state.openedVolumePath == BuildOpenableVolumeGuidDevicePath(state.volumeName),
+               L"a changed SUBST backing GUID must replace the old physical medium cache entry",
+               passed,
+               failed);
 }
 
 struct DebugNvmeFallbackStorageProbeState
@@ -2332,7 +2195,8 @@ void RunDebugNvmeFallbackStorageProbeSelfTest(unsigned int& passed, unsigned int
         .openVolume                       = DebugNvmeFallbackOpenVolume,
         .deviceIoControl                  = DebugNvmeFallbackDeviceIoControl,
     };
-    StorageProbeDebugScope scope(hooks);
+    LocalVolumeRouteCache testRouteCache;
+    StorageProbeDebugScope scope(hooks, testRouteCache);
 
     FileSystemStorageCharacteristics characteristics{};
     characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
@@ -2422,7 +2286,8 @@ void RunDebugUncPathClassificationSelfTest(unsigned int& passed, unsigned int& f
         .getVolumePathName = DebugUncGetVolumePathName,
         .getDriveType      = DebugUncGetDriveType,
     };
-    StorageProbeDebugScope scope(hooks);
+    LocalVolumeRouteCache testRouteCache;
+    StorageProbeDebugScope scope(hooks, testRouteCache);
     auto* fileSystem = new (std::nothrow) FileSystem();
     if (! DebugCheck(fileSystem != nullptr, L"UNC classification selftest should allocate a FileSystem instance", passed, failed))
     {
@@ -2865,6 +2730,24 @@ constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 
     return MakePersistentLocalObjectIdentity(fileIdInfo, identity);
 }
 
+[[nodiscard]] HRESULT QueryPersistentIdentityFromRetainedHandle(HANDLE file, LocalObjectIdentityPayload& identity) noexcept
+{
+    identity = {};
+    if (file == nullptr || file == INVALID_HANDLE_VALUE)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+    }
+
+    wil::unique_handle metadataHandle(
+        ReOpenFile(file, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_FLAG_OPEN_REPARSE_POINT));
+    if (! metadataHandle)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    return QueryExactLocalObjectIdentity(metadataHandle.get(), identity);
+}
+
 [[nodiscard]] HRESULT ResolveNewStageIdentity(HANDLE file,
                                               const wchar_t* stagePath,
                                               std::wstring_view objectKind,
@@ -3304,6 +3187,35 @@ constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILE
         return S_OK;
     }
     return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+}
+
+[[nodiscard]] HRESULT DeletePathOnlyWhenPersistentIdentityMatches(const std::wstring& path, const LocalObjectIdentityPayload& expectedIdentity) noexcept
+{
+    if (path.empty() || IsRetainedHandleIdentity(expectedIdentity))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    wil::unique_handle file(
+        CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (! file)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    LocalObjectIdentityPayload currentIdentity{};
+    const HRESULT identityHr = QueryExactLocalObjectIdentity(file.get(), currentIdentity);
+    if (FAILED(identityHr))
+    {
+        return identityHr;
+    }
+    if (std::memcmp(&currentIdentity, &expectedIdentity, sizeof(currentIdentity)) != 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
+    return DeleteExactHandle(file.get());
 }
 
 class LocalBoundObject final : public IFileSystemBoundObject,
@@ -4391,21 +4303,7 @@ private:
 
     [[nodiscard]] static HRESULT MakeBackupPath(std::wstring_view finalPath, std::wstring& backupPath) noexcept
     {
-        GUID guid{};
-        const HRESULT guidHr = CoCreateGuid(&guid);
-        if (FAILED(guidHr))
-        {
-            return guidHr;
-        }
-        std::array<wchar_t, 40u> guidText{};
-        if (StringFromGUID2(guid, guidText.data(), static_cast<int>(guidText.size())) <= 0)
-        {
-            return E_FAIL;
-        }
-        backupPath.assign(finalPath);
-        backupPath.append(L".rs_bak_");
-        backupPath.append(guidText.data());
-        return S_OK;
+        return FileSystemInternal::MakeStageSiblingPath(finalPath, L".rs_bak_", backupPath);
     }
 
     [[nodiscard]] HRESULT ClearTemporaryAttributes() noexcept
@@ -4420,7 +4318,9 @@ private:
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
         }
-        basic.FileAttributes &= ~(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY);
+        // Source metadata has already replaced the stage attributes. Hidden is user metadata;
+        // only the writer's temporary caching hint must be removed before publication.
+        basic.FileAttributes &= ~FILE_ATTRIBUTE_TEMPORARY;
         if (basic.FileAttributes == 0u)
         {
             basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
@@ -4922,6 +4822,7 @@ public:
 
         if (_replaceOnCommit)
         {
+            CapturePersistentIdentity();
             _file.reset();
             return PromoteTempIntoFinalPath();
         }
@@ -4933,15 +4834,32 @@ public:
 private:
     ~Win32FileWriter()
     {
-        if (_committed)
+        if (_committed || _path.empty())
         {
             return;
         }
 
-        _file.reset();
-        if (! _path.empty())
+        HRESULT cleanupHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        if (_file)
         {
-            static_cast<void>(DeleteFileW(_path.c_str()));
+            cleanupHr = DeleteExactHandle(_file.get());
+            if (SUCCEEDED(cleanupHr))
+            {
+                _file.reset();
+                return;
+            }
+            CapturePersistentIdentity();
+            _file.reset();
+        }
+
+        if (_hasPersistentIdentity)
+        {
+            cleanupHr = DeletePathOnlyWhenPersistentIdentityMatches(_path, _identity);
+        }
+        if (FAILED(cleanupHr))
+        {
+            Debug::Warning(L"FileSystem: aborted writer cleanup left an unverified path untouched (error={}).",
+                           static_cast<unsigned long>(HRESULT_CODE(cleanupHr)));
         }
     }
 
@@ -4950,8 +4868,19 @@ private:
         return _hasOperationOptions ? &_operationOptions : nullptr;
     }
 
+    void CapturePersistentIdentity() noexcept
+    {
+        if (_hasPersistentIdentity || ! _file)
+        {
+            return;
+        }
+        _hasPersistentIdentity = SUCCEEDED(QueryPersistentIdentityFromRetainedHandle(_file.get(), _identity)) && ! IsRetainedHandleIdentity(_identity);
+    }
+
     std::atomic_ulong _refCount{1};
     wil::unique_handle _file;
+    LocalObjectIdentityPayload _identity{};
+    bool _hasPersistentIdentity = false;
     std::wstring _path;
     std::wstring _finalPath;
     bool _allowReplaceReadOnly = false;
@@ -6244,13 +6173,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         {
             return E_INVALIDARG;
         }
-        const std::wstring prefix = std::wstring(filePath.substr(separator + 1u)) + L".~rs-write-";
-        const Common::Paths::UniqueSiblingFileOptions options{.prefix             = prefix,
-                                                              .suffix             = L".tmp",
-                                                              .shareMode          = FILE_SHARE_READ,
-                                                              .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
-                                                              .maximumAttempts    = 32u};
-        const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(filePath, options, tempPath, file);
+        const std::wstring_view leaf = std::wstring_view(filePath).substr(separator + 1u);
+        const Common::Paths::UniqueSiblingFileOptions options{
+            .shareMode = FILE_SHARE_READ, .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY, .maximumAttempts = 32u};
+        // Keep the writer marker and random token intact when the readable leaf consumes the
+        // volume's component limit; the shared creator still owns exclusive creation/retries.
+        const HRESULT tempHr =
+            Common::Paths::CreateUniqueFileInDirectory(filePath.substr(0u, separator + 1u), options, [leaf](size_t, std::wstring& name) noexcept {
+            return Common::Paths::BuildUniqueSiblingName<wchar_t>(leaf, L".~rs-write-", L".tmp", 255u, name);
+        }, tempPath, file);
         if (FAILED(tempHr))
         {
             return tempHr;
@@ -6259,8 +6190,20 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), tempPath, filePath, allowReplaceReadOnly, nullptr);
         if (! impl)
         {
+            LocalObjectIdentityPayload tempIdentity{};
+            const bool hasPersistentIdentity =
+                SUCCEEDED(QueryPersistentIdentityFromRetainedHandle(file.get(), tempIdentity)) && ! IsRetainedHandleIdentity(tempIdentity);
+            HRESULT cleanupHr = DeleteExactHandle(file.get());
             file.reset();
-            static_cast<void>(::DeleteFileW(tempPath.c_str()));
+            if (FAILED(cleanupHr) && hasPersistentIdentity)
+            {
+                cleanupHr = DeletePathOnlyWhenPersistentIdentityMatches(tempPath, tempIdentity);
+            }
+            if (FAILED(cleanupHr))
+            {
+                Debug::Warning(L"FileSystem: writer allocation failure left an unverified stage untouched (error={}).",
+                               static_cast<unsigned long>(HRESULT_CODE(cleanupHr)));
+            }
             return E_OUTOFMEMORY;
         }
 
@@ -7613,24 +7556,60 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
     const std::wstring& driveTypeRoot   = ! volumeRoot.empty() ? volumeRoot : driveRoot;
     const UINT driveType                = ! driveTypeRoot.empty() ? GetDriveTypeForStorageProbe(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
     const bool highLatency              = driveType == DRIVE_REMOTE || IsUncPath(path);
-    const std::wstring cacheKey         = std::format(L"{}\n{}\n{}\n{}", volumeRoot, driveRoot, driveType, highLatency ? 1u : 0u);
     const unsigned long callerSizeBytes = characteristics->sizeBytes;
+
+    if (highLatency)
+    {
+        if (! volumeRoot.empty())
+        {
+            std::scoped_lock lock(_storageCharacteristicsMutex);
+            _storageCharacteristicsCache.erase(OrdinalString::FoldCaseInvariant(volumeRoot));
+        }
+        FillStorageCharacteristicsLocal(*characteristics, {}, driveType, true);
+        Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"uncached-network", 0u, 0u, 1u, S_OK);
+        return S_OK;
+    }
+
+    // Resolve once before the cache lookup. The returned openable path is both
+    // the current physical identity and the exact target used by the probe.
+    // If a direct volume GUID is unavailable, ResolveStorageProbeDevicePath
+    // preserves the existing SUBST/backing-root and drive-letter fallbacks.
+    const std::wstring volumePath = ResolveStorageProbeDevicePath(volumeRoot, driveRoot);
+    if (! IsStableVolumeGuidDevicePath(volumePath) || volumeRoot.empty())
+    {
+        {
+            std::scoped_lock lock(_storageCharacteristicsMutex);
+            _storageCharacteristicsCache.erase(OrdinalString::FoldCaseInvariant(volumeRoot));
+            FillStorageCharacteristicsLocal(*characteristics, volumePath, driveType, false);
+        }
+        Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"uncached-unstable-identity", 0u, 0u, 1u, S_OK);
+        return S_OK;
+    }
+
+    const std::wstring cacheKey = OrdinalString::FoldCaseInvariant(volumeRoot);
     {
         // Hold the per-instance lock through the first physical probe so concurrent operation-start
         // queries cannot all issue the same volume IOCTLs.
         std::scoped_lock lock(_storageCharacteristicsMutex);
-        if (const auto cached = _storageCharacteristicsCache.find(cacheKey); cached != _storageCharacteristicsCache.end())
+        if (const auto cached = _storageCharacteristicsCache.find(cacheKey);
+            cached != _storageCharacteristicsCache.end() && OrdinalString::EqualsNoCase(cached->second.backingVolumeGuidDevicePath, volumePath) &&
+            OrdinalString::EqualsNoCase(cached->second.driveRoot, driveRoot) && cached->second.driveType == driveType && ! cached->second.highLatency)
         {
-            *characteristics           = cached->second;
+            *characteristics           = cached->second.characteristics;
             characteristics->sizeBytes = callerSizeBytes;
             Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"hit", 0u, 1u, 0u, S_OK);
             return S_OK;
         }
 
-        FillStorageCharacteristicsLocal(*characteristics, volumeRoot, driveRoot, driveType, highLatency);
-        FileSystemStorageCharacteristics cached = *characteristics;
-        cached.sizeBytes                        = sizeof(FileSystemStorageCharacteristics);
-        _storageCharacteristicsCache.emplace(cacheKey, cached);
+        FillStorageCharacteristicsLocal(*characteristics, volumePath, driveType, false);
+        StorageCharacteristicsCacheEntry cached{};
+        cached.backingVolumeGuidDevicePath = volumePath;
+        cached.driveRoot                   = driveRoot;
+        cached.driveType                   = driveType;
+        cached.highLatency                 = false;
+        cached.characteristics             = *characteristics;
+        cached.characteristics.sizeBytes   = sizeof(FileSystemStorageCharacteristics);
+        _storageCharacteristicsCache.insert_or_assign(cacheKey, std::move(cached));
     }
     Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"miss", 0u, 0u, 1u, S_OK);
     return S_OK;

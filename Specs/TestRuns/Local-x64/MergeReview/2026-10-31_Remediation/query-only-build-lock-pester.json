@@ -1,0 +1,21 @@
+{
+  "schema": "codex.focused-build-output-process-pester.v1",
+  "run_id": "20261031T145541Z-84844-d4a29a04b8864d0291ed0c225846fc7a",
+  "started_utc": "2026-10-31T14:55:41.5931781+00:00",
+  "elapsed_seconds": 7.362,
+  "test_root": "Z:\\RedSalamander.Perf",
+  "temp": "Z:\\RedSalamander.Perf\\runs\\20261031T145541Z-84844-d4a29a04b8864d0291ed0c225846fc7a\\scratch\\focused-pester\\build-output-process",
+  "tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T145541Z-84844-d4a29a04b8864d0291ed0c225846fc7a\\scratch\\focused-pester\\build-output-process",
+  "pester": "3.4.0",
+  "exclude_tag": "RequiresBuildToolchain",
+  "test_path": "Tools/Tests/BuildOutputProcess.Tests.ps1",
+  "passed": 28,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "inconclusive": 0,
+  "total": 28,
+  "failure_details": [],
+  "runner_failure": null,
+  "finished_utc": "2026-10-31T14:55:48.9593017+00:00"
+}

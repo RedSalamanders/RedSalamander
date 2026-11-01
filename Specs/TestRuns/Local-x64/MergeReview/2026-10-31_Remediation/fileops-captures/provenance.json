@@ -1,0 +1,120 @@
+{
+  "run_id": "20261031T141120Z-75668-9279d796d7fe40fcbb43042d68b2c4cd",
+  "build_receipt_id": "561b2f04049400ba8abfd0cd2ed14411139df7c0afa65e07b467b708dc6e1388",
+  "source_snapshot_id": "1c9bd2813781b632ab5094534a61a4b45c21c37bba45dc61a29b775f14410ebd",
+  "profile": "x64 Debug",
+  "mode": "harness no activation; deterministic seeded application state",
+  "coverage": "10 dark en-US frames at 144 DPI only; no physical keyboard, assistive technology, mixed DPI or high contrast acceptance",
+  "captures": [
+    {
+      "file": "file-operations-popup.png",
+      "scenario": "running-copy",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "ebb671ec361f5164ca3c8f24c7dcedc8270b4c9b631b329b09bd89961ab7299d",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-counting.png",
+      "scenario": "open-counting",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "240891a50817f44bf11551fb8c18d80b491af1d051133204b9e11d07caab394e",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-move-totals.png",
+      "scenario": "totals-only-move",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "fca3b34e7de7d0a000230e75d93a3854816d539699f28ba55361c8f79a66f833",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-file-progress.png",
+      "scenario": "file-progress-only",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "9d2ab6f7428cc8cfcca017b2efcb422a357b6d4d84e71632e67a8a4eac7c98f9",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-paused.png",
+      "scenario": "paused-copy",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "11c920df5689ff542a6db0e22bac3774b3bdc344980aa69d862e5fe35e06b14f",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-queued.png",
+      "scenario": "queued-copy",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "fbf69575533037086ccd62df7770b3a2b3149ebd681c33723803d4dfba2c4c08",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-completed.png",
+      "scenario": "completed-copy",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "699440903233b7d4c6d88f28214434f260ebd9fe282a0de85a7f1d45750c88df",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-conflict.png",
+      "scenario": "destination-conflict",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "dc75b26f34e7b22a71abc880b69412974c5430ffe6fb7947450bfea8626d18b3",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-wrapped-note.png",
+      "scenario": "wrapped-terminal-note",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 760,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "dd0683f88bf48aabbdbc0caf0713d3c77e85e75827eaa6648c0c6d5406172997",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    },
+    {
+      "file": "file-operations-issues.png",
+      "scenario": "selected-source-missing-issue",
+      "language": "en-US",
+      "theme": "dark",
+      "client_width_dip": 900,
+      "dpi": 144,
+      "fixture": "invented Workshop media paths",
+      "sha256": "75457a4a4d4b640d4d37d8859a51e851f64f9663dd2e9ef3cf98a74e11cd3fa6",
+      "visual_review": "Inspected actual harness-rendered image: readable labels and paths, no clipping/overlap observed; invented fixture content."
+    }
+  ]
+}

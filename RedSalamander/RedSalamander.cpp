@@ -7144,7 +7144,7 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
     L"  --commands-selftest             Run Commands self-test suite.\r\n"
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
-    L"  --selftest-no-activate          Prevent reviewed Compare/FileOperations or exact static documentation selftests from taking activation or keyboard "
+    L"  --selftest-no-activate          Prevent reviewed Compare/FileOperations or exact approved Commands cases from taking activation or keyboard "
     L"focus.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
     L"  --selftest-case=NAME            Run the exact matching self-test case, a case-prefix family when NAME ends in '_', or comma-separated exact cases.\r\n"
@@ -7518,15 +7518,18 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool explicitNoActivate = hasArg(L"--selftest-no-activate");
     std::wstring selectedCaptureCase;
     std::wstring selectedCaptureProof;
-    const bool selectedDocumentationGallery =
-        hasArg(L"--commands-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
-        selectedCaptureCase == L"cmd_product_documentation_gallery" && ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") &&
-        ! hasArg(L"--fileops-selftest") && ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) &&
-        ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) && ! getArgValue(L"--selftest-crash-case=", selectedCaptureProof);
-    const bool selectedSafeSuite          = hasArg(L"--compare-selftest") || hasArg(L"--fileops-selftest") || selectedDocumentationGallery;
-    const bool selectedGalleryInteraction = hasArg(L"--fileops-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
-                                            _wcsicmp(selectedCaptureCase.c_str(), L"FileOps_VisualGalleryInteraction") == 0;
-    const bool selectedFocusSuite = hasArg(L"--selftest") || (hasArg(L"--commands-selftest") && ! selectedDocumentationGallery) || selectedGalleryInteraction;
+    const bool selectedNoActivationCommandsCase = hasArg(L"--commands-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
+                                                  (selectedCaptureCase == L"cmd_product_documentation_gallery" ||
+                                                   selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained") &&
+                                                  ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") && ! hasArg(L"--fileops-selftest") &&
+                                                  ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) &&
+                                                  ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) &&
+                                                  ! getArgValue(L"--selftest-crash-case=", selectedCaptureProof);
+    const bool selectedSafeSuite                = hasArg(L"--compare-selftest") || hasArg(L"--fileops-selftest") || selectedNoActivationCommandsCase;
+    const bool selectedGalleryInteraction       = hasArg(L"--fileops-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
+                                                  _wcsicmp(selectedCaptureCase.c_str(), L"FileOps_VisualGalleryInteraction") == 0;
+    const bool selectedFocusSuite =
+        hasArg(L"--selftest") || (hasArg(L"--commands-selftest") && ! selectedNoActivationCommandsCase) || selectedGalleryInteraction;
     const HWND previousGalleryForeground = selectedGalleryInteraction ? GetForegroundWindow() : nullptr;
     const auto restoreGalleryForeground  = wil::scope_exit([&]
     {
@@ -7535,7 +7538,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     });
     if (explicitNoActivate && (! selectedSafeSuite || selectedFocusSuite))
     {
-        Debug::Error(L"--selftest-no-activate requires a reviewed no-activation suite or exact static documentation case.");
+        Debug::Error(L"--selftest-no-activate requires a reviewed no-activation suite or an exact approved Commands case.");
         return 2;
     }
     // Warn before startup can activate a Commands test window. The suite and

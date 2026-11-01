@@ -4541,6 +4541,12 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
         fieldCase.mutate(fileOperations);
         settings.fileOperations = fileOperations;
 
+        Common::Settings::Settings preferenceWorkingSettings{};
+        preferenceWorkingSettings.fileOperations = fileOperations;
+        PrefsFileOperations::MaybeResetWorkingFileOperationsSettingsIfEmpty(preferenceWorkingSettings);
+        state.Require(preferenceWorkingSettings.fileOperations.has_value() && fieldCase.matches(preferenceWorkingSettings.fileOperations.value()),
+                      std::format(L"{}-only non-default preference was erased when the working File Operations settings were pruned.", fieldCase.name));
+
         const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
         state.Require(prepared.fileOperations.has_value(),
                       std::format(L"{}-only file-operations settings should survive canonical save preparation.", fieldCase.name));
@@ -4567,6 +4573,55 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
 
         state.Require(fieldCase.matches(loaded.fileOperations.value()), std::format(L"{}-only file-operations value did not round-trip.", fieldCase.name));
     }
+
+    // Preferences applies from a snapshot while the popup and Issues pane can
+    // independently persist their own fields. A later settings snapshot must
+    // keep those live fields when a Preferences-owned value changes.
+    FileOperationsSettings preferencesBaseline{};
+    FileOperationsSettings preferencesWorking{};
+    preferencesWorking.verifyAfterCopy                     = true;
+    preferencesWorking.defaultBandwidthLimitBytesPerSecond = 2ull * 1024ull * 1024ull;
+    Common::Settings::Settings latestSettings{};
+    latestSettings.fileOperations                           = FileOperationsSettings{};
+    latestSettings.fileOperations->popupFooterOnly          = true;
+    latestSettings.fileOperations->popupCompactDensity      = true;
+    latestSettings.fileOperations->popupThroughputExpanded  = false;
+    latestSettings.fileOperations->diagnosticsInfoEnabled   = ! preferencesBaseline.diagnosticsInfoEnabled;
+    latestSettings.fileOperations->diagnosticsDebugEnabled  = ! preferencesBaseline.diagnosticsDebugEnabled;
+    latestSettings.fileOperations->issuesPaneSortColumnId   = L"severity";
+    latestSettings.fileOperations->issuesPaneSortDescending = true;
+    latestSettings.fileOperations->issuesPaneGridLayout.push_back(
+        Common::Settings::GridColumnLayoutEntry{.columnId = L"severity", .displayIndex = 1u, .widthDip = 181.0f});
+    latestSettings.fileOperations->maxIssueReportFiles          = 17u;
+    latestSettings.fileOperations->maxDiagnosticsInMemory       = 701u;
+    latestSettings.fileOperations->maxDiagnosticsPerFlush       = 83u;
+    latestSettings.fileOperations->diagnosticsFlushIntervalMs   = 2900u;
+    latestSettings.fileOperations->diagnosticsCleanupIntervalMs = 9100u;
+    PrefsFileOperations::MergePreferencesOwnedFileOperationsSettings(latestSettings, preferencesBaseline, preferencesWorking);
+    state.Require(latestSettings.fileOperations.has_value() && latestSettings.fileOperations->verifyAfterCopy &&
+                      latestSettings.fileOperations->defaultBandwidthLimitBytesPerSecond == 2ull * 1024ull * 1024ull,
+                  L"Preferences-owned File Operations edits were not merged into the latest settings snapshot.");
+    state.Require(latestSettings.fileOperations.has_value() && latestSettings.fileOperations->popupFooterOnly &&
+                      latestSettings.fileOperations->popupCompactDensity && ! latestSettings.fileOperations->popupThroughputExpanded &&
+                      latestSettings.fileOperations->diagnosticsInfoEnabled != preferencesBaseline.diagnosticsInfoEnabled &&
+                      latestSettings.fileOperations->diagnosticsDebugEnabled != preferencesBaseline.diagnosticsDebugEnabled &&
+                      latestSettings.fileOperations->issuesPaneSortColumnId == L"severity" && latestSettings.fileOperations->issuesPaneSortDescending &&
+                      latestSettings.fileOperations->issuesPaneGridLayout.size() == 1u &&
+                      latestSettings.fileOperations->issuesPaneGridLayout.front().columnId == L"severity" &&
+                      std::abs(latestSettings.fileOperations->issuesPaneGridLayout.front().widthDip - 181.0f) < 0.01f &&
+                      latestSettings.fileOperations->maxIssueReportFiles == 17u && latestSettings.fileOperations->maxDiagnosticsInMemory == 701u &&
+                      latestSettings.fileOperations->maxDiagnosticsPerFlush == 83u && latestSettings.fileOperations->diagnosticsFlushIntervalMs == 2900u &&
+                      latestSettings.fileOperations->diagnosticsCleanupIntervalMs == 9100u,
+                  L"Preferences Apply overwrote popup, Issues-grid, or JSON-only diagnostics fields from its stale working copy.");
+
+    Common::Settings::Settings unchangedLatest{};
+    unchangedLatest.fileOperations                         = FileOperationsSettings{};
+    unchangedLatest.fileOperations->popupFooterOnly        = true;
+    unchangedLatest.fileOperations->issuesPaneSortColumnId = L"status";
+    PrefsFileOperations::MergePreferencesOwnedFileOperationsSettings(unchangedLatest, preferencesBaseline, preferencesBaseline);
+    state.Require(unchangedLatest.fileOperations.has_value() && unchangedLatest.fileOperations->popupFooterOnly &&
+                      unchangedLatest.fileOperations->issuesPaneSortColumnId == L"status",
+                  L"An unrelated Apply with no File Operations page edits changed live popup-owned fields.");
     return state.failure.empty();
 }
 
@@ -12821,11 +12876,23 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     const std::filesystem::path root     = suiteRoot / L"work" / (L"cleanup_leftovers_" + NewGuidText());
     const std::filesystem::path leftover = root / L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0";
     const std::filesystem::path original = root / L"report.docx.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}";
+    const std::filesystem::path recent   = root / L"current.bin.rs_tmp_00112233445566778899AABBCCDDEEFF_3";
     const std::filesystem::path ordinary = root / L"ordinary.txt";
     const std::filesystem::path nested   = root / L"sub" / L"nested.bin.rs_tmp_00112233445566778899AABBCCDDEEFF_2";
     state.Require(SelfTest::EnsureDirectory(root / L"sub") && SelfTest::WriteTextFile(leftover, "partial") && SelfTest::WriteTextFile(original, "original") &&
-                      SelfTest::WriteTextFile(ordinary, "ordinary") && SelfTest::WriteTextFile(nested, "nested"),
+                      SelfTest::WriteTextFile(recent, "recent") && SelfTest::WriteTextFile(ordinary, "ordinary") && SelfTest::WriteTextFile(nested, "nested"),
                   L"Failed to create the leftover cleanup fixtures.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto oldTimestamp = std::filesystem::file_time_type::clock::now() - std::chrono::hours{48};
+    for (const std::filesystem::path& oldStage : {leftover, nested})
+    {
+        std::error_code timeError;
+        std::filesystem::last_write_time(oldStage, oldTimestamp, timeError);
+        state.Require(! timeError, L"Failed to age the old leftover fixture past the conservative preselection window.");
+    }
     if (! state.failure.empty())
     {
         return false;
@@ -12860,8 +12927,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set the pane path for the leftover cleanup test.");
-    state.Require(WaitForPaneItems(
-                      FolderWindow::Pane::Left, {leftover.filename().native(), original.filename().native(), L"ordinary.txt", L"sub"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {leftover.filename().native(), original.filename().native(), recent.filename().native(), L"ordinary.txt", L"sub"},
+                                   SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for the leftover cleanup test.");
     if (! state.failure.empty())
     {
@@ -12896,10 +12964,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return found == snapshot.rows.end() ? nullptr : &*found;
     };
     const auto nothingDeleted = [&]() noexcept
-    { return SelfTest::PathExists(leftover) && SelfTest::PathExists(original) && SelfTest::PathExists(ordinary) && SelfTest::PathExists(nested); };
+    {
+        return SelfTest::PathExists(leftover) && SelfTest::PathExists(original) && SelfTest::PathExists(recent) && SelfTest::PathExists(ordinary) &&
+               SelfTest::PathExists(nested);
+    };
 
-    // 1. The listing: the leftover checked, the possible original listed but unchecked, the ordinary
-    //    file and the subfolder's leftover absent; Cancel deletes nothing.
+    // 1. Old stages start checked; a recent stage and possible original start unchecked. The ordinary
+    //    file and subfolder's leftover are absent; Cancel deletes nothing.
     FolderWindow::LeftoverCleanupDebugSnapshot listing{};
     state.Require(openListing(listing), L"cmd/pane/cleanUpLeftovers should open the leftover listing.");
     if (! state.failure.empty())
@@ -12908,8 +12979,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     const auto* leftoverRow = rowFor(listing, leftover);
     const auto* originalRow = rowFor(listing, original);
-    state.Require(listing.rows.size() == 2u && leftoverRow != nullptr && originalRow != nullptr, L"The listing should show exactly the two Possible rows.");
+    const auto* recentRow   = rowFor(listing, recent);
+    state.Require(listing.rows.size() == 3u && leftoverRow != nullptr && originalRow != nullptr && recentRow != nullptr,
+                  L"The listing should show both old/recent stages and the possible original.");
     state.Require(leftoverRow != nullptr && leftoverRow->checked && ! leftoverRow->mayHoldOriginal, L"The leftover should be listed and checked.");
+    state.Require(recentRow != nullptr && ! recentRow->checked && ! recentRow->mayHoldOriginal, L"A recent leftover stage should start unchecked.");
     state.Require(originalRow != nullptr && ! originalRow->checked && originalRow->mayHoldOriginal,
                   L"A possible original should be listed separately and never pre-checked.");
     state.Require(! listing.includeSubfolders && listing.deleteEnabled && listing.deleteSupported && listing.hiddenInUse == 0u,
@@ -12944,8 +13018,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
     }
 
-    // 3. Include subfolders adds the nested leftover (checked, never seen before) and keeps the leftover
-    //    the user unchecked unchecked, also after the subfolders are left out again.
+    // 3. Include subfolders adds the old nested leftover (checked, never seen before) and keeps the
+    //    leftover the user unchecked, also after the subfolders are left out again.
     FolderWindow::LeftoverCleanupDebugSnapshot walkListing{};
     state.Require(openListing(walkListing), L"The leftover listing should open again for the subfolder walk.");
     state.Require(g_folderWindow.DebugToggleLeftoverCleanupRow(leftover, false), L"The leftover row should be uncheckable.");
@@ -12956,12 +13030,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }, {.timeout = SelfTest::Scale(10000ms), .operationName = L"leftover cleanup subfolder walk"});
     const auto* walkedLeftover = rowFor(walked, leftover);
     const auto* walkedNested   = rowFor(walked, nested);
-    state.Require(walkDone.conditionMet && walked.rows.size() == 3u && walkedNested != nullptr && walkedNested->checked && walkedLeftover != nullptr &&
+    state.Require(walkDone.conditionMet && walked.rows.size() == 4u && walkedNested != nullptr && walkedNested->checked && walkedLeftover != nullptr &&
                       ! walkedLeftover->checked && ! walked.folderLimit && ! walked.rowLimit && ! walked.depthLimit,
                   L"Including subfolders should add the nested leftover and keep the unchecked leftover unchecked.");
     state.Require(g_folderWindow.DebugSetLeftoverCleanupIncludeSubfolders(false), L"Include subfolders should be clearable on the listing.");
     FolderWindow::LeftoverCleanupDebugSnapshot unwalked{};
-    state.Require(g_folderWindow.DebugGetLeftoverCleanupSnapshot(unwalked) && unwalked.rows.size() == 2u && rowFor(unwalked, nested) == nullptr &&
+    state.Require(g_folderWindow.DebugGetLeftoverCleanupSnapshot(unwalked) && unwalked.rows.size() == 3u && rowFor(unwalked, nested) == nullptr &&
                       rowFor(unwalked, leftover) != nullptr && ! rowFor(unwalked, leftover)->checked,
                   L"Leaving subfolders out again should keep the user's check state.");
     state.Require(g_folderWindow.DebugAnswerLeftoverCleanup(false), L"Cancel should be answerable after the subfolder walk.");
@@ -12979,7 +13053,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetLeftoverCleanupDeleteUnsupportedForSelfTest(false);
     const std::wstring cannotDelete = LoadStringResource(nullptr, IDS_LEFTOVER_CLEANUP_CANNOT_DELETE);
     const uint64_t taskBefore       = g_folderWindow.DebugGetLeftoverCleanupLastTaskId();
-    state.Require(! readOnlyListing.deleteSupported && ! readOnlyListing.deleteEnabled && readOnlyListing.rows.size() == 2u &&
+    state.Require(! readOnlyListing.deleteSupported && ! readOnlyListing.deleteEnabled && readOnlyListing.rows.size() == 3u &&
                       std::ranges::none_of(readOnlyListing.rows, [](const auto& row) noexcept { return row.checked; }) && ! cannotDelete.empty() &&
                       readOnlyListing.status.find(cannotDelete) != std::wstring::npos,
                   L"A location that cannot delete should list its leftovers unchecked, offer no Delete, and say why.");
@@ -13012,8 +13086,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Delete Selected should remove the checked leftover through a Delete task.");
     state.Require(HostGetTestPromptRequestCount() == 1u,
                   std::format(L"Delete Selected should ask exactly one question (the touch guard's warning), asked {}.", HostGetTestPromptRequestCount()));
-    state.Require(SelfTest::PathExists(original) && SelfTest::PathExists(ordinary) && SelfTest::PathExists(nested),
-                  L"Delete Selected must leave the unchecked original, the ordinary file and the subfolder's leftover.");
+    state.Require(SelfTest::PathExists(original) && SelfTest::PathExists(recent) && SelfTest::PathExists(ordinary) && SelfTest::PathExists(nested),
+                  L"Delete Selected must leave the unchecked original and recent stage, ordinary file and subfolder's leftover.");
     const HRESULT takeHr = SelfTest::TakeRecycledTestItems(recycled);
     state.Require(SUCCEEDED(takeHr), std::format(L"The Recycle Bin journal could not be read (hr=0x{:08X}).", static_cast<unsigned long>(takeHr)));
     // A volume without a Recycle Bin takes the permanent route (behind its card); otherwise the leftover

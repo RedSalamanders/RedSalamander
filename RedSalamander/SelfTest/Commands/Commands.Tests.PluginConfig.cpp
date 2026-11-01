@@ -5408,6 +5408,10 @@ private:
     std::string fileOperationsSource;
     const std::filesystem::path fileOperationsSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.cpp";
     state.Require(ReadSourceFileUtf8(fileOperationsSourcePath, fileOperationsSource), std::format(L"Failed to read {}.", fileOperationsSourcePath.wstring()));
+    const std::vector<std::string_view> viewerActionBodies = SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::ExecuteViewerAction");
+    state.Require(viewerActionBodies.size() == 1u && viewerActionBodies.front().find("FILESYSTEM_FLAG_RECURSIVE |") != std::string_view::npos &&
+                      viewerActionBodies.front().find("request.action == HOST_VIEWER_RECYCLE ? FILESYSTEM_FLAG_USE_RECYCLE_BIN") != std::string_view::npos,
+                  L"Viewer Delete and Recycle dispatch must retain recursive deletion; Recycle additionally requests the Recycle Bin.");
     state.Require(fileOperationsSource.find("_fileOperations->StartOperation(") == std::string::npos &&
                       fileOperationsSource.find("_fileOperations->AdmitOperation(") != std::string::npos &&
                       fileOperationsSource.find("TryGetFileSystemPluginIdentity") != std::string::npos &&

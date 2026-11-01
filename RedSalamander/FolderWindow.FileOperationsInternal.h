@@ -22,6 +22,8 @@
 
 namespace FileOperations
 {
+enum class SameHostOverlapProblem : uint8_t;
+
 inline constexpr ULONGLONG kTaskCardRevealDelayMs         = 500u;
 inline constexpr ULONGLONG kInlineRenameCardRevealDelayMs = kTaskCardRevealDelayMs;
 [[nodiscard]] uint32_t GetSharedParallelTransferLimit() noexcept;
@@ -267,6 +269,10 @@ struct MutationInterlockScope
 {
     QualifiedEndpoint endpoint;
     std::wstring providerPath;
+    // Canonical provider-profile key prepared before queue admission. Missing keys preserve the
+    // component-wise path fallback; they never authorize a weaker comparison. Retargeting an
+    // unpublished copy must rebuild or clear this key; published scopes remain immutable.
+    std::optional<std::wstring> providerPathKey;
     std::shared_ptr<const MutationInterlockAuthorityNode> root;
     std::vector<MutationInterlockAnchor> anchors;
     MutationInterlockAccess access = MutationInterlockAccess::WriteSource;
@@ -351,6 +357,10 @@ struct PreparationSnapshot final
 [[nodiscard]] bool DebugMutationScopeSetsOverlapForSelfTest(const std::vector<MutationInterlockScope>& left,
                                                             const std::vector<MutationInterlockScope>& right,
                                                             uint64_t& comparisons) noexcept;
+[[nodiscard]] SameHostOverlapProblem DebugClassifySameHostOverlapForSelfTest(const std::vector<MutationInterlockScope>& left,
+                                                                             const std::vector<MutationInterlockScope>& right,
+                                                                             bool& byNameDelete,
+                                                                             uint64_t& pairComparisons) noexcept;
 #endif
 
 struct QualifiedSourceItem
@@ -766,26 +776,6 @@ enum class SameHostOverlapProblem : uint8_t
 
 inline constexpr size_t kMaxSameHostOverlapRelations = 64u;
 
-struct SameHostOverlapRelationSet final
-{
-    std::array<uint64_t, kMaxSameHostOverlapRelations> taskIds{};
-    size_t taskIdCount = 0u;
-};
-
-struct DeferredConsentReceipt
-{
-    DeferredConsentRisk risk = DeferredConsentRisk::InsufficientSpace;
-    uint64_t taskId          = 0;
-    std::optional<size_t> itemIndex;
-    std::wstring destinationRootId;
-    std::optional<ProviderIdentitySnapshot> sourceIdentity;
-    std::optional<ProviderIdentitySnapshot> destinationIdentity;
-    // Allocated only for an overlap decision. Keeping the fixed relation set behind one shared
-    // owner avoids multiplying it by every slot in Task's bounded receipt table.
-    std::shared_ptr<const SameHostOverlapRelationSet> relatedTasks;
-    ConflictAction decision = ConflictAction::Cancel;
-};
-
 [[nodiscard]] bool IsProviderKeepBothDestinationEligible(bool providerHandlesNestedKeepBoth,
                                                          std::wstring_view conflictDestinationPath,
                                                          std::wstring_view selectedDestinationPath) noexcept;
@@ -850,6 +840,9 @@ enum class PlanRejectionBucket : uint8_t
 [[nodiscard]] bool IsLocalFileSystemEndpoint(const QualifiedEndpoint& endpoint) noexcept;
 [[nodiscard]] bool QualifiedEndpointsReferToSameRoot(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept;
 [[nodiscard]] bool QualifiedEndpointsHaveSamePathContract(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept;
+// Select display rules across roots in one provider namespace. Strategy admission still uses
+// QualifiedEndpointsHaveSamePathContract, which includes rootId.
+[[nodiscard]] const FileSystemPathIdentity* SelectSharedDisplayPathIdentity(const QualifiedEndpoint& displayOwner, const QualifiedEndpoint& candidate) noexcept;
 [[nodiscard]] bool QualifiedEndpointsShareObjectIdentityDomain(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept;
 [[nodiscard]] TransferMutationGuard PrepareTransferMutationGuard(IFileSystem* sourceFileSystem,
                                                                  IFileSystem* destinationFileSystem,
@@ -895,6 +888,13 @@ inline void RestoreActivePaneFolderViewFocusIfWindowHadFocusBeforeHide(FolderWin
 
     static_cast<void>(folderWindow.TryRestoreActivePaneFolderViewFocus());
 }
+
+#ifdef ENABLE_TESTS
+namespace FolderWindowFileOperationsStateInternal
+{
+[[nodiscard]] bool RunQueueWaitCancelLostWakeSelfTest(FolderWindow::FileOperationState& state) noexcept;
+}
+#endif
 
 struct FolderWindow::FileOperationState
 {
@@ -1178,6 +1178,11 @@ struct FolderWindow::FileOperationState
         // that state changed nothing; its result line says so instead of listing untouched sources.
         bool startedMutation = true;
         std::wstring resultSummary;
+        UINT resultSummaryResourceId                   = 0u;
+        bool resultSummaryHasArguments                 = false;
+        unsigned long resultSummaryArgument0           = 0u;
+        unsigned long resultSummaryArgument1           = 0u;
+        uint64_t resultSummaryLanguageRevision         = 0u;
         unsigned long publishedItemCount               = 0;
         unsigned long unknownPublicationItemCount      = 0;
         unsigned long removedSourceCount               = 0;
@@ -1204,7 +1209,14 @@ struct FolderWindow::FileOperationState
         // authorizes source or destination mutation.
         uint64_t interruptedOperationId = 0u;
         std::filesystem::path interruptedMoveBreadcrumbPath;
-        bool interruptedMoveNotice = false;
+        std::shared_ptr<const uint8_t> interruptedMoveNoticeClaim;
+        bool interruptedMoveNotice                = false;
+        bool interruptedMoveNoticeHasSummary      = false;
+        bool interruptedMoveNoticeExecuting       = false;
+        uint64_t interruptedMoveNativeItemCount   = 0u;
+        uint64_t interruptedMoveManagedItemCount  = 0u;
+        uint64_t interruptedMoveCopyOnlyItemCount = 0u;
+        uint64_t interruptedMoveSourceRootCount   = 0u;
 
         ULONGLONG lastProgressCallbackTick = 0;
         ULONGLONG completedTick            = 0;
@@ -1512,8 +1524,6 @@ struct FolderWindow::FileOperationState
             std::condition_variable cv;
             static constexpr size_t kMaxCachedConflictDecisions = 64u;
             std::array<std::optional<CachedConflictDecision>, kMaxCachedConflictDecisions> decisionCache{};
-            static constexpr size_t kMaxDeferredConsentReceipts = 64u;
-            std::array<std::optional<FileOperations::DeferredConsentReceipt>, kMaxDeferredConsentReceipts> consentReceipts{};
             ConflictPromptState prompt{};
             uint64_t nextPromptGeneration = 0u;
             bool decisionWasOffered       = false;
@@ -1703,12 +1713,13 @@ struct FolderWindow::FileOperationState
             std::atomic<uint64_t> pauseWaitUs{0};
             uint64_t conflictWaitUs = 0;
             std::atomic<uint64_t> conflictMetadataUs{0};
-            uint64_t conflictConvergenceWaitUs           = 0;
-            uint64_t conflictPromptCount                 = 0;
-            uint64_t consentWaitUs                       = 0;
-            uint64_t consentPromptCount                  = 0;
-            uint64_t queueEnterCount                     = 0;
-            uint64_t queueNotifyAllCount                 = 0;
+            uint64_t conflictConvergenceWaitUs = 0;
+            uint64_t conflictPromptCount       = 0;
+            uint64_t consentWaitUs             = 0;
+            uint64_t consentPromptCount        = 0;
+            uint64_t queueEnterCount           = 0;
+            // UI cancellation/queue changes can race the worker's final telemetry snapshot.
+            std::atomic<uint64_t> queueNotifyAllCount{0};
             uint64_t queueCancelWhileWaiting             = 0;
             uint64_t queueDepthOnEnter                   = 0;
             uint64_t queueActiveOperations               = 0;
@@ -1830,6 +1841,7 @@ struct FolderWindow::FileOperationState
                                                        uint64_t itemCount,
                                                        bool bytesKnown,
                                                        uint64_t bytes,
+                                                       size_t itemIndex,
                                                        ConflictAction* selectedAction) noexcept;
         void DebugClearConcurrentOverlapRelationsForSelfTest() noexcept;
 #endif
@@ -2213,7 +2225,9 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _freshSelectedFileMetadataChanged{false};
         size_t _closedDiscoveryItemCount = 0;
 
-        std::stop_token _stopToken{};
+        // Published with the task. Its identity never changes while UI and provider workers observe it.
+        std::stop_source _stopSource;
+        const std::stop_token _stopToken{_stopSource.get_token()};
         std::mutex _pauseMutex;
         std::condition_variable _pauseCv;
 
@@ -2345,6 +2359,8 @@ struct FolderWindow::FileOperationState
         std::atomic_uint32_t _dbgPauseWaiterCount{0};
         std::atomic<bool> _dbgConflictWaitBeforeSleepGate{false};
         std::atomic<bool> _dbgConflictWaitBeforeSleepReached{false};
+        std::atomic<bool> _dbgQueueWaitBeforeSleepGate{false};
+        std::atomic<bool> _dbgQueueWaitBeforeSleepReached{false};
 #endif
 
         std::jthread _thread;
@@ -2664,7 +2680,8 @@ struct FolderWindow::FileOperationState
         uint32_t suppressedLaunches = 0u;
         uint32_t refusedCreates     = 0u;
     };
-    void DebugConfigureIssuesExportRouteForSelfTest(std::filesystem::path reportDirectory, bool refuseCreate) noexcept;
+    // A fixed basename makes target-collision behavior deterministic in the owned report route.
+    void DebugConfigureIssuesExportRouteForSelfTest(std::filesystem::path reportDirectory, bool refuseCreate, std::wstring fixedFileName = {}) noexcept;
     [[nodiscard]] IssuesExportRouteDebugSnapshot DebugGetIssuesExportRouteForSelfTest() noexcept;
     // Route the real task log into a case-owned directory and observe its
     // completed More callback without opening an external application.
@@ -2866,6 +2883,10 @@ struct FolderWindow::FileOperationState
 #endif
 
 private:
+#ifdef ENABLE_TESTS
+    friend bool FolderWindowFileOperationsStateInternal::RunQueueWaitCancelLostWakeSelfTest(FileOperationState& state) noexcept;
+#endif
+
     struct PendingConflictInspection
     {
         uint64_t generation     = 0u;
@@ -2912,7 +2933,15 @@ private:
     void DrainOrphanedCompletion(OrphanedCompletionDrainContext& context) noexcept;
     [[nodiscard]] bool TryPostCompletedWakeup(const TaskCompletedPayload& completed) noexcept;
     static void CALLBACK OrphanedCompletionDrainCallback(PTP_CALLBACK_INSTANCE instance, void* context) noexcept;
-    void EnsurePopupVisible() noexcept;
+    enum class PopupRevealReason : uint8_t
+    {
+        RoutineTask,
+        ActionableTask,
+        InterruptedMoveNotice,
+        ExplicitShow,
+        InformationalTask,
+    };
+    void EnsurePopupVisible(PopupRevealReason reason) noexcept;
     void RequestTaskPresentationRefresh() noexcept;
     void RequestActionablePromptPresentation() noexcept;
     [[nodiscard]] ULONGLONG TaskPresentationNowTick() const noexcept;
@@ -2921,7 +2950,7 @@ private:
     void FlushDiagnostics(bool force) noexcept;
     std::filesystem::path GetDiagnosticsLogDirectory() const noexcept;
     std::filesystem::path GetDiagnosticsLogPathForDate(const SYSTEMTIME& localTime) const noexcept;
-    std::filesystem::path GetLatestDiagnosticsLogPathUnlocked() const noexcept;
+    std::filesystem::path GetLatestDiagnosticsLogPath() const noexcept;
     void RemoveFromQueue(uint64_t taskId) noexcept;
     void UpdateQueuePausedTasks() noexcept;
     void QueueSettingsSave(std::wstring_view context) noexcept;
@@ -2992,6 +3021,7 @@ private:
 
 #ifdef ENABLE_TESTS
     std::filesystem::path _debugIssuesExportReportDirectory;
+    std::wstring _debugIssuesExportFixedFileName;
     bool _debugIssuesExportRefuseCreate = false;
     IssuesExportRouteDebugSnapshot _debugIssuesExportRoute{};
     mutable std::mutex _debugDiagnosticsLogRouteMutex;

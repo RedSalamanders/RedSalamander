@@ -1,0 +1,503 @@
+
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  RedSalamander-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedSalamander-ja-JP.dll
+  RedSalamander-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedSalamander-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\Terminal-fr-FR.dll
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  Terminal-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\Terminal-sk-SK.dll
+  Terminal-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\Terminal-ja-JP.dll
+  ViewerText-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerText-fr-FR.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Main.cpp
+  dllmain.cpp
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  compilation header save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\Intermediate\ARM64\ASan Debug\DxUi\DxUiCompositePS.cso
+  DxUi.RichDocument.cpp
+  DxUi.RichMarkdownProjection.cpp
+  DxUi.RichSemantic.cpp
+  RedLauncher.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\RedLauncher.exe
+  FileSystem-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem-fr-FR.dll
+  DxUi.RichTextCommands.cpp
+  FileSystem7z-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystem7z.cpp
+  FileSystemDummy.cpp
+  FilesInformationGoogleDrive.cpp
+  FileSystemCurl-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  DxUi.RichSemanticDocument.cpp
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSpace-fr-FR.dll
+  DxUi.RichSemanticGeometry.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Common.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Common.exp
+  ViewerSqlite-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSqlite-fr-FR.dll
+  Common.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Common.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerVLC-fr-FR.dll
+  FileSystemGoogleDrive.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Generating Code...
+  Generating Code...
+  FileSystemPathIdentity.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  dllmain.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.exp
+  Factory.cpp
+  FileSystemDummy.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemDummy.dll
+  LocalSearchIndexCore.cpp
+  dllmain.cpp
+  Factory.cpp
+  DxUi.MarkdownSyntax.cpp
+  FileSystemGoogleDrive.Tests.FakeDrive.cpp
+  FilesInformationMtp.cpp
+  FilesInformationMicrosoftDrive.cpp
+  DxUi.NativeFlowchart.cpp
+  DxUi.NativeMath.cpp
+  SearchServiceBroker.cpp
+  Factory.cpp
+  DxUi.NativeFlowchartLayout.cpp
+  DxUi.PreparedFlowchart.cpp
+  FileSystemMtp.Core.cpp
+  FileSystemMicrosoftDrive.cpp
+  Generating Code...
+  DxUi.RichTextLayout.cpp
+  dllmain.cpp
+  SqliteIndexStore.cpp
+  Factory.cpp
+  FilesInformationS3.cpp
+  DxUi.RichDocumentLayout.cpp
+  FileSystemMtp.Device.cpp
+  FileSystemCurl.CopyMove.cpp
+  FileSystemMicrosoftDrive.Tests.FakeGraph.cpp
+  DxUi.RichTextEditor.cpp
+  SearchTextHelpers.cpp
+  FileSystemS3.Configuration.cpp
+  FileSystemMtp.Tests.FakeBackend.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  dllmain.cpp
+  Generating Code...
+  Factory.cpp
+  DxUi.RichImage.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMicrosoftDrive.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemGoogleDrive.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem7z.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem7z.dll
+  ControlCatalog.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SearchTextHelpers.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  FileSystemMtp.Shared.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystem.cpp
+  FileSystemS3.Core.cpp
+  NativeMenuInterop.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.exp
+  RedSalamanderSearchService.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\RedSalamanderSearchService.exe
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystemMtp.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemMtp.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem.DirectoryOps.cpp
+  FileSystem7z-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerPE-ja-JP.dll
+  Embedded.cpp
+  ViewerSpace-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSqlite-ja-JP.dll
+  FileSystemS3.Directory.cpp
+  ViewerText-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerWeb-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMtp-sk-SK.dll
+  RedConfigure-ja-JP.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedConfigure-ja-JP.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls1.cpp
+  FileSystemCurl.Shared.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls2.cpp
+  FileSystem.FileOps.cpp
+  ls1.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ls1.exe
+  ls2.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ls2.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls3.cpp
+  FrameRuntime.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FlipSequentialDiscard.cpp
+  DxUi.Accessibility.cpp
+  ls3.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ls3.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerSqlite.Engine.cpp
+  FileSystemCurl.Tests.Ftp.cpp
+  FileSystemS3.DirectoryOps.cpp
+  FlipSequentialDiscard.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\FlipSequentialDiscard.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystem.Menu.cpp
+  ViewerPE.Tests.Runner.cpp
+  ViewerSqlite.Tests.Runner.cpp
+  Generating Code...
+  FileSystem.Path.cpp
+  Compiling...
+  DxUi.ComboBox.cpp
+  Generating Code...
+  FileSystemS3.DriveInfo.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.exp
+  ViewerSqliteTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ViewerSqliteTests.exe
+  FileSystem.Search.cpp
+  FileSystemCurl.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemCurl.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  PluginContract.Tests.Runner.cpp
+  SettingsSchema.Tests.Runner.cpp
+  DxUi.Controls.cpp
+  FileSystemS3.IO.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+  FileSystem.Watch.cpp
+  FileSystemPathIdentity.cpp
+  SettingsSchemaParser.cpp
+  DxUi.Layout.cpp
+  FileSystemRouteContract.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  Generating Code...
+  Generating Code...
+  PluginContractTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\PluginContractTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  CrashHandling.Tests.Runner.cpp
+  Generating Code...
+  FileSystemS3.Menu.cpp
+  DxUi.Forms.cpp
+  SettingsSchemaTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\SettingsSchemaTests.exe
+  LocalizationTests-fr-FR.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\LocalizationTests-fr-FR.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Localization.Tests.Runner.cpp
+  CrashQuarantine.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem.exp
+  FileSystem.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystem.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystemCurl.ImapHelpers.cpp
+  DxUi.EditorControls.cpp
+  LocalizationTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\LocalizationTests.exe
+  FileSystemS3.S3.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  CrashHandler.cpp
+  ls4.cpp
+  FileSystemCurl.Tests.Runner.cpp
+  Generating Code...
+  DxUi.cpp
+  Generating Code...
+  FileSystemCurlTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\FileSystemCurlTests.exe
+  ls4.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ls4.exe
+  FileSystem-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystem7z-sk-SK.dll
+  ViewerPETests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ViewerPETests.exe
+  FileSystemCurl-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  CrashHandling.Tests.CrashQuarantine.Stubs.cpp
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerText-sk-SK.dll
+  FileSystemS3.S3Table.cpp
+  ViewerVLC-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerVLC-cs-CZ.dll
+  ViewerWeb-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerWeb-cs-CZ.dll
+  DxUi.Grid.cpp
+  ViewerWeb-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\ViewerWeb-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedSalamander-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Lang\RedConfigure-sk-SK.dll
+  Generating Code...
+  CrashHandlingTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\CrashHandlingTests.exe
+  DxUi.Menu.cpp
+  FileSystemS3.Shared.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystemS3.Tests.FakeS3.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  DxUi.SingleLineTextEditing.cpp
+  Generating Code...
+  DxUi.TextInput.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemS3.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemS3.exp
+  FileSystemS3.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\FileSystemS3.dll
+  DxUi.TextStoreACP.cpp
+  TextInputServices.cpp
+  TextClipboard.cpp
+  DxUi.Theme.cpp
+  DxUi.Tree.cpp
+  DxUi.Typeahead.cpp
+  DxUi.WindowHost.cpp
+  Generating Code...
+  Compiling...
+  DxUi.TextElements.cpp
+  Generating Code...
+  DxUi.vcxproj -> Z:\src\RedSalamander\.build\dependencies\DxUi\295adb4820bddea6\ARM64\ASan Debug\DxUi.lib
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  PlaceholderValidation.cpp
+  dllmain.cpp
+  dllmain.cpp
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  RcParser.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  AppTheme.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  ViewerImgRaw.Decode.cpp
+  ViewerSqlite.Engine.cpp
+  UiMetrics.cpp
+  ViewerSpace.cpp
+  RedConfigurePagePresenters.cpp
+  dllmain.cpp
+  Factory.cpp
+  ViewerSqlite.cpp
+  RedConfigureRoot.cpp
+  ProductUi.Tests.Runner.cpp
+  ViewerImgRaw.Export.cpp
+  ViewerVLC.cpp
+  ViewerSpace.Layout.cpp
+  Generating Code...
+  ViewerImgRaw.cpp
+  ProductUi.Scope.Tests.DirectoryRecords.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.exp
+  RedConfigureSession.cpp
+  ViewerSqlite.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSqlite.dll
+  Performance.Tests.pch.cpp
+  Generating Code...
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerVLC.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerVLC.exp
+  ViewerVLC.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerVLC.dll
+  ViewerSpace.Analysis.cpp
+  RedConfigure.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\RedConfigure.exe
+  ProductUiTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\ProductUiTests.exe
+  dllmain.cpp
+  Factory.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Factory.cpp
+  RedConfigureWorkflow.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.exp
+  ViewerImgRaw.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerImgRaw.dll
+  TraceProvider.cpp
+  ViewerWeb.cpp
+  ViewerSpace.Workspace.cpp
+  ViewerText.Encoding.cpp
+  ViewerPE.cpp
+  RedConfigureTraceProvider.cpp
+  Common.Tests.LatencyHooks.cpp
+  FileSystemPluginManager.cpp
+  ViewerText.MenuTheme.cpp
+  RedConfigureUiHelpers.cpp
+  FileSystemPathIdentity.cpp
+  Generating Code...
+  dllmain.cpp
+  FileSystemRouteContract.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerWeb.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerWeb.exp
+  ViewerWeb.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerWeb.dll
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerPE.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerPE.exp
+  ViewerSpace.Model.cpp
+  ViewerPE.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerPE.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  PluginModuleLifecycle.cpp
+  ThemeCatalog.cpp
+  ViewerText.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  ThemePreviewModel.cpp
+  [GhosttyRuntime] waiting for repository lease: Z:\src\RedSalamander
+  [GhosttyRuntime] acquired repository lease: Z:\src\RedSalamander
+  ViewerPluginManager.cpp
+  ViewerSpace.AnalysisHost.cpp
+  [GhosttyRuntime] starting: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=50524: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=50524 code=0; draining output: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: Z:\src\RedSalamander\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=4612: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=4612 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=6452: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=6452 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=73148: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=73148 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] restoring locked dependency: aro
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=75228: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=75228 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: pixels
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=64580: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=64580 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: translate-c
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=67632: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=67632 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: uucode
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=86112: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=86112 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] restoring locked dependency: wuffs
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] started pid=48504: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] exited pid=48504 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=79936: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=79936 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=77300: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=77300 code=1; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=9344: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=9344 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  Ghostty terminal runtime ready: mode=Product platform=ARM64 pairedRaw=fb1ba734aa742b59b72451c725f6c43edd3d02a0b414969e66dd330884a08a21 normalizedDiagnostic=31e3f2674c2b4a312330adb1a50ffdb7c7f9c3643ffed53741be2b37385916b0
+  WorkspaceDiscovery.cpp
+  ViewerText.Text.cpp
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  ViewerSpace.NavigationHost.cpp
+  Performance.Tests.FolderView.Enumeration.Access.cpp
+  RedConfigure.Tests.Runner.cpp
+  Terminal.cpp
+  ViewerText.Hex.cpp
+  ViewerSpace.Hosts.cpp
+  Generating Code...
+  IconCache.cpp
+  Generating Code...
+  TerminalAccessibility.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerText.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerText.exp
+  ViewerText.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerText.dll
+  RedConfigureTests.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\RedConfigureTests.exe
+  TerminalInternal.cpp
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSpace.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSpace.exp
+  Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp
+  ViewerSpace.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\Plugins\ViewerSpace.dll
+  Performance.Tests.FolderIconEnumerationPerfTest.cpp
+  Performance.Tests.FolderViewColumnLayout.cpp
+  TerminalKittyImagePipeline.cpp
+  Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp
+  TerminalCommandSurfaceModel.cpp
+  Performance.Tests.Runner.cpp
+  Performance.Tests.PluginManager.Stubs.cpp
+  TerminalRuntimeLoader.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander\.build\ARM64\ASan Debug\PerformanceTests2.lib and object Z:\src\RedSalamander\.build\ARM64\ASan Debug\PerformanceTests2.exp
+  PerformanceTests2.vcxproj -> Z:\src\RedSalamander\.build\ARM64\ASan Debug\PerformanceTests2.dll
+  TerminalSecurity.cpp
+  TerminalSession.cpp
+  TerminalVt.cpp
+Z:\src\RedSalamander\Plugins\Terminal\TerminalVt.cpp(2310,1): error C1090: PDB API call failed, error code '23': (0x000006BA) [Z:\src\RedSalamander\Plugins\Terminal\Terminal.vcxproj]
+  Terminal.Tests.VtUpgrade.cpp
+  Generating Code...

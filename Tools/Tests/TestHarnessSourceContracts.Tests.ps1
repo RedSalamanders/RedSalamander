@@ -25,6 +25,12 @@ Describe 'Authorized ReFS sandbox' {
 }
 
 Describe 'Product documentation capture fixtures' {
+    It 'keeps the MTP fake backend behind the test-enabled build gate' {
+        $fakeBackend = Get-RSText -Path 'Plugins/FileSystemMtp/FileSystemMtp.Tests.FakeBackend.cpp'
+        $fakeBackend.TrimStart() | Should Match '^#if defined\(ENABLE_TESTS\)'
+        $fakeBackend.TrimEnd() | Should Match '#else\s+static_assert\(true,[^;]+\);\s+#endif\s*$'
+    }
+
     It 'keeps Terminal transcripts shell-free and provider scenes confined to owned fakes' {
         $terminal = Get-RSText -Path 'Plugins/Terminal/Terminal.cpp'
         $factory = Get-RSText -Path 'Plugins/Terminal/Factory.cpp'
@@ -114,6 +120,44 @@ Describe 'Product documentation capture fixtures' {
         $gallery.Value | Should Match 'RedSalamanderPluginShutdown'
         $gallery.Value | Should Match 'libraries\[scenario\.dll\]'
         $gallery.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput)\s*\('
+    }
+
+    It 'admits the directory-cache cancellation Commands case without warning or window isolation only by exact selection' {
+        $navigation = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp'
+        $cacheCase = [regex]::Match($navigation, '(?s)bool TestDirectoryCacheInvalidationDuringEnumerationIsRetained\(.*?\r?\n\}')
+        $cacheCase.Success | Should Be $true
+        foreach ($witness in @('AcquireBatchRenameCommandsSandboxRoot', 'DirectoryInfoCache', 'SetEnsureLoadedPrewaitHookForSelfTest',
+                'WakeWaitersForSelfTest', 'SetReadDirectoryInfoBlockingPipe', 'CreatePipe', 'request_stop', 'ERROR_OPERATION_ABORTED')) {
+            $cacheCase.Value | Should Match ([regex]::Escape($witness))
+        }
+        $cacheCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
+
+        $navigation | Should Match 'SelfTest::RunCase\(options,\s*suite,\s*L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
+        $app = Get-RSText -Path 'RedSalamander/RedSalamander.cpp'
+        $startupAdmission = [regex]::Match($app, '(?s)const bool selectedNoActivationCommandsCase\s*=.*?;')
+        $startupAdmission.Success | Should Be $true
+        $startupAdmission.Value | Should Match 'hasArg\(L"--commands-selftest"\)'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_product_documentation_gallery"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
+        foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
+            $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
+        }
+        foreach ($proof in @('--selftest-flaky-proof-case=', '--selftest-order-proof-case=', '--selftest-crash-case=')) {
+            $startupAdmission.Value | Should Match ([regex]::Escape('! getArgValue(L"' + $proof + '"'))
+        }
+        $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
+        $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
+        $runner | Should Match 'const bool noActivationDirectoryCacheCase\s*=\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectoryCacheCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
+        $bypass.Success | Should Be $true
+        $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
+        $prepareIndex = $runner.IndexOf('PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext)', [StringComparison]::Ordinal)
+        $bypass.Index | Should BeLessThan $warningIndex
+        $bypass.Index | Should BeLessThan $prepareIndex
+        $interactiveIndex = $runner.IndexOf('else if (! options.listCasesOnly)', $bypass.Index, [StringComparison]::Ordinal)
+        $interactiveIndex | Should BeGreaterThan $bypass.Index
+        $interactiveIndex | Should BeLessThan $warningIndex
+        $interactiveIndex | Should BeLessThan $prepareIndex
     }
 
     It 'keeps Search documentation seeding UI-thread-only and refuses an active search' {
@@ -362,6 +406,8 @@ Describe 'Test harness source contracts' {
 
         $nightly | Should Not Match '(?m)^  (schedule|push|pull_request):'
         $nightly | Should Match 'workflow_dispatch:'
+        $nightly | Should Match '(?m)^"on":\r?\n\s+workflow_dispatch:\s*$'
+        $nightly | Should Not Match '(?m)^\s+(?:schedule|pull_request|push):'
         $nightly | Should Match 'REDSALAMANDER_TEST_ROOT'
         $nightly | Should Match 'Run-AllTests\.ps1\s+-Suite\s+All'
         $nightly | Should Match '-SelfTestRepeat\s+5'
@@ -638,6 +684,10 @@ Describe 'Test harness source contracts' {
         $source | Should Not Match 'CancelScanAndWait|ReapFinishedScanWorkers\(bool\s+wait\)'
         $source | Should Match 'worker\.done[\s\S]{0,180}worker\.thread\.join\(\)[\s\S]{0,180}g_scanWorkerUnloadGates\.fetch_sub'
         $source | Should Match 'worker\.thread\.detach\(\)[\s\S]{0,300}abandonedWorkers'
+        $source | Should Match 'reaper->workers\.emplace_back\(std::move\(worker\)\)'
+        $source | Should Match 'reaper->modulePin\s*=\s*AcquireModuleReferenceFromAddress'
+        $source | Should Match '!\s*reaper->modulePin\s*\|\|\s*!\s*SubmitOwnedThreadpoolCallbackWithInstance\(reaper\)'
+        $source | Should Match 'TransferModulePinToCallbackReturn\(instance,\s*modulePin\)'
         $source | Should Match 'g_scanWorkerUnloadGates\.fetch_add\(1u'
         $source | Should Match 'CanUnloadViewerSpaceModuleNow[\s\S]{0,180}g_scanWorkerUnloadGates\.load'
         $factory | Should Match 'RedSalamanderPluginCanUnloadNow[\s\S]{0,180}CanUnloadViewerSpaceModuleNow'
@@ -646,7 +696,8 @@ Describe 'Test harness source contracts' {
         ([regex]::Matches($source, 'update\.generation\s*!=\s*_scanGeneration\.load')).Count | Should BeGreaterThan 1
         $tests | Should Match 'TestViewerSpaceBlockedProviderCloseAndPostUpdateRace'
         $tests | Should Match 'kViewerSpaceDebugPauseNextPostUpdate'
-        $tests | Should Match 'runtime unload gate rejects refresh while an abandoned worker exists'
+        $tests | Should Match 'runtime unload gate rejects refresh while a retiring worker exists'
+        $tests | Should Match 'background join releases its unload gate after the provider returns'
     }
 
     It 'publishes authoritative ViewerSpace totals before root completion becomes visible' {
@@ -1864,6 +1915,24 @@ Describe 'Test harness source contracts' {
         $runAllTests | Should Not Match 'repo-local trust-boundary override'
     }
 
+    It 'keeps standalone vcpkg merge fixtures inside a unique marked TestSandbox run' {
+        $source = Get-RSText -Path 'Tests\vcpkg-merge-synthetic-test.ps1'
+
+        $source | Should Match 'New-RSTestRunContext\s+-RepoRoot\s+\$repoRoot\s+-RunId\s+\$runId'
+        $source | Should Match 'New-RSTestSandboxScratchDirectory'
+        $source | Should Match "-Harness 'vcpkg-merge-synthetic'"
+        $source | Should Match 'Assert-RSTestSandboxContainedPath'
+        $source | Should Match 'Remove-RSTestSandboxExactRunDirectory'
+        $source | Should Not Match '\.build[\\/]merge-synthetic-test|Remove-Item[^\r\n]*\$testRoot'
+        $source | Should Match 'SkipCleanup retains only that exact run'
+    }
+
+    It 'preserves bounded Pester assertion and stack details in failed case reasons' {
+        $runner = Get-RSText -Path 'Tools\Run-AllTests.ps1'
+
+        $runner | Should Match 'Convert-RSPesterTestResults\s+-TestResults\s+\$pesterTestResults'
+    }
+
     It 'gives retained Preferences page-state activation a broad-order settle budget' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
@@ -2311,6 +2380,47 @@ Specs\TestRuns\local_scratch
         $probe | Should Match 'GetConsoleWindow\(\) == nullptr'
         $probe | Should Match '--test-support-child-probe=delayed-marker'
         $probe | Should Match '#ifdef ENABLE_TESTS[\s\S]*TryRunTestSupportChildProbe'
+    }
+
+    It 'keeps the legacy breadcrumb peer fixture suspended and self-contained' {
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FileOperations.Scope.Tests.ReviewRemediation.cpp'
+        $breadcrumb = Get-RSText -Path 'RedSalamander\FileOperationMoveBreadcrumb.cpp'
+        $start = $source.IndexOf('[[nodiscard]] bool StartSuspendedLegacyBreadcrumbPeerForSelfTest')
+        $next = $source.IndexOf('[[nodiscard]] bool RunFileOpsLegacyBreadcrumbPolicyChecks', $start)
+        $caseNext = $source.IndexOf('[[nodiscard]] bool RunFileOpsInterruptedMoveWriterChecks', $next)
+        $start | Should BeGreaterThan -1
+        $next | Should BeGreaterThan $start
+        $caseNext | Should BeGreaterThan $next
+
+        $fixture = $source.Substring($start, $next - $start)
+        $fixture | Should Match 'CREATE_SUSPENDED\s*\|\s*CREATE_NO_WINDOW'
+        $fixture | Should Match 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'
+        $fixture | Should Match 'AssignProcessToJobObject'
+        $fixture | Should Not Match 'ResumeThread'
+        $fixture | Should Not Match 'ShowWindow|SetForegroundWindow|SetFocus|SendInput'
+        $caseBlock = $source.Substring($next, $caseNext - $next)
+        $caseBlock | Should Match 'peerJob\.reset\(\)[\s\S]*WaitForSingleObject\(peerProcess\.get\(\)'
+
+        $probeStart = $breadcrumb.IndexOf('[[nodiscard]] LegacyPeerState ObserveLegacyPeerProcess')
+        $probeNext = $breadcrumb.IndexOf('[[nodiscard]] HRESULT MakeRecordPath', $probeStart)
+        $probeStart | Should BeGreaterThan -1
+        $probeNext | Should BeGreaterThan $probeStart
+        $probe = $breadcrumb.Substring($probeStart, $probeNext - $probeStart)
+        $probe | Should Match 'CreateToolhelp32Snapshot\(TH32CS_SNAPPROCESS'
+        $probe | Should Match 'Process32FirstW[\s\S]*Process32NextW'
+        $probe | Should Match 'GetCurrentProcessId\(\)[\s\S]*RedSalamander\.exe'
+        $probe | Should Not Match 'GetProcessTimes|createdFileTime'
+        $probe | Should Match 'LegacyPeerState::Uncertain'
+    }
+
+    It 'assigns interrupted-notice IDs inside the same mutex section as publication' {
+        $source = Get-RSText -Path 'RedSalamander/FolderWindow.FileOperations.State.Runtime.cpp'
+        $body = [regex]::Match($source, '(?s)void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs\(\) noexcept\s*\{.*?\r?\n\}')
+        $body.Success | Should Be $true
+        @([regex]::Matches($body.Value, 'summary\.taskId\s*=\s*_nextTaskId\+\+')).Count | Should Be 1
+        $body.Value | Should Match 'std::scoped_lock lock\(_mutex\);\s*summary\.taskId\s*=\s*_nextTaskId\+\+;\s*_completedTasks\.push_back\(std::move\(summary\)\)'
+        $fixture = Get-RSText -Path 'RedSalamander/SelfTest/FileOperations/FileOperations.Scope.Tests.ReviewRemediation.cpp'
+        $fixture | Should Match 'queueAllocator\.join\(\)[\s\S]*concurrent notice and queue-key allocation produced duplicate'
     }
 
     It 'keeps local index snapshot reload timing advisory instead of a correctness ceiling' {
@@ -4279,9 +4389,17 @@ Specs\TestRuns\local_scratch
         $directoryOps | Should Match '!\s*rootDirectory\s*&&\s*IsNonFatalDirectorySizeChildError\(lastError\)[\s\S]{0,120}markPartial\(\)'
         $watch | Should Match 'else\s*\{\s*EnqueueOverflowLocked\(\);\s*\}[\s\S]{0,180}// Re-arm read immediately before dispatching callbacks'
         $watch | Should Match 'Failed to re-issue directory watch[\s\S]{0,180}EnqueueOverflowLocked\(\)'
-        $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*&bom[\s\S]{0,120}written\s*!=\s*sizeof\(bom\)'
-        $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*header\.data\(\)[\s\S]{0,160}written\s*!=\s*static_cast<DWORD>\(headerBytes\)'
-        $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*line\.data\(\)[\s\S]{0,160}written\s*!=\s*static_cast<DWORD>\(bytesToWrite\)'
+        $issuesExport = [regex]::Match($fileOpsDiagnostics, '(?s)bool FolderWindow::FileOperationState::ExportTaskIssuesReport\([^\r\n]*\) noexcept\s*\{.*?\r?\n\}')
+        $issuesExport.Success | Should Be $true
+        $issuesExport.Value | Should Match 'LocalFileTransaction::Create\(reportPath,\s*Common::Files::ExistingTargetPolicy::FailIfExists,\s*true,\s*transaction\)'
+        $issuesExport.Value | Should Match 'const HRESULT writeHr = transaction\.Write\(data, byteCount\);\s*if \(SUCCEEDED\(writeHr\)\)\s*\{\s*expectedBytes \+='
+        $issuesExport.Value | Should Match 'if \(FAILED\(writeBytes\(&bom, sizeof\(bom\)\)\)\)\s*\{\s*return false;'
+        $issuesExport.Value | Should Match 'if \(FAILED\(writeBytes\(header\.data\(\), headerBytes\)\)\)\s*\{\s*return false;'
+        $issuesExport.Value | Should Match 'if \(FAILED\(writeBytes\(line\.data\(\), bytesToWrite\)\)\)\s*\{\s*return false;'
+        $issuesExport.Value | Should Match 'if \(FAILED\(transaction\.Commit\(expectedBytes\)\)\)\s*\{\s*return false;'
+        $commitIndex = $issuesExport.Value.IndexOf('transaction.Commit(expectedBytes)', [StringComparison]::Ordinal)
+        $publishedIndex = $issuesExport.Value.IndexOf('*reportPathOut = reportPath', [StringComparison]::Ordinal)
+        $commitIndex | Should BeLessThan $publishedIndex
         $issuesPane | Should Match 'CollectIssuesSnapshotIfChanged'
         $issuesPane | Should Match '_projection\.Update\('
         $issuesProjection | Should Match 'std::format\(L"prompt\|\{\}\|\{\}",\s*issue\.taskId,\s*generation\)'
@@ -4406,7 +4524,9 @@ Specs\TestRuns\local_scratch
         $bridge | Should Match 'ClassifyManagedCleanupMutation[\s\S]{0,7000}action\s*==\s*ConflictAction::Retry[\s\S]{0,240}\+\+cleanupRecord\.retryCount[\s\S]{0,120}continue;'
         $bridge | Should Not Match 'RetryTransientCleanupProbe|DeleteCopiedSourcePathNoRecursive|ReaderMatchesHash|ReadersHaveEqualContent|sourceRead\s*!=\s*destinationRead'
         $bridge | Should Match 'HRESULT\s+PublishOwnedStage\([\s\S]{0,5400}outcomeKnown\s*==\s*FALSE[\s\S]{0,3600}mutationCommitted\s*!=\s*FALSE'
-        $bridge | Should Match 'HRESULT\s+PumpAndPublishFile\([\s\S]{0,60000}PublishOwnedStage\('
+        $bridge | Should Match 'HRESULT\s+PumpAndPublishFile\([\s\S]{0,6000}PumpAndPublishFileOnce\('
+        $bridge | Should Match 'if\s*\(txn\.useIdentityOwnedStage\)[\s\S]{0,1600}PublishOwnedStage\('
+        $bridge | Should Match 'else\s*\{\s*txn\.promoted\s*=\s*true;'
         $bridge | Should Not Match 'DrainDeferredLinks|QueueDeferredLink|ClassifyLinkDependency|SparseLinkComponentMappingRecord|HasPendingLinkDependencyForSource'
         $bridge | Should Match 'PrepareManagedSourceAuthority\([\s\S]{0,12000}FinalizeManagedSourceCleanup\('
         $bridge | Should Not Match 'CopyFileWithBuffer|bridge\.CopyPath\('
@@ -4716,9 +4836,32 @@ Specs\TestRuns\local_scratch
         $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
 
         $hostServices | Should Match 'resultCapacity\s*=\s*result->sizeBytes[\s\S]{0,180}resultCapacity\s*<\s*sizeof\(HostConnectionManagerResult\)[\s\S]{0,180}result->sizeBytes\s*=\s*sizeof\(HostConnectionManagerResult\)'
-        $hostServices | Should Match 'SendSynchronousHostPayload\(hostWindow,\s*WndMsg::kHostShowPrompt'
-        $hostServices | Should Match 'SendSynchronousHostPayload\([\s\S]{0,160}WndMsg::kHostShowConnectionManager'
-        $hostServices | Should Not Match 'TakeMessagePayload<Pending(?:Prompt|ConnectionManager)>'
+        $synchronousRoutes = @(
+            @{ Message = 'kHostShowPrompt'; Payload = 'PendingPrompt'; Invocation = 'ShowPromptOnUiThread'; Output = 'result' },
+            @{ Message = 'kHostShowConnectionManager'; Payload = 'PendingConnectionManager'; Invocation = 'ShowConnectionManagerOnUiThread'; Output = 'result' },
+            @{ Message = 'kHostGetConnectionJsonUtf8'; Payload = 'PendingConnectionJson'; Invocation = 'BuildConnectionJsonUtf8'; Output = 'jsonOut' },
+            @{ Message = 'kHostGetConnectionSecret'; Payload = 'PendingConnectionSecret'; Invocation = 'GetConnectionSecretOnUiThread'; Output = 'secretOut' },
+            @{ Message = 'kHostSetConnectionSecret'; Payload = 'PendingSetConnectionSecret'; Invocation = 'SetConnectionSecretOnUiThread'; Output = '' },
+            @{ Message = 'kHostDeleteConnectionSecret'; Payload = 'PendingDeleteConnectionSecret'; Invocation = 'DeleteConnectionSecretOnUiThread'; Output = '' },
+            @{ Message = 'kHostPromptConnectionSecret'; Payload = 'PendingConnectionSecret'; Invocation = 'PromptForConnectionSecretOnUiThread'; Output = 'secretOut' },
+            @{ Message = 'kHostClearCachedConnectionSecret'; Payload = 'PendingClearConnectionSecretCache'; Invocation = 'ClearCachedConnectionSecretOnUiThread'; Output = '' },
+            @{ Message = 'kHostUpgradeFtpAnonymousToPassword'; Payload = 'PendingUpgradeFtpAnonymousToPassword'; Invocation = 'UpgradeFtpAnonymousToPasswordOnUiThread'; Output = '' },
+            @{ Message = 'kHostOpenViewer'; Payload = 'PendingOpenViewer'; Invocation = 'OpenViewerWithPlugin'; Output = '' }
+        )
+        ([regex]::Matches($hostServices, 'SendSynchronousHostPayload\(hostWindow,\s*WndMsg::kHost')).Count | Should Be $synchronousRoutes.Count
+        foreach ($route in $synchronousRoutes) {
+            $hostServices | Should Match ('SendSynchronousHostPayload\(hostWindow,\s*WndMsg::{0}' -f $route.Message)
+            $routePattern = '(?ms)^\s*if\s*\(message\s*==\s*WndMsg::{0}\s*\)\s*\{{.*?(?=^\s*if\s*\(message\s*==\s*WndMsg::|\z)' -f $route.Message
+            $routeBlock = [regex]::Match($hostServices, $routePattern).Value
+            $routeBlock.Length | Should BeGreaterThan 0
+            $routeBlock | Should Match ('TakeMessagePayload<{0}>\(hwnd,\s*message,\s*lParam\)' -f $route.Payload)
+            $routeBlock | Should Match $route.Invocation
+            $routeBlock | Should Match 'data->dispatchResult'
+            $routeBlock | Should Match '\*data->dispatchResult\s*='
+            if ($route.Output) {
+                $routeBlock | Should Match ('!\s*data->{0}' -f $route.Output)
+            }
+        }
         $hostServices | Should Not Match 'new\s+SynchronousHostPayloadRegistry'
         $hostServices | Should Match 'GetAncestor\(hostWindow,\s*GA_ROOT\)'
         $connectionManager | Should Match 'g_modalFacadeInstance'
@@ -4851,7 +4994,7 @@ Specs\TestRuns\local_scratch
         $guard | Should Match 'HCBT_SETFOCUS[\s\S]{0,250}return 1;'
 
         $app | Should Match 'selectedSafeSuite\s*=\s*hasArg\(L"--compare-selftest"\)\s*\|\|\s*hasArg\(L"--fileops-selftest"\)'
-        $app | Should Match 'selectedFocusSuite\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*\(hasArg\(L"--commands-selftest"\)\s*&&\s*! selectedDocumentationGallery\)'
+        $app | Should Match 'selectedFocusSuite\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*\(hasArg\(L"--commands-selftest"\)\s*&&\s*! selectedNoActivationCommandsCase\)'
         $app | Should Match 'selectedSafeSuite\s*&&\s*!\s*selectedFocusSuite[\s\S]{0,250}selfTestActivationBlocker\.Start\(\)'
 
 
@@ -5097,12 +5240,15 @@ Specs\TestRuns\local_scratch
         $transaction | Should Match 'CreateUniqueSiblingFile\(extendedTarget\.native\(\)'
         $transaction | Should Match 'Common::HandleIo::WriteAll'
         $transaction | Should Match 'FlushFileBuffers\(_file\.get\(\)\)'
-        $transaction | Should Match 'FILE_RENAME_FLAG_REPLACE_IF_EXISTS\s*\|\s*FILE_RENAME_FLAG_POSIX_SEMANTICS'
-        $transaction | Should Match 'SetFileInformationByHandle\([\s\S]{0,120}FileRenameInfoEx'
-        $transaction | Should Match 'MoveFileExW\(_temporaryPath\.c_str\(\),\s*_targetPath\.c_str\(\),\s*moveFlags\)'
+        $transaction | Should Match 'FILE_RENAME_FLAG_POSIX_SEMANTICS\s*\|[\s\S]{0,100}FILE_RENAME_FLAG_REPLACE_IF_EXISTS'
+        $transaction | Should Match 'RenameOwnedFile\(FileRenameInfoEx'
+        $transaction | Should Match 'RenameOwnedFile\(FileRenameInfo,'
+        $transaction | Should Match 'SetFileInformationByHandle\(_file\.get\(\),\s*informationClass'
+        $transaction | Should Not Match 'MoveFileExW|DeleteFileW'
         $transaction | Should Match '~LocalFileTransaction\(\)\s+noexcept[\s\S]{0,80}Abort\(\);'
-        $transaction | Should Match '!\s*_committed\s*&&\s*!\s*_temporaryPath\.empty\(\)[\s\S]{0,120}DeleteFileW'
-        $transaction | Should Match '#ifdef ENABLE_TESTS[\s\S]{0,900}FailNextLocalFileTransactionWrite'
+        $transaction | Should Match 'FileDispositionInfoEx'
+        $transaction | Should Match 'FileDispositionInfo,'
+        $transaction | Should Match '#ifdef ENABLE_TESTS\s+namespace Testing\s*\{[\s\S]*?FailNextLocalFileTransactionWrite'
         $transaction | Should Match 'FailNextLocalFileTransactionFlush'
         $transaction | Should Match 'FailNextLocalFileTransactionPublish'
 
@@ -5891,5 +6037,69 @@ Describe 'Recycle Bin hygiene source contracts' {
         $deleteAt | Should BeGreaterThan $purge.IndexOf('_wcsicmp(recordedOriginal')
         $runnerSource | Should Not Match 'SHEmptyRecycleBin'
         $purge | Should Not Match 'FindFirstFile|directory_iterator'
+    }
+}
+
+Describe 'Packed plugin FileInfo consumer contracts' {
+    BeforeAll {
+        $folderViewEnumeration = Get-RSText -Path 'RedSalamander\FolderView.Enumeration.cpp'
+        $navigationMenus = Get-RSText -Path 'RedSalamander\NavigationView.Menus.cpp'
+        $leftoverCleanup = Get-RSText -Path 'RedSalamander\FolderWindow.LeftoverCleanup.cpp'
+    }
+
+    It 'routes each host FileInfo consumer through the bounded cursor and checks query results and capacity' {
+        foreach ($source in @($folderViewEnumeration, $navigationMenus, $leftoverCleanup)) {
+            $source | Should Match 'GetCount\(&entryCount\)'
+            $source | Should Match 'GetBufferSize\(&bufferSize\)'
+            $source | Should Match 'GetBuffer\(&entry\)'
+            $source | Should Match 'GetAllocatedSize\(&allocatedSize\)'
+            $source | Should Match 'allocatedSize\s*<\s*bufferSize'
+            $source | Should Match 'Common::Plugins::PackedFileInfoCursor\s+cursor\('
+            $source | Should Match 'cursor\.Next\(&current\)'
+        }
+        # This guards the three reviewed consumer regions at a coarse file boundary. The decoder's
+        # malformed-chain behavior is exercised by PluginContractTests; this mapping check does not
+        # claim to simulate a hostile provider through the UI.
+        $folderViewEnumeration | Should Not Match 'reinterpret_cast<FileInfo\*>\([^\r\n]*NextEntryOffset'
+        $navigationMenus | Should Not Match 'reinterpret_cast<FileInfo\*>\([^\r\n]*NextEntryOffset'
+        $leftoverCleanup | Should Not Match 'reinterpret_cast<FileInfo\*>\([^\r\n]*NextEntryOffset'
+    }
+
+    It 'validates provider child components only at filesystem joins' {
+        $navigationMenus | Should Match 'IsSingleChildPathComponent\(name\)[\s\S]{0,180}parentPath\s*/\s*std::wstring\(name\)'
+        $scanStart = $leftoverCleanup.IndexOf('static void ScanFolderTree(', [StringComparison]::Ordinal)
+        $scanEnd = $leftoverCleanup.IndexOf('void StartScan()', $scanStart, [StringComparison]::Ordinal)
+        $scanStart | Should BeGreaterThan -1
+        $scanEnd | Should BeGreaterThan $scanStart
+        $scanBlock = $leftoverCleanup.Substring($scanStart, $scanEnd - $scanStart)
+        $childGuard = $scanBlock.IndexOf('IsSingleChildPathComponent(name)', [StringComparison]::Ordinal)
+        $continueAfterGuard = $scanBlock.IndexOf('continue;', $childGuard, [StringComparison]::Ordinal)
+        $childJoin = $scanBlock.IndexOf('child /= std::wstring(name);', [StringComparison]::Ordinal)
+        $childGuard | Should BeGreaterThan -1
+        $continueAfterGuard | Should BeGreaterThan $childGuard
+        $childJoin | Should BeGreaterThan $continueAfterGuard
+        $folderViewEnumeration | Should Not Match 'IsSingleChildPathComponent'
+    }
+}
+
+Describe 'Leftover scan worker retirement contract' {
+    BeforeAll {
+        $leftoverCleanup = Get-RSText -Path 'RedSalamander\FolderWindow.LeftoverCleanup.cpp'
+        $identityLess = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.IdentityLess.cpp'
+        $runner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+    }
+
+    It 'keeps provider work off UI state and retires a held scan through the existing reaper seam' {
+        $leftoverCleanup | Should Match 'std::jthread\(\[context\s*=\s*std::move\(context\)\]'
+        $leftoverCleanup | Should Not Match 'std::jthread\(\[this'
+        $leftoverCleanup | Should Match 'scanWorkContext\.get\(\)\s*!=\s*context\.get\(\)'
+        $leftoverCleanup | Should Match 'SubmitOwnedThreadpoolCallbackWithInstance\(reaper\)'
+        $leftoverCleanup | Should Match 'TransferModulePinToCallbackReturn\(instance,\s*context->providerModulePin\)'
+        $leftoverCleanup | Should Match 'TakeMessagePayload<ScanCompletionPayload>\(hwnd,\s*message,\s*lParam\)'
+        $identityLess | Should Match 'RunFileOpsLeftoverScanWorkerRetirementChecks'
+        $identityLess | Should Match 'retirementElapsedMs\s*>\s*200u'
+        $identityLess | Should Match 'provider->ReferenceCountForSelfTest\(\)\s*!=\s*2u'
+        $identityLess | Should Match 'probe\.delivered\.load\(std::memory_order_acquire\)\s*!=\s*0u'
+        $runner | Should Match 'SetBlockReadDirectoryInfoForSelfTest'
     }
 }

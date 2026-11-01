@@ -2021,7 +2021,7 @@ and requires host/attachment counts to return after destruction.
 samples, actual client geometry/DPI and a semantic workload digest. Compare deltas within stages;
 reject unequal workload, fixture bytes, dimensions or DPI. Redraw wall time is neither presented FPS
 nor a frame interval. Surface allocation, newer selected-detail/graph-disclosure behavior and the
-full consumer resource gate require separate evidence. The first [runtime smoke](../TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery/README.md)
+full consumer resource gate require separate evidence. The first [runtime smoke](../TestRuns/4cb089111a23/Validation/v05/README.md)
 passes but does not establish paired non-regression; retain original P0 and equal-feature baselines.
 The [original-P0/current comparison](../TestRuns/4cb089111a23/Validation/2026-09-27_common-p0-current/README.md)
 retains five fresh processes per revision, all ten passing at matching 144 DPI, dimensions and
@@ -2113,7 +2113,7 @@ This source reconstruction does not attest the historical raw checkout or execut
 The older F6 and v2 comparison also had different non-DxUi dependency outputs; retain
 that whole-product comparison limit. Neither comparison isolates I27 changes from
 dependency differences or replaces the unchanged v2 workload and five-process criteria.
-The [I27 qualification report](../TestRuns/4cb089111a23/Validation/2026-10-01_fileops-safety-remediation/ReviewRemediation.md)
+The [I27 qualification report](../TestRuns/4cb089111a23/Validation/v06/ReviewRemediation.md)
 binds implementation, paired measurement, Full results and their remaining platform limits.
 
 The File Operations case `cmd_pane_fileops_popup_resource_lifetime` measures five warm-up and

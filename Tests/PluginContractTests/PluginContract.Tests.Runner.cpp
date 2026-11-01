@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -27,6 +28,7 @@
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
 #include "Helpers.h"
+#include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
 #include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/Factory.h"
@@ -415,15 +417,16 @@ HRESULT CreateFactoryContractInstance(const FactoryOptions*, IHost*, void**) noe
 // ---------------------------------------------------------------------------
 // Check helper (matches LocalizationTests pattern)
 // ---------------------------------------------------------------------------
-void Check(bool condition, const wchar_t* message, bool& success) noexcept
+bool Check(bool condition, const wchar_t* message, bool& success) noexcept
 {
     if (! condition)
     {
         std::wcerr << L"[ FAILED  ] " << message << L"\n";
         success = false;
-        return;
+        return false;
     }
     std::wcout << L"[       OK ] " << message << L"\n";
+    return true;
 }
 
 [[nodiscard]] bool SetRegistryStringValue(HKEY key, const wchar_t* valueName, DWORD type, std::wstring_view value, bool includeTerminator) noexcept
@@ -574,6 +577,136 @@ void TestRegistryAndWslCatalogContracts(bool& success) noexcept
               L"canonical WSL catalog preserves WSL1 default metadata",
               success);
     }
+}
+
+void TestLocalFileTransactionOwnedPublicationContracts(bool& success) noexcept
+{
+    using Common::Files::ExistingTargetPolicy;
+    using Common::Files::LocalFileTransaction;
+    std::error_code error;
+    const auto root = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"PluginContractTests",
+                                                                        .leafSegment         = L"owned-output-transaction",
+                                                                        .fallbackRunIdPrefix = L"plugin-contract",
+                                                                        .kind                = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
+                                                                       error);
+    if (! Check(! error && ! root.empty(), L"owned transaction acquires marked scratch", success))
+        return;
+    std::filesystem::remove_all(root, error);
+    error.clear();
+    std::filesystem::create_directories(root, error);
+    if (! Check(! error, L"owned transaction creates its isolated fixture", success))
+        return;
+    const auto cleanup = wil::scope_exit([&]() noexcept { std::filesystem::remove_all(root, error); });
+    // Fixture-local bounded byte oracle; all transfers use the canonical checked I/O helper.
+    const auto writeNew = [](const std::filesystem::path& path, std::string_view text) noexcept
+    {
+        wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        return file && SUCCEEDED(Common::HandleIo::WriteAll(file.get(), std::as_bytes(std::span(text.data(), text.size()))));
+    };
+    const auto matches = [](const std::filesystem::path& path, std::string_view text) noexcept
+    {
+        wil::unique_hfile file(CreateFileW(
+            path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        uint64_t size = 0u;
+        if (! file || FAILED(Common::HandleIo::GetFileSizeBounded(file.get(), 1024u, size)) || size != text.size())
+            return false;
+        std::vector<std::byte> bytes(static_cast<size_t>(size));
+        return SUCCEEDED(Common::HandleIo::ReadExact(file.get(), bytes)) && std::ranges::equal(bytes, std::as_bytes(std::span(text.data(), text.size())));
+    };
+    const auto temporaryPath = [](HANDLE file)
+    {
+        std::array<wchar_t, 32768u> path{};
+        const DWORD length = GetFinalPathNameByHandleW(file, path.data(), static_cast<DWORD>(path.size()), FILE_NAME_NORMALIZED);
+        return length != 0u && length < path.size() ? std::filesystem::path(std::wstring_view(path.data(), length)) : std::filesystem::path{};
+    };
+    constexpr std::string_view payload  = "complete owned report\n";
+    constexpr std::string_view sentinel = "independent occupant\n";
+    for (const auto policy : {ExistingTargetPolicy::FailIfExists, ExistingTargetPolicy::Replace})
+    {
+#ifdef ENABLE_TESTS
+        constexpr size_t routes = 2u;
+#else
+        constexpr size_t routes = 1u;
+#endif
+        for (size_t route = 0u; route < routes; ++route)
+        {
+            const auto target = root / std::format(L"report-{}-{}.txt", static_cast<unsigned int>(policy), route);
+            if (policy == ExistingTargetPolicy::Replace && ! Check(writeNew(target, sentinel), L"replace transaction seeds exact old report", success))
+                return;
+            LocalFileTransaction transaction;
+            if (! Check(SUCCEEDED(LocalFileTransaction::Create(target, policy, false, transaction)) &&
+                            SUCCEEDED(transaction.Write(std::as_bytes(std::span(payload.data(), payload.size())))),
+                        L"owned transaction stages all report bytes",
+                        success))
+                return;
+            const auto stage = temporaryPath(transaction.GetHandle());
+#ifdef ENABLE_TESTS
+            if (route == 1u)
+                Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+#endif
+            const auto started = std::chrono::steady_clock::now();
+            const HRESULT hr   = transaction.Commit(payload.size());
+            Debug::Perf::Emit(L"Common.LocalFileTransaction.OwnedPublishUs",
+                              std::format(L"policy={} legacy={}", static_cast<unsigned int>(policy), route),
+                              Debug::Perf::ElapsedUs(started),
+                              payload.size(),
+                              0u,
+                              hr);
+            Check(SUCCEEDED(hr) && ! stage.empty() && GetFileAttributesW(stage.c_str()) == INVALID_FILE_ATTRIBUTES && matches(target, payload),
+                  L"owned Ex/legacy publication preserves exact bytes and retires its private name",
+                  success);
+            transaction.Abort();
+            Check(matches(target, payload), L"aborting a committed transaction preserves its published report", success);
+        }
+
+        const auto target = root / std::format(L"failed-{}.txt", static_cast<unsigned int>(policy));
+        if (policy == ExistingTargetPolicy::Replace && ! Check(writeNew(target, sentinel), L"failed replace seeds exact old report", success))
+            return;
+        LocalFileTransaction failed;
+        if (! Check(SUCCEEDED(LocalFileTransaction::Create(target, policy, false, failed)) &&
+                        SUCCEEDED(failed.Write(std::as_bytes(std::span(payload.data(), payload.size())))),
+                    L"failure control creates its owned stage",
+                    success))
+            return;
+        const auto stage = temporaryPath(failed.GetHandle());
+        if (! Check(! stage.empty(), L"failure control observes the exact owned temporary name", success))
+            return;
+#ifdef ENABLE_TESTS
+        Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+        Common::Files::Testing::FailNextLocalFileTransactionLegacyRename(HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION));
+        const uint64_t expectedSize = payload.size();
+#else
+        // A size mismatch is a real pre-publication failure in a shipping build.
+        const uint64_t expectedSize = payload.size() + 1u;
+#endif
+        const HRESULT failedHr = failed.Commit(expectedSize);
+        const auto moved       = stage.native() + L".moved";
+        const bool changed     = MoveFileExW(stage.c_str(), moved.c_str(), 0u) != FALSE;
+        Check(FAILED(failedHr) && failed.GetHandle() != nullptr && ! changed,
+              L"failed publication retains exact source authority and refuses namespace replacement",
+              success);
+        failed.Abort();
+        Check(GetFileAttributesW(stage.c_str()) == INVALID_FILE_ATTRIBUTES && (policy != ExistingTargetPolicy::Replace || matches(target, sentinel)),
+              L"failed publication abort removes only its owned stage",
+              success);
+        if (Check(writeNew(stage, sentinel), L"independent writer can reuse retired temporary spelling", success))
+        {
+            failed.Abort();
+            Check(matches(stage, sentinel), L"repeated abort cannot delete a later occupant at the old temporary name", success);
+        }
+    }
+    const auto target = root / L"occupied-at-commit.txt";
+    LocalFileTransaction collision;
+    if (! Check(SUCCEEDED(LocalFileTransaction::Create(target, ExistingTargetPolicy::FailIfExists, false, collision)) &&
+                    SUCCEEDED(collision.Write(std::as_bytes(std::span(payload.data(), payload.size())))) && writeNew(target, sentinel),
+                L"collision control installs a destination after transaction admission",
+                success))
+        return;
+    const HRESULT collisionHr = collision.Commit(payload.size());
+    collision.Abort();
+    Check((collisionHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || collisionHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)) && matches(target, sentinel),
+          L"exclusive handle publication preserves a destination installed after admission",
+          success);
 }
 
 void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
@@ -747,6 +880,17 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
               success);
     }
 
+    Common::Plugins::PackedFileInfoCursor cursor(first, byteSize, count);
+    for (unsigned long index = 0u; index < count; ++index)
+    {
+        const FileInfo* entry              = nullptr;
+        const HRESULT nextHr               = cursor.Next(&entry);
+        const std::wstring_view actualName = entry ? std::wstring_view(entry->FileName, entry->FileNameSize / sizeof(wchar_t)) : std::wstring_view{};
+        Check(nextHr == S_OK && entry != nullptr && actualName == entries[index].name,
+              std::format(L"canonical packed FileInfo cursor returns entry {}", index).c_str(),
+              success);
+    }
+
     const unsigned long originalOffset = first ? first->NextEntryOffset : 0u;
     if (first)
     {
@@ -755,6 +899,11 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
     FileInfo* malformed = nullptr;
     Check(buffer.Get(1, &malformed) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && malformed == nullptr,
           L"packed FileInfo traversal rejects a short unaligned next offset",
+          success);
+    Common::Plugins::PackedFileInfoCursor malformedCursor(first, byteSize, count);
+    const FileInfo* cursorEntry = nullptr;
+    Check(malformedCursor.Next(&cursorEntry) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && cursorEntry == nullptr,
+          L"canonical packed FileInfo cursor rejects a malformed next offset before exposing the record",
           success);
     if (first)
     {
@@ -1876,6 +2025,183 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     {
         static_cast<void>(::SetFileAttributesW(target.c_str(), attributes & ~FILE_ATTRIBUTE_READONLY));
     }
+
+    const auto writeThroughProvider = [&](const std::filesystem::path& path, FileSystemFlags flags, std::string_view content, bool commit) noexcept
+    {
+        wil::com_ptr_nothrow<IFileWriter> output;
+        const std::wstring pathText = path.wstring();
+        const HRESULT createHr      = io->CreateFileWriter(pathText.c_str(), flags, output.put());
+        if (FAILED(createHr) || ! output)
+        {
+            return createHr;
+        }
+        unsigned long written   = 0u;
+        const auto contentBytes = static_cast<unsigned long>(content.size());
+        const HRESULT writeHr   = output->Write(content.data(), contentBytes, &written);
+        if (FAILED(writeHr) || written != contentBytes)
+        {
+            return FAILED(writeHr) ? writeHr : HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+        }
+        return commit ? output->Commit() : S_OK;
+    };
+    const auto readThroughProvider = [&](const std::filesystem::path& path, std::string& content) noexcept
+    {
+        content.clear();
+        wil::com_ptr_nothrow<IFileReader> input;
+        const std::wstring pathText = path.wstring();
+        if (FAILED(io->CreateFileReader(pathText.c_str(), input.put())) || ! input)
+        {
+            return false;
+        }
+        uint64_t sizeBytes = 0u;
+        if (FAILED(input->GetSize(&sizeBytes)) || sizeBytes > std::numeric_limits<unsigned long>::max())
+        {
+            return false;
+        }
+        content.resize(static_cast<size_t>(sizeBytes));
+        unsigned long read = 0u;
+        return SUCCEEDED(input->Read(content.data(), static_cast<unsigned long>(content.size()), &read)) && read == static_cast<unsigned long>(content.size());
+    };
+    const auto enumerateWriterStages = [&](const std::filesystem::path& destination, std::error_code& enumerationError)
+    {
+        std::vector<std::filesystem::path> stages;
+        enumerationError.clear();
+        constexpr std::wstring_view stageMarker{L".~rs-write-"};
+        constexpr std::wstring_view stageSuffix{L".tmp"};
+        constexpr size_t stageTokenLength  = 32u;
+        const size_t readablePrefixLimit   = 255u - stageMarker.size() - stageTokenLength - stageSuffix.size();
+        const std::wstring destinationLeaf = destination.filename().wstring();
+        std::wstring prefix(destinationLeaf.substr(0u, readablePrefixLimit));
+        prefix.append(stageMarker);
+        for (std::filesystem::directory_iterator iterator(root, enumerationError), end; ! enumerationError && iterator != end;
+             iterator.increment(enumerationError))
+        {
+            const std::wstring name = iterator->path().filename().wstring();
+            if (name.starts_with(prefix) && name.ends_with(L".tmp"))
+            {
+                stages.push_back(iterator->path());
+            }
+        }
+        return stages;
+    };
+
+    constexpr std::string_view abortedBytes       = "uncommitted-direct-bytes";
+    const std::filesystem::path abortedDirectPath = root / L"aborted-direct.txt";
+    const HRESULT abortedDirectHr                 = writeThroughProvider(abortedDirectPath, FILESYSTEM_FLAG_NONE, abortedBytes, false);
+    std::error_code pathError;
+    const bool abortedDirectExists = std::filesystem::exists(abortedDirectPath, pathError);
+    Check(abortedDirectHr == S_OK && ! pathError && ! abortedDirectExists, L"aborting a direct local writer removes only its exact created file", success);
+
+    const std::filesystem::path directCommittedPath = root / L"committed-direct.txt";
+    constexpr std::string_view committedDirectBytes = "committed-direct-bytes";
+    const HRESULT directCommitHr                    = writeThroughProvider(directCommittedPath, FILESYSTEM_FLAG_NONE, committedDirectBytes, true);
+    std::string directCommittedRead;
+    Check(directCommitHr == S_OK && readThroughProvider(directCommittedPath, directCommittedRead) && directCommittedRead == committedDirectBytes,
+          L"committing a direct local writer preserves its published bytes",
+          success);
+
+    const std::filesystem::path stagedAbortTarget = root / L"staged-abort.txt";
+    Check(writeThroughProvider(stagedAbortTarget, FILESYSTEM_FLAG_NONE, "original-stage-target", true) == S_OK,
+          L"staged abort regression seeds its original destination",
+          success);
+    std::error_code stageEnumerationError;
+    const auto stagesBeforeAbort     = enumerateWriterStages(stagedAbortTarget, stageEnumerationError);
+    const bool enumeratedBeforeAbort = ! stageEnumerationError;
+    const HRESULT stagedAbortHr      = writeThroughProvider(stagedAbortTarget, FILESYSTEM_FLAG_ALLOW_OVERWRITE, "uncommitted-stage", false);
+    const auto stagesAfterAbort      = enumerateWriterStages(stagedAbortTarget, stageEnumerationError);
+    std::string stagedTargetAfterAbort;
+    Check(stagedAbortHr == S_OK && enumeratedBeforeAbort && ! stageEnumerationError && stagesBeforeAbort.empty() && stagesAfterAbort.empty() &&
+              readThroughProvider(stagedAbortTarget, stagedTargetAfterAbort) && stagedTargetAfterAbort == "original-stage-target",
+          L"aborting a staged local writer removes its exact stage and retains the original destination",
+          success);
+
+    const HRESULT stagedCommitHr = writeThroughProvider(stagedAbortTarget, FILESYSTEM_FLAG_ALLOW_OVERWRITE, "committed-stage-bytes", true);
+    std::string stagedCommitRead;
+    Check(stagedCommitHr == S_OK && readThroughProvider(stagedAbortTarget, stagedCommitRead) && stagedCommitRead == "committed-stage-bytes",
+          L"committing a staged local writer publishes its complete replacement bytes",
+          success);
+
+    const std::filesystem::path maximumLeafTarget     = root / std::wstring(255u, L'm');
+    constexpr std::string_view maximumLeafDirectBytes = "maximum-leaf-direct-commit";
+    const HRESULT maximumLeafDirectHr                 = writeThroughProvider(maximumLeafTarget, FILESYSTEM_FLAG_NONE, maximumLeafDirectBytes, true);
+    std::string maximumLeafDirectRead;
+    std::error_code maximumLeafStageError;
+    const auto maximumLeafStagesAfterDirect = enumerateWriterStages(maximumLeafTarget, maximumLeafStageError);
+    Check(maximumLeafDirectHr == S_OK && readThroughProvider(maximumLeafTarget, maximumLeafDirectRead) && maximumLeafDirectRead == maximumLeafDirectBytes &&
+              ! maximumLeafStageError && maximumLeafStagesAfterDirect.empty(),
+          L"local writer creates and commits exact bytes at the 255-character leaf boundary without leaving a stage",
+          success);
+
+    constexpr std::string_view maximumLeafReplacementBytes = "maximum-leaf-overwrite-commit";
+    const HRESULT maximumLeafOverwriteHr = writeThroughProvider(maximumLeafTarget, FILESYSTEM_FLAG_ALLOW_OVERWRITE, maximumLeafReplacementBytes, true);
+    std::string maximumLeafOverwriteRead;
+    const auto maximumLeafStagesAfterCommit = enumerateWriterStages(maximumLeafTarget, maximumLeafStageError);
+    Check(maximumLeafOverwriteHr == S_OK && readThroughProvider(maximumLeafTarget, maximumLeafOverwriteRead) &&
+              maximumLeafOverwriteRead == maximumLeafReplacementBytes && ! maximumLeafStageError && maximumLeafStagesAfterCommit.empty(),
+          L"local writer commits a staged overwrite at the 255-character leaf boundary with no stage residue",
+          success);
+
+    constexpr std::string_view maximumLeafAbandonedBytes = "maximum-leaf-abandoned-overwrite";
+    const HRESULT maximumLeafAbandonedHr = writeThroughProvider(maximumLeafTarget, FILESYSTEM_FLAG_ALLOW_OVERWRITE, maximumLeafAbandonedBytes, false);
+    std::string maximumLeafAfterAbandonRead;
+    const auto maximumLeafStagesAfterAbandon = enumerateWriterStages(maximumLeafTarget, maximumLeafStageError);
+    Check(maximumLeafAbandonedHr == S_OK && readThroughProvider(maximumLeafTarget, maximumLeafAfterAbandonRead) &&
+              maximumLeafAfterAbandonRead == maximumLeafReplacementBytes && ! maximumLeafStageError && maximumLeafStagesAfterAbandon.empty(),
+          L"abandoning a 255-character leaf overwrite preserves committed bytes and removes only its own stage",
+          success);
+
+    const std::filesystem::path promotionTarget      = root / L"promotion-failure-target.txt";
+    const std::filesystem::path savedPromotionTarget = root / L"promotion-failure-target.saved";
+    Check(writeThroughProvider(promotionTarget, FILESYSTEM_FLAG_NONE, "original-destination", true) == S_OK,
+          L"failed-promotion regression seeds its original destination",
+          success);
+    wil::com_ptr_nothrow<IFileWriter> failedPromotionWriter;
+    const std::wstring promotionTargetText = promotionTarget.wstring();
+    const HRESULT failedPromotionCreateHr  = io->CreateFileWriter(promotionTargetText.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, failedPromotionWriter.put());
+    constexpr std::string_view stagedPromotionBytes = "staged-candidate";
+    unsigned long stagedPromotionWritten            = 0u;
+    const HRESULT stagedPromotionWriteHr =
+        failedPromotionWriter
+            ? failedPromotionWriter->Write(stagedPromotionBytes.data(), static_cast<unsigned long>(stagedPromotionBytes.size()), &stagedPromotionWritten)
+            : E_UNEXPECTED;
+    const BOOL movedOriginal  = MoveFileW(promotionTarget.c_str(), savedPromotionTarget.c_str());
+    const BOOL madeDirectory  = movedOriginal != FALSE ? CreateDirectoryW(promotionTarget.c_str(), nullptr) : FALSE;
+    const HRESULT promotionHr = madeDirectory != FALSE && SUCCEEDED(failedPromotionCreateHr) && SUCCEEDED(stagedPromotionWriteHr) &&
+                                        stagedPromotionWritten == static_cast<unsigned long>(stagedPromotionBytes.size())
+                                    ? failedPromotionWriter->Commit()
+                                    : E_UNEXPECTED;
+    auto failedStages         = enumerateWriterStages(promotionTarget, stageEnumerationError);
+    bool sentinelSurvived     = false;
+    if (! stageEnumerationError && failedStages.size() == 1u && promotionHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED))
+    {
+        const std::filesystem::path stagePath    = failedStages.front();
+        const BOOL removedOriginalStage          = DeleteFileW(stagePath.c_str());
+        constexpr std::string_view sentinelBytes = "replacement-sentinel";
+        wil::unique_handle sentinel(CreateFileW(stagePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        DWORD sentinelWritten = 0u;
+        const bool sentinelSeeded =
+            removedOriginalStage != FALSE && sentinel &&
+            WriteFile(sentinel.get(), sentinelBytes.data(), static_cast<DWORD>(sentinelBytes.size()), &sentinelWritten, nullptr) != FALSE &&
+            sentinelWritten == static_cast<DWORD>(sentinelBytes.size());
+        sentinel.reset();
+        failedPromotionWriter.reset();
+        std::string sentinelRead;
+        sentinelSurvived = sentinelSeeded && readThroughProvider(stagePath, sentinelRead) && sentinelRead == sentinelBytes;
+        Check(sentinelSurvived, L"failed staged promotion cleanup preserves a different file installed at the former stage path", success);
+    }
+    else
+    {
+        failedPromotionWriter.reset();
+        Check(false, L"failed staged promotion reaches the exact stage-replacement fixture boundary", success);
+    }
+    if (madeDirectory != FALSE)
+    {
+        static_cast<void>(RemoveDirectoryW(promotionTarget.c_str()));
+    }
+    if (movedOriginal != FALSE)
+    {
+        static_cast<void>(MoveFileW(savedPromotionTarget.c_str(), promotionTarget.c_str()));
+    }
     std::filesystem::remove_all(root, error);
 }
 
@@ -1986,6 +2312,178 @@ void SkipTrack13ProviderContracts(std::wstring_view relativePath) noexcept
         return;
     }
     std::wcout << L"[  SKIPPED ] " << relativePath << L": provider mutation proofs need a TestSandbox scratch root that a packaged extraction does not have\n";
+}
+
+void CheckPathKeyRelationParityMatrix(const FileSystemPathIdentity& identity,
+                                      const std::span<const wchar_t> alphabet,
+                                      const std::wstring_view label,
+                                      bool& success)
+{
+    std::vector<std::wstring> paths{L""};
+    std::vector<std::wstring> frontier{L""};
+    for (size_t length = 0u; length < 4u; ++length)
+    {
+        std::vector<std::wstring> next;
+        next.reserve(frontier.size() * alphabet.size());
+        for (const std::wstring& prefix : frontier)
+        {
+            for (const wchar_t ch : alphabet)
+            {
+                next.emplace_back(prefix + ch);
+            }
+        }
+        paths.insert(paths.end(), next.begin(), next.end());
+        frontier = std::move(next);
+    }
+
+    for (const std::wstring_view edge :
+         {L"\u0131",     L"I",          L"i",          L"\u0130",     L"\u00DF",       L"SS",           L"\u03C3",           L"\u03C2",
+          L"\u03A3",     L"\u212A",     L"k",          L"\u212B",     L"\u00C5",       L"\u00E5",       L"e\u0301",          L"\u00E9",
+          L"\U0001F4C1", L"\U0001F4C2", L"\U00010428", L"\U00010400", L"x\U00010428z", L"X\U00010400Z", L"\U00010428/child", L"\U00010400/child"})
+        paths.emplace_back(edge);
+    std::vector<std::optional<std::wstring>> keys;
+    keys.reserve(paths.size());
+    for (const std::wstring& path : paths)
+        keys.emplace_back(TryMakePathKey(identity, path));
+
+    bool parity             = true;
+    size_t comparedKeyPairs = 0u;
+    std::wstring mismatch;
+    for (size_t leftIndex = 0u; leftIndex < paths.size(); ++leftIndex)
+    {
+        const std::wstring& left = paths[leftIndex];
+        const auto& leftKey      = keys[leftIndex];
+        if (! leftKey.has_value())
+            continue;
+        for (size_t rightIndex = 0u; rightIndex < paths.size(); ++rightIndex)
+        {
+            const std::wstring& right = paths[rightIndex];
+            const auto& rightKey      = keys[rightIndex];
+            if (! rightKey.has_value())
+                continue;
+            const auto actual                        = CompareFileSystemPathKeys(identity, leftKey.value(), rightKey.value());
+            const FileSystemPathKeyRelation expected = EquivalentPath(identity, left, right)           ? FileSystemPathKeyRelation::Equal
+                                                       : IsStrictDescendantPath(identity, left, right) ? FileSystemPathKeyRelation::LeftAncestor
+                                                       : IsStrictDescendantPath(identity, right, left) ? FileSystemPathKeyRelation::RightAncestor
+                                                                                                       : FileSystemPathKeyRelation::Disjoint;
+            if (! actual.has_value() || actual.value() != expected)
+            {
+                parity   = false;
+                mismatch = std::format(L"left='{}' right='{}' expected={} actual={}",
+                                       left,
+                                       right,
+                                       static_cast<unsigned int>(expected),
+                                       actual.has_value() ? static_cast<unsigned int>(actual.value()) : 255u);
+                break;
+            }
+            ++comparedKeyPairs;
+        }
+        if (! parity)
+            break;
+    }
+
+    const wchar_t malformedUnit = static_cast<wchar_t>(0xD800u);
+    const auto malformedKey     = TryMakePathKey(identity, std::wstring_view{&malformedUnit, 1u});
+    const bool malformedKeySafe =
+        ! malformedKey.has_value() || (CompareFileSystemPathKeys(identity, malformedKey.value(), malformedKey.value()) == FileSystemPathKeyRelation::Equal &&
+                                       EquivalentPath(identity, std::wstring_view{&malformedUnit, 1u}, std::wstring_view{&malformedUnit, 1u}));
+    Check(parity && comparedKeyPairs > 0u && malformedKeySafe,
+          std::format(L"{} canonical path-key relations match the raw component predicates across {} key pairs and malformed UTF-16 fallback; mismatch={}",
+                      label,
+                      comparedKeyPairs,
+                      mismatch)
+              .c_str(),
+          success);
+}
+
+void CheckOrdinalComponentKeyUnitParity(const FileSystemPathIdentity& identity, bool& success)
+{
+    struct UnitKey
+    {
+        wchar_t unit   = L'\0';
+        wchar_t key    = L'\0';
+        bool available = false;
+    };
+    constexpr size_t unitCount = 65536u;
+    std::vector<UnitKey> units(unitCount);
+    std::vector<size_t> nativeOrder;
+    std::vector<size_t> keyOrder;
+    nativeOrder.reserve(unitCount);
+    keyOrder.reserve(unitCount);
+    for (size_t index = 0u; index < unitCount; ++index)
+    {
+        UnitKey& entry  = units[index];
+        entry.unit      = static_cast<wchar_t>(index);
+        const auto key  = TryMakeComponentKey(identity, std::wstring_view{&entry.unit, 1u});
+        entry.available = key.has_value() && key.value().size() == 1u;
+        if (entry.available)
+        {
+            entry.key = key.value().front();
+            keyOrder.emplace_back(index);
+        }
+        nativeOrder.emplace_back(index);
+    }
+    bool nativeCallsValid    = true;
+    const auto nativeCompare = [&](const size_t left, const size_t right) noexcept
+    {
+        const int result = CompareStringOrdinal(&units[left].unit, 1, &units[right].unit, 1, TRUE);
+        nativeCallsValid = nativeCallsValid && result != 0;
+        return result;
+    };
+    std::sort(nativeOrder.begin(),
+              nativeOrder.end(),
+              [&](const size_t left, const size_t right) noexcept
+    {
+        const int result = nativeCompare(left, right);
+        return result == CSTR_EQUAL || result == 0 ? left < right : result == CSTR_LESS_THAN;
+    });
+    size_t equivalentKeyMismatches = 0u;
+    size_t nativeClasses           = 1u;
+    for (size_t index = 1u; index < nativeOrder.size(); ++index)
+    {
+        const size_t left  = nativeOrder[index - 1u];
+        const size_t right = nativeOrder[index];
+        if (nativeCompare(left, right) == CSTR_EQUAL)
+        {
+            if (units[left].available && units[right].available && units[left].key != units[right].key)
+                ++equivalentKeyMismatches;
+        }
+        else
+        {
+            ++nativeClasses;
+        }
+    }
+    std::sort(keyOrder.begin(), keyOrder.end(), [&](const size_t left, const size_t right) noexcept {
+        return units[left].key == units[right].key ? left < right : units[left].key < units[right].key;
+    });
+    size_t keyCollisions = 0u;
+    for (size_t index = 1u; index < keyOrder.size(); ++index)
+    {
+        const size_t left  = keyOrder[index - 1u];
+        const size_t right = keyOrder[index];
+        if (units[left].key == units[right].key && nativeCompare(left, right) != CSTR_EQUAL)
+            ++keyCollisions;
+    }
+    Check(nativeCallsValid && keyOrder.size() == unitCount && equivalentKeyMismatches == 0u && keyCollisions == 0u,
+          std::format(L"Local component keys preserve native equivalence across {} UTF-16 units: available={} classes={} missed={} collisions={}",
+                      unitCount,
+                      keyOrder.size(),
+                      nativeClasses,
+                      equivalentKeyMismatches,
+                      keyCollisions)
+              .c_str(),
+          success);
+
+    const auto lower           = TryMakeComponentKey(identity, L"\U00010428");
+    const auto upper           = TryMakeComponentKey(identity, L"\U00010400");
+    const auto contextualLower = TryMakeComponentKey(identity, L"x\U00010428z");
+    const auto contextualUpper = TryMakeComponentKey(identity, L"X\U00010400Z");
+    const auto emoji           = TryMakeComponentKey(identity, L"\U0001F4C1");
+    Check(lower.has_value() && upper.has_value() && lower.value() != upper.value() && contextualLower.has_value() && contextualUpper.has_value() &&
+              contextualLower.value() != contextualUpper.value() && emoji.has_value() && emoji.value() == L"\U0001F4C1" &&
+              ! EquivalentComponent(identity, L"\U00010428", L"\U00010400") && ! EquivalentComponent(identity, L"x\U00010428z", L"X\U00010400Z"),
+          L"Local required component keys admit supplementary names and emoji while retaining native Deseret distinctions",
+          success);
 }
 
 void TestTypedRouteValidatorContracts(bool& success) noexcept
@@ -2278,7 +2776,15 @@ bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs,
 
             if (std::wstring_view(pluginId) == L"builtin/file-system-7z" && typed.snapshot.pathIdentity.has_value())
             {
-                const FileSystemPathIdentity& identity        = typed.snapshot.pathIdentity.value();
+                const FileSystemPathIdentity& identity = typed.snapshot.pathIdentity.value();
+                constexpr std::array<wchar_t, 4> pathKeyAlphabet{L'a', L'A', L'b', L'/'};
+                CheckPathKeyRelationParityMatrix(identity, pathKeyAlphabet, L"case-sensitive 7z", success);
+                Check(CompareFileSystemPathsByComponents(identity, L"/Films", L"/Films-Old") < 0 &&
+                          CompareFileSystemPathsByComponents(identity, L"/Films", L"/Films/Classic") < 0 &&
+                          CompareFileSystemPathsByComponents(identity, L"/Films/Classic", L"/Films-Old") < 0 &&
+                          CompareFileSystemPathsByComponents(identity, L"/Films/Classic", LR"(\Films\Classic)") == 0,
+                      L"Path hierarchy ordering keeps descendant subtrees contiguous across sibling punctuation and accepted separators",
+                      success);
                 const std::array<std::wstring, 4> nestedPaths = {
                     L"/Films/Classic/movie.mkv",
                     (std::filesystem::path(L"/Films/Classic") / L"movie.mkv").native(),
@@ -2299,6 +2805,25 @@ bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs,
                 Check(identity.preferredSeparator == L'/' && ! EquivalentPath(identity, L"/Films/movie.mkv", L"/films/movie.mkv"),
                       L"7z keeps forward-slash joins and case-sensitive archive identity",
                       success);
+                const auto comparePathKeys = [&](std::wstring_view left, std::wstring_view right) noexcept -> std::optional<FileSystemPathKeyRelation>
+                {
+                    const auto leftKey  = TryMakePathKey(identity, left);
+                    const auto rightKey = TryMakePathKey(identity, right);
+                    return leftKey.has_value() && rightKey.has_value() ? CompareFileSystemPathKeys(identity, leftKey.value(), rightKey.value()) : std::nullopt;
+                };
+                Check(comparePathKeys(L"/Films/Classic", LR"(\Films\Classic)") == FileSystemPathKeyRelation::Equal &&
+                          comparePathKeys(L"/Films", L"/Films/Classic") == FileSystemPathKeyRelation::LeftAncestor &&
+                          comparePathKeys(L"/Films/Classic", L"/Films") == FileSystemPathKeyRelation::RightAncestor &&
+                          comparePathKeys(L"/Films", L"/Films-Old") == FileSystemPathKeyRelation::Disjoint &&
+                          comparePathKeys(L"/Films", L"/Filmstrip") == FileSystemPathKeyRelation::Disjoint &&
+                          comparePathKeys(L"", L"/Films") == FileSystemPathKeyRelation::Disjoint,
+                      L"Canonical path keys preserve accepted separators, component boundaries, and empty-root semantics",
+                      success);
+                FileSystemPathIdentity unstableIdentity = identity;
+                unstableIdentity.pathTextStableIdentity = false;
+                Check(! CompareFileSystemPathKeys(unstableIdentity, L"/FILMS", L"/FILMS/CLASSIC").has_value(),
+                      L"Canonical path-key comparison refuses an unstable path identity so callers can use the exact fallback",
+                      success);
                 for (const std::wstring_view invalidChild : {L"folder/movie.mkv", LR"(folder\movie.mkv)"})
                 {
                     const auto name = FileSystemRouteContract::QueryChildNameContract(fs.get(), L"/", invalidChild, FILESYSTEM_COPY, pluginId);
@@ -2307,6 +2832,32 @@ bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs,
                           L"7z rejects either separator inside a proposed single child name",
                           success);
                 }
+            }
+            if (std::wstring_view(pluginId) == L"builtin/file-system" && typed.snapshot.pathIdentity.has_value())
+            {
+                const FileSystemPathIdentity& identity = typed.snapshot.pathIdentity.value();
+                constexpr std::array<wchar_t, 5> pathKeyAlphabet{L'a', L'A', L'b', L'\\', L'/'};
+                CheckOrdinalComponentKeyUnitParity(identity, success);
+                CheckPathKeyRelationParityMatrix(identity, pathKeyAlphabet, L"ordinal-ignore-case Local", success);
+                Check(CompareFileSystemPathsByComponents(identity, L"Dir", L"dir/X") < 0 &&
+                          CompareFileSystemPathsByComponents(identity, L"Dir/X", L"DIR-OLD") < 0,
+                      L"Ordinal-ignore-case local path hierarchy orders descendants before interleaved punctuation siblings",
+                      success);
+                const auto localRootKey    = TryMakePathKey(identity, L"Dir");
+                const auto localChildKey   = TryMakePathKey(identity, L"dir/X");
+                const auto localSiblingKey = TryMakePathKey(identity, L"DIR-OLD");
+                Check(localRootKey.has_value() && localChildKey.has_value() && localSiblingKey.has_value() &&
+                          CompareFileSystemPathKeys(identity, localRootKey.value(), localChildKey.value()) == FileSystemPathKeyRelation::LeftAncestor &&
+                          CompareFileSystemPathKeys(identity, localRootKey.value(), localSiblingKey.value()) == FileSystemPathKeyRelation::Disjoint,
+                      L"Ordinal-ignore-case path keys preserve case folding without confusing punctuation siblings",
+                      success);
+                const auto localDirectoryKey = TryMakePathKey(identity, LR"(C:\foo\)");
+                const auto localFileKey      = TryMakePathKey(identity, LR"(C:\foo\bar)");
+                Check(localDirectoryKey.has_value() && localFileKey.has_value() &&
+                          CompareFileSystemPathKeys(identity, localDirectoryKey.value(), localFileKey.value()) == FileSystemPathKeyRelation::LeftAncestor &&
+                          IsStrictDescendantPath(identity, LR"(C:\foo\)", LR"(C:\foo\bar)"),
+                      L"Canonical keys preserve the raw predicate's separator-completed directory-root ancestry",
+                      success);
             }
 
             BOOL peerAllowed = 2;
@@ -3202,6 +3753,7 @@ int wmain(int argc, wchar_t** argv)
         bool focusedSuccess = true;
         std::wcout << L"[ RUN      ] Delete-on-close temporary-file contracts\n";
         TestDeleteOnCloseTemporaryFileContracts(focusedSuccess);
+        TestLocalFileTransactionOwnedPublicationContracts(focusedSuccess);
         std::wcout << (focusedSuccess ? L"PluginContractTests focused temporary-file contracts passed.\n"
                                       : L"PluginContractTests focused temporary-file contracts failed.\n");
         return focusedSuccess ? 0 : 1;
@@ -3457,6 +4009,9 @@ int wmain(int argc, wchar_t** argv)
 
     std::wcout << L"[ RUN      ] Step1c: Bounded registry and canonical WSL catalog contracts\n";
     TestRegistryAndWslCatalogContracts(success);
+
+    std::wcout << L"[ RUN      ] Step1d: Owned local output transaction contracts\n";
+    TestLocalFileTransactionOwnedPublicationContracts(success);
 
     std::wcout << L"[ RUN      ] Step2: EnumerateAndSchema - filesystem plugins\n";
     success = RunEnumerateAndSchemaPass(kFilesystemDlls, __uuidof(IFileSystem)) && success;

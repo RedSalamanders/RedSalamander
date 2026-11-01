@@ -24,8 +24,22 @@ constexpr size_t kMaximumPathUnits     = 32768u;
 constexpr size_t kMaximumPathDepth     = 512u;
 constexpr uint64_t kMaximumExportBytes = 8u * 1024u * 1024u;
 std::atomic_bool g_exportInFlight{false};
-std::atomic_uint64_t g_exportOwnedBytes{0u};
 const uint8_t kExportModuleAnchor = 0u;
+struct ExportOwnedMemory final
+{
+    explicit ExportOwnedMemory(std::shared_ptr<std::atomic_uint64_t> value) noexcept : counter(std::move(value))
+    {
+    }
+    ~ExportOwnedMemory()
+    {
+        counter->store(0u, std::memory_order_release);
+    }
+    ExportOwnedMemory(const ExportOwnedMemory&)            = delete;
+    ExportOwnedMemory(ExportOwnedMemory&&)                 = delete;
+    ExportOwnedMemory& operator=(const ExportOwnedMemory&) = delete;
+    ExportOwnedMemory& operator=(ExportOwnedMemory&&)      = delete;
+    std::shared_ptr<std::atomic_uint64_t> counter;
+};
 struct ExportCompletion final
 {
     HRESULT status = E_FAIL;
@@ -45,17 +59,19 @@ struct ViewerSpace::WorkspaceExportBuild final
     WorkspaceExportBuild(WorkspaceExportBuild&&)                 = delete;
     WorkspaceExportBuild& operator=(const WorkspaceExportBuild&) = delete;
     WorkspaceExportBuild& operator=(WorkspaceExportBuild&&)      = delete;
-    uint32_t generation                                          = 0u;
-    uint64_t revision                                            = 0u;
-    uint64_t projectionRevision                                  = 0u;
-    uint64_t discovered                                          = 0u;
-    uint64_t shown                                               = 0u;
-    uint64_t usedBytes                                           = 0u;
-    size_t cursor                                                = 0u;
-    bool csv                                                     = false;
-    bool partial                                                 = false;
-    bool countKnown                                              = false;
-    bool save                                                    = true;
+    // First field releases last, after all frozen rows and strings have retired.
+    std::unique_ptr<ExportOwnedMemory> ownedBytes;
+    uint32_t generation         = 0u;
+    uint64_t revision           = 0u;
+    uint64_t projectionRevision = 0u;
+    uint64_t discovered         = 0u;
+    uint64_t shown              = 0u;
+    uint64_t usedBytes          = 0u;
+    size_t cursor               = 0u;
+    bool csv                    = false;
+    bool partial                = false;
+    bool countKnown             = false;
+    bool save                   = true;
     std::string area;
     std::string scope;
     std::string root;
@@ -82,11 +98,13 @@ void ViewerSpace::ExportCurrentView(bool csv) noexcept
     if (! _model || _scanActive.load() || _analysisDirty || _analysisBuild || _workspaceRebinding ||
         (! needsHiddenProjection && _analysisGeneration != _displayGeneration))
     {
+        _exportProjectionRequested = false;
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_WAIT);
         return;
     }
     if (_analysisRows.size() > 20000u)
     {
+        _exportProjectionRequested = false;
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_LIMIT);
         return;
     }
@@ -97,6 +115,7 @@ void ViewerSpace::ExportCurrentView(bool csv) noexcept
         const auto* parent = TryGetRealNode(_model->viewNodeId);
         if (parent && parent->childrenCount > 20000u)
         {
+            _exportProjectionRequested = false;
             ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_LIMIT);
             return;
         }
@@ -218,9 +237,10 @@ bool ViewerSpace::QueueWorkspaceExport(std::wstring_view outputPath, bool csv) n
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_IO_ERROR);
         return false;
     }
-    build->usedBytes = sizeof(WorkspaceExportBuild) + build->ids.capacity() * sizeof(uint32_t) + build->rows.capacity() * sizeof(ViewerSpaceExport::Row) +
-                       build->root.capacity() + build->viewPath.capacity() + build->outputPath.capacity() * sizeof(wchar_t);
-    g_exportOwnedBytes.store(kMaximumExportBytes, std::memory_order_release);
+    build->usedBytes  = sizeof(WorkspaceExportBuild) + build->ids.capacity() * sizeof(uint32_t) + build->rows.capacity() * sizeof(ViewerSpaceExport::Row) +
+                        build->root.capacity() + build->viewPath.capacity() + build->outputPath.capacity() * sizeof(wchar_t);
+    build->ownedBytes = std::make_unique<ExportOwnedMemory>(_workspaceExportOwnedBytes);
+    build->ownedBytes->counter->store(kMaximumExportBytes, std::memory_order_release);
     _workspaceExport = std::move(build);
     releaseAdmission.release();
     EnsureAnimationTimer();
@@ -347,7 +367,6 @@ void ViewerSpace::SubmitWorkspaceExport(bool save) noexcept
     }
     // Failed submission is the sole inline-disposal fallback; no callback owns the snapshot.
     context.reset();
-    g_exportOwnedBytes.store(0u, std::memory_order_release);
     g_exportInFlight.store(false, std::memory_order_release);
     if (save)
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_IO_ERROR);
@@ -357,11 +376,7 @@ void ViewerSpace::SubmitWorkspaceExport(bool save) noexcept
 
 void CALLBACK ViewerSpace::WorkspaceExportCallback(PTP_CALLBACK_INSTANCE instance, void* context) noexcept
 {
-    auto releaseAdmission = wil::scope_exit([]() noexcept
-    {
-        g_exportOwnedBytes.store(0u, std::memory_order_release);
-        g_exportInFlight.store(false, std::memory_order_release);
-    });
+    auto releaseAdmission = wil::scope_exit([]() noexcept { g_exportInFlight.store(false, std::memory_order_release); });
     std::unique_ptr<std::shared_ptr<WorkspaceExportBuild>> owner(static_cast<std::shared_ptr<WorkspaceExportBuild>*>(context));
     auto job = std::move(*owner);
     TransferModulePinToCallbackReturn(instance, job->modulePin);
@@ -1133,7 +1148,7 @@ uint64_t ViewerSpace::ShownBytes(uint32_t id, uint64_t original) const noexcept
 
 uint64_t ViewerSpace::WorkspaceOwnedBytes() const noexcept
 {
-    uint64_t result = g_exportOwnedBytes.load(std::memory_order_acquire) + _excludedPaths.capacity() * sizeof(ExcludedPath) +
+    uint64_t result = _workspaceExportOwnedBytes->load(std::memory_order_acquire) + _excludedPaths.capacity() * sizeof(ExcludedPath) +
                       _workspaceBindingParts.capacity() * sizeof(std::wstring);
     for (const auto& entry : _excludedPaths)
         result += entry.path.capacity() * sizeof(wchar_t);

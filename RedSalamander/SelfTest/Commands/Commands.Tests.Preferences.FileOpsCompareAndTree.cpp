@@ -583,6 +583,20 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(selectParallelLimit(4u) && DebugGetPreferencesDialogSnapshot(snapshot) && ! snapshot.dirty && ! snapshot.shellApplyButtonEnabled,
                   L"Restoring four must restore the clean baseline and disable Apply.");
     state.Require(selectParallelLimit(6u), L"Parallel transfers must accept a second actual keyboard change.");
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state is required for the concurrent popup settings validation.");
+    if (! fileOps)
+        return false;
+    const bool expectedFooterOnly = ! fileOps->GetPopupFooterOnly();
+    const bool expectedCompact    = ! fileOps->GetPopupCompactDensity();
+    const bool expectedThroughput = ! fileOps->GetPopupThroughputExpanded();
+    // Simulate popup changes after Preferences captured its baseline and while its draft is dirty.
+    fileOps->SetPopupFooterOnly(expectedFooterOnly);
+    fileOps->SetPopupCompactDensity(expectedCompact);
+    fileOps->SetPopupThroughputExpanded(expectedThroughput);
+    state.Require(fileOps->DebugFlushPendingSettingsSaveForSelfTest(10000u), L"Concurrent popup settings must settle before Preferences Apply.");
+    state.Require(DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty && snapshot.shellApplyButtonEnabled,
+                  L"Concurrent popup settings must not clear the edited parallel-transfer draft.");
     state.Require(InvokeVisibleDescendantByNameWithMessagePump(
                       getShellHost(), UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_BTN_APPLY), L"Parallel transfers Preferences Apply"),
                   L"The visible Apply button must commit the parallel-transfer limit.");
@@ -601,6 +615,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(persisted.theme.currentThemeId == expectedTheme && persisted.fileOperations.has_value() &&
                       persisted.fileOperations->verifyAfterCopy == expectedVerification,
                   L"Parallel-transfer Apply must preserve unrelated theme and File Operations settings.");
+    state.Require(g_settings.fileOperations->popupFooterOnly == expectedFooterOnly && g_settings.fileOperations->popupCompactDensity == expectedCompact &&
+                      g_settings.fileOperations->popupThroughputExpanded == expectedThroughput && persisted.fileOperations.has_value() &&
+                      persisted.fileOperations->popupFooterOnly == expectedFooterOnly && persisted.fileOperations->popupCompactDensity == expectedCompact &&
+                      persisted.fileOperations->popupThroughputExpanded == expectedThroughput,
+                  L"Parallel-transfer Apply must preserve concurrent popup settings in memory and on disk.");
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot) && ! snapshot.dirty && ! snapshot.shellApplyButtonEnabled,
                   L"Successful Apply must advance the parallel-transfer baseline and disable Apply.");
     state.Require(selectParallelLimit(2u), L"The applied parallel limit must remain editable before Cancel.");
@@ -691,11 +710,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences shell Cancel action did not discard the File Operations edit mutation before the page was reopened.");
     state.Require(waitForComboValue(parallelName, L"6") && g_settings.fileOperations->maxParallelTransfers == 6u &&
-                      FileOperations::GetSharedParallelTransferLimit() == 6u,
+                      FileOperations::GetSharedParallelTransferLimit() == 6u && g_settings.fileOperations->popupFooterOnly == expectedFooterOnly &&
+                      g_settings.fileOperations->popupCompactDensity == expectedCompact &&
+                      g_settings.fileOperations->popupThroughputExpanded == expectedThroughput,
                   L"Cancel must discard the unapplied parallel limit while retaining the last successfully applied value.");
 
     snapshot = {};
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after File Operations live interaction validation.");
+    state.Require(! snapshot.dirty && ! snapshot.shellApplyButtonEnabled, L"Reopened Preferences must start clean after Cancel.");
     state.Require(snapshot.currentCategory == kPrefCategoryFileOperations, L"Preferences live interaction should keep the active category on File Operations.");
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_FILE_OPERATIONS),
                   L"Preferences File Operations page title changed unexpectedly during live interaction validation.");

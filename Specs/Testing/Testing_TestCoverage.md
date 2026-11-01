@@ -245,7 +245,7 @@ Tooling tests must guard:
 - Terminal-engine raw-byte inputs under LF and `core.autocrlf=true`-equivalent checkouts,
   localized valid tar metadata, malicious archives, empty-online/warm-offline dependency
   caches, separately tampered dependency locks/licenses, and actual x64/ARM64 PE imports;
-- centralized runtime dependency staging, clean portable extraction, architecture identity, MSI/MSIX and winget publication contracts;
+- centralized runtime dependency staging, clean portable extraction, architecture identity, ZIP and Winget publication contracts;
 - CI/Full run-plan parity, result coverage, timeout/failure classification, quarantine/repair lanes, and TestSandbox containment;
 - resource ownership, positional placeholder equivalence, satellite fallback, and settings/localization round trips;
 - source-policy bans and shared-helper adoption where runtime observation is not the relevant property;

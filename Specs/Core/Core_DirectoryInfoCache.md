@@ -61,6 +61,23 @@ If the cache cannot get under budget because visible folders are pinned, it rema
 
 Borrowed handles keep the snapshot alive and non-evictable for the duration of use.
 
+### Cancellation and wait notification
+
+An `AllowEnumerate` borrow may receive a caller stop token. If another borrower is currently loading
+the entry, the waiter must wake and return `ERROR_CANCELLED` when its token is stopped, without
+cancelling the other borrower's load. The stop callback is registered before taking the cache mutex;
+it takes and releases that same mutex before notifying the entry condition variable. This mutex
+barrier closes the predicate-to-wait lost-wakeup gap. The callback must be destroyed after the waiter
+releases the mutex because stop callbacks can run synchronously and callback destruction can wait for
+an in-flight callback.
+
+The loading borrower passes its token to `IFileSystemCancellableDirectoryEnumeration` when available.
+The host also registers the provider-call thread with `Common::SynchronousIoCancelWatch` while
+performing the synchronous call, allowing a requested stop to interrupt pending synchronous Win32
+I/O after the watch's grace interval. This does not forcibly cancel arbitrary provider waits or
+socket operations; providers without cooperative checkpoints or pending synchronous Win32 I/O may
+continue to occupy the caller until they return.
+
 Pure cache borrows do not automatically attach a watcher. In the reference implementation, watcher attachment is a visible-pane decision by default.
 
 An invalidation received while enumeration is in flight must survive publication of that older

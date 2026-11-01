@@ -1,0 +1,22 @@
+{
+  "run_id": "20261101T004014Z-20408-b6518ed1f0964256922cd3306462ff76",
+  "source_snapshot_id": "a79ffed0f6cfe05c3fadeef759410cad5e9e39220e8c4102eb250f924a8142cd",
+  "verdict": "FAILED",
+  "scope": "Original broad affected Release run; failure retained, never promoted",
+  "passed": 1420,
+  "failed": 1,
+  "skipped": 31,
+  "compare_passed": 251,
+  "compare_failed": 1,
+  "compare_skipped": 31,
+  "case": {
+    "name": "local_search_callback_contract",
+    "status": "failed",
+    "duration_ms": 4,
+    "repeat_index": 1,
+    "reason": "Search abort-match case expected ERROR_CANCELLED. hr=0x00000000"
+  },
+  "native_result_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T004014Z-20408-b6518ed1f0964256922cd3306462ff76\\artifacts\\archive\\4cb089111a23\\CompareDirectories\\2026-11-01_023345\\compare_results.json",
+  "native_result_sha256": "50c030100d859ce1e3adbd459319da0d7ccbdf9e44973fa675df2fcd9c715bef",
+  "root_diagnosis": "Coordinator cached completed workers before final match callback; cancellation entered terminal state but cached success escaped after join."
+}

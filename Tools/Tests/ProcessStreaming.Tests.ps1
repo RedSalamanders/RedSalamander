@@ -510,7 +510,14 @@ Write-Output "delegated=$hasDelegation"
                 }, $true))[0]
         $null -eq $wrapperAst | Should Be $false
 
-        $buildLogDir = Join-Path $TestDrive 'deployment-logs'
+        $sandboxCase = Join-Path $TestDrive 'RedSalamander.Perf\runs\fixture-20261031\scratch\pester-targeted-plugin-deployment\build-capture'
+        [void](New-Item -ItemType Directory -Path $sandboxCase -Force)
+        $script:scratchAllocation = $null
+        function New-RSTestSandboxScratchDirectory {
+            param([string]$RepoRoot, [string]$Harness, [string]$Case)
+            $script:scratchAllocation = [pscustomobject]@{ RepoRoot = $RepoRoot; Harness = $Harness; Case = $Case }
+            return $sandboxCase
+        }
         $buildScript = Join-Path $TestDrive 'build.ps1'
         $repoRoot = $TestDrive
         Invoke-Expression $wrapperAst.Extent.Text
@@ -541,12 +548,21 @@ Write-Output "delegated=$hasDelegation"
         finally {
             Remove-Item Function:\Invoke-RSTargetedBuildForDeploymentTest -ErrorAction SilentlyContinue
             Remove-Item Function:\Invoke-RSStreamingProcess -ErrorAction SilentlyContinue
+            Remove-Item Function:\New-RSTestSandboxScratchDirectory -ErrorAction SilentlyContinue
         }
 
         $null -eq $capturedException | Should Be $false
+        [System.IO.Path]::GetFullPath([string]$script:scratchAllocation.RepoRoot) |
+            Should Be ([System.IO.Path]::GetFullPath([string]$TestDrive))
+        $script:scratchAllocation.Harness | Should Be 'pester-targeted-plugin-deployment'
+        $script:scratchAllocation.Case | Should Be 'build-capture'
+        $captureRoot = [System.IO.Path]::GetFullPath($sandboxCase).TrimEnd('\') + '\'
         $capturedException.Message | Should Match 'simulated streaming timeout'
-        $capturedException.Message | Should Match 'stdout: .+pester-targeted-plugin-deployment-\d{8}_\d{6}_\d{3}\.out\.log'
-        $capturedException.Message | Should Match 'stderr: .+pester-targeted-plugin-deployment-\d{8}_\d{6}_\d{3}\.err\.log'
+        foreach ($capturePath in @(
+                [regex]::Match($capturedException.Message, 'stdout: (?<path>.+?\.out\.log)').Groups['path'].Value,
+                [regex]::Match($capturedException.Message, 'stderr: (?<path>.+?\.err\.log)').Groups['path'].Value)) {
+            [System.IO.Path]::GetFullPath($capturePath).StartsWith($captureRoot, [System.StringComparison]::OrdinalIgnoreCase) | Should Be $true
+        }
         $capturedException.InnerException.GetType().FullName | Should Be 'System.TimeoutException'
         $capturedException.InnerException.Message | Should Be 'simulated streaming timeout'
     }

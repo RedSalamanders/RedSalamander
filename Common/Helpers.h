@@ -376,8 +376,16 @@ template <typename CharT>
     }
 
     const size_t prefixLimit = maxLength - marker.size() - kHexChars - suffix.size();
-    nameOut.reserve((std::min)(readablePrefix.size(), prefixLimit) + marker.size() + kHexChars + suffix.size());
-    nameOut.append(readablePrefix.substr(0u, prefixLimit));
+    size_t prefixLength      = (std::min)(readablePrefix.size(), prefixLimit);
+    if constexpr (std::same_as<CharT, wchar_t>)
+    {
+        // A readable UTF-16 prefix must not become malformed when its leaf cap cuts a pair.
+        if (prefixLength > 0u && prefixLength < readablePrefix.size() && readablePrefix[prefixLength - 1u] >= L'\xD800' &&
+            readablePrefix[prefixLength - 1u] <= L'\xDBFF' && readablePrefix[prefixLength] >= L'\xDC00' && readablePrefix[prefixLength] <= L'\xDFFF')
+            --prefixLength;
+    }
+    nameOut.reserve(prefixLength + marker.size() + kHexChars + suffix.size());
+    nameOut.append(readablePrefix.substr(0u, prefixLength));
     nameOut.append(marker);
     Common::Crypto::AppendHexToken(nameOut, entropy);
     nameOut.append(suffix);
@@ -1393,10 +1401,6 @@ inline int MessageBoxCenteredText(_In_opt_ HWND owner, const std::wstring& text,
     return MessageBoxThemedImpl(owner, text.c_str(), caption.c_str(), type, true);
 }
 
-// class name for the RedSalamander Monitor window
-constexpr auto g_redSalamanderMonitor          = L"RedSalamander Monitor";
-constexpr auto g_redSalamanderMonitorClassName = L"RedSalamanderMonitor Window";
-
 //////////////////////////////////////////////////////////////////////////////////
 // DEBUG helpers
 namespace Debug
@@ -1693,6 +1697,36 @@ inline bool IsDebugEtwEnabled() noexcept
     return IsEtwEnabled(kDebugKeyword);
 }
 
+inline constexpr std::wstring_view kRedMonitorApplicationLabel{L"RedSalamander"};
+inline constexpr std::wstring_view kEtwTruncationMarker{L"… [truncated]"};
+
+[[nodiscard]] inline std::wstring BuildBoundedRedMonitorMessage(std::wstring_view message)
+{
+    constexpr size_t prefixOverhead = kRedMonitorApplicationLabel.size() + 3u;
+    constexpr size_t maxMessageSize = RedMonitor::kMaxMessageCodeUnits - prefixOverhead;
+    static_assert(kEtwTruncationMarker.size() < maxMessageSize);
+    if (message.size() <= maxMessageSize)
+    {
+        return std::wstring(message);
+    }
+
+    size_t retainedCodeUnits = maxMessageSize - kEtwTruncationMarker.size();
+    if (retainedCodeUnits > 0u && retainedCodeUnits < message.size())
+    {
+        const auto previous            = static_cast<uint16_t>(message[retainedCodeUnits - 1u]);
+        const auto next                = static_cast<uint16_t>(message[retainedCodeUnits]);
+        const bool splitsSurrogatePair = previous >= 0xD800u && previous <= 0xDBFFu && next >= 0xDC00u && next <= 0xDFFFu;
+        if (splitsSurrogatePair)
+        {
+            --retainedCodeUnits;
+        }
+    }
+
+    std::wstring bounded(message.substr(0u, retainedCodeUnits));
+    bounded.append(kEtwTruncationMarker.data(), kEtwTruncationMarker.size());
+    return bounded;
+}
+
 inline InfoParam BuildInfoParam(InfoParam::Type type) noexcept
 {
     InfoParam dbg{};
@@ -1717,8 +1751,17 @@ inline bool EmitEtwEvent(const InfoParam& info, std::wstring_view message) noexc
     }
 
     static_assert(static_cast<uint32_t>(InfoParam::Type::Warning) == static_cast<uint32_t>(RedMonitor::Severity::Warning));
+    constexpr size_t prefixOverhead = kRedMonitorApplicationLabel.size() + 3u;
+    constexpr size_t maxMessageSize = RedMonitor::kMaxMessageCodeUnits - prefixOverhead;
+    std::wstring boundedMessage;
+    if (message.size() > maxMessageSize)
+    {
+        boundedMessage = BuildBoundedRedMonitorMessage(message);
+        message        = boundedMessage;
+    }
+
     const ULONG status = RedMonitor::WriteNormalizedEvent(
-        g_RedSalamanderProvider, L"RedSalamander", static_cast<RedMonitor::Severity>(info.type), message, info.processID, info.threadID, info.time);
+        g_RedSalamanderProvider, kRedMonitorApplicationLabel, static_cast<RedMonitor::Severity>(info.type), message, info.processID, info.threadID, info.time);
     if (status != ERROR_SUCCESS)
     {
         g_etwFailed.fetch_add(1, std::memory_order_relaxed);

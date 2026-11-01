@@ -1,0 +1,67 @@
+{
+  "run_id": "20261031T154620Z-17772-3add3773c99244aeadaed33d8798caa3",
+  "receipt": "a7e7cd1312434e1b2c65cbc312ac24071945877170df8617a411fa6363e6d9e5",
+  "scope": "ten documentation frames, dark/en-US/144 DPI; no focus/AT/mixed-DPI qualification",
+  "frames": [
+    {
+      "name": "file-operations-completed.png",
+      "actual_sha256": "699440903233B7D4C6D88F28214434F260EBD9FE282A0DE85A7F1D45750C88DF",
+      "reviewed_sha256": "699440903233B7D4C6D88F28214434F260EBD9FE282A0DE85A7F1D45750C88DF",
+      "identical": true
+    },
+    {
+      "name": "file-operations-conflict.png",
+      "actual_sha256": "DC75B26F34E7B22A71ABC880B69412974C5430FFE6FB7947450BFEA8626D18B3",
+      "reviewed_sha256": "DC75B26F34E7B22A71ABC880B69412974C5430FFE6FB7947450BFEA8626D18B3",
+      "identical": true
+    },
+    {
+      "name": "file-operations-counting.png",
+      "actual_sha256": "240891A50817F44BF11551FB8C18D80B491AF1D051133204B9E11D07CAAB394E",
+      "reviewed_sha256": "240891A50817F44BF11551FB8C18D80B491AF1D051133204B9E11D07CAAB394E",
+      "identical": true
+    },
+    {
+      "name": "file-operations-file-progress.png",
+      "actual_sha256": "9D2AB6F7428CC8CFCCA017B2EFCB422A357B6D4D84E71632E67A8A4EAC7C98F9",
+      "reviewed_sha256": "9D2AB6F7428CC8CFCCA017B2EFCB422A357B6D4D84E71632E67A8A4EAC7C98F9",
+      "identical": true
+    },
+    {
+      "name": "file-operations-issues.png",
+      "actual_sha256": "75457A4A4D4B640D4D37D8859A51E851F64F9663DD2E9EF3CF98A74E11CD3FA6",
+      "reviewed_sha256": "75457A4A4D4B640D4D37D8859A51E851F64F9663DD2E9EF3CF98A74E11CD3FA6",
+      "identical": true
+    },
+    {
+      "name": "file-operations-move-totals.png",
+      "actual_sha256": "FCA3B34E7DE7D0A000230E75D93A3854816D539699F28BA55361C8F79A66F833",
+      "reviewed_sha256": "FCA3B34E7DE7D0A000230E75D93A3854816D539699F28BA55361C8F79A66F833",
+      "identical": true
+    },
+    {
+      "name": "file-operations-paused.png",
+      "actual_sha256": "11C920DF5689FF542A6DB0E22BAC3774B3BDC344980AA69D862E5FE35E06B14F",
+      "reviewed_sha256": "11C920DF5689FF542A6DB0E22BAC3774B3BDC344980AA69D862E5FE35E06B14F",
+      "identical": true
+    },
+    {
+      "name": "file-operations-popup.png",
+      "actual_sha256": "EBB671EC361F5164CA3C8F24C7DCEDC8270B4C9B631B329B09BD89961AB7299D",
+      "reviewed_sha256": "EBB671EC361F5164CA3C8F24C7DCEDC8270B4C9B631B329B09BD89961AB7299D",
+      "identical": true
+    },
+    {
+      "name": "file-operations-queued.png",
+      "actual_sha256": "FBF69575533037086CCD62DF7770B3A2B3149EBD681C33723803D4DFBA2C4C08",
+      "reviewed_sha256": "FBF69575533037086CCD62DF7770B3A2B3149EBD681C33723803D4DFBA2C4C08",
+      "identical": true
+    },
+    {
+      "name": "file-operations-wrapped-note.png",
+      "actual_sha256": "DD0683F88BF48AABBDBC0CAF0713D3C77E85E75827EAA6648C0C6D5406172997",
+      "reviewed_sha256": "DD0683F88BF48AABBDBC0CAF0713D3C77E85E75827EAA6648C0C6D5406172997",
+      "identical": true
+    }
+  ]
+}

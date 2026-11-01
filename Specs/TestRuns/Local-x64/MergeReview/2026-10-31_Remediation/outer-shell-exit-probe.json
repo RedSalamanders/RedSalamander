@@ -1,0 +1,22 @@
+{
+  "schema": "codex.powershell-exit-probe.v1",
+  "run_id": "ec31-7612ab4f",
+  "tested_utc": "2026-10-31T14:30:13.4334983Z",
+  "cases": [
+    {
+      "mode": "-Command",
+      "command": "pwsh -NoProfile -Command 'exit 2'; exit $LASTEXITCODE",
+      "reported_exit": 2
+    },
+    {
+      "mode": "-File",
+      "command": "pwsh -NoProfile -File <sandbox child>; exit $LASTEXITCODE",
+      "reported_exit": 2
+    },
+    {
+      "mode": "wrapper-without-propagation",
+      "command": "pwsh -NoProfile -Command 'exit 2'",
+      "reported_exit": 1
+    }
+  ]
+}
