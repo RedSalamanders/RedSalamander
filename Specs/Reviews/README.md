@@ -3,6 +3,8 @@
 > [!IMPORTANT]
 > **Historical snapshot — not a live work queue.** Review evidence remains bounded by its original scope. Routing was reconciled on 2026-07-17 at repository commit `f4e0c8c3bed8`; the completed disposition ledger is `Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md`, while live work is indexed by `Specs/Plans/WIP/README.md`.
 
+Each later review starts with a historical, non-live banner naming its reviewed repository commit (12–40 hexadecimal digits), the reviewed source date (ISO `yyyy-MM-dd` or `d MMMM yyyy`), and the live `Specs/Plans/WIP/README.md` index. The original July campaign files retain their exact 2026-07-17 routing reconciliation, commit `f4e0c8c3bed8`, and Observatory disposition ledger; those facts are not provenance for later reviews.
+
 This folder contains date- and commit-bounded audit evidence. Its `*-Audit.md`, `*-Findings.md`, campaign summary, and
 progress files are historical snapshots, not executable work queues. They remain here because later implementation
 needs the original evidence, rejected alternatives, and source attribution even after the reviewed code changes.
