@@ -1,0 +1,1 @@
+- Preserve explicit microsecond units for zero-duration performance records and transfer-wait metrics, and reject mixed-unit analyzer summaries and comparisons; retain exact counter and auxiliary-field semantics.

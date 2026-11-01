@@ -2558,7 +2558,7 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
         uint64_t comparisons     = 0u;
         const uint64_t startedUs = PerfNowUs();
         const bool overlap       = TaskScopesOverlap(left, right, comparisons);
-        Debug::Perf::Emit(L"FileOps.SelfTest.SharedTransfers.IndexUs", L"distinct-new-files", PerfElapsedUs(startedUs), comparisons, count, S_OK);
+        Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.SharedTransfers.IndexUs", L"distinct-new-files", PerfElapsedUs(startedUs), comparisons, count, S_OK);
         if (overlap || comparisons > count * 100u)
         {
             failure = L"Large new-file selections must use the bounded identity/namespace index without Cartesian comparison.";

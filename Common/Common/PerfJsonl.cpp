@@ -252,7 +252,8 @@ void TryInitializeJsonlOutputFromEnvironmentLocked() noexcept
 
 // ---- exported functions ----
 
-COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept
+static void WritePerfJsonlImpl(
+    std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr, bool isDuration) noexcept
 {
     // Fast path: once resolved with no sink configured, every emit is a single atomic load and return.
     if (g_perfJsonlSinkState.load(std::memory_order_acquire) == 2)
@@ -336,7 +337,7 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
         AppendJsonNumericField(line, "hr", static_cast<uint32_t>(hr), firstField);
         line.append(g_perfJsonlMetadata);
 
-        if (durationUs != 0)
+        if (isDuration || durationUs != 0)
         {
             AppendJsonNumericField(line, "value", durationUs, firstField);
             AppendJsonStringField(line, "unit", L"us", firstField);
@@ -363,6 +364,16 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
     }
 }
 
+COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept
+{
+    WritePerfJsonlImpl(metric, detail, durationUs, value0, value1, hr, false);
+}
+
+COMMON_API void WritePerfJsonlDuration(
+    std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept
+{
+    WritePerfJsonlImpl(metric, detail, durationUs, value0, value1, hr, true);
+}
 COMMON_API bool HasPerfJsonlOutput() noexcept
 {
     const int state = g_perfJsonlSinkState.load(std::memory_order_acquire);
@@ -380,6 +391,7 @@ COMMON_API bool HasPerfJsonlOutput() noexcept
 
 namespace Debug::Perf
 {
+
 #ifdef ENABLE_TESTS
 COMMON_API JsonlDebugSnapshot GetJsonlDebugSnapshotForSelfTest() noexcept
 {

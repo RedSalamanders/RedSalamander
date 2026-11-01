@@ -3936,7 +3936,8 @@ public:
             }
         }
         if (Debug::Perf::IsCaptureEnabled())
-            Debug::Perf::Emit(L"FileOps.SharedTransfers.AcquireUs", exclusive ? L"exclusive" : L"shared", PerfElapsedUs(startedUs), reserved, limit, S_OK);
+            Debug::Perf::EmitDurationUs(
+                L"FileOps.SharedTransfers.AcquireUs", exclusive ? L"exclusive" : L"shared", PerfElapsedUs(startedUs), reserved, limit, S_OK);
         Permit permit(this, {}, exclusive ? Kind::ExclusiveTransfer : Kind::SharedTransfer);
 #ifdef ENABLE_TESTS
         _debugTransferPause.Pause(15'000u);
@@ -26356,12 +26357,12 @@ bool FolderWindow::FileOperationState::DebugRunSharedTransfersForSelfTest(IFileS
     }
     workers.clear();
     const auto snapshot = limiter.DebugTransfers();
-    Debug::Perf::Emit(L"FileOps.SelfTest.SharedTransfers.RealIoUs",
-                      operation == FILESYSTEM_MOVE ? L"managed-move" : L"copy",
-                      PerfElapsedUs(startedUs),
-                      snapshot.peak,
-                      limit,
-                      S_OK);
+    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.SharedTransfers.RealIoUs",
+                                operation == FILESYSTEM_MOVE ? L"managed-move" : L"copy",
+                                PerfElapsedUs(startedUs),
+                                snapshot.peak,
+                                limit,
+                                S_OK);
     for (const auto& task : state._tasks)
     {
         const HRESULT expectedStatus = task.get() == cancelled ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;

@@ -1819,7 +1819,12 @@ by the JSONL `build` field. Release runs are not acceptable evidence when the
 artifact is mislabeled as Debug or when the build flavor is unknown.
 
 For percentile-based decisions, `Tools/Show-PerfRuns.ps1` is the required
-first-pass analyzer. Use PowerShell 7+ for this script. Any p95 claim SHOULD have
+first-pass analyzer. Use PowerShell 7+ for this script. A metric's selected rows
+must have one consistent unit, and a comparison or trend must use the same unit
+for that metric across runs. The analyzer fails with a nonzero exit before
+publishing the affected summary when units differ, regardless of `-FailOnQuality`;
+it never converts counts to time or infers a zero duration from a count. A
+consistently omitted legacy unit remains unitless. Any p95 claim SHOULD have
 at least 200 samples for the requested metric unless an authoritative per-metric
 budget declares a smaller `minimumSamples`; p99 SHOULD have at least 1000
 samples. Automation that gates a p95 claim MUST pass `-FailOnQuality`, which

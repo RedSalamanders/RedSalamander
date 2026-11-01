@@ -19129,6 +19129,15 @@ struct FolderViewPerfBudgetFile
     const auto maximum = (std::numeric_limits<uint64_t>::max)();
     Debug::Perf::Emit(L"perf.jsonl.contract", controls, maximum, maximum, maximum - 1u, E_ACCESSDENIED);
     Debug::Perf::Emit(L"perf.jsonl.counter", L"", 0u, maximum, 1u, S_OK);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_zero", L"shared", 0u, 7u, 16u, E_ACCESSDENIED);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_nonzero", L"exclusive", 42u, 3u, 4u, S_OK);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_default_detail", 0u, 2u, 3u);
+    Debug::Perf::EmitCounter(L"perf.jsonl.counter_zero", 0u);
+    {
+        Debug::Perf::Scope scope(L"perf.jsonl.scope");
+        scope.SetValue0(9u);
+        scope.SetValue1(11u);
+    }
     const std::wstring large(100000u, L'x');
     Debug::Perf::Emit(L"perf.jsonl.large", large, 1u);
     const auto afterLarge = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
@@ -19161,7 +19170,8 @@ struct FolderViewPerfBudgetFile
     const auto after = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
     state.Require(after.metadataPreparations == before.metadataPreparations && after.retainedLineCapacity <= 64u * 1024u,
                   L"JSONL emission rebuilt constant metadata or retained oversized scratch.");
-    state.Require(after.threadWriteCalls - before.threadWriteCalls == 8u, L"JSONL observation must count this thread's writes without counting other threads.");
+    state.Require(after.threadWriteCalls - before.threadWriteCalls == 13u,
+                  L"JSONL observation must count this thread's writes without counting other threads.");
     std::array<bool, kThreadCount * kRowsPerThread> seen{};
     size_t ownRows = 0u;
     std::ifstream file(path, std::ios::binary);
@@ -19261,6 +19271,36 @@ struct FolderViewPerfBudgetFile
                               yyjson_get_uint(yyjson_obj_get(object, "value")) == maximum,
                           L"Zero-duration JSONL counter semantics changed.");
         }
+        else if (name == "perf.jsonl.duration_zero" || name == "perf.jsonl.duration_nonzero")
+        {
+            const bool zero = name == "perf.jsonl.duration_zero";
+            state.Require(JsonStringEquals(object, "unit", "us") && JsonStringEquals(object, "detail", zero ? "shared" : "exclusive") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "durationUs")) == (zero ? 0u : 42u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == (zero ? 0u : 42u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value0")) == (zero ? 7u : 3u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value1")) == (zero ? 16u : 4u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "hr")) == static_cast<uint32_t>(zero ? E_ACCESSDENIED : S_OK),
+                          L"Typed durations must preserve exact elapsed values, units, detail, auxiliary facts and status.");
+        }
+        else if (name == "perf.jsonl.duration_default_detail")
+        {
+            state.Require(JsonStringEquals(object, "unit", "us") && JsonStringEquals(object, "detail", "duration") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == 0u && yyjson_get_uint(yyjson_obj_get(object, "value0")) == 2u &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value1")) == 3u,
+                          L"The existing duration helper must retain its detail and serialize a zero duration as microseconds.");
+        }
+        else if (name == "perf.jsonl.counter_zero")
+        {
+            state.Require(JsonStringEquals(object, "unit", "count") && yyjson_get_uint(yyjson_obj_get(object, "value")) == 0u,
+                          L"A genuine zero counter must remain a count.");
+        }
+        else if (name == "perf.jsonl.scope")
+        {
+            state.Require(JsonStringEquals(object, "unit", "us") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == yyjson_get_uint(yyjson_obj_get(object, "durationUs")) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value0")) == 9u && yyjson_get_uint(yyjson_obj_get(object, "value1")) == 11u,
+                          L"Scope output must be a duration with unchanged auxiliary facts, even when the clock rounds to zero.");
+        }
         else if (name == "perf.jsonl.large")
         {
             state.Require(JsonStringEquals(object, "detail", std::string(large.size(), 'x')), L"An oversized JSONL record was truncated.");
@@ -19280,7 +19320,7 @@ struct FolderViewPerfBudgetFile
         }
     }
     file.close();
-    state.Require(ownRows == seen.size() + 8u && std::all_of(seen.begin(), seen.end(), [](bool value) { return value; }),
+    state.Require(ownRows == seen.size() + 13u && std::all_of(seen.begin(), seen.end(), [](bool value) { return value; }),
                   L"JSONL records were not immediately readable and complete before clearing capture.");
     Debug::Perf::ClearJsonlOutput();
     std::error_code ec;

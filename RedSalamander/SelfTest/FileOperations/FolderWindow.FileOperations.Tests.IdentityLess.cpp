@@ -2604,22 +2604,54 @@ struct QueuedByNameDelete final
         const auto cardMs            = std::chrono::duration_cast<std::chrono::milliseconds>(answered - started).count();
         const auto runMs             = std::chrono::duration_cast<std::chrono::milliseconds>(ended - answered).count();
         const bool deleted           = ! std::filesystem::exists(tree);
-        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms hr=0x{:08X} deleted={}",
+        const HRESULT completionHr   = end != nullptr ? end->hr : E_PENDING;
+        const HRESULT scenarioHr =
+            end == nullptr ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : (end->hr == S_OK && deleted ? S_OK : (FAILED(end->hr) ? end->hr : E_FAIL));
+        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms completionAvailable={} completionHr=0x{:08X} "
+                              L"scenarioHr=0x{:08X} deleted={}",
                               where,
                               kEntries,
                               cardMs,
                               runMs,
-                              end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul,
+                              end != nullptr,
+                              static_cast<unsigned long>(completionHr),
+                              static_cast<unsigned long>(scenarioHr),
                               deleted));
-        Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeScale",
-                          where,
-                          static_cast<uint64_t>(runMs) * 1000u,
-                          kEntries,
-                          static_cast<uint64_t>(cardMs),
-                          end != nullptr ? end->hr : E_FAIL);
+        if (end == nullptr)
+        {
+            // Owner-thread delivery and atomic task observations are independent witnesses,
+            // not a coherent snapshot. Never read the worker result before its release flag.
+            const auto* current = operations->FindTask(deletion.value());
+            const bool finished = current && current->_taskFinished.load(std::memory_order_acquire);
+            const bool active   = operations->DebugAreBothAdmissionsActiveForSelfTest(deletion.value(), deletion.value());
+            AppendLog(std::format(L"Pinned tree, scale WAIT FAILURE {} task={} taskPresent={} finished={} workerHr=0x{:08X} "
+                                  L"lifecycle={} started={} reserved={} entered={} waiting={} waitingOthers={} "
+                                  L"readinessComplete={} readinessHr=0x{:08X} activeAdmission={}",
+                                  where,
+                                  deletion.value(),
+                                  current != nullptr,
+                                  finished,
+                                  static_cast<unsigned long>(finished ? current->GetResult() : E_PENDING),
+                                  current ? static_cast<unsigned int>(current->GetLifecyclePhase()) : 0u,
+                                  current && current->HasStarted(),
+                                  current && current->HasReservedOperation(),
+                                  current && current->HasEnteredOperation(),
+                                  current && current->IsWaitingInQueue(),
+                                  current && current->IsWaitingForOthers(),
+                                  current && current->_selectedRootReadinessComplete.load(std::memory_order_acquire),
+                                  static_cast<unsigned long>(current ? current->_selectedRootReadinessStatus.load(std::memory_order_acquire) : E_PENDING),
+                                  active));
+        }
+        Debug::Perf::EmitDurationUs(
+            L"FileOps.SelfTest.PinnedTreeScale", where, static_cast<uint64_t>(runMs) * 1000u, kEntries, static_cast<uint64_t>(cardMs), scenarioHr);
         if (end == nullptr || end->hr != S_OK || ! deleted)
-            return reject(std::format(
-                L"{}: the tree was not deleted by name (hr=0x{:08X} deleted={})", where, end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul, deleted));
+            return reject(std::format(L"{}: the tree was not deleted by name (completionAvailable={} completionHr=0x{:08X} "
+                                      L"scenarioHr=0x{:08X} deleted={})",
+                                      where,
+                                      end != nullptr,
+                                      static_cast<unsigned long>(completionHr),
+                                      static_cast<unsigned long>(scenarioHr),
+                                      deleted));
         return true;
     };
 

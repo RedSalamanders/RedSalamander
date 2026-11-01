@@ -1596,7 +1596,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "List, summarize, compare, and trend archived performance runs, keeping product sort-to-paint, legacy warm-render and synchronous writer attribution separate.",
+      "purpose": "List, summarize, compare, and trend archived performance runs with mixed-unit rejection, keeping product sort-to-paint, legacy warm-render and synchronous writer attribution separate.",
       "usage": "Run manually against Specs/TestRuns performance evidence.",
       "usedBy": [
         "Performance reviewers and feature maintainers"

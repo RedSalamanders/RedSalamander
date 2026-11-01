@@ -162,6 +162,72 @@ function Invoke-RSShowPerfRunsCommand {
 }
 
 Describe 'Show-PerfRuns quality gates' {
+    It 'rejects mixed count and time samples even without a quality gate' {
+        $root = New-RSPerfRunsRoot
+        try {
+            $run = New-RSPerfRun -RunsRoot $root -RunName 'mixed' -Metrics @(
+                (New-RSPerfMetric -Name 'fileops.acquire_us' -Count 200 -StartValue 1 -Unit 'us')
+                (New-RSPerfMetric -Name 'fileops.acquire_us' -Count 1 -StartValue 4 -Unit 'count')
+            )
+            foreach ($useQualityGate in @($false, $true)) {
+                $arguments = @('-Run', $run, '-Metric', 'fileops.acquire_us')
+                if ($useQualityGate) { $arguments += '-FailOnQuality' }
+                $result = Invoke-RSShowPerfRuns -RunsRoot $root -Arguments $arguments
+                ($result.ExitCode -ne 0) | Should Be $true
+                $result.Stderr | Should Match 'mixed units'
+                $result.Stdout | Should Not Match 'Detailed Table'
+            }
+        } finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+        }
+    }
+
+    It 'accepts homogeneous count, explicit zero time, and unitless legacy samples' {
+        $root = New-RSPerfRunsRoot
+        try {
+            $run = New-RSPerfRun -RunsRoot $root -RunName 'homogeneous' -Metrics @(
+                (New-RSPerfMetric -Name 'explicit.time' -Count 2 -StartValue 0 -Unit 'us')
+                (New-RSPerfMetric -Name 'ordinary.count' -Count 2 -StartValue 0 -Unit 'count')
+            )
+            $perfPath = Join-Path $run 'perf\perf_metrics.jsonl'
+            '{"metric":"legacy.unitless","scenario":"gr8-show-perfruns","value":0,"build":"Release"}' |
+                Add-Content -LiteralPath $perfPath -Encoding UTF8
+            $result = Invoke-RSShowPerfRuns -RunsRoot $root -Arguments @('-Run', $run)
+            Assert-RSEqual -Actual $result.ExitCode -Expected 0 -Message "Homogeneous units must remain readable. $($result.Stderr)"
+            $result.Stdout | Should Match 'explicit\.time'
+            $result.Stdout | Should Match 'ordinary\.count'
+            $result.Stdout | Should Match 'legacy\.unitless'
+        } finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+        }
+    }
+
+    It 'rejects a unit change across otherwise homogeneous comparison and trend runs' {
+        $root = New-RSPerfRunsRoot
+        try {
+            $old = New-RSPerfRun -RunsRoot $root -RunName 'baseline' -Metrics @(
+                (New-RSPerfMetric -Name 'fileops.acquire_us' -Count 2 -StartValue 0 -Unit 'us')
+            )
+            $new = New-RSPerfRun -RunsRoot $root -RunName 'candidate' -Metrics @(
+                (New-RSPerfMetric -Name 'fileops.acquire_us' -Count 2 -StartValue 1 -Unit 'count')
+            )
+            $compare = Invoke-RSShowPerfRunsCommand -RunsRoot $root -CommandText (
+                '& ' + (ConvertTo-RSPowerShellSingleQuotedString $showPerfRunsScript) +
+                ' -RunsRoot ' + (ConvertTo-RSPowerShellSingleQuotedString $root) +
+                ' -CompareRun ' + (ConvertTo-RSPowerShellSingleQuotedString $old) + ',' + (ConvertTo-RSPowerShellSingleQuotedString $new) +
+                ' -Metric fileops.acquire_us')
+            ($compare.ExitCode -ne 0) | Should Be $true
+            $compare.Stderr | Should Match 'different units across compared runs'
+            $compare.Stdout | Should Not Match 'Visual Delta'
+            $trend = Invoke-RSShowPerfRuns -RunsRoot $root -Arguments @('-Trend', '-Metric', 'fileops.acquire_us')
+            ($trend.ExitCode -ne 0) | Should Be $true
+            $trend.Stderr | Should Match 'different units across trend runs'
+            $trend.Stdout | Should Not Match 'Visual Trend'
+        } finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+        }
+    }
+
     It 'reports product paint, legacy warm and writer attribution as separate metrics' {
         $root = New-RSPerfRunsRoot
         try {
