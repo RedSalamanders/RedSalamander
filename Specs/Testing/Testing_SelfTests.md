@@ -1126,6 +1126,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   and permit legacy directory disposition/name recreation while this task's old snapshot remains alive.
   A reserved directory remains in monotonic `PreparingExecution` before entering mutation; the popup
   shows Preparing outside the question and Waiting for decision while the confirmation is active.
+  Combining an identity-Unsupported metadata observation with a denied strict Delete open must
+  fail preparation with the source intact and no by-name authority or consent route.
 - Synthetic File Operations producer fixtures clean up every exact task ID they create, on success
   and failure, so the following idle-state witness never inherits their completion summaries.
   Waiting-card captures use `ScopedNonActivatingDesktopObserver` to reject process-owned activation

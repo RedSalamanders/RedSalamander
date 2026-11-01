@@ -82,7 +82,8 @@ constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar          = L"REDS
 constexpr std::wstring_view kBindDirectoryIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH";
 // I35 R7.1: the no-follow open of exactly this path fails with ERROR_NOT_SUPPORTED (a redirector that
 // refuses the open itself); it stays set until the test clears it.
-constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
+constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar   = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
+constexpr std::wstring_view kBindDeleteAccessDeniedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DELETE_ACCESS_DENIED_PATH";
 // I35 R7.3: a smaller entry bound for the listing of a folder deleted by name (a number of entries).
 constexpr std::wstring_view kDeleteByNameEntryBudgetEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_ENTRY_BUDGET";
 // I35 R7.3: the listing of a folder deleted by name reports no file index (a redirector without id listings).
@@ -182,25 +183,30 @@ constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDE
 }
 
 // True while the persistent open-failure injection names exactly `path`.
-[[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
+[[nodiscard]] bool IsBindOpenFailureForSelfTest(const wchar_t* path, std::wstring_view variable) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
         return false;
     }
-    const DWORD required = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), nullptr, 0u);
+    const DWORD required = GetEnvironmentVariableW(variable.data(), nullptr, 0u);
     if (required == 0u)
     {
         return false;
     }
     std::wstring configured(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), configured.data(), required);
+    const DWORD written = GetEnvironmentVariableW(variable.data(), configured.data(), required);
     if (written == 0u || written >= required)
     {
         return false;
     }
     configured.resize(written);
     return OrdinalString::EqualsNoCase(FileSystemInternal::ToExtendedPath(configured), FileSystemInternal::ToExtendedPath(path));
+}
+
+[[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
+{
+    return IsBindOpenFailureForSelfTest(path, kBindOpenNotSupportedPathEnvVar);
 }
 #endif
 
@@ -6586,7 +6592,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
     wil::unique_handle file;
 #if defined(ENABLE_TESTS)
-    if (IsBindOpenNotSupportedForSelfTest(path))
+    if ((requestedFlags & FILESYSTEM_BIND_DELETE) != 0u && IsBindOpenFailureForSelfTest(path, kBindDeleteAccessDeniedPathEnvVar))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.Local.BindDeleteAccessDeniedInjected");
+        SetLastError(ERROR_ACCESS_DENIED);
+    }
+    else if (IsBindOpenNotSupportedForSelfTest(path))
     {
         Debug::Perf::EmitCounter(L"FileOps.Local.BindOpenNotSupportedInjected");
         SetLastError(ERROR_NOT_SUPPORTED);

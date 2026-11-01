@@ -371,7 +371,7 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
                             SelfTest::WriteTextFile(peer / L"peer.txt", "unchanged-peer-content"),
                         L"Deferred directory Delete requires its own synthetic root."))
         return false;
-    const auto makeTask = [&](uint64_t id, bool includePeer) -> std::unique_ptr<State::Task>
+    const auto makeTask = [&](uint64_t id, bool includePeer, bool prepare = true) -> std::unique_ptr<State::Task>
     {
         State::OperationConstruction construction{};
         construction.operation           = FILESYSTEM_DELETE;
@@ -395,11 +395,41 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
         task->_permanentDeleteConfirmationPending = true;
         task->_permanentDeleteTestOverride        = 1;
         task->InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(admission.plans)), {});
-        if (! state.Require(task->PrepareMutationInterlockScopes() == S_OK && task->LoadMutationInterlockAdmission()->hasDeferredDirectoryDeletes,
-                            L"Queued Local directory deletion retains metadata identity without a strict mutation lease."))
+        if (prepare && ! state.Require(task->PrepareMutationInterlockScopes() == S_OK && task->LoadMutationInterlockAdmission()->hasDeferredDirectoryDeletes,
+                                       L"Queued Local directory deletion retains metadata identity without a strict mutation lease."))
             return {};
         return task;
     };
+
+    {
+        auto refused = makeTask(0xD1EA202611010004ull, false, false);
+        if (! refused)
+            return false;
+        try
+        {
+            const RedSalamander::TestSupport::ScopedEnvironmentVariable unsupported(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH", selected.native());
+            const RedSalamander::TestSupport::ScopedEnvironmentVariable deleteDenied(L"REDSALAMANDER_FILEOPS_BIND_DELETE_ACCESS_DENIED_PATH",
+                                                                                     selected.native());
+            const HRESULT refusedHr = refused->PrepareMutationInterlockScopes();
+            const auto scopes       = refused->LoadMutationInterlockScopes();
+            std::error_code ec;
+            if (! state.Require(refusedHr == E_ACCESSDENIED &&
+                                    (! scopes || std::ranges::none_of(*scopes, [](const auto& scope) noexcept { return scope.byNameCorroborated; })) &&
+                                    std::filesystem::exists(selected / L"original.txt", ec) && ! ec,
+                                L"Identity-less metadata must not grant a by-name route when the strict Delete open is denied."))
+                return false;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::system_error& error)
+        {
+            // The shared environment guard reports setup failure by exception in this noexcept witness.
+            Debug::Error(L"Directory Delete denial fixture could not set its scoped injection: {}", error.code().value());
+            return state.Require(false, L"The scoped directory Delete denial injection could not be installed.");
+        }
+    }
 
     auto changed = makeTask(0xD1EA202611010001ull, true);
     if (! changed)

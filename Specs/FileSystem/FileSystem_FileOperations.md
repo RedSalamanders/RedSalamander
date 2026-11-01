@@ -1556,6 +1556,11 @@ never receives `DeleteIfUnchanged`. Files, links, native-authority and corrobora
 retain their existing binding rules. Mixed selections retain the ordinary strict file/link pins
 while queued.
 
+An Unsupported metadata probe never enables the by-name route by itself. The original strict
+Delete bind must also report Unsupported; a denied or failed strict open stays a preparation
+failure. If the strict probe unexpectedly supplies exact identity after metadata could not, the
+task refuses with `ERROR_RETRY` rather than weakening identity or retaining a strict queue-time pin.
+
 After every strict directory grant has been checked, `IFileSystemBoundObjectPinHandoff` retires this
 task's old metadata kernel pins before confirmation. Existing immutable snapshots keep identity
 facts, not a second open directory handle. Local counted metadata reads make handoff fail with

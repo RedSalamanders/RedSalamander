@@ -10355,6 +10355,23 @@ public:
                 retainDeleteAuthority && ! deferLocalDirectoryDelete ? static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE) : kBindFlags;
             ++_bindCount;
             FileOperations::ObjectBindingResult root = FileOperations::BindObjectAuthority(fileSystem, providerPath, endpoint.profileId, rootBindFlags);
+            if (deferLocalDirectoryDelete && root.state == FileOperations::ObjectBindingState::Unsupported)
+            {
+                // An identity-less metadata observation does not prove that the
+                // delete-capable open succeeded. Preserve the original strict probe
+                // before permitting the identity-less consent route.
+                ++_bindCount;
+                root = FileOperations::BindObjectAuthority(
+                    fileSystem, providerPath, endpoint.profileId, static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE));
+                if (root.state == FileOperations::ObjectBindingState::Bound)
+                {
+                    if (rootBinding != nullptr)
+                        *rootBinding = RootBindingFacts{.attempted = true, .state = root.state, .status = root.status};
+                    // Metadata and strict probes disagreed. Refuse without keeping a
+                    // new strict directory pin across the queue or weakening identity.
+                    return HRESULT_FROM_WIN32(ERROR_RETRY);
+                }
+            }
             if (deferLocalDirectoryDelete && root.state == FileOperations::ObjectBindingState::Bound)
             {
                 bool plainDirectory = false;
