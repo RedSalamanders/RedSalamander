@@ -1,0 +1,1 @@
+- Require review provenance warnings to be rendered opening alerts, rejecting fenced examples and later quotations while preserving dated legacy and newer-review provenance checks.
