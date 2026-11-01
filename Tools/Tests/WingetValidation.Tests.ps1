@@ -130,7 +130,8 @@ Describe 'Winget shared publication route' {
         $workflow = Get-Content (Join-Path $engine '.github/workflows/publish.yml') -Raw
         $publicationModule = Get-Content (Join-Path $engine 'Tools/Modules/Ci.WingetPublication.psm1') -Raw
         $transport = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Winget.psm1') -Raw
-        $install = Get-Content (Join-Path $engine 'Tools/Invoke-WingetInstall.ps1') -Raw
+        $installEntry = Get-Content (Join-Path $engine 'Tools/Invoke-WingetInstall.ps1') -Raw
+        $install = Get-Content (Join-Path $engine 'Tools/Modules/Ci.WingetInstall.psm1') -Raw
     }
     It 'requires explicit main publication and both native install receipts before submission' {
         $caller = Get-Content (Join-Path $repoRoot '.github/workflows/publish.yml') -Raw
@@ -143,18 +144,21 @@ Describe 'Winget shared publication route' {
         $workflow | Should Match 'platform: ARM64'
         $submit = Get-Content (Join-Path $engine 'Tools/Submit-Winget.ps1') -Raw
         $submit | Should Match 'foreach\(\$platform in @\(''x64'',''ARM64''\)\)'
-        $submit | Should Match 'manifestDigest -cne \$identity.PublicationId'
-        $submit | Should Match 'receipt.runId -cne \$env:GITHUB_RUN_ID'
+        $submit | Should Match 'Test-CiWingetInstallReceipt.*-Receipt \$receipt.*-Plan \$plan.*-Platform \$platform.*-RunId \$env:GITHUB_RUN_ID.*-ManifestDigest \$identity.PublicationId'
+        $install | Should Match '\$Receipt.manifestDigest -cne \$ManifestDigest'
+        $install | Should Match '\$Receipt.runId -cne \$RunId'
     }
     It 'enables local manifests, validates before install and cleans only an owned absent identity' {
         $enable = $install.IndexOf("@('settings','--enable','LocalManifestFiles')")
         $validate = $install.IndexOf("@('validate','--manifest'")
         $start = $install.IndexOf("@('install','--manifest'")
         ($enable -ge 0 -and $validate -gt $enable -and $start -gt $validate) | Should Be $true
-        $install | Should Match 'noApplicationsFound=-1978335212'
-        $install | Should Match 'must be absent before this owned install'
+        $installEntry | Should Match 'Invoke-CiOwnedWingetInstall'
+        $install | Should Match 'must be absent before this owned operation'
         $install | Should Match 'if\(\$owned\)'
-        $install | Should Match '''uninstall'',''--exact'',''--id'',\$package'
+        $install | Should Match '''uninstall'',''--manifest''.*\$Manifest.*''--version'',\$Plan.batch.version'
+        $install | Should Match 'Owned portable registration remained after uninstall'
+        $install | Should Match 'Owned portable alias remained after uninstall'
         $install | Should Not Match 'build.ps1'
     }
     It 'keeps publication credentials out of native project execution and CLI arguments' {

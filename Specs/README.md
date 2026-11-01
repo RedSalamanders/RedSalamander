@@ -53,6 +53,7 @@ Do not copy a public ABI definition, generated inventory, mutable count, depende
 - Durable requirements discovered during work move into the appropriate domain contract before closeout.
 - A completed plan moves to `Specs/Plans/Done/`; it is then immutable history. Corrections to current behavior belong in current specs or a new WIP, never by rewriting Done history.
 - The same closeout change adds the exact new Done path to the reviewed `Test-RSProtectedDoneHistory` additional-path allowlist and its focused admission test; the test also rejects an unreviewed sibling path. This authorizes only that new immutable file and does not permit modifying existing Done history.
+- The [I55 CI implementation record](Plans/Done/CI_OrganizationStandardization_2026-10-29.md) has exact-file admission after the owner's implementation/hosted-acceptance split. [I56](Plans/WIP/CI_HostedAcceptance_2026-10-31.md) retains failed, unavailable and pending qualification; admission does not close that follow-up or qualify a release.
 - The [2026-10-16 File Operations card hierarchy record](Plans/Done/FileOperations_CardInformationHierarchy_2026-10-16.md) uses this exact-file admission; adjacent dates and additional companion artifacts remain unreviewed.
 - The [October 20 waiting-card record](Plans/Done/FileOperations_WaitingCards_2026-10-20.md) has exact-file admission with sibling and companion rejection; its scoped validation does not establish Full or platform qualification.
 - The five 2026-10-19 File Operations UI/screenshot closeout records and the

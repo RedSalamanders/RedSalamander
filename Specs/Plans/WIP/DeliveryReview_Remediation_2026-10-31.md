@@ -1,6 +1,6 @@
-# I56 Delivery review remediation 2026-10-31
+# I57 Delivery review remediation 2026-10-31
 
-Status: ACTIVE. Implementation: not started.
+Status: ACTIVE. Implementation: not started. Renumbered from the drifted I56 label to I57 on 2026-10-31: origin/main already assigns I56 to Unified CI hosted acceptance, and plan ranks are never reused.
 Priority: high. This plan makes the dirty remediation on `ej/review-remediation-20261031` safe to merge.
 It is a merge gate for this worktree. It is not a claim that `origin/main` is broken today.
 

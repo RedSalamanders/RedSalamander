@@ -102,7 +102,7 @@ Describe 'Historical Terminal profile integrity' {
         ($round4Tests -join "`0") | Should Be ($expectedRound4 -join "`0")
     }
 
-    It 'excludes only the exact sealed Gate0 workflow from Dependabot action updates' {
+    It 'excludes only sealed Gate0 and coordinates shared-engine pin updates' {
         $dependabot = Get-Content -LiteralPath (Join-Path $repoRoot '.github/dependabot.yml') -Raw
         $actions = [regex]::Match($dependabot,
             '(?ms)^  - package-ecosystem: github-actions\r?\n(?<settings>.*?)(?=^  - package-ecosystem:|\z)')
@@ -119,6 +119,10 @@ Describe 'Historical Terminal profile integrity' {
         $actionIgnore.Success | Should Be $true
         $actionIgnore.Groups['rules'].Value | Should Match 'dependency-name: RedSalamanders/\.github'
         $actionIgnore.Groups['rules'].Value | Should Not Match 'dependency-name: \*|update-types:'
+        $ignored = @([regex]::Matches($actions.Groups['settings'].Value, '(?m)^      - dependency-name: ([^\r\n]+)') |
+            ForEach-Object { $_.Groups[1].Value.Trim() })
+        $ignored.Count | Should Be 1
+        $ignored[0] | Should Be 'RedSalamanders/.github'
     }
 
     It 'classifies the unused generic lifecycle facade without deleting its stable paths' {

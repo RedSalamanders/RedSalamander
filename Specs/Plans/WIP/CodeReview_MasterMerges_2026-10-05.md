@@ -102,9 +102,12 @@ At qualified implementation snapshot
 
 The [execution packet](../../TestRuns/Local-x64/MergeReview/2026-10-31_Remediation/README.md)
 contains the exact run IDs, receipts, source identities and remaining gates. This
-plan/status publication follows the qualified snapshot and changes documentation
-only; its commit does not retag old receipts or establish native ARM64, physical-device,
-foreground, mixed-DPI, assistive-technology or real shutdown acceptance.
+plan/status closeout follows the qualified snapshot. Integration with current main
+also preserves its newer test and CI policy changes and reuses its canonical pipe
+fixture connector with deterministic attempt observations. Merged-source validation
+is recorded separately; old receipts are not retagged as that integration or as
+native ARM64, physical-device, foreground, mixed-DPI, assistive-technology or real
+shutdown acceptance. I50 retains the incoming revision-2 review/routing scope.
 
 Qualification checkpoint before the final fixture edits: noninteractive PrePush
 `20261031T164304Z-21260-b7c1915171574a9abd900578f6a31e5b` failed with 1,433 passed,

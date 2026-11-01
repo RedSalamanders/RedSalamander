@@ -42,6 +42,15 @@ package-check closeout; native runtime qualification remains outside that review
 The I54 dependency integration record has exact-file admission. Its guard rejects a date-shifted
 sibling and an unreviewed companion; it grants no broader runtime or performance qualification.
 
+The I55 unified CI implementation record has exact-file admission after the owner's closeout split.
+Its guard rejects a date-shifted sibling, an unreviewed companion and premature I56 hosted-acceptance
+closeout. Hosted qualification remains explicit in I56; admission is not a product or release pass.
+
+Current CI contract tests follow the shared compiler-free PR and paired Release regression pipeline, manual
+extended/shuffle diagnostics and canonical vcpkg source initializer. The two sealed Terminal workflows retain
+exact Dependabot exclusions; shared-engine updates coordinate the manifest and callers. Winget guards inspect
+the current installer/receipt module and its entrypoint, including owned cleanup, rather than obsolete inline code.
+
 `Restore-DxUi.ps1 -Platform x64 -Configuration Debug -CheckUpdates` restores the exact
 `Dependencies/DxUi.lock.json` pin before an IDE build. Root `build.ps1` performs this automatically.
 The source and compiler/SDK/CRT-isolated outputs stay under `.build/dependencies/DxUi`; a dirty

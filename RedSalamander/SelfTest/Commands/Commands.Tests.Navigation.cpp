@@ -35,6 +35,7 @@
         DWORD installError         = ERROR_SUCCESS;
         bool retired               = false;
         bool keyDownAtDispatch     = false;
+        bool altDownAtDispatch     = false;
         static const wchar_t* StateProp() noexcept
         {
             return L"RedSalamander.TestForeground.DispatchWitness";
@@ -58,6 +59,7 @@
                 {
                     ++witness->dispatchCount;
                     witness->keyDownAtDispatch = (GetAsyncKeyState(VK_F24) & 0x8000) != 0;
+                    witness->altDownAtDispatch = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
                 }
                 Remove(window);
                 if (witness)
@@ -109,6 +111,7 @@
         const unsigned int dispatchBefore = witness.dispatchCount;
         witness.retired                   = false;
         witness.keyDownAtDispatch         = false;
+        witness.altDownAtDispatch         = false;
         const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
         const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
                                     RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
@@ -117,14 +120,23 @@
             return false;
         state.Require(retiredWitness && witness.installError == ERROR_SUCCESS && witness.dispatchCount == dispatchBefore + 1u,
                       L"Foreground admission must dispatch exactly one real hotkey through its window procedure and retire the independent witness.");
-        Trace(std::format(
-            L"Foreground hotkey witness: keyDownAtDispatch={} dispatchCount={} retired={}", witness.keyDownAtDispatch, witness.dispatchCount, retiredWitness));
-        state.Require(witness.keyDownAtDispatch, L"The hotkey must remain depressed until its handler completes the foreground handoff.");
+        Trace(std::format(L"Foreground hotkey witness: keyDownAtDispatch={} altDownAtDispatch={} dispatchCount={} retired={}",
+                          witness.keyDownAtDispatch,
+                          witness.altDownAtDispatch,
+                          witness.dispatchCount,
+                          retiredWitness));
+        state.Require(witness.keyDownAtDispatch && witness.altDownAtDispatch,
+                      L"Both registered chord keys must remain depressed until the foreground handoff completes.");
         const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
-            return (GetAsyncKeyState(VK_F24) & 0x8000) == 0;
+            return (GetAsyncKeyState(VK_F24) & 0x8000) == 0 && (GetAsyncKeyState(VK_MENU) & 0x8000) == 0;
         }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});
         state.Require(released.conditionMet, L"The foreground handshake must leave its synthetic key released.");
-        const bool registered = RegisterHotKey(mainWindow, probeHotkeyId, MOD_NOREPEAT, VK_F24) != FALSE;
+        GUITHREADINFO threadInfo{};
+        threadInfo.cbSize = sizeof(threadInfo);
+        state.Require(GetGUIThreadInfo(GetCurrentThreadId(), &threadInfo) != FALSE &&
+                          (threadInfo.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE)) == 0u,
+                      L"The registered foreground chord must not leave a native menu active.");
+        const bool registered = RegisterHotKey(mainWindow, probeHotkeyId, MOD_ALT | MOD_NOREPEAT, VK_F24) != FALSE;
         if (! state.Require(registered, L"The foreground handshake must retire its hotkey registration."))
             return false;
         const auto unregister = wil::scope_exit([&]() noexcept { UnregisterHotKey(mainWindow, probeHotkeyId); });

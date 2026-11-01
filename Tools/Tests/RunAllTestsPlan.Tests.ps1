@@ -1148,6 +1148,20 @@ Set-StrictMode -Version Latest
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
         $nightly | Should Match '(?m)^      scope: Full\s*$'
+        $pin = [regex]::Escape($engineRef)
+        $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
+        $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
+        $native | Should Match ('uses: RedSalamanders/\.github/\.github/workflows/native\.yml@' + $pin)
+        $native | Should Match 'cancel-in-progress: false'
+        $adapter = Get-Content (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $adapter | Should Match "else \{ 'CI' \}"
+        $adapter | Should Match "Run 'Tools/Run-AllTests.ps1'"
+        $adapter | Should Match 'Invoke-CiAssertionProbe'
+        foreach ($manual in @('nightly-ci.yml','nightly-flake.yml')) {
+            $diagnostic = Get-Content (Join-Path $repoRoot ('.github/workflows/' + $manual)) -Raw
+            $diagnostic | Should Match 'workflow_dispatch:'
+            $diagnostic | Should Not Match '(?m)^  (schedule|push|pull_request):'
+        }
 
     }
 

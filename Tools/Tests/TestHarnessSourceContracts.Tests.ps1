@@ -390,10 +390,22 @@ Describe 'Test harness source contracts' {
         $source | Should Not Match 'Start-Process -FilePath \$sc\.Path'
     }
 
-    It 'keeps the manually dispatched shuffle repeat lane separate from the PR gate' {
+    It 'keeps foreground admission diagnostics in the Commands failure summary' {
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
+        $failure = [regex]::Match($source, '(?s)state\.Require\(activated && foregroundAfter == inputWindow,.*?\);')
+        $failure.Success | Should Be $true
+        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted')) {
+            $failure.Value | Should Match ([regex]::Escape('admission.' + $field))
+        }
+        $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'
+    }
+
+    It 'keeps repeated shuffle qualification manual and separate from the PR gate' {
         $nightly = Get-RSText -Path '.github\workflows\nightly-flake.yml'
         $ci = Get-RSText -Path '.github\workflows\ci.yml'
 
+        $nightly | Should Not Match '(?m)^  (schedule|push|pull_request):'
+        $nightly | Should Match 'workflow_dispatch:'
         $nightly | Should Match '(?m)^"on":\r?\n\s+workflow_dispatch:\s*$'
         $nightly | Should Not Match '(?m)^\s+(?:schedule|pull_request|push):'
         $nightly | Should Match 'REDSALAMANDER_TEST_ROOT'
